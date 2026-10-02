@@ -572,7 +572,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       createdBy: user?.name ?? 'admin', createdAt: new Date().toISOString(),
     };
     commitSalesReturn(ret, null, () => {
-      cancelVoucher(voucher.id, 'Sales return rolled back (cloud save failed)', user?.name || 'System');
+      cancelVoucher(voucher.id, 'Sales return rolled back (cloud save failed)', user?.name || 'System', { viaParent: true });
       // RULE 1/2: also reverse the stock added back at creation (compensating negative adjustment),
       // else a failed cloud save leaves phantom inventory with no return record — mirrors deleteSalesReturn.
       items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: `${returnNo}/REV`, narration: `Sales return rolled back ${sale.saleNo}` }));
@@ -614,7 +614,8 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
 
     // 1) Reverse the OLD return: cancel its voucher + compensating −qty stock (mirrors delete).
-    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Sales return edited', user?.name || 'System');
+    // H4: abort if the old voucher could not be cancelled (lock/permission) — else two live postings.
+    if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Sales return edited', user?.name || 'System', { viaParent: true })) return null;
     cur.items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: `${cur.returnNo}/EDIT`, narration: `Sales return edited — reverse old ${cur.saleNo}` }));
 
     // 2) Post the NEW voucher (same return no. kept on the record).
@@ -652,7 +653,8 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return;
     const cur = salesReturns.find(r => r.id === id);
     if (!cur || cur.isDeleted) return;
-    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Sales return deleted', user?.name || 'System');
+    // H4 / RULE 3: never mark the return deleted while its voucher stays live.
+    if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Sales return deleted', user?.name || 'System', { viaParent: true })) return;
     // Reverse the stock that was added back (compensating negative adjustment).
     const today = new Date().toISOString().slice(0, 10);
     cur.items.forEach(it => addStockMovement({ date: today, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: `${cur.returnNo}/REV`, narration: `Sales return reversed ${cur.saleNo}` }));
@@ -746,7 +748,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       createdBy: user?.name ?? 'admin', createdAt: new Date().toISOString(),
     };
     commitPurchaseReturn(ret, null, () => {
-      cancelVoucher(voucher.id, 'Purchase return rolled back (cloud save failed)', user?.name || 'System');
+      cancelVoucher(voucher.id, 'Purchase return rolled back (cloud save failed)', user?.name || 'System', { viaParent: true });
       // RULE 1/2: also restore the stock removed at creation (compensating positive adjustment),
       // else a failed cloud save leaves inventory understated with no return record — mirrors deletePurchaseReturn.
       items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: `${returnNo}/REV`, narration: `Purchase return rolled back ${purchase.purchaseNo}` }));
@@ -782,7 +784,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
 
     // 1) Reverse the OLD return: cancel its voucher + restore the stock it removed (+qty).
-    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Purchase return edited', user?.name || 'System');
+    if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Purchase return edited', user?.name || 'System', { viaParent: true })) return null;
     cur.items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: `${cur.returnNo}/EDIT`, narration: `Purchase return edited — restore old ${cur.purchaseNo}` }));
 
     // 2) Post the NEW voucher (same return no. kept on the record).
@@ -828,7 +830,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return;
     const cur = purchaseReturns.find(r => r.id === id);
     if (!cur || cur.isDeleted) return;
-    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Purchase return deleted', user?.name || 'System');
+    if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Purchase return deleted', user?.name || 'System', { viaParent: true })) return;
     // Restore the stock that left (compensating positive adjustment).
     const today = new Date().toISOString().slice(0, 10);
     cur.items.forEach(it => addStockMovement({ date: today, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: `${cur.returnNo}/REV`, narration: `Purchase return reversed ${cur.purchaseNo}` }));

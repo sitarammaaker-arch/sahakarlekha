@@ -160,7 +160,7 @@ interface DataContextType {
   // engine voucher / unbalanced) — the guard already showed the real reason, so callers
   // must NOT show a success toast on false (mirrors cancelVoucher's contract).
   updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => boolean;
-  cancelVoucher: (id: string, reason: string, deletedBy: string) => boolean;
+  cancelVoucher: (id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean }) => boolean;
   reverseVoucher: (id: string, reason: string) => Voucher | null;
   /** T-20: post the year-end statutory appropriation of net surplus as ONE balanced voucher through
    *  the canonical engine (effective-dated UCAS rates). Flag-gated (society.statutoryAppropriation).
@@ -263,7 +263,7 @@ interface DataContextType {
   sales: Sale[];
   addSale: (data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>) => Sale;
   updateSale: (id: string, data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>) => Sale | null;
-  deleteSale: (id: string) => void;
+  deleteSale: (id: string) => boolean;
   addBillReceipt: (data: { customerId: string; date: string; paymentMode: 'cash' | 'bank'; bankAccountId?: string; allocations: { saleId: string; amount: number }[]; advance?: number; onAccount?: number; narration?: string }) => Voucher | null;
   addBillPayment: (data: { supplierId: string; date: string; paymentMode: 'cash' | 'bank'; bankAccountId?: string; allocations: { purchaseId: string; amount: number }[]; advance?: number; onAccount?: number; narration?: string }) => Voucher | null;
 
@@ -271,7 +271,7 @@ interface DataContextType {
   purchases: Purchase[];
   addPurchase: (data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>) => Purchase;
   updatePurchase: (id: string, data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>) => Purchase | null;
-  deletePurchase: (id: string) => void;
+  deletePurchase: (id: string) => boolean;
 
   // Suppliers
   suppliers: Supplier[];
@@ -2241,11 +2241,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Returns true if the voucher was actually cancelled, false if blocked (a guard fired
   // and showed its own toast). Callers should only show a success message when true.
-  const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string): boolean => {
+  const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean }): boolean => {
     if (guardFYLocked()) return false;
     if (guardPermission('delete', 'वाउचर रद्द करने')) return false;   // ECR-06: role gate
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return false;
+    // H4: already cancelled ⇒ nothing to do. A parent cleanup (e.g. deleting a return whose voucher
+    // was cancelled earlier) must not fire a second server cancel that is refused and toasts red.
+    if (current.isDeleted) return true;
+    // H4 / RULE 3: a return's voucher belongs to its Sales/Purchase Return document. Cancelling it
+    // here left the return live (still in the return register, still moving stock) while the ledger
+    // dropped it — found in prod (2 returns, 2026-10-01). Only the Returns page (viaParent) may.
+    if ((current.refType === 'sale.return' || current.refType === 'purchase.return') && !opts?.viaParent) {
+      const page = current.refType === 'sale.return' ? 'बिक्री वापसी (Sales Return)' : 'ख़रीद वापसी (Purchase Return)';
+      toastRef.current({ title: 'यहाँ रद्द नहीं होगा', description: `यह वाउचर ${page} से बना है। उसी page से return delete करें — तभी return, स्टॉक और बही तीनों साथ ठीक होंगे।`, variant: 'destructive', duration: 10000 });
+      return false;
+    }
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
     // ECR-08: a reversed voucher must not also be cancelled — its reversal would then
     // net against nothing (phantom entry). Correction already stands via the reversal.
@@ -6274,16 +6285,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return sale;
   }, [society.financialYear, customers, accounts, addVoucher, stockItems]);
 
-  const deleteSale = useCallback((id: string) => {
-    if (guardPermission('delete', 'बिक्री मिटाने')) return;   // ECR-06: role gate
-    if (guardFYLocked()) return;
+  // H4 / RULE 3: a sale/purchase with a LIVE return cannot be deleted — the return would be left
+  // pointing at a deleted bill (prod 2026-09: Rania's returns outlived their sale and purchase).
+  // Returns live in ConsumerDataContext, but their vouchers carry refType '<kind>.return' +
+  // refId = the bill, so the live-return check needs no cross-context state.
+  const guardLiveReturns = (kind: 'sale' | 'purchase', docId: string): boolean => {
+    const n = vouchersRef.current.filter(v => !v.isDeleted && v.refType === `${kind}.return` && v.refId === docId).length;
+    if (n === 0) return false;
+    const page = kind === 'sale' ? 'बिक्री वापसी (Sales Return)' : 'ख़रीद वापसी (Purchase Return)';
+    toastRef.current({ title: 'पहले वापसी (return) हटाएँ', description: `इस ${kind === 'sale' ? 'बिक्री' : 'ख़रीद'} की ${n} चालू वापसी है। पहले ${page} page से उसे delete करें, फिर यह बिल हटेगा।`, variant: 'destructive', duration: 10000 });
+    return true;
+  };
+
+  const deleteSale = useCallback((id: string): boolean => {
+    if (guardPermission('delete', 'बिक्री मिटाने')) return false;   // ECR-06: role gate
+    if (guardFYLocked()) return false;
+    if (guardLiveReturns('sale', id)) return false;
     // S3-f-2: under the posting service the whole delete is one server transaction.
     if (postingServiceRef.current) {
       const sale = salesRef.current.find(s => s.id === id);
-      if (!sale) return;
+      if (!sale) return false;
       cancelStockDocument('sale', sale, sale.saleNo, [sale.voucherId, ...(sale.gstVoucherIds ?? [])].filter(Boolean) as string[], `Sale ${sale.saleNo} deleted`);
       emitAudit({ entityType: 'sale', entityId: id, action: 'delete', reason: 'Sale deleted' });
-      return;
+      return true;
     }
     setSalesState(prev => {
       const sale = prev.find(s => s.id === id);
@@ -6315,6 +6339,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('sales').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     emitAudit({ entityType: 'sale', entityId: id, action: 'delete', reason: 'Sale deleted' });
     console.info(`[AUDIT-DELETE] Sale id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    return true;
   }, []);
 
   const updateSale = useCallback((id: string, data: Omit<Sale, 'id' | 'saleNo' | 'createdAt'>): Sale | null => {
@@ -6669,16 +6694,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return purchase;
   }, [society.financialYear, suppliers, accounts, addVoucher, stockItems]);
 
-  const deletePurchase = useCallback((id: string) => {
-    if (guardPermission('delete', 'खरीद मिटाने')) return;   // ECR-06: role gate
-    if (guardFYLocked()) return;
+  const deletePurchase = useCallback((id: string): boolean => {
+    if (guardPermission('delete', 'खरीद मिटाने')) return false;   // ECR-06: role gate
+    if (guardFYLocked()) return false;
+    if (guardLiveReturns('purchase', id)) return false;
     // S3-f-2: under the posting service the whole delete is one server transaction.
     if (postingServiceRef.current) {
       const purchase = purchasesRef.current.find(p => p.id === id);
-      if (!purchase) return;
+      if (!purchase) return false;
       cancelStockDocument('purchase', purchase, purchase.purchaseNo, [purchase.voucherId, ...(purchase.taxVoucherIds ?? [])].filter(Boolean) as string[], `Purchase ${purchase.purchaseNo} deleted`);
       emitAudit({ entityType: 'purchase', entityId: id, action: 'delete', reason: 'Purchase deleted' });
-      return;
+      return true;
     }
     setPurchasesState(prev => {
       const purchase = prev.find(p => p.id === id);
@@ -6711,6 +6737,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('purchases').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
     emitAudit({ entityType: 'purchase', entityId: id, action: 'delete', reason: 'Purchase deleted' });
     console.info(`[AUDIT-DELETE] Purchase id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    return true;
   }, []);
 
   const updatePurchase = useCallback((id: string, data: Omit<Purchase, 'id' | 'purchaseNo' | 'createdAt'>): Purchase | null => {

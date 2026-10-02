@@ -340,9 +340,9 @@ const SaleManagement: React.FC = () => {
   // ── Delete sale ───────────────────────────────────────────────────────────
   const handleDelete = () => {
     if (!deleteId) return;
-    deleteSale(deleteId);
+    const done = deleteSale(deleteId);   // H4: false = refused (lock / permission / live return) — the context already toasted why
     setDeleteId(null);
-    toast({ title: language === 'hi' ? 'बिक्री हटाई गई' : 'Sale deleted' });
+    if (done) toast({ title: language === 'hi' ? 'बिक्री हटाई गई' : 'Sale deleted' });
   };
 
   // ── Download Invoice PDF ──────────────────────────────────────────────────

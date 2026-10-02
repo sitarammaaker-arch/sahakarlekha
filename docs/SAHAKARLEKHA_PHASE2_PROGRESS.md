@@ -130,6 +130,24 @@ NOT STARTED. See the roadmap in the master prompt; the order follows the depende
   - The read-only prod data cannot prove a root cause. Next step: a harness repro (concurrent `post_stock_document` + `addVoucher` in one society) or the `ua` / society stamp in future rows.
   - Gap: reportError rows carry no `society_id` (all 30-day rows are NULL). Stamping it is a candidate G8 follow-up.
 
+### 2026-10-02: Phase G closed, Phase H started (H4 trading/GST)
+- **G CLOSED.**
+  - Shipped: G1 #610, G2/G8 #612, G8 #613, G4 #614 and G3 #618.
+  - G5 is covered by F1, G3 and G4.
+  - Deferred: G6 (no proof yet) and G7 (no evidence in 60 days).
+  - error_log is quiet: 0 rows in the 6 hours after the deploys.
+- **H prioritised by real usage (prod row counts):** vouchers 3141, members 506, sales/purchases/movements 233/91/420, returns 7+7. The domain modules are nearly empty (procurement 3 lots, housing 3 flats, dairy 0, loans 0). So H starts with trading/GST.
+- **H4 read-only audit (prod):**
+  - Every live sale and purchase has a live voucher. Every deleted one has a cancelled voucher. All amounts match.
+  - Stock: 8 items show `currentStock` cache drift and 3 orphan sale/purchase movements. Neither is user-visible: every surface (Inventory, Closing Stock, Valuation, Dashboard, Sale, Retail, Trading A/c) uses `reconcileMovements` (live records), and nothing reads the cache.
+  - Returns: every return's adjustment qty matches its items, and deleted returns are netted by `/REV` movements.
+  - **FOUND:** 2 Rania returns (SRET/PRET/2026-27/001) are LIVE while their vouchers were cancelled from the voucher screen ("Cancel Due to Wrong Entry", 2026-10-01). Their sale and purchase had been deleted under them.
+- **Fix (PR):**
+  - `cancelVoucher` refuses `sale.return` / `purchase.return` unless called with `viaParent` (the Returns page). An already-cancelled voucher is now a no-op success.
+  - Return delete/edit abort if their voucher stays live.
+  - deleteSale/deletePurchase refuse while a live return exists. They now return a boolean, and the pages say "deleted" only when it ran.
+- **Data cleanup (founder / Rania, after deploy, via the app — no SQL):** delete SRET/2026-27/001 and PRET/2026-27/001 from the Sales/Purchase Return pages. The cancel becomes a no-op, the `/REV` stock movement is written, and the row is marked deleted.
+
 ## Tracked audit findings
 | ID | Area | Status |
 |---|---|---|
