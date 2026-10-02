@@ -43,6 +43,7 @@ const GLOSSARY_DIR = resolve(ROOT, 'docs', 'kpp', 'wave-1-active');
 const CALC_FILE = resolve(ROOT, 'src', 'content', 'calculators', 'index.ts');
 const FAQ_FILE = resolve(ROOT, 'src', 'content', 'faq.ts');
 const QUIZ_FILE = resolve(ROOT, 'src', 'content', 'guide', 'quizzes.ts');
+const GLOSSARY_LINKS_FILE = resolve(ROOT, 'src', 'content', 'glossaryLinks.ts');
 const RELATED_FILE = resolve(ROOT, 'src', 'content', 'relatedContent.ts');
 const COURSE = 'सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स';
 
@@ -255,6 +256,7 @@ async function loadData() {
     ['calc', CALC_FILE, 'CALCULATORS'],
     ['faq', FAQ_FILE, 'FAQ_CATEGORIES'],
     ['quizzes', QUIZ_FILE, 'GUIDE_QUIZZES'],
+    ['glossaryLinks', GLOSSARY_LINKS_FILE, 'resolveGlossaryHref'],
     ['society', SOCIETY_TYPES, 'SOCIETY_TYPES'],
     ['states', STATES_FILE, 'STATES'],
     ['rel', RELATED_FILE, null], // whole module (edge maps + helpers), GOS-11
@@ -1370,6 +1372,19 @@ try {
     ...staticExtraPages(DATA),
     ...appShellPages(DATA),
   ];
+
+  // L8: same rule as GuideMarkdown — a /glossary/<slug> link to a term that doesn't exist becomes plain
+  // text (or goes to its exact synonym), so static HTML never carries the dead link either.
+  const glossarySlugs = new Set(pages.filter((p) => p && p.path && p.path.startsWith('/glossary/')).map((p) => p.path.slice('/glossary/'.length)));
+  if (DATA.glossaryLinks) {
+    for (const page of pages) {
+      if (!page || !page.body) continue;
+      page.body = page.body.replace(/<a href="(\/glossary\/[^"]*)"([^>]*)>([\s\S]*?)<\/a>/g, (m0, href, rest, inner) => {
+        const to = DATA.glossaryLinks(href, (slug) => glossarySlugs.has(slug));
+        return to === null ? inner : to === href ? m0 : `<a href="${to}"${rest}>${inner}</a>`;
+      });
+    }
+  }
 
   let n = 0, withBody = 0;
   for (const page of pages) {

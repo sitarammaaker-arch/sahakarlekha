@@ -12,6 +12,8 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { linkifyText, newLinkifyState } from '@/lib/glossaryLinkify';
+import { findTerm } from '@/content/glossary';
+import { resolveGlossaryHref } from '@/content/glossaryLinks';
 
 /* Stable slug for heading anchors — keeps Devanagari letters, used by both
    the renderer (id=) and the chapter sub-TOC (href=). Must stay deterministic. */
@@ -92,11 +94,16 @@ const components: React.ComponentProps<typeof ReactMarkdown>['components'] = {
   h3: ({ children }) => <Heading level={3}>{children}</Heading>,
   h4: ({ children }) => <Heading level={4}>{children}</Heading>,
   p: ({ children }) => <p className="my-3 leading-relaxed text-foreground/90">{children}</p>,
-  a: ({ href, children }) => (
-    <a href={href} className="text-primary underline underline-offset-2 hover:opacity-80">
-      {children}
-    </a>
-  ),
+  a: ({ href, children }) => {
+    // L8: a hand-written /glossary/<slug> link to a term that doesn't exist → plain text (lib: glossaryLinks).
+    const to = resolveGlossaryHref(href, (slug) => !!findTerm(slug));
+    if (to === null) return <>{children}</>;
+    return (
+      <a href={to} className="text-primary underline underline-offset-2 hover:opacity-80">
+        {children}
+      </a>
+    );
+  },
   strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
   ul: ({ children }) => <ul className="list-disc pl-6 my-3 space-y-1.5 marker:text-primary">{children}</ul>,
   ol: ({ children }) => <ol className="list-decimal pl-6 my-3 space-y-1.5 marker:text-primary">{children}</ol>,

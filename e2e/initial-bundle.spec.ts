@@ -69,3 +69,14 @@ test('an article whose body chunk fails shows a reload message, not a redirect',
   await page.waitForTimeout(3000);             // a reload loop would keep requesting the chunk
   expect(blocked).toBe(2);                     // the first load + once after the ONE automatic reload — never a loop
 });
+
+// L8 · a hand-written glossary link to a term that doesn't exist renders as plain text (it used to
+// bounce the reader to the /glossary index); a link to a real term stays a link.
+test('article glossary links: missing term → plain text, real term → link', async ({ page }) => {
+  await page.goto('/blog/amul-anand-pattern-dairy-cooperative');
+  const article = page.locator('article, main').first();
+  await expect(article.locator('a[href="/glossary/dairy-cooperative"]').first()).toBeVisible({ timeout: 20_000 });
+  expect(await page.locator('a[href^="/glossary/amul"]').count()).toBe(0);
+  expect(await page.locator('a[href="/glossary/anand-pattern"], a[href="/glossary/white-revolution"]').count()).toBe(0);
+  await expect(article.getByText('Amul', { exact: false }).first()).toBeVisible();
+});

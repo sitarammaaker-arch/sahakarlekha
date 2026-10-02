@@ -317,6 +317,18 @@
     - no lastmod is in the future
     - every page has a description and exactly one h1
   - **Still open, for L8:** 392 blog links point to 262 glossary terms that do not exist (for example trial-balance, reserve-fund, audit, cm-pacs). GlossaryTerm sends these readers to the /glossary index. Because of this, `test:dist` still fails, and it is not in CI yet.
+- **L8, glossary links:** 392 of the 570 hand-written `/glossary/<slug>` links in blog posts pointed at 262 terms that do not exist. GlossaryTerm sent those readers to the /glossary index.
+  - **Fix:** a render-time rule (`src/content/glossaryLinks.ts`). It applies in both GuideMarkdown and the prerender, so no markdown file is rewritten:
+    - if the term exists, the link stays as written
+    - if an exact synonym exists, the link points to it (4 aliases: registrar ×2, marketing-society, nomination)
+    - otherwise the words stay and render as plain text
+  - When a missing term is later added to the glossary, its links come back on their own.
+  - **The markdown files were deliberately left untouched:** the main checkout has a large set of uncommitted blog edits.
+  - Tests:
+    - new `test:glossary-links` (12 checks)
+    - new e2e test for the rule
+    - **`test:dist` now passes and runs in CI** (verify job: `npm run build && npm run test:dist`)
+  - **Content backlog:** the most-linked missing terms are cm-pacs ×9, reserve-fund ×7, managing-committee ×6, trial-balance ×5, share-capital ×5, maker-checker ×5 and general-body ×5. Each new term needs its source (statutory-values rule).
 
 ## Tracked audit findings
 | ID | Area | Status |
