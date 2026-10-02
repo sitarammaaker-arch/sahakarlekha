@@ -1440,6 +1440,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'चार फ़ोकस क्षेत्र, ज़मीनी प्रगति के संकेतक और अभी तक की स्थिति — हरियाणा की नई सहकारिता नीति का जीवंत ट्रैकर।',
     accent: 'amber',
     tags: ['Cooperation Policy', 'हरियाणा', 'ट्रैकर'],
+    image: '/blog/haryana-state-cooperation-policy-2026-tracker.webp',
+    imageAlt: 'हरियाणा राज्य सहकारिता नीति 2026 का प्रगति ट्रैकर: अधिकारी और सहकारी प्रतिनिधि प्रगति बोर्ड देखते हुए',
   },
 ];
 
