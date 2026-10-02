@@ -11,6 +11,7 @@ project `sahakarlekha-staging` (ref `ivmrlhjrqtwftdlxajxk`, Singapore). Producti
   - It has 177 COA accounts from the app template.
   - Triggers create its open FY 2026-27, a trial subscription and `posting_service = on`.
   - It has one admin, `e2e-admin@sahakarlekha.test`.
+- **One stock item, "E2E परीक्षण वस्तु"** (opening stock 100000, sale rate ₹10, GST 0) for the sale spec. It is added by `staging-04-seed-stock.sql`.
 - **The access-token hook is enabled** (`public.custom_access_token_hook`), as in prod.
 
 Every staging SQL file is guarded: it refuses any database holding a real society's vouchers.
@@ -40,3 +41,4 @@ Configuration comes from the environment or from the git-ignored `.env.e2e.local
   4. the voucher is still listed, which proves it reached the cloud.
 
   Each run leaves one tagged voucher (`E2E-<timestamp>`) in the staging demo society.
+- **`sale-stock.spec.ts`:** sells 1 unit through the Sale form, reloads, and checks that the form's available quantity is exactly 1 lower. This proves that `post_stock_document` committed and that stock is derived from live records (RULE 1 + RULE 2).
