@@ -112,6 +112,24 @@ NOT STARTED. See the roadmap in the master prompt; the order follows the depende
       - an online event after an incomplete load stays blocked.
 - **Next:** remaining phases G–M. Open CA questions (above) remain.
 
+### 2026-10-02: Phase G (production reliability)
+- **F1 LIVE** (#611, deployed `9c650a5`): the live entry bundle contains the banner strings (verified by curl).
+- **G8 error_log audit (30 days):**
+  - `hasOwn` / `.at` (43 + 29): fixed by G1.
+  - ResizeObserver noise (24).
+  - About 30 stale-chunk rows reached the ErrorBoundary.
+  - 2 sale-post-service duplicate voucherNo rows.
+- **G2 (PR #612):** the stale-chunk rows look like crawlers re-rendering cached HTML, not users.
+  - Evidence: public pages only; one stale entry (`index-D4K6ozdD.js`) requested across days of deploys; fixed daily times.
+  - Found: a missing `/assets/*.js` was served index.html as `200 text/html`.
+  - Fix: the SPA rewrite excludes `assets/` (real 404); reportError stamps `ua`; window.error drops ResizeObserver noise.
+  - The preview is behind Vercel auth. **Verify after merge:** `curl -I https://sahakarlekha.com/assets/x.js` should return 404.
+- **G6 DEFERRED (investigated):** Rania, 2026-09-29 17:30 and 17:34 UTC. `post_stock_document` was refused with `uniq_vouchers_society_no`.
+  - RULE 1 held: rolled back, red toast. The retry at 17:48 posted RV/2026/27/915.
+  - `_official_doc_no` checks that a number is free before post_voucher inserts it. The max at the time was 914, so 915 was free. A collision needs a concurrent insert that left no row.
+  - The read-only prod data cannot prove a root cause. Next step: a harness repro (concurrent `post_stock_document` + `addVoucher` in one society) or the `ua` / society stamp in future rows.
+  - Gap: reportError rows carry no `society_id` (all 30-day rows are NULL). Stamping it is a candidate G8 follow-up.
+
 ## Tracked audit findings
 | ID | Area | Status |
 |---|---|---|
