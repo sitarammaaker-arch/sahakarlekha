@@ -8,10 +8,10 @@
  */
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { fetchSubscriptionRow, type SubRow, type SubscriptionStatus } from '@/lib/subscriptionRow';
 import { PLAN_CATALOG, type PlanId, type PlanSpec } from '@/lib/plans';
 
-export type SubscriptionStatus = 'active' | 'trialing' | 'grace' | 'expired';
+export type { SubscriptionStatus };
 
 export interface SubscriptionState {
   loading: boolean;
@@ -27,12 +27,6 @@ export interface SubscriptionState {
   isReadOnly: boolean;
 }
 
-interface SubRow {
-  plan: PlanId;
-  status: SubscriptionStatus;
-  period_end: string | null;
-}
-
 export function useSubscription(): SubscriptionState {
   const { user } = useAuth();
   const societyId = user?.societyId;
@@ -46,16 +40,11 @@ export function useSubscription(): SubscriptionState {
       return;
     }
     setLoading(true);
-    (async () => {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select('plan, status, period_end')
-        .eq('society_id', societyId)
-        .maybeSingle();
+    fetchSubscriptionRow(societyId).then((r) => {
       if (cancelled) return;
-      setRow(error || !data ? null : (data as SubRow));
+      setRow(r);
       setLoading(false);
-    })();
+    });
     return () => {
       cancelled = true;
     };
