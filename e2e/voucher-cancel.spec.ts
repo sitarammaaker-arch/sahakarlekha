@@ -10,8 +10,9 @@ test.skip(!HAS_LOGIN, 'E2E_EMAIL / E2E_PASSWORD (staging test login) not set');
 test('a cancelled voucher stays cancelled after a reload', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
-  // Diagnostics for an unexplained full reload right after the cancel click (CI, 2026-10-02).
-  page.on('framenavigated', f => { if (f === page.mainFrame()) console.log(`[nav] ${f.url()}`); });
+  // Diagnostics, kept on purpose: twice in CI (2026-10-02) a full document reload landed ~200 ms after the
+  // cancel click and aborted cancel_voucher; not reproduced in 5 later runs. If it recurs, the CI log shows
+  // the navigation request, console errors, and whether lazyWithRetry (chunk-reload flag) caused it.
   page.on('console', m => { if (['error', 'warning'].includes(m.type()) || m.text().startsWith('[diag]')) console.log(`[console.${m.type()}] ${m.text().slice(0, 600)}`); });
   page.on('request', r => { if (r.isNavigationRequest() && r.frame() === page.mainFrame()) console.log(`[navreq] ${r.method()} ${r.url()}`); });
   // lazyWithRetry sets this flag right before it reloads on a failed chunk import — log who sets it.
