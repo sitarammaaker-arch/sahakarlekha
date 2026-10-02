@@ -148,6 +148,22 @@ NOT STARTED. See the roadmap in the master prompt; the order follows the depende
   - deleteSale/deletePurchase refuse while a live return exists. They now return a boolean, and the pages say "deleted" only when it ran.
 - **Data cleanup (founder / Rania, after deploy, via the app — no SQL):** delete SRET/2026-27/001 and PRET/2026-27/001 from the Sales/Purchase Return pages. The cancel becomes a no-op, the `/REV` stock movement is written, and the row is marked deleted.
 
+### 2026-10-02: H, members / share capital / core vouchers (read-only prod audit)
+- **Clean:**
+  - 0 unbalanced posted vouchers.
+  - 0 live vouchers of a deleted member.
+  - 0 duplicate live member numbers.
+- **FIXED (PR #621):** a share transfer (two journals bridged by Suspense 9999) could be half-cancelled from the voucher screen.
+  - In 06cea2fb (2026-07-11) the transferor half was cancelled with reason "s", leaving Dr 9999 / Cr 1102 ₹5,000 live.
+  - Both halves now carry `refType 'share.transfer'` + one id. `cancelVoucher` refuses a half (legacy halves are recognised by narration) and points to a reverse transfer.
+  - The 06cea2fb data is left for the founder (2-member society; it also has a Dr 1102 / Cr 4403 ₹40,000 payment that looks like experimentation).
+- **FOUNDER DECISION NEEDED: Rania share capital is not in the books.**
+  - Its 455 live members' register shows ₹32,650.
+  - Ledger 1100/1101/1102/1103 nets ₹500 (one receipt). Every opening balance is 0 and `previousYearBalances` is empty.
+  - So the Balance Sheet understates share capital by ₹32,150.
+  - Fix = enter the audited 31-03-2026 share-capital opening (an Opening Balances / opening journal) **from the society's audited BS**. Do not copy it from the register.
+- Minor: SSK (d0dd474f) has a ₹500 member scalar and ₹0 ledger (no contact). 45e91c0d has one member's scalar at ₹500 vs ₹250 in vouchers (the society total ties). ShareRegister already shows a per-member reconciliation.
+
 ## Tracked audit findings
 | ID | Area | Status |
 |---|---|---|

@@ -2252,6 +2252,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // H4 / RULE 3: a return's voucher belongs to its Sales/Purchase Return document. Cancelling it
     // here left the return live (still in the return register, still moving stock) while the ledger
     // dropped it — found in prod (2 returns, 2026-10-01). Only the Returns page (viaParent) may.
+    // H / RULE 3: a share transfer is a PAIR of vouchers (bridged by Suspense 9999) plus both members'
+    // share balances; cancelling one half here left the other half and the balances standing (prod
+    // 2026-07). Legacy transfers carry no refType, so their narration identifies them.
+    if ((current.refType === 'share.transfer' || (!current.refType && (current.narration || '').startsWith('Shares transferred from '))) && !opts?.viaParent) {
+      toastRef.current({ title: 'यहाँ रद्द नहीं होगा', description: 'यह शेयर-ट्रांसफर का वाउचर है (दो वाउचरों का जोड़ा)। गलती सुधारने के लिए Share Register से उल्टा ट्रांसफर करें — तभी दोनों सदस्यों का शेयर और बही साथ ठीक रहेंगे।', variant: 'destructive', duration: 10000 });
+      return false;
+    }
     if ((current.refType === 'sale.return' || current.refType === 'purchase.return') && !opts?.viaParent) {
       const page = current.refType === 'sale.return' ? 'बिक्री वापसी (Sales Return)' : 'ख़रीद वापसी (Purchase Return)';
       toastRef.current({ title: 'यहाँ रद्द नहीं होगा', description: `यह वाउचर ${page} से बना है। उसी page से return delete करें — तभी return, स्टॉक और बही तीनों साथ ठीक होंगे।`, variant: 'destructive', duration: 10000 });
@@ -3181,15 +3188,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
     const SUSPENSE = '9999';
+    // H: both halves carry refType 'share.transfer' + one transfer id, so cancelVoucher can refuse
+    // a lone half (prod: a cancelled transferor half left Cr 1102 / Dr 9999 standing, inflating
+    // share capital and suspense by the transfer amount).
+    const transferId = crypto.randomUUID();
     addVoucher({
       type: 'journal', date, debitAccountId: ACCOUNT_IDS.SHARE_CAP, creditAccountId: SUSPENSE, amount: amt,
       narration: `Shares transferred from ${from.name} to ${to.name} — ${date}`,
-      createdBy: user?.name ?? 'System', memberId: fromMemberId,
+      createdBy: user?.name ?? 'System', memberId: fromMemberId, refType: 'share.transfer', refId: transferId,
     });
     addVoucher({
       type: 'journal', date, debitAccountId: SUSPENSE, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: amt,
       narration: `Shares transferred from ${from.name} to ${to.name} — ${date}`,
-      createdBy: user?.name ?? 'System', memberId: toMemberId,
+      createdBy: user?.name ?? 'System', memberId: toMemberId, refType: 'share.transfer', refId: transferId,
     });
     // ECR-16 (MS-11): premium paid to the society → Dr Cash/Bank / Cr Reserve (capped above).
     if (prem > 0) {
