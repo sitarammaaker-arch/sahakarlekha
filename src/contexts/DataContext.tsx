@@ -25,6 +25,7 @@ import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { inventoryProcurementCost, closingStock, isStockLedgerAccount } from '@/lib/tradingAccount';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
+import { CORE_PARTS, setLoadFailures, refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
 import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
@@ -821,6 +822,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // FY-lock guard — reads the LATEST society via ref, so it is never stale even
   // inside useCallbacks declared with empty deps. Returns true (and toasts) when locked.
   const guardFYLocked = useCallback((): boolean => {
+    // F1 (offline policy अ): every mutation already passes this guard, so the online-only rule lives
+    // here once — offline, or a core part of the books failed to load ⇒ refuse with a clear toast.
+    if (refuseIfWriteBlocked(toastRef.current)) return true;
     if (societyRef.current?.fyLocked) {
       toastRef.current({ title: 'FY Locked', description: 'Cannot modify data while the Financial Year is audit-locked. (वित्तीय वर्ष लॉक है)', variant: 'destructive' });
       return true;
@@ -1034,14 +1038,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         postingServiceRef.current = false;
         supabase.from('society_flags').select('posting_service').eq('society_id', sid).maybeSingle()
           .then(({ data, error }) => { postingServiceRef.current = !error && data?.posting_service === true; }, () => { /* stays false */ });
-        const [
-          { data: vData, error: vErr }, { data: mData }, { data: aData },
-          { data: lData }, { data: asData }, { data: aoData },
-          { data: siData }, { data: smData }, { data: slData },
-          { data: puData }, { data: emData }, { data: srData },
-          { data: socData }, { data: supData }, { data: cusData },
-          { data: kccData }, { data: recData }, { data: kaData }, { data: p7Data },
-        ] = await Promise.all([
+        const loadResults = await Promise.all([
           fetchAllPaged<Voucher>('vouchers', ['createdAt', 'id']),
           fetchAllPaged<Member>('members'),
           fetchAllPaged<LedgerAccount>('accounts'),
@@ -1062,6 +1059,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           fetchAllPaged<KachiAaratEntry>('kachi_aarat_entries', ['createdAt', 'id']),
           fetchAllPaged<P7Entry>('p7_entries', ['createdAt', 'id']),
         ]);
+        const [
+          { data: vData, error: vErr }, { data: mData }, { data: aData, error: aErr },
+          { data: lData }, { data: asData }, { data: aoData },
+          { data: siData }, { data: smData }, { data: slData },
+          { data: puData }, { data: emData }, { data: srData },
+          { data: socData }, { data: supData }, { data: cusData },
+          { data: kccData }, { data: recData }, { data: kaData }, { data: p7Data },
+        ] = loadResults;
+        // F1 (offline policy अ): supabase-js RESOLVES a network failure as `{ data: null, error }` —
+        // it never throws — so the catch-block fallback below never ran and an offline load showed
+        // ₹0 / empty registers with no warning. Record which parts errored; a failed CORE part (or
+        // the browser being offline) refuses every mutation and shows the read-only banner.
+        const LOAD_PARTS = ['vouchers', 'members', 'accounts', 'loans', 'assets', 'audit_objections', 'stock_items',
+          'stock_movements', 'sales', 'purchases', 'employees', 'salary_records', 'society_settings', 'suppliers',
+          'customers', 'kcc_loans', 'recoverables', 'kachi_aarat_entries', 'p7_entries'] as const;
+        const failedParts = LOAD_PARTS.filter((_, i) => loadResults[i].error);
+        setLoadFailures(failedParts);
+        if (failedParts.length > 0) console.warn('Load incomplete — failed parts:', failedParts.join(', '));
 
         if (vErr) console.warn('Vouchers query error:', vErr.message);
         // Load vouchers — safe first, auto-migration separate
@@ -1072,11 +1087,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (activeMembers.length > 0) { setMembersState(activeMembers); storage.setMembers(activeMembers); }
         else setMembersState([]);
 
-        // Load accounts from Supabase; fall back to CMS template if none exist
-        const rawAccts: LedgerAccount[] = aData && aData.length > 0 ? [...aData] : [...CMS_SOCIETY_ACCOUNTS];
+        // Load accounts from Supabase; fall back to CMS template if none exist. F1: a FAILED accounts
+        // query is not "none exist" — showing the template then presented a stranger's chart as this
+        // society's, and overwrote the device's cached copy of the real one. On error show the cached
+        // copy (read-only: entry is blocked) and leave the cache untouched.
+        const rawAccts: LedgerAccount[] = aData && aData.length > 0 ? [...aData]
+          : aErr ? storage.getAccounts() : [...CMS_SOCIETY_ACCOUNTS];
         const { accounts: baseAccts, changed: acctsMigrated, newlyAdded } = storage.migrateAccounts(rawAccts);
         setAccountsState(baseAccts);
-        storage.setAccounts(baseAccts);
+        if (!aErr) storage.setAccounts(baseAccts);
         // RM-01 (S0 emergency safety fix): the load path NEVER writes to the database. The template
         // accounts migrateAccounts adds are merged into LOCAL state only (every device merges the same
         // deterministic list on load); they used to be upserted into `accounts` here on every load.
@@ -1252,6 +1271,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       } catch (err) {
         console.warn('Supabase load failed, falling back to localStorage:', err);
+        setLoadFailures([...CORE_PARTS]); // F1: the cached copy below is read-only — entry stays blocked
         // Properly restore from localStorage when Supabase is unavailable
         const lsVouchers = storage.getVouchers();
         const lsMembers = storage.getMembers();
@@ -1628,6 +1648,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ECR-06: role gate at the voucher choke point — every composite flow (sale/purchase/salary/
     // loan/reversal) and page funnels through here, so one guard covers every voucher birth.
     if (guardPermission('create', 'वाउचर बनाने')) {
+      return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    }
+    // F1: online-only entry — addVoucher carries its own FY check rather than guardFYLocked, so the
+    // shared write-block is applied here explicitly (every voucher birth funnels through this point).
+    if (refuseIfWriteBlocked(toastRef.current)) {
       return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     }
     // P2-1: Block new vouchers when the FY is audit-locked
@@ -3943,6 +3968,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // (is_society_admin), so a non-admin's save is REJECTED by the DB — we must restore local
   // state (not just toast) or the change would silently diverge and vanish on refresh.
   const updateSociety = useCallback((data: Partial<SocietySettings>, opts?: { onSaved?: () => void; onFailed?: (message: string) => void }) => {
+    // F1: settings deliberately skip the FY guard (unlocking the FY is a settings save), so the
+    // online-only rule is applied here directly. Without it, a load whose society_settings failed
+    // would upsert the device's STALE cached settings over the live row.
+    if (refuseIfWriteBlocked(toastRef.current)) { opts?.onFailed?.('offline / data incomplete'); return; }
     setSocietyState(prev => {
       const rollback = prev;
       const updated = { ...prev, ...data };
@@ -3986,6 +4015,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Flag OFF (default) ⇒ the exact lock the setup page did before, byte-identical.
   // Returns true when the year was locked; false when refused (a toast explains why).
   const closeFinancialYear = useCallback((opts?: { attestation?: AuthorityAttestation }): boolean => {
+    // F1: refuse up front — updateSociety would refuse too, but this returns true regardless, so the
+    // page would toast a lock that never happened (the false-success pattern).
+    if (refuseIfWriteBlocked(toastRef.current)) return false;
     let recorded: string | undefined;
     if (societyRef.current?.fyCloseAuthorityRequired) {
       const verdict = authorizeFinalization({ act: 'fy_close', preparedBy: userRef.current?.name ?? '', attestation: opts?.attestation });

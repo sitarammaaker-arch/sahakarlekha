@@ -1,5 +1,7 @@
 import * as React from "react";
 
+import { suppressAfterRefusal } from "@/lib/connectivity/writeBlock";
+
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 
 const TOAST_LIMIT = 1;
@@ -136,6 +138,13 @@ type Toast = Omit<ToasterToast, "id">;
 
 function toast({ ...props }: Toast) {
   const id = genId();
+
+  // F1: TOAST_LIMIT is 1 and many pages toast "सहेजा गया" right after calling a mutation without
+  // checking it ran. When the online-only guard has just refused that mutation, the page's success
+  // toast would replace the red refusal — so it is dropped. Inert unless entry is blocked.
+  if (props.variant !== "destructive" && suppressAfterRefusal()) {
+    return { id, dismiss: () => {}, update: () => {} };
+  }
 
   const update = (props: ToasterToast) =>
     dispatch({

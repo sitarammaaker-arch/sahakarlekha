@@ -156,20 +156,21 @@ const SocietySetup: React.FC = () => {
   }, [accounts, society.previousYearBalances]);
 
   const handleSaveBasic = () => {
-    updateSociety(form);
-    toast({
-      title: language === 'hi' ? 'सहेजा गया' : 'Saved',
-      description: language === 'hi' ? 'समिति विवरण अपडेट हो गया' : 'Society details updated successfully',
-    });
-    trackEvent('society_setup_saved', { tab: 'basic' });
+    // F1: "saved" only once the cloud save really landed (refusal / failure already toast red).
+    updateSociety(form, { onSaved: () => {
+      toast({
+        title: language === 'hi' ? 'सहेजा गया' : 'Saved',
+        description: language === 'hi' ? 'समिति विवरण अपडेट हो गया' : 'Society details updated successfully',
+      });
+      trackEvent('society_setup_saved', { tab: 'basic' });
+    } });
   };
 
   const handleSaveFY = () => {
-    updateSociety(fyForm);
-    toast({
+    updateSociety(fyForm, { onSaved: () => toast({
       title: language === 'hi' ? 'सहेजा गया' : 'Saved',
       description: language === 'hi' ? 'वित्तीय वर्ष अपडेट हो गया' : 'Financial year updated',
-    });
+    }) });
   };
 
   // ECR-07 dual-control: locking is single-admin; UNLOCKING needs a request by one
@@ -217,8 +218,8 @@ const SocietySetup: React.FC = () => {
       const val = parseFloat(pyForm[a.id] || '0');
       if (!isNaN(val) && val !== 0) balances[a.id] = val;
     });
-    updateSociety({ previousFinancialYear: pyYear, previousYearBalances: balances });
-    toast({ title: language === 'hi' ? 'सहेजा गया' : 'Saved', description: language === 'hi' ? 'पिछले वर्ष की शेष राशि सहेजी गई' : 'Previous year balances saved' });
+    updateSociety({ previousFinancialYear: pyYear, previousYearBalances: balances }, { onSaved: () =>
+      toast({ title: language === 'hi' ? 'सहेजा गया' : 'Saved', description: language === 'hi' ? 'पिछले वर्ष की शेष राशि सहेजी गई' : 'Previous year balances saved' }) });
   };
 
   const handleFillFromCurrentClosing = () => {

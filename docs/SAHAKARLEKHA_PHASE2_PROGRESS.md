@@ -81,6 +81,37 @@ NOT STARTED. See the roadmap in the master prompt; the order follows the depende
   - (c) For 194C / 194H above the threshold, is TDS on the whole sum or the excess?
 - **Next:** E (payroll TDS cumulative, PAY-01), then F (offline policy), then G1 (old-browser build target).
 
+### 2026-10-02: D5, E, G1 and F1
+- **D5 LIVE:** the founder confirmed the figures ("सब सही है और audit हो चुका है"), then applied Bacher's 2024-25 year-transfer from prod-derived SQL (not committed; `D:\SahakarLekha-Backups\b2\d5-*`).
+  - Verified: all income/expense accounts read 0 at 01-04-2025.
+  - 1208 is Cr ₹75,843.85.
+  - Drift is 0.
+- **E:** cumulative salary TDS was already wired (verified). The new payroll engine's ledger posting stays off by design, because usage is tiny (1 society, 9 payslips). **E3 (payroll through the posting service) is deferred.**
+- **G1 LIVE (#610, deployed 2026-10-02):** runtime polyfills for `.at`, `Object.hasOwn` and `findLast` / `findLastIndex`. These caused 22 + 11 errors in error_log over 14 days.
+  - Watch error_log to confirm those errors stop.
+  - The "Failed to fetch dynamically imported module" errors (12) come from stale chunks after a deploy. lazyWithRetry already reloads once, so nothing was changed for them.
+- **F1 offline policy (founder decision अ, online-only; PR):**
+  - **Finding:** supabase-js *resolves* a network failure as `{data:null,error}`, so the catch-block localStorage fallback never ran. An offline load therefore showed ₹0 and empty registers with no warning. The accounts query also fell back to the CMS template and overwrote the device's cached real chart.
+  - **Fix:**
+    - `lib/connectivity/writeBlock` is the single rule: offline, or any of the 8 core load parts errored, blocks entry. The 8 core parts are vouchers, accounts, members, society_settings, stock_items, stock_movements, sales and purchases. The other 11 parts only warn.
+    - The guard lives in guardFYLocked (91 mutations), addVoucher, updateSociety and closeFinancialYear, and in the 5 domain contexts.
+    - A non-dismissable OfflineBanner shows the failed parts and a reload button.
+    - Back online after a full load, entry reopens automatically. After an incomplete load it needs a reload.
+    - Nothing is queued and nothing syncs; `src/lib/offline/` stays unwired.
+  - **Also:**
+    - With TOAST_LIMIT = 1, a page's unconditional "सहेजा गया" would replace the red refusal, so use-toast drops non-destructive toasts for 3s after a refusal.
+    - SocietySetup now shows "saved" only from `onSaved`.
+    - The banner is not sticky: the root's `overflow-x-hidden` breaks sticky, and `overflow-x-clip` would regress old Safari, the very audience G1 serves.
+  - **Checks:**
+    - Prod (read-only): all 19 load tables exist and `authenticated` holds SELECT on them, so no society is blocked permanently.
+    - test:offline-write-block 35/35.
+    - Browser, with the worktree having no Supabase env, so the load genuinely fails:
+      - the banner shows on desktop and mobile;
+      - the settings save is refused with the red toast and no false "saved";
+      - an offline event switches to the offline message;
+      - an online event after an incomplete load stays blocked.
+- **Next:** remaining phases G–M. Open CA questions (above) remain.
+
 ## Tracked audit findings
 | ID | Area | Status |
 |---|---|---|

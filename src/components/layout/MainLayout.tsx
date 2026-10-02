@@ -9,6 +9,7 @@ import ModuleGlossaryBar from '@/components/glossary/ModuleGlossaryBar';
 import Breadcrumbs from './Breadcrumbs';
 import NextSteps from './NextSteps';
 import SubscriptionBanner from '@/components/SubscriptionBanner';
+import OfflineBanner from '@/components/OfflineBanner';
 import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { fmtDate } from '@/lib/dateUtils';
@@ -71,6 +72,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             {' · '}{hi ? 'छापा गया' : 'Printed'}: {fmtDate(new Date().toISOString().slice(0, 10))}
           </div>
           <div className="print:hidden">
+            <OfflineBanner />
             <SubscriptionBanner />
             <Breadcrumbs />
             <ModuleGlossaryBar />

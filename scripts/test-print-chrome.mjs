@@ -19,7 +19,7 @@ const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  âœ
 const chrome = code.match(/<div className="print:hidden">([\s\S]*?)<\/div>\s*<main/);
 ok(!!chrome, 'header/sidebar wrapped in a print:hidden block');
 ok(chrome && /<Sidebar/.test(chrome[1]) && /<Header/.test(chrome[1]) && /<KeyboardShortcutsHelp/.test(chrome[1]), 'Sidebar, Header and shortcuts help are inside it');
-ok(/<div className="print:hidden">\s*<SubscriptionBanner \/>\s*<Breadcrumbs \/>\s*<ModuleGlossaryBar \/>\s*<\/div>/.test(code), 'banner, breadcrumbs and glossary bar are print:hidden');
+ok(/<div className="print:hidden">\s*<OfflineBanner \/>\s*<SubscriptionBanner \/>\s*<Breadcrumbs \/>\s*<ModuleGlossaryBar \/>\s*<\/div>/.test(code), 'offline + subscription banners, breadcrumbs and glossary bar are print:hidden');
 ok(/<div className="print:hidden"><NextSteps \/><\/div>/.test(code), 'NEXT STEP block is print:hidden');
 ok(/\{children\}/.test(code) && !/print:hidden[^"]*">\s*\{children\}/.test(code), 'the page content itself is NOT hidden');
 ok(/print:pt-0 print:ml-0/.test(code), 'main drops the header offset + sidebar margin in print');
