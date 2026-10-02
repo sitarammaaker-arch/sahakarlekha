@@ -28,3 +28,7 @@ _archive-old-brand/
 
 # Supabase CLI local state (not for the repo)
 supabase/.temp/
+
+# Playwright (I6 e2e) artefacts
+test-results/
+playwright-report/
