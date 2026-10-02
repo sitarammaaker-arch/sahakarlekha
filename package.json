@@ -32,6 +32,7 @@
     "test:receipts-payments": "node scripts/test-receipts-payments.mjs",
     "test:account-book": "node scripts/test-account-book.mjs",
     "test:entity-links": "node scripts/test-entity-links.mjs",
+    "test:subscription-row": "node scripts/test-subscription-row.mjs",
     "test:batched-loads": "node scripts/test-batched-loads.mjs",
     "test:j6b-module-loads": "node scripts/test-j6b-module-loads.mjs",
     "test:096-voucher-numbering-client": "node scripts/test-096-voucher-numbering-client.mjs",

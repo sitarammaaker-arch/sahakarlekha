@@ -38,6 +38,7 @@ import { computeTradingAccount, computeProfitLoss } from '@/lib/reports/tradingA
 import { computeReceiptsPayments } from '@/lib/reports/receiptsPayments';
 import { computeCashBook, computeBankBook } from '@/lib/reports/accountBook';
 import { computeEntityLinks } from '@/lib/entityLinks';
+import { fetchSubscriptionRow } from '@/lib/subscriptionRow';
 import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate, reconcileMovements } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
@@ -859,15 +860,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // T-01: keep the jurisdiction code in sync with the society's state, via the SSOT.
     jurisdictionRef.current = resolveJurisdiction(society.state);
   }, [society]);
-  // Phase 2a-4c: subscription read-only flag. The SELECT is RLS-scoped to the caller's
-  // society (055 policy), so no id is needed. true ONLY when status='expired' → false for
+  // Phase 2a-4c: subscription read-only flag, read for the signed-in society (RLS also scopes it
+  // to the caller's society, 055 policy). true ONLY when status='expired' → false for
   // legacy / active / trialing, i.e. never blocks the 19 grandfathered societies.
   const subExpiredRef = useRef(false);
   useEffect(() => {
     if (!user?.societyId) { subExpiredRef.current = false; return; }   // J6: logged out → nothing to read
     let cancelled = false;
-    supabase.from('subscriptions').select('status').maybeSingle().then(({ data }) => {
-      if (!cancelled) subExpiredRef.current = (data as { status?: string } | null)?.status === 'expired';
+    // J5: shared with useSubscription (one request per society per minute, not one per reader).
+    fetchSubscriptionRow(user.societyId).then((row) => {
+      if (!cancelled) subExpiredRef.current = row?.status === 'expired';
     });
     return () => { cancelled = true; };
   }, [user?.societyId]);   // re-read per signed-in society (was once, at mount — possibly logged out)
