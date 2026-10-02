@@ -73,3 +73,40 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.PAYROLL_STAGING_DATABASE_URL }}
         run: npm run test:pay-rls-coverage
+
+  # I6 · end-to-end tests against the STAGING Supabase project (never production — playwright.config.ts
+  # refuses the prod ref). Opt-in: skips cleanly until the four E2E_* repository secrets are set.
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+      E2E_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+    steps:
+      - name: Skip note (staging secrets not set)
+        if: env.E2E_SUPABASE_URL == ''
+        run: echo "E2E_* secrets not set — e2e skipped (staging-only; see playwright.config.ts)."
+      - uses: actions/checkout@v4
+        if: env.E2E_SUPABASE_URL != ''
+      - uses: actions/setup-node@v4
+        if: env.E2E_SUPABASE_URL != ''
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install
+        if: env.E2E_SUPABASE_URL != ''
+        run: npm ci
+      - name: Install Chromium for Playwright
+        if: env.E2E_SUPABASE_URL != ''
+        run: npx playwright install --with-deps chromium
+      - name: E2E (staging)
+        if: env.E2E_SUPABASE_URL != ''
+        run: npm run e2e
+      - name: Upload report on failure
+        if: failure() && env.E2E_SUPABASE_URL != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
