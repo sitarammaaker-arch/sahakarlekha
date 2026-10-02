@@ -78,8 +78,8 @@ export default function MaintenanceBilling() {
 
   const remove = (id: string, billNo: string) => {
     if (!window.confirm(hi ? `बिल ${billNo} हटाएँ? इसका receivable voucher भी रद्द होगा।` : `Delete bill ${billNo}? Its receivable voucher will be cancelled too.`)) return;
-    deleteMaintenanceBill(id);
-    toast({ title: hi ? 'बिल हटाया गया' : 'Bill deleted' });
+    // H: false = refused (lock / permission / voucher not cancellable) — the context already said why.
+    if (deleteMaintenanceBill(id)) toast({ title: hi ? 'बिल हटाया गया' : 'Bill deleted' });
   };
 
   const openReceive = (billId: string, outstanding: number) => {

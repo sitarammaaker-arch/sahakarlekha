@@ -355,7 +355,8 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const cur = patronageRuns.find(r => r.id === runId);
     if (!cur) return;
     if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले भुगतान reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
-    if (cur.status === 'approved' && cur.voucherId) cancelVoucher(cur.voucherId, 'Patronage run deleted', user?.name || 'System', { viaParent: true });
+    // H / RULE 3: never mark the run deleted while its voucher stays live (lock / permission refusal).
+    if (cur.status === 'approved' && cur.voucherId && !cancelVoucher(cur.voucherId, 'Patronage run deleted', user?.name || 'System', { viaParent: true })) return;
     commitPatronageRun({ ...cur, isDeleted: true }, cur);
   }, [patronageRuns, cancelVoucher, guardFYLocked, commitPatronageRun, user]);
 
