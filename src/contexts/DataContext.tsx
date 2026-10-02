@@ -3804,7 +3804,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       onSuccess: () => { if (zeroEvent) persistLedgerEvent(zeroEvent); },
       onFail: () => { if (zeroEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== zeroEvent.eventId); },
     });
-    console.info(`[AUDIT-DELETE] Account id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    // H11: was console-only — a deleted ledger left no durable trail.
+    emitAudit({ entityType: 'account', entityId: id, action: 'delete', before: { name: account.name, type: account.type }, reason: 'Account deleted' });
     return true;
   }, [accounts, society.fyLocked, deleteAccountRow]);
 
@@ -6502,6 +6503,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     salesRef.current = salesRef.current.map(s => s.id === id ? updated : s);
     setSalesState(prev => prev.map(s => s.id === id ? updated : s));
+    // H11: a bill edited after the fact was audited to the console only — now a durable row.
+    emitAudit({ entityType: 'sale', entityId: id, action: 'update', before: { date: original.date, grandTotal: original.grandTotal, items: original.items.length }, after: { date: updated.date, grandTotal: updated.grandTotal, items: updated.items.length }, reason: `Sale ${original.saleNo} edited` });
 
     const srv = viaServer as { v: Voucher; ev: LedgerEvent; rollback: () => void } | null;
     if (srv) {
@@ -6532,7 +6535,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     attemptSaleUpdate(saleBase);
 
-    console.info(`[AUDIT-EDIT] Sale id=${id} edited by ${data.createdBy || 'unknown'} at ${now}`);
     return updated;
   }, [society.fyLocked, customers, accounts, addVoucher, stockItems]);
 
@@ -6912,6 +6914,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     purchasesRef.current = purchasesRef.current.map(p => p.id === id ? updated : p);
     setPurchasesState(prev => prev.map(p => p.id === id ? updated : p));
+    // H11: a bill edited after the fact was audited to the console only — now a durable row.
+    emitAudit({ entityType: 'purchase', entityId: id, action: 'update', before: { date: original.date, grandTotal: original.grandTotal, items: original.items.length }, after: { date: updated.date, grandTotal: updated.grandTotal, items: updated.items.length }, reason: `Purchase ${original.purchaseNo} edited` });
 
     const srv = viaServer as { v: Voucher; ev: LedgerEvent; rollback: () => void } | null;
     if (srv) {
@@ -6938,7 +6942,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     attemptPurchaseUpdate(purchaseBase);
 
-    console.info(`[AUDIT-EDIT] Purchase id=${id} edited by ${data.createdBy || 'unknown'} at ${now}`);
     return updated;
   }, [society.fyLocked, suppliers, accounts, addVoucher, stockItems]);
 
@@ -7191,7 +7194,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setSalaryRecordsState(prev => prev.filter(r => r.id !== id));
     salaryRecordsRef.current = salaryRecordsRef.current.filter(r => r.id !== id);
     supabase.from('salary_records').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    console.info(`[AUDIT-DELETE] SalaryRecord id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    emitAudit({ entityType: 'salaryRecord', entityId: id, action: 'delete', before: record ? { slipNo: record.slipNo, netSalary: record.netSalary, isPaid: record.isPaid } : undefined, reason: 'Salary slip deleted' });   // H11
   }, []);
 
   // ── Suppliers ──────────────────────────────────────────────────────────────
@@ -7351,7 +7354,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (supAccount) deleteAccountRow(supAccount, { context: 'supplier-account-delete' });
       }
     }
-    console.info(`[AUDIT-DELETE] Supplier id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    emitAudit({ entityType: 'supplier', entityId: id, action: 'delete', before: { name: sup.name, accountId: sup.accountId }, reason: 'Supplier deleted' });   // H11
   }, [suppliers, deleteAccountRow]);
 
   // ── Customers ──────────────────────────────────────────────────────────────
@@ -7512,7 +7515,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (cusAccount) deleteAccountRow(cusAccount, { context: 'customer-account-delete' });
       }
     }
-    console.info(`[AUDIT-DELETE] Customer id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    emitAudit({ entityType: 'customer', entityId: id, action: 'delete', before: { name: cus.name, accountId: cus.accountId }, reason: 'Customer deleted' });   // H11
   }, [customers, deleteAccountRow]);
 
   const getEntityLinks = useCallback((entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan' | 'asset', id: string): EntityLink[] => {
