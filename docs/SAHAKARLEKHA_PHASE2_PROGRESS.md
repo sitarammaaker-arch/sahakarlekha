@@ -164,6 +164,19 @@ NOT STARTED. See the roadmap in the master prompt; the order follows the depende
   - Fix = enter the audited 31-03-2026 share-capital opening (an Opening Balances / opening journal) **from the society's audited BS**. Do not copy it from the register.
 - Minor: SSK (d0dd474f) has a ₹500 member scalar and ₹0 ledger (no contact). 45e91c0d has one member's scalar at ₹500 vs ₹250 in vouchers (the society total ties). ShareRegister already shows a per-member reconciliation.
 
+### 2026-10-02: H cash/bank/TB, GST, governance (read-only prod audits)
+- **TB:** Σ posted movement = 0 in every society, and 0 lines sit on unknown accounts.
+  - Kisan Samriddhi (45e91c0d): the opening balances don't balance (Dr ₹2,400). This is a data-entry note; nothing changed.
+- **095 LIVE** (#622; backup `sahakarlekha-prod-20261002-0431Z.dump`; verified: migration row, check in body, anon exec false, drift 0).
+  - Cause: a reversal voucher could be edited (Demo Labor Society RV/044, 2,00,000 → 2,50,000 on 2026-07-16; cash went negative to −₹2,42,850).
+  - Fix: `isEditLocked` and `edit_voucher` now also lock `reversalOf`.
+- **GST (H4 COMPLETE):** for every taxed society, bill tax = ledger 2201/3310 to the paisa (ddcb71c2: sales ₹15,99,393.25 / purchases ₹53,46,386.40).
+- **H11 governance:**
+  - audit_log records voucher cancel / approve / reverse / reject and bill deletes.
+  - Voucher creation and edits are traced by the append-only journal (ledger_events producer) plus `editHistory`.
+  - **FOUND:** sale/purchase EDITS and account / salary-slip / supplier / customer DELETES "audited" with `console.info` only. That trail dies in the browser (16 bill-edit cancels in 30 days with no audit row). **Fixed in PR:** they now write `emitAudit` rows. For the bill edits, the row is written before the server/legacy split, so both paths record the edit.
+- **Rania returns:** still live, waiting for the founder to delete them via the Returns pages.
+
 ## Tracked audit findings
 | ID | Area | Status |
 |---|---|---|
