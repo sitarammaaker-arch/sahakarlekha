@@ -36,6 +36,7 @@ import { fyStartOf, fyStartFromLabel } from '@/lib/fyPeriod';
 import { computeTrialBalance } from '@/lib/reports/trialBalance';
 import { computeTradingAccount, computeProfitLoss } from '@/lib/reports/tradingAndProfitLoss';
 import { computeReceiptsPayments } from '@/lib/reports/receiptsPayments';
+import { computeCashBook, computeBankBook } from '@/lib/reports/accountBook';
 import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate, reconcileMovements } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
@@ -4878,54 +4879,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const getCashBookEntries = useCallback((fromDate?: string, toDate?: string): CashBookEntry[] => {
-    const cashAccount = accounts.find(a => a.id === ACCOUNT_IDS.CASH);
-    if (!cashAccount) return [];
-    // T-02: accumulate the running balance in exact integer paise (RULE 2), converting to rupees only
-    // at each emitted row — so a cash book over thousands of legs cannot drift in the last paisa.
-    // ECR-17: the account opening belongs to the Head Office scope (same rule as the trial balance).
-    const openingMinor = openingsInScope
-      ? toMinor(cashAccount.openingBalanceType === 'debit' ? cashAccount.openingBalance : -cashAccount.openingBalance)
-      : 0;
-    let runningBalanceMinor = openingMinor;
-
-    const cashVouchers = activeVouchers
-      .filter(v => getVoucherLines(v).some(l => l.accountId === ACCOUNT_IDS.CASH))
-      // Deterministic tie-break so same-date + same-createdAt vouchers sort the SAME way here as in the
-      // ledger projection (projectCashBook), else the running balance — and cash-book parity — diverge.
-      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || '').localeCompare(b.voucherNo || '') || a.id.localeCompare(b.id));
-
-    if (fromDate) {
-      cashVouchers.filter(v => v.date < fromDate).forEach(v => {
-        getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.CASH).forEach(l => {
-          runningBalanceMinor = addMinor(runningBalanceMinor, l.type === 'Dr' ? toMinor(l.amount) : -toMinor(l.amount));
-        });
-      });
-    }
-
-    const result: CashBookEntry[] = [];
-    cashVouchers
-      .filter(v => {
-        if (fromDate && v.date < fromDate) return false;
-        if (toDate && v.date > toDate) return false;
-        return true;
-      })
-      .forEach(v => {
-        const cashLines = getVoucherLines(v).filter(l => l.accountId === ACCOUNT_IDS.CASH);
-        cashLines.forEach(l => {
-          runningBalanceMinor = addMinor(runningBalanceMinor, l.type === 'Dr' ? toMinor(l.amount) : -toMinor(l.amount));
-          const otherLines = getVoucherLines(v).filter(ol => ol.accountId !== ACCOUNT_IDS.CASH);
-          const otherAcc = accounts.find(a => a.id === otherLines[0]?.accountId);
-          result.push({
-            id: v.id,
-            date: v.date,
-            voucherNo: v.voucherNo,
-            particulars: v.narration || otherAcc?.name || '',
-            type: l.type === 'Dr' ? 'receipt' : 'payment',
-            amount: l.amount,
-            runningBalance: toRupees(runningBalanceMinor),
-          });
-        });
-      });
+    // K4: the voucher-state compute is a pure module (lib/reports/accountBook) — same formula, testable alone.
+    const book = computeCashBook({ accounts, vouchers: activeVouchers, accountId: ACCOUNT_IDS.CASH, fromDate, toDate, openingsInScope });
+    if (!book) return [];
+    const { entries: result, openingMinor } = book;
     return ledgerReport<CashBookEntry[]>(
       'cashBook',
       result,
@@ -4936,52 +4893,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const getBankBookEntries = useCallback((fromDate?: string, toDate?: string, bankAccountId?: string): BankBookEntry[] => {
     const targetBankId = bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK;
-    const bankAccount = accounts.find(a => a.id === targetBankId);
-    if (!bankAccount) return [];
-    // T-02: running balance in exact integer paise (RULE 2), rupees only at each emitted row.
-    // ECR-17: the account opening belongs to the Head Office scope (same rule as the trial balance).
-    const openingMinor = openingsInScope
-      ? toMinor(bankAccount.openingBalanceType === 'debit' ? bankAccount.openingBalance : -bankAccount.openingBalance)
-      : 0;
-    let runningBalanceMinor = openingMinor;
-
-    const bankVouchers = activeVouchers
-      .filter(v => getVoucherLines(v).some(l => l.accountId === targetBankId))
-      // Deterministic tie-break — same key as projectCashBook (which serves the bank book too).
-      .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || '').localeCompare(b.voucherNo || '') || a.id.localeCompare(b.id));
-
-    if (fromDate) {
-      bankVouchers.filter(v => v.date < fromDate).forEach(v => {
-        getVoucherLines(v).filter(l => l.accountId === targetBankId).forEach(l => {
-          runningBalanceMinor = addMinor(runningBalanceMinor, l.type === 'Dr' ? toMinor(l.amount) : -toMinor(l.amount));
-        });
-      });
-    }
-
-    const result: BankBookEntry[] = [];
-    bankVouchers
-      .filter(v => {
-        if (fromDate && v.date < fromDate) return false;
-        if (toDate && v.date > toDate) return false;
-        return true;
-      })
-      .forEach(v => {
-        const bankLines = getVoucherLines(v).filter(l => l.accountId === targetBankId);
-        bankLines.forEach(l => {
-          runningBalanceMinor = addMinor(runningBalanceMinor, l.type === 'Dr' ? toMinor(l.amount) : -toMinor(l.amount));
-          const otherLines = getVoucherLines(v).filter(ol => ol.accountId !== targetBankId);
-          const otherAcc = accounts.find(a => a.id === otherLines[0]?.accountId);
-          result.push({
-            id: v.id,
-            date: v.date,
-            voucherNo: v.voucherNo,
-            particulars: v.narration || otherAcc?.name || '',
-            type: l.type === 'Dr' ? 'deposit' : 'withdrawal',
-            amount: l.amount,
-            runningBalance: toRupees(runningBalanceMinor),
-          });
-        });
-      });
+    // K4: the voucher-state compute is a pure module (lib/reports/accountBook) — same formula, testable alone.
+    const book = computeBankBook({ accounts, vouchers: activeVouchers, accountId: targetBankId, fromDate, toDate, openingsInScope });
+    if (!book) return [];
+    const { entries: result, openingMinor } = book;
     return ledgerReport<BankBookEntry[]>(
       `bankBook:${targetBankId}`,
       result,
