@@ -14,7 +14,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { trackEvent } from '@/lib/analytics';
-import { MAGNETS, generateMagnet, type MagnetKey } from '@/lib/leadMagnets';
+import { MAGNETS, type MagnetKey } from '@/lib/leadMagnetsMeta';
+
+// J1: the PDF engine (jspdf) loads only when a checklist is actually generated.
+const generateMagnet = (key: MagnetKey) => { void import('@/lib/leadMagnets').then(m => m.generateMagnet(key)); };
 import { FileCheck2, CheckCircle2, Download, ArrowRight } from 'lucide-react';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
