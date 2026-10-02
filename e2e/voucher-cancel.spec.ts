@@ -19,7 +19,8 @@ test('a cancelled voucher stays cancelled after a reload', async ({ page }) => {
   await row.getByRole('button', { name: 'वाउचर रद्द करें' }).click();
 
   const dialog = page.getByRole('alertdialog');
-  await dialog.getByPlaceholder('कारण लिखें...').fill('e2e cancel check');
+  // The cancelled list shows the cancel REASON in its note column (not the narration), so carry the tag there.
+  await dialog.getByPlaceholder('कारण लिखें...').fill(`e2e cancel ${tag}`);
   await dialog.getByRole('button', { name: 'रद्द करें' }).click();
   await expect(page.getByRole('row').filter({ hasText: tag })).toHaveCount(0);   // gone from the active list
 
