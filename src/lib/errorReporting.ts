@@ -53,7 +53,10 @@ export function buildErrorRecord(
 export function reportError(source: string, error: unknown, context?: Record<string, unknown>): void {
   try {
     const url = typeof window !== 'undefined' ? window.location?.href ?? null : null;
-    const rec = buildErrorRecord(source, error, context, undefined, url);
+    // G8: the user agent tells a real visitor from a crawler re-rendering a stale cached page
+    // (the stale-chunk rows of 2026-09 recurred at fixed daily times on public pages only).
+    const ua = typeof navigator !== 'undefined' ? clip(navigator.userAgent, 300) : undefined;
+    const rec = buildErrorRecord(source, error, ua ? { ...(context ?? {}), ua } : context, undefined, url);
     supabase.from('error_log').insert(rec).then(
       () => { /* logged */ },
       () => { /* swallow — a failed error-log must never surface or re-enter a handler */ },
