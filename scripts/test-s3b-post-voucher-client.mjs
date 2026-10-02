@@ -74,7 +74,9 @@ ok("calls supabase.rpc('post_voucher') with the lib payload", /supabase\.rpc\('p
 ok('a refusal rolls back + destructive toast ≥10s + reportError (RULE 1)', /rollbackOptimistic\(\)/.test(add) && /variant: 'destructive', duration: 15000/.test(add) && /reportError\('voucher-post-service'/.test(add));
 ok('network rejection also rolls back', /\(rejection: unknown\) =>[\s\S]*?fail\(/.test(add));
 ok('number collision renumbers and retries (bounded)', /isUniqueViolation\(error\) && tries < MAX_RENUMBER_RETRIES/.test(add));
-ok('official number taken first (T-03)', /issueOfficialNumber\(nextDocNumber, societyIdRef\.current, provisionalNo\)/.test(add));
+// 096: the official number is issued by post_voucher inside its transaction (gapless) — the client no
+// longer pre-issues it, and restamps the number the server returns.
+ok('official number comes from post_voucher and is restamped (096)', !/issueOfficialNumber\(/.test(add) && /\(data as \{ voucherNo\?: string \} \| null\)\?\.voucherNo/.test(add));
 ok('the RPC branch returns — never falls through to a second save', /return newVoucher;\s*\}\s*$/.test(add));
 ok('the RPC branch never calls persistVoucher / persistLedgerEvent (the server writes all four)', !/persistVoucher\(|persistLedgerEvent\(/.test(add));
 ok('flag-off path unchanged: persistVoucher, event appended only after base success', /persistVoucher\(newVoucher, \{\s*isUpdate: false,[\s\S]*?onBaseSuccess: \(\) => \{ if \(shadowEvent\) persistLedgerEvent\(shadowEvent\); \},\s*onBaseFail: rollbackOptimistic,/.test(dc));

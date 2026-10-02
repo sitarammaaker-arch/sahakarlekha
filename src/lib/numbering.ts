@@ -23,11 +23,19 @@ export interface DocNumberParts {
   width: number;
 }
 
-/** PURE — split a doc number into parts. Handles `BOOK/FY/SEQ` (3-part, e.g. `RCP/2025-26/0001`)
+/** PURE — split a doc number into parts. Handles the voucher `BOOK/YYYY/YY/SEQ` (4-part), `BOOK/FY/SEQ` (3-part, e.g. `RCP/2025-26/0001`)
  *  and the FY-less `BOOK/SEQ` (2-part, e.g. `AST/0001`, `ITM/001`, `EMP/001`). Returns null for
  *  anything else (including no-separator prefixes like farmer `F0001`, deliberately unsupported). */
 export function parseDocNumber(no: string | undefined | null): DocNumberParts | null {
   const parts = (no ?? '').split('/');
+  // Voucher shape BOOK/YYYY/YY/SEQ (the FY rendered with a slash, e.g. `RV/2026/27/012`): the FY
+  // segment is 'YYYY/YY'. Unparsed before migration 096, so voucher numbers fell back to each browser's
+  // local counter (gaps, backward jumps, collisions). Must match the server's _official_doc_no keying.
+  if (parts.length === 4) {
+    const [book, yyyy, yy, seqStr] = parts;
+    if (!book || !/^[0-9]{4}$/.test(yyyy) || !/^[0-9]{2}$/.test(yy) || !/^[0-9]+$/.test(seqStr)) return null;
+    return { book, fy: `${yyyy}/${yy}`, seq: parseInt(seqStr, 10), width: seqStr.length };
+  }
   if (parts.length === 3) {
     const [book, fy, seqStr] = parts;
     if (!book || !fy || !/^[0-9]+$/.test(seqStr)) return null;

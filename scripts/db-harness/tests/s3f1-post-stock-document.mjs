@@ -118,7 +118,11 @@ await inRollback(async (tx) => {
     `${code(r)} ${r.ok ? r.rows[0].r.voucherNo : ''}`);
   const s5 = doc('sale', { voucher: { voucherNo: `${pfx}/99999999` } });
   r = await post(tx, s5);
-  ok('a FREE 4-part provisional number is kept as is', r.ok && r.rows[0].r.voucherNo === `${pfx}/99999999`, `${code(r)} ${r.ok ? r.rows[0].r.voucherNo : ''}`);
+  // 096: 4-part voucher numbers are server-sequenced — a client-chosen jump (99999999) is replaced by
+  // the next number in the series, so the books never skip ahead.
+  // (the zero-pad width follows the provisional's — the app sends 3-digit provisionals)
+  ok('a 4-part provisional number takes the next number in the series (096)', r.ok && r.rows[0].r.voucherNo.startsWith(`${pfx}/`)
+    && Number(r.rows[0].r.voucherNo.split('/').pop()) === Number(mx) + 2, `${code(r)} ${r.ok ? r.rows[0].r.voucherNo : ''}`);
 
   console.log('Refusals write nothing');
   const nothing = async (x) => {
