@@ -5,6 +5,7 @@
  * `app_error` (message truncated — no PII, no stack dumps).
  */
 import { onLCP, onCLS, onINP, onTTFB, type Metric } from 'web-vitals';
+import { isBenignBrowserNoise } from './errorNoise';
 import { trackEvent } from '@/lib/analytics';
 import { reportError } from '@/lib/errorReporting';
 
@@ -25,6 +26,9 @@ export function reportWebVitals() {
 
 export function installErrorTracking() {
   window.addEventListener('error', (e) => {
+    // G8: "ResizeObserver loop …" is a benign browser notice (layout settled a frame late), not an
+    // app fault — it was 24 of the last 30 days' window.error rows and only buried real errors.
+    if (isBenignBrowserNoise(e.message)) return;
     trackEvent('app_error', {
       message: String(e.message || '').slice(0, 150),
       // NOT `source`: that is a GA4 reserved traffic-source parameter, so a filename here

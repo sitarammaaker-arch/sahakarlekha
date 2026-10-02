@@ -26,6 +26,7 @@
     "test:jurisdiction-packs": "node scripts/test-jurisdiction-packs.mjs",
     "test:money": "node scripts/test-money.mjs",
     "test:polyfills": "node scripts/test-polyfills.mjs",
+    "test:g2-g8-error-hygiene": "node scripts/test-g2-g8-error-hygiene.mjs",
     "test:offline-write-block": "node scripts/test-offline-write-block.mjs",
     "test:pay-run-state": "node scripts/test-pay-run-state.mjs",
     "test:pay-event": "node scripts/test-pay-event.mjs",

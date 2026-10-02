@@ -21,6 +21,6 @@ ok('Object.hasOwn(null) throws like the spec', threw);
 ok('findLast / findLastIndex', [1, 4, 2, 5].findLast(x => x % 2 === 0) === 2 && [1, 4, 2, 5].findLastIndex(x => x > 3) === 3 && [1].findLastIndex(x => x > 9) === -1);
 ok('polyfilled methods are non-enumerable (no for-in leaks)', !Object.keys(Array.prototype).includes('at') && (() => { for (const k in []) if (k === 'at') return false; return true; })());
 const main = readFileSync(resolve(root, 'src/main.tsx'), 'utf8');
-ok('main.tsx imports the polyfills FIRST', main.split('\n').find(l => l.startsWith('import')) === 'import "./polyfills";');
+ok('main.tsx imports the polyfills FIRST', main.split(/\r?\n/).find(l => l.startsWith('import')) === 'import "./polyfills";');
 console.log(`\npolyfills: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
