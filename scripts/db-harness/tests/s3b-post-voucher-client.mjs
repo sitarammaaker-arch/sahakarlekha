@@ -64,7 +64,8 @@ await inRollback(async (tx) => {
   ok('posts', r.ok && r.rows[0].r.status === 'posted', code(r));
   await tx.asOwner();
   const row = (await tx.query(`select "voucherNo", amount::numeric a, society_id::text s, "branchId" b, lines, origin from public.vouchers where id = $1`, [v.id])).rows[0];
-  ok('vouchers row carries the app fields (no, amount, lines, branch, origin)', row && row.voucherNo === v.voucherNo && Number(row.a) === 500.25
+  // 096: the server issues the official number inside post_voucher and returns it — the row carries THAT.
+  ok('vouchers row carries the app fields (official no, amount, lines, branch, origin)', row && row.voucherNo === r.rows[0].r.voucherNo && Number(row.a) === 500.25
     && Array.isArray(row.lines) && row.lines.length === 2 && (row.b ?? undefined) === branch && row.origin === 'manual', JSON.stringify(row));
   // The entries the server wrote equal what the client path (buildVoucherEntries) would have written.
   const ents = (await tx.query(`select "accountId", dr::numeric dr, cr::numeric cr from public.voucher_entries where "voucherId" = $1 order by "accountId"`, [v.id])).rows
@@ -80,7 +81,8 @@ await inRollback(async (tx) => {
   ok('the same voucher again (retry) → exists, no duplicate', again.ok && again.rows[0].r.status === 'exists');
   const dup = await send(tx, appVoucher({ voucherNo: v.voucherNo }), sid);
   const uniqueNo = (await tx.query(`select 1 from pg_indexes where tablename = 'vouchers' and indexdef ilike '%unique%' and indexdef ilike '%voucherNo%'`)).rowCount > 0;
-  if (uniqueNo) ok('a taken voucher number → 23505 (the app renumbers and retries)', !dup.ok && dup.error.code === '23505', code(dup));
+  // 096: a taken provisional number no longer collides — the server issues the next free official one.
+  if (uniqueNo) ok('a taken provisional number → posts with a different, free official number (no 23505)', dup.ok && dup.rows[0].r.voucherNo !== r.rows[0].r.voucherNo, code(dup));
   else ok('no unique index on voucherNo here — a repeated number posts (app renumber path unused)', dup.ok, code(dup));
 
   console.log('Legacy two-leg + a refusal surfaces a code the app maps to Hindi');

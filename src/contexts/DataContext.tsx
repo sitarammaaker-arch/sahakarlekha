@@ -1864,8 +1864,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const ev = eventFor(v);
         restamp(v, ev);
         const p = buildPostVoucherPayload(v, ev);
-        supabase.rpc('post_voucher', p).then(({ error }) => {
-          if (!error) return; // 'posted' or 'exists' (idempotent retry) — both mean the voucher is durable.
+        supabase.rpc('post_voucher', p).then(({ data, error }) => {
+          if (!error) {
+            // 'posted' or 'exists' (idempotent retry) — both mean the voucher is durable. 096: the server
+            // issued the OFFICIAL number inside the posting transaction — restamp it locally.
+            const officialNo = (data as { voucherNo?: string } | null)?.voucherNo;
+            if (officialNo && officialNo !== v.voucherNo) {
+              const nv = { ...v, voucherNo: officialNo };
+              const nev = { ...ev, payload: { ...(ev.payload as Record<string, unknown>), voucherNo: officialNo } } as LedgerEvent;
+              restamp(nv, nev);
+            }
+            return;
+          }
           if (isUniqueViolation(error) && tries < MAX_RENUMBER_RETRIES) {
             // Another device took this number — bump to max+1 in the same series and retry.
             const m = v.voucherNo?.match(/^(.*)\/(\d+)$/);
@@ -1882,11 +1892,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           fail(`Network error — ${msg}`, msg);
         });
       };
-      // T-03: take the official (gapless) number first, exactly as the table path does.
-      issueOfficialNumber(nextDocNumber, societyIdRef.current, provisionalNo).then((officialNo) => {
-        const finalNo = officialNo ?? provisionalNo;
-        attempt(finalNo === provisionalNo ? newVoucher : { ...newVoucher, voucherNo: finalNo }, 0);
-      });
+      // 096: post_voucher issues the OFFICIAL number inside its own transaction (gapless — a refused post
+      // spends no number) and returns it; no client pre-issue, which used to burn a number per failure.
+      attempt(newVoucher, 0);
       return newVoucher;
     }
 
