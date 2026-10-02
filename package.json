@@ -29,6 +29,7 @@
     "test:polyfills": "node scripts/test-polyfills.mjs",
     "test:trial-balance": "node scripts/test-trial-balance.mjs",
     "test:trading-pl": "node scripts/test-trading-pl.mjs",
+    "test:receipts-payments": "node scripts/test-receipts-payments.mjs",
     "test:j6b-module-loads": "node scripts/test-j6b-module-loads.mjs",
     "test:096-voucher-numbering-client": "node scripts/test-096-voucher-numbering-client.mjs",
     "test:h-module-delete-abort": "node scripts/test-h-module-delete-abort.mjs",

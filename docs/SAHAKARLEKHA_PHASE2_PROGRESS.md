@@ -268,6 +268,16 @@
   - New `test:trial-balance` and `e2e/trial-balance.spec.ts` (balanced on staging).
   - **K approach:** lift pure computes out of DataContext one at a time, each with an equivalence check plus a unit test. No state or behaviour change.
   - **Next candidates:** P&L, Trading A/c, Receipts & Payments, cash/bank books.
+- **K2 (#648, merged):** the Trading A/c and P&L/I&E computes moved to `src/lib/reports/tradingAndProfitLoss.ts`.
+  - Equivalence check: 500 random books, 0 mismatches.
+  - New `test:trading-pl` (19 checks).
+  - Two source-pinning tests now read the new module.
+  - e2e covers `/trading-account` and `/profit-loss`.
+- **K3:** the Receipts & Payments voucher-state compute moved to `src/lib/reports/receiptsPayments.ts`.
+  - It also returns the paise openings and bank ids, which the T-09 projection needs.
+  - Equivalence check: 500 cases, 0 mismatches.
+  - New `test:receipts-payments` (14 checks).
+  - e2e covers `/receipts-payments`.
 
 ## Tracked audit findings
 | ID | Area | Status |
