@@ -1277,6 +1277,7 @@ const Vouchers: React.FC = () => {
                               )}
                               {canDelete && !cancelled && (
                                 <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  aria-label={language === 'hi' ? 'वाउचर रद्द करें' : 'Cancel voucher'} title={language === 'hi' ? 'वाउचर रद्द करें' : 'Cancel voucher'}
                                   onClick={() => { setCancelId(v.id); setCancelReason(''); }}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
