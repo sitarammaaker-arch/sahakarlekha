@@ -50,6 +50,10 @@ for (const [label, v] of [['legacy two-leg', legacy], ['multi-line with a dimens
 }
 ok('the raw builder output DOES carry societyId (why the mapping is needed)', 'societyId' in buildVoucherEntries(legacy, 'S1')[0]);
 ok('a failed sync is reported, not only console.warn', /reportError\('voucher-entries-sync'/.test(sync));
+// An edit rebuilds lines with new ids — the old rows must go, or the voucher counts twice (Assandh JV/2384).
+ok('after a successful upsert, this voucher\'s rows that are no longer its lines are deleted',
+  /return; \}[\s\S]*?\.delete\(\)\.eq\('voucherId', v\.id\)\.not\('id', 'in', `\(\$\{keep\}\)`\)/.test(sync));
+ok('a failed upsert never reaches the cleanup (returns first)', /reportError\('voucher-entries-sync', error\.message, \{ voucherId: v\.id \}\); return; \}/.test(sync));
 
 console.log('Member receipt journal event');
 const helper = dc.slice(dc.indexOf('const postJoiningReceipts = useCallback'), dc.indexOf('const addMember = useCallback'));

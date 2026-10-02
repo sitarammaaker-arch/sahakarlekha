@@ -1416,7 +1416,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const rows = buildVoucherEntries(v, sid).map(({ societyId: _sid, ...e }) => ({ ...e, society_id: sid, jurisdiction: jurisdictionRef.current }));
     if (rows.length === 0) return;
     supabase.from('voucher_entries').upsert(rows).then(({ error }) => {
-      if (error) { console.warn('voucher_entries sync error:', error.message); reportError('voucher-entries-sync', error.message, { voucherId: v.id }); }
+      if (error) { console.warn('voucher_entries sync error:', error.message); reportError('voucher-entries-sync', error.message, { voucherId: v.id }); return; }
+      // An edit rebuilds the voucher's lines with NEW ids, so upserting alone left the old rows in
+      // place — the voucher counted twice in voucher_entries (Assandh JV/2026/27/2384, 2026-10-02:
+      // bank Dr twice, 4400 + 4405 both Cr). Drop this voucher's rows that are no longer its lines —
+      // only after the new rows are confirmed, so a failed upsert never leaves it with no entries.
+      const keep = rows.map(r => `"${r.id}"`).join(',');
+      supabase.from('voucher_entries').delete().eq('voucherId', v.id).not('id', 'in', `(${keep})`).then(({ error: delErr }) => {
+        if (delErr) { console.warn('voucher_entries stale-row cleanup error:', delErr.message); reportError('voucher-entries-sync', delErr.message, { voucherId: v.id, at: 'stale-cleanup' }); }
+      });
     });
   };
 
