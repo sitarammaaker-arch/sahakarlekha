@@ -362,8 +362,10 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         return;
       }
       // Cascade (RULE-3): cancel the bill voucher + all its collection vouchers.
-      if (old.voucherId) cancelVoucher(old.voucherId, 'Department bill deleted', user?.name || 'System', { viaParent: true });
-      vouchers.filter(v => !v.isDeleted && v.refType === 'dept.collection' && v.refId === old.id).forEach(v => cancelVoucher(v.id, 'Department bill deleted (collection reversed)', user?.name || 'System', { viaParent: true }));
+      // H / RULE 3: the row is already gone — a refused cancel must not be silent.
+      const okBill = !old.voucherId || cancelVoucher(old.voucherId, 'Department bill deleted', user?.name || 'System', { viaParent: true });
+      const okColl = vouchers.filter(v => !v.isDeleted && v.refType === 'dept.collection' && v.refId === old.id).map(v => cancelVoucher(v.id, 'Department bill deleted (collection reversed)', user?.name || 'System', { viaParent: true })).every(Boolean);
+      if (!okBill || !okColl) toastRef.current({ title: 'वाउचर रद्द नहीं हुआ', description: 'रिकॉर्ड हट गया, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', variant: 'destructive', duration: 15000 });
     });
   }, [departmentBills, vouchers, society, user, cancelVoucher]);
 
@@ -456,8 +458,9 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
         return;
       }
-      if (old.voucherId) cancelVoucher(old.voucherId, 'Worker advance deleted', user?.name || 'System', { viaParent: true });
-      vouchers.filter(v => !v.isDeleted && v.refType === 'worker.advance.recovery' && v.refId === old.id).forEach(v => cancelVoucher(v.id, 'Worker advance deleted (recovery reversed)', user?.name || 'System', { viaParent: true }));
+      const okAdv = !old.voucherId || cancelVoucher(old.voucherId, 'Worker advance deleted', user?.name || 'System', { viaParent: true });   // H / RULE 3
+      const okRec = vouchers.filter(v => !v.isDeleted && v.refType === 'worker.advance.recovery' && v.refId === old.id).map(v => cancelVoucher(v.id, 'Worker advance deleted (recovery reversed)', user?.name || 'System', { viaParent: true })).every(Boolean);
+      if (!okAdv || !okRec) toastRef.current({ title: 'वाउचर रद्द नहीं हुआ', description: 'रिकॉर्ड हट गया, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', variant: 'destructive', duration: 15000 });
     });
   }, [workerAdvances, vouchers, society, user, cancelVoucher]);
 
@@ -582,8 +585,9 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
         return;
       }
-      if (old.voucherId) cancelVoucher(old.voucherId, 'PF/ESI run deleted', user?.name || 'System', { viaParent: true });
-      if (old.depositVoucherId) cancelVoucher(old.depositVoucherId, 'PF/ESI run deleted (deposit reversed)', user?.name || 'System', { viaParent: true });
+      const okRun = !old.voucherId || cancelVoucher(old.voucherId, 'PF/ESI run deleted', user?.name || 'System', { viaParent: true });   // H / RULE 3
+      const okDep = !old.depositVoucherId || cancelVoucher(old.depositVoucherId, 'PF/ESI run deleted (deposit reversed)', user?.name || 'System', { viaParent: true });
+      if (!okRun || !okDep) toastRef.current({ title: 'वाउचर रद्द नहीं हुआ', description: 'रिकॉर्ड हट गया, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', variant: 'destructive', duration: 15000 });
     });
   }, [pfEsiRuns, society, user, cancelVoucher]);
 

@@ -26,6 +26,7 @@
     "test:jurisdiction-packs": "node scripts/test-jurisdiction-packs.mjs",
     "test:money": "node scripts/test-money.mjs",
     "test:polyfills": "node scripts/test-polyfills.mjs",
+    "test:h-module-delete-abort": "node scripts/test-h-module-delete-abort.mjs",
     "test:h-voucher-ownership": "node scripts/test-h-voucher-ownership.mjs",
     "test:h11-audit-trail": "node scripts/test-h11-audit-trail.mjs",
     "test:h-reversal-edit-lock": "node scripts/test-h-reversal-edit-lock.mjs",

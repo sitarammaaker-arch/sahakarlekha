@@ -422,7 +422,8 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const cur = settlements.find(s => s.id === settlementId);
     if (!cur) return;
     if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले भुगतान reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
-    if (cur.status === 'approved' && cur.voucherId) cancelVoucher(cur.voucherId, 'Settlement deleted', user?.name || 'System', { viaParent: true });
+    // H / RULE 3: abort if the voucher cannot be cancelled — the document must not outlive it.
+    if (cur.status === 'approved' && cur.voucherId && !cancelVoucher(cur.voucherId, 'Settlement deleted', user?.name || 'System', { viaParent: true })) return;
     commitSettlement({ ...cur, isDeleted: true }, cur);
   }, [settlements, cancelVoucher, commitSettlement, user]);
 
@@ -498,7 +499,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const cur = dispatches.find(d => d.id === dispatchId);
     if (!cur) return;
     if (cur.amountReceived > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले प्राप्ति reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
-    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Dispatch deleted', user?.name || 'System', { viaParent: true });
+    if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Dispatch deleted', user?.name || 'System', { viaParent: true })) return;   // H / RULE 3
     commitDispatch({ ...cur, isDeleted: true }, cur);
   }, [dispatches, cancelVoucher, commitDispatch, user]);
 
@@ -548,7 +549,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       const bal = memberInputOutstanding(inputIssues, settlements, cur.memberId, inputAcct);
       if (bal.recovered > bal.issued - cur.amount + 0.005) { toastRef.current({ title: 'वसूली मौजूद', description: 'इस आदान की वसूली सेटलमेंट में हो चुकी है — पहले वह सेटलमेंट/कटौती reverse करें।', variant: 'destructive', duration: 10000 }); return; }
     }
-    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Input issue deleted', user?.name || 'System', { viaParent: true });
+    if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Input issue deleted', user?.name || 'System', { viaParent: true })) return;   // H / RULE 3
     commitInputIssue({ ...cur, isDeleted: true }, cur);
   }, [inputIssues, settlements, accounts, cancelVoucher, commitInputIssue, user]);
 
@@ -650,7 +651,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const cur = distributions.find(d => d.id === distributionId);
     if (!cur) return;
     if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले भुगतान reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
-    if (cur.status === 'approved' && cur.voucherId) cancelVoucher(cur.voucherId, 'Distribution deleted', user?.name || 'System', { viaParent: true });
+    if (cur.status === 'approved' && cur.voucherId && !cancelVoucher(cur.voucherId, 'Distribution deleted', user?.name || 'System', { viaParent: true })) return;   // H / RULE 3
     commitDistribution({ ...cur, isDeleted: true }, cur);
   }, [distributions, cancelVoucher, commitDistribution, user]);
 

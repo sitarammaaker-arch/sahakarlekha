@@ -38,7 +38,7 @@ interface HousingDataContextValue {
 
   maintenanceBills: MaintenanceBill[];
   generateMaintenanceBills: (data: { period: string; date?: string; flatIds?: string[] }) => MaintenanceBill[];
-  deleteMaintenanceBill: (id: string) => void;
+  deleteMaintenanceBill: (id: string) => boolean;
   recordMaintenanceCollection: (data: { billId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string; remarks?: string }) => Voucher;
 
   chargeHeads: HousingChargeHead[];
@@ -388,12 +388,13 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     return created;
   }, [accounts, housingFlats, maintenanceBills, chargeHeads, members, society, addAccount, addVoucher, cancelVoucher, user]);
 
-  const deleteMaintenanceBill = useCallback((id: string) => {
-    if (guardFYLocked()) return;
+  const deleteMaintenanceBill = useCallback((id: string): boolean => {
+    if (guardFYLocked()) return false;
     const bill = maintenanceBills.find(b => b.id === id && !b.isDeleted);
-    if (!bill) return;
+    if (!bill) return false;
     // RULE 3: cancel the linked receivable voucher so no ghost receivable/income lingers.
-    if (bill.voucherId) cancelVoucher(bill.voucherId, `Maintenance bill ${bill.billNo} deleted`, user?.name || 'System', { viaParent: true });
+    // H / RULE 3: abort if the receivable voucher cannot be cancelled (lock / permission).
+    if (bill.voucherId && !cancelVoucher(bill.voucherId, `Maintenance bill ${bill.billNo} deleted`, user?.name || 'System', { viaParent: true })) return false;
     setMaintenanceBillsState(prev => { const u = prev.filter(b => b.id !== id); storage.setMaintenanceBills(u); return u; });
     supabase.from('maintenance_bills').delete().eq('id', id).then(({ error }) => {
       if (error) {
@@ -402,6 +403,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
+    return true;
   }, [maintenanceBills, cancelVoucher, user]);
 
   // Maintenance Collection — record a receipt against a bill: Dr Cash/Bank / Cr 3303
@@ -615,8 +617,12 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return;
     const inv = fundInvestments.find(i => i.id === id);
     if (!inv) return;
-    if (inv.voucherId) cancelVoucher(inv.voucherId, `Fund investment deleted`, user?.name || 'System', { viaParent: true });
-    if (inv.redemptionVoucherId) cancelVoucher(inv.redemptionVoucherId, `Fund investment deleted (redemption reversed)`, user?.name || 'System', { viaParent: true });
+    // H / RULE 3: redemption first, then the investment voucher; stop at the first refusal.
+    if (inv.redemptionVoucherId && !cancelVoucher(inv.redemptionVoucherId, `Fund investment deleted (redemption reversed)`, user?.name || 'System', { viaParent: true })) return;
+    if (inv.voucherId && !cancelVoucher(inv.voucherId, `Fund investment deleted`, user?.name || 'System', { viaParent: true })) {
+      toastRef.current({ title: 'निवेश आंशिक रूप से हटा', description: 'Redemption वाउचर रद्द हुआ, पर निवेश का वाउचर नहीं — निवेश चालू रखा गया है। Admin को बताएँ।', variant: 'destructive', duration: 15000 });
+      return;
+    }
     setFundInvestmentsState(prev => { const u = prev.filter(i => i.id !== id); storage.setHousingFundInvestments(u); return u; });
     supabase.from('housing_fund_investments').delete().eq('id', id).then(({ error }) => {
       if (error) {
@@ -776,7 +782,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const t = transfers.find(x => x.id === id);
     if (!t) return;
     // Cancels the fee voucher; does NOT auto-revert ownership (the flat may have had later activity).
-    if (t.voucherId) cancelVoucher(t.voucherId, `Transfer ${t.flatNo} deleted`, user?.name || 'System', { viaParent: true });
+    if (t.voucherId && !cancelVoucher(t.voucherId, `Transfer ${t.flatNo} deleted`, user?.name || 'System', { viaParent: true })) return;   // H / RULE 3
     setTransfersState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingTransfers(u); return u; });
     supabase.from('housing_transfers').delete().eq('id', id).then(({ error }) => {
       if (error) {
