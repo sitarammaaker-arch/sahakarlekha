@@ -1104,6 +1104,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'किसे मिलता है, कब मिलता है, कौन देता है और हरियाणा नियम 72 की 10% सीमा — धाराओं के हवाले से, उदाहरण सहित।',
     accent: 'amber',
     tags: ['डिविडेंड', 'लाभांश', 'शेयर कैपिटल', 'नियम 72'],
+    image: '/blog/cooperative-society-member-dividend-guide.webp',
+    imageAlt: 'सहकारी समिति में सदस्य को डिविडेंड मिलना: सचिव बुज़ुर्ग किसान सदस्य को लाभांश का लिफ़ाफ़ा सौंपते हुए, पीछे कतार में अन्य सदस्य',
   },
   {
     slug: 'member-and-share-accounting',
