@@ -17,7 +17,7 @@ Every staging SQL file is guarded: it refuses any database holding a real societ
 
 ## Running
 ```
-npm run e2e            # Playwright; serves the app on :5179 pointed at staging
+npm run e2e            # Playwright; builds the app and serves it (vite preview) on :5179, pointed at staging
 ```
 Configuration comes from the environment or from the git-ignored `.env.e2e.local`:
 

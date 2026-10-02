@@ -230,6 +230,18 @@
   - The CI `e2e` job uses 4 `E2E_*` secrets. First green run: 3/3 (run 36975369836).
 - **Next in I:** run the db-harness suites against staging in CI (needs a `STAGING_DATABASE_URL` secret), plus more E2E flows (sale/purchase, year close).
 
+### 2026-10-02: I7 cancel flow; NEW finding — voucher numbering is client-side
+- **E2E (#629):**
+  - `voucher-cancel` (RULE 3): cancel with a reason → reload → listed under Cancelled.
+  - E2E now runs on a **production build** (`vite preview`). The dev server's dependency re-optimisation force-reloaded the page and aborted an in-flight cancel_voucher (seen in the trace).
+  - CI result: 4/4.
+- **FOUND (prod, P1): voucher numbers are not server-sequenced.**
+  - The format is `RV/2026/27/NNN` (4 parts, because the FY is rendered with a slash), so `_official_doc_no` skips the server sequence. That sequence only handles BOOK/FY/SEQ.
+  - The number is therefore the client's provisional one, or the max+1 fallback.
+  - Evidence (7f2919f0, last 30 days): RV 1783 → 1863 → 1884 …; it went backwards to 289 / 292 / 293 on 09-22, then back to 1931. `document_sequences` has no RV/PV/JV book. Rania JV: 5 vouchers over a 165-wide span.
+  - This is the likely root of the G6 duplicate-number refusal.
+  - The fix needs a prod migration: seed the sequences from the current max per prefix, then let `_official_doc_no` sequence 4-part prefixes. **Awaiting founder approval.**
+
 ## Tracked audit findings
 | ID | Area | Status |
 |---|---|---|

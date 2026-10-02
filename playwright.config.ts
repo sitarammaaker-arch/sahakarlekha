@@ -6,7 +6,7 @@
  *   E2E_EMAIL, E2E_PASSWORD                   the staging test login (login specs skip without them)
  *   E2E_BROWSER_CHANNEL                       optional: 'msedge' / 'chrome' to use an installed browser
  *
- * The app is served by Vite with VITE_SUPABASE_* pointed at staging. The config refuses to run if the
+ * The app is built and served (vite build + preview) with VITE_SUPABASE_* pointed at staging. The config refuses to run if the
  * URL is the production project, so a mis-set variable can never point a test run at real books.
  */
 import { defineConfig, devices } from '@playwright/test';
@@ -53,11 +53,13 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], ...(process.env.E2E_BROWSER_CHANNEL ? { channel: process.env.E2E_BROWSER_CHANNEL } : {}) },
     },
   ],
+  // A PRODUCTION build served by `vite preview` — what users run. The dev server re-optimises deps on
+  // the first lazy import and force-reloads the page, which aborted an in-flight cancel_voucher mid-test.
   webServer: {
-    command: `npx vite --port ${PORT} --strictPort`,
+    command: `npx vite build --logLevel warn && npx vite preview --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 300_000,
     env: { VITE_SUPABASE_URL: url, VITE_SUPABASE_ANON_KEY: anon },
   },
 });
