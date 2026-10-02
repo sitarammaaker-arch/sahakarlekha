@@ -16,7 +16,7 @@ const ok = (n, c) => { if (c) { pass++; console.log(`  ✓ ${n}`); } else { fail
 const read = p => readFileSync(resolve(root, p), 'utf8');
 
 const dc = read('src/contexts/DataContext.tsx');
-const cv = dc.slice(dc.indexOf('const cancelVoucher = useCallback'), dc.indexOf('const cancelVoucher = useCallback') + 2200);
+const cv = dc.slice(dc.indexOf('const cancelVoucher = useCallback'), dc.indexOf('const cancelVoucher = useCallback') + 4500);
 ok('cancelVoucher accepts { viaParent }', /cancelVoucher: \(id: string, reason: string, deletedBy: string, opts\?: \{ viaParent\?: boolean \}\) => boolean;/.test(dc) && /opts\?: \{ viaParent\?: boolean \}\): boolean =>/.test(cv));
 ok('already-cancelled voucher ⇒ true, before any other check', /if \(!current\) return false;\s*\n(?:\s*\/\/[^\n]*\n)*\s*if \(current\.isDeleted\) return true;/.test(cv));
 ok('return vouchers refused unless viaParent', /\(current\.refType === 'sale\.return' \|\| current\.refType === 'purchase\.return'\) && !opts\?\.viaParent[\s\S]{0,600}return false;/.test(cv));

@@ -14,6 +14,7 @@
  * idempotent bill-run, same cascade-on-delete — only the home of the state changed.
  */
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
 import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -100,7 +101,7 @@ const HousingDataContext = createContext<HousingDataContextValue | undefined>(un
 export function HousingProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   // Compose core (never fork): FY-lock + chart from society; sub-ledgers + vouchers via the core engine.
-  const { society, accounts, members, vouchers, addAccount, addVoucher, cancelVoucher } = useData();
+  const { society, accounts, members, vouchers, addAccount, addVoucher, cancelVoucher, registerVoucherOwner } = useData();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   useEffect(() => { toastRef.current = toast; }, [toast]);
@@ -126,6 +127,10 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const [complaints, setComplaintsState] = useState<HousingComplaint[]>(() => storage.getHousingComplaints());
   const [parkingSlots, setParkingState] = useState<HousingParking[]>(() => storage.getHousingParking());
   const [transfers, setTransfersState] = useState<HousingTransfer[]>(() => storage.getHousingTransfers());
+  // H / RULE 3: vouchers these documents carry are cancelled through the document, not alone.
+  const ownerGroupsRef = useRef<OwnerGroup[]>([]);
+  ownerGroupsRef.current = [{ label: 'मेंटेनेंस बिल', docs: maintenanceBills }, { label: 'फंड निवेश', docs: fundInvestments }, { label: 'फ्लैट ट्रांसफर', docs: transfers }];
+  useEffect(() => registerVoucherOwner('housing', id => findVoucherOwner(ownerGroupsRef.current, id)), [registerVoucherOwner]);
   const [insurances, setInsurancesState] = useState<HousingInsurance[]>(() => storage.getHousingInsurance());
   const [amcs, setAmcsState] = useState<HousingAmc[]>(() => storage.getHousingAmc());
   const [documents, setDocumentsState] = useState<HousingDocument[]>(() => storage.getHousingDocuments());
@@ -374,7 +379,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         if (error) {
           console.error('Maintenance bill save error:', error.message); reportError('housing-save', error.message);
           setMaintenanceBillsState(prev => { const r = prev.filter(b => b.id !== bill.id); storage.setMaintenanceBills(r); return r; });
-          if (bill.voucherId) cancelVoucher(bill.voucherId, 'Maintenance bill save failed (auto-rollback)', user?.name || 'System');
+          if (bill.voucherId) cancelVoucher(bill.voucherId, 'Maintenance bill save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
           toastRef.current({ title: 'बिल सेव नहीं हुआ', description: `${bill.billNo} — cloud save fail (${error.message}). इसका receivable voucher वापस ले लिया गया।`, variant: 'destructive', duration: 12000 });
         }
       });
@@ -388,7 +393,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const bill = maintenanceBills.find(b => b.id === id && !b.isDeleted);
     if (!bill) return;
     // RULE 3: cancel the linked receivable voucher so no ghost receivable/income lingers.
-    if (bill.voucherId) cancelVoucher(bill.voucherId, `Maintenance bill ${bill.billNo} deleted`, user?.name || 'System');
+    if (bill.voucherId) cancelVoucher(bill.voucherId, `Maintenance bill ${bill.billNo} deleted`, user?.name || 'System', { viaParent: true });
     setMaintenanceBillsState(prev => { const u = prev.filter(b => b.id !== id); storage.setMaintenanceBills(u); return u; });
     supabase.from('maintenance_bills').delete().eq('id', id).then(({ error }) => {
       if (error) {
@@ -437,7 +442,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Maintenance collection bill-update error:', error.message); reportError('housing-save', error.message);
         setMaintenanceBillsState(prev => { const u = prev.map(b => b.id === bill.id ? bill : b); storage.setMaintenanceBills(u); return u; });
-        cancelVoucher(voucher.id, 'Maintenance collection rolled back (bill update failed)', user?.name || 'System');
+        cancelVoucher(voucher.id, 'Maintenance collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true });
         toastRef.current({ title: 'वसूली सेव नहीं हुई', description: `Cloud save fail — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
       }
     });
@@ -559,7 +564,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Fund investment save error:', error.message); reportError('housing-save', error.message);
         setFundInvestmentsState(prev => { const r = prev.filter(x => x.id !== inv.id); storage.setHousingFundInvestments(r); return r; });
-        cancelVoucher(v.id, 'Fund investment save failed (auto-rollback)', user?.name || 'System');
+        cancelVoucher(v.id, 'Fund investment save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
         toastRef.current({ title: 'निवेश सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. इसका voucher वापस ले लिया गया।`, variant: 'destructive', duration: 12000 });
       }
     });
@@ -599,7 +604,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Fund investment redeem error:', error.message); reportError('housing-save', error.message);
         setFundInvestmentsState(prev => { const u = prev.map(i => i.id === inv.id ? inv : i); storage.setHousingFundInvestments(u); return u; });
-        cancelVoucher(v.id, 'Redemption rolled back (row update failed)', user?.name || 'System');
+        cancelVoucher(v.id, 'Redemption rolled back (row update failed)', user?.name || 'System', { viaParent: true });
         toastRef.current({ title: 'भुनाना सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
@@ -610,8 +615,8 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return;
     const inv = fundInvestments.find(i => i.id === id);
     if (!inv) return;
-    if (inv.voucherId) cancelVoucher(inv.voucherId, `Fund investment deleted`, user?.name || 'System');
-    if (inv.redemptionVoucherId) cancelVoucher(inv.redemptionVoucherId, `Fund investment deleted (redemption reversed)`, user?.name || 'System');
+    if (inv.voucherId) cancelVoucher(inv.voucherId, `Fund investment deleted`, user?.name || 'System', { viaParent: true });
+    if (inv.redemptionVoucherId) cancelVoucher(inv.redemptionVoucherId, `Fund investment deleted (redemption reversed)`, user?.name || 'System', { viaParent: true });
     setFundInvestmentsState(prev => { const u = prev.filter(i => i.id !== id); storage.setHousingFundInvestments(u); return u; });
     supabase.from('housing_fund_investments').delete().eq('id', id).then(({ error }) => {
       if (error) {
@@ -758,7 +763,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         console.error('Transfer save error:', error.message); reportError('housing-save', error.message);
         setTransfersState(prev => { const r = prev.filter(x => x.id !== t.id); storage.setHousingTransfers(r); return r; });
         updateHousingFlat(flat.id, { memberId: oldOwner, receivableAccountId: flat.receivableAccountId, associateMemberId: flat.associateMemberId, nomineeName: flat.nomineeName, nomineeRelation: flat.nomineeRelation, nomineePhone: flat.nomineePhone });
-        if (voucherId) cancelVoucher(voucherId, 'Transfer save failed (auto-rollback)', user?.name || 'System');
+        if (voucherId) cancelVoucher(voucherId, 'Transfer save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
         toastRef.current({ title: 'हस्तांतरण सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. मालिक व शुल्क वापस ले लिए गए।`, variant: 'destructive', duration: 12000 });
       }
     });
@@ -771,7 +776,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const t = transfers.find(x => x.id === id);
     if (!t) return;
     // Cancels the fee voucher; does NOT auto-revert ownership (the flat may have had later activity).
-    if (t.voucherId) cancelVoucher(t.voucherId, `Transfer ${t.flatNo} deleted`, user?.name || 'System');
+    if (t.voucherId) cancelVoucher(t.voucherId, `Transfer ${t.flatNo} deleted`, user?.name || 'System', { viaParent: true });
     setTransfersState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingTransfers(u); return u; });
     supabase.from('housing_transfers').delete().eq('id', id).then(({ error }) => {
       if (error) {

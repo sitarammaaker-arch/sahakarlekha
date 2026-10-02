@@ -14,6 +14,7 @@
  * C2 exposes the 'member' tier in the UI; 'wholesale'/'promo' are schema-ready for later slices.
  */
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
 import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -108,7 +109,7 @@ interface ConsumerDataContextValue {
 const ConsumerDataContext = createContext<ConsumerDataContextValue | null>(null);
 
 export function ConsumerProvider({ children }: { children: ReactNode }) {
-  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase, deletePurchase, addStockMovement, purchases, suppliers, stockItems } = useData();
+  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase, deletePurchase, addStockMovement, purchases, suppliers, stockItems, registerVoucherOwner } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -242,7 +243,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
 
   const deleteMemberRecovery = useCallback((voucherId: string) => {
     if (guardFYLocked()) return;
-    cancelVoucher(voucherId, 'Member recovery reversed', user?.name ?? 'Counter');
+    cancelVoucher(voucherId, 'Member recovery reversed', user?.name ?? 'Counter', { viaParent: true });
   }, [cancelVoucher, user]);
 
   const setMemberCreditLimit = useCallback((memberId: string, limit: number) => {
@@ -318,7 +319,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     } as Parameters<typeof addVoucher>[0]);
     if (!voucher?.id) return null;
     const next: PatronageRun = { ...cur, status: 'approved', resolutionNo: args.resolutionNo.trim(), resolutionDate: args.resolutionDate, voucherId: voucher.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
-    commitPatronageRun(next, cur, () => cancelVoucher(voucher.id, `${label} approval rolled back (cloud save failed)`, user?.name || 'System'));
+    commitPatronageRun(next, cur, () => cancelVoucher(voucher.id, `${label} approval rolled back (cloud save failed)`, user?.name || 'System', { viaParent: true }));
     toastRef.current({ title: `✅ ${label} approved`, description: `प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}` });
     return next;
   }, [patronageRuns, accounts, addVoucher, cancelVoucher, guardFYLocked, commitPatronageRun, user]);
@@ -344,7 +345,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     } as Parameters<typeof addVoucher>[0]);
     if (!voucher?.id) return null;
     const next: PatronageRun = { ...cur, amountPaid: +(cur.amountPaid + amount).toFixed(2) };
-    commitPatronageRun(next, cur, () => cancelVoucher(voucher.id, 'Patronage payment rolled back (cloud save failed)', user?.name || 'System'));
+    commitPatronageRun(next, cur, () => cancelVoucher(voucher.id, 'Patronage payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
     toastRef.current({ title: '✅ भुगतान दर्ज', description: `₹${amount.toLocaleString('en-IN')}` });
     return voucher;
   }, [patronageRuns, accounts, addVoucher, cancelVoucher, guardFYLocked, commitPatronageRun, user]);
@@ -354,12 +355,16 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const cur = patronageRuns.find(r => r.id === runId);
     if (!cur) return;
     if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले भुगतान reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
-    if (cur.status === 'approved' && cur.voucherId) cancelVoucher(cur.voucherId, 'Patronage run deleted', user?.name || 'System');
+    if (cur.status === 'approved' && cur.voucherId) cancelVoucher(cur.voucherId, 'Patronage run deleted', user?.name || 'System', { viaParent: true });
     commitPatronageRun({ ...cur, isDeleted: true }, cur);
   }, [patronageRuns, cancelVoucher, guardFYLocked, commitPatronageRun, user]);
 
   // ── Purchase Order + GRN (approval-driven procurement) ──────────────────────
   const [purchaseOrders, setPOState] = useState<PurchaseOrder[]>(() => storage.getConsumerPurchaseOrders());
+  // H / RULE 3: vouchers these documents carry are cancelled through the document, not alone.
+  const ownerGroupsRef = useRef<OwnerGroup[]>([]);
+  ownerGroupsRef.current = [{ label: 'बिक्री वापसी (Sales Return)', docs: salesReturns }, { label: 'ख़रीद वापसी (Purchase Return)', docs: purchaseReturns }, { label: 'संरक्षण लाभांश (Patronage)', docs: patronageRuns }, { label: 'Purchase Order', docs: purchaseOrders }];
+  useEffect(() => registerVoucherOwner('consumer', id => findVoucherOwner(ownerGroupsRef.current, id)), [registerVoucherOwner]);
   useEffect(() => {
     const sid = user?.societyId;
     if (!sid) { setPOState([]); return; }

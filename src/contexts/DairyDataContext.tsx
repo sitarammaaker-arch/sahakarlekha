@@ -14,6 +14,7 @@
  * page — C-B) lands in D2.
  */
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
 import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -97,7 +98,7 @@ interface DairyDataContextValue {
 const DairyDataContext = createContext<DairyDataContextValue | null>(null);
 
 export function DairyProvider({ children }: { children: ReactNode }) {
-  const { society, accounts, members, addVoucher, cancelVoucher } = useData();
+  const { society, accounts, members, addVoucher, cancelVoucher, registerVoucherOwner } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -130,6 +131,10 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   const [dispatches, setDispatchesState] = useState<DairyDispatch[]>(() => storage.getDairyDispatches());
   const [inputIssues, setInputIssuesState] = useState<DairyInputIssue[]>(() => storage.getDairyInputIssues());
   const [distributions, setDistributionsState] = useState<DairyDistribution[]>(() => storage.getDairyDistributions());
+  // H / RULE 3: vouchers these documents carry are cancelled through the document, not alone.
+  const ownerGroupsRef = useRef<OwnerGroup[]>([]);
+  ownerGroupsRef.current = [{ label: 'दूध भुगतान (Settlement)', docs: settlements }, { label: 'दूध डिस्पैच', docs: dispatches }, { label: 'इनपुट वितरण', docs: inputIssues }, { label: 'बोनस/लाभ वितरण', docs: distributions }];
+  useEffect(() => registerVoucherOwner('dairy', id => findVoucherOwner(ownerGroupsRef.current, id)), [registerVoucherOwner]);
 
   useEffect(() => {
     const sid = user?.societyId;
@@ -381,7 +386,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!voucher?.id) return sentinel;
     const no = 'DS/' + String(settlements.filter(s => s.status === 'approved' && !s.isDeleted).length + 1).padStart(4, '0');
     const next: DairySettlement = { ...cur, status: 'approved', settlementNo: no, netPayable: net, voucherId: voucher.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
-    commitSettlement(next, cur, () => cancelVoucher(voucher.id, 'Settlement approval rolled back (cloud save failed)', user?.name || 'System'));
+    commitSettlement(next, cur, () => cancelVoucher(voucher.id, 'Settlement approval rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
     toastRef.current({ title: '✅ सेटलमेंट approved', description: `${no} — नेट देय ₹${net.toLocaleString('en-IN')}` });
     return next;
   }, [settlements, accounts, addVoucher, cancelVoucher, commitSettlement, user]);
@@ -407,7 +412,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     } as Parameters<typeof addVoucher>[0]);
     if (!voucher?.id) return sentinel;
     const next: DairySettlement = { ...cur, amountPaid: +(cur.amountPaid + amount).toFixed(2) };
-    commitSettlement(next, cur, () => cancelVoucher(voucher.id, 'Payment rolled back (cloud save failed)', user?.name || 'System'));
+    commitSettlement(next, cur, () => cancelVoucher(voucher.id, 'Payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
     toastRef.current({ title: '✅ भुगतान दर्ज', description: `₹${amount.toLocaleString('en-IN')} — बकाया ₹${outstanding(cur.netPayable, next.amountPaid).toLocaleString('en-IN')}` });
     return voucher;
   }, [settlements, accounts, addVoucher, cancelVoucher, commitSettlement, user]);
@@ -417,7 +422,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const cur = settlements.find(s => s.id === settlementId);
     if (!cur) return;
     if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले भुगतान reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
-    if (cur.status === 'approved' && cur.voucherId) cancelVoucher(cur.voucherId, 'Settlement deleted', user?.name || 'System');
+    if (cur.status === 'approved' && cur.voucherId) cancelVoucher(cur.voucherId, 'Settlement deleted', user?.name || 'System', { viaParent: true });
     commitSettlement({ ...cur, isDeleted: true }, cur);
   }, [settlements, cancelVoucher, commitSettlement, user]);
 
@@ -457,7 +462,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     } as Parameters<typeof addVoucher>[0]);
     if (!voucher?.id) return sentinel;
     const d: DairyDispatch = { ...data, id: crypto.randomUUID(), amount, voucherId: voucher.id, amountReceived: 0, createdAt: new Date().toISOString() };
-    commitDispatch(d, null, () => cancelVoucher(voucher.id, 'Dispatch rolled back (cloud save failed)', user?.name || 'System'));
+    commitDispatch(d, null, () => cancelVoucher(voucher.id, 'Dispatch rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
     toastRef.current({ title: '✅ डिस्पैच दर्ज', description: `${data.unionName} — बिक्री ₹${amount.toLocaleString('en-IN')}` });
     return d;
   }, [accounts, addVoucher, cancelVoucher, commitDispatch, user]);
@@ -483,7 +488,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     } as Parameters<typeof addVoucher>[0]);
     if (!voucher?.id) return sentinel;
     const next: DairyDispatch = { ...cur, amountReceived: +(cur.amountReceived + amount).toFixed(2) };
-    commitDispatch(next, cur, () => cancelVoucher(voucher.id, 'Union payment rolled back (cloud save failed)', user?.name || 'System'));
+    commitDispatch(next, cur, () => cancelVoucher(voucher.id, 'Union payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
     toastRef.current({ title: '✅ भुगतान प्राप्त', description: `₹${amount.toLocaleString('en-IN')} — बकाया ₹${(due - amount).toLocaleString('en-IN')}` });
     return voucher;
   }, [dispatches, accounts, addVoucher, cancelVoucher, commitDispatch, user]);
@@ -493,7 +498,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const cur = dispatches.find(d => d.id === dispatchId);
     if (!cur) return;
     if (cur.amountReceived > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले प्राप्ति reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
-    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Dispatch deleted', user?.name || 'System');
+    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Dispatch deleted', user?.name || 'System', { viaParent: true });
     commitDispatch({ ...cur, isDeleted: true }, cur);
   }, [dispatches, cancelVoucher, commitDispatch, user]);
 
@@ -527,7 +532,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     } as Parameters<typeof addVoucher>[0]);
     if (!voucher?.id) return sentinel;
     const issue: DairyInputIssue = { ...data, id: crypto.randomUUID(), amount, voucherId: voucher.id, createdAt: new Date().toISOString() };
-    commitInputIssue(issue, null, () => cancelVoucher(voucher.id, 'Input issue rolled back (cloud save failed)', user?.name || 'System'));
+    commitInputIssue(issue, null, () => cancelVoucher(voucher.id, 'Input issue rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
     toastRef.current({ title: '✅ आदान दर्ज', description: `${data.memberName} — ₹${amount.toLocaleString('en-IN')} (उधार)` });
     return issue;
   }, [accounts, addVoucher, cancelVoucher, commitInputIssue, user]);
@@ -543,7 +548,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       const bal = memberInputOutstanding(inputIssues, settlements, cur.memberId, inputAcct);
       if (bal.recovered > bal.issued - cur.amount + 0.005) { toastRef.current({ title: 'वसूली मौजूद', description: 'इस आदान की वसूली सेटलमेंट में हो चुकी है — पहले वह सेटलमेंट/कटौती reverse करें।', variant: 'destructive', duration: 10000 }); return; }
     }
-    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Input issue deleted', user?.name || 'System');
+    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Input issue deleted', user?.name || 'System', { viaParent: true });
     commitInputIssue({ ...cur, isDeleted: true }, cur);
   }, [inputIssues, settlements, accounts, cancelVoucher, commitInputIssue, user]);
 
@@ -608,7 +613,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     } as Parameters<typeof addVoucher>[0]);
     if (!voucher?.id) return sentinel;
     const next: DairyDistribution = { ...cur, status: 'approved', resolutionNo: args.resolutionNo.trim(), resolutionDate: args.resolutionDate, voucherId: voucher.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
-    commitDistribution(next, cur, () => cancelVoucher(voucher.id, 'Distribution approval rolled back (cloud save failed)', user?.name || 'System'));
+    commitDistribution(next, cur, () => cancelVoucher(voucher.id, 'Distribution approval rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
     toastRef.current({ title: `✅ ${kindHi} approved`, description: `प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}` });
     return next;
   }, [distributions, accounts, addVoucher, cancelVoucher, commitDistribution, user]);
@@ -635,7 +640,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     } as Parameters<typeof addVoucher>[0]);
     if (!voucher?.id) return sentinel;
     const next: DairyDistribution = { ...cur, amountPaid: +(cur.amountPaid + amount).toFixed(2) };
-    commitDistribution(next, cur, () => cancelVoucher(voucher.id, 'Distribution payment rolled back (cloud save failed)', user?.name || 'System'));
+    commitDistribution(next, cur, () => cancelVoucher(voucher.id, 'Distribution payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
     toastRef.current({ title: '✅ भुगतान दर्ज', description: `₹${amount.toLocaleString('en-IN')} — बकाया ₹${(outstandingAmt - amount).toLocaleString('en-IN')}` });
     return voucher;
   }, [distributions, accounts, addVoucher, cancelVoucher, commitDistribution, user]);
@@ -645,7 +650,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const cur = distributions.find(d => d.id === distributionId);
     if (!cur) return;
     if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले भुगतान reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
-    if (cur.status === 'approved' && cur.voucherId) cancelVoucher(cur.voucherId, 'Distribution deleted', user?.name || 'System');
+    if (cur.status === 'approved' && cur.voucherId) cancelVoucher(cur.voucherId, 'Distribution deleted', user?.name || 'System', { viaParent: true });
     commitDistribution({ ...cur, isDeleted: true }, cur);
   }, [distributions, cancelVoucher, commitDistribution, user]);
 
