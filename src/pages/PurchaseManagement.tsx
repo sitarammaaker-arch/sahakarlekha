@@ -362,9 +362,9 @@ const PurchaseManagement: React.FC = () => {
   // ── Delete purchase ───────────────────────────────────────────────────────
   const handleDelete = () => {
     if (!deleteId) return;
-    deletePurchase(deleteId);
+    const done = deletePurchase(deleteId);   // H4: false = refused (lock / permission / live return) — the context already toasted why
     setDeleteId(null);
-    toast({ title: language === 'hi' ? 'खरीद हटाई गई' : 'Purchase deleted' });
+    if (done) toast({ title: language === 'hi' ? 'खरीद हटाई गई' : 'Purchase deleted' });
   };
 
   // ── Download Purchase Record PDF (internal) ───────────────────────────────

@@ -26,6 +26,7 @@
     "test:jurisdiction-packs": "node scripts/test-jurisdiction-packs.mjs",
     "test:money": "node scripts/test-money.mjs",
     "test:polyfills": "node scripts/test-polyfills.mjs",
+    "test:h4-return-voucher-guard": "node scripts/test-h4-return-voucher-guard.mjs",
     "test:g3-error-boundary-reset": "node scripts/test-g3-error-boundary-reset.mjs",
     "test:g4-silent-writes": "node scripts/test-g4-silent-writes.mjs",
     "test:g2-g8-error-hygiene": "node scripts/test-g2-g8-error-hygiene.mjs",
