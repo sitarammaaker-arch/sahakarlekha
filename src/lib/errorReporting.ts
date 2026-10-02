@@ -10,6 +10,7 @@
  * A later slice can plug Sentry into this same seam and/or add an in-app viewer.
  */
 import { supabase } from '@/lib/supabase';
+import { getAuthSession } from '@/lib/storage';
 
 export interface ErrorRecord {
   id: string;
@@ -57,7 +58,11 @@ export function reportError(source: string, error: unknown, context?: Record<str
     // (the stale-chunk rows of 2026-09 recurred at fixed daily times on public pages only).
     const ua = typeof navigator !== 'undefined' ? clip(navigator.userAgent, 300) : undefined;
     const rec = buildErrorRecord(source, error, ua ? { ...(context ?? {}), ua } : context, undefined, url);
-    supabase.from('error_log').insert(rec).then(
+    // G8: which society hit it — every 30-day row was society-less, so a failed save could not be
+    // traced to its books (the Rania duplicate-number refusal had to be found by timestamp).
+    let societyId: string | null = null;
+    try { societyId = getAuthSession()?.societyId || null; } catch { /* no storage → leave null */ }
+    supabase.from('error_log').insert(societyId ? { ...rec, society_id: societyId } : rec).then(
       () => { /* logged */ },
       () => { /* swallow — a failed error-log must never surface or re-enter a handler */ },
     );
