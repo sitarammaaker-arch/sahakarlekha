@@ -41,3 +41,17 @@ test('an article page loads and renders its own body', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'लेखांकन है क्या?' })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(/मिनट/).first()).toBeVisible();
 });
+
+// J6 · logged out there is no society to load. DataContext used to load the placeholder 'SOC001' —
+// ~41 Supabase requests on EVERY public page view (vouchers, members, accounts …), all returning nothing.
+const PUBLIC_OK = /\/rest\/v1\/(rpc\/public_reviews|public_reviews|blog_post_views|rpc\/increment_blog_view|rpc\/get_blog_view_count)\b/;
+for (const path of ['/', '/blog', '/blog/cooperative-accounting-basics', '/login']) {
+  test(`public page ${path} makes no society-data request`, async ({ page }) => {
+    const bad: string[] = [];
+    page.on('request', r => { const u = r.url(); if (u.includes('.supabase.co/rest/v1/') && !PUBLIC_OK.test(u)) bad.push(u.replace(/^.*\/rest\/v1\//, '').slice(0, 80)); });
+    await page.goto(path);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+    expect(bad, bad.join('\n')).toEqual([]);
+  });
+}

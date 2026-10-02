@@ -619,6 +619,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // society switch it still holds the PREVIOUS society's branches — keeping them rendered a wrong
   // branch selector. Only a query error (data null) falls back to the cache.
   useEffect(() => {
+    if (!user?.societyId) return;   // J6: logged out (public pages) → no society data to load
     supabase.from('branches').select('*').eq('society_id', societyIdRef.current)
       .then(({ data }) => { if (data) { const bs = data as Branch[]; setBranchesState(bs); cacheBranches(bs); } });
   }, [user?.societyId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -699,6 +700,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const cacheGodowns = (g: Godown[]) => { try { localStorage.setItem('sahayata_godowns', JSON.stringify(g)); } catch { /* quota */ } };
   const setActiveGodown = useCallback((id: string) => { setActiveGodownState(id); try { localStorage.setItem('sahayata_active_godown', id); } catch { /* quota */ } }, []);
   useEffect(() => {
+    if (!user?.societyId) return;   // J6: logged out → nothing to load
     supabase.from('godowns').select('*').eq('society_id', societyIdRef.current)
       .then(({ data }) => { if (data && data.length) { const gs = data as Godown[]; setGodownsState(gs); cacheGodowns(gs); } });
   }, [user?.societyId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -816,12 +818,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // legacy / active / trialing, i.e. never blocks the 19 grandfathered societies.
   const subExpiredRef = useRef(false);
   useEffect(() => {
+    if (!user?.societyId) { subExpiredRef.current = false; return; }   // J6: logged out → nothing to read
     let cancelled = false;
     supabase.from('subscriptions').select('status').maybeSingle().then(({ data }) => {
       if (!cancelled) subExpiredRef.current = (data as { status?: string } | null)?.status === 'expired';
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [user?.societyId]);   // re-read per signed-in society (was once, at mount — possibly logged out)
   // FY-lock guard — reads the LATEST society via ref, so it is never stale even
   // inside useCallbacks declared with empty deps. Returns true (and toasts) when locked.
   const guardFYLocked = useCallback((): boolean => {
@@ -991,10 +994,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [kccLoans, setKccLoansState] = useState<KccLoan[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
+  const loadedSocietyRef = useRef<string | null>(null);   // J6: the society whose books this page loaded
 
   useEffect(() => {
-    const sid = user?.societyId || 'SOC001';
+    // J6: logged out (landing, blog, login …) there is no society to load. This used to load the
+    // placeholder 'SOC001' — ~41 Supabase requests on EVERY public page view, all returning nothing.
+    if (!user?.societyId) {
+      setIsLoading(false);
+      // Signed out after a society's books were loaded in THIS page → reload once, so no previous
+      // society's data stays in memory (the old placeholder load used to overwrite it by accident).
+      // After the reload nothing is loaded yet, so this cannot loop.
+      if (loadedSocietyRef.current) { loadedSocietyRef.current = null; window.location.reload(); }
+      return;
+    }
+    const sid = user.societyId;
     societyIdRef.current = sid;
+    loadedSocietyRef.current = sid;
     setIsLoading(true);
 
     // Reset all state to empty before loading new society's data
@@ -2554,7 +2569,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const refreshPostingFlag = () => {
       const sid = societyIdRef.current;
-      if (!sid || document.visibilityState !== 'visible') return;
+      if (!userRef.current || !sid || document.visibilityState !== 'visible') return;   // J6: not when logged out
       supabase.from('society_flags').select('posting_service').eq('society_id', sid).maybeSingle()
         .then(({ data, error }) => { if (!error) postingServiceRef.current = data?.posting_service === true; }, () => { /* keep */ });
     };
