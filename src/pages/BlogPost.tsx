@@ -13,6 +13,8 @@ import HelpfulWidget from '@/components/HelpfulWidget';
 import EmailCapture from '@/components/EmailCapture';
 import { magnetForCategory } from '@/lib/leadMagnetsMeta';
 import { trackEvent } from '@/lib/analytics';
+import { reloadOnceForStaleChunk } from '@/lib/chunkReload';
+import { reportError } from '@/lib/errorReporting';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findPost, loadBlogRaw, readingMinutes, relatedPosts, publishedOrder, isPublished } from '@/content/blog';
 import { getAuthor, authorInitials } from '@/content/blog/authors';
@@ -162,10 +164,23 @@ const BlogPost: React.FC = () => {
   const post = findPost(slug);
   // J2: the article body is its own lazy chunk — load it for this slug. undefined = loading, null = none.
   const [raw, setRaw] = React.useState<string | null | undefined>(undefined);
+  const [loadFailed, setLoadFailed] = React.useState(false);
   React.useEffect(() => {
     let live = true;
     setRaw(undefined);
-    loadBlogRaw(slug).then((r) => { if (live) setRaw(r); }, () => { if (live) setRaw(null); });
+    setLoadFailed(false);
+    loadBlogRaw(slug).then(
+      (r) => { if (live) setRaw(r); },
+      // L1: a body chunk that fails to load (stale after a deploy, or a weak network) is NOT a missing
+      // post — it used to set null and silently bounce the reader to /blog. Reload once to pick up the
+      // fresh build; if that already happened, say so and offer a reload.
+      (err) => {
+        if (!live) return;
+        if (reloadOnceForStaleChunk()) return;            // keep the loading shell until the reload
+        reportError('chunk-load', err, { at: 'blog body', slug });
+        setLoadFailed(true);
+      },
+    );
     return () => { live = false; };
   }, [slug]);
 
@@ -260,6 +275,18 @@ const BlogPost: React.FC = () => {
   // to the index. Scheduled posts stay hidden until their publish date arrives.
   if (!post || raw === null || !isPublished(post)) {
     return <Navigate to="/blog" replace />;
+  }
+  if (loadFailed) {
+    return (
+      <PublicLayout>
+        <div className="max-w-3xl mx-auto px-4 py-16 text-center space-y-4" role="alert">
+          <p className="text-foreground">लेख लोड नहीं हो पाया — शायद साइट अभी अपडेट हुई है या नेटवर्क कमज़ोर है।</p>
+          <button type="button" onClick={() => window.location.reload()} className="px-4 py-2 rounded-md bg-primary text-primary-foreground">
+            पेज फिर से लोड करें
+          </button>
+        </div>
+      </PublicLayout>
+    );
   }
   if (raw === undefined) {
     // Body still loading (one small chunk) — keep the page shell; the prerendered HTML already served

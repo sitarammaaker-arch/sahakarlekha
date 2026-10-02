@@ -289,6 +289,20 @@
     - Before, Ledger Heads said "no links" for an account used only inside a multi-line voucher, and the delete was then refused.
     - No data was at risk, because the guard itself was right.
   - New `test:entity-links` (13 checks).
+- **J5 (#656, #659, merged):** a DevTools-hook probe counts React commits from login to network idle.
+  - Batching 32 independent table loads (DataContext 17, Marketing 10, Consumer 5) took commits from 81 to 43.
+  - The shared subscription read (3 fetches → 1) brought data-phase commits down to **10**.
+  - The remaining roughly 30–50 commits are the dashboard recharts entry animation (chart subtree only). That is a visual choice and was left as is.
+
+### 2026-10-02: Phase L started (SEO / public website)
+- **L1, old-browser crashes:** checked error_log read-only.
+  - `.at` and `Object.hasOwn` stopped after G1's polyfills (#610). None since.
+  - What remains on public pages is about one stale-chunk error per day ("Failed to fetch dynamically imported module"). These come from tabs left open across deploys and still running the old build. `ua` is now logged (#612), so future rows are diagnosable.
+  - **Fixed:**
+    - J2's article-body loader turned a failed body chunk into "missing post" and silently redirected the reader to /blog. It now reloads once, and if loading still fails it shows a reload message.
+    - Shared `lib/chunkReload`: at most one reload per 30 s.
+    - The old "clear on success" flag would have looped forever when the page chunk loaded and the body chunk failed. A new e2e test caught this: 14 reloads in 8 s. It now asserts exactly 2 loads.
+  - New `test:chunk-reload` (6 checks).
 
 ## Tracked audit findings
 | ID | Area | Status |
