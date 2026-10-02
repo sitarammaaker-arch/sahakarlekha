@@ -22,6 +22,20 @@ test('perf probe: login → dashboard data load', async ({ page }) => {
       onCommitFiberRoot() { w.__commits.push(performance.now()); },
       onCommitFiberUnmount() {}, onPostCommitFiberRoot() {}, onScheduleFiberRoot() {}, checkDCE() {},
     };
+    // J5b: record when each Supabase response is fully read, so every commit can be attributed to the
+    // response that finished just before it (the setState that caused it).
+    const fw = window as unknown as { __fetchEnds: { t: number; u: string }[] };
+    fw.__fetchEnds = [];
+    const orig = window.fetch.bind(window);
+    window.fetch = async (...args: Parameters<typeof fetch>) => {
+      const res = await orig(...args);
+      const u = typeof args[0] === 'string' ? args[0] : (args[0] as Request).url ?? String(args[0]);
+      if (u.includes('.supabase.co/')) {
+        const done = () => fw.__fetchEnds.push({ t: performance.now(), u: u.replace(/^.*\/(rest|auth)\/v1\//, '$1:').replace(/\?.*$/, '') });
+        res.clone().text().then(done, done);
+      }
+      return res;
+    };
   });
   const commitsSince = (from: number) => page.evaluate((f) => (window as unknown as { __commits: number[] }).__commits.filter(t => t >= f).length, from);
   const t0 = Date.now();
@@ -55,6 +69,18 @@ test('perf probe: login → dashboard data load', async ({ page }) => {
   console.log(`[perf] login click→dashboard URL ${tUrl - tClick} ms; click→data ready ${tReady - tClick} ms; click→network idle ${tIdle - tClick} ms`);
   console.log(`[perf] supabase REST requests after login: ${afterClick.length} (first ${firstStart - tClick} ms, last end ${lastEnd - tClick} ms after click); bytes ${Math.round(afterClick.reduce((s, r) => s + (r.bytes ?? 0), 0) / 1024)} KB`);
   console.log(`[perf] React commits login click→network idle: ${commits}`);
+  // J5b: attribute each commit to the Supabase response that finished last before it (≤ 50 ms earlier).
+  const attrib = await page.evaluate((f) => {
+    const w = window as unknown as { __commits: number[]; __fetchEnds: { t: number; u: string }[] };
+    const out = new Map<string, number>();
+    for (const c of w.__commits.filter(t => t >= f)) {
+      const prev = w.__fetchEnds.filter(e => e.t <= c && c - e.t <= 50).sort((a, b) => b.t - a.t)[0];
+      const k = prev ? prev.u : '(no response — timer/navigation/user)';
+      out.set(k, (out.get(k) ?? 0) + 1);
+    }
+    return [...out].sort((a, b) => b[1] - a[1]);
+  }, perfClick);
+  for (const [k, n] of attrib) console.log(`[perf] commits after ${k}: ${n}`);
   console.log(`[perf] distinct tables/rpcs: ${tables.size}; repeated: ${[...tables].filter(([, n]) => n > 1).map(([t, n]) => `${t}×${n}`).join(', ')}`);
   for (const r of reqs.filter(x => /\/rest\/v1\/(vouchers|society_settings)\?/.test(x.url))) console.log(`[perf] dup? start+${r.start - tClick} ms  ${r.url.replace(/^.*\/rest\/v1\//, '').slice(0, 110)}`);
   for (const r of slow) console.log(`[perf] slow ${String(r.end! - r.start).padStart(5)} ms  start+${r.start - tClick}  ${r.url.replace(/^.*\/rest\/v1\//, '').slice(0, 90)}`);
