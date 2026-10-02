@@ -98,7 +98,7 @@ const empty: Omit<AppUser, 'id' | 'createdAt' | 'society_id'> = {
 };
 
 export default function UserManagement() {
-  const { user: currentUser, adminResetMfa, can } = useAuth();
+  const { user: currentUser, adminResetMfa, can, logout } = useAuth();
   // ECR-06 S7: user-management is delegated to admin + secretary (matrix `userMgmt`).
   // A non-admin manager (secretary) may NOT create or edit admin users — mirrors the
   // server guards (mig 047: is_society_user_manager + the role<>'admin' RLS/RPC checks).
@@ -198,10 +198,22 @@ export default function UserManagement() {
 
     try {
       if (editing) {
-        // Update existing user
+        // Email change goes FIRST, through the server: it updates the Supabase Auth login AND
+        // society_users together (migration 098). Writing society_users.email alone left the Auth
+        // login on the old email — the user then signed in to Auth but the app found no row and
+        // said "Invalid email or password", even after a password reset (Rania admin, 2026-10-02).
+        const newEmail = form.email.trim().toLowerCase();
+        const emailChanged = newEmail !== (editing.email || '').trim().toLowerCase();
+        if (emailChanged) {
+          const { error: emErr } = await supabase.rpc('app_update_society_user_email', { p_su_id: editing.id, p_new_email: newEmail });
+          if (emErr) {
+            setSaveError(hi ? `ईमेल नहीं बदला गया: ${emErr.message}` : `Email was not changed: ${emErr.message}`);
+            return;   // nothing else saved — the admin can fix the email and retry
+          }
+        }
+        // Update the remaining fields (email is owned by the RPC above, never written here).
         const updateData: Record<string, unknown> = {
           name: form.name,
-          email: form.email,
           role: form.role,
           is_active: form.isActive,
           branch_id: form.branchId || null,   // ECR-17 Phase 4b: '' = society-wide (unrestricted)
@@ -216,11 +228,21 @@ export default function UserManagement() {
 
         const updated = users.map(u =>
           u.id === editing.id
-            ? { ...u, name: form.name, email: form.email, role: form.role, isActive: form.isActive, branchId: form.branchId || '' }
+            ? { ...u, name: form.name, email: emailChanged ? newEmail : u.email, role: form.role, isActive: form.isActive, branchId: form.branchId || '' }
             : u
         );
         setUsers(updated);
         cacheUsers(updated);
+
+        // Changing YOUR OWN email: this session's token still carries the old email, which every
+        // tenant check reads — sign in again with the new email.
+        if (emailChanged && (currentUser?.email || '').toLowerCase() === (editing.email || '').toLowerCase()) {
+          window.alert(hi
+            ? `आपका ईमेल बदलकर ${newEmail} हो गया है। कृपया नए ईमेल से दोबारा लॉगिन करें।`
+            : `Your email is now ${newEmail}. Please log in again with the new email.`);
+          logout();
+          return;
+        }
 
         // P1-SEC-5: real logins live in Supabase Auth, not society_users.password
         // (a dead column that 012's trigger force-blanks). Reset via the SECURITY

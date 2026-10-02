@@ -243,7 +243,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { data } = await supabase
           .from('society_users')
           .select('id, name, email, role, society_id, is_active, mfa_enabled, branch_id')
-          .eq('email', email)
+          .eq('email', email.trim().toLowerCase())   // stored emails are lower-case (mig 097)
           .eq('is_active', true)
           .maybeSingle();
 
@@ -398,7 +398,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { data: userData } = await supabase
           .from('society_users')
           .select('id, name, email, role, society_id, is_active, mfa_enabled, branch_id')
-          .eq('email', email)
+          .eq('email', email.trim().toLowerCase())   // stored emails are lower-case (mig 097)
           .eq('is_active', true)
           .maybeSingle();
 
@@ -522,7 +522,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { data: legacyUser } = await supabase
           .from('society_users')
           .select('email, name')
-          .eq('email', email)
+          .eq('email', email.trim().toLowerCase())   // stored emails are lower-case (mig 097)
           .eq('is_active', true)
           .maybeSingle();
 
