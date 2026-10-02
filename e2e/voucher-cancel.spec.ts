@@ -18,8 +18,7 @@ test('a cancelled voucher stays cancelled after a reload', async ({ page }) => {
   await page.addInitScript(() => {
     const orig = Storage.prototype.setItem;
     Storage.prototype.setItem = function (k: string, v: string) {
-      if (k === 'sl_chunk_reloaded') console.log('[diag] chunk-reload flag set: ' + (new Error().stack || '').split('
-').slice(1, 6).join(' | '));
+      if (k === 'sl_chunk_reloaded') console.log('[diag] chunk-reload flag set: ' + String(new Error().stack || '').replace(/\s+/g, ' ').slice(0, 500));
       return orig.call(this, k, v);
     };
     window.addEventListener('unhandledrejection', e => console.log('[diag] unhandledrejection: ' + String((e as PromiseRejectionEvent).reason).slice(0, 300)));
