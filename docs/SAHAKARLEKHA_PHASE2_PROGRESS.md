@@ -13,20 +13,19 @@
 - Explain findings to the founder in Devanagari Hindi, with stepwise instructions.
 - Statutory values need a SOURCE (Act or circular text plus URL), never a statement.
 
-## Current position (2026-10-02)
-- **Done and live:**
-  - A (security).
-  - B2 / B3 / B7.
-  - C (FY rollover + year close, D5 applied).
-  - D (tax slices; CA questions open).
-  - F1 (online-only).
-  - G (reliability).
-  - **H (deep domain audit: trading/GST, members/share capital, cash/TB, governance, all domain modules)**.
-- **Phase I in progress:** staging + Playwright e2e LIVE (RULE 1 flow green in CI).
+## Current position (2026-10-02, end of day)
+- **Phases A–M processed.** The final gate and report are in [SAHAKARLEKHA_PRODUCTION_READINESS_REPORT.md](SAHAKARLEKHA_PRODUCTION_READINESS_REPORT.md).
+- **Verdict:** production-usable, but not yet READY. The blockers are:
+  - S4: the database still accepts direct client accounting writes
+  - open CA tax questions
+  - E3 payroll posting is off
+  - the db-harness is not in CI
 - **Founder actions open:**
-  - Delete Rania's 2 returns (SRET / PRET/2026-27/001) in the app.
-  - Supply Rania's audited share-capital opening.
-  - Answer the CA questions (194Q turnover gate, GST base, 194C/194H whole-vs-excess).
+  - Vercel Redeploy (#665/#668 are rate-limited)
+  - apply 098
+  - Rania: delete its 2 returns, and enter its audited share-capital opening
+  - answer the CA questions
+- **Next dependency-safe task:** S4 design. The database refuses direct client writes to `vouchers`, `voucher_entries` and `ledger_events` for posting-ON societies, with the work done on the harness first, then staging.
 
 ## Roadmap status
 
@@ -63,7 +62,7 @@
 - F1: COMPLETE.
 - G: COMPLETE (G6/G7 deferred with evidence).
 - H: COMPLETE (see the 2026-10-02 H sections).
-- I–M: not started.
+- I–M: processed (see their dated sections; final gate in the readiness report).
 
 ### Phase H — summary (2026-10-02)
 | Area | Result | PR |
