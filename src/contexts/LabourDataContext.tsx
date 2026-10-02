@@ -11,6 +11,7 @@
  * upsert, with RULE-1 rollback on cloud failure and a RULE-6 FY-lock guard on every mutation.
  */
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
 import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -73,7 +74,7 @@ const LabourDataContext = createContext<LabourDataContextValue | undefined>(unde
 export function LabourProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   // Compose core (never fork): FY-lock from society; sub-ledger via the core account engine.
-  const { society, accounts, vouchers, musterEntries, addAccount, updateAccount, deleteAccount, addVoucher, cancelVoucher, getAccountBalance } = useData();
+  const { society, accounts, vouchers, musterEntries, addAccount, updateAccount, deleteAccount, addVoucher, cancelVoucher, getAccountBalance, registerVoucherOwner } = useData();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   useEffect(() => { toastRef.current = toast; }, [toast]);
@@ -97,6 +98,10 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   const [departmentBills, setDepartmentBillsState] = useState<DepartmentBill[]>(() => storage.getDepartmentBills());
   const [workerAdvances, setWorkerAdvancesState] = useState<WorkerAdvance[]>(() => storage.getWorkerAdvances());
   const [pfEsiRuns, setPfEsiRunsState] = useState<PfEsiRun[]>(() => storage.getPfEsiRuns());
+  // H / RULE 3: vouchers these documents carry are cancelled through the document, not alone.
+  const ownerGroupsRef = useRef<OwnerGroup[]>([]);
+  ownerGroupsRef.current = [{ label: 'विभाग बिल', docs: departmentBills }, { label: 'श्रमिक अग्रिम', docs: workerAdvances }, { label: 'PF/ESI', docs: pfEsiRuns }];
+  useEffect(() => registerVoucherOwner('labour', id => findVoucherOwner(ownerGroupsRef.current, id)), [registerVoucherOwner]);
 
   // Load when the society changes; Supabase is SSOT, localStorage is offline fallback.
   useEffect(() => {
@@ -286,7 +291,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Department bill save error:', error.message);
         setDepartmentBillsState(prev => { const r = prev.filter(b => b.id !== bill.id); storage.setDepartmentBills(r); return r; });
-        cancelVoucher(voucher.id, 'Department bill rolled back (save failed)', user?.name || 'System');
+        cancelVoucher(voucher.id, 'Department bill rolled back (save failed)', user?.name || 'System', { viaParent: true });
         toastRef.current({ title: 'बिल सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. बिल वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
       }
     });
@@ -336,7 +341,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Department collection bill-update error:', error.message);
         setDepartmentBillsState(prev => { const u = prev.map(b => b.id === bill.id ? bill : b); storage.setDepartmentBills(u); return u; });
-        cancelVoucher(voucher.id, 'Department collection rolled back (bill update failed)', user?.name || 'System');
+        cancelVoucher(voucher.id, 'Department collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true });
         toastRef.current({ title: 'वसूली सेव नहीं हुई', description: `Cloud save fail — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
       }
     });
@@ -357,8 +362,8 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         return;
       }
       // Cascade (RULE-3): cancel the bill voucher + all its collection vouchers.
-      if (old.voucherId) cancelVoucher(old.voucherId, 'Department bill deleted', user?.name || 'System');
-      vouchers.filter(v => !v.isDeleted && v.refType === 'dept.collection' && v.refId === old.id).forEach(v => cancelVoucher(v.id, 'Department bill deleted (collection reversed)', user?.name || 'System'));
+      if (old.voucherId) cancelVoucher(old.voucherId, 'Department bill deleted', user?.name || 'System', { viaParent: true });
+      vouchers.filter(v => !v.isDeleted && v.refType === 'dept.collection' && v.refId === old.id).forEach(v => cancelVoucher(v.id, 'Department bill deleted (collection reversed)', user?.name || 'System', { viaParent: true }));
     });
   }, [departmentBills, vouchers, society, user, cancelVoucher]);
 
@@ -393,7 +398,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Worker advance save error:', error.message);
         setWorkerAdvancesState(prev => { const r = prev.filter(a => a.id !== adv.id); storage.setWorkerAdvances(r); return r; });
-        cancelVoucher(voucher.id, 'Worker advance rolled back (save failed)', user?.name || 'System');
+        cancelVoucher(voucher.id, 'Worker advance rolled back (save failed)', user?.name || 'System', { viaParent: true });
         toastRef.current({ title: 'अग्रिम सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
       }
     });
@@ -431,7 +436,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Advance recovery update error:', error.message);
         setWorkerAdvancesState(prev => { const u = prev.map(a => a.id === adv.id ? adv : a); storage.setWorkerAdvances(u); return u; });
-        cancelVoucher(voucher.id, 'Advance recovery rolled back (update failed)', user?.name || 'System');
+        cancelVoucher(voucher.id, 'Advance recovery rolled back (update failed)', user?.name || 'System', { viaParent: true });
         toastRef.current({ title: 'वसूली सेव नहीं हुई', description: `Cloud save fail — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
       }
     });
@@ -451,8 +456,8 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
         return;
       }
-      if (old.voucherId) cancelVoucher(old.voucherId, 'Worker advance deleted', user?.name || 'System');
-      vouchers.filter(v => !v.isDeleted && v.refType === 'worker.advance.recovery' && v.refId === old.id).forEach(v => cancelVoucher(v.id, 'Worker advance deleted (recovery reversed)', user?.name || 'System'));
+      if (old.voucherId) cancelVoucher(old.voucherId, 'Worker advance deleted', user?.name || 'System', { viaParent: true });
+      vouchers.filter(v => !v.isDeleted && v.refType === 'worker.advance.recovery' && v.refId === old.id).forEach(v => cancelVoucher(v.id, 'Worker advance deleted (recovery reversed)', user?.name || 'System', { viaParent: true }));
     });
   }, [workerAdvances, vouchers, society, user, cancelVoucher]);
 
@@ -519,7 +524,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('PF/ESI run save error:', error.message);
         setPfEsiRunsState(prev => { const r = prev.filter(x => x.id !== run.id); storage.setPfEsiRuns(r); return r; });
-        cancelVoucher(voucher.id, 'PF/ESI run rolled back (save failed)', user?.name || 'System');
+        cancelVoucher(voucher.id, 'PF/ESI run rolled back (save failed)', user?.name || 'System', { viaParent: true });
         toastRef.current({ title: 'EPF/ESI सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
       }
     });
@@ -557,7 +562,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('PF/ESI deposit update error:', error.message);
         setPfEsiRunsState(prev => { const u = prev.map(r => r.id === run.id ? run : r); storage.setPfEsiRuns(u); return u; });
-        cancelVoucher(voucher.id, 'PF/ESI deposit rolled back (update failed)', user?.name || 'System');
+        cancelVoucher(voucher.id, 'PF/ESI deposit rolled back (update failed)', user?.name || 'System', { viaParent: true });
         toastRef.current({ title: 'जमा सेव नहीं हुई', description: `Cloud save fail — ${error.message}. वापस ले लिया गया।`, variant: 'destructive', duration: 12000 });
       }
     });
@@ -577,8 +582,8 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
         return;
       }
-      if (old.voucherId) cancelVoucher(old.voucherId, 'PF/ESI run deleted', user?.name || 'System');
-      if (old.depositVoucherId) cancelVoucher(old.depositVoucherId, 'PF/ESI run deleted (deposit reversed)', user?.name || 'System');
+      if (old.voucherId) cancelVoucher(old.voucherId, 'PF/ESI run deleted', user?.name || 'System', { viaParent: true });
+      if (old.depositVoucherId) cancelVoucher(old.depositVoucherId, 'PF/ESI run deleted (deposit reversed)', user?.name || 'System', { viaParent: true });
     });
   }, [pfEsiRuns, society, user, cancelVoucher]);
 

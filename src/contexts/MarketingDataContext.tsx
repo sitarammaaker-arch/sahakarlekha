@@ -742,7 +742,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
 
   const deleteAgencyReceipt = useCallback((voucherId: string) => {
     if (guardFYLocked()) return;
-    cancelVoucher(voucherId, 'Agency receipt reversed', user?.name || 'System');
+    cancelVoucher(voucherId, 'Agency receipt reversed', user?.name || 'System', { viaParent: true });
   }, [cancelVoucher, user]);
 
   // ── Procurement commission accrual (M3d) ──────────────────────────────────────────
@@ -775,7 +775,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
 
   const deleteCommissionAccrual = useCallback((voucherId: string) => {
     if (guardFYLocked()) return;
-    cancelVoucher(voucherId, 'Commission accrual reversed', user?.name || 'System');
+    cancelVoucher(voucherId, 'Commission accrual reversed', user?.name || 'System', { viaParent: true });
   }, [cancelVoucher, user]);
 
   return (

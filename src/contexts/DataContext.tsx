@@ -26,6 +26,7 @@ import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode'
 import { inventoryProcurementCost, closingStock, isStockLedgerAccount } from '@/lib/tradingAccount';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
 import { CORE_PARTS, setLoadFailures, refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
+import type { VoucherOwnerCheck } from '@/lib/voucherOwnership';
 import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
 import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
@@ -161,6 +162,8 @@ interface DataContextType {
   // must NOT show a success toast on false (mirrors cancelVoucher's contract).
   updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => boolean;
   cancelVoucher: (id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean }) => boolean;
+  /** H: a domain context registers who owns its vouchers; returns the unregister fn. */
+  registerVoucherOwner: (key: string, check: VoucherOwnerCheck) => () => void;
   reverseVoucher: (id: string, reason: string) => Voucher | null;
   /** T-20: post the year-end statutory appropriation of net surplus as ONE balanced voucher through
    *  the canonical engine (effective-dated UCAS rates). Flag-gated (society.statutoryAppropriation).
@@ -2243,6 +2246,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Returns true if the voucher was actually cancelled, false if blocked (a guard fired
   // and showed its own toast). Callers should only show a success message when true.
+  // H / RULE 3: domain contexts register an owner check for the vouchers their documents carry.
+  const voucherOwnersRef = useRef(new Map<string, VoucherOwnerCheck>());
+  const registerVoucherOwner = useCallback((key: string, check: VoucherOwnerCheck) => {
+    voucherOwnersRef.current.set(key, check);
+    return () => { if (voucherOwnersRef.current.get(key) === check) voucherOwnersRef.current.delete(key); };
+  }, []);
+
   const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean }): boolean => {
     if (guardFYLocked()) return false;
     if (guardPermission('delete', 'वाउचर रद्द करने')) return false;   // ECR-06: role gate
@@ -2260,6 +2270,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if ((current.refType === 'share.transfer' || (!current.refType && (current.narration || '').startsWith('Shares transferred from '))) && !opts?.viaParent) {
       toastRef.current({ title: 'यहाँ रद्द नहीं होगा', description: 'यह शेयर-ट्रांसफर का वाउचर है (दो वाउचरों का जोड़ा)। गलती सुधारने के लिए Share Register से उल्टा ट्रांसफर करें — तभी दोनों सदस्यों का शेयर और बही साथ ठीक रहेंगे।', variant: 'destructive', duration: 10000 });
       return false;
+    }
+    // H / RULE 3: a voucher a LIVE module document links to (settlement, maintenance bill, worker
+    // advance, …) is cancelled only through that document; an orphan (document gone) stays cancellable.
+    if (!opts?.viaParent) {
+      for (const check of voucherOwnersRef.current.values()) {
+        const owner = check(id);
+        if (owner) {
+          toastRef.current({ title: 'यहाँ रद्द नहीं होगा', description: `यह वाउचर "${owner}" से जुड़ा है। उसी module से उसे delete करें — तभी document, बही और balances साथ ठीक रहेंगे।`, variant: 'destructive', duration: 10000 });
+          return false;
+        }
+      }
     }
     if ((current.refType === 'sale.return' || current.refType === 'purchase.return') && !opts?.viaParent) {
       const page = current.refType === 'sale.return' ? 'बिक्री वापसी (Sales Return)' : 'ख़रीद वापसी (Purchase Return)';
@@ -7703,7 +7724,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
-    addVoucher, updateVoucher, cancelVoucher, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
+    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
     addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
@@ -7742,7 +7763,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
-    addVoucher, updateVoucher, cancelVoucher, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
+    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
     addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
