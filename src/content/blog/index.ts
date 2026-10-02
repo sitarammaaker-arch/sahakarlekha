@@ -432,6 +432,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'रोज़ नकद-गिनती, महीने में BRS और वाउचर जाँच, साल में रिपोर्ट व ऑडिट-रिकॉर्ड — कोषाध्यक्ष की व्यावहारिक चेकलिस्ट।',
     accent: 'sky',
     tags: ['कोषाध्यक्ष', 'नकद', 'BRS', 'वाउचर जाँच'],
+    image: '/blog/treasurer-accounting-work-checklist.webp',
+    imageAlt: 'सहकारी समिति के कोषाध्यक्ष का लेखा-काम: लैपटॉप पर डैशबोर्ड, कैश बॉक्स, वाउचर और बैंक पासबुक के साथ चेकलिस्ट',
   },
   {
     slug: 'office-bearers-chairman-secretary-treasurer',
