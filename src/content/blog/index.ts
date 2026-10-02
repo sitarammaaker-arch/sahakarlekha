@@ -1410,6 +1410,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'HARCO Bank से 19 DCCB होते हुए PACS तक — हरियाणा के सहकारी ऋण ढांचे की पूरी तस्वीर एक गाइड में।',
     accent: 'emerald',
     tags: ['DCCB', 'HARCO Bank', 'ऋण संरचना'],
+    image: '/blog/dccb-haryana-pacs-harco-bank-credit-structure.webp',
+    imageAlt: 'हरियाणा की तीन-स्तरीय सहकारी ऋण संरचना: गाँव के PACS में किसान और सचिव का हाथ मिलाना, पीछे ज़िला बैंक और शीर्ष बैंक की इमारतें',
   },
   {
     slug: 'haryana-state-cooperation-policy-2026-tracker',
