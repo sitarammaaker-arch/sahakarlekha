@@ -23,7 +23,15 @@ export default defineConfig(({ mode }) => ({
         // they load only when a page that needs them is opened (and are cached
         // across route navigations). Keeps the initial download small on mobile.
         manualChunks(id: string) {
+          // J1: Vite's own preload helper (a virtual module, not under node_modules) must not land in a
+          // feature chunk — it did ("pdf"), so the entry imported the whole jspdf bundle to reach it.
+          if (id.includes("vite/preload-helper") || id.includes("commonjsHelpers")) return "helpers";
           if (!id.includes("node_modules")) return;
+          // J1: React and tiny shared helpers get their OWN chunks. Left unassigned, Rollup hoisted React
+          // and clsx into "charts" and a helper into "pdf", so EVERY page (landing, blog) modulepreloaded
+          // the whole recharts + jspdf/html2canvas bundles (~400 KB gzip) it never uses.
+          if (/[\/]node_modules[\/](react|react-dom|scheduler|react-is)[\/]/.test(id)) return "react";
+          if (/[\/]node_modules[\/](@babel[\/]runtime|tslib|clsx|tailwind-merge|class-variance-authority)[\/]/.test(id)) return "helpers";
           if (id.includes("jspdf") || id.includes("html2canvas") || id.includes("dompurify") || id.includes("canvg")) return "pdf";
           if (id.includes("recharts") || id.includes("/d3-") || id.includes("victory")) return "charts";
           if (id.includes("xlsx")) return "xlsx";

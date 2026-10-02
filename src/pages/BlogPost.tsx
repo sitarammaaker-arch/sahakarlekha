@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import GuideMarkdown, { slugifyHeading } from '@/components/guide/GuideMarkdown';
 import HelpfulWidget from '@/components/HelpfulWidget';
 import EmailCapture from '@/components/EmailCapture';
-import { magnetForCategory } from '@/lib/leadMagnets';
+import { magnetForCategory } from '@/lib/leadMagnetsMeta';
 import { trackEvent } from '@/lib/analytics';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findPost, loadBlogRaw, readingMinutes, relatedPosts, publishedOrder, isPublished } from '@/content/blog';
