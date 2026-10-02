@@ -24,6 +24,8 @@ ok('window.error handler drops noise before tracking or logging', /if \(isBenign
 const rep = readFileSync(resolve(root, 'src/lib/errorReporting.ts'), 'utf8');
 ok('reportError adds the user agent to context', /navigator\.userAgent/.test(rep) && /\{ \.\.\.\(context \?\? \{\}\), ua \}/.test(rep));
 
+ok('reportError stamps society_id from the auth session (never throws)', /getAuthSession\(\)\?\.societyId/.test(rep) && /society_id: societyId/.test(rep) && /catch \{ \/\* no storage/.test(rep));
+
 const vercel = JSON.parse(readFileSync(resolve(root, 'vercel.json'), 'utf8'));
 const spa = (vercel.rewrites || []).find(r => r.destination === '/index.html');
 const re = spa && new RegExp('^' + spa.source + '$');
