@@ -1151,9 +1151,11 @@ function ledgerTrialBalance(events, accounts, asOf, fyStart) {
       netBalance: toRupees(totDr - totCr)
     });
   }
+  const groupById = new Map((Array.isArray(accounts) ? accounts : []).filter((a) => a.isGroup).map((a) => [a.id, a]));
   for (const l of split.lines) {
     if (seen.has(l.accountId)) continue;
-    const account = {
+    const group = groupById.get(l.accountId);
+    const account = group ? { ...group, isGroup: false } : {
       id: l.accountId,
       name: `[Deleted] ${l.accountId.slice(0, 8)}...`,
       nameHi: `[\u0939\u091F\u093E\u092F\u093E] ${l.accountId.slice(0, 8)}...`,
@@ -1169,7 +1171,8 @@ function ledgerTrialBalance(events, accounts, asOf, fyStart) {
       transactionCredit: toRupees(l.txnCrMinor),
       totalDebit: toRupees(l.totalDrMinor),
       totalCredit: toRupees(l.totalCrMinor),
-      netBalance: toRupees(l.netMinor)
+      netBalance: toRupees(l.netMinor),
+      ...group ? { postedToGroup: true } : {}
     });
   }
   return results;
