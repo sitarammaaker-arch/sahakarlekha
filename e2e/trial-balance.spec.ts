@@ -13,7 +13,7 @@ test('trial balance renders and is balanced', async ({ page }) => {
   page.on('pageerror', e => errors.push(e.message));
   await login(page);
   await page.goto('/trial-balance');
-  await expect(page.getByText(/ट्रायल बैलेंस संतुलित है|Trial Balance is Balanced/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/ट्रायल बैलेंस संतुलित है|Trial Balance is Balanced/).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/असंतुलित|NOT Balanced/)).toHaveCount(0);
   expect(errors, errors.join('\n')).toEqual([]);
 });
