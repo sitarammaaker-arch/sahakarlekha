@@ -15,6 +15,10 @@
 -- anon-exec: get_current_society_id — evaluated inside RLS policies granted to `public` (incl. anon
 -- requests); revoking it would turn those reads into errors. For anon it returns NULL (no JWT email),
 -- which matches no row. CREATE OR REPLACE keeps the existing grants.
+--
+-- Applied in prod 2026-10-02 (verified: helper uses lower(email), 0 mixed-case emails, grants intact).
+
+begin;
 
 create or replace function public.get_current_society_id()
 returns text
@@ -35,6 +39,11 @@ update public.society_users su
  where su.email <> lower(su.email)
    and not exists (select 1 from public.society_users o
                     where o.id <> su.id and lower(o.email) = lower(su.email));
+
+insert into public.app_migrations (version, name) values ('097', 'current_society_id_case_insensitive')
+  on conflict (version) do nothing;
+
+commit;
 
 -- Verify (run after): both must return 0 rows / 0.
 --   select count(*) from public.society_users where email <> lower(email);
