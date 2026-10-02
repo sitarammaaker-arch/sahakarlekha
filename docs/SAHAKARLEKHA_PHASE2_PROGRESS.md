@@ -13,11 +13,20 @@
 - Explain findings to the founder in Devanagari Hindi, with stepwise instructions.
 - Statutory values need a SOURCE (Act or circular text plus URL), never a statement.
 
-## Current position
-- **Phase:** A — Critical security
-- **Phase A: COMPLETE and LIVE.** (Old note follows.) A1–A4. PR #584 is MERGED and the client is deployed (2026-09-30 16:20 UTC). Still AWAITING-FOUNDER: deploy the 8 edge fns, then apply 084 + 085 (files staged in `D:\SahakarLekha-Backups\sec\`).
-- **A5:** the P0 (086) is **LIVE**. The founder applied it 2026-09-30 ~16:15 UTC after backup `sahakarlekha-prod-20260930-1613Z.dump`. Verified read-only: anon EXECUTE is false for both fns, the guard is in the body, and the app_migrations row is 086. PR #585 is awaiting merge. The last A5 items (087 issue_certificate, create-order caller check) are in PR `sec/a5-order-cert`.
-- **Next task:** Phase A is code-complete. Next is **B1/B2** (server-posting rollout readiness; the next society is 7f2919f0), then B3.
+## Current position (2026-10-02)
+- **Done and live:**
+  - A (security).
+  - B2 / B3 / B7.
+  - C (FY rollover + year close, D5 applied).
+  - D (tax slices; CA questions open).
+  - F1 (online-only).
+  - G (reliability).
+  - **H (deep domain audit: trading/GST, members/share capital, cash/TB, governance, all domain modules)**.
+- **Next: Phase I (testing).** It needs a founder decision on a **staging Supabase project** (see the Phase I assessment below).
+- **Founder actions open:**
+  - Delete Rania's 2 returns (SRET / PRET/2026-27/001) in the app.
+  - Supply Rania's audited share-capital opening.
+  - Answer the CA questions (194Q turnover gate, GST base, 194C/194H whole-vs-excess).
 
 ## Roadmap status
 
@@ -49,7 +58,37 @@
 | C6/C7 carry-forward, previous closing = next opening | NOT STARTED | The client snapshot (previousYearBalances) still runs. A server-side opening event is to be designed. |
 
 ### Phases D–M
-NOT STARTED. See the roadmap in the master prompt; the order follows the dependency rule.
+- D: slices live (093, 194Q advice); CA questions open.
+- E: cumulative salary TDS verified; E3 deferred.
+- F1: COMPLETE.
+- G: COMPLETE (G6/G7 deferred with evidence).
+- H: COMPLETE (see the 2026-10-02 H sections).
+- I–M: not started.
+
+### Phase H — summary (2026-10-02)
+| Area | Result | PR |
+|---|---|---|
+| Trading: sales/purchases ⇄ vouchers, stock, returns | consistent; FOUND returns outliving cancelled vouchers | #620 |
+| GST (H4) | bill tax = ledger 2201/3310 to the paisa | (audit only) |
+| Members / share capital | FOUND share transfer half-cancellable | #621 |
+| Cash / bank / TB | FOUND reversal voucher editable (client + server) | #622 + mig 095 LIVE |
+| Governance / audit trail (H11) | FOUND bill edits + 4 deletes audited to console only | #623 |
+| Domain modules (dairy, housing, labour, consumer, marketing) | FOUND ~30 voucher types cancellable without their document; deletes ignored refused cancels | #624, #625 |
+| Data notes for the founder | Rania share capital not in books (₹32,150 short); 06cea2fb half transfer; Kisan opening imbalance ₹2,400; Demo Labor edited reversal | — |
+
+### Phase I — assessment (2026-10-02, awaiting a founder decision)
+- **Have:**
+  - 302 pure `test:*` suites run in CI, along with tsc and the edge-bundle gate.
+  - Vercel previews act as the build check.
+  - 24 db-harness suites (RLS a6, posting service s3*, FY c1/c2, drift b7, 095…) pass **locally only**, because they need a prod dump and the repo is public, so prod data can never be in CI.
+- **Gaps:**
+  - I6/I7: no E2E (Playwright) framework.
+  - I2/I9: the harness is not in CI. The repo's schema sources can't bootstrap a fresh DB (known circularity), so CI has no database to test against.
+- **Decision needed:** an E2E or harness run needs a non-prod backend. Options:
+  - **(a) Free staging Supabase project.** Schema only, no prod data, plus seeded demo societies. Its URL/keys become GitHub secrets. This unblocks both E2E and harness-in-CI.
+  - **(b) E2E with a mocked network** (no backend). UI flows only, so lower value.
+  - **(c) Defer I** and move to J (performance).
+
 
 ## 2026-10-01: Phase A went live
 - The founder took backup `sahakarlekha-prod-20261001-0115Z.dump`, then applied 087, 084 and 085 (all "SQL OK"). PRs #584–#587 are merged and deployed (Vercel `125cff0`).
