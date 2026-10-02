@@ -5,7 +5,7 @@
 SahakarLekha helps society secretaries, accountants, auditors, and board members keep correct books and produce statutory reports — Trial Balance, Balance Sheet, Trading & Profit/Loss, Receipts & Payments, and audit certificates. Plans start at Starter ₹1,499 per financial year; the learning guide/course, calculators and checklists are free.
 
 ## Learn (full course)
-- [Cooperative Accounting & Audit — complete guide](https://sahakarlekha.com/guide): a 45-chapter bilingual course covering vouchers, ledgers, opening balances, reports, GST/TDS, audit, and year-end, with per-part quizzes and a completion certificate.
+- [Cooperative Accounting & Audit — complete guide](https://sahakarlekha.com/guide): a 35-chapter bilingual course (plus 10 appendices) covering vouchers, ledgers, opening balances, reports, GST/TDS, audit, and year-end, with per-part quizzes and a completion certificate.
 
 ## Blog (concepts & how-to)
 - [Blog index](https://sahakarlekha.com/blog): articles on cooperative accounting basics, voucher entry, member & share accounting, loan & interest accounting, inventory & stock, bank reconciliation, reading financial reports, audit preparation, and common accounting mistakes.

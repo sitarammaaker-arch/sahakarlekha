@@ -443,7 +443,7 @@ const LandingPage: React.FC = () => {
                 <span className="inline-flex items-center gap-2 text-primary text-sm font-semibold">
                   <GraduationCap className="h-4 w-4" /> मुफ्त लर्निंग एकेडमी
                 </span>
-                <h2 className="mt-2 text-2xl font-bold text-foreground">सहकारी लेखांकन — 30 अध्याय का मुफ्त कोर्स + प्रमाणपत्र</h2>
+                <h2 className="mt-2 text-2xl font-bold text-foreground">सहकारी लेखांकन — 35 अध्याय का मुफ्त कोर्स + प्रमाणपत्र</h2>
                 <p className="mt-2 text-muted-foreground">
                   नींव से ऑडिट तक — सरल हिंदी व English में। क्विज़ हल करें, सत्यापन-योग्य प्रमाणपत्र पाएँ। बिना लॉगिन, बिल्कुल मुफ्त।
                   <br /><span className="text-sm">Free 30-chapter cooperative accounting course + verifiable certificate.</span>

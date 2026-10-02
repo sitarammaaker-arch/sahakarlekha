@@ -166,6 +166,10 @@ owner decision; the copy was **not** changed to mention it.
    SELECT `society_users` (e.g. society admins under RLS) may be able to read colleagues'
    passwords. **Severity: high.** Needs: stop writing, null the column, rotate, review RLS
    on that column. Owner + security review.
+   **Status 2026-10-02 (separate session, PR #616, migration 094 live):** step A done — no
+   user's password remains in `society_users`; anon-executable definer functions reduced 16 → 11.
+   Pending: users created before 2026-07-12 reset via "Forgot password"; step B (migration 095)
+   drops the column/trigger after 094 runs cleanly for a few days.
 2. **SECURITY DEFINER functions executable by `anon`** (bypass RLS by design): 16, incl.
    `register_society`, `app_register_admin`, `society_has_users`, `app_set_my_password`,
    `pay_payslip_lines`, `issue_certificate`, `increment_blog_view`. Several repo files grant only
@@ -189,8 +193,15 @@ owner decision; the copy was **not** changed to mention it.
 
 1. Blog, guide, help, cookbook and glossary markdown were **not** audited for these claims
    (e.g. `guide/comprehensive-faq.md` "regular PDF backups"). Needs a separate pass.
-2. In-app Dashboard still labels the loan-exposure check "Loan Limit (Sec 32)" (`Dashboard.tsx`)
-   — product UI, left unchanged per scope.
+   **Follow-up 2026-10-02:** 92 blog posts end with "SahakarLekha पर मुफ्त शुरू करें"
+   (90×) / "मुफ्त रजिस्टर करें" / "मुफ्त वाउचर बनाएँ"; `blog/cooperative-law-framework.md`
+   says "धारा 32-प्रकार की सीमाएँ". **Deliberately not edited:** an uncommitted 63-file blog
+   rewrite (+7,446 lines) sits in the main working copy and touches the same CTA lines — fix the
+   CTAs (e.g. "SahakarLekha पर शुरू करें") as part of that rewrite to avoid conflicts.
+2. ~~In-app Dashboard still labels the loan-exposure check "Loan Limit (Sec 32)"~~ —
+   **fixed 2026-10-02** (`Dashboard.tsx`, `LoanRegister.tsx` user-visible strings now say
+   "10× owned funds"; legacy `sec32*` variable names kept). Haryana s.65 "limitation of interest"
+   cap in `LoanInterest.tsx` / `loans/interestAccrual.ts` is correctly cited and left as is.
 3. `lib/stateAuditFormats.ts` section citations (HR/MH/GJ/KA/KL/UP) not re-verified here
    (`test:audit-schedule-cites` exists).
 4. TDS module still uses Income-tax Act 1961 section codes and the 26Q layout for FY 2026-27
@@ -199,7 +210,9 @@ owner decision; the copy was **not** changed to mention it.
    ambiguous; owner to decide wording.
 6. `index.html` FAQPage JSON-LD questions are not all present in the visible FAQ (Google
    expects parity).
-7. `llms.txt` says "45-chapter" course; landing says "30 अध्याय" — reconcile.
+7. ~~`llms.txt` "45-chapter" vs landing "30 अध्याय"~~ — **fixed 2026-10-02**: the guide
+   registry has 35 chapters + 10 appendices; both now say 35 (llms adds "plus 10 appendices").
+   Guide hub CTA "सहकार लेखा बिल्कुल मुफ़्त है" also corrected (`guide/i18n.ts`).
 8. Haryana Act copy consulted is amended only to Oct 2007; later amendments and Haryana Rules
    1989 (reserve fund) still need the official consolidated text.
 
