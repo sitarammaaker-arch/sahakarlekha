@@ -1245,6 +1245,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'बिल सबूत है, वाउचर बही की एंट्री: प्रकार, कौन-सा कब, और हर प्रकार की Dr/Cr एंट्री के उदाहरण।',
     accent: 'indigo',
     tags: ['वाउचर', 'वाउचर के प्रकार', 'लेखा-प्रविष्टि', 'Dr/Cr'],
+    image: '/blog/what-is-voucher-types-uses-accounting-entry.webp',
+    imageAlt: 'वाउचर क्या है: सहकारी समिति में लेखाकार वाउचर और बिलों के बंडल के साथ लैपटॉप पर वाउचर के प्रकार देखते हुए',
   },
   {
     slug: 'voucher-entry-guide',
