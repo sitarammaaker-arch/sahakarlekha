@@ -745,7 +745,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { godownId, ...base } = mv;
     supabase.from('stock_movements').upsert(withSoc(base)).then(({ error }) => {
       if (error) { console.error('DB sync error (movement):', error.message); reportError('stock-movement-save', error.message, { movementId: mv.id, itemId: mv.itemId }); return; }
-      if (godownId) supabase.from('stock_movements').update({ godownId }).eq('id', mv.id).then(({ error: gErr }) => { if (gErr) console.warn('Movement godown patch:', gErr.message); });
+      if (godownId) supabase.from('stock_movements').update({ godownId }).eq('id', mv.id).then(({ error: gErr }) => { if (gErr) { console.warn('Movement godown patch:', gErr.message); reportError('write-partial', gErr.message, { at: 'Movement godown patch:' }); } });
     });
   };
 
@@ -1332,7 +1332,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Delete entries for a voucher (on cancel).
   const deleteEntries = (voucherId: string) => {
     supabase.from('voucher_entries').delete().eq('voucherId', voucherId).then(({ error }) => {
-      if (error) console.warn('voucher_entries delete error:', error.message);
+      if (error) { console.warn('voucher_entries delete error:', error.message); reportError('write-partial', error.message, { at: 'voucher_entries delete error:' }); }
     });
   };
 
@@ -1916,7 +1916,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!accounts.find(a => a.id === INTER_BRANCH_CONTROL_ID)) {
       const control: LedgerAccount = { id: INTER_BRANCH_CONTROL_ID, name: 'Inter-Branch Control A/c', nameHi: 'अंतर-शाखा नियंत्रण खाता', type: 'liability', subtype: 'current_liability', openingBalance: 0, openingBalanceType: 'credit', parentId: '2100', isGroup: false };
       setAccountsState(prev => [...prev, control]);
-      supabase.from('accounts').upsert(withSoc(control)).then(({ error }) => { if (error) console.warn('Control account save:', error.message); });
+      supabase.from('accounts').upsert(withSoc(control)).then(({ error }) => {
+        if (error) {   // G4 / RULE 1: the transfer vouchers would reference an account the cloud lacks
+          setAccountsState(prev => prev.filter(a => a.id !== control.id));
+          reportError('control-account-save', error.message, { accountId: control.id });
+          toastRef.current({ title: 'अंतर-शाखा खाता सेव नहीं हुआ', description: `${error.message}. ट्रांसफर दोबारा करें; न हो तो admin को बताएँ।`, variant: 'destructive', duration: 15000 });
+        }
+      });
     }
     const acct = input.mode === 'bank' ? (input.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     const t = buildInterBranchTransfer({ fromBranchId: input.fromBranchId, toBranchId: input.toBranchId, amount: amt, fromAccountId: acct, toAccountId: acct });
@@ -3003,7 +3009,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     // Metadata (late-added columns) — best-effort; base status above is already safe.
     supabase.from('members').update({ statusReason: reason, statusChangedAt: changedAt }).eq('id', id).then(({ error }) => {
-      if (error) console.warn('Member status metadata not persisted — run latest supabase-tables.sql migration:', error.message);
+      if (error) { console.warn('Member status metadata not persisted — run latest supabase-tables.sql migration:', error.message); reportError('write-partial', error.message, { at: 'member status metadata' }); }
     });
     emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { status: current.status }, after: { status: newStatus }, reason });
     toastRef.current({ title: '✅ सदस्य स्थिति अपडेट', description: `${current.name}: ${current.status} → ${newStatus}`, variant: 'default', duration: 6000 });
@@ -3231,8 +3237,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       voucherId: voucher.id, balanceAfter, createdAt: new Date().toISOString(),
     };
     setDepositTransactionsState(prev => [...prev, txn]);
+    // G4 / RULE 1: the passbook line used to fail silently (console only) — the voucher stood but
+    // the member's passbook lost the entry on refresh. Roll the line back and say so loudly.
     supabase.from('deposit_transactions').upsert(withSoc(txn)).then(({ error }) => {
-      if (error) console.warn('Deposit txn sync failed (run latest migration):', error.message);
+      if (error) {
+        setDepositTransactionsState(prev => prev.filter(t => t.id !== txn.id));
+        reportError('deposit-txn-save', error.message, { depositAccountId: acct.id, voucherId: voucher.id });
+        toastRef.current({ title: 'पासबुक entry सेव नहीं हुई', description: `वाउचर ${voucher.voucherNo} बन गया, पर पासबुक की पंक्ति cloud पर नहीं गई — ${error.message}. Admin को बताएँ।`, variant: 'destructive', duration: 15000 });
+      }
     });
     return balanceAfter;
   };
@@ -3337,7 +3349,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       voucherId: voucher.id, balanceAfter: newBal, createdAt: new Date().toISOString(),
     };
     setDepositTransactionsState(prev => [...prev, txn]);
-    supabase.from('deposit_transactions').upsert(withSoc(txn)).then(({ error }) => { if (error) console.warn('Deposit interest txn sync:', error.message); });
+    supabase.from('deposit_transactions').upsert(withSoc(txn)).then(({ error }) => {
+      if (error) {   // G4 / RULE 1 (see postDepositLeg)
+        setDepositTransactionsState(prev => prev.filter(t => t.id !== txn.id));
+        reportError('deposit-txn-save', error.message, { depositAccountId: accountId, voucherId: voucher.id });
+        toastRef.current({ title: 'ब्याज की पासबुक entry सेव नहीं हुई', description: `वाउचर ${voucher.voucherNo} बन गया, पर पासबुक की पंक्ति cloud पर नहीं गई — ${error.message}. Admin को बताएँ।`, variant: 'destructive', duration: 15000 });
+      }
+    });
     emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { balance: before.balance }, after: { balance: newBal, interest: amt } });
     toastRef.current({ title: '✅ ब्याज जमा', description: `${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · शेष ₹${newBal.toLocaleString('en-IN')}` });
     return true;
@@ -3400,7 +3418,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!filing) return;
     complianceFilingsRef.current = complianceFilingsRef.current.filter(f => f.itemId !== itemId);
     setComplianceFilingsState(prev => prev.filter(f => f.itemId !== itemId));
-    supabase.from('compliance_filings').delete().eq('id', filing.id).then(({ error }) => { if (error) console.warn('Compliance filing delete:', error.message); });
+    supabase.from('compliance_filings').delete().eq('id', filing.id).then(({ error }) => { if (error) { console.warn('Compliance filing delete:', error.message); reportError('write-partial', error.message, { at: 'Compliance filing delete:' }); } });
     emitAudit({ entityType: 'compliance', entityId: itemId, action: 'update', after: { filed: false } });
   }, []);
   const getComplianceFiledIds = useCallback((): string[] => complianceFilings.map(f => f.itemId), [complianceFilings]);
@@ -4441,7 +4459,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // T-05 dual-write: mirror the money objects into typed columns (step-2, RULE 1 — the base
       // row is already saved; this fails only until migration 017 adds the columns).
       supabase.from('procurement_settlements').update(settlementTypedColumns(stl)).eq('id', stl.id)
-        .then(({ error: e2 }) => { if (e2) console.warn('Settlement typed-money columns (run migration 017):', e2.message); });
+        .then(({ error: e2 }) => { if (e2) { console.warn('Settlement typed-money columns (run migration 017):', e2.message); reportError('write-partial', e2.message, { at: 'Settlement typed-money columns (run migration 017):' }); } });
     });
     toastRef.current({ title: 'निपटान ड्राफ्ट बना', description: `${gross.currency} ${gross.amount}`, duration: 5000 });
     return stl;
@@ -4459,7 +4477,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       // T-05 dual-write (step-2, RULE 1) — mirror the money objects into typed columns.
       supabase.from('procurement_settlements').update(settlementTypedColumns(nextStl)).eq('id', nextStl.id)
-        .then(({ error: e2 }) => { if (e2) console.warn('Settlement typed-money columns (run migration 017):', e2.message); });
+        .then(({ error: e2 }) => { if (e2) { console.warn('Settlement typed-money columns (run migration 017):', e2.message); reportError('write-partial', e2.message, { at: 'Settlement typed-money columns (run migration 017):' }); } });
     });
   };
 
@@ -5081,7 +5099,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           newLoan.voucherId = dv.id;
           loansRef.current = loansRef.current.map(l => l.id === newLoan.id ? { ...l, voucherId: dv.id } : l);
           setLoansState(prev => prev.map(l => l.id === newLoan.id ? { ...l, voucherId: dv.id } : l));
-          supabase.from('loans').update({ voucherId: dv.id }).eq('id', newLoan.id).then(({ error }) => { if (error) console.warn('Loan voucherId patch:', error.message); });
+          supabase.from('loans').update({ voucherId: dv.id }).eq('id', newLoan.id).then(({ error }) => { if (error) { console.warn('Loan voucherId patch:', error.message); reportError('write-partial', error.message, { at: 'Loan voucherId patch:' }); } });
         }
       } else {
         toastRef.current({
@@ -6025,7 +6043,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toastRef.current({ title: 'स्टॉक मूवमेंट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
         return;
       }
-      if (_mvGod) supabase.from('stock_movements').update({ godownId: _mvGod }).eq('id', movement.id).then(({ error: gErr }) => { if (gErr) console.warn('Movement godown patch:', gErr.message); });
+      if (_mvGod) supabase.from('stock_movements').update({ godownId: _mvGod }).eq('id', movement.id).then(({ error: gErr }) => { if (gErr) { console.warn('Movement godown patch:', gErr.message); reportError('write-partial', gErr.message, { at: 'Movement godown patch:' }); } });
     });
 
     // Recompute currentStock from openingStock + ALL movements (authoritative — prevents drift
@@ -6084,8 +6102,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const err = r1.error || r2.error;
       if (err) { console.error('DB sync error (transfer):', err.message); rollback(err.message); return; }
       // step-2: patch godownId on both legs (overlay column — never blocks the base save).
-      supabase.from('stock_movements').update({ godownId: outMv.godownId }).eq('id', outMv.id).then(({ error }) => { if (error) console.warn('Transfer OUT godown patch:', error.message); });
-      supabase.from('stock_movements').update({ godownId: inMv.godownId }).eq('id', inMv.id).then(({ error }) => { if (error) console.warn('Transfer IN godown patch:', error.message); });
+      supabase.from('stock_movements').update({ godownId: outMv.godownId }).eq('id', outMv.id).then(({ error }) => { if (error) { console.warn('Transfer OUT godown patch:', error.message); reportError('write-partial', error.message, { at: 'Transfer OUT godown patch:' }); } });
+      supabase.from('stock_movements').update({ godownId: inMv.godownId }).eq('id', inMv.id).then(({ error }) => { if (error) { console.warn('Transfer IN godown patch:', error.message); reportError('write-partial', error.message, { at: 'Transfer IN godown patch:' }); } });
       emitAudit({ entityType: 'stockMovement', entityId: transferNo, action: 'create', after: { itemId: input.itemId, from: input.fromGodownId, to: input.toGodownId, qty: input.qty }, reason: `Inter-godown transfer ${transferNo}` });
     });
     toastRef.current({ title: 'स्थानांतरण दर्ज', description: `${transferNo}: ${input.qty} ${nameOf(input.fromGodownId)} → ${nameOf(input.toGodownId)}` });
@@ -7286,7 +7304,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Keep the account so historical vouchers stay reconcilable; just rename it to mark orphan
         setAccountsState(prev => prev.map(a => a.id === sup.accountId ? { ...a, name: `${a.name} [Supplier deleted]`, isSystem: false } : a));
         supabase.from('accounts').update({ name: `${sup.name} [Supplier deleted]` }).eq('id', sup.accountId).eq('society_id', societyIdRef.current)
-          .then(({ error }) => { if (error) console.error('Account rename sync:', error.message); });
+          .then(({ error }) => { if (error) { console.error('Account rename sync:', error.message); reportError('write-partial', error.message, { at: 'Account rename sync:' }); } });
       } else {
         const supAccount = accountsRef.current.find(a => a.id === sup.accountId);
         setAccountsState(prev => prev.filter(a => a.id !== sup.accountId));
@@ -7447,7 +7465,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (accountReferenced) {
         setAccountsState(prev => prev.map(a => a.id === cus.accountId ? { ...a, name: `${a.name} [Customer deleted]`, isSystem: false } : a));
         supabase.from('accounts').update({ name: `${cus.name} [Customer deleted]` }).eq('id', cus.accountId).eq('society_id', societyIdRef.current)
-          .then(({ error }) => { if (error) console.error('Account rename sync:', error.message); });
+          .then(({ error }) => { if (error) { console.error('Account rename sync:', error.message); reportError('write-partial', error.message, { at: 'Account rename sync:' }); } });
       } else {
         const cusAccount = accountsRef.current.find(a => a.id === cus.accountId);
         setAccountsState(prev => prev.filter(a => a.id !== cus.accountId));

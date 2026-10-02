@@ -96,12 +96,18 @@ export function buildAuditEvent(input: AuditInput, ctx: AuditContext) {
  * Fire-and-forget audit write. NEVER awaited by callers and NEVER throws — a failure is
  * logged to the console and swallowed, so it cannot affect the business transaction.
  */
+function reportAuditFailure(error: unknown, context?: Record<string, unknown>): void {
+  import('@/lib/errorReporting').then(m => m.reportError('audit-write', error, context), () => { /* never surface */ });
+}
+
 export function logAudit(input: AuditInput, ctx: AuditContext): void {
   try {
     const row = buildAuditEvent(input, ctx);
     void supabase.from('audit_log').insert(row).then(
-      ({ error }) => { if (error) console.warn('[audit] write failed (run audit_log migration?):', error.message); },
-      (e) => console.warn('[audit] write rejected:', e),
+      // G4: a lost audit row is a governance gap, not a console detail — make it operator-visible.
+      // Loaded lazily, only on failure, so this module's import graph stays as light as before.
+      ({ error }) => { if (error) { console.warn('[audit] write failed (run audit_log migration?):', error.message); reportAuditFailure(error.message, { entity: row.entity_type, action: row.action }); } },
+      (e) => { console.warn('[audit] write rejected:', e); reportAuditFailure(e); },
     );
   } catch (e) {
     console.warn('[audit] logAudit error:', e);

@@ -365,7 +365,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       });
       flatRecUpdates.forEach((rec, flatId) => {
         const flat = housingFlats.find(f => f.id === flatId);
-        if (flat) supabase.from('housing_flats').upsert(withSoc({ ...flat, receivableAccountId: rec })).then(({ error }) => { if (error) console.warn('Flat receivable backfill (non-fatal):', error.message); });
+        if (flat) supabase.from('housing_flats').upsert(withSoc({ ...flat, receivableAccountId: rec })).then(({ error }) => { if (error) { console.warn('Flat receivable backfill (non-fatal):', error.message); reportError('write-partial', error.message, { at: 'Flat receivable backfill (non-fatal):' }); } });
       });
     }
     setMaintenanceBillsState(prev => { const u = [...prev, ...created]; storage.setMaintenanceBills(u); return u; });
