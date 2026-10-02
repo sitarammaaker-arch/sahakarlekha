@@ -4,6 +4,10 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { reportWebVitals, installErrorTracking } from "./lib/vitals";
+import { initConnectivityListeners } from "./lib/connectivity/writeBlock";
+
+// F1: browser online/offline → read-only banner + entry guard (online-only policy).
+initConnectivityListeners();
 
 createRoot(document.getElementById("root")!).render(<App />);
 

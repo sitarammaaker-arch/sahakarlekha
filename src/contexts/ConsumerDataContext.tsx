@@ -14,6 +14,7 @@
  * C2 exposes the 'member' tier in the UI; 'wholesale'/'promo' are schema-ready for later slices.
  */
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
@@ -121,6 +122,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   toastRef.current = toast;
 
   const guardFYLocked = useCallback((): boolean => {
+    if (refuseIfWriteBlocked(toastRef.current)) return true; // F1: online-only entry (shared rule)
     if (societyRef.current?.fyLocked) {
       toastRef.current({
         title: 'FY Locked',
