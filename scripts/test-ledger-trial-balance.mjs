@@ -76,6 +76,14 @@ ok(gone && gone.account.name.startsWith('[Deleted]') && gone.transactionDebit ==
 const sumDr2 = tb2.reduce((s, r) => s + r.totalDebit, 0), sumCr2 = tb2.reduce((s, r) => s + r.totalCredit, 0);
 ok(Math.round(sumDr2 * 100) === Math.round(sumCr2 * 100), 'TB with an orphan leg still ties out');
 
+// 4b. Legs on an EXISTING group account (ledger flipped to group after entries) keep the real
+//     account + type, as a ledger, flagged postedToGroup — never a "[Deleted]" liability row.
+const grpEvents = planGenesisEvents([{ voucher: v('g', { debitAccountId: '2100', creditAccountId: '4101', amount: 300 }), tenantId: 'SOC001' }]).events;
+const tb3 = ledgerTrialBalance([...events, ...grpEvents], accounts);
+const g = row(tb3, '2100');
+ok(g && g.account.name === '2100' && g.account.isGroup === false && g.postedToGroup === true && g.transactionDebit === 300, 'group-account legs → the real account, flagged postedToGroup');
+ok(g && g.account.type === accounts[3].type, 'group-account row keeps its real type');
+
 // 5. As-of-date flows through to the mapper.
 const later = planGenesisEvents([{ voucher: v('c', { date: '2025-12-01' }), tenantId: 'SOC001' }]).events;
 const asOf = ledgerTrialBalance([...events, ...later], accounts, '2025-06-30');

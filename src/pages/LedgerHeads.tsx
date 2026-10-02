@@ -129,6 +129,15 @@ const LedgerHeads: React.FC = () => {
     return sorted;
   }, [accounts, search, typeFilter, depthMap]);
 
+  // A ledger with entries or an opening balance can't be ticked "Group" (DataContext.updateAccount
+  // enforces it too) — a group's balance is invisible to every report.
+  const editLocksGroup = useMemo(() => {
+    if (!editAccount || editAccount.isGroup) return false;
+    if ((Number(editAccount.openingBalance) || 0) !== 0) return true;
+    return vouchers.some(v => !v.isDeleted && (v.debitAccountId === editAccount.id || v.creditAccountId === editAccount.id
+      || (v.lines ?? []).some(l => l.accountId === editAccount.id)));
+  }, [editAccount, vouchers]);
+
   // Summary counts
   const leafAccounts = accounts.filter(a => !a.isGroup);
   const equityCount    = accounts.filter(a => a.type === 'equity').length;
@@ -273,14 +282,16 @@ const LedgerHeads: React.FC = () => {
       });
       return;
     }
-    updateAccount(editAccount.id, {
+    const saved = updateAccount(editAccount.id, {
       name: form.name.trim(),
       nameHi: form.nameHi.trim(),
       openingBalance: form.isGroup ? 0 : (Number(form.openingBalance) || 0),
       openingBalanceType: form.openingBalanceType,
-      isGroup: form.isGroup || undefined,
+      // Explicit boolean: `|| undefined` meant unticking "Group" never reached the database.
+      isGroup: form.isGroup,
       parentId: form.parentId || undefined,
     });
+    if (!saved) return;   // a guard blocked it and showed its own toast — keep the dialog open
     toast({ title: hi ? 'खाता अपडेट किया गया' : 'Account updated successfully' });
     setEditAccount(null);
     resetForm();
@@ -695,12 +706,18 @@ const LedgerHeads: React.FC = () => {
                 type="checkbox"
                 id="isGroupEdit"
                 checked={form.isGroup}
+                disabled={editLocksGroup}
                 onChange={e => setForm(f => ({ ...f, isGroup: e.target.checked }))}
-                className="h-4 w-4 rounded border-gray-300"
+                className="h-4 w-4 rounded border-gray-300 disabled:opacity-50"
               />
-              <label htmlFor="isGroupEdit" className="text-sm font-medium cursor-pointer select-none">
+              <label htmlFor="isGroupEdit" className={cn('text-sm font-medium select-none', editLocksGroup ? 'text-muted-foreground' : 'cursor-pointer')}>
                 <FolderOpen className="inline h-4 w-4 mr-1 text-amber-600" />
                 {hi ? 'यह एक ग्रुप है' : 'This is a Group'}
+                {editLocksGroup && (
+                  <span className="block text-xs font-normal">
+                    {hi ? 'इस खाते में एंट्री/Opening Balance है — इसे ग्रुप नहीं बनाया जा सकता। नया ग्रुप अलग से बनाएँ।' : 'This account has entries/an opening balance, so it cannot become a group. Create a separate group instead.'}
+                  </span>
+                )}
               </label>
             </div>
             {/* Opening balance — only for leaf (non-group) accounts */}

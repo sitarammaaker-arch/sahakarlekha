@@ -131,6 +131,11 @@ const TrialBalance: React.FC = () => {
               <button className="text-left hover:text-primary hover:underline" onClick={() => navigate(`/ledger?account=${b.account.id}`)} title={language === 'hi' ? 'खाता-बही खोलें' : 'Open ledger'}>
                 {language === 'hi' ? b.account.nameHi : b.account.name}
               </button>
+              {b.postedToGroup && (
+                <span className="block text-[11px] font-normal text-warning" title={language === 'hi' ? 'Ledger Heads में इस खाते से "ग्रुप" का निशान हटाएँ' : 'Untick "Group" for this account in Ledger Heads'}>
+                  {language === 'hi' ? '⚠ ग्रुप खाते पर सीधी entry — Ledger Heads में इसे ledger बनाएँ' : '⚠ Entries on a group account — make it a ledger in Ledger Heads'}
+                </span>
+              )}
             </TableCell>
             <TableCell className="text-right text-sm text-muted-foreground">
               {b.openingDebit > 0 ? <>{fmt(b.openingDebit)} <span className="text-[10px]">Dr</span></>

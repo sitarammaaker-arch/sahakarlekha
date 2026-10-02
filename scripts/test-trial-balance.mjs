@@ -115,6 +115,18 @@ const accounts = [
   check('TB with orphan balances', sum(tb, 'totalDebit') === sum(tb, 'totalCredit'));
 }
 
+// 5b. Legs on an EXISTING account flagged as a group (a ledger flipped to group after entries — Assandh
+//     5201 Salary, 2026-10-02) keep the real account and type, flagged — never a "[Deleted]" liability.
+{
+  const withGroup = [...accounts, { id: 'SAL', name: 'Salary', nameHi: 'वेतन', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isGroup: true }];
+  const tb = computeTrialBalance({ accounts: withGroup, vouchers: [legacy('g', '2026-05-01', 'SAL', 'CASH', 500)], fyStart: '2026-04-01', openingsInScope: true });
+  const r = row(tb, 'SAL');
+  check('group-account legs keep the real name', !!r && r.account.name === 'Salary');
+  check('…and the real type (expense, not liability)', r?.account.type === 'expense');
+  check('…as a ledger, flagged postedToGroup', r?.account.isGroup === false && r?.postedToGroup === true && r?.transactionDebit === 500);
+  check('TB with a group-posted row balances', sum(tb, 'totalDebit') === sum(tb, 'totalCredit'));
+}
+
 // 6. T-02: paise-exact over many legs (float accumulation drifts here).
 {
   const vs = Array.from({ length: 1000 }, (_, i) => multi(`m${i}`, '2026-05-01', [['CASH', 'Dr', 0.1], ['SALES', 'Cr', 0.1]]));

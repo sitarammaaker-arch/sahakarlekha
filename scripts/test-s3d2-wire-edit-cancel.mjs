@@ -53,7 +53,12 @@ ok('updateVoucher: error AND network rejection → revertEdit + destructive toas
 ok("updateVoucher: the server's events replace the optimistic edit events", /mapLedgerEventRows\(/.test(updRpc) && /filter\(e => !editEvents\.some\(x => x\.eventId === e\.eventId\)\), \.\.\.serverEvents\]/.test(updRpc));
 ok('updateVoucher: RPC branch never calls persistVoucher / syncEntries / persistLedgerEvent', !/persistVoucher\(|syncEntries\(|persistLedgerEvent\(/.test(updRpc));
 ok('updateVoucher: RPC branch returns true (guards already passed)', /return true;\s*\}\s*$/.test(updRpc));
-ok('updateVoucher: flag-off default path unchanged', /persistVoucher\(updatedVoucher, \{\s*isUpdate: true,[\s\S]*?onBaseSuccess: \(\) => \{ for \(const e of editEvents\) persistLedgerEvent\(e\); \},\s*onBaseFail: revertEdit,/.test(upd));
+// Flag-off default path: the edit's journal pair is built from the DB journal (persistVoucherEditEvents),
+// not the in-memory ref — the ref-built events wrote a second "posted seq 1" when the ref was short
+// (Assandh JV/2026/27/2384, 2026-10-02). Still appended only after the base row is confirmed.
+ok('updateVoucher: flag-off default path journals from the DB after the base row saves', /persistVoucher\(updatedVoucher, \{\s*isUpdate: true,[\s\S]*?onBaseSuccess: \(\) => \{[\s\S]*?persistVoucherEditEvents\(updatedVoucher, voucherPostingLines\(updatedVoucher\), editEvents\)[\s\S]*?\},\s*onBaseFail: revertEdit,/.test(upd));
+ok('persistVoucherEditEvents: reads this voucher\'s events from ledger_events and appends atomically with a visible failure',
+  /const persistVoucherEditEvents = async[\s\S]*?\.from\('ledger_events'\)[\s\S]*?\.eq\('aggregate_id', voucher\.id\)[\s\S]*?insert\(events\.map\(toLedgerEventRow\)\)[\s\S]*?variant: 'destructive'/.test(dc));
 
 const can = between('const cancelVoucher = useCallback(', 'const reverseVoucher = useCallback(');
 const canRpc = can.slice(can.indexOf('// ── S3-d posting service'), can.indexOf('// ── journal-first-write (slice 6)'));

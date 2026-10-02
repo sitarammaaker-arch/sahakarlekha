@@ -1076,6 +1076,10 @@ export interface AccountBalance {
   totalDebit: number;
   totalCredit: number;
   netBalance: number;
+  /** The legs were posted to an account flagged as a GROUP (should never happen — a ledger was
+      flipped to group after entries). The row carries the real account (as a ledger) so reports
+      classify it by its true type; the UI shows a warning so the chart gets fixed. */
+  postedToGroup?: boolean;
 }
 
 export interface CashBookEntry {
