@@ -55,3 +55,17 @@ for (const path of ['/', '/blog', '/blog/cooperative-accounting-basics', '/login
     expect(bad, bad.join('\n')).toEqual([]);
   });
 }
+
+// L1 · a blog body chunk that cannot load (stale after a deploy / weak network) must NOT bounce the reader
+// to /blog. The page reloads once to pick up the fresh build; if the chunk still fails it shows a reload
+// message on the article URL.
+test('an article whose body chunk fails shows a reload message, not a redirect', async ({ page }) => {
+  let blocked = 0;
+  await page.route(/\/assets\/cooperative-accounting-basics-[^/]+\.js$/, (r) => { blocked++; return r.abort(); });
+  await page.goto('/blog/cooperative-accounting-basics');
+  await expect(page.getByText('लेख लोड नहीं हो पाया')).toBeVisible({ timeout: 20_000 });
+  expect(page.url()).toContain('/blog/cooperative-accounting-basics');
+  await expect(page.getByRole('button', { name: 'पेज फिर से लोड करें' })).toBeVisible();
+  await page.waitForTimeout(3000);             // a reload loop would keep requesting the chunk
+  expect(blocked).toBe(2);                     // the first load + once after the ONE automatic reload — never a loop
+});

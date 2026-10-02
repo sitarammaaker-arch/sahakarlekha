@@ -17,13 +17,14 @@ import { CapabilityGuard } from "@/components/CapabilityGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePageTracking } from "@/lib/analytics";
 import { useNoIndex } from "@/lib/useDocumentMeta";
+import { reloadOnceForStaleChunk } from "@/lib/chunkReload";
 
 // Auto-recover from stale-chunk errors after a new deploy. When the app has stayed
 // open across a deploy, an old hashed chunk filename can 404 on the CDN and the
 // dynamic import() rejects → blank screen until a manual refresh. Here we reload the
-// page ONCE (sessionStorage-guarded against loops) to fetch the fresh index.html +
-// chunk map, so the user never has to refresh by hand. The flag resets on the next
-// successful chunk load, so a later deploy can recover the same way.
+// page ONCE (lib/chunkReload: at most one reload per 30 s, so never a loop) to fetch
+// the fresh index.html + chunk map, so the user never has to refresh by hand. A later
+// deploy (after that window) can recover the same way.
 // Early hand-outs used /sadasya/<id>; the portal now lives at /member/<id>.
 function SadasyaRedirect() {
   const { societyId = '' } = useParams();
@@ -34,18 +35,12 @@ function lazyWithRetry<T extends ComponentType<unknown>>(
   factory: () => Promise<{ default: T }>,
 ) {
   return lazy(async () => {
-    const KEY = 'sl_chunk_reloaded';
     try {
-      const mod = await factory();
-      sessionStorage.removeItem(KEY);
-      return mod;
+      return await factory();
     } catch (err) {
-      if (sessionStorage.getItem(KEY) !== '1') {
-        sessionStorage.setItem(KEY, '1');
-        window.location.reload();
-        return new Promise<{ default: T }>(() => {}); // hold the fallback until reload
-      }
-      throw err; // already retried once — let the ErrorBoundary show a message
+      // L1: one reload per 30 s (timestamp guard, lib/chunkReload) — never a loop.
+      if (reloadOnceForStaleChunk()) return new Promise<{ default: T }>(() => {}); // hold the fallback until reload
+      throw err; // already retried — let the ErrorBoundary show its reload message
     }
   });
 }
