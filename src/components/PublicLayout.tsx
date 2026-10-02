@@ -161,8 +161,8 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                 <span className="font-bold">SahakarLekha</span>
               </Link>
               <p className="mt-2 text-sm text-muted-foreground">
-                भारत की सहकारी समितियों के लिए मुफ्त एकाउंटिंग सॉफ्टवेयर।
-                Free cooperative society accounting software for India.
+                भारत की सहकारी समितियों के लिए एकाउंटिंग सॉफ्टवेयर — ₹1,499/FY से। गाइड व कोर्स मुफ़्त।
+                Cooperative society accounting software for India — from ₹1,499/FY. Learning guides &amp; course are free.
               </p>
               <div className="mt-4">
                 <p className="text-xs font-semibold text-foreground mb-2">हमसे जुड़ें / Follow us</p>

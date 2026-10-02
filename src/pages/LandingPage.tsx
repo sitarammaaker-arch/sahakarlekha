@@ -44,8 +44,8 @@ const handleSampleReport = async () => {
 const FEATURES = [
   { icon: BookOpen, title: 'Double-Entry Accounting', titleHi: 'दोहरी एंट्री लेखा', desc: 'Voucher, Cash Book, Bank Book, Day Book, Ledger — complete accounting system' },
   { icon: BarChart3, title: 'Financial Reports', titleHi: 'वित्तीय रिपोर्ट', desc: 'Trial Balance, Balance Sheet, I&E, R&P, Trading Account — one-click PDF' },
-  { icon: FileText, title: 'TDS 26Q + GST', titleHi: 'TDS 26Q + GST', desc: 'TDS Register, Form 26Q export for TRACES, GSTR-1/3B, e-Way Bill' },
-  { icon: Shield, title: 'Audit Compliance', titleHi: 'ऑडिट अनुपालन', desc: 'Reserve Fund (Sec 65), Sec 32 Loan Limit, FY Lock, Audit Certificate' },
+  { icon: FileText, title: 'TDS + GST', titleHi: 'TDS + GST', desc: 'TDS Register + quarterly TDS data export, GSTR-1/3B figures, e-Way Bill JSON — filing is done by you on the government portals' },
+  { icon: Shield, title: 'Audit Compliance', titleHi: 'ऑडिट अनुपालन', desc: 'Reserve Fund appropriation, loan-exposure check, FY Lock, Audit Certificate' },
   { icon: Users, title: 'Member Management', titleHi: 'सदस्य प्रबंधन', desc: 'Share Register, Loan Register, Member Ledger, Profit Distribution' },
   { icon: Globe, title: 'Hindi + English', titleHi: 'हिंदी + अंग्रेजी', desc: 'Fully bilingual interface — switch anytime. PDF reports in English.' },
 ];
@@ -72,24 +72,31 @@ const TOUR = [
   { shot: 'voucher.png', title: 'आसान वाउचर एंट्री', titleEn: 'Easy voucher entry', desc: 'रसीद, भुगतान, जर्नल, कोंट्रा — एक-क्लिक टेम्पलेट; Dr=Cr अपने-आप जाँच।' },
   { shot: 'trial-balance.png', title: 'एक-क्लिक ट्रायल बैलेंस व रिपोर्ट', titleEn: 'One-click Trial Balance & reports', desc: 'ट्रायल बैलेंस, बैलेंस शीट, आमदनी-खर्च — RCS दो-खंड प्रारूप में, सीधे PDF।' },
   { shot: 'member-register.png', title: 'सदस्य, शेयर व ऋण रजिस्टर', titleEn: 'Member, share & loan registers', desc: 'शेयर रजिस्टर, ऋण रजिस्टर, लाभ का बँटवारा — सहकारी नियमानुसार।' },
-  { shot: 'certificate.png', title: 'ऑडिट प्रमाणपत्र व अनुपालन', titleEn: 'Audit certificate & compliance', desc: 'रिज़र्व फंड (धारा 65), FY-लॉक, ऑडिट प्रमाणपत्र — ऑडिट तैयार।' },
+  { shot: 'certificate.png', title: 'ऑडिट प्रमाणपत्र व अनुपालन', titleEn: 'Audit certificate & compliance', desc: 'रिज़र्व फंड विनियोजन (आपके राज्य अधिनियम/उपनियम अनुसार %), FY-लॉक, ऑडिट प्रमाणपत्र — ऑडिट की तैयारी।' },
 ];
 
-const TALLY_ROWS = [
-  { f: 'Built for cooperative societies / सहकारी समितियों के लिए बना', tally: false, zoho: false, sl: true },
-  { f: 'RCS audit-format reports (Sec 65, two-section TB)', tally: 'manual', zoho: false, sl: true },
-  { f: 'TDS 26Q + GST for societies', tally: 'partial', zoho: 'GST', sl: true },
-  { f: 'Federation / NABARD / DCCB reports', tally: false, zoho: false, sl: true },
-  { f: 'Member share/loan register, profit appropriation', tally: false, zoho: false, sl: true },
-  { f: 'Hindi-first, fully bilingual / हिंदी-प्रथम', tally: 'partial', zoho: 'partial', sl: true },
-  { f: 'Cloud + automatic backup', tally: 'add-on', zoho: true, sl: true },
-  { f: 'Free learning + certification / मुफ्त कोर्स + प्रमाणपत्र', tally: false, zoho: false, sl: true },
-  { f: 'Price / मूल्य', tally: '₹ licence/yr', zoho: '₹/month', sl: '₹1,499/FY से' },
+/* Competitor cells carry ONLY what the vendor's own site states (checked on COMPARE_DATE,
+   sources in COMPARE_SOURCES). NV = not verified from vendor docs — it does NOT mean
+   "not available". Re-verify every cell before changing it; never use blanket negatives. */
+const NV = 'nv' as const;
+const COMPARE_DATE = '2 अक्टूबर 2026 / 2 Oct 2026';
+const TALLY_ROWS: { f: string; tally: boolean | string; zoho: boolean | string; sl: boolean | string }[] = [
+  { f: 'Price / मूल्य', tally: 'Silver: ₹22,500 + GST (lifetime) या ₹8,100 + GST/वर्ष (rental)', zoho: 'Free plan (revenue ≤ ₹25 लाख); paid ₹749/माह से (annual)', sl: '₹1,499/FY से' },
+  { f: 'GST e-Invoice (IRN)', tally: true, zoho: 'Standard plan से', sl: 'नहीं / Not supported' },
+  { f: 'e-Way Bill', tally: true, zoho: NV, sl: 'JSON बनता है (NIC portal पर upload)' },
+  { f: 'RCS two-section Trial Balance / Balance Sheet', tally: NV, zoho: NV, sl: true },
+  { f: 'Member share/loan register, reserve-fund appropriation', tally: NV, zoho: NV, sl: true },
+  { f: 'Hindi interface / हिंदी इंटरफ़ेस', tally: NV, zoho: NV, sl: true },
+  { f: 'Free learning course + certificate / मुफ़्त कोर्स + प्रमाणपत्र', tally: NV, zoho: NV, sl: true },
+];
+const COMPARE_SOURCES = [
+  { label: 'TallyPrime — Buy Silver & Gold', href: 'https://tallysolutions.com/buy-tally/' },
+  { label: 'Zoho Books India — Pricing', href: 'https://www.zoho.com/in/books/pricing/' },
 ];
 
 const SECURITY = [
-  { icon: Lock, title: 'सुरक्षित व अलग डेटा', titleEn: 'Encrypted & isolated', desc: 'समिति-स्तरीय सुरक्षा (RLS) — कोई दूसरी समिति आपके खाते कभी नहीं देख सकती।' },
-  { icon: Database, title: 'स्वतः बैकअप', titleEn: 'Automatic backups', desc: 'क्लाउड में सुरक्षित; जब चाहें PDF/Excel में पूरा डेटा निर्यात करें।' },
+  { icon: Lock, title: 'सुरक्षित व अलग डेटा', titleEn: 'Encrypted & isolated', desc: 'हर समिति का डेटा Row-Level Security (RLS) से अलग; Supabase के अनुसार डेटा AES-256 (at rest) व TLS (in transit) से एन्क्रिप्ट।' },
+  { icon: Database, title: 'स्वतः बैकअप', titleEn: 'Automatic backups', desc: 'हर हफ़्ते अपने-आप बैकअप; जब चाहें PDF/Excel में पूरा डेटा निर्यात करें।' },
   { icon: RefreshCw, title: 'आपका डेटा, आपका अधिकार', titleEn: 'Your data, your control', desc: 'कभी भी सब कुछ डाउनलोड करें — कोई लॉक-इन नहीं, डेटा कभी बेचा नहीं जाता।' },
   { icon: Shield, title: 'पूरा ऑडिट-ट्रेल', titleEn: 'Full audit trail', desc: 'हर एंट्री किसने/कब बनाई-बदली; रद्द भी कारण सहित — ऑडिट में पारदर्शी।' },
 ];
@@ -157,10 +164,22 @@ const MockDashboard: React.FC = () => (
   </div>
 );
 
-const Yes = () => <CheckCircle2 className="h-5 w-5 text-success mx-auto" />;
-const No = () => <XCircle className="h-5 w-5 text-muted-foreground/50 mx-auto" />;
+const Yes = () => (
+  <>
+    <CheckCircle2 className="h-5 w-5 text-success mx-auto" aria-hidden="true" />
+    <span className="sr-only">समर्थित / Supported</span>
+  </>
+);
+const No = () => (
+  <>
+    <XCircle className="h-5 w-5 text-muted-foreground/50 mx-auto" aria-hidden="true" />
+    <span className="sr-only">समर्थित नहीं / Not supported</span>
+  </>
+);
 const cell = (v: boolean | string) =>
-  v === true ? <Yes /> : v === false ? <No /> : <span className="text-xs text-muted-foreground">{v}</span>;
+  v === true ? <Yes /> : v === false ? <No /> : v === 'nv'
+    ? <span className="text-xs text-muted-foreground italic">सत्यापित नहीं / not verified</span>
+    : <span className="text-xs text-muted-foreground">{v}</span>;
 
 const LandingPage: React.FC = () => {
   return (
@@ -361,12 +380,13 @@ const LandingPage: React.FC = () => {
           <p className="mt-2 text-center text-muted-foreground">सहकारी समिति के लिए जो ज़रूरी है, वही यहाँ बना-बनाया है।</p>
           <div className="mt-8 overflow-x-auto rounded-xl border">
             <table className="w-full text-sm">
+              <caption className="sr-only">TallyPrime Silver, Zoho Books (India) और SahakarLekha की तुलना — {COMPARE_DATE}</caption>
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-left p-3 font-semibold">Feature</th>
-                  <th className="p-3 font-semibold text-center w-24">Tally</th>
-                  <th className="p-3 font-semibold text-center w-24">Zoho</th>
-                  <th className="p-3 font-semibold text-center w-28 text-primary">SahakarLekha</th>
+                  <th scope="col" className="text-left p-3 font-semibold">Feature</th>
+                  <th scope="col" className="p-3 font-semibold text-center w-28">TallyPrime (Silver)</th>
+                  <th scope="col" className="p-3 font-semibold text-center w-28">Zoho Books (India)</th>
+                  <th scope="col" className="p-3 font-semibold text-center w-28 text-primary">SahakarLekha</th>
                 </tr>
               </thead>
               <tbody>
@@ -381,6 +401,16 @@ const LandingPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            तुलना {COMPARE_DATE} को vendors की official websites से — "सत्यापित नहीं" का मतलब है कि vendor के दस्तावेज़ में हमें इसकी पुष्टि नहीं मिली, यह नहीं कि सुविधा उपलब्ध नहीं है। मूल्य बदल सकते हैं।
+            {' '}Compared on {COMPARE_DATE} using vendors' official websites; "not verified" means we could not confirm it in vendor documentation, not that it is unavailable. Prices may change. Sources:{' '}
+            {COMPARE_SOURCES.map((s, i) => (
+              <React.Fragment key={s.href}>
+                {i > 0 && ' · '}
+                <a href={s.href} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">{s.label}</a>
+              </React.Fragment>
+            ))}
+          </p>
         </div>
       </section>
 
@@ -430,15 +460,15 @@ const LandingPage: React.FC = () => {
       {/* ───────── AUDIT / COMPLIANCE ───────── */}
       <section className="py-16 bg-muted/30" id="compliance">
         <div className="max-w-3xl mx-auto px-4">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">कानूनी अनुपालन बिल्ट-इन — Compliance Built-in</h2>
-          <p className="mt-2 text-center text-muted-foreground">पूरे वर्ष books व्यवस्थित रखें — ताकि audit के समय हफ़्तों का काम दिनों में सिमट सके।</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">अनुपालन की तैयारी — Compliance support</h2>
+          <p className="mt-2 text-center text-muted-foreground">पूरे वर्ष books व्यवस्थित रखें — ताकि audit के समय हफ़्तों का काम दिनों में सिमट सके। धाराएँ व प्रारूप राज्य अनुसार अलग होते हैं — अपने ऑडिटर/RCS से मिलाएँ।</p>
           <div className="mt-8 space-y-3">
             {[
-              'Haryana / Maharashtra / Multi-State Co-op Societies Acts',
-              'Income Tax — TDS Sec 192/194A/194C/194H/194J/194Q, Form 26Q',
-              'GST — GSTR-1, GSTR-3B, e-Invoice, e-Way Bill',
-              'NABARD / DCCB reporting · RCS audit format (state-wise)',
-              'Reserve Fund (Sec 65) · ICAI Guidance Note on Cooperative Societies',
+              'State-wise audit schedules — Haryana, Maharashtra, Gujarat, Karnataka, Kerala, UP and more (sections differ by state Act)',
+              'TDS register + quarterly TDS data export (legacy Form 26Q layout) — you file on the Income Tax e-Filing portal',
+              'GST — GSTR-1 / GSTR-3B figures and e-Way Bill JSON — you file on the GST / e-Way Bill portals',
+              'NABARD / DCCB-style MIS report · RCS two-section Trial Balance & Balance Sheet',
+              'Statutory Reserve Fund appropriation — % set as per your state Act / bye-laws',
             ].map(c => (
               <div key={c} className="flex items-center gap-3 p-3 rounded-lg bg-success/5 border border-success/20">
                 <CheckCircle2 className="h-5 w-5 text-success shrink-0" />

@@ -22,8 +22,8 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
     items: [
       {
         q: 'SahakarLekha क्या है? / What is SahakarLekha?',
-        aHi: 'SahakarLekha भारत की सहकारी समितियों के लिए विशेष रूप से बनाया गया मुफ्त क्लाउड-आधारित लेखा सॉफ्टवेयर है। यह 8 प्रकार की समितियों, 36 राज्यों, TDS/GST अनुपालन और द्विभाषी (हिंदी+अंग्रेजी) इंटरफेस का समर्थन करता है।',
-        aEn: 'SahakarLekha is a free cloud-based accounting software built specifically for Indian cooperative societies. It supports 8 society types, 36 states, TDS/GST compliance, and a bilingual (Hindi+English) interface.',
+        aHi: 'SahakarLekha भारत की सहकारी समितियों के लिए विशेष रूप से बनाया गया क्लाउड-आधारित लेखा सॉफ्टवेयर है (Starter ₹1,499/वित्त वर्ष से)। यह 8 प्रकार की समितियों, 36 राज्यों, TDS/GST अनुपालन और द्विभाषी (हिंदी+अंग्रेजी) इंटरफेस का समर्थन करता है।',
+        aEn: 'SahakarLekha is cloud-based accounting software built specifically for Indian cooperative societies (Starter from ₹1,499/FY). It supports 8 society types, 36 states, TDS/GST compliance, and a bilingual (Hindi+English) interface.',
       },
       {
         q: 'कैसे रजिस्टर करें? / How to register?',
@@ -79,13 +79,13 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
     items: [
       {
         q: 'TDS 26Q कैसे बनाएं? / How to generate Form 26Q?',
-        aHi: 'TDS Register पेज पर जाएं → तिमाही चुनें → \'26Q Export\' बटन दबाएं। TRACES-संगत पाइप-डिलिमिटेड फाइल डाउनलोड हो जाती है जो सीधे TRACES पर अपलोड की जा सकती है।',
-        aEn: 'Go to TDS Register page → select quarter → click \'26Q Export\'. A TRACES-compatible pipe-delimited file downloads that can be directly uploaded to TRACES portal.',
+        aHi: 'TDS Register पेज पर जाएं → तिमाही चुनें → \'26Q Export\' बटन दबाएं। इससे तिमाही TDS का pipe-delimited डेटा फ़ाइल बनती है, जो return तैयार करने में मदद करती है। यह validated FVU फ़ाइल नहीं है — return को Protean (NSDL) के RPU/FVU utility से validate करके Income Tax e-Filing portal पर deductor ख़ुद फाइल करता है। 1 अप्रैल 2026 से (Income-tax Act, 2025) इसकी जगह Form 140 आया है; Form 140 का format अभी SahakarLekha में उपलब्ध नहीं है।',
+        aEn: 'Go to TDS Register page → select quarter → click \'26Q Export\'. This downloads a pipe-delimited data file of the quarter\'s TDS to help prepare the return. It is not a validated FVU file — the deductor validates the return with Protean (NSDL) RPU/FVU and files it on the Income Tax e-Filing portal. From 1 April 2026 (Income-tax Act, 2025) Form 26Q is replaced by Form 140; the Form 140 format is not yet available in SahakarLekha.',
       },
       {
         q: 'GST रिटर्न में कैसे मदद मिलती है? / How does GST help work?',
-        aHi: 'GST Summary पेज GSTR-1 (बिक्री) और GSTR-3B (कर सारांश) दोनों दिखाता है। HSN-वार, दर-वार विभाजन। e-Way Bill प्रबंधन भी उपलब्ध है।',
-        aEn: 'The GST Summary page shows both GSTR-1 (sales) and GSTR-3B (tax summary). HSN-wise, rate-wise breakup. e-Way Bill management is also available.',
+        aHi: 'GST Summary पेज GSTR-1 (बिक्री) और GSTR-3B (कर सारांश) के आँकड़े तैयार करता है — HSN-वार, दर-वार विभाजन। e-Way Bill के लिए NIC portal पर upload करने योग्य JSON बनता है। SahakarLekha GSTN पर return फाइल नहीं करता और e-Invoice (IRN) नहीं बनाता — फाइलिंग आप या आपका CA GST portal पर करते हैं।',
+        aEn: 'The GST Summary page prepares GSTR-1 (sales) and GSTR-3B (tax summary) figures with HSN-wise and rate-wise breakup. For e-Way Bills it generates a JSON you upload on the NIC portal. SahakarLekha does not file returns on GSTN and does not generate e-Invoices (IRN) — you or your CA complete filing on the GST portal.',
       },
       {
         q: 'Audit Certificate कैसे निकालें? / How to get Audit Certificate?',
@@ -100,8 +100,8 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
     items: [
       {
         q: 'डेटा कहाँ स्टोर होता है? / Where is data stored?',
-        aHi: 'सभी डेटा Supabase (PostgreSQL) पर स्टोर होता है, जो AWS Mumbai (ap-south-1) क्षेत्र में होस्ट है। AES-256 एन्क्रिप्शन और Row-Level Security (RLS) के साथ।',
-        aEn: 'All data is stored on Supabase (PostgreSQL), hosted in AWS Mumbai (ap-south-1) region. With AES-256 encryption and Row-Level Security (RLS).',
+        aHi: 'सभी डेटा Supabase (PostgreSQL) क्लाउड डेटाबेस में स्टोर होता है। Supabase के अनुसार डेटा स्थिर अवस्था में AES-256 और ट्रांज़िट में TLS से एन्क्रिप्ट होता है। हर समिति का डेटा Row-Level Security (RLS) से अलग रखा जाता है।',
+        aEn: 'All data is stored in a Supabase (PostgreSQL) cloud database. Per Supabase, data is encrypted at rest with AES-256 and in transit with TLS. Each society\'s data is kept separate with Row-Level Security (RLS).',
       },
       {
         q: 'मोबाइल पर चलता है? / Does it work on mobile?',
@@ -121,8 +121,8 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
     items: [
       {
         q: 'क्या कोई छिपा शुल्क है? / Any hidden charges?',
-        aHi: 'बिल्कुल नहीं। SahakarLekha पूरी तरह से मुफ्त है। कोई छिपा शुल्क नहीं, कोई विज्ञापन नहीं, कोई डेटा बिक्री नहीं।',
-        aEn: 'Absolutely not. SahakarLekha is completely free. No hidden charges, no ads, no data selling.',
+        aHi: 'नहीं। Plan का पूरा मूल्य Pricing पेज पर लिखा है (Starter ₹1,499/वित्त वर्ष से)। कोई विज्ञापन नहीं, कोई डेटा बिक्री नहीं।',
+        aEn: 'No. Each plan\'s full price is shown on the Pricing page (Starter from ₹1,499/FY). No ads, no data selling.',
       },
       {
         q: 'Pro Plan कब आएगा? / When will Pro plan launch?',

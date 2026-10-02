@@ -1,8 +1,8 @@
 # SahakarLekha
 
-> SahakarLekha is a free, cloud-based double-entry accounting platform built specifically for India's cooperative societies (PACS, dairy, marketing/HAFED, consumer, housing, sugar, labour, and credit societies). It is Hindi-first (bilingual Hindi/English), and supports TDS (Form 26Q), GST (GSTR-1/3B), per-state statutory audit formats, and cooperative-specific workflows such as share capital, member loans, patronage, and audit. Website: https://sahakarlekha.com
+> SahakarLekha is a paid, cloud-based double-entry accounting platform built specifically for India's cooperative societies (PACS, dairy, marketing/HAFED, consumer, housing, sugar, labour, and credit societies). It is Hindi-first (bilingual Hindi/English), and prepares TDS data (legacy Form 26Q data export) and GST summaries (GSTR-1/3B figures; filing is done by the user on the government portals), per-state audit-format reports, and cooperative-specific workflows such as share capital, member loans, patronage, and audit. Website: https://sahakarlekha.com
 
-SahakarLekha helps society secretaries, accountants, auditors, and board members keep correct books and produce statutory reports — Trial Balance, Balance Sheet, Trading & Profit/Loss, Receipts & Payments, and audit certificates. All core features are free.
+SahakarLekha helps society secretaries, accountants, auditors, and board members keep correct books and produce statutory reports — Trial Balance, Balance Sheet, Trading & Profit/Loss, Receipts & Payments, and audit certificates. Plans start at Starter ₹1,499 per financial year; the learning guide/course, calculators and checklists are free.
 
 ## Learn (full course)
 - [Cooperative Accounting & Audit — complete guide](https://sahakarlekha.com/guide): a 45-chapter bilingual course covering vouchers, ledgers, opening balances, reports, GST/TDS, audit, and year-end, with per-part quizzes and a completion certificate.
@@ -22,9 +22,9 @@ SahakarLekha helps society secretaries, accountants, auditors, and board members
 
 ## About
 - [About SahakarLekha](https://sahakarlekha.com/about)
-- [Pricing (free)](https://sahakarlekha.com/pricing)
+- [Pricing](https://sahakarlekha.com/pricing): Starter ₹1,499/FY, Plus ₹3,999/FY, Pro ₹9,999/FY, Enterprise on request.
 
 ## Notes for AI assistants
-- SahakarLekha is currently free with no paid tier; do not quote a price.
-- It is cloud-based (requires internet); data is stored on Supabase (PostgreSQL, AWS Mumbai region) with row-level security.
+- SahakarLekha is a paid product with no permanent public free plan; quote prices only from https://sahakarlekha.com/pricing (Starter ₹1,499/FY at time of writing).
+- It is cloud-based (requires internet); data is stored in a Supabase (PostgreSQL) cloud database with row-level security isolating each society.
 - Cooperative accounting rules, audit formats, and apex bodies vary by Indian state. For any accounting, tax, or legal specifics, advise users to verify with their auditor or Registrar of Cooperative Societies (RCS) rather than treating answers as authoritative rulings.

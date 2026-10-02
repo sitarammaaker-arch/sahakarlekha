@@ -33,10 +33,10 @@ export const SOCIETY_TYPES: SocietyType[] = [
     nameHi: 'प्राथमिक कृषि ऋण समिति (PACS)',
     nameEn: 'PACS',
     metaTitle: 'PACS लेखा सॉफ्टवेयर — ₹1,499/FY से | PACS Accounting Software India',
-    metaDescription: 'PACS (प्राथमिक कृषि ऋण समिति) के लिए लेखा सॉफ्टवेयर — सदस्य ऋण, KCC, ब्याज, NPA, DCCB/NABARD रिपोर्ट, आरक्षित फंड (धारा 65), ऑडिट। हिंदी+English।',
+    metaDescription: 'PACS (प्राथमिक कृषि ऋण समिति) के लिए लेखा सॉफ्टवेयर — सदस्य ऋण, KCC, ब्याज, NPA, DCCB/NABARD-शैली रिपोर्ट, आरक्षित फंड विनियोजन, ऑडिट। हिंदी+English।',
     h1Hi: 'PACS के लिए लेखा सॉफ्टवेयर',
     introHi: 'प्राथमिक कृषि ऋण समिति का पूरा हिसाब एक जगह — सदस्य ऋण, KCC, ब्याज गणना, NPA वर्गीकरण और DCCB/NABARD रिपोर्ट, सहकारिता अधिनियम के अनुरूप।',
-    seoEn: 'SahakarLekha is accounting software built for PACS (Primary Agricultural Credit Societies). Manage member loans, KCC, interest calculation, NPA classification, Reserve Fund (Sec 65), and DCCB/NABARD reporting in the RCS audit format — in Hindi and English.',
+    seoEn: 'SahakarLekha is accounting software built for PACS (Primary Agricultural Credit Societies). Manage member loans, KCC, interest calculation, NPA classification, Statutory Reserve Fund appropriation (% as per your state Act / bye-laws), and DCCB/NABARD-style reports and RCS-format statements — in Hindi and English.',
     painsHi: [
       'सदस्य-वार ऋण व ब्याज की गणना और बकाया का हिसाब',
       'KCC (किसान क्रेडिट कार्ड) खातों का प्रबंधन',
@@ -44,9 +44,9 @@ export const SOCIETY_TYPES: SocietyType[] = [
       'NPA वर्गीकरण व आरक्षित फंड का अनुपालन',
     ],
     solvesHi: [
-      'ऋण रजिस्टर (धारा 32) — सदस्य-वार ऋण, किस्त व ब्याज स्वतः',
+      'ऋण रजिस्टर — सदस्य-वार ऋण, किस्त व ब्याज स्वतः',
       'समर्पित KCC मॉड्यूल व ब्याज गणना',
-      'NABARD रिपोर्ट + आरक्षित फंड (धारा 65) स्वतः',
+      'NABARD-शैली रिपोर्ट + आरक्षित फंड विनियोजन (राज्य अधिनियम/उपनियम अनुसार %)',
       'सदस्य शेयर रजिस्टर, ट्रायल बैलन्स, बैलेंस शीट व ऑडिट प्रमाणपत्र',
     ],
   },
@@ -183,7 +183,7 @@ export const SOCIETY_TYPES: SocietyType[] = [
     ],
     solvesHi: [
       'वेतन/मजदूरी मॉड्यूल',
-      'TDS रजिस्टर + 26Q निर्यात (TRACES)',
+      'TDS रजिस्टर + तिमाही TDS डेटा निर्यात (पुराना 26Q layout)',
       'गतिविधि-वार आय हेड',
       'सदस्य खाता, बैलेंस शीट व ऑडिट',
     ],

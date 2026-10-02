@@ -86,7 +86,7 @@ const EmailCapture: React.FC<{ magnet?: MagnetKey; className?: string }> = ({
           <button onClick={() => generateMagnet(magnet)} className="text-primary underline underline-offset-2 mx-1">यहाँ क्लिक करें</button>।
         </p>
         <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'leadmagnet_thanks', target: 'register' })}>
-          <Button className="gap-1.5 mt-4">अपनी समिति मुफ्त डिजिटल कीजिए <ArrowRight className="h-4 w-4" /></Button>
+          <Button className="gap-1.5 mt-4">अपनी समिति डिजिटल कीजिए <ArrowRight className="h-4 w-4" /></Button>
         </Link>
       </div>
     );

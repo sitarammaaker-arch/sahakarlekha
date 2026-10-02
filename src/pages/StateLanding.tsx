@@ -115,7 +115,7 @@ const StateLanding: React.FC = () => {
         {/* Trust strip */}
         <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-primary" /> RCS ऑडिट प्रारूप</span>
-          <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> TDS 26Q · GST</span>
+          <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> TDS · GST सारांश</span>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> हिंदी + English</span>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> ₹1,499/FY से</span>
         </div>

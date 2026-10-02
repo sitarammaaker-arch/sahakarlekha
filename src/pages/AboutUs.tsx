@@ -11,15 +11,14 @@ import {
   Globe, CheckCircle2, Building2,
 } from 'lucide-react';
 
+// Product capabilities, not compliance guarantees — sections/formats differ by state Act.
 const COMPLIANCE_ITEMS = [
-  'Haryana Co-op Societies Act 1984',
-  'Maharashtra Co-op Societies Act 1960',
-  'Multi-State Co-op Societies Act 2002',
-  'Income Tax Act — TDS (192/194A/194C/194H/194J/194Q)',
-  'GST Act — GSTR-1, GSTR-3B, e-Way Bill',
-  'NABARD / DCCB Reporting',
-  'RCS Audit Format (State-wise)',
-  'ICAI Guidance Note on Cooperative Societies',
+  'State-wise audit schedules — Haryana, Maharashtra, Gujarat, Karnataka, Kerala, UP and more',
+  'Statutory Reserve Fund appropriation — % as per your state Act / bye-laws',
+  'TDS register + quarterly TDS data export (legacy Form 26Q layout; you file on the e-Filing portal)',
+  'GST — GSTR-1 / GSTR-3B figures, e-Way Bill JSON (you file on the government portals)',
+  'NABARD / DCCB-style MIS report',
+  'RCS two-section Trial Balance & Balance Sheet',
 ];
 
 const AboutUs: React.FC = () => {
@@ -37,7 +36,7 @@ const AboutUs: React.FC = () => {
             हमारे बारे में — <span className="text-primary">About SahakarLekha</span>
           </h1>
           <p className="mt-4 text-sm sm:text-base lg:text-xl text-muted-foreground max-w-2xl mx-auto">
-            India's first cooperative-specific cloud accounting platform
+            सहकारी समितियों के लिए बना क्लाउड लेखा प्लेटफ़ॉर्म — A cooperative-specific cloud accounting platform
           </p>
         </div>
       </section>

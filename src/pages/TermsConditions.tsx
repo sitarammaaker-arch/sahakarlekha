@@ -1,6 +1,9 @@
 /**
  * Terms & Conditions — SahakarLekha
  * SaaS usage terms for cooperative society accounting platform
+ * Binding text — do NOT edit without owner/legal review. §7 (₹0 "free tier" liability cap)
+ * and §8 (30-day window) conflict with the paid model / Privacy §7: see
+ * docs/audits/PUBLIC-CLAIMS-AUDIT-2026-10.md §B (legal-review drafts).
  * Bilingual Hindi + English
  */
 import React from 'react';

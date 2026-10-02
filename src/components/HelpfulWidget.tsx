@@ -56,7 +56,7 @@ const HelpfulWidget: React.FC = () => {
           onClick={() => trackEvent('cta_click', { location: 'helpful_thanks', target: 'register' })}
           className="inline-flex items-center gap-1 font-medium text-primary hover:gap-1.5 transition-all"
         >
-          अपनी समिति का खाता मुफ्त डिजिटल कीजिए <ArrowRight className="h-4 w-4" />
+          अपनी समिति का खाता डिजिटल कीजिए <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
     );
