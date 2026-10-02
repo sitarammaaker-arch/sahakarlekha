@@ -1013,8 +1013,8 @@ function staticExtraPages(DATA) {
         `<ul class="sl-cards">` +
           `<li>असीमित वाउचर व सदस्य — नकद/बैंक, खरीद-बिक्री, वेतन, ऋण, जमा</li>` +
           `<li>सभी रिपोर्ट PDF/Excel में — ट्रायल बैलेंस, बैलेंस शीट, आय-व्यय, प्राप्ति-भुगतान, TDS/GST</li>` +
-          `<li>सहकारी-विशेष — धारा 32 ऋण सीमा, आरक्षित निधि, नामांकन, RCS ऑडिट प्रारूप</li>` +
-          `<li>क्लाउड बैकअप · हिन्दी + English · डेटा कभी भी export करें, कोई लॉक-इन नहीं</li>` +
+          `<li>सहकारी-विशेष — ऋण रजिस्टर व ऋण-सीमा जाँच, आरक्षित निधि विनियोजन, नामांकन, RCS ऑडिट प्रारूप</li>` +
+          `<li>साप्ताहिक स्वतः बैकअप · हिन्दी + English · डेटा कभी भी export करें, कोई लॉक-इन नहीं</li>` +
         `</ul>` +
         `<p>PACS, dairy, marketing, consumer, housing — हर प्रकार की समिति के लिए। Starter ₹1,499/FY · Plus ₹3,999/FY · Pro ₹9,999/FY — <a href="/pricing">सभी plans देखें</a>।</p>` +
         `<p><a href="/software">अपनी समिति के प्रकार के लिए</a> · <a href="/guide">मुफ़्त गाइड व कोर्स</a> · <a href="/blog">ब्लॉग</a> · <a href="/tools">कैलकुलेटर</a> · <a href="/glossary">शब्दकोश</a></p>` +
@@ -1033,15 +1033,15 @@ function staticExtraPages(DATA) {
       current: 'हमारे बारे में',
       html:
         `<h1>हमारे बारे में — About SahakarLekha</h1>` +
-        `<p>SahakarLekha भारत का <strong>पहला सहकारी-विशेष क्लाउड लेखा प्लेटफ़ॉर्म</strong> है। हमारा उद्देश्य — भारत की हर सहकारी समिति को, चाहे गाँव की छोटी समिति हो या राज्य-स्तरीय फेडरेशन, आधुनिक, पारदर्शी व किफ़ायती लेखा प्रणाली देना — <a href="/pricing">₹1,499/FY से</a>।</p>` +
-        `<p>India's first cooperative-specific cloud accounting platform — built for PACS, dairy, marketing, consumer and housing societies, in Hindi and English, from ₹1,499 per financial year.</p>` +
-        `<h2>अनुपालन (Compliance)</h2>` +
+        `<p>SahakarLekha एक <strong>सहकारी-विशेष क्लाउड लेखा प्लेटफ़ॉर्म</strong> है। हमारा उद्देश्य — भारत की हर सहकारी समिति को, चाहे गाँव की छोटी समिति हो या राज्य-स्तरीय फेडरेशन, आधुनिक, पारदर्शी व किफ़ायती लेखा प्रणाली देना — <a href="/pricing">₹1,499/FY से</a>।</p>` +
+        `<p>A cooperative-specific cloud accounting platform — built for PACS, dairy, marketing, consumer and housing societies, in Hindi and English, from ₹1,499 per financial year.</p>` +
+        `<h2>अनुपालन की तैयारी (Compliance support)</h2>` +
         `<ul>` +
-          `<li>राज्य सहकारी अधिनियम (Haryana 1984, Maharashtra 1960) व Multi-State Co-op Societies Act 2002</li>` +
-          `<li>Income Tax — TDS (192 / 194A / 194C / 194H / 194J / 194Q)</li>` +
-          `<li>GST — GSTR-1, GSTR-3B, e-Way Bill</li>` +
-          `<li>NABARD / DCCB रिपोर्टिंग व राज्य-वार RCS ऑडिट प्रारूप</li>` +
-          `<li>ICAI Guidance Note on Cooperative Societies</li>` +
+          `<li>राज्य-वार ऑडिट schedules — Haryana, Maharashtra, Gujarat, Karnataka, Kerala, UP आदि (धाराएँ राज्य अधिनियम अनुसार अलग)</li>` +
+          `<li>TDS रजिस्टर + तिमाही TDS डेटा निर्यात (पुराना Form 26Q layout) — फाइलिंग Income Tax e-Filing portal पर आप करते हैं</li>` +
+          `<li>GST — GSTR-1 / GSTR-3B के आँकड़े व e-Way Bill JSON — फाइलिंग सरकारी portal पर आप करते हैं</li>` +
+          `<li>NABARD / DCCB-शैली MIS रिपोर्ट व RCS दो-खंड ट्रायल बैलेंस/बैलेंस शीट</li>` +
+          `<li>आरक्षित निधि विनियोजन — % अपने राज्य अधिनियम/उपनियम अनुसार</li>` +
         `</ul>` +
         `<p><a href="/contact">संपर्क करें</a> · <a href="/guide">गाइड</a> · <a href="/software">समिति के प्रकार</a></p>` +
         registerCta(),

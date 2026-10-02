@@ -32,7 +32,7 @@ export const STATES: StateInfo[] = [
     nameEn: 'Haryana',
     Icon: MapPin,
     metaTitle: 'हरियाणा सहकारी समिति लेखा सॉफ्टवेयर — ₹1,499/FY से | Haryana Cooperative Society Accounting Software',
-    metaDescription: 'हरियाणा की सहकारी समितियों के लिए लेखा सॉफ्टवेयर — HAFED MSP खरीद, Vita दुग्ध भुगतान, PACS/KCC साख, RCS हरियाणा ऑडिट प्रारूप, हरियाणा सहकारी समिति अधिनियम 1984 अनुपालन, TDS 26Q/GST। हिंदी+English, ₹1,499/FY से।',
+    metaDescription: 'हरियाणा की सहकारी समितियों के लिए लेखा सॉफ्टवेयर — HAFED MSP खरीद, Vita दुग्ध भुगतान, PACS/KCC साख, RCS हरियाणा ऑडिट प्रारूप, TDS व GST सारांश। हिंदी+English, ₹1,499/FY से।',
     h1Hi: 'हरियाणा सहकारी समिति लेखा सॉफ्टवेयर',
     introHi: 'हरियाणा की सहकारी समितियाँ हरियाणा सहकारी समिति अधिनियम, 1984 व नियम, 1989 के अंतर्गत पंजीकृत होती हैं और सहकारिता विभाग / Registrar of Cooperative Societies (RCS), हरियाणा के अधीन ऑडिट होती हैं। SahakarLekha इन्हीं ज़रूरतों के लिए बना द्विभाषी (हिंदी+English) लेखा सॉफ्टवेयर है।',
     act: 'हरियाणा सहकारी समिति अधिनियम, 1984 (Haryana Act No. 22 of 1984) व हरियाणा सहकारी समिति नियम, 1989',
@@ -43,12 +43,12 @@ export const STATES: StateInfo[] = [
       { area: 'अन्य', body: 'सहकारी चीनी मिलें, आवास समितियाँ, उपभोक्ता भंडार', fits: 'स्टॉक, बिल-वार निपटान, रख-रखाव बकाया, GST बिक्री' },
     ],
     compliance: [
-      'हरियाणा अधिनियम 1984 अनुसार रिज़र्व फंड (नेट प्रॉफ़िट का तय भाग) का स्वतः परिकलन',
+      'रिज़र्व फंड (नेट प्रॉफ़िट का तय भाग — % अपने नियम/उपनियम अनुसार सेट करें) का स्वतः परिकलन',
       'RCS हरियाणा के लिए ऑडिट-तैयार बैलेंस शीट, आमदनी-खर्च, रसीद-भुगतान व ट्रायल बैलेंस',
-      'TDS 26Q व GST रिटर्न-तैयार सारांश',
+      'TDS डेटा निर्यात व GST सारांश — फाइलिंग आप सरकारी portal पर करते हैं',
       'सब कुछ हिंदी + English में — सदस्य, सचिव, क्लर्क व ऑडिटर सभी के लिए',
     ],
-    seoEn: 'Cooperative society accounting software for Haryana — built for societies registered under the Haryana Cooperative Societies Act, 1984 and Rules, 1989. It handles HAFED MSP procurement (wheat, paddy, mustard, cotton), Vita dairy member payments, PACS / KCC credit under HARCO Bank and the District Central Cooperative Banks, cooperative sugar mills, housing and consumer stores — with audit-ready reports for the Registrar of Cooperative Societies (RCS), Haryana, plus TDS 26Q and GST. Bilingual Hindi-English, from ₹1,499 per financial year.',
+    seoEn: 'Cooperative society accounting software for Haryana — built for societies registered under the Haryana Cooperative Societies Act, 1984 and Rules, 1989. It handles HAFED MSP procurement (wheat, paddy, mustard, cotton), Vita dairy member payments, PACS / KCC credit under HARCO Bank and the District Central Cooperative Banks, cooperative sugar mills, housing and consumer stores — with audit-ready reports for the Registrar of Cooperative Societies (RCS), Haryana, plus TDS and GST summaries (filing is done by you on the government portals). Bilingual Hindi-English, from ₹1,499 per financial year.',
   },
 ];
 

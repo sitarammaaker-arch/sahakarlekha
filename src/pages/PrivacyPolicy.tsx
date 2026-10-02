@@ -1,6 +1,8 @@
 /**
  * Privacy Policy — SahakarLekha
- * Compliant with IT Act 2000, DPDP Act 2023, GDPR
+ * Binding policy text — do NOT edit without owner/legal review. Several statements are
+ * contradicted by the live system (region, Aadhaar/bank collection, DPDP rights, 90-day
+ * backup deletion): see docs/audits/PUBLIC-CLAIMS-AUDIT-2026-10.md §B (legal-review drafts).
  * Bilingual Hindi + English
  */
 import React from 'react';
@@ -179,7 +181,7 @@ const SECTIONS = [
 const PrivacyPolicy: React.FC = () => {
   useDocumentMeta({
     title: 'गोपनीयता नीति — SahakarLekha | Privacy Policy',
-    description: 'SahakarLekha आपकी समिति का डेटा कैसे सुरक्षित रखता है — society-level isolation, एन्क्रिप्शन व DPDP Act 2023 अनुपालन. How SahakarLekha protects your cooperative society data.',
+    description: 'SahakarLekha आपकी समिति का कौन-सा डेटा रखता है और उसे कैसे सुरक्षित रखता है — society-level isolation व एन्क्रिप्शन. What data SahakarLekha holds and how it protects your cooperative society data.',
     canonicalPath: '/privacy',
   });
   return (

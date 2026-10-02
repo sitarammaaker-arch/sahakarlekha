@@ -72,11 +72,11 @@
         "Double-entry accounting",
         "Trial Balance, Balance Sheet, Income & Expenditure",
         "Receipts & Payments Account",
-        "TDS Register with Form 26Q export for TRACES",
-        "GST Summary (GSTR-1, GSTR-3B)",
+        "TDS Register with quarterly TDS data export (legacy Form 26Q layout)",
+        "GST Summary with GSTR-1 / GSTR-3B figures (filing done on the GST portal)",
         "Member Share Register",
-        "Loan Register with Sec 32 compliance",
-        "Reserve Fund (Sec 65) enforcement",
+        "Loan Register with loan-exposure check (outstanding loans vs 10x share capital + reserves)",
+        "Statutory Reserve Fund appropriation (default 25%, adjustable to your state Act / bye-laws)",
         "FY Lock and Year-end Rollover",
         "8 society type COA templates",
         "36 Indian states and UTs supported",
@@ -144,7 +144,7 @@
           "name": "Will auditors accept reports from SahakarLekha?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. SahakarLekha generates the Trial Balance, Balance Sheet and Income & Expenditure in the RCS two-section audit format, with Reserve Fund (Sec 65), TDS 26Q, GST summaries, FY-Lock and a full audit trail required for cooperative audits."
+            "text": "SahakarLekha prepares the Trial Balance, Balance Sheet and Income & Expenditure in the RCS two-section audit format, with Reserve Fund appropriation, TDS and GST summaries, FY-Lock and a full audit trail. Acceptance of any report is at your auditor's discretion, and formats vary by state."
           }
         },
         {
@@ -152,7 +152,7 @@
           "name": "Is my society's data safe?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. Data is encrypted with society-level isolation (Row-Level Security) so no other society can ever see your books, with automatic cloud backups. You can export everything to PDF/Excel anytime — there is no lock-in, and your data is never sold."
+            "text": "Data is stored in a Supabase (PostgreSQL) cloud database, which Supabase states is encrypted at rest (AES-256) and in transit (TLS). Each society's books are isolated with Row-Level Security, and an automatic weekly backup is taken. You can export everything to PDF/Excel anytime — there is no lock-in, and your data is never sold."
           }
         },
         {

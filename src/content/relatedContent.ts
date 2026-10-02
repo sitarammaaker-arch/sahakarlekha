@@ -188,7 +188,7 @@ const G = B; // guide refs use the same {slug,title} shape
 
 export const SOCIETY_CONTENT: Record<string, SurfaceLinks> = {
   pacs: {
-    guide: [G('special-registers', 'विशेष रजिस्टर (ऋण रजिस्टर धारा 32)'), G('society-type-entries', 'समिति-प्रकार अनुसार एंट्रियाँ')],
+    guide: [G('special-registers', 'विशेष रजिस्टर (ऋण रजिस्टर)'), G('society-type-entries', 'समिति-प्रकार अनुसार एंट्रियाँ')],
     blog: [B('kcc-crop-loan-accounting', 'KCC व फसली ऋण का लेखांकन')],
     help: ['loan-entry'],
     cookbook: ['loan-disbursed', 'loan-interest-received'],
