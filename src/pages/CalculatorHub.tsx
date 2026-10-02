@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { CALCULATORS } from '@/content/calculators';
 import { Home, ChevronRight, Search, Calculator as CalcIcon, ArrowRight, Sparkles } from 'lucide-react';
+import { HUB_META } from '@/content/hubMeta';
 
 const SITE = 'https://sahakarlekha.com';
 
@@ -45,8 +46,8 @@ const CalculatorHub: React.FC = () => {
   ];
 
   useDocumentMeta({
-    title: 'सहकारी लेखांकन कैलकुलेटर (Calculators) — मुफ्त | SahakarLekha',
-    description: 'ब्याज, EMI, डेप्रिसिएशन, GST, TDS, शेयर कैपिटल, कैश अंतर, प्रतिशत व वर्किंग कैपिटल — सहकारी समिति के लिए मुफ्त, आसान कैलकुलेटर, सूत्र व समझाइश सहित।',
+    title: HUB_META.tools.title,
+    description: HUB_META.tools.description,
     canonicalPath: '/tools',
     jsonLd,
   });

@@ -14,6 +14,7 @@ import { publishedOrder, readingMinutes, blogIntro, type BlogPost } from '@/cont
 import { formatDate } from '@/components/blog/blogTheme';
 import { fetchBlogViewCounts, formatViews } from '@/lib/blogViews';
 import { ArrowRight, Calendar, Clock, Eye, Rss, ArrowUpRight, Flame } from 'lucide-react';
+import { HUB_META } from '@/content/hubMeta';
 
 const SITE = 'https://sahakarlekha.com';
 
@@ -44,8 +45,8 @@ const Meta: React.FC<{ post: BlogPost; views?: number; className?: string }> = (
 const BlogIndex: React.FC = () => {
   const posts = publishedOrder();
   useDocumentMeta({
-    title: 'सहकार लेखा ब्लॉग — सहकारी समिति लेखांकन, ऑडिट व प्रबंधन',
-    description: 'सहकारी समितियों के लिए डिजिटल लेखांकन, वाउचर एंट्री, ऑडिट, अनुपालन व प्रबंधन पर सरल हिन्दी लेख — PACS, मार्केटिंग, उपभोक्ता व बहुउद्देशीय समितियों के लिए।',
+    title: HUB_META.blog.title,
+    description: HUB_META.blog.description,
     canonicalPath: '/blog',
     jsonLd: {
       '@context': 'https://schema.org',

@@ -329,6 +329,26 @@
     - new e2e test for the rule
     - **`test:dist` now passes and runs in CI** (verify job: `npm run build && npm run test:dist`)
   - **Content backlog:** the most-linked missing terms are cm-pacs ×9, reserve-fund ×7, managing-committee ×6, trial-balance ×5, share-capital ×5, maker-checker ×5 and general-body ×5. Each new term needs its source (statutory-values rule).
+- **L5–L7 and L9–L12 audit:** re-crawled all 376 live sitemap URLs, then **rendered every one in a headless browser**.
+  - **Clean on all 376:**
+    - no redirect
+    - canonical = own URL, in both the static HTML and the rendered page
+    - no noindex
+    - exactly one h1
+    - valid JSON-LD with the required fields (BlogPosting, BreadcrumbList, FAQPage, HowTo, DefinedTerm, Article, Course)
+    - no duplicate title or description
+    - lang is hi-IN
+  - The only state page (`/cooperative-software/haryana`) is fine: there is just one state in `states.ts`.
+  - **Drift found:** what crawlers first see (static HTML) differed from the rendered page on all 6 hubs and on all 110 glossary terms.
+    - The glossary client used the English definition, while the prerender deliberately uses Hindi (for CTR).
+    - /guide disagreed on facts: "9 भाग" vs "30 अध्याय". The real numbers are **10 parts and 35 chapters**.
+  - **Fix:** `src/content/hubMeta.ts` is the one source, read by both the pages and the prerender (HUB_META + glossaryMetaDescription).
+    - New `test:hub-meta` (25 checks). It pins the guide counts to the registry and checks that no private copy remains.
+    - A local render of the 6 hubs and 109 terms after the fix: 0 mismatches.
+  - **Noted, not changed:**
+    - Titles over 70 characters: 63 glossary terms and 29 blog posts. Google truncates them, but they are not wrong.
+    - The static bodies of cookbook/help/privacy/terms are shorter than the rendered page. Google renders JS anyway.
+    - The 13 app-shell guide pages have no BreadcrumbList.
 
 ## Tracked audit findings
 | ID | Area | Status |

@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { HELP_TASKS, HELP_CATEGORIES } from '@/content/help';
 import { LifeBuoy, Clock, ArrowRight, Search as SearchIcon } from 'lucide-react';
+import { HUB_META } from '@/content/hubMeta';
 
 const SITE = 'https://sahakarlekha.com';
 
@@ -17,8 +18,8 @@ const HelpHub: React.FC = () => {
   const [q, setQ] = React.useState('');
   const onSearch = (e: React.FormEvent) => { e.preventDefault(); const v = q.trim(); if (v) navigate(`/search?q=${encodeURIComponent(v)}`); };
   useDocumentMeta({
-    title: 'मदद केंद्र (Help Center) — कैसे करें | SahakarLekha',
-    description: 'सहकारी समिति लेखांकन के रोज़मर्रा के काम — Member कैसे जोड़ें, Opening Balance कैसे डालें, Voucher कैसे करें — आसान स्टेप-बाय-स्टेप, सीधे app में करने के लिंक सहित।',
+    title: HUB_META.help.title,
+    description: HUB_META.help.description,
     canonicalPath: '/help',
     jsonLd: [
       {
