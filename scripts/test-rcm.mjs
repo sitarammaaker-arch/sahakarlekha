@@ -60,4 +60,4 @@ ok(s.total === 2700, 'total RCM tax = 900+900+900 (payable in cash AND claimable
 ok(computeRCM([{ date: '2026-05-01', netAmount: 100, cgstAmount: 9, sgstAmount: 9, igstAmount: 0 }], FROM, TO).total === 0, 'no RCM-flagged purchase → 0');
 
 console.log(`\nRCM (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

@@ -113,4 +113,4 @@ check('employee with salary records', mods(links('employee', 'E1', { salaryRecor
 }
 
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll entity-link checks passed.');
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

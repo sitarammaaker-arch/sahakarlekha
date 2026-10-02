@@ -152,4 +152,4 @@ ok(src.includes('NEVER WRITE A TEST ROW'), 'the WORM hazard is documented for th
 ok(src.includes('DELIBERATE DEVIATION'), 'and the missing table is a documented decision, not an omission');
 
 console.log(`\nRestore trail: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

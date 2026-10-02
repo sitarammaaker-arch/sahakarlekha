@@ -88,4 +88,4 @@ ok('the flag ref defaults to false', /const postingServiceRef = useRef\(false\);
 ok('the app never writes society_flags', !/from\('society_flags'\)\.(upsert|insert|update|delete)/.test(dc));
 
 console.log(`\nS3-b post_voucher client: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

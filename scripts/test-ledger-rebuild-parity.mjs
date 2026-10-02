@@ -103,4 +103,4 @@ const postedV1 = evt(v1, 'voucher.posted', 1, '2026-06-01T00:00:00Z');
   ok(r.matches === true, 'unset memberId/branchId on both sides ⇒ parity (normalized to "")'); }
 
 console.log(`\nRebuild parity (journal-first-write slice 7 pre-flight): ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

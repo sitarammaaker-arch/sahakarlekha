@@ -91,4 +91,4 @@ ok(!isFundAccount({ ...fund, subtype: 'bank' }), 'non-reserve subtype → not a 
 }
 
 console.log(`\nFunds (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

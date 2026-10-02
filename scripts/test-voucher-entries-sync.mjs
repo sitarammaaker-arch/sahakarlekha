@@ -62,4 +62,4 @@ ok('appends it only after the voucher row is confirmed', /onBaseSuccess: \(\) =>
 ok('drops it with the voucher when the save fails', /onBaseFail: \(\) => \{[\s\S]*ledgerEventsRef\.current = ledgerEventsRef\.current\.filter\(e => e\.eventId !== postedEvent!\.eventId\)/.test(helper));
 
 console.log(`\nvoucher_entries sync + receipt journal: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

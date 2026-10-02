@@ -59,4 +59,4 @@ ok(!validateNominees([{ name: 'A', relation: 'son', sharePercent: 0 }]).ok, 'zer
 ok(nomineeShareTotal([{ sharePercent: 33.33 }, { sharePercent: 33.33 }, { sharePercent: 33.34 }]) === 100, 'fractional shares sum to 100');
 
 console.log(`\nNominees (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

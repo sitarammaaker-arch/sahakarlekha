@@ -52,4 +52,4 @@ ok(canApproveUnlock({ locked: true, requestedBy: 'a@x.com' }, 'b@x.com'), 'a sec
 ok(!canApproveUnlock({ locked: true, requestedBy: 'a@x.com' }, ''), 'empty user cannot approve');
 
 console.log(`\nDual-control unlock (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

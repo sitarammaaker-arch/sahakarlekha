@@ -72,4 +72,4 @@ const frac = appropriationWaterfall(33333.33, { reservePct: 25 });
 ok(frac.steps[0].amount === r2(33333.33 * 0.25), 'fractional reserve rounds to 2dp');
 
 console.log(`\nAppropriation waterfall (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

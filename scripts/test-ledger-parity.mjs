@@ -104,4 +104,4 @@ const ob = openingBalances([...accounts, { id: '9', openingBalance: 0, openingBa
 ok(ob['1001'] === 500000 && ob['4101'] === -500000 && ob['9'] === undefined, 'openingBalances: debit +, credit −, zero skipped');
 
 console.log(`\nLedger parity (T-07): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

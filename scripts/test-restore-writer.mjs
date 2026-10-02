@@ -238,4 +238,4 @@ ok(deleteChains.length > 0 && deleteChains.every(c => c.includes("eq('society_id
   'EVERY delete in the source is scoped by society_id — none can reach another tenant');
 
 console.log(`\nRestore writer: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

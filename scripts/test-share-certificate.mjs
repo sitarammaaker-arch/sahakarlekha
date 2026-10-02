@@ -51,4 +51,4 @@ ok(!validateCertificate({ status: 'cancelled', reason: '' }).ok, 'cancel without
 ok(!validateCertificate({ status: 'cancelled' }).ok, 'cancel without reason (undefined) rejected');
 
 console.log(`\nShare certificate (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

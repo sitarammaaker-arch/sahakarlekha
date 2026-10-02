@@ -135,4 +135,4 @@ const rupeeSum = (lines, drCr) => lines.filter((l) => l.type === drCr).reduce((s
   } }
 
 console.log(`\nSociety appropriation adapter (T-20 wiring slice 1+2): ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

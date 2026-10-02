@@ -138,4 +138,4 @@ ok(healthFromRehearsalRows([{ created_at: daysAgo(1) }], NOW).status === 'red',
   'a row missing its outcome reads as not-passed (red), never silently green');
 
 console.log(`\nRehearsal audit + persisted health: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

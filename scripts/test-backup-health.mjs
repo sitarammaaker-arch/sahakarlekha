@@ -217,4 +217,4 @@ ok(rawSource.includes('NEVER GREEN ON MISSING DATA'), 'the one rule is stated at
 }
 
 console.log(`\nBackup health: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

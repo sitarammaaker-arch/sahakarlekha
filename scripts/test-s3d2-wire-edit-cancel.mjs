@@ -81,4 +81,4 @@ ok('no Restore button in the Vouchers list; cancel only for live vouchers', !/re
 ok('bulk-cancel copy no longer promises a restore', !/restore हो सकते हैं|can be restored/.test(vp) && /restore नहीं होंगे/.test(vp));
 
 console.log(`\nS3-d-2 edit/cancel wiring: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -223,4 +223,4 @@ ok(enc1.every((v, i) => v === enc2[i]), 'given the same salt and IV, encryption 
 ok(k1 !== k2, 'different salts derive different keys');
 
 console.log(`\nBackup crypto (AES-256-GCM): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

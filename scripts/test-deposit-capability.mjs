@@ -75,4 +75,4 @@ const shipTimeParity = TYPES.every((t) => {
 ok(shipTimeParity, 'ship-time empty-diff: every default template holds deposit_ledger iff it holds lending');
 
 console.log(`\nDeposit capability gating (T-13): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

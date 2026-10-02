@@ -64,4 +64,4 @@ ok(buildRdSchedule({ openDate: '2024-04-01', installmentAmount: 0, maturityDate:
 ok(buildRdSchedule({ openDate: '2024-04-01', installmentAmount: 1000, maturityDate: undefined, totalPaid: 0, asOf: '2024-05-01' }).length === 0, 'no maturity date → empty');
 
 console.log(`\nRD schedule (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

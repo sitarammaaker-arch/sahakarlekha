@@ -77,4 +77,4 @@ ok(!!r18 && r18.taxableValue === 14000, 'rate-wise: 18% bucket taxable = 14000 (
 ok(g.outwardByRate.length === 1, 'only one rate bucket (18%)');
 
 console.log(`\nGSTR-9 (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

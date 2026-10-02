@@ -69,4 +69,4 @@ ok(applyShareOp('redeem', 1000, 1000) === 0, 'full redeem → 0');
 ok(applyShareOp('surrender', 1000.5, 0.25) === 1000.25, 'rounding preserved to 2dp');
 
 console.log(`\nShare operations (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

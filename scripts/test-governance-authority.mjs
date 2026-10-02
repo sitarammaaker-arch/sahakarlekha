@@ -110,4 +110,4 @@ ok(apprEvent.payload.authority && apprEvent.payload.authority.reference === 'AGM
   'the posted appropriation event RECORDS the AGM authority (the audit chain: figure → governance act, CL-7)');
 
 console.log(`\nGovernance authority: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

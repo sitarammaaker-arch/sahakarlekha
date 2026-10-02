@@ -97,4 +97,4 @@ const foreignCode = await totp(otherSecret, at);
 ok(!(await verifyTotp(loginSecret, foreignCode, at)) || foreignCode === liveCode, 'login: a code from a different secret is rejected');
 
 console.log(`\nTOTP (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

@@ -90,4 +90,4 @@ const asOf = ledgerTrialBalance([...events, ...later], accounts, '2025-06-30');
 ok(row(asOf, '1001').transactionDebit === 1000, 'as-of excludes the later voucher (txn still ₹1000)');
 
 console.log(`\nLedger trial balance (T-09): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

@@ -120,4 +120,4 @@ ok(setEq(resolveCapabilities('pacs', [], NOW, undefined, ['credit_short_term']),
   'resolution is deterministic for a fixed now (MR-2: pure)');
 
 console.log(`\nActivity resolution within entitlement: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

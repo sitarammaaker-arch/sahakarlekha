@@ -49,4 +49,4 @@ ok(!canApprovalTransition(undefined, 'approved'), 'undefined (non-workflow) → 
 ok(!canApprovalTransition(undefined, 'rejected'), 'undefined (non-workflow) → rejected blocked');
 
 console.log(`\nApproval state machine (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

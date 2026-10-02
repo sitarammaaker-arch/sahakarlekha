@@ -79,4 +79,4 @@ ok(Object.keys(payloadWithoutMissingColumn({ code: 'PGRST204', message: "Could n
   'dropping the sole column yields an empty object (caller checks length and stops)');
 
 console.log(`\nDB retry (missing-column guard): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

@@ -57,4 +57,4 @@ ok(premiumAllowed(100, 2000, 5) && !premiumAllowed(101, 2000, 5), 'cap tracks fa
 ok(premiumCap(333.33, 7.5) === 25, '7.5% of 333.33 ≈ ₹25.00 (2dp)');
 
 console.log(`\nShare-transfer premium cap (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

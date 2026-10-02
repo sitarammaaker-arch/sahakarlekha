@@ -43,4 +43,4 @@ ok('the hook resolves exactly like CapabilityGuard', /navigationService\.resolve
   && /navigationService\.resolveCapabilities\(societyType, societyCapabilities, society\.state, declaredActivities\(societyActivities\), society\.activitiesCutoverEnabled\)/.test(guard));
 
 console.log(`\nJ6b module loads: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

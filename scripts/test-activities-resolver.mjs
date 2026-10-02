@@ -90,4 +90,4 @@ const housingGated = resolveCapabilities('housing', [], undefined, undefined, ['
 ok(!housingGated.has('lending'), 'MR-4 — an activity cannot grant a capability the society is not entitled to');
 
 console.log(`\nActivities resolver (pure, T-11): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

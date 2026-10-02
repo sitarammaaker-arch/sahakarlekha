@@ -124,4 +124,4 @@ ok(currentYear.lines.find((l) => l.accountId === 'CASH').netMinor === toMinor(45
   'the prior-period adjustment flows forward into the current year (as a new event, not a mutation)');
 
 console.log(`\nYear-end close & opening balances: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

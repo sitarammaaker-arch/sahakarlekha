@@ -52,4 +52,4 @@ ok(capexPendingAssets(assets, new Set()).length === 0, 'no pending vouchers → 
 ok(capexPendingAssets(null, pending).length === 0, 'null assets → none');
 
 console.log(`\nCapex approval (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

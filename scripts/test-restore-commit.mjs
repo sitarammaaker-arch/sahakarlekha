@@ -311,4 +311,4 @@ ok(src.includes('replayEntries') && !/dr:\s*l\.type === 'Dr'/.test(src),
   'commit.ts replays through the shared posting rule, and does not reimplement it');
 
 console.log(`\nRestore commit: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

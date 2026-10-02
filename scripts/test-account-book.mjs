@@ -122,4 +122,4 @@ const bals = (b) => b.entries.map(e => e.runningBalance).join(',');
 }
 
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll cash / bank book checks passed.');
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

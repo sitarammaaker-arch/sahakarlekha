@@ -74,4 +74,4 @@ const b6 = book([deposit('d1', 'M1', 1000), ev('other', [leg('1001', 'Dr', 300),
 ok(b6.length === 1 && b6[0].id === 'd1', 'a non-share-capital voucher for the member is excluded');
 
 console.log(`\nMember ledger projection (T-09): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

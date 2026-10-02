@@ -161,4 +161,4 @@ const noUsage = { voucherRefCount: {}, balance: {}, linkedParty: {} };
 }
 
 console.log(`\nLedger hygiene (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

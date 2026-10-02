@@ -60,4 +60,4 @@ ok(calcWDVDepreciation(mk({ depreciationMethod: 'WDV' }), '2025-26', 10000) === 
 ok(calcWDVDepreciation(mk({ depreciationMethod: 'WDV', residualValue: 95000 }), '2025-26', 0) <= 5000, 'WDV capped so book never drops below residual');
 
 console.log(`\nDepreciation (born-exact): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

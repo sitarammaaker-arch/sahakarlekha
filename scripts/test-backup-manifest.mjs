@@ -258,4 +258,4 @@ ok(unplaceableEntities(ghost, REGISTRY).join(',') === 'ghost_table',
   'AN ENTITY THIS BUILD DOES NOT KNOW IS NAMED — a restore must not silently drop it (gap EXP-02)');
 
 console.log(`\nBackup manifest + integrity (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

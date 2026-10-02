@@ -59,4 +59,4 @@ ok(maskId('ABCDE1234F') === 'XXXXXX234F', 'pan masked to last 4');
 ok(maskId('') === '' && maskId('12') === '12', 'short/empty values pass through');
 
 console.log(`\nKYC (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

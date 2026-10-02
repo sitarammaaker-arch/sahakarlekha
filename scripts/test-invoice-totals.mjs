@@ -145,4 +145,4 @@ ok(paise(grn.netAmount) + paise(grn.taxAmount) === paise(grn.grandTotal), 'GRN n
 // TdsRegister's tdsAmount now uses the same applyPercent half-up (the 2.675 → 2.68 fix, §1).
 
 console.log(`\nInvoice totals (born-exact): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

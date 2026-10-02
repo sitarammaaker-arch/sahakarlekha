@@ -64,4 +64,4 @@ const empty = reconcileStatutory([salariedRow([]), labourRow({}, 0)]);
 ok(empty.totals.gross === 0 && empty.totals.pfTotal === 0 && empty.totals.count === 0, 'empty period → zeros');
 
 console.log(`\nStatutory reconciliation (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

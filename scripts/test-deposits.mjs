@@ -76,4 +76,4 @@ ok(validateDepositTxn('withdraw', 1000, 1000).ok, 'withdraw equal to balance all
 ok(!validateDepositTxn('withdraw', 1001, 1000).ok, 'over-balance withdrawal rejected');
 
 console.log(`\nDeposits engine (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

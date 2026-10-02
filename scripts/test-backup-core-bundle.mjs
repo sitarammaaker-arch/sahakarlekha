@@ -104,4 +104,4 @@ ok(report.problems.length === 0, report.problems.length === 0 ? 'with zero probl
 ok(report.fingerprintMatches === true, 'and the registry fingerprint MATCHES — the server build is indistinguishable from the client build');
 
 console.log(`\nServer backup-core bundle: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

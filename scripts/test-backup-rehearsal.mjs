@@ -154,4 +154,4 @@ ok(rawSource.includes('SHADOW SOCIETY') && rawSource.includes('DEFERRED'),
   'the file states plainly that the server orchestration is deferred, not done');
 
 console.log(`\nBackup rehearsal: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

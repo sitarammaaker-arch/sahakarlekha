@@ -106,4 +106,4 @@ ok(T.multipurpose.includes('deposit_ledger') && T.multipurpose.includes('subsidy
 ok(!T.dairy.includes('deposit_ledger'), 'dairy is NOT auto-entitled to deposits (a declared deposits activity there stays gated — MR-4)');
 
 console.log(`\nActivities layer (catalog + map): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

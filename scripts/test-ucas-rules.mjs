@@ -103,4 +103,4 @@ const edu = applyPercent(toMinor(1234.57), ucasEducationFundPct(AT));
 ok(edu.minor === toMinor(61.73), '5% of ₹1,234.57 rounds to ₹61.73 by the recorded policy');
 
 console.log(`\nUCAS rules as data: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

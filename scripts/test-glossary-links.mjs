@@ -67,4 +67,4 @@ for (const [from, to] of Object.entries(GLOSSARY_ALIASES)) {
   check(`alias ${from} → ${to} targets a real term, and ${from} itself is not one`, has(to) && !has(from));
 }
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll glossary-link checks passed.');
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

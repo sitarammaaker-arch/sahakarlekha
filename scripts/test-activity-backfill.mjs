@@ -75,4 +75,4 @@ const batch = planActivityBackfill([
 ok(byId(batch, 'A').skipped === null && byId(batch, 'B').skipped === 'no-parity', 'batch decides per society independently');
 
 console.log(`\nActivity backfill planner (T-12): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

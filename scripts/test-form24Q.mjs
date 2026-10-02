@@ -67,4 +67,4 @@ const q3 = build24Q(recs, emps, '2024-25', 'Q3');
 ok(q3.rows.length === 0 && q3.totals.tds === 0 && q3.totals.deductees === 0, 'empty quarter → no rows');
 
 console.log(`\nForm 24Q (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

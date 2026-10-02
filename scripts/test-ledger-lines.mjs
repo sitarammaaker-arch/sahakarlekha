@@ -105,4 +105,4 @@ ok(checkBalanced([{ accountId: 'a', drCr: 'Dr', amountMinor: 1.5 }]).reasons.som
   'a non-integer minor amount is rejected — floats cannot sneak into the typed form');
 
 console.log(`\nLedger lines (typed promotion + balance): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

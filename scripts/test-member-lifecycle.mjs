@@ -66,4 +66,4 @@ ok(!isMemberActive('inactive') && !isMemberActive('resigned') && !isMemberActive
   'all non-active states are excluded (dividend/active count unchanged)');
 
 console.log(`\nMember lifecycle (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

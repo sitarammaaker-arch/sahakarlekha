@@ -35,4 +35,4 @@ ok('editing a bill does not count it twice', edit.kind === 'below' && edit.aggre
 const page = readFileSync(pathResolve(SRC, 'pages/PurchaseManagement.tsx'), 'utf8');
 ok('the purchase form shows the advice and never sets the TDS % from it', /purchaseTdsAdvice\(\{/.test(page) && /data-testid="tds-194q-advice"/.test(page) && !/setTdsPct\(tdsAdvice/.test(page));
 console.log(`\npurchase TDS advice: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

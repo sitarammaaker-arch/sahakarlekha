@@ -130,4 +130,4 @@ const many = clone(cb).concat(clone(cb)).concat(clone(cb));
 ok(cashBookParity(many.map((r) => ({ ...r, voucherNo: 'X' })), many).diffs.length <= 10, 'parity diffs are capped (a diagnostic, not a dump)');
 
 console.log(`\nLedger report adapters + per-report parity (T-09): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

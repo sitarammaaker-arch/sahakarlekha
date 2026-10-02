@@ -82,4 +82,4 @@ ok(unbranchedInScope(ALL_BRANCHES, undefined), 'no HO known: consolidated still 
 ok(!unbranchedInScope(B2, undefined), 'no HO known: a specific branch excludes openings');
 
 console.log(`\nBranch scope (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

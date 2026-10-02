@@ -60,4 +60,4 @@ ok(clampPaidDays(45, 30) === 30 && clampPaidDays(-3, 30) === 0, 'clamp bounds');
 ok(prorate(10000, 10, 30) === r2(10000 * 10 / 30), '10/30 rounds to 2dp');
 
 console.log(`\nAttendance (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

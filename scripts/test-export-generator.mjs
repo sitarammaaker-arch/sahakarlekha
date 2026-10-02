@@ -342,4 +342,4 @@ const statuses = new Set(['exported', 'too-large', 'read-failed', 'denied', 'aud
 ok(statuses.size === 6, 'six distinct outcomes, each deserving a different sentence to the user');
 
 console.log(`\nExport generator (pure + wired): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

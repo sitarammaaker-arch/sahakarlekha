@@ -83,4 +83,4 @@ const down = readFileSync(pathResolve(HERE, '../supabase/migrations/076_voucher_
 ok('down drops voucher_lines, removes only the backfilled historical FYs and 076', /drop table if exists public\.voucher_lines/.test(down) && /delete from public\.financial_years where close_authority = 'backfill \(S2\): pre-M1 history'/.test(down) && /version = '076'/.test(down));
 
 console.log(`\nS2 voucher_lines (unit/static): ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
