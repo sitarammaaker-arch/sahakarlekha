@@ -446,6 +446,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'बैठक-कार्यवृत्त, पत्राचार-रिकॉर्ड, वाउचर की निगरानी, सदस्य-रजिस्टर, रिपोर्ट और ऑडिट-फ़ाइलें: सचिव के काम का पूरा नक्शा।',
     accent: 'emerald',
     tags: ['सचिव', 'कार्यवृत्त', 'ऑडिट', 'रिकॉर्ड'],
+    image: '/blog/secretary-work-meetings-records-accounts-audit.webp',
+    imageAlt: 'सहकारी समिति के सचिव का काम: लैपटॉप पर डैशबोर्ड, रजिस्टर और ऑडिट-फ़ाइलों के साथ सदस्यों के सामने बैठक की तैयारी',
   },
   {
     slug: 'office-bearers-chairman-secretary-treasurer',
