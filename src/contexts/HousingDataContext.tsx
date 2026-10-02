@@ -15,6 +15,7 @@
  */
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
+import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
 import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -102,6 +103,10 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   // Compose core (never fork): FY-lock + chart from society; sub-ledgers + vouchers via the core engine.
   const { society, accounts, members, vouchers, addAccount, addVoucher, cancelVoucher, registerVoucherOwner } = useData();
+  // J6b: load this module's tables only when its capability is on for the society (same rule as the
+  // sidebar / CapabilityGuard) — societies that don't use housing no longer fetch them on every login.
+  const moduleOn = useCapabilityEnabled(['housing']);
+  const loadSid = moduleOn ? user?.societyId : undefined;
   const { toast } = useToast();
   const toastRef = useRef(toast);
   useEffect(() => { toastRef.current = toast; }, [toast]);
@@ -138,7 +143,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
 
   // Load when the society changes; Supabase is SSOT, localStorage is offline fallback.
   useEffect(() => {
-    const sid = user?.societyId;
+    const sid = loadSid;
     if (!sid) { setHousingFlatsState([]); setMaintenanceBillsState([]); setChargeHeadsState([]); setFundInvestmentsState([]); setComplaintsState([]); setParkingState([]); setTransfersState([]); setInsurancesState([]); setAmcsState([]); setDocumentsState([]); setBuildingsState([]); return; }
     fetchAllPaged<HousingFlat>('housing_flats', sid).then(
       ({ data, error }) => setHousingFlatsState(error || !data ? storage.getHousingFlats() : (data as unknown as HousingFlat[])),
@@ -184,7 +189,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       ({ data, error }) => setBuildingsState(error || !data ? storage.getHousingBuildings() : (data as unknown as HousingBuilding[])),
       () => setBuildingsState(storage.getHousingBuildings()),
     );
-  }, [user?.societyId]);
+  }, [loadSid]);
 
   // ── Charge-head schedule (society-wide master; plain-table persistence + RULE-1 rollback) ──
   const addChargeHead = useCallback((data: Omit<HousingChargeHead, 'id' | 'createdAt'>): HousingChargeHead => {

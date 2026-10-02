@@ -12,6 +12,7 @@
  */
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
+import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
 import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -75,6 +76,10 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   // Compose core (never fork): FY-lock from society; sub-ledger via the core account engine.
   const { society, accounts, vouchers, musterEntries, addAccount, updateAccount, deleteAccount, addVoucher, cancelVoucher, getAccountBalance, registerVoucherOwner } = useData();
+  // J6b: load this module's tables only when its capability is on for the society (same rule as the
+  // sidebar / CapabilityGuard) — societies that don't use labour no longer fetch them on every login.
+  const moduleOn = useCapabilityEnabled(['labour', 'pf_esi']);
+  const loadSid = moduleOn ? user?.societyId : undefined;
   const { toast } = useToast();
   const toastRef = useRef(toast);
   useEffect(() => { toastRef.current = toast; }, [toast]);
@@ -105,7 +110,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
 
   // Load when the society changes; Supabase is SSOT, localStorage is offline fallback.
   useEffect(() => {
-    const sid = user?.societyId;
+    const sid = loadSid;
     if (!sid) { setWorkersState([]); setDepartmentsState([]); setDepartmentBillsState([]); setWorkerAdvancesState([]); setPfEsiRunsState([]); return; }
     fetchAllPaged<Worker>('workers', sid).then(
       ({ data, error }) => setWorkersState(error || !data ? storage.getWorkers() : (data as unknown as Worker[])),
@@ -127,7 +132,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       ({ data, error }) => setPfEsiRunsState(error || !data ? storage.getPfEsiRuns() : (data as unknown as PfEsiRun[])),
       () => setPfEsiRunsState(storage.getPfEsiRuns()),
     );
-  }, [user?.societyId]);
+  }, [loadSid]);
 
   const addWorker = useCallback((data: Omit<Worker, 'id' | 'createdAt'>): Worker => {
     if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as Worker;
