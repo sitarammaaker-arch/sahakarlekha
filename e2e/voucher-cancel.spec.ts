@@ -12,7 +12,18 @@ test('a cancelled voucher stays cancelled after a reload', async ({ page }) => {
   page.on('pageerror', e => errors.push(e.message));
   // Diagnostics for an unexplained full reload right after the cancel click (CI, 2026-10-02).
   page.on('framenavigated', f => { if (f === page.mainFrame()) console.log(`[nav] ${f.url()}`); });
-  page.on('console', m => { if (['error', 'warning'].includes(m.type())) console.log(`[console.${m.type()}] ${m.text().slice(0, 300)}`); });
+  page.on('console', m => { if (['error', 'warning'].includes(m.type()) || m.text().startsWith('[diag]')) console.log(`[console.${m.type()}] ${m.text().slice(0, 600)}`); });
+  page.on('request', r => { if (r.isNavigationRequest() && r.frame() === page.mainFrame()) console.log(`[navreq] ${r.method()} ${r.url()}`); });
+  // lazyWithRetry sets this flag right before it reloads on a failed chunk import — log who sets it.
+  await page.addInitScript(() => {
+    const orig = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (k: string, v: string) {
+      if (k === 'sl_chunk_reloaded') console.log('[diag] chunk-reload flag set: ' + (new Error().stack || '').split('
+').slice(1, 6).join(' | '));
+      return orig.call(this, k, v);
+    };
+    window.addEventListener('unhandledrejection', e => console.log('[diag] unhandledrejection: ' + String((e as PromiseRejectionEvent).reason).slice(0, 300)));
+  });
   await login(page);
   const tag = await createVoucher(page, 'E2E-CANCEL');
 
@@ -25,8 +36,7 @@ test('a cancelled voucher stays cancelled after a reload', async ({ page }) => {
   // The cancelled list shows the cancel REASON in its note column (not the narration), so carry the tag there.
   await dialog.getByPlaceholder('कारण लिखें...').fill(`e2e cancel ${tag}`);
   await dialog.getByRole('button', { name: 'रद्द करें' }).click();
-  await page.waitForTimeout(1500);
-  console.log(`[diag] after cancel: chunkReloadFlag=${await page.evaluate(() => sessionStorage.getItem('sl_chunk_reloaded'))}`);
+
   await expect(page.getByRole('row').filter({ hasText: tag })).toHaveCount(0);   // gone from the active list
 
   await page.reload();
