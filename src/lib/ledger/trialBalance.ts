@@ -43,9 +43,13 @@ export function ledgerTrialBalance(
   }
 
   // Orphan legs — an account no longer in the chart. Synthetic "[Deleted]" row so the TB still balances.
+  // Legs on an EXISTING group account (a ledger flipped to group after entries) keep the real account,
+  // as a ledger, flagged postedToGroup — same rule as the voucher-state compute (reports/trialBalance).
+  const groupById = new Map((Array.isArray(accounts) ? accounts : []).filter((a) => a.isGroup).map((a) => [a.id, a]));
   for (const l of split.lines) {
     if (seen.has(l.accountId)) continue;
-    const account: LedgerAccount = {
+    const group = groupById.get(l.accountId);
+    const account: LedgerAccount = group ? { ...group, isGroup: false } : {
       id: l.accountId,
       name: `[Deleted] ${l.accountId.slice(0, 8)}...`,
       nameHi: `[हटाया] ${l.accountId.slice(0, 8)}...`,
@@ -59,6 +63,7 @@ export function ledgerTrialBalance(
       transactionDebit: toRupees(l.txnDrMinor), transactionCredit: toRupees(l.txnCrMinor),
       totalDebit: toRupees(l.totalDrMinor), totalCredit: toRupees(l.totalCrMinor),
       netBalance: toRupees(l.netMinor),
+      ...(group ? { postedToGroup: true } : {}),
     });
   }
 

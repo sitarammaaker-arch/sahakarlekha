@@ -78,16 +78,22 @@ export function computeTrialBalance({ accounts, vouchers, asOnDate, fyStart, ope
   const orphanIds = new Set<string>();
   txnByAccount.forEach((_b, id) => { if (!accountIds.has(id)) orphanIds.add(id); });
   priorByAccount.forEach((_b, id) => { if (!accountIds.has(id)) orphanIds.add(id); });
+  // Legs on an account that EXISTS but is flagged as a group (a ledger flipped to group after entries)
+  // are not orphans: keep the real account — as a ledger, so every report classifies it by its true
+  // type — and flag the row. A synthetic "[Deleted]" liability row here moved expenses/assets into
+  // Section I and dropped them from Income & Expenditure (Assandh, 2026-10-02).
+  const groupById = new Map(accounts.filter(a => a.isGroup).map(a => [a.id, a]));
   orphanIds.forEach((id) => {
     const t = txnByAccount.get(id) ?? { dr: 0, cr: 0 };
     const p = priorByAccount.get(id);
     const o = p ? netOpening(p.dr, p.cr) : { drMinor: 0, crMinor: 0 };
-    const syntheticAccount: LedgerAccount = {
+    const group = groupById.get(id);
+    const rowAccount: LedgerAccount = group ? { ...group, isGroup: false } : {
       id, name: `[Deleted] ${id.slice(0, 8)}...`, nameHi: `[हटाया] ${id.slice(0, 8)}...`,
       type: 'liability', openingBalance: 0, openingBalanceType: 'credit',
     };
     const totDr = addMinor(o.drMinor, t.dr), totCr = addMinor(o.crMinor, t.cr);
-    results.push({ account: syntheticAccount, openingDebit: toRupees(o.drMinor), openingCredit: toRupees(o.crMinor), transactionDebit: toRupees(t.dr), transactionCredit: toRupees(t.cr), totalDebit: toRupees(totDr), totalCredit: toRupees(totCr), netBalance: toRupees(subMinor(totDr, totCr)) });
+    results.push({ account: rowAccount, openingDebit: toRupees(o.drMinor), openingCredit: toRupees(o.crMinor), transactionDebit: toRupees(t.dr), transactionCredit: toRupees(t.cr), totalDebit: toRupees(totDr), totalCredit: toRupees(totCr), netBalance: toRupees(subMinor(totDr, totCr)), ...(group ? { postedToGroup: true } : {}) });
   });
 
   return results;

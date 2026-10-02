@@ -231,7 +231,7 @@ interface DataContextType {
   rejectMember: (id: string) => void;
 
   addAccount: (data: Omit<LedgerAccount, 'id'>) => LedgerAccount;
-  updateAccount: (id: string, data: Partial<LedgerAccount>) => void;
+  updateAccount: (id: string, data: Partial<LedgerAccount>) => boolean;
   deleteAccount: (id: string) => boolean;
   /** Resolves null when a guard blocked the merge or the save failed (each shows its own toast). */
   mergeAccounts: (keepId: string, removeId: string) => Promise<AccountMergeResult | null>;
@@ -509,6 +509,49 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ledgerEventsRef.current = [...ledgerEventsRef.current, cancelEvent];   // keep the in-session journal in step
       }
     } catch { /* best-effort — never affects the cancel */ }
+  };
+  // Edit hardening (same idea as ensureVoucherCancelEvent): the reverse-old + repost-new pair is built
+  // from THIS voucher's events read from the DB, not from the in-memory ref. With the ref short (journal
+  // not loaded, or not readable for the session), the edit used to append a second "voucher.posted
+  // seq 1" — refused by the WORM log — and the journal kept the OLD legs for good (Assandh
+  // JV/2026/27/2384, 2026-10-02). Appends atomically; a failure is shown, never only logged.
+  const persistVoucherEditEvents = async (voucher: Voucher, newLegs: { accountId: string; drCr: 'Dr' | 'Cr'; amountMinor: number }[], optimistic: LedgerEvent[]) => {
+    const fail = (msg: string) => {
+      reportError('voucher-edit-journal', msg, { voucherId: voucher.id });
+      toastRef.current({
+        title: '⚠ वाउचर सेव हुआ, पर Journal अपडेट नहीं हुआ',
+        description: `${voucher.voucherNo}: ${msg}. रिपोर्ट सही रहेंगी; admin को बताएँ ताकि journal ठीक किया जाए। / Voucher saved but the journal was not updated — reports stay correct; tell your admin.`,
+        variant: 'destructive', duration: 15000,
+      });
+    };
+    try {
+      const { data, error } = await supabase.from('ledger_events')
+        .select('event_id, event_type, schema_version, society_id, jurisdiction, aggregate_type, aggregate_id, sequence, occurred_at, producer_kind, producer_id, on_behalf_of, reversal_of, payload')
+        .eq('aggregate_type', 'voucher').eq('aggregate_id', voucher.id);
+      if (error || !data) { fail(error?.message ?? 'journal read failed'); return; }
+      const evs = mapLedgerEventRows(data);
+      if (evs.some(e => e.eventType === 'voucher.cancelled')) return;   // cancelled — nothing to repost
+      const posting = currentPostingEventId(evs, voucher.id);
+      const maxSeq = evs.reduce((m, e) => Math.max(m, e.sequence || 0), 0);
+      const at = new Date().toISOString();
+      const base = {
+        tenantId: societyIdRef.current, jurisdiction: jurisdictionRef.current,
+        aggregateType: 'voucher' as const, aggregateId: voucher.id,
+        producer: { kind: 'human' as const, id: userRef.current?.name ?? null },
+      };
+      const events: LedgerEvent[] = posting
+        ? [
+            // Reverse what the JOURNAL holds — it can differ from the voucher's old legs.
+            buildEvent({ ...base, eventType: 'voucher.reversed', sequence: maxSeq + 1, reversalOf: posting, payload: { lines: flipLegs(evs.find(e => e.eventId === posting)?.payload) ?? [], ...voucherEventMeta(voucher), reason: 'edit' } }, { eventId: crypto.randomUUID(), occurredAt: at }),
+            buildEvent({ ...base, eventType: 'voucher.reposted', sequence: maxSeq + 2, payload: { lines: newLegs, ...voucherEventMeta(voucher) } }, { eventId: crypto.randomUUID(), occurredAt: at }),
+          ]
+        : [buildEvent({ ...base, eventType: 'voucher.posted', sequence: maxSeq + 1, payload: { lines: newLegs, ...voucherEventMeta(voucher) } }, { eventId: crypto.randomUUID(), occurredAt: at })];
+      if (posting && !(events[0].payload as { lines: unknown[] }).lines.length) { fail('journal posting has no legs to reverse'); return; }
+      const { error: insErr } = await supabase.from('ledger_events').insert(events.map(toLedgerEventRow));
+      if (insErr) { fail(insErr.message); return; }
+      // Keep the in-session journal in step: swap the optimistic events for the ones actually written.
+      ledgerEventsRef.current = [...ledgerEventsRef.current.filter(e => !optimistic.some(x => x.eventId === e.eventId)), ...events];
+    } catch (e) { fail(e instanceof Error ? e.message : String(e)); }
   };
   // S3-e-2 · an APPROVED voucher must be in the journal. A pending voucher gets no voucher.posted when it
   // is created (addVoucher skips it), and approval used to flip the status only — 342 approved vouchers
@@ -843,6 +886,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ECR-07 (P1 #7): period lock / back-dating prevention. A voucher dated ON or BEFORE
   // society.periodLockDate is in a closed period. Pure predicate (mirrored in the test).
   const isPeriodLocked = (entityDate?: string): boolean => isDateInLockedPeriod(entityDate, societyRef.current?.periodLockDate);
+  // A voucher leg on a GROUP account is invisible to every report (they read ledgers only), so it
+  // would surface as a "[Deleted]" row and fall out of I&E. AccountPicker already hides groups;
+  // this is the choke-point check for every other path (edits, composite flows). True = blocked.
+  const blockGroupPosting = (lines: readonly { accountId: string }[]): boolean => {
+    const group = lines.map(l => accountsRef.current.find(a => a.id === l.accountId)).find(a => a?.isGroup);
+    if (!group) return false;
+    toastRef.current({
+      title: 'ग्रुप खाते में एंट्री नहीं / Cannot post to a group',
+      description: `"${group.name}" एक ग्रुप है — इसके नीचे का कोई ledger खाता चुनें। / "${group.name}" is a group; choose a ledger under it.`,
+      variant: 'destructive', duration: 12000,
+    });
+    return true;
+  };
   // Returns true when BLOCKED (mirrors guardFYLocked). Checks any of the supplied dates
   // (add → new date; edit → existing AND incoming date) so you can neither edit within
   // nor back-date into a locked period.
@@ -1718,6 +1774,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ];
       }
     }
+    if (blockGroupPosting(lines ?? [])) {
+      return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    }
 
     // ── Double-entry balance guard (Audit C-1/C-2, NCDC double-entry rule) ────
     // Every Dr MUST have an equal Cr. Two-tier handling:
@@ -2138,6 +2197,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }
 
+    if (blockGroupPosting(getVoucherLines(updatedVoucher))) return false;
+
     // ── Double-entry balance guard on edit (Audit C-1/C-2) ───────────────────
     // Block an edit that would leave a multi-line voucher materially unbalanced.
     if (updatedVoucher.lines && updatedVoucher.lines.length > 0) {
@@ -2255,8 +2316,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ── Default (flag OFF, or a postings-neutral edit): two-step persist + rollback. BYTE-IDENTICAL. ──
     persistVoucher(updatedVoucher, {
       isUpdate: true,
-      // The reverse-old + repost-new pair is durably appended only after the base row is confirmed.
-      onBaseSuccess: () => { for (const e of editEvents) persistLedgerEvent(e); },
+      // The reverse-old + repost-new pair is durably appended only after the base row is confirmed —
+      // built from the DB journal (ground truth), not the possibly-short in-memory ref.
+      onBaseSuccess: () => {
+        if (editEvents.length) void persistVoucherEditEvents(updatedVoucher, voucherPostingLines(updatedVoucher), editEvents);
+      },
       onBaseFail: revertEdit,
     });
     // syncEntries (which uses base columns only) is fired by persistVoucher only on add,
@@ -3766,24 +3830,62 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return newAccount;
   }, []);
 
-  const updateAccount = useCallback((id: string, data: Partial<LedgerAccount>) => {
-    if (guardFYLocked()) return;
+  // Returns false when a guard blocked the edit (callers must not show a success toast then).
+  const updateAccount = useCallback((id: string, data: Partial<LedgerAccount>): boolean => {
+    if (guardFYLocked()) return false;
+    const current = accountsRef.current.find(a => a.id === id);
+    // A ledger that carries entries (or an opening balance) must never become a GROUP: reports skip
+    // group accounts, so its balance turned into a "[Deleted]" row and vanished from I&E (Assandh,
+    // 2026-10-02 — Salary ₹9.07 L). Re-home the entries first, or create a new group instead.
+    if (current && !current.isGroup && data.isGroup === true) {
+      const hasOpening = (Number(current.openingBalance) || 0) !== 0;
+      const hasEntries = vouchersRef.current.some(v => !v.isDeleted && getVoucherLines(v).some(l => l.accountId === id));
+      if (hasOpening || hasEntries) {
+        toastRef.current({
+          title: 'ग्रुप नहीं बन सकता / Cannot make this a group',
+          description: hasEntries
+            ? 'इस खाते में वाउचर एंट्री हैं — ग्रुप बनाने पर इसका बैलेंस रिपोर्ट से गायब हो जाएगा। नया ग्रुप अलग से बनाएँ और यह खाता उसके नीचे रखें। / This account has voucher entries; create a separate group and place this ledger under it.'
+            : 'इस खाते का Opening Balance है — पहले उसे शून्य करें या नया ग्रुप अलग से बनाएँ। / This account has an opening balance; clear it first or create a separate group.',
+          variant: 'destructive', duration: 12000,
+        });
+        return false;
+      }
+    }
     setAccountsState(prev => {
       const before = prev.find(a => a.id === id);
       const updated = prev.map(a => a.id === id ? { ...a, ...data } : a);
       const updatedAccount = updated.find(a => a.id === id);
       const openingEvent = updatedAccount && before ? buildOpeningDelta(updatedAccount) : null;
       if (openingEvent) ledgerEventsRef.current = [...ledgerEventsRef.current, openingEvent];
-      if (updatedAccount && before) supabase.from('accounts').upsert(withSoc(updatedAccount)).then(({ error }) => {
-        if (error) {
-          console.error('DB sync error:', error.message); reportError('db-sync', error.message);
-          setAccountsState(p => p.map(a => a.id === id ? before : a));   // RULE 1: roll back to prior state
-          if (openingEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== openingEvent.eventId);
-          toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
-        } else if (openingEvent) persistLedgerEvent(openingEvent);
-      });
+      if (updatedAccount && before) {
+        // A field CLEARED by the edit (undefined, e.g. "Group" unticked or parent removed) is dropped by
+        // JSON, so the upsert left the old DB value in place — the UI showed a ledger, F5 brought the
+        // group back (RULE 1). Send it explicitly: false for isGroup, null for anything else.
+        const row: Record<string, unknown> = { ...withSoc(updatedAccount) };
+        for (const k of Object.keys(data) as (keyof LedgerAccount)[]) {
+          if (data[k] === undefined) row[k] = k === 'isGroup' || k === 'isSystem' ? false : null;
+        }
+        supabase.from('accounts').upsert(row).then(({ error }) => {
+          if (error) {
+            console.error('DB sync error:', error.message); reportError('db-sync', error.message);
+            setAccountsState(p => p.map(a => a.id === id ? before : a));   // RULE 1: roll back to prior state
+            if (openingEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== openingEvent.eventId);
+            toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+            return;
+          }
+          if (openingEvent) persistLedgerEvent(openingEvent);
+          // Chart edits were never audited, so a ledger flipped to group left no trace of who/when.
+          const changed = (Object.keys(data) as (keyof LedgerAccount)[]).filter(k => before[k] !== updatedAccount[k]);
+          if (changed.length) emitAudit({
+            entityType: 'account', entityId: id, action: 'update',
+            before: Object.fromEntries(changed.map(k => [k, before[k] ?? null])),
+            after: Object.fromEntries(changed.map(k => [k, updatedAccount[k] ?? null])),
+          });
+        });
+      }
       return updated;
     });
+    return true;
   }, []);
 
   // Returns true only when the account was actually removed; false on any guard bail. Callers
