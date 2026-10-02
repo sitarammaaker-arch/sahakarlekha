@@ -42,6 +42,7 @@ const COOKBOOK_FILE = resolve(ROOT, 'src', 'content', 'cookbook', 'index.ts');
 const GLOSSARY_DIR = resolve(ROOT, 'docs', 'kpp', 'wave-1-active');
 const CALC_FILE = resolve(ROOT, 'src', 'content', 'calculators', 'index.ts');
 const FAQ_FILE = resolve(ROOT, 'src', 'content', 'faq.ts');
+const QUIZ_FILE = resolve(ROOT, 'src', 'content', 'guide', 'quizzes.ts');
 const RELATED_FILE = resolve(ROOT, 'src', 'content', 'relatedContent.ts');
 const COURSE = 'सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स';
 
@@ -71,6 +72,11 @@ const maxDate = (dates, fallback) => {
   const ds = dates.filter(Boolean).sort();
   return ds.length ? ds[ds.length - 1] : fallback;
 };
+
+// L2: a content date can be typed in the future (a post's `updated:` set ahead). A sitemap lastmod /
+// dateModified after the day of the build is invalid — clamp to the build day.
+const BUILD_DAY = new Date().toISOString().slice(0, 10);
+const notFuture = (d) => (d && d > BUILD_DAY ? BUILD_DAY : d);
 
 const crumb = (items) => ({
   '@context': 'https://schema.org',
@@ -248,6 +254,7 @@ async function loadData() {
     ['cookbook', COOKBOOK_FILE, 'COOKBOOK_ENTRIES'],
     ['calc', CALC_FILE, 'CALCULATORS'],
     ['faq', FAQ_FILE, 'FAQ_CATEGORIES'],
+    ['quizzes', QUIZ_FILE, 'GUIDE_QUIZZES'],
     ['society', SOCIETY_TYPES, 'SOCIETY_TYPES'],
     ['states', STATES_FILE, 'STATES'],
     ['rel', RELATED_FILE, null], // whole module (edge maps + helpers), GOS-11
@@ -482,7 +489,7 @@ function blogPages(DATA) {
     while ((m = re.exec(src))) {
       const [, slug, title, description, date, updated] = m;
       if (date > today) continue; // scheduled (future-dated) post — not live yet
-      posts.push({ slug, title, description, date, updated });
+      posts.push({ slug, title, description, date, updated: notFuture(updated) });
     }
   }
   // optional featured image per post (declared after `slug:` in the same entry)
@@ -490,6 +497,12 @@ function blogPages(DATA) {
   if (existsSync(BLOG_FILE)) {
     const isrc = readFileSync(BLOG_FILE, 'utf-8');
     for (const im of isrc.matchAll(/slug:\s*'([^']+)'(?:(?!slug:)[\s\S])*?image:\s*'([^']+)'/g)) images[im[1]] = im[2];
+  }
+  // the on-page heading (`title:`, not `metaTitle:`) — BlogPost renders it as THE h1
+  const headings = {};
+  if (existsSync(BLOG_FILE)) {
+    const hsrc = readFileSync(BLOG_FILE, 'utf-8');
+    for (const hm of hsrc.matchAll(/slug:\s*'([^']+)'(?:(?!slug:)[\s\S])*?\n\s*title:\s*'((?:[^'\\]|\\.)*)'/g)) headings[hm[1]] = hm[2].replace(/\\'/g, "'");
   }
   posts.sort((a, b) => (a.date < b.date ? 1 : -1));
 
@@ -523,10 +536,13 @@ function blogPages(DATA) {
         // GOS-11: narrative → task edge into the static body too
         const helpSlugs = (DATA.rel && DATA.rel.BLOG_HELP && DATA.rel.BLOG_HELP[p.slug]) || [];
         const helpLinks = surfaceLinksHtml({ help: helpSlugs }, DATA, 'अभी करें (मदद केंद्र)');
+        // L2: mirror BlogPost — its h1 is the post's `title:` and the markdown's own leading "# …" is
+        // stripped. 40 posts have no "# " line, so their static HTML had NO h1 at all.
+        const heading = headings[p.slug] || p.title;
         body = shell({
           crumbs: [['/blog', 'ब्लॉग']],
-          current: p.title,
-          html: md(raw) + helpLinks + registerCta(),
+          current: heading,
+          html: `<h1>${esc(heading)}</h1>` + md(raw.replace(/^﻿?\s*#\s+.*(\r?\n)+/, '')) + helpLinks + registerCta(),
         });
       }
     } catch { /* body optional */ }
@@ -982,6 +998,44 @@ function calculatorPages(DATA) {
   return pages;
 }
 
+/* ---------------- app-shell publics (L2) ---------------- */
+
+// These routes were in the sitemap with NO static file: crawlers got the homepage template (homepage
+// <title>, canonical "/"), so 18 sitemap URLs each declared themselves a copy of "/". Each now gets its
+// own head (same title/description/canonical as the page's useDocumentMeta) and a short honest body;
+// the quizzes list their real questions. React replaces the body on mount.
+function appShellPages(DATA) {
+  const page = (path, title, description, h1, html, crumbs = []) => ({
+    path, title, description, lastmod: LASTMOD.static,
+    body: shell({ crumbs, current: h1, html: `<h1>${esc(h1)}</h1><p>${esc(description)}</p>` + html }),
+  });
+  const pages = [
+    page('/privacy', 'गोपनीयता नीति — SahakarLekha | Privacy Policy',
+      'SahakarLekha आपकी समिति का कौन-सा डेटा रखता है और उसे कैसे सुरक्षित रखता है — society-level isolation व एन्क्रिप्शन. What data SahakarLekha holds and how it protects your cooperative society data.',
+      'गोपनीयता नीति — Privacy Policy', '<p><a href="/terms">नियम व शर्तें</a> · <a href="/contact">संपर्क करें</a></p>'),
+    page('/terms', 'नियम व शर्तें — SahakarLekha | Terms & Conditions',
+      'SahakarLekha सहकारी लेखा प्लेटफ़ॉर्म के उपयोग की नियम व शर्तें. Terms and conditions for using the SahakarLekha cooperative accounting platform.',
+      'नियम व शर्तें — Terms & Conditions', '<p><a href="/privacy">गोपनीयता नीति</a> · <a href="/contact">संपर्क करें</a></p>'),
+    page('/guide/quick-start', 'SahakarLekha कैसे चलाएँ? — पूर्ण उपयोग गाइड | सहकार लेखा',
+      'सहकारी समिति के क्लर्क, लेखाकार, प्रबंधक और ऑडिटर के लिए STEP-BY-STEP सरल हिंदी गाइड — बिना किसी ट्रेनिंग के सहकार लेखा सॉफ्टवेयर चलाएँ।',
+      'SahakarLekha कैसे चलाएँ?', '<p><a href="/guide">पूरा लेखांकन कोर्स</a> · <a href="/help">मदद केंद्र</a></p>' + registerCta(), [['/guide', 'गाइड']]),
+    page('/guide/certificate', 'पूर्णता प्रमाणपत्र — सहकार लेखा गाइड',
+      'सहकार लेखा सम्पूर्ण लेखांकन कोर्स पूरा करने पर यूनीक क्रमांक वाला, सत्यापन-योग्य पूर्णता प्रमाणपत्र प्राप्त करें।',
+      'पूर्णता प्रमाणपत्र', '<p><a href="/guide">कोर्स शुरू करें</a> · <a href="/guide/verify">प्रमाणपत्र सत्यापित करें</a></p>', [['/guide', 'गाइड']]),
+    page('/guide/verify', 'प्रमाणपत्र सत्यापन — सहकार लेखा गाइड',
+      'सहकार लेखा गाइड के पूर्णता प्रमाणपत्र को क्रमांक व नाम से सत्यापित करें।',
+      'प्रमाणपत्र सत्यापन', '<p><a href="/guide/certificate">पूर्णता प्रमाणपत्र</a></p>', [['/guide', 'गाइड']]),
+  ];
+  for (const q of Object.values(DATA.quizzes || {})) {
+    if (!q || !q.partId) continue;
+    const list = q.questions || [];
+    pages.push(page(`/guide/quiz/${q.partId}`, `${q.title} — क्विज़ | सहकार लेखा गाइड`,
+      `${q.title}: ${list.length} प्रश्नों की क्विज़ — अपना ज्ञान परखें।`,
+      q.title, `<ol>${list.map((x) => `<li>${esc(x.q)}</li>`).join('')}</ol><p><a href="/guide">गाइड पर लौटें</a></p>`, [['/guide', 'गाइड']]));
+  }
+  return pages;
+}
+
 /* ---------------- pricing + faq (GOS-05: static publics, now prerendered) ---------------- */
 
 function staticExtraPages(DATA) {
@@ -1201,25 +1255,16 @@ function rank(path) {
 }
 
 function buildSitemaps(dynamicPages, blogMax) {
-  // Static public routes (not prerendered, or app-entry pages worth indexing).
-  const STATIC = [
-    { path: '/', lastmod: blogMax },
-    { path: '/register', lastmod: LASTMOD.static },
-    { path: '/login', lastmod: LASTMOD.static },
-    { path: '/about', lastmod: LASTMOD.static },
-    { path: '/contact', lastmod: LASTMOD.static },
-    { path: '/privacy', lastmod: '2026-10-02' },
-    { path: '/terms', lastmod: LASTMOD.static },
-    { path: '/guide/quick-start', lastmod: LASTMOD.guide },
-    { path: '/guide/certificate', lastmod: LASTMOD.guide },
-    { path: '/guide/verify', lastmod: LASTMOD.guide },
-  ];
-  for (let i = 1; i <= 10; i++) STATIC.push({ path: `/guide/quiz/part-${i}`, lastmod: LASTMOD.guide });
-
-  const all = [
-    ...STATIC,
-    ...dynamicPages.filter((p) => p && p.path).map((p) => ({ path: p.path, lastmod: p.lastmod || LASTMOD.static })),
-  ];
+  // L2: the sitemap lists ONLY pages this script wrote a file for (`dynamicPages`). A hand list of
+  // "static" routes used to add /login, /register, /privacy, /terms, the quizzes … with no file behind
+  // them — each served the homepage template (canonical "/"). /login and /register stay out: they are
+  // app entry points whose canonical is the homepage.
+  const PAGE_LASTMOD = { '/': blogMax, '/privacy': '2026-10-02', '/guide/quick-start': LASTMOD.guide,
+    '/guide/certificate': LASTMOD.guide, '/guide/verify': LASTMOD.guide };
+  const all = dynamicPages.filter((p) => p && p.path).map((p) => ({
+    path: p.path,
+    lastmod: notFuture(PAGE_LASTMOD[p.path] || (p.path.startsWith('/guide/quiz/') ? LASTMOD.guide : p.lastmod) || LASTMOD.static),
+  }));
   const seen = new Set();
   const urls = all.filter((u) => (seen.has(u.path) ? false : (seen.add(u.path), true)));
 
@@ -1323,6 +1368,7 @@ try {
     ...glossaryPages(DATA),
     ...calculatorPages(DATA),
     ...staticExtraPages(DATA),
+    ...appShellPages(DATA),
   ];
 
   let n = 0, withBody = 0;

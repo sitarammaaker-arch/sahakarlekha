@@ -79,10 +79,57 @@ for (const file of htmlFiles(DIST)) {
   }
 }
 
+// 3. L2 — sitemap ↔ files. Every <loc> must be a prerendered file whose canonical is that same URL and
+//    whose title is its own (not the homepage template's); no lastmod after today; no duplicate <loc>.
+//    Every prerendered page: a non-empty meta description and exactly ONE <h1> in its static body.
+const SITE = 'https://sahakarlekha.com';
+const today = new Date().toISOString().slice(0, 10);
+const fileFor = (path) => (path === '/' ? resolve(DIST, 'index.html') : resolve(DIST, path.slice(1), 'index.html'));
+const homeTitle = (readFileSync(resolve(DIST, 'index.html'), 'utf-8').match(/<title>([\s\S]*?)<\/title>/) || [])[1];
+let locsChecked = 0;
+const smIndex = existsSync(resolve(DIST, 'sitemap.xml')) ? readFileSync(resolve(DIST, 'sitemap.xml'), 'utf-8') : '';
+if (!smIndex) errors.push('sitemap.xml missing');
+for (const m of smIndex.matchAll(/<lastmod>([^<]+)<\/lastmod>/g)) if (m[1] > today) errors.push(`sitemap.xml: lastmod ${m[1]} is in the future`);
+const seenLoc = new Set();
+for (const child of smIndex.matchAll(/<loc>([^<]+)<\/loc>/g)) {
+  const name = child[1].replace(SITE + '/', '');
+  const xml = existsSync(resolve(DIST, name)) ? readFileSync(resolve(DIST, name), 'utf-8') : null;
+  if (!xml) { errors.push(`${name}: listed in the index but not written`); continue; }
+  for (const u of xml.matchAll(/<url>([\s\S]*?)<\/url>/g)) {
+    locsChecked++;
+    const loc = (u[1].match(/<loc>([^<]+)<\/loc>/) || [])[1] || '';
+    const lm = (u[1].match(/<lastmod>([^<]+)<\/lastmod>/) || [])[1] || '';
+    const path = loc.replace(SITE, '') || '/';
+    if (seenLoc.has(loc)) errors.push(`${name}: duplicate <loc> ${loc}`);
+    seenLoc.add(loc);
+    if (lm > today) errors.push(`${name}: ${path} lastmod ${lm} is in the future`);
+    const f = fileFor(path);
+    if (!existsSync(f)) { errors.push(`${name}: ${path} has no prerendered file (crawlers get the homepage template)`); continue; }
+    const html = readFileSync(f, 'utf-8');
+    const canon = (html.match(/<link rel="canonical" href="([^"]+)"/) || [])[1];
+    if (canon !== loc) errors.push(`${name}: ${path} canonical is ${canon}`);
+    const title = (html.match(/<title>([\s\S]*?)<\/title>/) || [])[1];
+    if (path !== '/' && title === homeTitle) errors.push(`${name}: ${path} carries the homepage <title>`);
+  }
+}
+for (const file of htmlFiles(DIST)) {
+  const rel = file.slice(DIST.length + 1).replace(/\\/g, '/');
+  const html = readFileSync(file, 'utf-8');
+  const desc = (html.match(/<meta name="description" content="([^"]*)"/) || [])[1];
+  if (!desc) errors.push(`${rel}: empty meta description`);
+  const i = html.indexOf('<div id="root">');
+  const j = html.indexOf('<script type="module"', i);
+  const body = i >= 0 ? html.slice(i, j > i ? j : undefined) : '';
+  if (body.replace(/<div id="root">\s*<\/div>/, '').trim().length > 40) {
+    const h1 = (body.match(/<h1[\s>]/g) || []).length;
+    if (h1 !== 1) errors.push(`${rel}: ${h1} <h1> in the static body (want exactly 1)`);
+  }
+}
+
 if (errors.length) {
   console.error(`[test-dist] ${errors.length} problem(s):`);
-  [...new Set(errors)].slice(0, 30).forEach((e) => console.error('  ✗ ' + e));
+  [...new Set(errors)].slice(0, process.env.ALL ? 1e9 : 30).forEach((e) => console.error('  ✗ ' + e));
   if (errors.length > 30) console.error(`  … and ${errors.length - 30} more`);
   process.exit(1);
 }
-console.log(`[test-dist] ✓ ${pagesChecked} pages · ${linksChecked} internal links resolve · ${ldChecked} JSON-LD blocks valid.`);
+console.log(`[test-dist] ✓ ${pagesChecked} pages · ${locsChecked} sitemap URLs map to their own file · ${linksChecked} internal links resolve · ${ldChecked} JSON-LD blocks valid.`);
