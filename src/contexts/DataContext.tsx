@@ -1137,9 +1137,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setStockItemsState(siData || []);
         setStockMovementsState(smData || []);
 
+        // J5: the side-loads below used to call setState each on its own resolve — one React commit per
+        // table (~17 extra commits after login, each re-rendering every consumer). They are collected and
+        // applied in ONE callback, so React batches them into a single commit. Each stays independent and
+        // error-tolerant: a failed or missing table still takes its own fallback and never breaks another.
+        const sideLoads: { q: PromiseLike<unknown>; settle: (r: PromiseSettledResult<unknown>) => void }[] = [];
+        const sideLoad = <R,>(q: PromiseLike<R>, ok: (r: R) => void, fail: () => void) => {
+          sideLoads.push({ q, settle: (r) => (r.status === 'fulfilled' ? ok(r.value as R) : fail()) });
+        };
+
         // C3: load capability rows independently (NOT in the Promise.all) so a missing
         // table (pre-migration) NEVER breaks the main data load. snake → camel mapped.
-        supabase.from('society_capabilities').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('society_capabilities').select('*').eq('society_id', sid),
           ({ data: capData, error: capErr }) => {
             if (capErr || !capData) { setSocietyCapabilitiesState([]); return; }
             setSocietyCapabilitiesState(capData.map((r: Record<string, unknown>) => ({
@@ -1158,7 +1167,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // missing table (pre-migration) NEVER breaks the main data load. Only active, non-deleted
         // rows matter to the resolver; declaredActivities() re-filters, but we drop deleted rows here
         // to keep state lean. Dormant until the cutover flag (T-12) — this changes nothing today.
-        supabase.from('society_activities').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('society_activities').select('*').eq('society_id', sid),
           ({ data: actData, error: actErr }) => {
             if (actErr || !actData) { setSocietyActivitiesState([]); return; }
             setSocietyActivitiesState((actData as Record<string, unknown>[])
@@ -1174,73 +1183,76 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Deposits module — independent, error-tolerant load (a missing table pre-migration
         // NEVER breaks the main data load).
-        supabase.from('deposit_accounts').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('deposit_accounts').select('*').eq('society_id', sid),
           ({ data, error }) => { if (!error && data) setDepositAccountsState(data as DepositAccount[]); },
           () => { /* table absent pre-migration — ignore */ },
         );
-        supabase.from('deposit_transactions').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('deposit_transactions').select('*').eq('society_id', sid),
           ({ data, error }) => { if (!error && data) setDepositTransactionsState(data as DepositTransaction[]); },
           () => { /* table absent pre-migration — ignore */ },
         );
-        supabase.from('compliance_filings').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('compliance_filings').select('*').eq('society_id', sid),
           ({ data, error }) => { if (!error && data) setComplianceFilingsState(data as ComplianceFiling[]); },
           () => { /* table absent pre-migration — ignore */ },
         );
 
         // Procurement Phase 1.0 — error-tolerant load (Supabase → localStorage fallback). Independent
         // queries: a missing table NEVER breaks the main data load; the demo persists via localStorage.
-        supabase.from('procurement_farmers').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('procurement_farmers').select('*').eq('society_id', sid),
           ({ data, error }) => setProcurementFarmersState(error || !data ? storage.getProcurementFarmers() : (data as unknown as Farmer[])),
           () => setProcurementFarmersState(storage.getProcurementFarmers()),
         );
-        supabase.from('procurement_lots').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('procurement_lots').select('*').eq('society_id', sid),
           ({ data, error }) => setProcurementLotsState(error || !data ? storage.getProcurementLots() : (data as unknown as ProcurementLot[])),
           () => setProcurementLotsState(storage.getProcurementLots()),
         );
-        supabase.from('procurement_events').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('procurement_events').select('*').eq('society_id', sid),
           ({ data, error }) => setProcurementEventsState(error || !data ? storage.getProcurementEvents() : (data as unknown as ProcurementEvent[])),
           () => setProcurementEventsState(storage.getProcurementEvents()),
         );
-        supabase.from('procurement_quality_tests').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('procurement_quality_tests').select('*').eq('society_id', sid),
           ({ data, error }) => setProcurementQualityTestsState(error || !data ? storage.getProcurementQualityTests() : (data as unknown as QualityTest[])),
           () => setProcurementQualityTestsState(storage.getProcurementQualityTests()),
         );
-        supabase.from('procurement_moisture_records').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('procurement_moisture_records').select('*').eq('society_id', sid),
           ({ data, error }) => setProcurementMoistureRecordsState(error || !data ? storage.getProcurementMoistureRecords() : (data as unknown as MoistureRecord[])),
           () => setProcurementMoistureRecordsState(storage.getProcurementMoistureRecords()),
         );
-        supabase.from('procurement_jforms').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('procurement_jforms').select('*').eq('society_id', sid),
           // T-05 dual-read: prefer the typed money columns, JSONB as fallback (hydrateJForm).
           ({ data, error }) => setProcurementJFormsState(error || !data ? storage.getProcurementJForms() : (data as Record<string, unknown>[]).map(hydrateJForm) as unknown as JForm[]),
           () => setProcurementJFormsState(storage.getProcurementJForms()),
         );
-        supabase.from('procurement_financial_intents').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('procurement_financial_intents').select('*').eq('society_id', sid),
           // T-05 dual-read: prefer the typed money columns, JSONB as fallback (hydrateAmount).
           ({ data, error }) => setProcurementFinancialIntentsState(error || !data ? storage.getProcurementFinancialIntents() : (data as Record<string, unknown>[]).map(hydrateAmount) as unknown as FinancialIntentRecord[]),
           () => setProcurementFinancialIntentsState(storage.getProcurementFinancialIntents()),
         );
-        supabase.from('procurement_posting_requests').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('procurement_posting_requests').select('*').eq('society_id', sid),
           // T-05 dual-read: prefer the typed money columns, JSONB as fallback (hydrateAmount).
           ({ data, error }) => setProcurementPostingRequestsState(error || !data ? storage.getProcurementPostingRequests() : (data as Record<string, unknown>[]).map(hydrateAmount) as unknown as PostingRequest[]),
           () => setProcurementPostingRequestsState(storage.getProcurementPostingRequests()),
         );
-        supabase.from('procurement_posting_rule_results').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('procurement_posting_rule_results').select('*').eq('society_id', sid),
           ({ data, error }) => setProcurementPostingRuleResultsState(error || !data ? storage.getProcurementPostingRuleResults() : (data as unknown as PostingRuleResult[])),
           () => setProcurementPostingRuleResultsState(storage.getProcurementPostingRuleResults()),
         );
-        supabase.from('procurement_settlements').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('procurement_settlements').select('*').eq('society_id', sid),
           // T-05 dual-read: prefer the typed money columns, JSONB as fallback (hydrateSettlement).
           ({ data, error }) => setProcurementSettlementsState(error || !data ? storage.getProcurementSettlements() : (data as Record<string, unknown>[]).map(hydrateSettlement) as unknown as FarmerSettlement[]),
           () => setProcurementSettlementsState(storage.getProcurementSettlements()),
         );
-        supabase.from('work_orders').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('work_orders').select('*').eq('society_id', sid),
           ({ data, error }) => setWorkOrdersState(error || !data ? storage.getWorkOrders() : (data as unknown as WorkOrder[])),
           () => setWorkOrdersState(storage.getWorkOrders()),
         );
-        supabase.from('muster_entries').select('*').eq('society_id', sid).then(
+        sideLoad(supabase.from('muster_entries').select('*').eq('society_id', sid),
           ({ data, error }) => setMusterEntriesState(error || !data ? storage.getMusterEntries() : (data as unknown as MusterEntry[])),
           () => setMusterEntriesState(storage.getMusterEntries()),
         );
+        Promise.allSettled(sideLoads.map(l => l.q)).then(results => results.forEach((r, i) => {
+          try { sideLoads[i].settle(r); } catch (e) { console.warn('side-load apply failed:', e); }
+        }));
 
         // RM-01 (S0 emergency safety fix): loading NEVER repairs, re-routes, renumbers or soft-deletes
         // vouchers, and never patches sales/purchases. The old "REPAIR v2" loop created vouchers for

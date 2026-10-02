@@ -24,6 +24,7 @@ import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabasePaging';
+import { applyLoadsTogether } from '@/lib/batchedLoads';
 import { resolveJurisdiction } from '@/lib/jurisdiction';
 import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
@@ -157,94 +158,36 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   const [bardanaTypes, setBardanaTypesState] = useState<BardanaType[]>(() => storage.getProcurementBardanaTypes());
   const [transporters, setTransportersState] = useState<Transporter[]>(() => storage.getMarketingTransporters());
 
+  // J5: these masters used to load in 10 separate effects — 10 React commits after login, each
+  // re-rendering every consumer. applyLoadsTogether applies them in one commit; each table keeps its own
+  // fallback to the cached copy.
   useEffect(() => {
     const sid = user?.societyId;
-    if (!sid) { setCropsState([]); return; }
-    fetchAllPaged<Crop>('procurement_crops', sid).then(
-      ({ data, error }) => setCropsState(error || !data ? storage.getProcurementCrops() : (data as Crop[])),
-      () => setCropsState(storage.getProcurementCrops()),
-    );
-  }, [user?.societyId]);
-
-  useEffect(() => {
-    const sid = user?.societyId;
-    if (!sid) { setVarietiesState([]); return; }
-    fetchAllPaged<Variety>('procurement_varieties', sid).then(
-      ({ data, error }) => setVarietiesState(error || !data ? storage.getProcurementVarieties() : (data as Variety[])),
-      () => setVarietiesState(storage.getProcurementVarieties()),
-    );
-  }, [user?.societyId]);
-
-  useEffect(() => {
-    const sid = user?.societyId;
-    if (!sid) { setSeasonsState([]); return; }
-    fetchAllPaged<Season>('procurement_seasons', sid).then(
-      ({ data, error }) => setSeasonsState(error || !data ? storage.getProcurementSeasons() : (data as Season[])),
-      () => setSeasonsState(storage.getProcurementSeasons()),
-    );
-  }, [user?.societyId]);
-
-  useEffect(() => {
-    const sid = user?.societyId;
-    if (!sid) { setAgenciesState([]); return; }
-    fetchAllPaged<Agency>('procurement_agencies', sid).then(
-      ({ data, error }) => setAgenciesState(error || !data ? storage.getProcurementAgencies() : (data as Agency[])),
-      () => setAgenciesState(storage.getProcurementAgencies()),
-    );
-  }, [user?.societyId]);
-
-  useEffect(() => {
-    const sid = user?.societyId;
-    if (!sid) { setCentresState([]); return; }
-    fetchAllPaged<ProcurementCentre>('procurement_centres', sid).then(
-      ({ data, error }) => setCentresState(error || !data ? storage.getProcurementCentres() : (data as ProcurementCentre[])),
-      () => setCentresState(storage.getProcurementCentres()),
-    );
-  }, [user?.societyId]);
-
-  useEffect(() => {
-    const sid = user?.societyId;
-    if (!sid) { setMspRatesState([]); return; }
-    fetchAllPaged<MSPRate>('procurement_msp_rates', sid).then(
-      ({ data, error }) => setMspRatesState(error || !data ? storage.getProcurementMspRates() : (data as MSPRate[])),
-      () => setMspRatesState(storage.getProcurementMspRates()),
-    );
-  }, [user?.societyId]);
-
-  useEffect(() => {
-    const sid = user?.societyId;
-    if (!sid) { setDeductionRulesState([]); return; }
-    fetchAllPaged<DeductionRule>('procurement_deduction_rules', sid).then(
-      ({ data, error }) => setDeductionRulesState(error || !data ? storage.getProcurementDeductionRules() : (data as DeductionRule[])),
-      () => setDeductionRulesState(storage.getProcurementDeductionRules()),
-    );
-  }, [user?.societyId]);
-
-  useEffect(() => {
-    const sid = user?.societyId;
-    if (!sid) { setQualitySpecsState([]); return; }
-    fetchAllPaged<QualitySpec>('procurement_quality_specs', sid).then(
-      ({ data, error }) => setQualitySpecsState(error || !data ? storage.getProcurementQualitySpecs() : (data as QualitySpec[])),
-      () => setQualitySpecsState(storage.getProcurementQualitySpecs()),
-    );
-  }, [user?.societyId]);
-
-  useEffect(() => {
-    const sid = user?.societyId;
-    if (!sid) { setBardanaTypesState([]); return; }
-    fetchAllPaged<BardanaType>('procurement_bardana_types', sid).then(
-      ({ data, error }) => setBardanaTypesState(error || !data ? storage.getProcurementBardanaTypes() : (data as BardanaType[])),
-      () => setBardanaTypesState(storage.getProcurementBardanaTypes()),
-    );
-  }, [user?.societyId]);
-
-  useEffect(() => {
-    const sid = user?.societyId;
-    if (!sid) { setTransportersState([]); return; }
-    fetchAllPaged<Transporter>('marketing_transporters', sid).then(
-      ({ data, error }) => setTransportersState(error || !data ? storage.getMarketingTransporters() : (data as Transporter[])),
-      () => setTransportersState(storage.getMarketingTransporters()),
-    );
+    if (!sid) {
+      setCropsState([]);
+      setVarietiesState([]);
+      setSeasonsState([]);
+      setAgenciesState([]);
+      setCentresState([]);
+      setMspRatesState([]);
+      setDeductionRulesState([]);
+      setQualitySpecsState([]);
+      setBardanaTypesState([]);
+      setTransportersState([]);
+      return;
+    }
+    applyLoadsTogether([
+      [fetchAllPaged<Crop>('procurement_crops', sid), setCropsState, storage.getProcurementCrops],
+      [fetchAllPaged<Variety>('procurement_varieties', sid), setVarietiesState, storage.getProcurementVarieties],
+      [fetchAllPaged<Season>('procurement_seasons', sid), setSeasonsState, storage.getProcurementSeasons],
+      [fetchAllPaged<Agency>('procurement_agencies', sid), setAgenciesState, storage.getProcurementAgencies],
+      [fetchAllPaged<ProcurementCentre>('procurement_centres', sid), setCentresState, storage.getProcurementCentres],
+      [fetchAllPaged<MSPRate>('procurement_msp_rates', sid), setMspRatesState, storage.getProcurementMspRates],
+      [fetchAllPaged<DeductionRule>('procurement_deduction_rules', sid), setDeductionRulesState, storage.getProcurementDeductionRules],
+      [fetchAllPaged<QualitySpec>('procurement_quality_specs', sid), setQualitySpecsState, storage.getProcurementQualitySpecs],
+      [fetchAllPaged<BardanaType>('procurement_bardana_types', sid), setBardanaTypesState, storage.getProcurementBardanaTypes],
+      [fetchAllPaged<Transporter>('marketing_transporters', sid), setTransportersState, storage.getMarketingTransporters],
+    ], 'marketing masters');
   }, [user?.societyId]);
 
   // ── Crop CRUD ────────────────────────────────────────────────────────────────

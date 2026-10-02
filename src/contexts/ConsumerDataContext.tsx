@@ -21,6 +21,7 @@ import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabasePaging';
+import { applyLoadsTogether } from '@/lib/batchedLoads';
 import { resolveJurisdiction } from '@/lib/jurisdiction';
 import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
@@ -138,14 +139,6 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   // ── Price list (localStorage seed → Supabase load on session) ─────────────────
   const [consumerPrices, setPricesState] = useState<ConsumerPrice[]>(() => storage.getConsumerPrices());
 
-  useEffect(() => {
-    const sid = user?.societyId;
-    if (!sid) { setPricesState([]); return; }
-    fetchAllPaged<ConsumerPrice>('consumer_price_lists', sid).then(
-      ({ data, error }) => setPricesState(error || !data ? storage.getConsumerPrices() : (data as ConsumerPrice[])),
-      () => setPricesState(storage.getConsumerPrices()),
-    );
-  }, [user?.societyId]);
 
   const addConsumerPrice = useCallback((data: { itemId: string; tier: ConsumerPriceTier; price: number; effectiveFrom: string }): ConsumerPrice => {
     const now = new Date().toISOString();
@@ -190,25 +183,9 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
 
   // ── Sales Returns (Feature 1) — state + load ────────────────────────────────
   const [salesReturns, setSalesReturnsState] = useState<SalesReturn[]>(() => storage.getSalesReturns());
-  useEffect(() => {
-    const sid = user?.societyId;
-    if (!sid) { setSalesReturnsState([]); return; }
-    fetchAllPaged<SalesReturn>('sales_returns', sid).then(
-      ({ data, error }) => setSalesReturnsState(error || !data ? storage.getSalesReturns() : (data as SalesReturn[])),
-      () => setSalesReturnsState(storage.getSalesReturns()),
-    );
-  }, [user?.societyId]);
   const activeReturns = salesReturns.filter(r => !r.isDeleted);
 
   const [purchaseReturns, setPurchaseReturnsState] = useState<PurchaseReturn[]>(() => storage.getPurchaseReturns());
-  useEffect(() => {
-    const sid = user?.societyId;
-    if (!sid) { setPurchaseReturnsState([]); return; }
-    fetchAllPaged<PurchaseReturn>('purchase_returns', sid).then(
-      ({ data, error }) => setPurchaseReturnsState(error || !data ? storage.getPurchaseReturns() : (data as PurchaseReturn[])),
-      () => setPurchaseReturnsState(storage.getPurchaseReturns()),
-    );
-  }, [user?.societyId]);
 
   const memberRecoveries = vouchers.filter(v => v.refType === RECOVERY_REF);
   const recoveryRows: RecoveryRow[] = memberRecoveries.map(v => ({ memberId: v.memberId, amount: v.amount, isDeleted: v.isDeleted }));
@@ -252,14 +229,6 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
 
   // ── C4: patronage rebate runs (draft → approve → pay), mirrors Dairy distribution ──
   const [patronageRuns, setPatronageRunsState] = useState<PatronageRun[]>(() => storage.getConsumerPatronageRuns());
-  useEffect(() => {
-    const sid = user?.societyId;
-    if (!sid) { setPatronageRunsState([]); return; }
-    fetchAllPaged<PatronageRun>('consumer_patronage_runs', sid).then(
-      ({ data, error }) => setPatronageRunsState(error || !data ? storage.getConsumerPatronageRuns() : (data as PatronageRun[])),
-      () => setPatronageRunsState(storage.getConsumerPatronageRuns()),
-    );
-  }, [user?.societyId]);
 
   const commitPatronageRun = useCallback((next: PatronageRun, revertTo: PatronageRun | null, onFail?: () => void) => {
     setPatronageRunsState(prev => { const u = prev.some(r => r.id === next.id) ? prev.map(r => r.id === next.id ? next : r) : [...prev, next]; storage.setConsumerPatronageRuns(u); return u; });
@@ -366,13 +335,26 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   const ownerGroupsRef = useRef<OwnerGroup[]>([]);
   ownerGroupsRef.current = [{ label: 'बिक्री वापसी (Sales Return)', docs: salesReturns }, { label: 'ख़रीद वापसी (Purchase Return)', docs: purchaseReturns }, { label: 'संरक्षण लाभांश (Patronage)', docs: patronageRuns }, { label: 'Purchase Order', docs: purchaseOrders }];
   useEffect(() => registerVoucherOwner('consumer', id => findVoucherOwner(ownerGroupsRef.current, id)), [registerVoucherOwner]);
+  // J5: these five tables used to load in five separate effects — five React commits after login, each
+  // re-rendering every consumer. applyLoadsTogether applies them in one commit; each table keeps its own
+  // fallback to the cached copy. (Placed here, after the last of these state declarations.)
   useEffect(() => {
     const sid = user?.societyId;
-    if (!sid) { setPOState([]); return; }
-    fetchAllPaged<PurchaseOrder>('consumer_purchase_orders', sid).then(
-      ({ data, error }) => setPOState(error || !data ? storage.getConsumerPurchaseOrders() : (data as PurchaseOrder[])),
-      () => setPOState(storage.getConsumerPurchaseOrders()),
-    );
+    if (!sid) {
+      setPricesState([]);
+      setSalesReturnsState([]);
+      setPurchaseReturnsState([]);
+      setPatronageRunsState([]);
+      setPOState([]);
+      return;
+    }
+    applyLoadsTogether([
+      [fetchAllPaged<ConsumerPrice>('consumer_price_lists', sid), setPricesState, storage.getConsumerPrices],
+      [fetchAllPaged<SalesReturn>('sales_returns', sid), setSalesReturnsState, storage.getSalesReturns],
+      [fetchAllPaged<PurchaseReturn>('purchase_returns', sid), setPurchaseReturnsState, storage.getPurchaseReturns],
+      [fetchAllPaged<PatronageRun>('consumer_patronage_runs', sid), setPatronageRunsState, storage.getConsumerPatronageRuns],
+      [fetchAllPaged<PurchaseOrder>('consumer_purchase_orders', sid), setPOState, storage.getConsumerPurchaseOrders],
+    ], 'consumer tables');
   }, [user?.societyId]);
 
   const commitPO = useCallback((next: PurchaseOrder, revertTo: PurchaseOrder | null, onFail?: () => void) => {
