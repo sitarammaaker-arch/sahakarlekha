@@ -86,6 +86,10 @@ test('perf probe: login → dashboard data load', async ({ page }) => {
     const w = window as unknown as { __commits: number[]; __fetchEnds: { t: number; u: string }[] };
     return { c: w.__commits.filter(t => t >= f).map(t => Math.round(t - f)), r: w.__fetchEnds.filter(e => e.t >= f).map(e => `${Math.round(e.t - f)}:${e.u}`) };
   }, perfClick);
+  // Data-phase commits: up to 50 ms after the last Supabase response. Later commits at a steady ~16.7 ms are
+  // the dashboard charts' entry animation (recharts, per-frame, chart subtree only), not data loading.
+  const lastResp = Math.max(0, ...tl.r.map(x => Number(x.split(':')[0])));
+  console.log(`[perf] data-phase commits (≤ last response + 50 ms): ${tl.c.filter(t => t <= lastResp + 50).length}; later (animation/timers): ${tl.c.filter(t => t > lastResp + 50).length}`);
   console.log(`[perf] commit times: ${tl.c.join(' ')}`);
   console.log(`[perf] response ends: ${tl.r.join(' ')}`);
   console.log(`[perf] distinct tables/rpcs: ${tables.size}; repeated: ${[...tables].filter(([, n]) => n > 1).map(([t, n]) => `${t}×${n}`).join(', ')}`);
