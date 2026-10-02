@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DataProvider, useData } from "@/contexts/DataContext";
@@ -234,6 +234,7 @@ preloadHindiFont();
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
   const { isLoading } = useData();
+  const { pathname } = useLocation();
   // App-only screens must never be indexed (robots.txt + X-Robots-Tag are the
   // other two layers; this covers any route a crawler still reaches with JS).
   useNoIndex();
@@ -253,7 +254,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     );
   }
 
-  return <MainLayout><CapabilityGuard><ErrorBoundary>{children}</ErrorBoundary></CapabilityGuard></MainLayout>;
+  return <MainLayout><CapabilityGuard><ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary></CapabilityGuard></MainLayout>;
 };
 
 // Public Route wrapper (redirects to dashboard if authenticated)
@@ -276,8 +277,9 @@ const PageLoader = () => (
 
 const AppRoutes = () => {
   usePageTracking();
+  const { pathname } = useLocation();
   return (
-    <ErrorBoundary>
+    <ErrorBoundary resetKey={pathname} homeHref="/">
     <Suspense fallback={<PageLoader />}>
     <Routes>
       {/* Public Routes */}

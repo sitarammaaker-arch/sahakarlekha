@@ -4,6 +4,12 @@ import { reportError } from '@/lib/errorReporting';
 
 interface Props {
   children: React.ReactNode;
+  /** G3: when this changes (the route path), a caught error is cleared. The boundary instance is
+   *  reused across routes (same wrapper type at the same position), so without this one crashed
+   *  page kept showing the error screen on every page the user navigated to until a reload. */
+  resetKey?: string;
+  /** Where the escape button goes — '/dashboard' for staff pages, '/' for public ones. */
+  homeHref?: string;
 }
 
 interface State {
@@ -19,6 +25,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
+  }
+
+  componentDidUpdate(prev: Props) {
+    if (this.state.hasError && prev.resetKey !== this.props.resetKey) this.setState({ hasError: false, error: null });
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
@@ -63,10 +73,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 </button>
               )}
               <button
-                onClick={() => { window.location.href = '/dashboard'; }}
+                onClick={() => { window.location.href = this.props.homeHref ?? '/dashboard'; }}
                 className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted"
               >
-                Dashboard पर जाएं
+                {(this.props.homeHref ?? '/dashboard') === '/' ? 'Home पर जाएं' : 'Dashboard पर जाएं'}
               </button>
             </div>
           </div>
