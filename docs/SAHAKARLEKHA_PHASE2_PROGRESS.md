@@ -13,20 +13,19 @@
 - Explain findings to the founder in Devanagari Hindi, with stepwise instructions.
 - Statutory values need a SOURCE (Act or circular text plus URL), never a statement.
 
-## Current position (2026-10-02)
-- **Done and live:**
-  - A (security).
-  - B2 / B3 / B7.
-  - C (FY rollover + year close, D5 applied).
-  - D (tax slices; CA questions open).
-  - F1 (online-only).
-  - G (reliability).
-  - **H (deep domain audit: trading/GST, members/share capital, cash/TB, governance, all domain modules)**.
-- **Phase I in progress:** staging + Playwright e2e LIVE (RULE 1 flow green in CI).
+## Current position (2026-10-02, end of day)
+- **Phases A–M processed.** The final gate and report are in [SAHAKARLEKHA_PRODUCTION_READINESS_REPORT.md](SAHAKARLEKHA_PRODUCTION_READINESS_REPORT.md).
+- **Verdict:** production-usable, but not yet READY. The blockers are:
+  - S4: the database still accepts direct client accounting writes
+  - open CA tax questions
+  - E3 payroll posting is off
+  - the db-harness is not in CI
 - **Founder actions open:**
-  - Delete Rania's 2 returns (SRET / PRET/2026-27/001) in the app.
-  - Supply Rania's audited share-capital opening.
-  - Answer the CA questions (194Q turnover gate, GST base, 194C/194H whole-vs-excess).
+  - Vercel Redeploy (#665/#668 are rate-limited)
+  - apply 098
+  - Rania: delete its 2 returns, and enter its audited share-capital opening
+  - answer the CA questions
+- **Next dependency-safe task:** S4 design. The database refuses direct client writes to `vouchers`, `voucher_entries` and `ledger_events` for posting-ON societies, with the work done on the harness first, then staging.
 
 ## Roadmap status
 
@@ -63,7 +62,7 @@
 - F1: COMPLETE.
 - G: COMPLETE (G6/G7 deferred with evidence).
 - H: COMPLETE (see the 2026-10-02 H sections).
-- I–M: not started.
+- I–M: processed (see their dated sections; final gate in the readiness report).
 
 ### Phase H — summary (2026-10-02)
 | Area | Result | PR |
@@ -349,6 +348,29 @@
     - Titles over 70 characters: 63 glossary terms and 29 blog posts. Google truncates them, but they are not wrong.
     - The static bodies of cookbook/help/privacy/terms are shorter than the rendered page. Google renders JS anyway.
     - The 13 app-shell guide pages have no BreadcrumbList.
+
+### 2026-10-02: Phase M (AI / knowledge)
+- **M1–M5, the knowledge stack:** 109 active KIs, all Level A, all CENTRAL. 100 are E2† and 9 are E2.
+  - By KAE 10, Level A may be active without an SME, so the gate law holds.
+  - A scan of every KI body for sections, rules, %, ₹ amounts and due dates found nothing beyond generic Dr = Cr, 1 April–31 March and example face values. No Level-B/C/D specific is hiding in a Level-A KI.
+  - The ask-ai-map's KI-000170 is correctly marked "planned".
+  - The 50 body references to not-yet-active KIs render as plain labels; there are no broken links.
+  - SMRD covers clusters by ranges (C095–C096 …), so no research id is actually missing.
+- **M7, drift fixed:**
+  - KIs 401–409 (added in #321) were never registered in the KPP registry, and all 9 were stamped `topic_id: C001` (Cooperative society). They are now registered (Wave 1.2) and re-traced to their real clusters (C096, C095, C038, C039, C134, C124, C112, C079, C087).
+  - The registry now says 109, not 100.
+- **M8, attribution:** /ask names the internal source (शब्दकोश / मदद / …) and links it.
+  - **Primary-source attribution does not exist yet.** Every KI's `evidence_id` (EV-…) points to a KAE evidence record that was never created, and no KI cites a primary source.
+  - This cannot be generated: per the statutory-values rule it needs real sourcing. It is the path from E2 to E3.
+- **M6, /ask:** eval:ask gives top-1 **83.2%** and top-6 97.9%, with 0 dead ends.
+  - The 2 wrong answers are the known synonym gap, left deliberately.
+  - The seam is live, and its guard refuses regulated specifics (checked live: "आरक्षित निधि कितने प्रतिशत है" → refusal).
+  - **Gap fixed:** while the seam was thinking (up to 20 s), or when it was unreachable, the page showed the local top hit as "जवाब · स्रोत: कैलकुलेटर" for a regulated question. The page now runs the same pure `classify()`:
+    - regulated + no seam reply → "प्रमाणित स्रोत देखा जा रहा है…", then the same refusal text (`REGULATED_REFUSAL`, now shared with core.ts; ask-core bundle rebuilt)
+    - once the seam replies, the seam decides
+  - New e2e test with the seam blocked: regulated → refusal, ordinary → answer card.
+- **M9:** the eval set (95 answerable + 12 must-not-assert) is in place.
+- **M10:** no LLM generation. `model: null` throughout, as intended.
 
 ## Tracked audit findings
 | ID | Area | Status |

@@ -1,7 +1,7 @@
 ---
 knowledge_id: KI-000401
-topic_id: C001
-research_id: SMRD:C001
+topic_id: C096
+research_id: SMRD:C096
 evidence_id: EV-000401
 title: Purchase
 hindi_name: खरीद
