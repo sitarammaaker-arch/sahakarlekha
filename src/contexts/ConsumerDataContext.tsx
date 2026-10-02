@@ -385,7 +385,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       }
       if (varianceStatus || varianceReason || varianceApprovedBy) {
         supabase.from('consumer_purchase_orders').update({ varianceStatus, varianceReason, varianceApprovedBy }).eq('id', next.id)
-          .then(({ error: vErr }) => { if (vErr) console.warn('PO variance patch:', vErr.message); });
+          .then(({ error: vErr }) => { if (vErr) { console.warn('PO variance patch:', vErr.message); reportError('write-partial', vErr.message, { at: 'PO variance patch:' }); } });
       }
     });
   }, [societyId]);
