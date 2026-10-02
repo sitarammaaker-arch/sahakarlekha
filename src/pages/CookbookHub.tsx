@@ -9,13 +9,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { COOKBOOK_ENTRIES, COOKBOOK_CATEGORIES } from '@/content/cookbook';
 import { BookOpenCheck, ArrowRight } from 'lucide-react';
+import { HUB_META } from '@/content/hubMeta';
 
 const SITE = 'https://sahakarlekha.com';
 
 const CookbookHub: React.FC = () => {
   useDocumentMeta({
-    title: 'एंट्री कुकबुक (Accounting Entries) — कौन-सी एंट्री कैसे करें | SahakarLekha',
-    description: 'सहकारी समिति की आम journal entries — नकद/उधार बिक्री-खरीद, शेयर पूँजी, ऋण-ब्याज, वेतन, डेप्रिसिएशन, क्लोज़िंग स्टॉक, HAFED कमीशन — हर एक का Dr/Cr उदाहरण सहित।',
+    title: HUB_META.cookbook.title,
+    description: HUB_META.cookbook.description,
     canonicalPath: '/cookbook',
     jsonLd: [
       {

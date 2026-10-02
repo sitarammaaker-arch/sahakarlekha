@@ -17,6 +17,7 @@ import { useGuideProgress } from '@/lib/guideProgress';
 import { useGuideQuizzes } from '@/lib/guideQuiz';
 import { useGuideLang, useGuideT } from '@/lib/guideLang';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { HUB_META } from '@/content/hubMeta';
 import {
   BookOpen, GraduationCap, Download, Rocket, ArrowRight, FileText, Layers,
   CheckCircle2, BookMarked, Award, HelpCircle, ShieldCheck,
@@ -47,10 +48,10 @@ const GuideHub: React.FC = () => {
   useDocumentMeta({
     title: lang === 'en'
       ? 'SahakarLekha Guide — Complete Cooperative Accounting Course'
-      : 'सहकार लेखा गाइड — सम्पूर्ण सहकारी लेखांकन कोर्स (हिंदी)',
+      : HUB_META.guide.title,
     description: lang === 'en'
-      ? 'A complete accounting guide for cooperative societies — sales, purchases, stock, GST/TDS, final accounts, audit & year-end. 30 chapters, free.'
-      : 'सहकारी समितियों के लिए सम्पूर्ण लेखांकन गाइड — बिक्री, खरीद, स्टॉक, GST/TDS, अंतिम खाते, ऑडिट व वर्षांत। 30 अध्याय, सरल हिंदी, बिल्कुल मुफ़्त।',
+      ? 'A complete accounting course for cooperative societies — sales, purchases, stock, GST/TDS, final accounts, audit & year-end. 10 parts, 35 chapters, quizzes & a certificate — free.'
+      : HUB_META.guide.description,
     canonicalPath: '/guide',
     // Course structured data → eligible for Google's "Course" rich result.
     jsonLd: {
@@ -60,8 +61,8 @@ const GuideHub: React.FC = () => {
         ? 'Cooperative Society Accounting & Audit — Complete Course'
         : 'सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स',
       description: lang === 'en'
-        ? 'A free, self-paced course teaching cooperative society accounting from first principles to final accounts, GST/TDS, audit and year-end — 30 chapters with quizzes and a verifiable certificate.'
-        : 'सहकारी समिति लेखांकन सिखाने वाला मुफ़्त, स्व-गति कोर्स — मूल सिद्धांतों से अंतिम खातों, GST/TDS, ऑडिट व वर्षांत तक। 30 अध्याय, क्विज़ व सत्यापन-योग्य प्रमाणपत्र।',
+        ? 'A free, self-paced course teaching cooperative society accounting from first principles to final accounts, GST/TDS, audit and year-end — 35 chapters with quizzes and a verifiable certificate.'
+        : 'सहकारी समिति लेखांकन सिखाने वाला मुफ़्त, स्व-गति कोर्स — मूल सिद्धांतों से अंतिम खातों, GST/TDS, ऑडिट व वर्षांत तक। 35 अध्याय, क्विज़ व सत्यापन-योग्य प्रमाणपत्र।',
       url: 'https://sahakarlekha.com/guide',
       inLanguage: lang === 'en' ? 'en' : 'hi',
       isAccessibleForFree: true,

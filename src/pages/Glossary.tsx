@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { allGlossary, filterGlossary, glossaryByLetter } from '@/content/glossary';
 import { Home, ChevronRight, Search, BookMarked, ArrowRight, Sparkles } from 'lucide-react';
+import { HUB_META } from '@/content/hubMeta';
 
 const SITE = 'https://sahakarlekha.com';
 
@@ -46,8 +47,8 @@ const Glossary: React.FC = () => {
   ];
 
   useDocumentMeta({
-    title: 'सहकारी लेखांकन शब्दकोश (Glossary) — हर शब्द आसान भाषा में | SahakarLekha',
-    description: 'कैश बुक से बैलेंस शीट तक — सहकारी समिति लेखांकन के मुख्य शब्दों का आसान हिन्दी व English शब्दकोश। हर शब्द से जुड़ी गाइड, मदद व सॉफ्टवेयर तक पहुँचें।',
+    title: HUB_META.glossary.title,
+    description: HUB_META.glossary.description,
     canonicalPath: '/glossary',
     jsonLd,
   });

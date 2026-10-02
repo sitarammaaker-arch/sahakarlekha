@@ -44,6 +44,7 @@ const CALC_FILE = resolve(ROOT, 'src', 'content', 'calculators', 'index.ts');
 const FAQ_FILE = resolve(ROOT, 'src', 'content', 'faq.ts');
 const QUIZ_FILE = resolve(ROOT, 'src', 'content', 'guide', 'quizzes.ts');
 const GLOSSARY_LINKS_FILE = resolve(ROOT, 'src', 'content', 'glossaryLinks.ts');
+const HUB_META_FILE = resolve(ROOT, 'src', 'content', 'hubMeta.ts');
 const RELATED_FILE = resolve(ROOT, 'src', 'content', 'relatedContent.ts');
 const COURSE = 'सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स';
 
@@ -257,6 +258,7 @@ async function loadData() {
     ['faq', FAQ_FILE, 'FAQ_CATEGORIES'],
     ['quizzes', QUIZ_FILE, 'GUIDE_QUIZZES'],
     ['glossaryLinks', GLOSSARY_LINKS_FILE, 'resolveGlossaryHref'],
+    ['hub', HUB_META_FILE, null], // L5: hub title/description + glossary description — same module as the pages
     ['society', SOCIETY_TYPES, 'SOCIETY_TYPES'],
     ['states', STATES_FILE, 'STATES'],
     ['rel', RELATED_FILE, null], // whole module (edge maps + helpers), GOS-11
@@ -277,15 +279,15 @@ async function loadData() {
 
 /* ---------------- guide routes (manifest meta + chapter .md body) ---------------- */
 
-function guidePages() {
+function guidePages(DATA) {
   if (!existsSync(MANIFEST)) return [];
   const entries = JSON.parse(readFileSync(MANIFEST, 'utf-8'));
   const chapters = entries.filter((e) => e && e.slug);
 
   const pages = [{
     path: '/guide',
-    title: 'सहकारी समिति लेखांकन गाइड — मुफ्त कोर्स, प्रमाणपत्र सहित | SahakarLekha',
-    description: 'लेखांकन की नींव से ऑडिट तक — सहकारी समितियों के लिए मुफ्त हिन्दी कोर्स। 9 भाग, क्विज़ व प्रमाणपत्र।',
+    title: DATA.hub.HUB_META.guide.title,
+    description: DATA.hub.HUB_META.guide.description,
     lastmod: LASTMOD.guide,
     jsonLd: [
       {
@@ -511,8 +513,8 @@ function blogPages(DATA) {
   const pages = [
     {
       path: '/blog',
-      title: 'सहकार लेखा ब्लॉग — सहकारी समिति लेखांकन, ऑडिट व प्रबंधन',
-      description: 'सहकारी समितियों के लिए डिजिटल लेखांकन, वाउचर एंट्री, ऑडिट, अनुपालन व प्रबंधन पर सरल हिन्दी लेख।',
+      title: DATA.hub.HUB_META.blog.title,
+      description: DATA.hub.HUB_META.blog.description,
       lastmod: maxDate(posts.map((p) => p.updated || p.date), LASTMOD.static),
       jsonLd: [crumb([{ name: 'ब्लॉग', item: `${SITE}/blog` }])],
       body: posts.length
@@ -617,8 +619,8 @@ function helpPages(DATA) {
   const pages = [
     {
       path: '/help',
-      title: 'मदद केंद्र (Help Center) — कैसे करें | SahakarLekha',
-      description: 'सहकारी समिति लेखांकन के रोज़मर्रा के काम — Member कैसे जोड़ें, Opening Balance कैसे डालें, Voucher कैसे करें — आसान स्टेप-बाय-स्टेप।',
+      title: DATA.hub.HUB_META.help.title,
+      description: DATA.hub.HUB_META.help.description,
       lastmod: maxDate(tasks.map((t) => t.updated), LASTMOD.help),
       jsonLd: [crumb([{ name: 'मदद केंद्र', item: `${SITE}/help` }])],
       body: tasks.length
@@ -708,8 +710,8 @@ function cookbookPages(DATA) {
   const pages = [
     {
       path: '/cookbook',
-      title: 'एंट्री कुकबुक (Accounting Entries) — कौन-सी एंट्री कैसे करें | SahakarLekha',
-      description: 'सहकारी समिति की आम journal entries — बिक्री-खरीद, शेयर पूँजी, ऋण-ब्याज, वेतन, डेप्रिसिएशन, क्लोज़िंग स्टॉक, HAFED कमीशन — हर एक का Dr/Cr उदाहरण सहित।',
+      title: DATA.hub.HUB_META.cookbook.title,
+      description: DATA.hub.HUB_META.cookbook.description,
       lastmod: maxDate(entries.map((e) => e.updated), LASTMOD.cookbook),
       jsonLd: [crumb([{ name: 'एंट्री कुकबुक', item: `${SITE}/cookbook` }])],
       body: entries.length
@@ -788,8 +790,8 @@ function glossaryPages(DATA) {
   const pages = [
     {
       path: '/glossary',
-      title: 'सहकारी लेखांकन शब्दकोश (Glossary) — हर शब्द आसान भाषा में | SahakarLekha',
-      description: 'रोकड़ बही से बैलेंस शीट तक — सहकारी समिति लेखांकन के मुख्य शब्दों का आसान हिन्दी व English शब्दकोश।',
+      title: DATA.hub.HUB_META.glossary.title,
+      description: DATA.hub.HUB_META.glossary.description,
       lastmod: LASTMOD.static,
       jsonLd: [crumb([{ name: 'शब्दकोश', item: `${SITE}/glossary` }])],
     },
@@ -857,7 +859,7 @@ function glossaryPages(DATA) {
     pages.push({
       path: `/glossary/${t.slug}`,
       title: `${name} — सहकारी लेखांकन शब्दकोश | SahakarLekha`,
-      description: hindiDef.slice(0, 158),
+      description: DATA.hub.glossaryMetaDescription({ hindi: s['hindi explanation'], definition: s['definition'] }), // L5: same rule as GlossaryTerm
       lastmod: t.lastUpdated || LASTMOD.static,
       body: shell({
         crumbs: [['/glossary', 'शब्दकोश']],
@@ -932,8 +934,8 @@ function calculatorPages(DATA) {
   const pages = [
     {
       path: '/tools',
-      title: 'सहकारी लेखांकन कैलकुलेटर (Calculators) — मुफ्त | SahakarLekha',
-      description: 'ब्याज, EMI, मूल्यह्रास, GST, TDS, अंश पूँजी, रोकड़ अंतर, प्रतिशत व कार्यशील पूँजी — सहकारी समिति के लिए मुफ्त, आसान कैलकुलेटर।',
+      title: DATA.hub.HUB_META.tools.title,
+      description: DATA.hub.HUB_META.tools.description,
       lastmod: maxDate(calcs.map((c) => c.updated), LASTMOD.calc),
       jsonLd: [crumb([{ name: 'कैलकुलेटर', item: `${SITE}/tools` }])],
       body: calcs.length
@@ -1361,7 +1363,7 @@ try {
 
   const blog = blogPages(DATA);
   const pages = [
-    ...guidePages(),
+    ...guidePages(DATA),
     ...softwarePages(DATA),
     ...statePages(DATA),
     ...blog,

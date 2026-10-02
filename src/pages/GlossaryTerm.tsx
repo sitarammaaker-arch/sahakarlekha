@@ -17,6 +17,7 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findTerm, learningPath, allGlossary } from '@/content/glossary';
 import { calculatorsForGlossary } from '@/content/calculators';
 import { blogForGlossary } from '@/content/relatedContent';
+import { glossaryMetaDescription } from '@/content/hubMeta';
 import {
   Home, ChevronRight, BookOpen, ArrowRight, Lightbulb, AlertTriangle, Link2,
   GraduationCap, MonitorPlay, FileText, ShieldCheck, Languages, Compass, Calculator as CalcIcon,
@@ -79,7 +80,7 @@ const GlossaryTerm: React.FC = () => {
 
   useDocumentMeta({
     title: term ? `${term.hindiName || term.title} (${term.englishName}) — सहकारी लेखांकन शब्दकोश | SahakarLekha` : undefined,
-    description: term ? term.definition.slice(0, 158) : undefined,
+    description: term ? glossaryMetaDescription(term) : undefined,  // L5: Hindi first, same as the prerender
     canonicalPath: `/glossary/${slug}`,
     jsonLd,
   });

@@ -35,6 +35,7 @@
     "test:subscription-row": "node scripts/test-subscription-row.mjs",
     "test:chunk-reload": "node scripts/test-chunk-reload.mjs",
     "test:glossary-links": "node scripts/test-glossary-links.mjs",
+    "test:hub-meta": "node scripts/test-hub-meta.mjs",
     "test:batched-loads": "node scripts/test-batched-loads.mjs",
     "test:j6b-module-loads": "node scripts/test-j6b-module-loads.mjs",
     "test:096-voucher-numbering-client": "node scripts/test-096-voucher-numbering-client.mjs",
