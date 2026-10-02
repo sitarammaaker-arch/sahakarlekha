@@ -1208,7 +1208,7 @@ function buildSitemaps(dynamicPages, blogMax) {
     { path: '/login', lastmod: LASTMOD.static },
     { path: '/about', lastmod: LASTMOD.static },
     { path: '/contact', lastmod: LASTMOD.static },
-    { path: '/privacy', lastmod: '2026-06-20' },
+    { path: '/privacy', lastmod: '2026-10-02' },
     { path: '/terms', lastmod: LASTMOD.static },
     { path: '/guide/quick-start', lastmod: LASTMOD.guide },
     { path: '/guide/certificate', lastmod: LASTMOD.guide },

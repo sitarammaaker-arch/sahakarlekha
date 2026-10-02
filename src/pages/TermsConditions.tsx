@@ -1,9 +1,10 @@
 /**
  * Terms & Conditions — SahakarLekha
  * SaaS usage terms for cooperative society accounting platform
- * Binding text — do NOT edit without owner/legal review. §7 (₹0 "free tier" liability cap)
- * and §8 (30-day window) conflict with the paid model / Privacy §7: see
- * docs/audits/PUBLIC-CLAIMS-AUDIT-2026-10.md §B (legal-review drafts).
+ * Binding text — do NOT edit without owner/legal review. §10 requires 30 days' email notice
+ * before changes. 2 Oct 2026: only the false "(currently ₹0 for free tier)" phrase was removed
+ * from §7 (cap rule unchanged) and the existing English cap sentence was mirrored in Hindi.
+ * Cap amount/period remain for counsel: docs/audits/PUBLIC-CLAIMS-AUDIT-2026-10.md §B-1.
  * Bilingual Hindi + English
  */
 import React from 'react';
@@ -117,10 +118,10 @@ const SECTIONS = [
     content: (
       <>
         <p className="text-muted-foreground leading-relaxed">
-          सॉफ्टवेयर "जैसा है" के आधार पर प्रदान किया गया है। हम लेखा त्रुटियों, कर फाइलिंग गलतियों, या ऑडिट विफलताओं के लिए उत्तरदायी नहीं हैं। हम CA/ऑडिटर नहीं हैं — सभी गणनाओं को अपने ऑडिटर से सत्यापित करें।
+          सॉफ्टवेयर "जैसा है" के आधार पर प्रदान किया गया है। हम लेखा त्रुटियों, कर फाइलिंग गलतियों, या ऑडिट विफलताओं के लिए उत्तरदायी नहीं हैं। अधिकतम दायित्व सेवा के लिए भुगतान की गई राशि तक सीमित है। हम CA/ऑडिटर नहीं हैं — सभी गणनाओं को अपने ऑडिटर से सत्यापित करें।
         </p>
         <p className="mt-3 text-muted-foreground leading-relaxed">
-          The software is provided "as is" without warranties of any kind. We are not liable for accounting errors, tax filing mistakes, or audit failures resulting from use of the platform. Maximum liability is limited to the amount paid for the service (currently ₹0 for free tier). <strong>We are not a Chartered Accountant or auditor</strong> — always verify all calculations with your society's qualified auditor.
+          The software is provided "as is" without warranties of any kind. We are not liable for accounting errors, tax filing mistakes, or audit failures resulting from use of the platform. Maximum liability is limited to the amount paid for the service. <strong>We are not a Chartered Accountant or auditor</strong> — always verify all calculations with your society's qualified auditor.
         </p>
       </>
     ),
