@@ -499,5 +499,28 @@ Each KI's `evidence_id` = paired `EV-######` (same numeric suffix) in [KAE 03](.
 
 ---
 
+## Wave 1.2 · Transaction terms — KI-000401–000409 (added 2026-07-25, #321; registered 2026-10-02, Phase M7)
+
+These nine were activated for the in-module glossary bar but never entered into this registry. They had
+also been stamped `topic_id: C001` (Cooperative society) as a placeholder; on 2026-10-02 they were re-traced
+to their real SCOS clusters, shown below. All are Level A: definitional only, with no rate, section or due date.
+TDS and GST sit in compliance-heavy clusters, so any rate or threshold stays a separate B/C/D KI behind E3.
+
+| KI | Concept | Topic | T | Ev | R | Pri | Pre |
+|---|---|---|---|---|---|---|---|
+| KI-000401 | Purchase | C096 | D | E2 | A | P1 | — |
+| KI-000402 | Sale | C095 | D | E2 | A | P1 | — |
+| KI-000403 | Receipt voucher | C038 | D | E2 | A | P1 | — |
+| KI-000404 | Payment voucher | C039 | D | E2 | A | P1 | — |
+| KI-000405 | TDS (concept only) | C134 | D | E2 | A | P1 | — |
+| KI-000406 | GST (concept only) | C124 | D | E2 | A | P1 | — |
+| KI-000407 | Depreciation (concept only) | C112 | D | E2 | A | P1 | — |
+| KI-000408 | Deposit | C079 | D | E2 | A | P1 | — |
+| KI-000409 | Closing stock | C087 | D | E2 | A | P1 | — |
+
+> **Cumulative active: 109 Level-A KIs**: the 100 above plus these 9.
+
+---
+
 ### Cross-references
 [KI Schema](01-knowledge-item-schema.md) · [Wave Plan](02-wave-1-plan.md) · [Population Rules](03-population-rules.md) · [Knowledge Relationships](04-knowledge-relationships.md) · [Quality Gates](07-quality-gates.md) · [Gap Analysis](06-gap-analysis.md)

@@ -18,6 +18,13 @@
 
 import type { SearchType } from '../search/rank';
 
+/** The refusal for a regulated specific with no verified, dated source. Lives here (pure, tiny) so the
+ *  seam (core.ts) and the /ask page say the SAME words — the page shows it itself while the seam is
+ *  slow or unreachable, instead of presenting a document as "the answer" to "GST की दर क्या है". */
+export const REGULATED_REFUSAL =
+  'यह एक नियामक आँकड़ा है (दर / सीमा / धारा) और मेरे पास इसका प्रमाणित, तिथि-सहित स्रोत नहीं है — ' +
+  'इसलिए मैं अंदाज़ा नहीं लगाऊँगा। अपने CA / RCS या आधिकारिक पोर्टल से पुष्टि करें।';
+
 /** F=fact · K=knowledge · D=society data · A=action · N=navigation. §4.2 */
 export type Lane = 'F' | 'K' | 'D' | 'A' | 'N';
 

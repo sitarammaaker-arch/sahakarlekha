@@ -80,3 +80,15 @@ test('article glossary links: missing term → plain text, real term → link', 
   expect(await page.locator('a[href="/glossary/anand-pattern"], a[href="/glossary/white-revolution"]').count()).toBe(0);
   await expect(article.getByText('Amul', { exact: false }).first()).toBeVisible();
 });
+
+// M6 · /ask with the seam unreachable (slow, offline, AI off): a regulated specific must get the honest
+// refusal, never a document presented as "the answer"; an ordinary question still gets its answer card.
+test('/ask without the seam: regulated → refusal, ordinary → answer', async ({ page }) => {
+  await page.route(/functions\/v1\/ai-ask/, (r) => r.abort());
+  await page.goto('/ask?q=' + encodeURIComponent('आरक्षित निधि कितने प्रतिशत है'));
+  await expect(page.getByText('मैं इसका उत्तर नहीं दूँगा')).toBeVisible({ timeout: 25_000 });
+  await expect(page.getByText(/जवाब · स्रोत/)).toHaveCount(0);
+  await page.goto('/ask?q=' + encodeURIComponent('दोहरा लेखा क्या है'));
+  await expect(page.getByText(/जवाब · स्रोत/)).toBeVisible({ timeout: 25_000 });
+  await expect(page.getByText('मैं इसका उत्तर नहीं दूँगा')).toHaveCount(0);
+});

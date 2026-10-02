@@ -1,7 +1,7 @@
 ---
 knowledge_id: KI-000403
-topic_id: C001
-research_id: SMRD:C001
+topic_id: C038
+research_id: SMRD:C038
 evidence_id: EV-000403
 title: Receipt Voucher
 hindi_name: रसीद वाउचर
