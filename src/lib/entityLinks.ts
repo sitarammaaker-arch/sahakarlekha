@@ -117,7 +117,12 @@ export function computeEntityLinks(
   }
 
   if (entityType === 'account') {
-    const vCount = vouchers.filter(v => v.debitAccountId === id || v.creditAccountId === id).length;
+    // Same rule as deleteAccount's guard: a multi-line voucher uses the account through `lines`, not
+    // the legacy debit/credit fields. Counting only those told the user "no links" and then the delete
+    // was refused anyway.
+    const vCount = vouchers.filter(v =>
+      v.debitAccountId === id || v.creditAccountId === id || (v.lines?.some(l => l.accountId === id) ?? false),
+    ).length;
     if (vCount > 0) links.push({
       module: 'Vouchers', count: vCount,
       labelHi: `${vCount} वाउचर में use ho raha hai`, labelEn: `Used in ${vCount} Voucher(s)`,

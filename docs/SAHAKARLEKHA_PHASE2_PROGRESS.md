@@ -283,6 +283,12 @@
   - Equivalence check: 500 cases (2,008 rows), 0 mismatches for each book.
   - New `test:account-book` (13 checks).
   - e2e covers `/cash-book` and `/bank-book`.
+- **K5:** the delete pre-check (`getEntityLinks`) moved to `src/lib/entityLinks.ts`.
+  - Equivalence check: 14,400 checks, 0 mismatches.
+  - **System fix, in its own commit:** the `account` pre-check now counts multi-line `lines`, using the same rule as `deleteAccount`'s guard.
+    - Before, Ledger Heads said "no links" for an account used only inside a multi-line voucher, and the delete was then refused.
+    - No data was at risk, because the guard itself was right.
+  - New `test:entity-links` (13 checks).
 
 ## Tracked audit findings
 | ID | Area | Status |
