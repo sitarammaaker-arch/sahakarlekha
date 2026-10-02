@@ -1,7 +1,7 @@
 ---
 knowledge_id: KI-000404
-topic_id: C001
-research_id: SMRD:C001
+topic_id: C039
+research_id: SMRD:C039
 evidence_id: EV-000404
 title: Payment Voucher
 hindi_name: भुगतान वाउचर

@@ -23,6 +23,7 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { trackEvent } from '@/lib/analytics';
 import { search, TYPE_LABEL } from '@/lib/siteSearch';
 import { askSeam, type AskOutcome } from '@/lib/ask/client';
+import { classify, REGULATED_REFUSAL } from '@/lib/ask/classify';
 import { WHATSAPP_NUMBER } from '@/lib/socials';
 import { Sparkles, Send, ArrowRight, ShieldCheck, Info } from 'lucide-react';
 
@@ -54,12 +55,22 @@ const AskAssistant: React.FC = () => {
      replies — not deployed, AI off, no signal — this IS the answer, exactly as today. */
   const results = React.useMemo(() => (q ? search(q, 8) : []), [q]);
   const [outcome, setOutcome] = React.useState<AskOutcome | null>(null);
+  const [seamSettled, setSeamSettled] = React.useState(false);
+  // M6: the same pure classifier the seam runs. A regulated specific ("GST की दर", "194Q की सीमा")
+  // must never get a document presented as "the answer" — not while the seam is still thinking (up
+  // to 20 s), and not when it is slow or unreachable and this page falls back to local search.
+  const regulated = React.useMemo(() => !!q && classify(q, false).lane === 'F', [q]);
 
   React.useEffect(() => {
     setOutcome(null);
+    setSeamSettled(false);
     if (!q) return;
     let live = true;
-    askSeam(q).then((o) => { if (live && o.source === 'seam') setOutcome(o); });
+    askSeam(q).then((o) => {
+      if (!live) return;
+      setSeamSettled(true);
+      if (o.source === 'seam') setOutcome(o);
+    });
     return () => { live = false; };
   }, [q]);
 
@@ -87,7 +98,11 @@ const AskAssistant: React.FC = () => {
   const computed = seam && !refusal && seam.answer && (seam.lane === 'D' || seam.lane === 'F')
     ? { text: seam.answer, cite: seam.cites?.[0] ?? null, lane: seam.lane, table: seam.table ?? null }
     : null;
-  const suppressTop = !!(refusal || computed);
+  // Regulated and the seam has not spoken (still waiting, or fell back to local): no document as the answer.
+  // Once the seam has replied it decides (it may have a VERIFIED rule to show, or refuse itself).
+  const localGuard = regulated && !seam;
+  const localRefusal = localGuard && seamSettled ? REGULATED_REFUSAL : null;
+  const suppressTop = !!(refusal || computed || localGuard);
   const top = suppressTop ? null : results[0];
   const rest = suppressTop ? results.slice(0, 6) : results.slice(1, 6);
 
@@ -126,7 +141,13 @@ const AskAssistant: React.FC = () => {
             alongside one: presenting a document as "the answer" to "GST की दर क्या है"
             is the exact thing the guard exists to stop. The sources below stay, so a
             refusal still points somewhere useful — it is honest, not a dead end. */}
-        {q && refusal && (
+        {q && localGuard && !seamSettled && (
+          <p className="mt-8 text-sm text-muted-foreground" aria-live="polite">
+            यह एक नियामक आँकड़ा (दर / सीमा / धारा) है — प्रमाणित स्रोत देखा जा रहा है…
+          </p>
+        )}
+
+        {q && (refusal || localRefusal) && (
           <div className="mt-8">
             <p className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-500 mb-2">
               मैं इसका उत्तर नहीं दूँगा
@@ -134,7 +155,7 @@ const AskAssistant: React.FC = () => {
             <Card className="border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20">
               <CardContent className="p-5 flex gap-3">
                 <Info className="h-5 w-5 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
-                <p className="text-foreground leading-relaxed">{refusal}</p>
+                <p className="text-foreground leading-relaxed">{refusal || localRefusal}</p>
               </CardContent>
             </Card>
           </div>

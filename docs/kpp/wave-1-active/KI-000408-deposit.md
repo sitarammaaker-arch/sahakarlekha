@@ -1,7 +1,7 @@
 ---
 knowledge_id: KI-000408
-topic_id: C001
-research_id: SMRD:C001
+topic_id: C079
+research_id: SMRD:C079
 evidence_id: EV-000408
 title: Deposit
 hindi_name: जमा

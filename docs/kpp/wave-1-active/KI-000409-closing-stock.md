@@ -1,7 +1,7 @@
 ---
 knowledge_id: KI-000409
-topic_id: C001
-research_id: SMRD:C001
+topic_id: C087
+research_id: SMRD:C087
 evidence_id: EV-000409
 title: Closing Stock
 hindi_name: अंतिम स्टॉक

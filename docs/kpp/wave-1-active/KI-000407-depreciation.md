@@ -1,7 +1,7 @@
 ---
 knowledge_id: KI-000407
-topic_id: C001
-research_id: SMRD:C001
+topic_id: C112
+research_id: SMRD:C112
 evidence_id: EV-000407
 title: Depreciation
 hindi_name: मूल्यह्रास

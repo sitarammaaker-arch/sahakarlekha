@@ -26,7 +26,7 @@ import type { SearchDoc, SearchResult, SearchType } from '../search/rank';
 import { isAiEnabled } from '../ai/killSwitch';
 import type { AiFlags } from '../ai/killSwitch';
 import { resolveJurisdiction } from '../jurisdiction';
-import { classify } from './classify';
+import { classify, REGULATED_REFUSAL } from './classify';
 import type { Intent, Lane } from './classify';
 import { answerFact, unverifiedHint } from './fact';
 import { cashBalance } from './tools/cashBalance';
@@ -119,9 +119,7 @@ export const ASK_FEATURE = 'ask';
 /** Hindi-first, plain second (RULE 7). These are the only user-facing strings here. */
 const SAY = {
   unknown: 'मुझे इसका पक्का उत्तर नहीं पता। नीचे के स्रोत देखें, या अपने CA / RCS से पूछें।',
-  regulated:
-    'यह एक नियामक आँकड़ा है (दर / सीमा / धारा) और मेरे पास इसका प्रमाणित, तिथि-सहित स्रोत नहीं है — ' +
-    'इसलिए मैं अंदाज़ा नहीं लगाऊँगा। अपने CA / RCS या आधिकारिक पोर्टल से पुष्टि करें।',
+  regulated: REGULATED_REFUSAL,
   // A different, more useful truth than "मुझे नहीं पता": the rule is in the catalog,
   // it just has not been checked by a human yet — and it names what to check.
   unverified: (cite: string) =>
