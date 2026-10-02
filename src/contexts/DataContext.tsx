@@ -37,6 +37,7 @@ import { computeTrialBalance } from '@/lib/reports/trialBalance';
 import { computeTradingAccount, computeProfitLoss } from '@/lib/reports/tradingAndProfitLoss';
 import { computeReceiptsPayments } from '@/lib/reports/receiptsPayments';
 import { computeCashBook, computeBankBook } from '@/lib/reports/accountBook';
+import { computeEntityLinks } from '@/lib/entityLinks';
 import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate, reconcileMovements } from '@/lib/stockUtils';
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
@@ -7100,156 +7101,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [customers, deleteAccountRow]);
 
   const getEntityLinks = useCallback((entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan' | 'asset', id: string): EntityLink[] => {
-    const links: EntityLink[] = [];
-    const activeVouchers = vouchersRef.current.filter(v => !v.isDeleted);
-
-    if (entityType === 'member') {
-      const vCount = activeVouchers.filter(v => v.memberId === id).length;
-      if (vCount > 0) links.push({
-        module: 'Vouchers', count: vCount,
-        labelHi: `${vCount} वाउचर`, labelEn: `${vCount} Voucher(s)`,
-        instructionHi: 'Vouchers page pe jao → in vouchers ko pehle cancel karo',
-        instructionEn: 'Go to Vouchers page → cancel these vouchers first',
-        blocking: true,
-      });
-      const lCount = loansRef.current.filter(l => l.memberId === id).length;
-      if (lCount > 0) links.push({
-        module: 'Loans', count: lCount,
-        labelHi: `${lCount} ऋण`, labelEn: `${lCount} Loan(s)`,
-        instructionHi: 'Loan Register pe jao → pehle ye loans delete karo',
-        instructionEn: 'Go to Loan Register → delete these loans first',
-        blocking: true,
-      });
-    }
-
-    if (entityType === 'customer') {
-      const sCount = salesRef.current.filter(s => s.customerId === id).length;
-      if (sCount > 0) links.push({
-        module: 'Sales', count: sCount,
-        labelHi: `${sCount} बिक्री`, labelEn: `${sCount} Sale(s)`,
-        instructionHi: 'Sale Management pe jao → pehle ye sales delete karo',
-        instructionEn: 'Go to Sale Management → delete these sales first',
-        blocking: true,
-      });
-    }
-
-    if (entityType === 'supplier') {
-      const pCount = purchasesRef.current.filter(p => p.supplierId === id).length;
-      if (pCount > 0) links.push({
-        module: 'Purchases', count: pCount,
-        labelHi: `${pCount} खरीद`, labelEn: `${pCount} Purchase(s)`,
-        instructionHi: 'Purchase Management pe jao → pehle ye purchases delete karo',
-        instructionEn: 'Go to Purchase Management → delete these purchases first',
-        blocking: true,
-      });
-    }
-
-    if (entityType === 'stockItem') {
-      // Only count movements whose parent purchase/sale still exists.
-      // Orphan movements (parent already deleted) are auto-cleaned by deleteStockItem,
-      // so they should NOT block deletion.
-      const livePurchaseNos = new Set(purchasesRef.current.map(p => p.purchaseNo));
-      const liveSaleNos = new Set(salesRef.current.map(s => s.saleNo));
-      const mvCount = stockMovements.filter(m =>
-        m.itemId === id && (livePurchaseNos.has(m.referenceNo || '') || liveSaleNos.has(m.referenceNo || ''))
-      ).length;
-      if (mvCount > 0) links.push({
-        module: 'Stock Movements', count: mvCount,
-        labelHi: `${mvCount} स्टॉक मूवमेंट`, labelEn: `${mvCount} Stock Movement(s)`,
-        instructionHi: 'Is item ki stock movements hain (purchases/sales). Pehle linked purchases aur sales delete karo.',
-        instructionEn: 'This item has stock movements (purchases/sales). Delete linked purchases and sales first.',
-        blocking: true,
-      });
-      const pCount = purchasesRef.current.filter(p => p.items.some(i => i.itemId === id)).length;
-      if (pCount > 0) links.push({
-        module: 'Purchases', count: pCount,
-        labelHi: `${pCount} खरीद में शामिल`, labelEn: `${pCount} Purchase(s) contain this item`,
-        instructionHi: 'Purchase Management pe jao → ye purchases delete karo',
-        instructionEn: 'Go to Purchase Management → delete these purchases',
-        blocking: true,
-      });
-      const sCount = salesRef.current.filter(s => s.items.some(i => i.itemId === id)).length;
-      if (sCount > 0) links.push({
-        module: 'Sales', count: sCount,
-        labelHi: `${sCount} बिक्री में शामिल`, labelEn: `${sCount} Sale(s) contain this item`,
-        instructionHi: 'Sale Management pe jao → ye sales delete karo',
-        instructionEn: 'Go to Sale Management → delete these sales',
-        blocking: true,
-      });
-    }
-
-    if (entityType === 'employee') {
-      const srCount = salaryRecordsRef.current.filter(r => r.employeeId === id).length;
-      if (srCount > 0) links.push({
-        module: 'Salary Records', count: srCount,
-        labelHi: `${srCount} वेतन रिकॉर्ड`, labelEn: `${srCount} Salary Record(s)`,
-        instructionHi: 'Salary Management pe jao → is employee ke salary records pehle delete karo',
-        instructionEn: 'Go to Salary Management → delete this employee\'s salary records first',
-        blocking: true,
-      });
-    }
-
-    if (entityType === 'account') {
-      const vCount = activeVouchers.filter(v => v.debitAccountId === id || v.creditAccountId === id).length;
-      if (vCount > 0) links.push({
-        module: 'Vouchers', count: vCount,
-        labelHi: `${vCount} वाउचर में use ho raha hai`, labelEn: `Used in ${vCount} Voucher(s)`,
-        instructionHi: 'Vouchers page pe jao → pehle in vouchers ko cancel karo',
-        instructionEn: 'Go to Vouchers page → cancel these vouchers first',
-        blocking: true,
-      });
-      const supLinked = suppliersRef.current.find(s => s.accountId === id);
-      if (supLinked) links.push({
-        module: 'Supplier', count: 1,
-        labelHi: `Supplier "${supLinked.name}" ka account hai`, labelEn: `This is Supplier "${supLinked.name}"'s account`,
-        instructionHi: 'Suppliers page pe jao → pehle supplier delete karo',
-        instructionEn: 'Go to Suppliers page → delete the supplier first',
-        blocking: true,
-      });
-      const cusLinked = customersRef.current.find(c => c.accountId === id);
-      if (cusLinked) links.push({
-        module: 'Customer', count: 1,
-        labelHi: `Customer "${cusLinked.name}" ka account hai`, labelEn: `This is Customer "${cusLinked.name}"'s account`,
-        instructionHi: 'Customers page pe jao → pehle customer delete karo',
-        instructionEn: 'Go to Customers page → delete the customer first',
-        blocking: true,
-      });
-    }
-
-    if (entityType === 'loan') {
-      const vCount = activeVouchers.filter(v => v.narration?.includes(loansRef.current.find(l => l.id === id)?.loanNo || '____NOMATCH____')).length;
-      if (vCount > 0) links.push({
-        module: 'Vouchers', count: vCount,
-        labelHi: `${vCount} वाउचर linked`, labelEn: `${vCount} linked Voucher(s)`,
-        instructionHi: 'Vouchers page pe jao → pehle in vouchers ko cancel karo',
-        instructionEn: 'Go to Vouchers → cancel linked vouchers first',
-        blocking: false,
-      });
-    }
-
-    if (entityType === 'asset') {
-      const asset = assetsRef.current.find(a => a.id === id);
-      if (asset) {
-        // M14: Tighter match — require a word-boundary around assetNo (prevents AST/0010
-        // matching AST/00100) AND restrict to depreciation/disposal vouchers, so a casual
-        // narration mention of the assetNo doesn't falsely block deletion.
-        const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const assetNoRe = new RegExp(`(^|[^\\w/-])${escapeRegex(asset.assetNo)}([^\\w/-]|$)`);
-        const vCount = activeVouchers.filter(v => {
-          if (!v.narration || !assetNoRe.test(v.narration)) return false;
-          return /depreciation|disposal|sold|written off|impair/i.test(v.narration);
-        }).length;
-        if (vCount > 0) links.push({
-          module: 'Vouchers', count: vCount,
-          labelHi: `${vCount} वाउचर (ह्रास आदि)`, labelEn: `${vCount} Voucher(s) (depreciation etc.)`,
-          instructionHi: 'Vouchers page pe jao → pehle in vouchers ko cancel karo',
-          instructionEn: 'Go to Vouchers → cancel depreciation vouchers first',
-          blocking: true,
-        });
-      }
-    }
-
-    return links;
+    // K5: the pre-check is a pure module (lib/entityLinks) — same rules, testable alone.
+    return computeEntityLinks(entityType, id, {
+      vouchers: vouchersRef.current.filter(v => !v.isDeleted),
+      loans: loansRef.current, sales: salesRef.current, purchases: purchasesRef.current, stockMovements,
+      salaryRecords: salaryRecordsRef.current, suppliers: suppliersRef.current, customers: customersRef.current,
+      assets: assetsRef.current,
+    });
   }, [stockMovements]); // eslint-disable-line
 
   // Perf (audit P0): the context value used to be an inline object literal, so EVERY re-render of
