@@ -65,6 +65,12 @@ jobs:
           fi
           echo "All pure test suites passed."
 
+      - name: Build + prerendered-output guards (test:dist)
+        # L8: the exact HTML crawlers see — every sitemap URL has its own file/canonical/title, no future
+        # lastmod, one h1 + a description per page, valid JSON-LD, and no broken internal link in any
+        # static body. Needs dist/, so it runs after a full `npm run build` (vite + prerender).
+        run: npm run build && npm run test:dist
+
       - name: Payroll staging RLS-coverage (opt-in; runs only if a staging DB secret is set)
         # READ-ONLY assertion that the payroll schema's RLS is complete on a target staging DB.
         # Skips cleanly (green) when PAYROLL_STAGING_DATABASE_URL is unset, so this is opt-in and
