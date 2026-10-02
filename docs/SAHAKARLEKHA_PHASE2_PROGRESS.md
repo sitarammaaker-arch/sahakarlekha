@@ -242,6 +242,19 @@
   - This is the likely root of the G6 duplicate-number refusal.
   - The fix needs a prod migration: seed the sequences from the current max per prefix, then let `_official_doc_no` sequence 4-part prefixes. **Awaiting founder approval.**
 
+### 2026-10-02: 096 server voucher numbering LIVE (founder: "system over society data")
+- **Founder direction:** stop chasing individual societies' manual data. Prod anomalies are evidence only; fix the system.
+- **096 LIVE** (#630; prod backup `sahakarlekha-prod-20261002-0726Z.dump`; also applied to staging with 095).
+  - `post_voucher` issues the official number inside its transaction (gapless).
+  - 4-part `RV/YYYY/YY/NNN` numbers are now sequenced.
+  - Sequences are seeded from current maxima.
+  - anon is off `next_document_number`.
+- **Verified read-only:** migration row present; post_voucher numbers; anon exec false; drift 0; **47 voucher sequences, 0 differing from their series max**.
+- **E2E:** green on main with 096.
+  - A rare post-cancel full reload (2 runs) aborted `cancel_voucher`.
+  - It did not reproduce in 5 later runs.
+  - #631 keeps permanent diagnostics in the cancel spec.
+
 ## Tracked audit findings
 | ID | Area | Status |
 |---|---|---|
