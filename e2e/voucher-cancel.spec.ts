@@ -10,6 +10,20 @@ test.skip(!HAS_LOGIN, 'E2E_EMAIL / E2E_PASSWORD (staging test login) not set');
 test('a cancelled voucher stays cancelled after a reload', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
+  // Diagnostics, kept on purpose: twice in CI (2026-10-02) a full document reload landed ~200 ms after the
+  // cancel click and aborted cancel_voucher; not reproduced in 5 later runs. If it recurs, the CI log shows
+  // the navigation request, console errors, and whether lazyWithRetry (chunk-reload flag) caused it.
+  page.on('console', m => { if (['error', 'warning'].includes(m.type()) || m.text().startsWith('[diag]')) console.log(`[console.${m.type()}] ${m.text().slice(0, 600)}`); });
+  page.on('request', r => { if (r.isNavigationRequest() && r.frame() === page.mainFrame()) console.log(`[navreq] ${r.method()} ${r.url()}`); });
+  // lazyWithRetry sets this flag right before it reloads on a failed chunk import — log who sets it.
+  await page.addInitScript(() => {
+    const orig = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (k: string, v: string) {
+      if (k === 'sl_chunk_reloaded') console.log('[diag] chunk-reload flag set: ' + String(new Error().stack || '').replace(/\s+/g, ' ').slice(0, 500));
+      return orig.call(this, k, v);
+    };
+    window.addEventListener('unhandledrejection', e => console.log('[diag] unhandledrejection: ' + String((e as PromiseRejectionEvent).reason).slice(0, 300)));
+  });
   await login(page);
   const tag = await createVoucher(page, 'E2E-CANCEL');
 
@@ -22,6 +36,7 @@ test('a cancelled voucher stays cancelled after a reload', async ({ page }) => {
   // The cancelled list shows the cancel REASON in its note column (not the narration), so carry the tag there.
   await dialog.getByPlaceholder('कारण लिखें...').fill(`e2e cancel ${tag}`);
   await dialog.getByRole('button', { name: 'रद्द करें' }).click();
+
   await expect(page.getByRole('row').filter({ hasText: tag })).toHaveCount(0);   // gone from the active list
 
   await page.reload();
