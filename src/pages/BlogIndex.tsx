@@ -10,7 +10,7 @@ import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
-import { publishedOrder, readingMinutes, loadBlogRaw, type BlogPost } from '@/content/blog';
+import { publishedOrder, readingMinutes, blogIntro, type BlogPost } from '@/content/blog';
 import { formatDate } from '@/components/blog/blogTheme';
 import { fetchBlogViewCounts, formatViews } from '@/lib/blogViews';
 import { ArrowRight, Calendar, Clock, Eye, Rss, ArrowUpRight, Flame } from 'lucide-react';
@@ -25,26 +25,10 @@ function catColor(cat: string): string {
   return CAT_COLORS[h % CAT_COLORS.length];
 }
 
-/** First few sentences of the article body (markdown stripped) for the hero card. */
-function introPreview(post: BlogPost, max = 300): string {
-  const raw = loadBlogRaw(post.slug);
-  if (!raw) return post.excerpt;
-  const paras = raw
-    .split(/\r?\n\s*\r?\n/)
-    .map((b) => b.trim())
-    .filter((b) => b && !/^(#|>|[-*]\s|\d+\.\s|\||---|```)/.test(b));
-  let out = '';
-  for (const b of paras) {
-    const t = b
-      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-      .replace(/[*_`]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    out = out ? out + ' ' + t : t;
-    if (out.length >= max) break;
-  }
-  // Whole paragraphs only — never cut mid-sentence.
-  return out || post.excerpt;
+/** First few sentences of the article body (markdown stripped) for the hero card — computed at build
+ *  time (J2: src/content/blog/mdMeta.ts), so the index no longer ships every article body. */
+function introPreview(post: BlogPost): string {
+  return blogIntro(post.slug) || post.excerpt;
 }
 
 const Meta: React.FC<{ post: BlogPost; views?: number; className?: string }> = ({ post, views, className = '' }) => (

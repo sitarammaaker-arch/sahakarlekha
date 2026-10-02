@@ -23,3 +23,21 @@ test('landing page downloads no pdf / charts / xlsx chunk', async ({ page }) => 
   const heavy = scripts.filter(u => /\/assets\/(pdf|charts|xlsx)-[^/]+\.js$/.test(u));
   expect(heavy, heavy.join('\n')).toEqual([]);
 });
+
+// J2 · article bodies are lazy chunks: list pages must not download any, and an article page must load its
+// own body and render it (headings from the markdown).
+test('landing and blog index download no article-body chunk', async ({ page }) => {
+  const bodies: string[] = [];
+  page.on('request', r => { if (/\/assets\/cooperative-accounting-basics-[^/]+\.js$/.test(r.url())) bodies.push(r.url()); });
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+  await page.goto('/blog');
+  await page.waitForLoadState('networkidle');
+  expect(bodies, bodies.join('\n')).toEqual([]);
+});
+
+test('an article page loads and renders its own body', async ({ page }) => {
+  await page.goto('/blog/cooperative-accounting-basics');
+  await expect(page.getByRole('heading', { name: 'लेखांकन है क्या?' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/मिनट/).first()).toBeVisible();
+});

@@ -1,3 +1,5 @@
+import type { BlogMdMeta } from './mdMeta';
+
 /**
  * SahakarLekha Blog — hand-authored articles (separate from the auto-generated
  * /guide course). Each post's prose lives in ./<slug>.md and is loaded raw;
@@ -1439,11 +1441,21 @@ export const BLOG_POSTS: BlogPost[] = [
   },
 ];
 
-// raw markdown for every post, keyed by "./<slug>.md"
-const RAW = import.meta.glob('./*.md', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+// J2: article bodies are NOT bundled into this module any more (it was ~3 MB raw / ~620 KB gzip, pulled
+// by the landing page, blog index and author pages just for reading times). Each body is its own lazy
+// chunk, loaded by the article page; list pages read build-time metadata (`?meta`, ./mdMeta.ts).
+const RAW_LOADERS = import.meta.glob('./*.md', { query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>;
+const META = import.meta.glob('./*.md', { query: '?meta', import: 'default', eager: true }) as Record<string, BlogMdMeta>;
 
-export function loadBlogRaw(slug: string): string | null {
-  return RAW['./' + slug + '.md'] ?? null;
+/** The article's markdown, loaded on demand (one small chunk per post). null if no such post. */
+export function loadBlogRaw(slug: string): Promise<string | null> {
+  const load = RAW_LOADERS['./' + slug + '.md'];
+  return load ? load() : Promise.resolve(null);
+}
+
+/** The first whole paragraphs of the article (markdown stripped), computed at build time. */
+export function blogIntro(slug: string): string | null {
+  return META['./' + slug + '.md']?.intro || null;
 }
 
 /** Posts sorted newest-first (ALL posts, incl. future-scheduled). */
@@ -1472,11 +1484,7 @@ export function findPost(slug: string): BlogPost | null {
 
 /** Estimated reading time in minutes from the post's markdown (Hindi ~130 wpm). */
 export function readingMinutes(slug: string): number {
-  const raw = loadBlogRaw(slug);
-  if (!raw) return 1;
-  const body = raw.replace(/^#\s+.*(\r?\n)+/, '');
-  const words = body.split(/\s+/).filter(Boolean).length;
-  return Math.max(1, Math.round(words / 130));
+  return META['./' + slug + '.md']?.minutes ?? 1;   // J2: computed at build time (mdMeta.ts)
 }
 
 /** Up to `n` related posts (published only; same category first, then newest). */

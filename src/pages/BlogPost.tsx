@@ -160,7 +160,14 @@ const ShareBar: React.FC<{ url: string; title: string }> = ({ url, title }) => {
 const BlogPost: React.FC = () => {
   const { slug = '' } = useParams();
   const post = findPost(slug);
-  const raw = loadBlogRaw(slug);
+  // J2: the article body is its own lazy chunk — load it for this slug. undefined = loading, null = none.
+  const [raw, setRaw] = React.useState<string | null | undefined>(undefined);
+  React.useEffect(() => {
+    let live = true;
+    setRaw(undefined);
+    loadBlogRaw(slug).then((r) => { if (live) setRaw(r); }, () => { if (live) setRaw(null); });
+    return () => { live = false; };
+  }, [slug]);
 
   // Parse structured blocks out of the body (H1 stripped first) so the summary
   // and FAQ render as real UI + FAQ schema, not duplicated prose. A section is
@@ -251,8 +258,17 @@ const BlogPost: React.FC = () => {
 
   // Unknown post, missing body, or a still-scheduled (future-dated) post → bounce
   // to the index. Scheduled posts stay hidden until their publish date arrives.
-  if (!post || raw == null || !isPublished(post)) {
+  if (!post || raw === null || !isPublished(post)) {
     return <Navigate to="/blog" replace />;
+  }
+  if (raw === undefined) {
+    // Body still loading (one small chunk) — keep the page shell; the prerendered HTML already served
+    // crawlers the full article.
+    return (
+      <PublicLayout>
+        <div className="max-w-3xl mx-auto px-4 py-16 text-center text-muted-foreground" aria-busy="true">लेख लोड हो रहा है…</div>
+      </PublicLayout>
+    );
   }
 
   const a = ACCENTS[post.accent];
