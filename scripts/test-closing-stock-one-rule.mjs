@@ -141,7 +141,9 @@ ok(near(RANIA.reduce((t, b) => t + b.netBalance, 0), 0), 'fixture: the Trial Bal
 // ── 4. Wiring: one rule, everywhere ──
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const dc = read('src/contexts/DataContext.tsx');
-ok(/const closing = closingStock\(stockLeaves, physicalClosingStock, closingStockPosted\);/.test(dc) && /const closingStockItems = closing\.items;/.test(dc), 'Trading A/c closing stock = closingStock()');
+// K2: the Trading A/c compute lives in lib/reports/tradingAndProfitLoss; DataContext delegates to it.
+const tp = read('src/lib/reports/tradingAndProfitLoss.ts');
+ok(/const closing = closingStock\(stockLeaves, physicalClosingStock, closingStockPosted\);/.test(tp) && /const closingStockItems = closing\.items;/.test(tp) && /return computeTradingAccount\(/.test(dc), 'Trading A/c closing stock = closingStock()');
 ok(!/ledgerClosingItems\.length > 0\s*\?\s*ledgerClosingItems/.test(dc), 'the old ledger-else-physical rule is gone');
 const bsl = read('src/lib/balanceSheetLeaves.ts');
 ok(/closingStock\(stockLeaves\.map/.test(bsl) && /const unpostedStock = cs\.replacesLedger \? cs\.total : 0;/.test(bsl), 'Balance Sheet closing stock = the same closingStock()');
