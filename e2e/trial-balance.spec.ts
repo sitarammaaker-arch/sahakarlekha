@@ -18,8 +18,8 @@ test('trial balance renders and is balanced', async ({ page }) => {
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
-// K2/K3 · the Trading A/c, I&E and Receipts & Payments pages read lib/reports/* through DataContext.
-for (const [path, heading] of [['/trading-account', /व्यापार खाता|Trading Account/], ['/profit-loss', /आय-व्यय खाता|Income & Expenditure Account/], ['/receipts-payments', /प्राप्ति एवं भुगतान खाता|Receipts & Payments Account/]] as const) {
+// K2–K4 · the Trading A/c, I&E, Receipts & Payments, Cash Book and Bank Book pages read lib/reports/* through DataContext.
+for (const [path, heading] of [['/trading-account', /व्यापार खाता|Trading Account/], ['/profit-loss', /आय-व्यय खाता|Income & Expenditure Account/], ['/receipts-payments', /प्राप्ति एवं भुगतान खाता|Receipts & Payments Account/], ['/cash-book', /कैश बुक|Cash Book/], ['/bank-book', /बैंक बुक|Bank Book/]] as const) {
   test(`${path} renders without page errors`, async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', e => errors.push(e.message));

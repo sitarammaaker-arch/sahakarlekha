@@ -278,6 +278,11 @@
   - Equivalence check: 500 cases, 0 mismatches.
   - New `test:receipts-payments` (14 checks).
   - e2e covers `/receipts-payments`.
+- **K4:** the Cash Book and Bank Book moved to `src/lib/reports/accountBook.ts`.
+  - They were the same compute duplicated in DataContext, and now share one core.
+  - Equivalence check: 500 cases (2,008 rows), 0 mismatches for each book.
+  - New `test:account-book` (13 checks).
+  - e2e covers `/cash-book` and `/bank-book`.
 
 ## Tracked audit findings
 | ID | Area | Status |
