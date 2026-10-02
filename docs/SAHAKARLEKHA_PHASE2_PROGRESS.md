@@ -22,7 +22,7 @@
   - F1 (online-only).
   - G (reliability).
   - **H (deep domain audit: trading/GST, members/share capital, cash/TB, governance, all domain modules)**.
-- **Next: Phase I (testing).** It needs a founder decision on a **staging Supabase project** (see the Phase I assessment below).
+- **Phase I in progress:** staging + Playwright e2e LIVE (RULE 1 flow green in CI).
 - **Founder actions open:**
   - Delete Rania's 2 returns (SRET / PRET/2026-27/001) in the app.
   - Supply Rania's audited share-capital opening.
@@ -215,6 +215,20 @@
   - Voucher creation and edits are traced by the append-only journal (ledger_events producer) plus `editHistory`.
   - **FOUND:** sale/purchase EDITS and account / salary-slip / supplier / customer DELETES "audited" with `console.info` only. That trail dies in the browser (16 bill-edit cancels in 30 days with no audit row). **Fixed in PR:** they now write `emitAudit` rows. For the bill edits, the row is written before the server/legacy split, so both paths record the edit.
 - **Rania returns:** still live, waiting for the founder to delete them via the Returns pages.
+
+### 2026-10-02: Phase I, staging + E2E LIVE (founder decision क)
+- **Staging** `sahakarlekha-staging` (ivmrlhjrqtwftdlxajxk, Singapore) was un-paused.
+  - The July payroll test fixture was found and inspected: 24 synthetic `dede0000-…` vouchers dated 2027-28. It was dropped.
+  - The production **schema with no data** was applied (116 tables / 197 policies / 77 fns, RLS on all).
+  - One synthetic seed society was added (`5eed0000-…`, 177 accounts, FY 2026-27 open, posting ON, trial).
+  - The access-token hook is enabled, and the test admin `e2e-admin@sahakarlekha.test` was created by the founder.
+  - Staging files live in `D:\SahakarLekha-Backups\staging\` and are not in the repo. `apply-sql-staging.ps1` is pinned to the staging ref. Every file refuses a database holding real-society vouchers (verified on the prod copy: refused, 3141 vouchers intact).
+- **Playwright e2e** (#627, #628):
+  - The config refuses the prod ref.
+  - `smoke`: the app renders, and no request reaches prod.
+  - `voucher-persist` (RULE 1 end to end): log in → save → reload → still listed.
+  - The CI `e2e` job uses 4 `E2E_*` secrets. First green run: 3/3 (run 36975369836).
+- **Next in I:** run the db-harness suites against staging in CI (needs a `STAGING_DATABASE_URL` secret), plus more E2E flows (sale/purchase, year close).
 
 ## Tracked audit findings
 | ID | Area | Status |

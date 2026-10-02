@@ -33,7 +33,7 @@ test('a voucher saved in the UI survives a reload (it reached the cloud)', async
 
   await page.goto('/vouchers');
   await page.getByText('प्रवेश शुल्क', { exact: true }).first().click();   // template: admission-fee receipt
-  await page.getByPlaceholder('0').fill(amount);
+  await page.getByRole('spinbutton', { name: '0' }).fill(amount);   // exact amount box (placeholder '0' also substring-matches the voucher no.)
   await page.getByPlaceholder('विवरण...').fill(tag);
   await page.getByRole('button', { name: 'सहेजें' }).click();
 
