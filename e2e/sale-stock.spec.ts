@@ -35,7 +35,10 @@ test('a sale saved in the UI lowers stock by exactly its quantity, and survives 
   const qty = page.getByRole('row').filter({ has: page.getByRole('combobox').filter({ hasText: ITEM }) }).first().getByRole('spinbutton').first();
   await qty.fill('1');
   await page.getByPlaceholder('नोट लिखें...').fill(`E2E-SALE-${Date.now()}`);
+  // Wait for the server to commit the sale before reloading (a reload mid-request aborts it).
+  const saved = page.waitForResponse(r => r.url().includes('/rpc/post_stock_document') && r.request().method() === 'POST', { timeout: 20_000 });
   await page.getByRole('button', { name: 'बिक्री सहेजें' }).click();
+  expect((await saved).ok()).toBe(true);
   await expect(page.getByText(/cloud par save NAHI|Cloud save fail|सेव नहीं हुआ/)).toHaveCount(0, { timeout: 8_000 });
 
   await page.reload();

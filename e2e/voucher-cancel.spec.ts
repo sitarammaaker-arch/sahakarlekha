@@ -24,6 +24,12 @@ test('a cancelled voucher stays cancelled after a reload', async ({ page }) => {
     };
     window.addEventListener('unhandledrejection', e => console.log('[diag] unhandledrejection: ' + String((e as PromiseRejectionEvent).reason).slice(0, 300)));
   });
+  // CDP: the JS stack that initiates any document navigation (to find what reloads the page after the cancel).
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Network.enable');
+  cdp.on('Network.requestWillBeSent', (e: { type?: string; request: { url: string }; initiator: unknown }) => {
+    if (e.type === 'Document') console.log(`[initiator] ${e.request.url} ${JSON.stringify(e.initiator).slice(0, 1500)}`);
+  });
   await login(page);
   const tag = await createVoucher(page, 'E2E-CANCEL');
 
@@ -35,7 +41,10 @@ test('a cancelled voucher stays cancelled after a reload', async ({ page }) => {
   const dialog = page.getByRole('alertdialog');
   // The cancelled list shows the cancel REASON in its note column (not the narration), so carry the tag there.
   await dialog.getByPlaceholder('कारण लिखें...').fill(`e2e cancel ${tag}`);
+  const cancelled = page.waitForResponse(r => r.url().includes('/rpc/cancel_voucher'), { timeout: 20_000 }).catch(() => null);
   await dialog.getByRole('button', { name: 'रद्द करें' }).click();
+  const res = await cancelled;
+  console.log(`[diag] cancel_voucher response: ${res ? res.status() : 'none (aborted?)'}`);
 
   await expect(page.getByRole('row').filter({ hasText: tag })).toHaveCount(0);   // gone from the active list
 
