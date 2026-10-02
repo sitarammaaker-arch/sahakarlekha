@@ -9,6 +9,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import PublicLayout from '@/components/PublicLayout';
+import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Accordion,
@@ -110,6 +111,12 @@ const TOC_ITEMS = [
 /* ──────────────── Main Component ──────────────── */
 
 const UserGuide: React.FC = () => {
+  // L2: this page had no meta of its own, so it kept the homepage's title and canonical "/" (same as its prerender).
+  useDocumentMeta({
+    title: 'SahakarLekha कैसे चलाएँ? — पूर्ण उपयोग गाइड | सहकार लेखा',
+    description: 'सहकारी समिति के क्लर्क, लेखाकार, प्रबंधक और ऑडिटर के लिए STEP-BY-STEP सरल हिंदी गाइड — बिना किसी ट्रेनिंग के सहकार लेखा सॉफ्टवेयर चलाएँ।',
+    canonicalPath: '/guide/quick-start',
+  });
   return (
     <PublicLayout>
       <div className="mx-auto px-4 py-10 md:py-16 max-w-7xl">

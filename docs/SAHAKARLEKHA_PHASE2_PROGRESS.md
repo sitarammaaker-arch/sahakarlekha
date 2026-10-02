@@ -303,6 +303,20 @@
     - Shared `lib/chunkReload`: at most one reload per 30 s.
     - The old "clear on success" flag would have looped forever when the page chunk loaded and the body chunk failed. A new e2e test caught this: 14 reloads in 8 s. It now asserts exactly 2 loads.
   - New `test:chunk-reload` (6 checks).
+- **L2–L4, public pages + sitemaps:** crawled the live sitemap index, all 8 child sitemaps and all 378 listed URLs (read-only). Every URL returns 200, with no duplicates. Problems found:
+  - **18 sitemap URLs had no static file:** /login, /register, /privacy, /terms, /guide/quick-start, /guide/certificate, /guide/verify and 10 quizzes. Crawlers got the homepage template, with the homepage title and canonical "/". So each of these URLs declared itself a copy of the homepage.
+    - Fix: the sitemap now lists only pages the prerender actually wrote.
+    - The other 16 now get their own head (the same title, description and canonical as their useDocumentMeta) and a short body. Quizzes list their real questions.
+    - /login and /register are out of the sitemap (they are app entry points).
+    - UserGuide had no meta of its own, so it now sets one.
+  - **40 blog posts had no h1** in their static HTML: the markdown has no "# " line. The prerender now mirrors BlogPost, using the post's `title:` as the h1 and stripping the markdown's own heading.
+  - **lastmod in the future:** one post has `updated: 2026-10-04`, and that leaked into the homepage, /blog and two sitemap-index entries. Sitemap lastmod and dateModified are now clamped to the build day.
+  - **5 guide appendices had an empty meta description** (in the client registry too). They now have Hindi summaries that mirror the existing English ones.
+  - `test:dist` now also checks:
+    - every sitemap `<loc>` maps to its own file, canonical and title
+    - no lastmod is in the future
+    - every page has a description and exactly one h1
+  - **Still open, for L8:** 392 blog links point to 262 glossary terms that do not exist (for example trial-balance, reserve-fund, audit, cm-pacs). GlossaryTerm sends these readers to the /glossary index. Because of this, `test:dist` still fails, and it is not in CI yet.
 
 ## Tracked audit findings
 | ID | Area | Status |
