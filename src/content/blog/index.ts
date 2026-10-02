@@ -1235,6 +1235,18 @@ export const BLOG_POSTS: BlogPost[] = [
     tags: ['ERP', 'भविष्य', 'क्लाउड'],
   },
   {
+    slug: 'what-is-voucher-types-uses-accounting-entry',
+    metaTitle: 'वाउचर क्या है? प्रकार, उपयोग और एंट्री का उदाहरण | SahakarLekha',
+    metaDescription: 'वाउचर क्या है, बिल से कैसे अलग, कितने प्रकार (रसीद, भुगतान, जर्नल, कोंट्रा) और कौन-सा कब — हर प्रकार की लेखा-प्रविष्टि के उदाहरण सहित सहकारी समिति गाइड।',
+    date: '2026-10-06',
+    category: 'लेखांकन मूल बातें',
+    title: 'वाउचर क्या है? प्रकार, उपयोग और लेखा-प्रविष्टि का उदाहरण',
+    shortTitle: 'वाउचर क्या है',
+    excerpt: 'बिल सबूत है, वाउचर बही की एंट्री: प्रकार, कौन-सा कब, और हर प्रकार की Dr/Cr एंट्री के उदाहरण।',
+    accent: 'indigo',
+    tags: ['वाउचर', 'वाउचर के प्रकार', 'लेखा-प्रविष्टि', 'Dr/Cr'],
+  },
+  {
     slug: 'voucher-entry-guide',
     metaTitle: 'वाउचर एंट्री कैसे करें — Receipt, Payment, Journal (उदाहरण सहित) | SahakarLekha',
     metaDescription: 'वाउचर कैसे भरें — Receipt, Payment, Journal व Contra; "पैसा आया या गया" से Dr/Cr तय करना, उदाहरण सहित स्टेप-बाय-स्टेप गाइड सहकारी समिति के लिए।',
