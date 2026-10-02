@@ -2064,6 +2064,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         title: '🔁 सीधे edit नहीं / Use reversal',
         description: current.reversedBy
           ? 'यह वाउचर पहले ही reverse हो चुका है — edit नहीं हो सकता।'
+          : current.reversalOf
+          ? 'यह एक reversal वाउचर है — इसे मूल वाउचर के बिल्कुल बराबर रहना चाहिए, edit नहीं हो सकता। गलती हो तो इसे रद्द करके सही reversal/entry करें।'
           : 'Approved voucher सीधे edit नहीं होता — correction के लिए इसे reverse करें (Reversal voucher बनेगा)।',
         variant: 'destructive', duration: 9000,
       });

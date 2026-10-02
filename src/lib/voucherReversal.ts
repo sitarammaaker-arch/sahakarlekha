@@ -11,9 +11,10 @@ export function reverseEntryLines(lines: VoucherLine[]): VoucherLine[] {
 }
 
 /**
- * In-place edit forbidden (correct via reversal instead) when the voucher is already reversed, or is
- * posted-under-control (opt-in maker-checker regime + approved).
+ * In-place edit forbidden (correct via reversal instead) when the voucher is already reversed, IS a
+ * reversal (it must mirror its original exactly — an edited reversal left a pair ₹50,000 apart in
+ * prod), or is posted-under-control (opt-in maker-checker regime + approved).
  */
-export function isEditLocked(v: Pick<Voucher, 'reversedBy' | 'approvalStatus'>, approvalRequired: boolean): boolean {
-  return !!v.reversedBy || (!!approvalRequired && v.approvalStatus === 'approved');
+export function isEditLocked(v: Pick<Voucher, 'reversedBy' | 'approvalStatus'> & { reversalOf?: string }, approvalRequired: boolean): boolean {
+  return !!v.reversedBy || !!v.reversalOf || (!!approvalRequired && v.approvalStatus === 'approved');
 }

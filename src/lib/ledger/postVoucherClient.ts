@@ -99,6 +99,7 @@ const MESSAGES: Record<string, string> = {
   voucher_not_found: 'यह वाउचर cloud पर नहीं मिला — page refresh करें।',
   voucher_cancelled: 'यह वाउचर रद्द हो चुका है — बदला नहीं जा सकता।',
   voucher_reversed: 'यह वाउचर reverse हो चुका है — बदला या रद्द नहीं हो सकता।',
+  voucher_is_reversal: 'यह reversal वाउचर है — मूल वाउचर के बराबर रहना चाहिए, edit नहीं हो सकता।',
   engine_voucher: 'सिस्टम (engine) वाउचर — सुधार केवल reversal से होता है।',
   voucher_in_closed_fy: 'यह वाउचर बंद वित्तीय वर्ष का है — बदला या रद्द नहीं हो सकता।',
   self_approval: 'आप अपना ही बनाया वाउचर approve नहीं कर सकते — कोई दूसरा अधिकारी approve करे।',
