@@ -67,3 +67,14 @@ Implemented, **inert until Phase 1 SQL is applied** (the app detects the table a
 * **#3 Export Center `member` entity — DONE:** `runEntityExport` overlays `member_identity` onto member rows (role-gated; missing table = untouched; real read failure aborts) — covered in `test:export-generator`.
 * **#4 Restore-commit PII routing — NOT DONE, deliberately.** Restore writes `members` rows verbatim from the archive. After Phase 3, restoring an OLD archive (taken before 106) would put PAN/Aadhaar back into `members` columns (readable by every role). A correct fix has to decide, per destination database, whether `member_identity` exists and must be rehearsed with a real restore round-trip on staging (restore is the one path where a mistake leaves a society half-restored). Interim rule: **do not run Phase 3 (blanking) on a society until a post-106 backup exists, and restore only post-106 archives afterwards.**
 * **Phase 3 itself** (blank `members.aadhaar/pan`) remains a separate, explicitly-approved step.
+
+## Phase 3 prerequisite #4 — restore-commit PII routing (branch feat/restore-member-pii)
+`makeRestoreWriter` now routes the member entity through `applyMemberWrites` (`src/lib/restore/rowWriter.ts`):
+1. members the archive's own `member_identity` does not cover → an identity row is derived from the member row and written **first**;
+2. identity write OK → `aadhaar`/`pan` are stripped from the member rows before they are written;
+3. identity table **missing** (un-migrated destination) → LEGACY fallback: members written as archived, nothing lost;
+4. any **other** identity failure → `RestoreWriteError`, and **no member row is written** (no half-restore, no silent PII leak);
+5. a newer archive that already carries `member_identity` → member rows stripped, the `member_identity` entity step restores the PII.
+Covered by `test:restore-member-pii` (19 checks, incl. merge mode and the abort-before-members guarantee). **Not exercised against a real restore round-trip** — the saga needs an authenticated admin session; do one restore rehearsal on staging with a login before Phase 3.
+The interim rule from the previous note is superseded: with this change an old archive no longer re-exposes PII after Phase 3, but still take a post-106 backup before blanking.
+`isMissingTableError` moved to the dependency-free `src/lib/export/missingTable.ts` (re-exported from `source.ts`).
