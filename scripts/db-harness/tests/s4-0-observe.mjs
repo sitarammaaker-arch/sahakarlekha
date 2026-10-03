@@ -5,7 +5,6 @@
 // call posting_service_on. Precondition: harness up (latest dump) with 102 applied. Rolled back.
 //
 // Run: node scripts/db-harness/tests/s4-0-observe.mjs
-// Run: node scripts/db-harness/tests/h-reversal-edit-lock.mjs
 
 import { register } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';

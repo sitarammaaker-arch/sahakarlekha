@@ -60,6 +60,25 @@
   - Regression: s3a/d/e2/f1/f2/f3, 096, 095, b7 and a6 (478) are all green; a7 definer grants 19/19.
 - **Next:** the founder applies 102. After a week, read the notes, then build S4-a, one server function per path seen.
 
+## 2026-10-03: S4-a built (103) — server paths for the remaining flag-ON client writes
+- **103 `s4_server_paths`**, five SECURITY DEFINER functions with the post_voucher contract (role, FY lock, error codes):
+  - `reject_voucher`
+  - `set_voucher_cleared`
+  - `link_voucher_reversal`
+  - `sync_account_opening_event` (the opening delta computed from the DB journal under an advisory lock)
+  - `merge_accounts` (the whole merge in ONE transaction: re-point, reversed + reposted pairs, entries/lines, parties, opening netting, account delete, audit; returns its events)
+- **App (flag ON only):**
+  - reject, clear and unclear use the RPCs.
+  - reverse links via RPC only after `post_voucher` confirms (new `addVoucher` `onPersisted`). This fixes a silent race: in prod, 1 of 2 reversals was never linked.
+  - Account opening, add and delete sync on the server.
+  - mergeAccounts makes one RPC call.
+  - Flag OFF stays unchanged.
+- **Harness:** s4-a-server-paths 41/41, s4-0-observe 13/13; a6/s3*/b7 green earlier with 102.
+- **Pure tests:** new `test:s4a-server-paths` 26/26; `test:b3` updated.
+- **Also fixed:** 102/103 now use `revoke execute` (not `revoke all`) so `test:definer-exec-grants` recognises them. That test went red on main with #678. Prod is unaffected, since for functions `revoke all` = `revoke execute`.
+- **Still open:** row 7, pending (maker-checker) create/edit, still writes directly (3 pending vouchers ever). S4-0 will show whether it is used before S4-b.
+- **Deploy order:** the founder applies 103 BEFORE this PR is merged. Otherwise the new app calls functions that do not exist yet.
+
 ## Roadmap status
 
 ### Phase A — Critical security

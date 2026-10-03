@@ -1750,7 +1750,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // call (post_stock_document). addVoucher builds + applies it optimistically exactly as always, then hands
   // over the voucher, its voucher.posted event and the rollback instead of saving it itself.
   type VoucherPersistWith = (v: Voucher, ev: LedgerEvent, rollback: () => void) => void;
-  const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }, opts?: { persistWith?: VoucherPersistWith }): Voucher => {
+  // opts.onPersisted (S4-a): called once the posting service has made the voucher durable (with its official
+  // number) — for a follow-up server call that needs the row to exist (reverseVoucher's link).
+  const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }, opts?: { persistWith?: VoucherPersistWith; onPersisted?: (v: Voucher) => void }): Voucher => {
     // ECR-06: role gate at the voucher choke point — every composite flow (sale/purchase/salary/
     // loan/reversal) and page funnels through here, so one guard covers every voucher birth.
     if (guardPermission('create', 'वाउचर बनाने')) {
@@ -1979,7 +1981,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               const nv = { ...v, voucherNo: officialNo };
               const nev = { ...ev, payload: { ...(ev.payload as Record<string, unknown>), voucherNo: officialNo } } as LedgerEvent;
               restamp(nv, nev);
-            }
+              opts?.onPersisted?.(nv);
+            } else opts?.onPersisted?.(v);
             return;
           }
           if (isUniqueViolation(error) && tries < MAX_RENUMBER_RETRIES) {
@@ -2624,6 +2627,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Build the contra reversal: swap Dr/Cr (and flip each compound line). addVoucher runs
     // its own FY/period-lock + balance checks and returns id:'' on failure.
     const revLines = current.lines ? reverseEntryLines(current.lines).map(l => ({ ...l, id: crypto.randomUUID() })) : undefined;
+    // S4-a: with the posting service the two links are set by ONE server call (link_voucher_reversal, 103)
+    // AFTER post_voucher has made the reversal durable — the old direct .update() could run before the row
+    // existed and silently link nothing.
+    const viaServer = postingServiceRef.current;
+    const linkOnServer = (rev: Voucher) => {
+      supabase.rpc('link_voucher_reversal', { p_original_id: id, p_reversal_id: rev.id }).then(({ error }) => {
+        if (!error) return;
+        reportError('voucher-reversal-link', error.message, { voucherId: rev.id, originalId: id });
+        toastRef.current({ title: '⚠ Reversal पोस्ट हुआ, पर जोड़ (link) सेव नहीं हुआ', description: `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)} — दोनों entries ledger में सही हैं; दोबारा reverse न करें, admin को बताएँ।`, variant: 'destructive', duration: 15000 });
+      }, (e: unknown) => reportError('voucher-reversal-link', e instanceof Error ? e.message : String(e), { voucherId: rev.id, originalId: id }));
+    };
     const reversal = addVoucher({
       type: current.type,
       date: revDate,
@@ -2634,7 +2648,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       memberId: current.memberId,
       lines: revLines,
       createdBy: user?.name ?? 'System', // every other addVoucher call sets this; the reversal was left without a creator
-    });
+    }, viaServer ? { onPersisted: linkOnServer } : undefined);
     if (!reversal?.id) return null; // addVoucher blocked (FY-lock / unbalanced / etc.)
 
     // Link both sides. reversalOf/reversedBy are late-added columns → targeted best-effort
@@ -2643,12 +2657,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const linkedOriginal = { ...current, reversedBy: reversal.id };
     vouchersRef.current = vouchersRef.current.map(v => v.id === reversal.id ? linkedReversal : v.id === id ? linkedOriginal : v);
     setVouchersState(prev => prev.map(v => v.id === reversal.id ? linkedReversal : v.id === id ? linkedOriginal : v));
-    supabase.from('vouchers').update({ reversalOf: current.id }).eq('id', reversal.id).then(({ error }) => {
-      if (error) reportError('voucher-reversal-link', error.message, { voucherId: reversal.id, field: 'reversalOf' });
-    });
-    supabase.from('vouchers').update({ reversedBy: reversal.id }).eq('id', id).then(({ error }) => {
-      if (error) reportError('voucher-reversal-link', error.message, { voucherId: id, field: 'reversedBy' });
-    });
+    if (!viaServer) {
+      supabase.from('vouchers').update({ reversalOf: current.id }).eq('id', reversal.id).then(({ error }) => {
+        if (error) reportError('voucher-reversal-link', error.message, { voucherId: reversal.id, field: 'reversalOf' });
+      });
+      supabase.from('vouchers').update({ reversedBy: reversal.id }).eq('id', id).then(({ error }) => {
+        if (error) reportError('voucher-reversal-link', error.message, { voucherId: id, field: 'reversedBy' });
+      });
+    }
     emitAudit({ entityType: 'voucher', entityId: id, action: 'reverse', before: { reversedBy: null }, after: { reversedBy: reversal.id }, reason });
     toastRef.current({ title: '🔁 Reversal बन गया', description: `${current.voucherNo} के लिए reversal ${reversal.voucherNo} पोस्ट हो गया। दोनों entries ledger में दिखेंगी (net zero)।`, variant: 'default', duration: 8000 });
     return reversal;
@@ -2688,8 +2704,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const cleared = { ...current, isCleared: true, clearedDate: clearedDate ?? new Date().toISOString().split('T')[0] };
     setVouchersState(prev => { const updated = prev.map(v => v.id === id ? cleared : v); return updated; });
     // Only the two changed columns — re-upserting the whole client copy could overwrite server-owned
-    // fields (e.g. a server-assigned number) with a stale local copy (B3).
-    supabase.from('vouchers').update({ isCleared: true, clearedDate: cleared.clearedDate }).eq('id', id).then(({ error }) => {
+    // fields (e.g. a server-assigned number) with a stale local copy (B3). S4-a: via the server when ON.
+    const write = postingServiceRef.current
+      ? supabase.rpc('set_voucher_cleared', { p_id: id, p_cleared: true, p_cleared_date: cleared.clearedDate })
+      : supabase.from('vouchers').update({ isCleared: true, clearedDate: cleared.clearedDate }).eq('id', id);
+    write.then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
@@ -2704,7 +2723,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!current) return;
     const uncleared = { ...current, isCleared: false, clearedDate: undefined };
     setVouchersState(prev => { const updated = prev.map(v => v.id === id ? uncleared : v); return updated; });
-    supabase.from('vouchers').update({ isCleared: false, clearedDate: null }).eq('id', id).then(({ error }) => {
+    const write = postingServiceRef.current
+      ? supabase.rpc('set_voucher_cleared', { p_id: id, p_cleared: false, p_cleared_date: null })
+      : supabase.from('vouchers').update({ isCleared: false, clearedDate: null }).eq('id', id);
+    write.then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
@@ -2783,6 +2805,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updated = { ...current, approvalStatus: 'rejected' as const, approvalRemarks: reason, approvedBy: rejectedBy, approvedAt: new Date().toISOString() };
     emitAudit({ entityType: 'voucher', entityId: id, action: 'reject', before: { approvalStatus: current.approvalStatus ?? null }, after: { approvalStatus: 'rejected' }, reason });
     setVouchersState(prev => { const u = prev.map(v => v.id === id ? updated : v); return u; });
+    // S4-a: with the posting service, ONE server call (reject_voucher, 103) flips the status AND removes the
+    // voucher_entries in one transaction.
+    if (postingServiceRef.current) {
+      const undoReject = (msg: string) => {
+        reportError('voucher-reject-post-service', msg, { voucherId: id });
+        setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
+        toastRef.current({ title: 'रिजेक्ट सेव नहीं हुआ', description: `${msg}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 15000 });
+      };
+      supabase.rpc('reject_voucher', { p_id: id, p_reason: reason, p_rejected_by: rejectedBy }).then(({ error }) => {
+        if (error) undoReject(postVoucherMessage(postVoucherErrorCode(error.message), error.message));
+      }, (e: unknown) => undoReject(`Network error — ${e instanceof Error ? e.message : String(e)}`));
+      return true;
+    }
     supabase.from('vouchers').update({ approvalStatus: 'rejected', approvalRemarks: reason, approvedBy: rejectedBy, approvedAt: updated.approvedAt }).eq('id', id).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
@@ -3910,12 +3945,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       );
     } catch { return null; } // best-effort — never affects the account save
   };
+  // S4-a · posting service ON: the account.opening delta is computed and appended by the SERVER from the DB
+  // journal (sync_account_opening_event, 103) — no client journal write, and no dependence on the in-memory
+  // journal being fully loaded. target 0 = the account was deleted (net its journal opening to zero).
+  const syncOpeningOnServer = (accountId: string, targetMinor?: number) => {
+    supabase.rpc('sync_account_opening_event', { p_account_id: accountId, p_target_minor: targetMinor ?? null }).then(({ data, error }) => {
+      if (error) {
+        reportError('account-opening-post-service', error.message, { accountId });
+        toastRef.current({ title: '⚠ खाता सेव हुआ, पर opening बही (journal) में नहीं गई', description: `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)} — opening दोबारा सेव करें; न हो तो admin को बताएँ।`, variant: 'destructive', duration: 15000 });
+        return;
+      }
+      const evs = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
+      if (evs.length) ledgerEventsRef.current = [...ledgerEventsRef.current, ...evs];
+    }, (e: unknown) => reportError('account-opening-post-service', e instanceof Error ? e.message : String(e), { accountId }));
+  };
 
   const addAccount = useCallback((data: Omit<LedgerAccount, 'id'>): LedgerAccount => {
     if (guardFYLocked()) return { ...data, id: '' } as LedgerAccount;
     const newAccount: LedgerAccount = { ...data, id: crypto.randomUUID() };
     setAccountsState(prev => [...prev, newAccount]);
-    const openingEvent = buildOpeningDelta(newAccount);
+    const openingViaServer = postingServiceRef.current;
+    const openingEvent = openingViaServer ? null : buildOpeningDelta(newAccount);
     if (openingEvent) ledgerEventsRef.current = [...ledgerEventsRef.current, openingEvent];
     supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => {
       if (error) {   // RULE 1: roll back so a failed cloud save can't silently diverge on F5
@@ -3924,6 +3974,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (openingEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== openingEvent.eventId);
         toastRef.current({ title: 'खाता सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
       } else if (openingEvent) persistLedgerEvent(openingEvent);
+      else if (openingViaServer && (Number(newAccount.openingBalance) || 0) !== 0) syncOpeningOnServer(newAccount.id);
     });
     return newAccount;
   }, []);
@@ -3953,7 +4004,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const before = prev.find(a => a.id === id);
       const updated = prev.map(a => a.id === id ? { ...a, ...data } : a);
       const updatedAccount = updated.find(a => a.id === id);
-      const openingEvent = updatedAccount && before ? buildOpeningDelta(updatedAccount) : null;
+      const openingViaServer = postingServiceRef.current;
+      const openingTouched = 'openingBalance' in data || 'openingBalanceType' in data;
+      const openingEvent = updatedAccount && before && !openingViaServer ? buildOpeningDelta(updatedAccount) : null;
       if (openingEvent) ledgerEventsRef.current = [...ledgerEventsRef.current, openingEvent];
       if (updatedAccount && before) {
         // A field CLEARED by the edit (undefined, e.g. "Group" unticked or parent removed) is dropped by
@@ -3972,6 +4025,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return;
           }
           if (openingEvent) persistLedgerEvent(openingEvent);
+          else if (openingViaServer && openingTouched) syncOpeningOnServer(id);
           // Chart edits were never audited, so a ledger flipped to group left no trace of who/when.
           const changed = (Object.keys(data) as (keyof LedgerAccount)[]).filter(k => before[k] !== updatedAccount[k]);
           if (changed.length) emitAudit({
@@ -4044,11 +4098,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAccountsState(prev => prev.filter(a => a.id !== id));
     // T-09: net the account's journal opening to zero — a deleted account's opening events would
     // otherwise keep its old balance in the journal and break parity permanently.
-    const zeroEvent = buildOpeningDelta({ ...account, openingBalance: 0 });
+    const zeroViaServer = postingServiceRef.current;
+    const zeroEvent = zeroViaServer ? null : buildOpeningDelta({ ...account, openingBalance: 0 });
     if (zeroEvent) ledgerEventsRef.current = [...ledgerEventsRef.current, zeroEvent];
     deleteAccountRow(account, {
       context: 'account-delete',
-      onSuccess: () => { if (zeroEvent) persistLedgerEvent(zeroEvent); },
+      onSuccess: () => { if (zeroEvent) persistLedgerEvent(zeroEvent); else if (zeroViaServer) syncOpeningOnServer(id, 0); },
       onFail: () => { if (zeroEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== zeroEvent.eventId); },
     });
     // H11: was console-only — a deleted ledger left no durable trail.
@@ -4112,6 +4167,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     const liveMoving = vouchersRef.current.filter(v => !v.isDeleted && repointVoucher(v, keepId, removeId));
     if (guardPeriodLock(...liveMoving.map(v => v.date))) return null;   // ECR-07: no re-point inside a locked period
+    // S4-a · posting service ON: the WHOLE merge is one server transaction (merge_accounts, 103) — re-point,
+    // journal reversed + reposted pairs, voucher_entries/voucher_lines, parties, opening netting, account
+    // delete and the audit row. Nothing is half-applied, so there is no client compensation to run.
+    if (postingServiceRef.current) {
+      const res = await supabase.rpc('merge_accounts', { p_keep: keepId, p_remove: removeId, p_by: userRef.current?.name ?? null })
+        .then((r) => r, (e: unknown) => ({ data: null, error: { message: `Network error — ${e instanceof Error ? e.message : String(e)}` } }));
+      if (res.error) {
+        reportError('merge-accounts-post-service', res.error.message, { keepId, removeId });
+        return block(postVoucherMessage(postVoucherErrorCode(res.error.message), res.error.message));
+      }
+      const r = (res.data ?? {}) as { moved?: number; journaled?: number; accountDeleted?: boolean; events?: Record<string, unknown>[] };
+      const repointed = vouchersRef.current.map(v => repointVoucher(v, keepId, removeId) ?? v);
+      vouchersRef.current = repointed;
+      setVouchersState(repointed);
+      if (suppliersRef.current.some(x => x.accountId === removeId)) {
+        suppliersRef.current = suppliersRef.current.map(x => x.accountId === removeId ? { ...x, accountId: keepId } : x);
+        setSuppliersState(suppliersRef.current);
+      }
+      if (customersRef.current.some(x => x.accountId === removeId)) {
+        customersRef.current = customersRef.current.map(x => x.accountId === removeId ? { ...x, accountId: keepId } : x);
+        setCustomersState(customersRef.current);
+      }
+      const evs = mapLedgerEventRows(r.events ?? []);
+      if (evs.length) ledgerEventsRef.current = [...ledgerEventsRef.current, ...evs];
+      if (r.accountDeleted) setAccountsState(prev => prev.filter(a => a.id !== removeId));
+      else toastRef.current({ title: 'Merge हो गया, पर पुराना खाता नहीं मिटा', description: `"${remove.name}" अभी किसी और जगह (जैसे account role) से जुड़ा है — उसे हटाकर यह खाता हाथ से delete करें।`, variant: 'destructive', duration: 12000 });
+      return { moved: r.moved ?? 0, journaled: r.journaled ?? 0, accountDeleted: !!r.accountDeleted };
+    }
     // Sequences come from the in-memory journal — without the FULL log they would collide on the WORM
     // index and the postings would silently stay on removeId. Fail closed.
     if (!journalLoadedRef.current && liveMoving.some(v => v.approvalStatus !== 'pending')) {
