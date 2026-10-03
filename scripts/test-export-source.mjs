@@ -67,7 +67,7 @@ try {
   console.error('        ' + String(e?.message ?? e).split('\n')[0]);
   process.exit(1);
 }
-const { fetchEntityRows, orderColumns, assertReadable, EntityNotReadableError, PAGE_SIZE, DEFAULT_MAX_ROWS } = src;
+const { isMissingTableError, fetchEntityRows, orderColumns, assertReadable, EntityNotReadableError, PAGE_SIZE, DEFAULT_MAX_ROWS } = src;
 const { getEntity } = reg;
 
 let pass = 0, fail = 0;
@@ -179,6 +179,25 @@ c = fakeClient(5, { error: 'permission denied' });
 res = await fetchEntityRows(member, 'SOC-A', { client: c });
 ok(res.error === 'permission denied', 'a read failure returns the error');
 ok(res.rows.length === 0 && res.truncated === false, 'a failed read yields no rows and no false truncation claim');
+
+// ── optionalTable: a table not migrated yet must not fail the backup (member_identity, migration 106) ──
+const identity = getEntity('member_identity');
+ok(identity && identity.optionalTable === true && identity.backupPolicy === 'full', 'member_identity is a full-backup entity flagged optionalTable');
+const missingMsg = "Could not find the table 'public.member_identity' in the schema cache";
+ok(isMissingTableError(missingMsg, 'member_identity'), 'schema-cache message for the table is recognised');
+ok(isMissingTableError('relation "public.member_identity" does not exist', 'member_identity'), 'does-not-exist message is recognised');
+ok(!isMissingTableError(missingMsg, 'members'), 'a missing-table message for ANOTHER table never matches');
+ok(!isMissingTableError('permission denied for table member_identity', 'member_identity'), 'permission denied is NOT treated as missing');
+ok(!isMissingTableError(null, 'member_identity'), 'null is not missing');
+res = await fetchEntityRows(identity, 'SOC-A', { client: fakeClient(0, { error: missingMsg }) });
+ok(res.error === null && res.rows.length === 0 && res.truncated === false, 'missing optional table => empty, complete, no error (backup keeps working pre-migration)');
+res = await fetchEntityRows(identity, 'SOC-A', { client: fakeClient(0, { error: 'permission denied' }) });
+ok(res.error === 'permission denied', 'any OTHER error on the optional table still aborts');
+res = await fetchEntityRows(member, 'SOC-A', { client: fakeClient(0, { error: "Could not find the table 'public.members' in the schema cache" }) });
+ok(res.error !== null, 'a normal (non-optional) entity with a missing table still FAILS the read');
+res = await fetchEntityRows(identity, 'SOC-A', { client: fakeClient(3) });
+ok(res.rows.length === 3 && res.error === null, 'when the table exists its rows are read normally');
+
 
 console.log(`\nExport source (pure + wired): ${pass} passed, ${fail} failed`);
 process.exitCode = fail > 0 ? 1 : 0;

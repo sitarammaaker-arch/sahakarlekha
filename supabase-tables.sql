@@ -3534,3 +3534,15 @@ create unique index if not exists loan_interest_accruals_one_live
   on loan_interest_accruals (society_id, "loanId", "periodFrom", "periodTo") where not "isDeleted";
 create index if not exists loan_interest_accruals_loan_idx on loan_interest_accruals (society_id, "loanId");
 alter table loan_interest_accruals enable row level security;
+
+-- ── member_identity: PAN / Aadhaar split out of members (migration 106; design:
+--    docs/reports-audit/design/MEMBER-PII-ROLE-SCOPED-READ.md). RLS: jwt_can_read_pii() roles only. ──
+create table if not exists member_identity (
+  society_id  text not null,
+  member_id   text not null,
+  aadhaar     text,
+  pan         text,
+  updated_at  timestamptz not null default now(),
+  primary key (society_id, member_id)
+);
+alter table member_identity enable row level security;

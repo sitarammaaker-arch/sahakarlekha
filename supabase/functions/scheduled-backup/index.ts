@@ -94,10 +94,19 @@ type FetchResult = { rows: any[]; truncated: boolean; fetched: number; error: st
 
 /** Faithful port of src/lib/export/source.ts fetchEntityRows — society-scoped, paginated,
  *  ordered by the natural key, and REFUSING (truncated:true) rather than silently capping. */
+/** Same rule as src/lib/export/source.ts isMissingTableError — keep the two in step. */
+function isMissingTableError(message: string | null | undefined, table: string): boolean {
+  const m = (message || '').toLowerCase();
+  return m.includes(table.toLowerCase()) && (m.includes('does not exist') || m.includes('schema cache') || m.includes('could not find'));
+}
+
 async function readEntity(supabase: any, entity: any, societyId: string): Promise<FetchResult> {
   const order: string[] = entity.naturalKey ?? [];
   const rows: any[] = [];
   let from = 0;
+  // optionalTable (e.g. member_identity before migration 106): a missing table is an empty table, not a failed backup.
+  const missingOk = (err: string | null) => !!entity.optionalTable && isMissingTableError(err, entity.table);
+  const empty: FetchResult = { rows: [], truncated: false, fetched: 0, error: null };
 
   const readPage = async (a: number, b: number) => {
     let q = supabase.from(entity.table).select('*').eq('society_id', societyId);
@@ -110,12 +119,12 @@ async function readEntity(supabase: any, entity: any, societyId: string): Promis
     const remaining = MAX_ROWS - rows.length;
     if (remaining <= 0) {
       const probe = await readPage(MAX_ROWS, MAX_ROWS);
-      if (probe.error) return { rows, truncated: true, fetched: rows.length, error: probe.error };
+      if (probe.error) return missingOk(probe.error) ? empty : { rows, truncated: true, fetched: rows.length, error: probe.error };
       return { rows, truncated: probe.data.length > 0, fetched: rows.length, error: null };
     }
     const size = Math.min(PAGE, remaining);
     const page = await readPage(from, from + size - 1);
-    if (page.error) return { rows, truncated: false, fetched: rows.length, error: page.error };
+    if (page.error) return missingOk(page.error) ? empty : { rows, truncated: false, fetched: rows.length, error: page.error };
     rows.push(...page.data);
     if (page.data.length < size) return { rows, truncated: false, fetched: rows.length, error: null };
     from += size;

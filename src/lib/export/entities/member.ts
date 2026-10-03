@@ -27,6 +27,33 @@ const money = (key: string, header: string, headerHi: string, over: Partial<Colu
 const internal = (key: string, header: string, headerHi: string, over: Partial<ColumnDescriptor> = {}): ColumnDescriptor =>
   c(key, header, headerHi, { defaultVisible: false, ...over });
 
+// ─── member_identity ─────────────────────────────────────────────────────────────────
+// PAN / Aadhaar split out of `members` (docs/reports-audit/design/MEMBER-PII-ROLE-SCOPED-READ.md).
+// minRole admin: the table's own RLS (jwt_can_read_pii) is stricter than viewer. optionalTable: the
+// table is created by a hand-run migration, so a backup taken before it exists must not fail.
+// Phase 3 blanks members.aadhaar/pan — this entity is what keeps that PII inside the backup.
+const memberIdentity: EntityDescriptor = {
+  key: 'member_identity',
+  table: 'member_identity',
+  domain: 'member',
+  label: 'Member identity (PAN / Aadhaar)',
+  labelHi: 'सदस्य पहचान (पैन / आधार)',
+  minRole: 'admin',
+  scope: 'society',
+  nature: 'master',
+  dependsOn: ['member'],
+  naturalKey: ['member_id'],
+  formats: ['csv', 'xlsx', 'json'],
+  backupPolicy: 'full',
+  optionalTable: true,
+  columns: [
+    c('member_id', 'Member ID', 'सदस्य आईडी'),
+    c('pan', 'PAN', 'पैन', { piiClass: 'identity' }),
+    c('aadhaar', 'Aadhaar', 'आधार', { piiClass: 'identity' }),
+    c('updated_at', 'Updated At', 'अद्यतन समय', { type: 'date', defaultVisible: false }),
+  ],
+};
+
 // ─── members ─────────────────────────────────────────────────────────────────────────
 // Soft-deleted (RULE 5). minRole is 'viewer' because a viewer may export the register;
 // the PII columns below are what gate unredacted output (enforced by the generator, T-14).
@@ -85,4 +112,4 @@ const member: EntityDescriptor = {
   ],
 };
 
-export const MEMBER_ENTITIES: EntityDescriptor[] = [member];
+export const MEMBER_ENTITIES: EntityDescriptor[] = [member, memberIdentity];

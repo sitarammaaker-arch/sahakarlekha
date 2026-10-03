@@ -103,6 +103,8 @@ export async function fetchEntityRows(
 
   const rows: SourceRow[] = [];
   let from = 0;
+  // optionalTable: a table not migrated yet is an empty table, not a failed backup.
+  const missingOk = (err: string | null) => !!entity.optionalTable && isMissingTableError(err, entity.table);
 
   for (;;) {
     const remaining = maxRows - rows.length;
@@ -112,13 +114,13 @@ export async function fetchEntityRows(
       // offset `maxRows`. A table holding EXACTLY maxRows rows is complete, not
       // truncated — reporting it as truncated would refuse a perfectly valid export.
       const probe = await readPage(client, entity.table, societyId, order, maxRows, maxRows);
-      if (probe.error) return { rows, truncated: true, fetched: rows.length, error: probe.error };
+      if (probe.error) return missingOk(probe.error) ? { rows: [], truncated: false, fetched: 0, error: null } : { rows, truncated: true, fetched: rows.length, error: probe.error };
       return { rows, truncated: probe.data.length > 0, fetched: rows.length, error: null };
     }
 
     const size = Math.min(PAGE_SIZE, remaining);
     const page = await readPage(client, entity.table, societyId, order, from, from + size - 1);
-    if (page.error) return { rows, truncated: false, fetched: rows.length, error: page.error };
+    if (page.error) return missingOk(page.error) ? { rows: [], truncated: false, fetched: 0, error: null } : { rows, truncated: false, fetched: rows.length, error: page.error };
 
     rows.push(...page.data);
     if (page.data.length < size) {
@@ -126,6 +128,13 @@ export async function fetchEntityRows(
     }
     from += size;
   }
+}
+
+/** PURE — is this PostgREST/Postgres message "that table does not exist (yet)"? Names the table, so an unrelated error never matches. */
+export function isMissingTableError(message: string | null | undefined, table: string): boolean {
+  const m = (message || '').toLowerCase();
+  const t = table.toLowerCase();
+  return m.includes(t) && (m.includes('does not exist') || m.includes('schema cache') || m.includes('could not find'));
 }
 
 async function readPage(
