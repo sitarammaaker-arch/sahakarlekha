@@ -83,7 +83,9 @@ const EntityExportButton: React.FC<Props> = ({
           entityKey,
           format,
           mode: 'standard',
-          filenameBase: `${entityKey}-${society.financialYear}`,
+          // D-12: this exports the WHOLE table (all years, all branches) — name and label it so, never as the current FY.
+          filenameBase: `${entityKey}-all-years-${new Date().toISOString().slice(0, 10)}`,
+          filters: { scope: 'all financial years, all branches' },
         },
         {
           societyId: user!.societyId,
@@ -93,7 +95,7 @@ const EntityExportButton: React.FC<Props> = ({
           meta: {
             societyName: society.name,
             registrationNo: society.registrationNo,
-            financialYear: society.financialYear,
+            financialYear: `All years (exported during FY ${society.financialYear})`,
             generatedBy: user!.name,
             mode: 'standard',
           },

@@ -17,12 +17,13 @@ import { Plus, Building2, Download, CreditCard, FileSpreadsheet } from 'lucide-r
 import { useToast } from '@/hooks/use-toast';
 import { generateBankBookPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
+import { bookWindow } from '@/lib/reports/bookWindow';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const BankBook: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { accounts, addVoucher, addAccount, getBankBookEntries, getAccountBalance, society } = useData();
+  const { accounts, addVoucher, addAccount, getBankBookEntries, society, matchesActiveBranch } = useData();
   const { toast } = useToast();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -41,9 +42,11 @@ const BankBook: React.FC = () => {
   const activeBankId = selectedBank || bankIds[0] || ACCOUNT_IDS.BANK;
 
   const bankAccount = accounts.find(a => a.id === activeBankId);
-  const openingBalance = bankAccount?.openingBalance || 0;
-  const entries = getBankBookEntries(undefined, undefined, activeBankId);
-  const bankBalance = getAccountBalance(activeBankId);
+  // A-05: account opening belongs to Head Office; a branch view must not show it. Closing = last
+  // running balance of the book (ties to the book, not to a separate all-time lookup).
+  const accountOpening = matchesActiveBranch(undefined) ? (bankAccount?.openingBalance || 0) : 0;
+  const { opening: openingBalance, closing: bankBalance, window: entries } = bookWindow(
+    getBankBookEntries(undefined, undefined, activeBankId), undefined, accountOpening);
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);

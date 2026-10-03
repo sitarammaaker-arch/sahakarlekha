@@ -148,7 +148,9 @@ const ExportCenter: React.FC = () => {
           format,
           mode,
           columns: chosenColumns ?? undefined,
-          filenameBase: `${selected.key}-${society.financialYear}`,
+          // D-12: this exports the WHOLE table (all years, all branches) — name and label it so, never as the current FY.
+          filenameBase: `${selected.key}-all-years-${new Date().toISOString().slice(0, 10)}`,
+          filters: { scope: 'all financial years, all branches' },
         },
         {
           societyId: user.societyId,
@@ -158,7 +160,7 @@ const ExportCenter: React.FC = () => {
           meta: {
             societyName: society.name,
             registrationNo: society.registrationNo,
-            financialYear: society.financialYear,
+            financialYear: `All years (exported during FY ${society.financialYear})`,
             generatedBy: user.name,
             mode,
           },

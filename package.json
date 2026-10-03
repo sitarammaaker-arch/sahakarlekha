@@ -261,6 +261,8 @@
     "test:drift": "node scripts/test-schema-drift.mjs",
     "test:export-utils": "node scripts/test-export-utils.mjs",
     "test:export-hardening": "node scripts/test-export-hardening.mjs",
+    "test:book-window": "node scripts/test-book-window.mjs",
+    "test:bank-clearing": "node scripts/test-bank-clearing.mjs",
     "test:counted-voucher": "node scripts/test-counted-voucher.mjs",
     "test:pdf-fit": "node scripts/test-pdf-fit.mjs",
     "test:gst-pos": "node scripts/test-gst-pos.mjs",
