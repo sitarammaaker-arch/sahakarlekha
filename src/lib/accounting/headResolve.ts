@@ -18,6 +18,8 @@ export type HeadAccount = Pick<LedgerAccount, 'id' | 'name' | 'nameHi' | 'type' 
 
 export const FD_ACCOUNT_ID = '2108';
 export const PT_ACCOUNT_ID = '2207';
+export const TDS_PAYABLE_ACCOUNT_ID = '2202';
+export const PENALTY_ACCOUNT_ID = '5605';
 
 const text = (a: HeadAccount) => `${a.name} ${a.nameHi ?? ''}`.toLowerCase();
 
@@ -28,10 +30,18 @@ const FD_EXCLUDE = /maintenance|रखरखाव|security|सुरक्ष�
 const PT_NAME = /professional tax|profession tax|व्यावसायिक कर|व्यवसाय कर/;
 const PT_EXCLUDE = /property|municipal|संपत्ति|नगरपालिका/;
 
-const isLiabilityLeaf = (a: HeadAccount) => !a.isGroup && a.type === 'liability';
+/** TDS Payable (the liability the society owes the tax department) — not the TDS/TCS *receivable* asset. */
+const TDS_NAME = /\btds\b|tax deducted|टीडीएस|स्रोत पर कर/;
+const TDS_EXCLUDE = /receivable|प्राप्य|\btcs\b/;
+/** Penalty / fine / late-charge expense — where interest and fees on a late tax deposit are booked. */
+const PENALTY_NAME = /penalt|\bfine\b|late fee|दंड|जुर्माना/;
+const NO_EXCLUDE = /(?!)/;
 
-function resolve(accounts: ReadonlyArray<HeadAccount>, id: string, include: RegExp, exclude: RegExp): string | null {
-  const meets = (a: HeadAccount) => isLiabilityLeaf(a) && include.test(text(a)) && !exclude.test(text(a));
+type Leaf = 'liability' | 'expense';
+const isLeaf = (a: HeadAccount, type: Leaf) => !a.isGroup && a.type === type;
+
+function resolve(accounts: ReadonlyArray<HeadAccount>, id: string, include: RegExp, exclude: RegExp, type: Leaf = 'liability'): string | null {
+  const meets = (a: HeadAccount) => isLeaf(a, type) && include.test(text(a)) && !exclude.test(text(a));
   const exact = accounts.find((a) => a.id === id);
   if (exact && meets(exact)) return exact.id;
   const byName = accounts.filter(meets).sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))[0];
@@ -48,6 +58,16 @@ export function professionalTaxAccountId(accounts: ReadonlyArray<HeadAccount>): 
   return resolve(accounts, PT_ACCOUNT_ID, PT_NAME, PT_EXCLUDE);
 }
 
+/** Liability head for tax deducted at source that is owed to the tax department, or null when the chart has none. */
+export function tdsPayableAccountId(accounts: ReadonlyArray<HeadAccount>): string | null {
+  return resolve(accounts, TDS_PAYABLE_ACCOUNT_ID, TDS_NAME, TDS_EXCLUDE);
+}
+
+/** Expense head for penalties / fines / late charges (interest and fees on a late TDS deposit), or null. */
+export function penaltyAccountId(accounts: ReadonlyArray<HeadAccount>): string | null {
+  return resolve(accounts, PENALTY_ACCOUNT_ID, PENALTY_NAME, NO_EXCLUDE, 'expense');
+}
+
 /** What the user is told when a head cannot be resolved (Hindi-first, RULE 7). Nothing is posted in that case. */
 export const MISSING_HEAD_TOAST = {
   fd: {
@@ -57,6 +77,14 @@ export const MISSING_HEAD_TOAST = {
   pt: {
     title: 'वेतन सेव नहीं हुआ',
     description: "Professional Tax काटा गया है, पर चार्ट में 'Professional Tax Payable' (देयता) खाता नहीं है (2207 यहाँ किसी और अर्थ में है)। Ledger Heads में वह खाता जोड़ें, फिर वेतन दोबारा बनाएँ।",
+  },
+  tds: {
+    title: 'देय TDS का खाता नहीं मिला',
+    description: "इस सोसाइटी के चार्ट में 'TDS Payable' (देयता) खाता नहीं है। Ledger Heads में यह खाता जोड़ें, फिर चालान दोबारा जोड़ें। कोई वाउचर नहीं बना।",
+  },
+  penalty: {
+    title: 'दंड / ब्याज का व्यय-खाता नहीं मिला',
+    description: "चालान में ब्याज या अन्य शुल्क है, पर चार्ट में 'Penalty / Fine' (व्यय) खाता नहीं है। Ledger Heads में वह खाता जोड़ें, या ब्याज/शुल्क शून्य रखें। कोई वाउचर नहीं बना।",
   },
   deposit: {
     title: 'जमा का देयता खाता नहीं मिला',

@@ -26,6 +26,9 @@ import { applyPercent, toMinor, toRupees } from '@/lib/money';
 import type { TdsEntry, TdsChallan, TdsChallanLink, TdsSection, TdsDeducteeType, TdsQuarter } from '@/types';
 import { resolveSectionRef, describeSectionRef, isAct2025 } from '@/lib/rules/tdsSections';
 import { reportError } from '@/lib/errorReporting';
+import { buildChallanPosting, CHALLAN_REF_TYPE, CHALLAN_POSTING_MESSAGE } from '@/lib/tax/challanPosting';
+import { tdsPayableAccountId, penaltyAccountId, MISSING_HEAD_TOAST } from '@/lib/accounting/headResolve';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -79,13 +82,13 @@ const EMPTY_CHALLAN = (): Omit<TdsChallan, 'id' | 'createdAt'> => ({
   bankName: '',
   quarter: getQuarterFromDate(new Date().toISOString().split('T')[0]),
   financialYear: '',
-  status: 'pending',
+  status: 'paid',   // a challan number / BSR code exists only once the tax is deposited
 });
 
 const TdsRegister: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { purchases: allPurchases, suppliers, society, matchesActiveBranch, salaryRecords: allSalaryRecords, employees } = useData();
+  const { purchases: allPurchases, suppliers, society, matchesActiveBranch, salaryRecords: allSalaryRecords, employees, accounts, vouchers, addVoucher, cancelVoucher } = useData();
   // ECR-17: honour the active branch (same rule as GstSummary / the registers).
   const purchases = useMemo(() => allPurchases.filter(p => matchesActiveBranch(p.branchId)), [allPurchases, matchesActiveBranch]);
   /* Salary is NOT branch-scoped — `SalaryRecord` has no branchId (verified, not assumed:
@@ -123,6 +126,13 @@ const TdsRegister: React.FC = () => {
   const [showAddChallan, setShowAddChallan] = useState(false);
   const [entryForm, setEntryForm] = useState(EMPTY_ENTRY());
   const [challanForm, setChallanForm] = useState(EMPTY_CHALLAN());
+  // Ledger voucher for a PAID challan (Dr TDS Payable [+ Dr penalty] / Cr Bank). Kept apart from the challan row, which has no
+  // columns for these: the amounts live in the voucher, which is linked back through refType/refId.
+  const [postChallanVoucher, setPostChallanVoucher] = useState(true);
+  const [challanBankId, setChallanBankId] = useState('');
+  const [challanInterest, setChallanInterest] = useState(0);
+  const [challanOther, setChallanOther] = useState(0);
+  const bankAccounts = useMemo(() => storage.getBankAccountIds(accounts).map(id => accounts.find(a => a.id === id)).filter((a): a is NonNullable<typeof a> => !!a), [accounts]);
 
   // Auto-import from purchases with TDS
   const purchaseTdsEntries = useMemo((): TdsEntry[] => {
@@ -270,12 +280,38 @@ const TdsRegister: React.FC = () => {
     });
   };
 
-  // Add challan
+  // Add challan. A PAID challan also posts its ledger voucher (Dr TDS Payable [+ Dr penalty] / Cr Bank), so the liability that
+  // deducting TDS created actually comes down. Order: the voucher first (its guards — FY / period lock — decide), the challan row
+  // second, and a failed cloud save of the row cancels the voucher again (RULE 1).
   const handleAddChallan = () => {
     if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', description: hi ? 'ऑडिट-लॉक होने पर जोड़ नहीं सकते।' : 'Cannot add while FY is audit-locked.', variant: 'destructive' }); return; }
+    const challanId = crypto.randomUUID();
+    let voucherId: string | undefined;
+    if (challanForm.status === 'paid' && postChallanVoucher) {
+      const tdsHead = tdsPayableAccountId(accounts);
+      if (!tdsHead) { toast({ ...MISSING_HEAD_TOAST.tds, variant: 'destructive', duration: 12000 }); return; }
+      const built = buildChallanPosting({
+        amount: challanForm.amount, interestAmount: challanInterest, otherAmount: challanOther,
+        bankAccountId: challanBankId || bankAccounts[0]?.id, tdsPayableId: tdsHead, penaltyId: penaltyAccountId(accounts),
+      });
+      if (built.ok === false) {   // explicit: the app's tsconfig is not strict, so `!built.ok` would not narrow the union
+        if (built.error === 'no_penalty_head') toast({ ...MISSING_HEAD_TOAST.penalty, variant: 'destructive', duration: 12000 });
+        else if (built.error === 'no_tds_head') toast({ ...MISSING_HEAD_TOAST.tds, variant: 'destructive', duration: 12000 });
+        else toast({ title: hi ? 'चालान वाउचर नहीं बना' : 'Challan voucher not created', description: CHALLAN_POSTING_MESSAGE[built.error], variant: 'destructive', duration: 12000 });
+        return;
+      }
+      const v = addVoucher({
+        type: 'payment', date: challanForm.challanDate, debitAccountId: tdsHead, creditAccountId: built.lines[built.lines.length - 1].accountId,
+        amount: built.amount, lines: built.lines,
+        narration: `TDS challan deposit — BSR ${challanForm.bsrCode} / ${challanForm.challanSerial || '-'} · ${selectedQuarter} ${fy}`,
+        refType: CHALLAN_REF_TYPE, refId: challanId, createdBy: user?.name || 'System',
+      });
+      if (!v?.id) return;   // addVoucher already told the user why (lock / unbalanced) — no challan row either
+      voucherId = v.id;
+    }
     const challan: TdsChallan = {
       ...challanForm,
-      id: crypto.randomUUID(),
+      id: challanId,
       financialYear: fy,
       quarter: selectedQuarter,
       createdAt: new Date().toISOString(),
@@ -284,10 +320,12 @@ const TdsRegister: React.FC = () => {
     persistChallans([...challans, challan]);
     setShowAddChallan(false);
     setChallanForm(EMPTY_CHALLAN());
+    setChallanBankId(''); setChallanInterest(0); setChallanOther(0); setPostChallanVoucher(true);
     supabase.from('tds_challans').upsert(withSoc(challan)).then(({ error }) => {
       if (error) {
         console.error('TDS challan save error:', error.message);
         persistChallans(prev); // RULE-1 rollback
+        if (voucherId) cancelVoucher(voucherId, 'TDS challan not saved (cloud save failed)', user?.name || 'System');   // the voucher must not outlive its challan
         toast({ title: hi ? 'चालान सेव नहीं हुआ' : 'Challan not saved', description: `Cloud save fail — ${error.message}. (Pehli baar: tds_challans block chalayein.)`, variant: 'destructive', duration: 12000 });
       } else {
         toast({ title: hi ? '✅ चालान जोड़ा गया' : '✅ Challan added' });
@@ -315,6 +353,13 @@ const TdsRegister: React.FC = () => {
   };
   const handleDeleteChallan = (id: string) => {
     if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    // RULE 3: the challan's ledger voucher goes with it. If it cannot be cancelled (period lock, approval), nothing is deleted.
+    for (const v of vouchers.filter(x => x.refType === CHALLAN_REF_TYPE && x.refId === id && !x.isDeleted)) {
+      if (!cancelVoucher(v.id, `TDS challan ${id} deleted`, user?.name || 'System')) {
+        toast({ title: hi ? 'चालान नहीं हटा' : 'Challan not deleted', description: hi ? `इससे जुड़ा वाउचर ${v.voucherNo} रद्द नहीं हो सका — पहले उसका कारण देखें।` : `Its voucher ${v.voucherNo} could not be cancelled.`, variant: 'destructive', duration: 12000 });
+        return;
+      }
+    }
     const prevChallans = challans;
     const prevLinks = links;
     persistChallans(challans.filter(c => c.id !== id));
@@ -771,6 +816,51 @@ const TdsRegister: React.FC = () => {
               <Label>{hi ? 'बैंक' : 'Bank Name'}</Label>
               <Input value={challanForm.bankName} onChange={e => setChallanForm(f => ({ ...f, bankName: e.target.value }))} placeholder="SBI, PNB..." />
             </div>
+            <div className="space-y-1">
+              <Label>{hi ? 'स्थिति' : 'Status'}</Label>
+              <Select value={challanForm.status} onValueChange={v => setChallanForm(f => ({ ...f, status: v as TdsChallan['status'] }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="paid">{hi ? 'भुगतान हो चुका' : 'Paid'}</SelectItem>
+                  <SelectItem value="pending">{hi ? 'लंबित' : 'Pending'}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {challanForm.status === 'paid' && (
+              <div className="space-y-3 rounded-md border p-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={postChallanVoucher} onCheckedChange={c => setPostChallanVoucher(c === true)} />
+                  {hi ? 'लेखे में वाउचर बनाएँ (देय TDS घटाएँ)' : 'Create the ledger voucher (reduces TDS Payable)'}
+                </label>
+                {postChallanVoucher && (
+                  <>
+                    <div className="space-y-1">
+                      <Label>{hi ? 'बैंक खाता (लेखा)' : 'Bank account (ledger)'}</Label>
+                      <Select value={challanBankId || bankAccounts[0]?.id || ''} onValueChange={setChallanBankId}>
+                        <SelectTrigger><SelectValue placeholder={hi ? 'बैंक चुनें' : 'Choose bank'} /></SelectTrigger>
+                        <SelectContent>
+                          {bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label>{hi ? 'ब्याज (₹)' : 'Interest (₹)'}</Label>
+                        <Input type="number" min={0} value={challanInterest || ''} onChange={e => setChallanInterest(Number(e.target.value))} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>{hi ? 'अन्य शुल्क (₹)' : 'Other charges (₹)'}</Label>
+                        <Input type="number" min={0} value={challanOther || ''} onChange={e => setChallanOther(Number(e.target.value))} />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {hi ? 'देय TDS में घटेगा' : 'Reduces TDS Payable by'}: ₹{Math.max(0, challanForm.amount - challanInterest - challanOther).toLocaleString('en-IN')}
+                      {' · '}{hi ? 'ब्याज/शुल्क व्यय में' : 'interest / charges to expense'}: ₹{(challanInterest + challanOther).toLocaleString('en-IN')}
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" onClick={() => setShowAddChallan(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
               <Button onClick={handleAddChallan} disabled={!challanForm.bsrCode || challanForm.amount <= 0}>
