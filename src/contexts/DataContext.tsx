@@ -31,7 +31,7 @@ import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
 import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
-import { buildPostVoucherPayload, buildEditVoucherPayload, buildStockDocumentPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
+import { buildPostVoucherPayload, buildEditVoucherPayload, buildStockDocumentPayload, buildPendingVoucherPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
 import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
 import { fyStartOf, fyStartFromLabel } from '@/lib/fyPeriod';
 import { computeTrialBalance } from '@/lib/reports/trialBalance';
@@ -1950,6 +1950,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // one transaction (post_voucher, migration 077) — no half-saved voucher on a dropped connection.
     // The posting rule stays here (RULE 2): the payload carries getVoucherLines legs + the same event.
     // Any refusal/failure → rollback + destructive toast (RULE 1). Flag OFF → the path below, unchanged.
+    // S4-a (104) · a PENDING voucher with the posting service ON: save_pending_voucher stores the row (and issues
+    // the official number) server-side — no lines, entries or journal event until approve_voucher posts it.
+    if (postingServiceRef.current && newVoucher.approvalStatus === 'pending') {
+      const failPending = (msg: string, raw: string) => {
+        reportError('voucher-pending-post-service', raw, { voucherId: newVoucher.id });
+        rollbackOptimistic();
+        toastRef.current({ title: '❌ Voucher cloud par save NAHI hua', description: `${msg}. Local state se entry hata di gayi — refresh karne par data lose nahi hoga.`, variant: 'destructive', duration: 15000 });
+      };
+      const pp = buildPendingVoucherPayload(newVoucher);
+      supabase.rpc('save_pending_voucher', pp).then(({ data, error }) => {
+        if (error) { failPending(postVoucherMessage(postVoucherErrorCode(error.message), error.message), error.message); return; }
+        const officialNo = (data as { voucherNo?: string } | null)?.voucherNo;
+        if (officialNo && officialNo !== newVoucher.voucherNo) {
+          vouchersRef.current = vouchersRef.current.map(x => x.id === newVoucher.id ? { ...x, voucherNo: officialNo } : x);
+          setVouchersState(prev => prev.map(x => x.id === newVoucher.id ? { ...x, voucherNo: officialNo } : x));
+        }
+        opts?.onPersisted?.({ ...newVoucher, voucherNo: officialNo || newVoucher.voucherNo });
+      }, (rejection: unknown) => { const msg = rejection instanceof Error ? rejection.message : String(rejection); failPending(`Network error — ${msg}`, msg); });
+      return newVoucher;
+    }
+
     if (postingServiceRef.current && shadowEvent) {
       const provisionalNo = newVoucher.voucherNo;
       const eventFor = (v: Voucher) => buildEvent({
@@ -2314,6 +2335,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         revertEdit();
         toastRef.current({ title: '❌ Voucher edit cloud par save NAHI hua', description: `Network error — ${msg}. Badlav local se hata diya.`, variant: 'destructive', duration: 15000 });
       });
+      return true;
+    }
+    // S4-a (104) · a PENDING voucher edited with the posting service ON: save_pending_voucher updates its
+    // editable fields server-side (no journal — it is not posted until approve_voucher).
+    if (postingServiceRef.current && current.approvalStatus === 'pending') {
+      const undo = (msg: string, raw: string) => {
+        reportError('voucher-pending-edit-post-service', raw, { voucherId: id });
+        revertEdit();
+        toastRef.current({ title: '❌ Voucher edit cloud par save NAHI hua', description: `${msg}. Badlav local se hata diya — refresh par purana data safe hai.`, variant: 'destructive', duration: 15000 });
+      };
+      const p = buildEditVoucherPayload(updatedVoucher);
+      supabase.rpc('save_pending_voucher', { p_voucher: p.p_voucher, p_lines: p.p_lines }).then(({ error }) => {
+        if (error) undo(postVoucherMessage(postVoucherErrorCode(error.message), error.message), error.message);
+      }, (rejection: unknown) => { const msg = rejection instanceof Error ? rejection.message : String(rejection); undo(`Network error — ${msg}`, msg); });
       return true;
     }
 

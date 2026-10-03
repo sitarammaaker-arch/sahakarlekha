@@ -54,6 +54,15 @@ ok('mergeAccounts: posting service → ONE rpc merge_accounts', merge.includes("
 ok('mergeAccounts: …before (and instead of) the client-side multi-write path', before(merge, "rpc('merge_accounts'", "from('vouchers').upsert"));
 ok('mergeAccounts: applies the server journal events locally', /mapLedgerEventRows\(r\.events/.test(merge));
 
+// Row 7 (104): pending (maker-checker) create / edit.
+ok('addVoucher: a PENDING voucher with the posting service → rpc save_pending_voucher', /postingServiceRef\.current && newVoucher\.approvalStatus === 'pending'\) \{[\s\S]*?rpc\('save_pending_voucher', pp\)/.test(add));
+ok('addVoucher: …before the post_voucher branch, with rollback + toast on failure', before(add, "rpc('save_pending_voucher'", "rpc('post_voucher'") && /failPending[\s\S]*?rollbackOptimistic\(\)/.test(add));
+const upd = body('updateVoucher');
+ok('updateVoucher: a PENDING voucher with the posting service → rpc save_pending_voucher', /postingServiceRef\.current && current\.approvalStatus === 'pending'\) \{[\s\S]*?rpc\('save_pending_voucher'/.test(upd));
+const sql104 = readFileSync(resolve(ROOT, 'supabase/migrations/104_save_pending_voucher.sql'), 'utf8');
+ok('104 defines save_pending_voucher as SECURITY DEFINER, anon revoked', /function public\.save_pending_voucher\([^)]*\)[\s\S]*?security definer/.test(sql104) && /revoke execute on function public\.save_pending_voucher\([^)]*\) from public, anon/.test(sql104));
+ok('104 writes no lines / entries / journal for a pending voucher', !/insert into public\.(voucher_lines|voucher_entries|ledger_events)/.test(sql104));
+
 for (const fn of ['reject_voucher', 'set_voucher_cleared', 'link_voucher_reversal', 'sync_account_opening_event', 'merge_accounts']) {
   ok(`103 defines ${fn} as SECURITY DEFINER`, new RegExp(`function public\\.${fn}\\([^)]*\\)[\\s\\S]*?security definer`).test(sql));
   ok(`103 revokes ${fn} from anon and grants authenticated`, new RegExp(`revoke execute on function public\\.${fn}\\([^)]*\\) from public, anon`).test(sql) && new RegExp(`grant execute on function public\\.${fn}\\([^)]*\\) to authenticated`).test(sql));

@@ -79,6 +79,18 @@
 - **Still open:** row 7, pending (maker-checker) create/edit, still writes directly (3 pending vouchers ever). S4-0 will show whether it is used before S4-b.
 - **Deploy order:** the founder applies 103 BEFORE this PR is merged. Otherwise the new app calls functions that do not exist yet.
 
+## 2026-10-03: 103 LIVE; 104 (pending vouchers); B4–B10 and C6/C7 closed with evidence
+- **103 LIVE** (founder: backup `20261003-1401Z`, applied 14:11 UTC).
+  - Verified read-only: 5 functions are SECURITY DEFINER and anon cannot execute them; no post-service / s4 errors in the merge-to-apply gap; drift 0.
+- **104 `save_pending_voucher`**, S4-a row 7: a pending (maker-checker) voucher is created and edited through the server.
+  - The row and its official number are written; no lines, entries or journal until `approve_voucher`.
+  - The app is wired (`addVoucher` pending branch, `updateVoucher` pending branch) with RULE 1 rollback.
+  - Harness s4-a 50/50 (+9 pending cases, including save → edit → approve).
+  - `test:s4a-server-paths` 31/31.
+  - **This completes S4-a.** Every flag-ON client accounting write in §2 now has a server path.
+- **B4–B6, B8–B10 and C6/C7 are marked COMPLETE**, each with its evidence (see the tables).
+- **S4-b** stays gated on the S4-0 week, which ends 2026-10-10.
+
 ## Roadmap status
 
 ### Phase A — Critical security
@@ -98,7 +110,12 @@
 | B3 disable unsafe client writes | PARTIAL, PR #587 | Fixed: salary edits now repost the journal (a JRN-01 source, flag on AND off); joining receipts go via the server; clear/unclear/reject use a targeted update; editedBy. Static test 15/15. Remaining: mergeAccounts, and the flag-off cancelLinkedVouchers path. Runtime spot-check after deploy: edit a paid salary in Rania. |
 | B2 rollout to all societies | AWAITING-FOUNDER | **Founder's direction (2026-10-01): no per-society work; one rule for every society.**<br>• `scripts/posting-readiness.mjs` classifies ALL societies in one read-only pass: ON / READY / EMPTY / HEAL / WAIT-FY / BLOCKED. Parity is checked per account: vouchers vs journal vs entries.<br>• Prod 2026-10-01: ON 1, READY 8, EMPTY 9, HEAL 4, WAIT-FY 1, BLOCKED 3.<br>• `heal-voucher-consistency` was extended. A rejected voucher whose posting was live gets a voucher.cancelled event (₹500 cash overstated in 2 societies). Entries on the wrong account/side are fixed (historical: the syncEntries outage).<br>• `posting-flag-batch.mjs` turns ON every READY/EMPTY society in one tx. It re-checks readiness inside the tx and aborts on drift.<br>• mig 088: a new society gets its open FY row. mig 089: a new society starts with posting ON.<br>• Harness verified: heal clears all drift, then the flip turns on 21 (+Rania = 22). Re-apply is refused, undo is exact, and the abort-on-drift works. b2-new-society-fy 7/7 (3/6 before 088).<br>• **WAIT-FY/BLOCKED (4) need FY rollover = Phase C**, and the rollover rule needs the founder's decision. |
 | B7 journal/ledger parity | AWAITING-FOUNDER (PR #599) | mig 092 `ledger_drift()` and `log_ledger_drift()` plus the nightly pg_cron job (02:00 IST), for all societies. The journal is read as the statements read it. Readiness uses the same rule and also checks ON societies. On the harness (latest prod dump) no society drifts. |
-| B4–B6, B8–B10 | NOT STARTED | |
+| B4 verify voucher posting | COMPLETE (harness) | s3a-post-voucher 20/20 (role, FY/period lock, balance, legs = total, event = legs, one transaction); 096 numbering 10/10; e2e `voucher-persist` on staging. |
+| B5 verify edit / reversal | COMPLETE (harness) | s3d 31/31 (edit = reversed + reposted from the DB journal); 095 reversal edit lock 7/7; S4-a `link_voucher_reversal` (103) closes the link race that left 1 of 2 prod reversals unlinked. |
+| B6 verify cancellation | COMPLETE (harness) | s3d cancel + s3f2 14/14 (soft delete + lines reversed + entries removed + voucher.cancelled from the DB journal); e2e `voucher-cancel`. |
+| B8 reconcile existing ledger discrepancies | COMPLETE (prod) | `ledger_drift()` = 0 societies (2026-10-03, read-only); nightly job logs any drift to error_log (092). Historical heals: b2 heal (25 vouchers), D5. |
+| B9 verify idempotency | COMPLETE (harness) | post_voucher same id → `exists` (s3a); approve → `already_approved` (s3e2); reject → `already_rejected`, link → `already_linked`, opening sync → `in_sync` (s4-a); the posting fns re-check under row locks. |
+| B10 verify audit trail | COMPLETE (prod + harness) | H11 (#623) closed console-only audit; FY close (c2) and merge (s4-a) write audit_log rows; the journal is append-only with reversal pairs. |
 
 ### Phase C — Financial year
 | Task | Status | Notes |
@@ -106,7 +123,7 @@
 | C1 rollover rule | DECIDED | Founder decision (अ), 2026-10-01: after moving to the new FY, the previous FY stays 'closing' and accepts postings until it is closed or audited. |
 | C5 create next FY (server) | AWAITING-FOUNDER (PR) | **mig 090:** the society_settings trigger performs the rollover when the label moves to the NEXT year: open → closing, next year inserted 'open' (previous_fy_id linked). It REFUSES (the app rolls back and shows the message) a jump of more than one year, a missing open year, or a year still 'closing'. All 6 server posting fns accept 'open' or 'closing'. SocietySetup announces success only after the cloud accepts (`updateSociety(…, { onSaved, onFailed })`). Harness c1-fy-rollover 13/13 (8/13 on the pre-090 schema); the s3*/a*/b2 suites are green. |
 | C2/C3/C4 closing validation, closing entries, closing → closed | AWAITING-FOUNDER (PR) | Decisions D1–D4 (founder, 2026-10-01): continuous ledger · surplus to 1208 · closing stock into the ledger · board resolution required. **C-a (PR #595):** TB opening = balance b/f at the FY start, on both paths. **C-b mig 091 `close_financial_year`:** checks (closing year, authority, no pending, books agree read as the statements read them, next year open), then posts the closing-stock delta journal (31 Mar, `fy.close.stock`) and the nominal sweep into 1208 (1 Apr, `fy.close`), both via post_voucher; the year becomes closed and an audit row is written. **C-c:** SocietySetup YearCloseCard; the Trading A/c recognises `fy.close.stock`. Harness c2-close-fy 21/21 on Kapil, Rania, Assandh and Kisan: opening = closing per account, BS unchanged, 1208 rises by the surplus, the closed year refuses posts. |
-| C6/C7 carry-forward, previous closing = next opening | NOT STARTED | The client snapshot (previousYearBalances) still runs. A server-side opening event is to be designed. |
+| C6/C7 carry-forward, previous closing = next opening | COMPLETE (by design D1 + harness) | Continuous ledger (founder decision D1): the journal never resets at a year boundary, so next opening = previous closing by construction, and the TB reads opening = balance b/f at the FY start (C-a). `close_financial_year` sweeps nominal accounts into 1208; c2 21/21 proves opening = closing per account on Kapil, Rania, Assandh and Kisan. `previousYearBalances` is NOT the carry-forward; it holds the comparative previous-year column (BS / audit schedules) and onboarding audited openings. |
 
 ### Phases D–M
 - D: slices live (093, 194Q advice); CA questions open.
