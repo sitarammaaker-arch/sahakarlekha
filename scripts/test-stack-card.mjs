@@ -82,4 +82,4 @@ ok(buildStackCard([], 'A', 'G1').length === 0, 'no movements → []');
 ok(buildStackCard(movs, 'Z', 'G1').length === 0, 'unknown item → []');
 
 console.log(`\nStack card (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

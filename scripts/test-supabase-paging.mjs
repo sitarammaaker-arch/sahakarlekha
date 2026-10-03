@@ -219,4 +219,4 @@ res = await fetchAllPaged('members', 'SOC-A');
 ok(res.data.length === 1200 && res.data.every((r) => r.society_id === 'SOC-A'), "another society's rows never leak in");
 
 console.log(`\nSupabase paging (total order): ${pass} passed, ${fail} failed`);
-process.exit(fail === 0 ? 0 : 1);
+process.exitCode = fail === 0 ? 0 : 1;

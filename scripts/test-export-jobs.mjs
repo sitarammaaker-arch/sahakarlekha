@@ -156,4 +156,4 @@ const bad = await listExportHistory('SOC-A');
 ok(bad.entries.length === 0 && bad.error === 'permission denied', 'a read failure returns the error, not a silent empty list');
 
 console.log(`\nExport history (pure + wired): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

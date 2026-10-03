@@ -68,4 +68,4 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); 
 }
 
 console.log(`\nFund backing (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

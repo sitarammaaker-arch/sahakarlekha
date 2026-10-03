@@ -69,4 +69,4 @@ ok(!isPayableHead({ accountName: 'Cash at Bank', glType: 'asset' }), 'a non-paya
 ok(rpParticulars({ accountName: 'TDS Payable', glType: 'liability' }, 'By', true) === 'TDS Payable (चुकाया गया)', 'hi with no accountNameHi falls back to the English name + hi tag');
 
 console.log(`\nR&P label (paid/received clarity): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

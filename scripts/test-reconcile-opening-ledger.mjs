@@ -107,4 +107,4 @@ const secondPass = accountsNow.map((a) => reconcileDelta(reconciled, a)).filter(
 ok(secondPass.length === 0, 'idempotent: re-running reconcile on a synced journal plans zero deltas');
 
 console.log(`\nOpening reconcile (T-09): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

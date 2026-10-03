@@ -84,4 +84,4 @@ ok(assetAcquisitionPosting('Land', 500000, '3302').assetAccount === '3101', 'lan
 ok(assetAcquisitionPosting('Computer', 0, '3301').amount === 0, 'zero cost → amount 0 (no capitalization)');
 
 console.log(`\nAsset disposal (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

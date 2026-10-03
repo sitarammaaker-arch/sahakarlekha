@@ -78,4 +78,4 @@ for (const r of ['auditor', 'internalAuditor', 'externalCA', 'readOnly', 'superA
 ok(!sqlDelete.has('accountant') && !sqlDelete.has('manager'), 'delete stays admin/societyAdmin/secretary only');
 
 console.log(`JWT role helpers (mig 045 ↔ PERMISSION_MATRIX): ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -85,4 +85,4 @@ ok(complianceNotifications(withFiled).length < alerts.length, 'filing reduces no
 ok(complianceNotifications(full).every(a => a.status !== 'upcoming' && a.status !== 'filed'), 'upcoming/filed excluded from notifications');
 
 console.log(`\nCompliance calendar (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

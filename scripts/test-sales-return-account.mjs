@@ -33,4 +33,4 @@ ok('a cancelled sale voucher is not trusted', f({ ...base, refundMode: 'credit',
 const ctx = readFileSync(pathResolve(SRC, 'contexts/ConsumerDataContext.tsx'), 'utf8');
 ok('both add and update sales return use the helper (no bare 3303 for a customer)', (ctx.match(/salesReturnCreditAccountId\(\{/g) || []).length === 2 && !/sale\.customerId \? '3303'/.test(ctx));
 console.log(`\nsales return account: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

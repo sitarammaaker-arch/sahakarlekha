@@ -113,4 +113,4 @@ const withBulk = (found, error = null) => { const x = io(); x.verifyMany = async
   ok(r.ok === false && r.error === 'read failed', 'verifyMany: read error ⇒ ok:false'); }
 
 console.log(`\nAuthoritative event append (journal-first-write slice 3+5): ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

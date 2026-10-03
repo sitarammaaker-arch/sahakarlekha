@@ -91,4 +91,4 @@ for (const [col, val] of [['type', p4406.type], ['parentId', p4406.parentId], ['
 }
 
 console.log(`\nM1-4b static: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -110,4 +110,4 @@ const ovZero = computeStatutory({ basic: 30000, allowances: 5000, pfApplicable: 
 ok(ovZero.pfEmployee === 0 && ovZero.netSalary === 35000, 'a 0 override waives that deduction (0 ≠ auto)');
 
 console.log(`\nPayroll statutory (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

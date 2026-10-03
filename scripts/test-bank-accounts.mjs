@@ -96,4 +96,4 @@ ok(resolveBank('', multiBank) === BANK, 'empty choice (cash mode / not picked) â
 ok(getBankAccountIds(multiBank).includes(resolveBank('u-hdfc', multiBank)), 'the resolved bank is always one the picker actually lists');
 
 console.log(`\nBank accounts (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

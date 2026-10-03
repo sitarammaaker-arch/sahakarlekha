@@ -67,4 +67,4 @@ ok(warehouseDocKind('adjustment', -5) === 'GatePass', 'negative adjustment → G
 }
 
 console.log(`\nWarehouse doc (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

@@ -107,4 +107,4 @@ const shape = m1.entries[0];
 ok(Object.keys(shape).sort().join(',') === 'accountId,amount,type', 'entry shape matches OpeningEntry');
 
 console.log(`\nOpening balances (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

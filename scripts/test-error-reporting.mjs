@@ -68,4 +68,4 @@ const r2 = buildErrorRecord('', 'e', undefined, NOW);
 ok(r2.source === 'unknown' && r2.context === null && r2.url === null, 'empty source → "unknown"; missing context/url → null');
 
 console.log(`\nError reporting (buildErrorRecord): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

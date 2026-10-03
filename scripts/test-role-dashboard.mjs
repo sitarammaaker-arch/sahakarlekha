@@ -78,4 +78,4 @@ for (const r of ['admin', 'accountant', 'auditor', 'viewer', 'chairman', 'cashie
 }
 
 console.log(`\nRole dashboard (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

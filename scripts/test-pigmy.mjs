@@ -60,4 +60,4 @@ ok(collectionTotal([]) === 0, 'empty batch = 0');
 ok(collectionTotal(['10.10', '10.15']) === 20.25, 'rounds to 2dp');
 
 console.log(`\nPigmy (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

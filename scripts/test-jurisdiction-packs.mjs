@@ -67,4 +67,4 @@ ok(JURISDICTION_CAPABILITY_PACKS.every((p) => p.jurisdiction === p.jurisdiction.
 ok(JURISDICTION_CAPABILITY_PACKS.every((p) => Array.isArray(p.societyTypes) && p.societyTypes.length > 0 && p.capabilities.length > 0), 'every pack targets ≥1 society type and grants ≥1 capability');
 
 console.log(`Jurisdiction packs (CA-11 / ADR-0008): ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -131,4 +131,4 @@ const base = { fy: '2026-27', effDate: '2027-03-31', vouchers: [], stockItems: [
 }
 
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll trading / P&L checks passed.');
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

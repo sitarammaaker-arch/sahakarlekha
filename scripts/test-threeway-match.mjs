@@ -113,4 +113,4 @@ const br = blockingReasons(threeWayMatch([po('A', 10, 100, 10)], [inv('A', 10, 1
 ok(br.includes('price-variance') && br.length === 1, 'blockingReasons = [price-variance]');
 
 console.log(`\n3-way match (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

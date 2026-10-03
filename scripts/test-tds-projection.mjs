@@ -122,4 +122,4 @@ ok(!tdsBasisNote('2026-07-16').includes('⚠️'), 'ui: the salary screen no lon
 
 console.log(`
 TDS projection (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

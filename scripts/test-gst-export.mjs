@@ -57,4 +57,4 @@ ok(typeof e._disclaimer === 'string' && /NOT a certified/.test(e._disclaimer), '
 ok(JSON.stringify(e).length > 0 && JSON.parse(JSON.stringify(e)).doc === 'GSTR9-DRAFT', 'serialises to valid JSON');
 
 console.log(`\nGST export (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

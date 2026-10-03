@@ -476,4 +476,4 @@ out = await runBackup({ ...baseRun, record: async () => 'x', deliver: (b) => { d
 ok(out.encrypted === false && !isEncryptedArchive(delivered), 'without a passphrase the archive is delivered unencrypted');
 
 console.log(`\nBackup writer + NDJSON: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

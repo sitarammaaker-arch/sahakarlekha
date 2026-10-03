@@ -121,4 +121,4 @@ ok(plan.lines.find((l) => l.step === 'reserve_fund').ratePct === 25, 'the reserv
 ok(plan.lines.find((l) => l.step === 'dividend').basisMinor === toMinor(200000), 'the dividend line records its base (share capital)');
 
 console.log(`\nUCAS appropriation posting: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

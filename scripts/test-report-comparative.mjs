@@ -98,4 +98,4 @@ ok(isEmptyPL({ incomeItems: [], expenseItems: [], totalIncome: 0, totalExpenses:
 ok(isEmptyPL(plEnd) === false, 'non-empty P&L detected');
 
 console.log(`\nReport comparative (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

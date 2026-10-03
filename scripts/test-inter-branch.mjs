@@ -59,4 +59,4 @@ ok(acctNet(t2, '3302') === -1000 && acctNet(t2, '3301') === 1000, 'bank −1000,
 ok(buildInterBranchTransfer({ fromBranchId: 'A', toBranchId: 'B', amount: 100.005, fromAccountId: 'x', toAccountId: 'x' }).from.lines[0].amount === 100.01, 'amount rounded to paise');
 
 console.log(`\nInter-branch (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

@@ -268,4 +268,4 @@ ok(!/^import .*['"](?!\.\.\/export\/registry\.types)/m.test(source.split('\n').f
   'dag.ts imports nothing but the registry types');
 
 console.log(`\nRestore DAG: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

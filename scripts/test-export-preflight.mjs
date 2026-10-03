@@ -165,4 +165,4 @@ pfRes = await preflightExport(member, 'SOC-A', 8, 'csv', { client: fakeClient(0,
 ok(pfRes.error === 'boom' && pfRes.result === null, 'a failed preflight returns no result — never a confident "0 rows"');
 
 console.log(`\nExport preflight (pure + wired): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

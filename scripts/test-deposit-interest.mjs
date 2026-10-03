@@ -60,4 +60,4 @@ ok(rdInterest(1000, 0, 12) === 0, 'RD zero-rate interest = 0');
 ok(simpleInterest(12345, 7.25, 37) === r2(12345 * 0.0725 * 37 / 365), 'fractional interest rounds to 2dp');
 
 console.log(`\nDeposit interest (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

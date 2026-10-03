@@ -77,4 +77,4 @@ check('blocked storage → never reload', reloadOnceForStaleChunk(blocked, reloa
 check('no storage → never reload', reloadOnceForStaleChunk(undefined, reload, now) === false && reloads === 2);
 
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll chunk-reload checks passed.');
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

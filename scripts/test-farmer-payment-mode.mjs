@@ -44,4 +44,4 @@ ok(resolveFarmerPaymentCredit('cash', { cash: '', bank: '3302', agency: 'x' }) =
 ok(resolveFarmerPaymentCredit('bank', { cash: '3301', bank: '', agency: 'x' }) === null, 'missing bank account → null');
 
 console.log(`\nFarmer payment mode (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

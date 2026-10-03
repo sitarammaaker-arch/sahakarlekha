@@ -132,4 +132,4 @@ ok(new Set(visibleIds('salesOperator', ALL)).has('sales'), 'salesOperator still 
 ok(new Set(visibleIds('storeKeeper', ALL)).has('inventory'), 'storeKeeper still sees Inventory (map governs)');
 
 console.log(`Role→module access (S2): ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

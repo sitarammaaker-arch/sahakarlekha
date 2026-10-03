@@ -110,4 +110,4 @@ ok(code.includes('serializeQueue') && code.includes('deserializeQueue'), 'it reu
 ok(!/JSON\.parse|JSON\.stringify/.test(code), 'it does not re-implement (de)serialization — that lives in the pure core');
 
 console.log(`\nOffline capture-queue persistence: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

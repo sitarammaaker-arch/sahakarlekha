@@ -90,4 +90,4 @@ ok(!/professionalTaxForState\(/.test(sm), 'SalaryManagement no longer auto-fills
 ok(/const ptNotice = ptState\.levies && !ptState\.verified/.test(sm) && /\{ptNotice && \(/.test(sm), 'unverified-PT notice is shown');
 
 console.log(`\nProfessional tax (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

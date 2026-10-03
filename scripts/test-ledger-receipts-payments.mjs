@@ -87,4 +87,4 @@ const r8 = rp([ev('later', [leg(CASH, 'Dr', 999999), leg('4101', 'Cr', 999999)],
 ok(r8.openingCashMinor === 50000 && r8.closingCashMinor === 50000 && r8.receipts.length === 0, 'opening seeds closing; a post-asOf voucher is excluded');
 
 console.log(`\nReceipts & Payments projection (T-09): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

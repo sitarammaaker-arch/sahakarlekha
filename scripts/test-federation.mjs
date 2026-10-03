@@ -104,4 +104,4 @@ for (const [file, sub] of [['graph.ts', 'graph'], ['consolidation.ts', 'consolid
 }
 
 console.log(`\nFederation graph + consolidation: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

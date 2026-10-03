@@ -139,4 +139,4 @@ ok(priorFy('bad') === '', 'priorFy bad → empty');
 }
 
 console.log(`\nAnalytics metrics (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

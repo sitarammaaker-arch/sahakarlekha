@@ -62,4 +62,4 @@ ok(qtyDelta(out.type, out.qty) === -30, 'source godown -30');
 ok(qtyDelta(inn.type, inn.qty) === 30, 'destination godown +30');
 
 console.log(`\nGodown transfer (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

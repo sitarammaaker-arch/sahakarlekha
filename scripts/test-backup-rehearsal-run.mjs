@@ -199,4 +199,4 @@ ok(src.includes('replayEntries') && !/dr:\s*l\.type === 'Dr'/.test(src),
 ok(!/from ['"]@\/lib\/supabase['"]/.test(src), 'and never imports the Supabase client directly — I/O is injected');
 
 console.log(`\nRehearsal runner: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

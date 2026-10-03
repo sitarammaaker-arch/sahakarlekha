@@ -138,4 +138,4 @@ const line = (list, id) => list.find(l => l.accountId === id);
 }
 
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll receipts & payments checks passed.');
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

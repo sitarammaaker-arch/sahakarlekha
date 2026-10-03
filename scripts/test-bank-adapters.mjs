@@ -116,4 +116,4 @@ for (const [file, sub] of [['statement.ts', 'statement'], ['payment.ts', 'paymen
 }
 
 console.log(`\nBanking adapters — prepare-only: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

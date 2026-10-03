@@ -86,4 +86,4 @@ ok(Object.values(CAPS).some((v) => v.includes('dairy_collection')), 'dairy_colle
 ok(Object.values(CAPS).some((v) => v.includes('housing')), 'housing exists in the templates');
 
 console.log(`\nT-14 type-branch parity: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

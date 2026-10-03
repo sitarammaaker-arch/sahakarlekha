@@ -89,4 +89,4 @@ const bare = voucherFromCurrent({ id: 'b', date: '2026-01-01', voucherNo: '', na
 ok(bare.type === 'journal' && bare.debitAccountId === '' && bare.creditAccountId === '' && bare.lines === undefined && bare.memberId === undefined && bare.branchId === undefined, 'bare current-voucher → safe defaults (unknown type→journal, no legs→no lines, empty→undefined)');
 
 console.log(`\nVoucher rebuild engine (journal-first-write slice 2): ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

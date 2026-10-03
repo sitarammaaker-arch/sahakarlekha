@@ -181,4 +181,4 @@ ok(res.error === 'permission denied', 'a read failure returns the error');
 ok(res.rows.length === 0 && res.truncated === false, 'a failed read yields no rows and no false truncation claim');
 
 console.log(`\nExport source (pure + wired): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

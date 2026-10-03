@@ -78,4 +78,4 @@ ok(r2(gpNew + 2325) === 26447.40, 'Rania Net Surplus after fix = 26,447.40 (BS t
 ok(tradingGrossProfit({ sales: 70, closingStock: 60, openingStock: 0, purchases: 100, directExp: 40 }) === -10, 'partly-sold nets: GP = 70+60−100−40 = −10');
 
 console.log(`\nTrading account (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

@@ -69,4 +69,4 @@ const log2 = await dispatch(msg, { enabled: { email: false } }, { email: true },
 ok(log2.find(l => l.channel === 'email').delivered === false, 'dispatch: disabled channel not sent');
 
 console.log(`\nNotification channels (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

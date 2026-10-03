@@ -137,4 +137,4 @@ ok('down drops account_roles, the check and the column, and its 074 record', /dr
   && /drop column if exists report_class/.test(down) && /drop constraint if exists accounts_report_class_check/.test(down) && /version = '074'/.test(down));
 
 console.log(`\nM1-3 account roles: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

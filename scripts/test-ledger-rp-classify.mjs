@@ -65,4 +65,4 @@ ok(CAPITAL_PARENTS.has('1100') && CAPITAL_PARENTS.has('3200') && !CAPITAL_PARENT
 ok(CAPITAL_SUBTYPES.has('share_capital') && CAPITAL_SUBTYPES.has('deposit') && !CAPITAL_SUBTYPES.has('current_asset'), 'CAPITAL_SUBTYPES holds the capital subtypes');
 
 console.log(`\nR&P classifier (T-09): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

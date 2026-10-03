@@ -750,4 +750,4 @@ ok(roleAtLeast('admin', REGISTRY.find(e => e.key === 'society').minRole), 'admin
 ok(!roleAtLeast('accountant', REGISTRY.find(e => e.key === 'society').minRole), 'accountant cannot export society settings');
 
 console.log(`\nExport registry (pure + real, ${REGISTRY.length} entities): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

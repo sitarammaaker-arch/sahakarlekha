@@ -55,4 +55,4 @@ ok(isRealMaker('system') === false, 'system (any case) is not real');
 ok(isRealMaker('  ') === false, 'whitespace-only maker is not real');
 
 console.log(`\nSoD maker≠checker (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

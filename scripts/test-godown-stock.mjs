@@ -69,4 +69,4 @@ const withDel = computeGodownStock([...mv, { itemId: 'wheat', type: 'purchase', 
 ok(get(withDel, 'wheat', 'g1').qty === 65, 'deleted movement ignored');
 
 console.log(`\nGodown stock (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

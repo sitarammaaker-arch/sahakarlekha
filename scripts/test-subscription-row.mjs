@@ -103,4 +103,4 @@ const row = { plan: 'plus', status: 'active', period_end: '2027-03-31' };
 }
 
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll subscription-row checks passed.');
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

@@ -137,4 +137,4 @@ const tbOpen = projectTrialBalance([genesisOpening, raise]);
 ok(tbOpen.lines.find((l) => l.accountId === '1001').drMinor === 800000, 'opening + delta sum to the current opening (Dr 800000)');
 
 console.log(`\nGenesis backfill planner (T-06): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

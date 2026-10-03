@@ -65,4 +65,4 @@ ok(isEditLocked({ approvalStatus: undefined }, true) === false, 'unstamped vouch
 ok(isEditLocked({}, false) === false, 'plain voucher, default regime → editable');
 
 console.log(`\nVoucher reversal (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

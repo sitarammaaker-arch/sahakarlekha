@@ -86,4 +86,4 @@ ok(stampedStatus({ origin: 'manual', type: 'payment', amount: 6000, approvalStat
 ok(stampedStatus({ origin: 'manual', type: 'journal', amount: 999999, approvalStatus: undefined }, {}) === undefined, 'no config → manual voucher not held (unchanged behaviour)');
 
 console.log(`\nApproval matrix (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

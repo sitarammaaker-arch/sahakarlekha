@@ -72,4 +72,4 @@ ok(validateTds({ ref: 'P2', amount: 50000, tdsAmount: 500, threshold: 30000 }).l
 ok(validateTds({ ref: 'P3', amount: 20000, tdsAmount: 0, threshold: 30000 }).length === 0, 'below threshold → ok');
 
 console.log(`\nGST/TDS validation (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

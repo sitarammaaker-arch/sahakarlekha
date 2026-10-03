@@ -96,4 +96,4 @@ ok(!hasCutoverParity('pacs', [], ['common_service_centre'], NOW),
 ok(hasCutoverParity('pacs', [], TYPE_INFERRED_ACTIVITIES.pacs, NOW), 'the real pacs inference has parity');
 
 console.log(`\nActivity inference + cutover parity: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

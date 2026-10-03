@@ -122,4 +122,4 @@ for (const [file, sub] of [['placement.ts', 'placement'], ['keyEscrow.ts', 'keyE
 }
 
 console.log(`\nPreservation — 3-2-1 + WORM + key escrow: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

@@ -103,4 +103,4 @@ ok(tie[0].voucherNo === 'RV/2026/27/409' && tie[1].voucherNo === 'RV/2026/27/410
 ok(tie[0].runningBalanceMinor === 25000 && tie[1].runningBalanceMinor === 25500, 'running balance follows the deterministic order');
 
 console.log(`\nCash book projection (T-09): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

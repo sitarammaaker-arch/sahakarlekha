@@ -81,4 +81,4 @@ ok(rankItems('c', accts, a => [a.name, a.id], 10).length === 0, 'single char →
 ok(rankItems('4101', accts, a => [a.name, a.id], 5)[0].id === '4101', 'search by account code');
 
 console.log(`\nGlobal search (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

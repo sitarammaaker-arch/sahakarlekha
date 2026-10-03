@@ -62,4 +62,4 @@ ok(editBlocked('2025-07-10', '2025-08-01', LOCK) === false, 'editing wholly with
 ok(editBlocked('2025-07-10', undefined, LOCK) === false, 'edit with unchanged (open) date and no new date is allowed');
 
 console.log(`\nPeriod lock (pure): ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

@@ -102,4 +102,4 @@ ok(legacyIntent.amount.amount === 850.25, 'legacy intent (no typed cols) falls b
 ok(hydrateAmount({ amountAmountMinor: 0, amountCurrency: 'INR', amount: { amount: 44, currency: 'INR' } }).amount.amount === 0, 'typed 0 amount honoured over JSONB 44');
 
 console.log(`\nTyped money columns: ${pass} passed, ${fail} failed`);
-process.exit(fail > 0 ? 1 : 0);
+process.exitCode = fail > 0 ? 1 : 0;

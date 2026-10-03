@@ -92,4 +92,4 @@ const span = Math.max(...calls.map(c => c.at)) - Math.min(...calls.map(c => c.at
 check('every setter ran in the same tick (one batch)', calls.length === 6 && span < 5, `calls=${calls.length} span=${span.toFixed(2)}ms`);
 
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll batched-load checks passed.');
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;
