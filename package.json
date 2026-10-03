@@ -325,6 +325,7 @@
     "test:chart-integrity": "node scripts/test-chart-integrity.mjs",
     "test:template-integrity": "node scripts/test-template-integrity.mjs",
     "test:salary-accrual-lines": "node scripts/test-salary-accrual-lines.mjs",
+    "test:standard-accounts-migration": "node scripts/test-standard-accounts-migration.mjs",
     "test:cas-statements": "node scripts/test-cas-statements.mjs",
     "test:loan-interest-accrual": "node scripts/test-loan-interest-accrual.mjs",
     "test:loan-repayment-accrual": "node scripts/test-loan-repayment-accrual.mjs",
