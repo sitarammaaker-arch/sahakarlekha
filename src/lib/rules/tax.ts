@@ -66,10 +66,18 @@ function tds(key: string, value: number, cite: string, effectiveFrom: string): R
  * Adding 194C/194J/194I is a data change — copy a line, cite the section, verify it.
  * Seeding sections nobody has checked would just be fabrication at scale.
  */
-/** CA-confirmed values (2026-07-16) carry the chain that made them assertable. */
-const CA_CHAIN =
-  'Confirmed by the society\'s CA against docs/CA-VERIFICATION-2026-07.md on 2026-07-16. ' +
-  'Chain: AI draft → CA review → founder\'s accountability. NOT independently corroborated.';
+/* The CA-confirmed values (2026-07-16) used to cite only the chain "AI draft → CA review → founder".
+   On 2026-10-03 every one of them still on this list was matched against the Act's text (S393/S402
+   below) and now cites the words; 194A did not survive that check (see its row). */
+
+/** The department's own pages for the 2025 Act — the TEXT, read on 2026-10-03 (s.393 table + s.402
+ *  definitions). A cite that names one of these was checked against the words, not a summary. */
+const S393 = 'incometaxindia.gov.in/w/section-393-5 (read 2026-10-03)';
+const S402 = 'incometaxindia.gov.in/w/section-402-5 (read 2026-10-03)';
+/** s.393(1)(a): "on the entire amount of such income or sum, where the amount or aggregate of amounts
+ *  exceeds the threshold limit specified in column D, or on sum as per Note 1 for serial number 8(ii)". */
+const WHOLE_SUM = `Income-tax Act 2025 s.393(1)(a) — "on the entire amount of such income or sum, where the amount or ` +
+  `aggregate of amounts exceeds the threshold limit specified in column D" (the only exception named is 8(ii), Note 1). SOURCE: ${S393}.`;
 
 function verified(key: string, value: number, cite: string, effectiveFrom: string): Rule<number> {
   const v: TaxRuleValue = { value, effectiveFrom, version: 2, verified: true, cite, note: cite };
@@ -89,6 +97,7 @@ function conditioned(
   rows: { value: number; when?: Record<string, string> }[],
   cite: string,
   effectiveFrom: string,
+  isVerified = true,
 ): Rule<number> {
   return {
     key,
@@ -98,7 +107,7 @@ function conditioned(
         when: r.when,
         effectiveFrom,
         version: 2,
-        verified: true,
+        verified: isVerified,
         cite,
         note: cite,
       } as TaxRuleValue)),
@@ -167,42 +176,37 @@ export const TDS_RULES: RuleCatalog = {
     TY2627,
   ),
 
-  /* 🚨 THE GATE THAT WAS MISSING ENTIRELY, and it matters more than the threshold.
-     Per the founder (2026-07-16): 194Q applies ONLY IF THE BUYER's turnover in the
-     PRECEDING financial year exceeded ₹10 crore.
-
-     Most cooperative societies are nowhere near ₹10 crore — so for most of this product's
-     users **194Q does not apply at all**. Without this gate, computeTds would return a
-     TDS figure for a society that owes none. That is not a wrong number; it is an
-     unlawful deduction from a farmer or an arhtiya.
-
-     It is recorded but NOT wired: it is a condition on the BUYER (a fact about the
-     society), not a variant of the rate, so `when` cannot express it — computeTds would
-     have to take the society's prior-year turnover as an input and gate on it. That is
-     the next slice here, and until it exists computeTds's refusal is the only correct
-     behaviour for this section. UNVERIFIED like everything else on this list. */
-  /* NOTE 1 HAS NOW BEEN READ, and it does NOT say what we expected. Verbatim:
-       "Note 1.-(a) The deduction of tax under serial number 8(ii) shall not apply to a
-        transaction on which tax is deductible or collectible under any of the provisions
-        of the Act.
-        (b) The tax shall be deducted on the sum exceeding fifty lakh rupees."
-
-     So Note 1 confirms ₹50,00,000 and "on the sum exceeding" — and contains **no
-     ₹10-crore buyer-turnover condition at all**. That gate came from a statement, not a
-     source. It may live in the definition of "buyer" elsewhere in s.393, or it may be a
-     1961-Act memory that did not survive the rewrite. NOT READ ⇒ NOT KNOWN.
-
-     It stays recorded and unverified rather than deleted, because "we looked and did not
-     find it" is a different state from "it does not exist", and the difference matters:
-     if the gate is real and we drop it, the software tells small societies to deduct when
-     they must not. Someone must read the definition of "buyer" in s.393 and settle it. */
-  'tds.194q.applies_if.buyer_turnover_min': tds(
+  /* THE BUYER GATE — FOUND (2026-10-03), not in s.393 but in the DEFINITION of "buyer", s.402(6),
+     Table Sl. No. 1, for "Purchase of goods referred to in section 393(1) [Table: Sl. No. 8(ii)]":
+       "A person whose total sales, gross receipts or turnover from the business carried on by him
+        exceed ten crore rupees during the tax year immediately preceding the tax year in which the
+        purchase of goods is carried out."   (excluded: "Any person, as the Central Government may
+        notify for this purpose")
+     History: founder's statement (2026-07-16) → Note 1 read, gate absent → CA pointed at s.393 "6(i)"
+     (that is the CONTRACTOR row — wrong cite, right figure) → the s.402 text settles it.
+     A society whose preceding-year turnover is ₹10 crore or less is NOT a "buyer": it owes no 194Q.
+     Verified, and still NOT ENFORCED by computeTds — it needs the society's preceding-year turnover,
+     a fact the books do not hold as one figure. purchaseTdsAdvice states the condition instead. */
+  'tds.194q.applies_if.buyer_turnover_min': verified(
     'tds.194q.applies_if.buyer_turnover_min', 100000000,
-    'CLAIMED GATE, NOT FOUND IN THE TEXT: "194Q applies only if the buyer\'s preceding-year turnover exceeded ' +
-      '₹10 crore" (founder, 2026-07-16). Note 1 to s.393(1) Table Sl. No. 8(ii) has now been read and contains ' +
-      'NO such condition — only "tax shall be deducted on the sum exceeding fifty lakh rupees" plus a carve-out ' +
-      'where the transaction is already taxed under another provision. The gate may sit in the definition of ' +
-      '"buyer" in s.393, unread. UNVERIFIED and unenforced. If real, most cooperative societies owe NO 194Q at all.',
+    'Income-tax Act 2025 s.402(6) Table Sl. No. 1 ("buyer" for s.393(1) Table Sl. No. 8(ii)) — "A person whose total ' +
+      'sales, gross receipts or turnover from the business carried on by him exceed ten crore rupees during the tax year ' +
+      `immediately preceding the tax year in which the purchase of goods is carried out." SOURCE: ${S402}. ` +
+      'RECORDED BUT NOT ENFORCED by computeTds (needs the society\'s preceding-year turnover).',
+    TY2627,
+  ),
+
+  /* GST in the 194Q base — a CBDT circular under the 1961 Act, read 2026-10-03 (Circular 20/2021 para 5.2.1,
+     restating Circular 13/2021 para 4.3.2): where GST is shown SEPARATELY in the invoice AND tax is deducted at
+     the time of CREDIT, deduct on the amount credited WITHOUT GST; if deducted on PAYMENT (payment before credit),
+     on the whole amount. The CA's answer ("GST is excluded") left out the payment-basis half.
+     UNVERIFIED as a 2025-Act rule: whether 1961-Act circulars continue under the 2025 Act (its savings
+     provision) has not been read. Nothing computes with this key; it documents what the advice says. */
+  'tds.194q.base_excludes_gst_when_separate_and_on_credit': tds(
+    'tds.194q.base_excludes_gst_when_separate_and_on_credit', 1,
+    'CBDT Circular 20/2021 (25-11-2021) para 5.2.1, restating Circular 13/2021 (30-06-2021) para 4.3.2 — GST shown ' +
+      'separately + TDS at credit ⇒ deduct on the amount credited without GST; TDS on payment basis ⇒ whole amount. ' +
+      'Issued under the 1961 Act; continuity under the 2025 Act NOT verified.',
     TY2627,
   ),
 
@@ -220,40 +224,44 @@ export const TDS_RULES: RuleCatalog = {
     TY2627,
   ),
 
-  /* Commission / brokerage — the only other section on the CA's list whose shape this
-     catalog can hold honestly (one threshold, one rate). */
+  /* Commission / brokerage. Values were CA-confirmed (2026-07-16); on 2026-10-03 each was matched against the
+     text of s.393(1) Table Sl. No. 1(ii) — payer "Specified person" (s.402: any person not an individual/HUF,
+     so every society), "Rate: 2%", "Threshold limit: ₹ 20,000". */
   'tds.194h.threshold': verified(
     'tds.194h.threshold', 20000,
-    `Income-tax Act 2025 s.393(1) Table 1 Sl.(ii) [1961: s.194H] — commission/brokerage in a tax year. ${CA_CHAIN}`,
+    `Income-tax Act 2025 s.393(1) Table Sl. No. 1(ii) [1961: s.194H] — "Threshold limit: ₹ 20,000". SOURCE: ${S393}.`,
     TY2627,
   ),
   'tds.194h.rate_pct': verified(
     'tds.194h.rate_pct', 2,
-    `Income-tax Act 2025 s.393(1) Table 1 Sl.(ii) [1961: s.194H] — rate. ${CA_CHAIN}`,
+    `Income-tax Act 2025 s.393(1) Table Sl. No. 1(ii) [1961: s.194H] — "Rate: 2%". SOURCE: ${S393}.`,
     TY2627,
   ),
+  'tds.194h.charge_on_excess_only': verified('tds.194h.charge_on_excess_only', 0, WHOLE_SUM, TY2627),
 
-  /* Contractor. TWO thresholds of different KINDS — either breach attracts TDS, so they
-     are separate keys, not a condition. And the RATE turns on who is paid: the 2025 Act
-     splits this across Table 6 Sl.(i)/(ii), which is very likely the same distinction the
-     `when` below expresses. */
+  /* Contractor. TWO thresholds of different KINDS — either breach attracts TDS, so they are separate keys.
+     Read 2026-10-03: it is Sl. No. 6(i) only — payer "Any designated person" (s.402: includes "any
+     co-operative society"); 6(ii) is a different row (individual/HUF payers, ₹50 lakh). "Rate: (a) 1%, if
+     contractor is individual or Hindu undivided family; (b) 2%" · "Threshold limit: (a) ₹ 30,000; for any
+     such sum; and (b) ₹ 1,00,000 in case of aggregate of such sums." */
   'tds.194c.threshold.per_payment': verified(
     'tds.194c.threshold.per_payment', 30000,
-    `Income-tax Act 2025 s.393(1) Table 6 Sl.(i)/(ii) [1961: s.194C] — single payment. ${CA_CHAIN}`,
+    `Income-tax Act 2025 s.393(1) Table Sl. No. 6(i) [1961: s.194C] — "₹ 30,000; for any such sum". SOURCE: ${S393}.`,
     TY2627,
   ),
   'tds.194c.threshold.annual': verified(
     'tds.194c.threshold.annual', 100000,
-    `Income-tax Act 2025 s.393(1) Table 6 Sl.(i)/(ii) [1961: s.194C] — aggregate in a tax year. ${CA_CHAIN}`,
+    `Income-tax Act 2025 s.393(1) Table Sl. No. 6(i) [1961: s.194C] — "₹ 1,00,000 in case of aggregate of such sums". SOURCE: ${S393}.`,
     TY2627,
   ),
+  'tds.194c.charge_on_excess_only': verified('tds.194c.charge_on_excess_only', 0, WHOLE_SUM, TY2627),
   'tds.194c.rate_pct': conditioned(
     'tds.194c.rate_pct',
     [
       { value: 1, when: { payeeType: 'individual' } },   // Individual / HUF
       { value: 2 },                                       // everyone else — the default
     ],
-    `Income-tax Act 2025 s.393(1) Table 6 Sl.(i)/(ii) [1961: s.194C] — 1% Individual/HUF, 2% others. ${CA_CHAIN}`,
+    `Income-tax Act 2025 s.393(1) Table Sl. No. 6(i) [1961: s.194C] — "(a) 1%, if contractor is individual or Hindu undivided family; (b) 2%". SOURCE: ${S393}.`,
     TY2627,
   ),
 
@@ -262,9 +270,10 @@ export const TDS_RULES: RuleCatalog = {
      the kind of gap where guessing is worst. */
   'tds.194j.threshold': verified(
     'tds.194j.threshold', 50000,
-    `Income-tax Act 2025 s.393(1) Table 6 Sl.(iii) [1961: s.194J]. ${CA_CHAIN}`,
+    `Income-tax Act 2025 s.393(1) Table Sl. No. 6(iii) [1961: s.194J] — "Threshold limit: (i) for (a), (b), (d) and (e) of Col. B: ₹ 50,000" (director's fees (c): Nil). SOURCE: ${S393}.`,
     TY2627,
   ),
+  'tds.194j.charge_on_excess_only': verified('tds.194j.charge_on_excess_only', 0, WHOLE_SUM, TY2627),
   'tds.194j.rate_pct': conditioned(
     'tds.194j.rate_pct',
     [
@@ -272,36 +281,47 @@ export const TDS_RULES: RuleCatalog = {
       { value: 2, when: { serviceType: 'technical' } },
       // no default — see above
     ],
-    `Income-tax Act 2025 s.393(1) Table 6 Sl.(iii) [1961: s.194J] — 10% professional, 2% technical. ${CA_CHAIN}`,
+    `Income-tax Act 2025 s.393(1) Table Sl. No. 6(iii) [1961: s.194J] — "(a) 2% … fees for technical services (not being a professional services) …; (b) 10% … in cases other than (a)". SOURCE: ${S393}.`,
     TY2627,
   ),
 
-  /* Interest. The threshold doubles for a senior citizen — the 2025 Act's Table 5
-     Sl.(ii)/(iii) split likely carries this same distinction. */
+  /* Interest — DOWNGRADED to unverified on 2026-10-03, because the text does not support what was asserted
+     for THIS product's users:
+       • ₹50,000 / ₹1,00,000 (senior) is Sl. No. 5(ii), whose payer is a BANKING company, a co-operative society
+         carrying on the business of BANKING, or a post office. A non-banking society is Sl. No. 5(iii)
+         ("Specified person [other than person in Sl. No. 5 (ii). C]"): "Threshold limit: ₹ 10,000".
+       • s.393(4) Table Sl. No. 7(b): NO deduction on interest paid "by a co-operative society other than a
+         co-operative bank, to a member thereof" or "to any other co-operative society", except where its
+         turnover exceeds fifty crore rupees in the preceding tax year AND the 5(ii) threshold is crossed.
+       • The rate is "Rates in force", not a figure in s.393 — 10% was never read from the text.
+     So the answer depends on who pays and to whom; one number would mislead a PACS. Unverified ⇒ the F-lane
+     and computeTds refuse rather than state ₹50,000 to a society that owes no TDS on members' interest. */
   'tds.194a.threshold': conditioned(
     'tds.194a.threshold',
     [
       { value: 100000, when: { payeeAge: 'senior' } },
-      { value: 50000 },                                   // everyone else — the default
+      { value: 50000 },
     ],
-    `Income-tax Act 2025 s.393(1) Table 5 Sl.(ii)/(iii) [1961: s.194A] — ₹50,000; ₹1,00,000 for senior citizens (bank/post office). ${CA_CHAIN}`,
+    `Income-tax Act 2025 s.393(1) Table Sl. No. 5(ii) — BANKING payers only; a non-banking society is 5(iii) (₹ 10,000) and ` +
+      `s.393(4) Sl. No. 7(b) exempts interest a non-bank co-operative pays its members / other co-operatives. SOURCE: ${S393}. ` +
+      'UNVERIFIED for this product: payer-dependent, not modelled.',
     TY2627,
+    false,
   ),
-  'tds.194a.rate_pct': verified(
+  'tds.194a.rate_pct': tds(
     'tds.194a.rate_pct', 10,
-    `Income-tax Act 2025 s.393(1) Table 5 Sl.(ii)/(iii) [1961: s.194A]. ${CA_CHAIN}`,
+    `Income-tax Act 2025 s.393(1) Table Sl. No. 5 — "Rate: Rates in force" (the Finance Act's rate, not stated in s.393). ` +
+      `UNVERIFIED: 10% was never read from a text. SOURCE checked: ${S393}.`,
     TY2627,
   ),
 
   /* Rent. Threshold is PER MONTH — a different kind again, hence its own key name; a
      caller must not compare an annual figure to it. NO DEFAULT rate: the asset decides.
-     ⚠️ The CA's answer arrived with this row's columns run together and carried the
-     caveat "(नए reporting framework में)" on the threshold. The values are legible and
-     recorded, but this row is the least certain on the list — re-confirm before it drives
-     a posting. */
+     The CA's answer carried the caveat "(नए reporting framework में)"; on 2026-10-03 both
+     figures were matched against s.393(1) Table Sl. No. 2 itself. */
   'tds.194i.threshold.per_month': verified(
     'tds.194i.threshold.per_month', 50000,
-    `Income-tax Act 2025 s.393(1) Table 2 [1961: s.194I] — PER MONTH. CA noted "नए reporting framework में" — least certain row; re-confirm. ${CA_CHAIN}`,
+    `Income-tax Act 2025 s.393(1) Table Sl. No. 2(i)/(ii) [1961: s.194I] — "Threshold limit: ₹ 50,000 for a month or part of a month". SOURCE: ${S393}.`,
     TY2627,
   ),
   'tds.194i.rate_pct': conditioned(
@@ -311,9 +331,10 @@ export const TDS_RULES: RuleCatalog = {
       { value: 10, when: { assetType: 'land_building' } },  // incl. furniture
       // no default — rent of what?
     ],
-    `Income-tax Act 2025 s.393(1) Table 2 [1961: s.194I] — 2% plant & machinery, 10% land/building/furniture. ${CA_CHAIN}`,
+    `Income-tax Act 2025 s.393(1) Table Sl. No. 2(ii) (payer: specified person — every society) [1961: s.194I] — "(a) 2%, for the use of any machinery or plant or equipment; and (b) 10%, for the use of any land, or building … or furniture, or fittings". SOURCE: ${S393}.`,
     TY2627,
   ),
+  'tds.194i.charge_on_excess_only': verified('tds.194i.charge_on_excess_only', 0, WHOLE_SUM, TY2627),
 
   /* Historical: the pre-2026 194Q figure, kept so a FY 2024-25 or 2025-26 purchase still
      resolves ITS OWN law. Never delete an old value — the 2025 Act's transitional

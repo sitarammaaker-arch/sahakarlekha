@@ -80,8 +80,14 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
      statement, not a source — the exact distinction this section keeps re-teaching. */
   const gate = tax.resolveTaxRule('tds.194q.applies_if.buyer_turnover_min', CTX);
   ok('194Q gate: the CLAIMED ₹10 crore condition is still recorded, not deleted', gate.value === 100000000);
-  ok('194Q gate: the cite says it was NOT FOUND in the text', gate.cite.includes('NOT FOUND'));
-  ok('194Q gate: unverified — "we looked and did not find it" ≠ "it does not exist"', gate.verified === false);
+  /* FOUND 2026-10-03 — not in s.393 but in the definition of "buyer", s.402(6) Table Sl. No. 1. The figure
+     the founder stated was right; until the text was read it stayed a claim. */
+  ok('194Q gate: now cites the definition of "buyer", s.402(6)', gate.cite.includes('s.402(6)') && gate.cite.includes('section-402-5'));
+  ok('194Q gate: quotes the text ("ten crore rupees … immediately preceding")', gate.cite.includes('ten crore rupees') && gate.cite.includes('immediately'));
+  ok('194Q gate: verified — read in the Act, not stated', gate.verified === true);
+  const gst = tax.resolveTaxRule('tds.194q.base_excludes_gst_when_separate_and_on_credit', CTX);
+  ok('194Q GST: the circular is recorded with BOTH halves (credit basis / payment basis)', gst.cite.includes('payment basis') && gst.cite.includes('13/2021'));
+  ok('194Q GST: unverified under the 2025 Act (a 1961-Act circular)', gst.verified === false);
   ok('194Q gate: never enforced, so it cannot silently gate a computation',
     computeTds({ section: '194q', aggregateMinor: 800000000, ctx: CTX }).applicable === true);
 
@@ -125,15 +131,18 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
   // Told the service type, the RATE resolves; above the threshold it then stops only for the missing
   // sourced excess/whole basis (Phase-2 D) — not for the rate any more. Below the threshold it answers.
   const jt = computeTds({ section: '194j', aggregateMinor: 900000000, ctx: { ...CTX, attrs: { serviceType: 'technical' } } });
-  ok('194J: told the service type, the rate resolves; it refuses only for the unsourced basis',
-    isRefusal(jt) && jt.missing.join() === 'tds.194j.charge_on_excess_only');
+  ok('194J: told the service type, above the threshold TDS is on the ENTIRE sum (s.393(1)(a))',
+    !isRefusal(jt) && jt.taxableMinor === 900000000 && jt.tdsMinor === 18000000);
   ok('194J: told the service type, below the threshold it answers (no TDS)',
     !isRefusal(computeTds({ section: '194j', aggregateMinor: 4000000, ctx: { ...CTX, attrs: { serviceType: 'technical' } } })));
 
-  // 194A — the threshold doubles for a senior citizen; there IS a default.
-  ok('194A: senior citizen → ₹1,00,000',
-    tax.verifiedValue('tds.194a.threshold', { ...CTX, attrs: { payeeAge: 'senior' } }).value === 100000);
-  ok('194A: everyone else → ₹50,000', tax.verifiedValue('tds.194a.threshold', CTX).value === 50000);
+  // 194A — DOWNGRADED 2026-10-03: ₹50,000/₹1,00,000 is the BANKING payers' row (5(ii)); a non-banking
+  // society is 5(iii) (₹10,000) and s.393(4) Sl. 7(b) exempts interest it pays members; rate is "Rates in force".
+  ok('194A: the banking-row figure is no longer stated as fact', tax.verifiedValue('tds.194a.threshold', CTX) === null);
+  ok('194A: ...its cite names the payer split and the member exemption',
+    tax.resolveTaxRule('tds.194a.threshold', CTX).cite.includes('5(iii)') && tax.resolveTaxRule('tds.194a.threshold', CTX).cite.includes('7(b)'));
+  ok('194A: rate unverified ("Rates in force")', tax.verifiedValue('tds.194a.rate_pct', CTX) === null);
+  ok('194A: compute refuses', isRefusal(computeTds({ section: '194a', aggregateMinor: 900000000, ctx: CTX })));
 
   // 194I — per-MONTH threshold, and no default rate: rent of what?
   ok('194I: threshold is PER MONTH, under its own key',
@@ -175,7 +184,7 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
   ok('F-lane: ...and says either breach attracts TDS', ct.text.includes('कोई भी'));
 
   ok('F-lane: 194J lists professional AND technical', answerFact('194J की दर', CTX).text.includes('10%'));
-  ok('F-lane: 194A senior threshold is stated', answerFact('194A की सीमा', CTX).text.includes('1,00,000'));
+  ok('F-lane: 194A is NOT stated as a fact any more (payer-dependent)', !(answerFact('194A की सीमा', CTX) || { text: '' }).text.includes('50,000'));
   ok('F-lane: 194I per-month threshold is labelled as such', answerFact('194I की सीमा', CTX).text.includes('प्रति माह'));
 
   // The section LABEL follows the date — 2026 prints the 2025 Act's reference.
@@ -202,9 +211,24 @@ console.log('\n  Tier 0 — TDS as data, computed deterministically\n');
   ok('compute: ₹4,000 exactly, in paise', r.tdsMinor === 400000);
   ok('compute: records the rule versions incl. the basis rule', r.basis.length === 3 && r.basis[0].version === 2 && r.basis[2].key === 'tds.194q.charge_on_excess_only');
   ok('compute: explains in Hindi', r.explain.includes('TDS'));
-  const h = computeTds({ section: '194h', aggregateMinor: 900000000, ctx: CTX });
-  ok('compute: 194H above its threshold REFUSES — no sourced excess/whole basis', h.refused === true && h.missing.includes('tds.194h.charge_on_excess_only'));
-  ok('compute: …and the refusal says why, in Hindi', /पूरी राशि पर लगता है या केवल सीमा से ऊपर/.test(h.reason));
+  /* 2026-10-03: s.393(1)(a) — "on the entire amount of such income or sum, where the amount or aggregate of
+     amounts exceeds the threshold limit" — read in the text. 194H/194C/194J/194I now carry that basis (0). */
+  const h = computeTds({ section: '194h', aggregateMinor: 2500000, ctx: CTX });   // ₹25,000 > ₹20,000
+  ok('compute: 194H above its threshold → TDS on the ENTIRE sum, not the excess', !isRefusal(h) && h.taxableMinor === 2500000);
+  ok('compute: 194H ₹25,000 × 2% = ₹500 exactly', !isRefusal(h) && h.tdsMinor === 50000);
+  ok('compute: …cites s.393(1)(a) in the basis', !isRefusal(h) && h.basis[2].key === 'tds.194h.charge_on_excess_only' && h.basis[2].cite.includes('393(1)(a)'));
+  // A section with NO basis rule still refuses above its threshold (the guard did not become permissive).
+  const noBasis = tax.TDS_RULES['tds.194q.charge_on_excess_only'];
+  ok('compute: the basis is still data — 194Q stays "excess" (Note 1(b))', !!noBasis);
+  // 194C: either limit binds. Aggregate under ₹1,00,000 but ONE sum over ₹30,000 ⇒ TDS on that sum.
+  const k1 = computeTds({ section: '194c', aggregateMinor: 4000000, paymentMinor: 4000000, ctx: CTX });
+  ok('compute: 194C single sum ₹40,000 > ₹30,000 → TDS on that sum (2% = ₹800)', !isRefusal(k1) && k1.applicable && k1.tdsMinor === 80000);
+  const k2 = computeTds({ section: '194c', aggregateMinor: 4000000, paymentMinor: 2500000, ctx: CTX });
+  ok('compute: 194C sum ₹25,000, year ₹40,000 → no TDS', !isRefusal(k2) && !k2.applicable && k2.tdsMinor === 0);
+  const k3 = computeTds({ section: '194c', aggregateMinor: 4000000, ctx: CTX });
+  ok('compute: 194C under the annual limit WITHOUT the payment → refuses (cannot tell)', isRefusal(k3) && k3.missing.includes('paymentMinor'));
+  const k4 = computeTds({ section: '194c', aggregateMinor: 12000000, ctx: { ...CTX, attrs: { payeeType: 'individual' } } });
+  ok('compute: 194C year ₹1,20,000 > ₹1,00,000, individual → 1% of the ENTIRE ₹1,20,000 = ₹1,200', !isRefusal(k4) && k4.tdsMinor === 120000);
 
   const below = computeTds({ section: '194h', aggregateMinor: 1000000, ctx: CTX });
   ok('compute: below threshold ⇒ zero, not a refusal', below.applicable === false && below.tdsMinor === 0);

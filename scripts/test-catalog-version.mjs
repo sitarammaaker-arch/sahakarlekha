@@ -38,7 +38,7 @@ console.log('\n  catalog_versions — the rules change-audit trail\n');
 
 // The values migration 053 seeds. If a rule changes, update BOTH — that IS recording a version.
 const SEEDED = {
-  tds:  { hash: '1cef8d5dc06e5e38', ruleCount: 17, valueCount: 21, verifiedCount: 19, unverifiedCount: 2 },   // 093: + tds.194q.charge_on_excess_only
+  tds:  { hash: '98270a8826d27783', ruleCount: 22, valueCount: 26, verifiedCount: 21, unverifiedCount: 5 },   // 099: rules matched to the 2025 Act text (gate verified, whole-sum bases, 194A unverified)
   // 068: Haryana's text-verified figures (Act s.87(1)(a), Rules rr.72-74) + bad_debt_fund_min_pct.
   ucas: { hash: 'd0e62014e64728ca', ruleCount: 5,  valueCount: 8,  verifiedCount: 4,  unverifiedCount: 0 },
 };
@@ -51,7 +51,7 @@ for (const [name, cat] of [['tds', TDS_RULES], ['ucas', UCAS_RULES]]) {
   ok(`${name}: hash is deterministic`, v.contentHash === buildCatalogVersion(name, cat).contentHash);
 
   // The canary — the seeded hash still describes the shipped catalog.
-  ok(`${name}: content hash matches the latest recorded seed (053 → 093)`,
+  ok(`${name}: content hash matches the latest recorded seed (053 → 099)`,
     v.contentHash === seed.hash,
     `catalog changed (${v.contentHash} ≠ ${seed.hash}) — record a new catalog_versions row`);
 
