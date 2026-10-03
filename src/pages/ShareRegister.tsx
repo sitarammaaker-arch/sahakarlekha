@@ -1,3 +1,4 @@
+import { shareRefundOutstanding } from '@/lib/shares/refundPayable';
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
@@ -21,7 +22,7 @@ import { premiumCap as sharePremiumCap, premiumAllowed as isSharePremiumAllowed 
 
 const ShareRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { members, updateMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, society, updateSociety, vouchers } = useData();
+  const { members, updateMember, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, society, updateSociety, vouchers } = useData();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
@@ -247,6 +248,7 @@ const ShareRegister: React.FC = () => {
                       <div className="flex gap-1 items-center">
                         <ShareTxnButton member={m} hi={hi} kind="purchase" onSubmit={purchaseShareCapital} />
                         {m.shareCapital > 0 && <ShareTxnButton member={m} hi={hi} kind="refund" onSubmit={refundShareCapital} />}
+                        <ShareRefundPayableButtons member={m} hi={hi} outstanding={shareRefundOutstanding(vouchers, m.id)} onApprove={approveShareRefund} onPay={payShareRefund} />
                         {m.shareCapital > 0 && <TransferShareButton member={m} members={approvedMembers} hi={hi} maxPremiumPct={society.maxSharePremiumPercent ?? 0} onTransfer={transferShareCapital} />}
                         <ShareOpButton member={m} hi={hi} onSubmit={shareOperation} />
                         <Button variant="ghost" size="icon" onClick={() => openEdit(m)}>
@@ -434,6 +436,78 @@ function ShareTxnButton({ member, hi, kind, onSubmit }: { member: Member; hi: bo
               <Button variant="outline" onClick={() => setOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
               <Button disabled={!(val > 0) || overCap} onClick={() => { onSubmit(member.id, val, mode, date); setOpen(false); setAmt(''); }}>
                 {isRefund ? (hi ? 'वापसी दर्ज करें' : 'Post Refund') : (hi ? 'शेयर जोड़ें' : 'Add Shares')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// Two-step refund: the committee approves (share capital moves to a payable), the society pays later.
+function ShareRefundPayableButtons({ member, hi, outstanding, onApprove, onPay }: {
+  member: Member; hi: boolean; outstanding: number;
+  onApprove: (memberId: string, amount: number, date: string, resolution: string) => boolean;
+  onPay: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => boolean;
+}) {
+  const [open, setOpen] = useState<null | 'approve' | 'pay'>(null);
+  const [amt, setAmt] = useState('');
+  const [mode, setMode] = useState<'cash' | 'bank'>('cash');
+  const [resolution, setResolution] = useState('');
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const val = Number(amt) || 0;
+  const cap = member.shareCapital || 0;
+  const fmtC = (n: number) => n.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' });
+  const approving = open === 'approve';
+  const limit = approving ? cap : outstanding;
+  const close = () => { setOpen(null); setAmt(''); setResolution(''); };
+  const submit = () => {
+    const done = approving ? onApprove(member.id, val, date, resolution) : onPay(member.id, val, mode, date);
+    if (done) close();
+  };
+  return (
+    <>
+      {cap > 0 && <Button variant="outline" size="sm" className="h-8" onClick={() => setOpen('approve')}>{hi ? 'वापसी स्वीकृत' : 'Approve refund'}</Button>}
+      {outstanding > 0 && <Button variant="outline" size="sm" className="h-8" onClick={() => { setAmt(String(outstanding)); setOpen('pay'); }}>{hi ? `देय भुगतान (${fmtC(outstanding)})` : `Pay refund (${fmtC(outstanding)})`}</Button>}
+      <Dialog open={open !== null} onOpenChange={o => { if (!o) close(); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>{approving ? (hi ? 'शेयर वापसी स्वीकृति' : 'Approve Share Refund') : (hi ? 'स्वीकृत शेयर वापसी का भुगतान' : 'Pay Approved Share Refund')} — {member.name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {approving ? (hi ? 'वर्तमान शेयर पूँजी:' : 'Current share capital:') : (hi ? 'स्वीकृत, अभी देय:' : 'Approved, still payable:')} <strong>{fmtC(limit)}</strong>
+            </p>
+            <div>
+              <Label>{hi ? 'राशि' : 'Amount'}</Label>
+              <Input type="number" value={amt} max={limit} onChange={e => setAmt(e.target.value)} />
+            </div>
+            {approving ? (
+              <div>
+                <Label>{hi ? 'समिति प्रस्ताव संख्या / संदर्भ' : 'Committee resolution no. / reference'}</Label>
+                <Input value={resolution} onChange={e => setResolution(e.target.value)} />
+              </div>
+            ) : (
+              <div>
+                <Label>{hi ? 'भुगतान विधि' : 'Payment mode'}</Label>
+                <select value={mode} onChange={e => setMode(e.target.value as 'cash' | 'bank')} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="cash">{hi ? 'नकद' : 'Cash'}</option>
+                  <option value="bank">{hi ? 'बैंक' : 'Bank'}</option>
+                </select>
+              </div>
+            )}
+            <div>
+              <Label>{hi ? 'तिथि' : 'Date'}</Label>
+              <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {approving
+                ? (hi ? 'Dr शेयर पूँजी / Cr शेयर वापसी देय — पैसा अभी नहीं जाता; भुगतान बाद में अलग से।' : 'Posts Dr Share Capital / Cr Share Refund Payable; the payment is a separate later step.')
+                : (hi ? 'Dr शेयर वापसी देय / Cr नकद-बैंक।' : 'Posts Dr Share Refund Payable / Cr Cash-Bank.')}
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={close}>{hi ? 'रद्द' : 'Cancel'}</Button>
+              <Button disabled={!(val > 0) || val > limit || (approving && resolution.trim().length < 2)} onClick={submit}>
+                {approving ? (hi ? 'स्वीकृत करें' : 'Approve') : (hi ? 'भुगतान दर्ज करें' : 'Post Payment')}
               </Button>
             </div>
           </div>

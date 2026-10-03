@@ -80,7 +80,8 @@ import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { splitVoucherExtras, extrasFailureToast } from '@/lib/voucherPersistence';
 import { shareOpPosting, validateShareOp, applyShareOp, type ShareOpType } from '@/lib/shareOps';
 import { resolveDepositLiabilityAccount, depositPosting, applyDepositTxn, validateDepositTxn } from '@/lib/depositEngine';
-import { professionalTaxAccountId, MISSING_HEAD_TOAST, missingDepositHeadToast } from '@/lib/accounting/headResolve';
+import { professionalTaxAccountId, shareRefundPayableAccountId, MISSING_HEAD_TOAST, missingDepositHeadToast } from '@/lib/accounting/headResolve';
+import { buildShareRefundApproval, buildShareRefundPayment, shareRefundOutstanding, SHARE_REFUND_APPROVE_REF, SHARE_REFUND_PAY_REF, SHARE_REFUND_MESSAGE } from '@/lib/shares/refundPayable';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, nextFY } from '@/lib/depreciation';
@@ -214,6 +215,10 @@ interface DataContextType {
   changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string) => boolean;
   deleteMember: (id: string) => void;
   refundShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
+  /** Two-step refund: committee approval (Dr Share Capital / Cr Share Refund Payable) … */
+  approveShareRefund: (memberId: string, amount: number, date: string, resolution: string) => boolean;
+  /** … and the later payment (Dr Share Refund Payable / Cr Cash-Bank). */
+  payShareRefund: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => boolean;
   purchaseShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
   transferShareCapital: (fromMemberId: string, toMemberId: string, amount: number, date: string, premium?: number, opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string }) => void;
   shareOperation: (memberId: string, type: ShareOpType, amount: number, opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string; date?: string; reason?: string }) => boolean;
@@ -3221,6 +3226,69 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
   }, [accounts, addVoucher, user]);
+
+  // Two-step share refund. APPROVE: Dr Share Capital 1102 / Cr Share Refund Payable (journal) — the member's holding comes
+  // down now, the society's debt to them is booked. PAY: Dr Share Refund Payable / Cr Cash-Bank. Unlike refundShareCapital the
+  // member row is only touched on approval (shareCapital is reduced then); the outstanding is read from live vouchers.
+  // RULE 1: if the member row cannot be saved, the member is restored AND the voucher is cancelled again.
+  const approveShareRefund = useCallback((memberId: string, amount: number, date: string, resolution: string): boolean => {
+    if (guardFYLocked()) return false;
+    const member = membersRef.current.find(m => m.id === memberId);
+    if (!member) return false;
+    if (guardPeriodLock(date)) return false;
+    const payableId = shareRefundPayableAccountId(accounts);
+    if (!payableId) { toastRef.current({ ...MISSING_HEAD_TOAST.shareRefund, variant: 'destructive', duration: 12000 }); return false; }
+    const built = buildShareRefundApproval({ amount, shareCapital: member.shareCapital || 0, shareCapAccountId: ACCOUNT_IDS.SHARE_CAP, payableAccountId: payableId, resolution });
+    if (built.ok === false) {
+      if (built.error !== 'no_payable_head') toastRef.current({ title: 'शेयर वापसी स्वीकृत नहीं हुई', description: SHARE_REFUND_MESSAGE[built.error], variant: 'destructive', duration: 10000 });
+      return false;
+    }
+    const v = addVoucher({
+      type: 'journal', date, debitAccountId: ACCOUNT_IDS.SHARE_CAP, creditAccountId: payableId, amount: built.amount, lines: built.lines,
+      narration: `Share refund approved for ${member.name} — resolution ${resolution.trim()} — ${date}`,
+      refType: SHARE_REFUND_APPROVE_REF, refId: memberId, createdBy: userRef.current?.name ?? 'System', memberId,
+    });
+    if (!v?.id) return false;   // addVoucher already told the user why
+    const before = member;
+    const updated = { ...member, shareCapital: toRupees(subMinor(toMinor(member.shareCapital || 0), toMinor(built.amount))) };
+    membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
+    setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
+    supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        reportCascade('Share refund approval member sync', error);
+        membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
+        setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
+        cancelVoucher(v.id, 'Share refund approval not saved (cloud save failed)', userRef.current?.name ?? 'System');
+        toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. वाउचर रद्द कर दिया गया।`, variant: 'destructive', duration: 12000 });
+      }
+    });
+    emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital }, after: { shareCapital: updated.shareCapital }, reason: `share:refund-approved — ${resolution.trim()}` });
+    toastRef.current({ title: '✅ शेयर वापसी स्वीकृत', description: `${member.name} · ₹${built.amount.toLocaleString('en-IN')} देय दर्ज` });
+    return true;
+  }, [accounts, addVoucher, cancelVoucher]);
+
+  const payShareRefund = useCallback((memberId: string, amount: number, mode: 'cash' | 'bank', date: string): boolean => {
+    if (guardFYLocked()) return false;
+    const member = membersRef.current.find(m => m.id === memberId);
+    if (!member) return false;
+    if (guardPeriodLock(date)) return false;
+    const payableId = shareRefundPayableAccountId(accounts);
+    if (!payableId) { toastRef.current({ ...MISSING_HEAD_TOAST.shareRefund, variant: 'destructive', duration: 12000 }); return false; }
+    const cashBank = mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const built = buildShareRefundPayment({ amount, outstanding: shareRefundOutstanding(vouchersRef.current, memberId), payableAccountId: payableId, cashBankAccountId: cashBank });
+    if (built.ok === false) {
+      if (built.error !== 'no_payable_head') toastRef.current({ title: 'शेयर वापसी का भुगतान नहीं हुआ', description: SHARE_REFUND_MESSAGE[built.error], variant: 'destructive', duration: 10000 });
+      return false;
+    }
+    const v = addVoucher({
+      type: 'payment', date, debitAccountId: payableId, creditAccountId: cashBank, amount: built.amount, lines: built.lines,
+      narration: `Share refund paid to ${member.name} — ${date}`,
+      refType: SHARE_REFUND_PAY_REF, refId: memberId, createdBy: userRef.current?.name ?? 'System', memberId,
+    });
+    if (!v?.id) return false;
+    toastRef.current({ title: '✅ शेयर वापसी का भुगतान', description: `${member.name} · ₹${built.amount.toLocaleString('en-IN')}` });
+    return true;
+  }, [accounts, addVoucher]);
 
   // ECR-16 / MS-02: statutory share operations — bonus / forfeit / redeem / surrender.
   // Posts the SHARE_CAP voucher and moves member.shareCapital by the same amount so the
@@ -7271,7 +7339,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
     addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
-    addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
+    addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
     addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety, closeFinancialYear,
@@ -7310,7 +7378,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
     addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
-    addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
+    addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
     addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety, closeFinancialYear,
