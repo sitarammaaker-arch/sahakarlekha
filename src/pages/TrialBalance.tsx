@@ -14,6 +14,7 @@ import { generateTrialBalancePDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { isEmptyPeriod } from '@/lib/reportComparative';
+import { PrintButton, PrintHeader } from '@/components/ReportPrint';
 
 const TrialBalance: React.FC = () => {
   const { t, language } = useLanguage();
@@ -178,6 +179,7 @@ const TrialBalance: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
+          <PrintHeader />
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Scale className="h-7 w-7 text-primary" />
             {t('trialBalance')}
@@ -185,6 +187,7 @@ const TrialBalance: React.FC = () => {
           <p className="text-muted-foreground">{language === 'hi' ? 'खातों का ट्रायल बैलेंस' : 'Trial Balance of Accounts'}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <PrintButton />
           <Button variant="outline" size="sm" className="gap-2" onClick={() => generateTrialBalancePDF(balances, society, asOnDate, language)}>
             <Download className="h-4 w-4" />PDF
           </Button>

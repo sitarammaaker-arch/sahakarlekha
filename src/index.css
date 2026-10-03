@@ -261,6 +261,8 @@
   }
 
   /* Print-friendly styles */
+  @page { size: A4; margin: 12mm; }
+
   @media print {
     .no-print {
       display: none !important;
@@ -274,6 +276,14 @@
       font-size: 12pt;
       line-height: 1.4;
     }
+
+    /* Report print (audit): repeat table headers per sheet, never split a row, keep totals together. */
+    thead { display: table-header-group; }
+    tfoot { display: table-footer-group; }
+    tr, .report-table tr { break-inside: avoid; page-break-inside: avoid; }
+    h1, h2, h3 { break-after: avoid; }
+    * { box-shadow: none !important; }
+    .overflow-x-auto, .overflow-auto { overflow: visible !important; }
 
     .report-table {
       border: 1px solid #000;

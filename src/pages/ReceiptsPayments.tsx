@@ -10,6 +10,7 @@ import { generateReceiptsPaymentsPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import type { ReceiptsPaymentsItem } from '@/types';
 import { rpParticulars } from '@/lib/ledger/rpLabel';
+import { PrintButton, PrintHeader } from '@/components/ReportPrint';
 
 const ReceiptsPayments: React.FC = () => {
   const { language } = useLanguage();
@@ -92,6 +93,7 @@ const ReceiptsPayments: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
+          <PrintHeader />
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <ArrowLeftRight className="h-7 w-7 text-primary" />
             {hi ? 'प्राप्ति एवं भुगतान खाता' : 'Receipts & Payments Account'}
@@ -103,6 +105,7 @@ const ReceiptsPayments: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <PrintButton />
           <Button variant="outline" size="sm" className="gap-2" onClick={() => generateReceiptsPaymentsPDF(data, society)}>
             <Download className="h-4 w-4" />PDF
           </Button>

@@ -9,6 +9,7 @@ import { ShoppingCart, Download, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateTradingAccountPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { PrintButton, PrintHeader } from '@/components/ReportPrint';
 
 const TradingAccount: React.FC = () => {
   const { language } = useLanguage();
@@ -62,6 +63,7 @@ const TradingAccount: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
+          <PrintHeader />
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <ShoppingCart className="h-7 w-7 text-primary" />
             {hi ? 'व्यापार खाता' : 'Trading Account'}
@@ -73,6 +75,7 @@ const TradingAccount: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <PrintButton />
           <Button
             variant="outline"
             size="sm"
