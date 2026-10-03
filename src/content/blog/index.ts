@@ -1186,6 +1186,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'खरीद, बिक्री, नकदी और स्टॉक एक ही कड़ी: रोज़ की छोटी जाँचें, सदस्य-उधार और साल-अंत की ऑडिट-तैयारी।',
     accent: 'emerald',
     tags: ['उपभोक्ता भंडार', 'स्टॉक', 'बिक्री', 'ऑडिट-तैयारी'],
+    image: '/blog/consumer-cooperative-store-accounting-audit-prep.webp',
+    imageAlt: 'उपभोक्ता सहकारी भंडार के काउंटर पर कर्मचारी लैपटॉप और बारकोड स्कैनर से सदस्य की खरीद दर्ज करते हुए, पीछे माल से भरी अलमारियाँ',
   },
   {
     slug: 'inventory-and-stock-management',
