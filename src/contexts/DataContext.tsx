@@ -24,6 +24,7 @@ import { getVoucherLines, buildVoucherEntries, splitNetByAccount } from '@/lib/v
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
+import { salaryAccrualLines, salaryAccrualChanged } from '@/lib/payroll/accrualLines';
 import { CORE_PARTS, setLoadFailures, refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import type { VoucherOwnerCheck } from '@/lib/voucherOwnership';
 import { buildMemberShareLedger } from '@/lib/memberSnapshot';
@@ -6732,42 +6733,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const accrualDate = /^\d{4}-\d{2}$/.test(base.month || '')
         ? new Date(Number(base.month.slice(0, 4)), Number(base.month.slice(5, 7)), 0).toISOString().split('T')[0]
         : base.createdAt.split('T')[0];
-      const lid = () => crypto.randomUUID();
-      const r2 = (n: number) => toRupees(toMinor(n));
       // ECR-14: when a statutory breakdown is present, book gross + employer contributions
       // to Salary Expense and split the employee dues + employer contributions to their
       // payable heads (EPF 2203 / ESI 2204 / PT 2207 / TDS 2202). Otherwise keep the legacy
-      // net-basis accrual so old salary flows are unchanged.
-      const pfEmp = base.pfEmployee || 0, pfEr = base.pfEmployer || 0;
-      const esiEmp = base.esiEmployee || 0, esiEr = base.esiEmployer || 0;
-      const ptAmt = base.pt || 0, tdsAmt = base.tds || 0;
-      const hasStatutory = (pfEmp + pfEr + esiEmp + esiEr + ptAmt + tdsAmt) > 0;
+      // net-basis accrual so old salary flows are unchanged. The lines come from the ONE shared
+      // builder (lib/payroll/accrualLines.ts) that updateSalaryRecord also uses.
+      const { lines, drTotal, hasStatutory } = salaryAccrualLines(base, payableAcc);
       try {
-        let av;
-        if (hasStatutory) {
-          const gross = r2((base.basicSalary || 0) + (base.allowances || 0));
-          const drTotal = r2(gross + pfEr + esiEr);   // employer contributions add to expense
-          const lines = [
-            { id: lid(), accountId: '5201', type: 'Dr' as const, amount: drTotal },
-            { id: lid(), accountId: payableAcc, type: 'Cr' as const, amount: base.netSalary },
-          ];
-          if (pfEmp + pfEr > 0) lines.push({ id: lid(), accountId: '2203', type: 'Cr' as const, amount: r2(pfEmp + pfEr) });
-          if (esiEmp + esiEr > 0) lines.push({ id: lid(), accountId: '2204', type: 'Cr' as const, amount: r2(esiEmp + esiEr) });
-          if (ptAmt > 0) lines.push({ id: lid(), accountId: '2207', type: 'Cr' as const, amount: r2(ptAmt) });
-          if (tdsAmt > 0) lines.push({ id: lid(), accountId: '2202', type: 'Cr' as const, amount: r2(tdsAmt) });
-          av = addVoucher({
-            type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: drTotal, lines,
-            narration: `Salary accrual (statutory): ${emp?.name || ''} - ${base.month} (${slipNo})`,
-            createdBy: 'System',
-          });
-        } else {
-          av = addVoucher({
-            type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: base.netSalary,
-            lines: [{ id: lid(), accountId: '5201', type: 'Dr', amount: base.netSalary }, { id: lid(), accountId: payableAcc, type: 'Cr', amount: base.netSalary }],
-            narration: `Salary accrual: ${emp?.name || ''} - ${base.month} (${slipNo})`,
-            createdBy: 'System',
-          });
-        }
+        const av = addVoucher({
+          type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: drTotal, lines,
+          narration: hasStatutory
+            ? `Salary accrual (statutory): ${emp?.name || ''} - ${base.month} (${slipNo})`
+            : `Salary accrual: ${emp?.name || ''} - ${base.month} (${slipNo})`,
+          createdBy: 'System',
+        });
         accrualVoucherId = av?.id || undefined;
       } catch { /* accrual best-effort; record still saves */ }
     }
@@ -6797,13 +6776,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // rewrote the rows directly and never touched the journal, so journal-read statements drifted.
     // Pre-check both vouchers: if either may not be edited in place, change NOTHING (not even the record).
     const amountChanged = data.netSalary !== undefined && data.netSalary !== oldRecord.netSalary;
+    // The accrual voucher carries the statutory split (EPF / ESI / PT / TDS + employer share), so ANY
+    // accrual-relevant field change re-syncs it — not only the net. Payment vouchers stay net-based.
+    const accrualChanged = salaryAccrualChanged(oldRecord, merged);
     {
       const payV = oldRecord.isPaid && data.isPaid && oldRecord.voucherId ? vouchersRef.current.find(x => x.id === oldRecord.voucherId) : undefined;
-      const accV = amountChanged && oldRecord.accrualVoucherId ? vouchersRef.current.find(x => x.id === oldRecord.accrualVoucherId) : undefined;
+      const accV = accrualChanged && oldRecord.accrualVoucherId ? vouchersRef.current.find(x => x.id === oldRecord.accrualVoucherId) : undefined;
       const payTouched = payV && !payV.isDeleted && (amountChanged || (data.paidDate !== undefined && data.paidDate !== oldRecord.paidDate) || (data.paymentMode !== undefined && data.paymentMode !== oldRecord.paymentMode));
       for (const v of [payTouched ? payV : undefined, accV && !accV.isDeleted && !isEngineVoucher(accV) ? accV : undefined]) {
         if (v && isEditLocked(v, !!societyRef.current?.approvalRequired)) {
           toastRef.current({ title: 'वेतन बदलाव नहीं हुआ', description: `वाउचर ${v.voucherNo} सीधे edit नहीं हो सकता (approved / reversed) — पहले उसे reverse करें, फिर वेतन बदलें।`, variant: 'destructive', duration: 12000 });
+          return;
+        }
+      }
+      // An unbalanced statutory breakdown cannot be re-booked: refuse the whole edit rather than save a
+      // slip whose accrual voucher disagrees with it (RULE 1 — never let local state and books diverge).
+      if (accV && !accV.isDeleted && !isEngineVoucher(accV)) {
+        const payableAccCheck = accounts.find(a => a.id === '2103')?.id || '2103';
+        if (!salaryAccrualLines(merged, payableAccCheck, lid).balanced) {
+          toastRef.current({ title: 'वेतन बदलाव नहीं हुआ', description: 'रकमें संतुलित नहीं हैं — (मूल वेतन + भत्ते + नियोक्ता PF/ESI) = (नेट वेतन + सभी देय कटौतियाँ) होना चाहिए। नेट वेतन और कटौतियाँ दोबारा जाँचकर डालें।', variant: 'destructive', duration: 12000 });
           return;
         }
       }
@@ -6863,17 +6854,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }
 
-    // Accrual re-sync: if the salary AMOUNT changed and the record was accrued, keep the
-    // accrual voucher (Dr 5201 / Cr 2103) in step so the expense + liability stay correct.
-    if (amountChanged && oldRecord.accrualVoucherId) {
+    // Accrual re-sync: if any accrual-relevant amount changed and the record was accrued, keep the
+    // accrual voucher in step so the expense and EVERY payable (net, EPF, ESI, PT, TDS) stay correct.
+    // The lines come from the same builder addSalaryRecord uses, so the statutory split is never dropped.
+    if (accrualChanged && oldRecord.accrualVoucherId) {
       const av = vouchersRef.current.find(x => x.id === oldRecord.accrualVoucherId);
       if (av && !av.isDeleted && !isEngineVoucher(av)) {
         const payableAcc = accounts.find(a => a.id === '2103')?.id || '2103';
-        const accLines: VoucherLine[] = [
-          { id: lid(), accountId: '5201', type: 'Dr', amount: merged.netSalary },
-          { id: lid(), accountId: payableAcc, type: 'Cr', amount: merged.netSalary },
-        ];
-        if (!updateVoucher(av.id, { amount: merged.netSalary, debitAccountId: '5201', creditAccountId: payableAcc, lines: accLines })) return;
+        const accrual = salaryAccrualLines(merged, payableAcc, lid);
+        if (!updateVoucher(av.id, { amount: accrual.drTotal, debitAccountId: '5201', creditAccountId: payableAcc, lines: accrual.lines })) return;
       }
     }
 
