@@ -269,7 +269,8 @@ export default function GstSummary() {
       const gross = s.items.reduce((sum, it) => sum + it.qty * it.rate, 0);
       const scale = gross > 0 ? s.netAmount / gross : 1;
       for (const item of s.items) {
-        const hsn = (item as any).hsnCode || 'N/A';
+        // SaleItem carries no hsnCode — resolve from the item master (audit C-12; returns side already does).
+        const hsn = (item as any).hsnCode || stockItems.find(st => st.id === item.itemId)?.hsnCode || 'N/A';
         const existing = map.get(hsn) ?? { hsn, description: item.itemName, uqc: item.unit || 'NOS', totalQty: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
         existing.totalQty += item.qty;
         const itemNet = item.qty * item.rate * scale;
@@ -289,7 +290,7 @@ export default function GstSummary() {
       map.set(hsn, e);
     }
     return Array.from(map.values()).sort((a, b) => a.hsn.localeCompare(b.hsn));
-  }, [activeSales, returnClassification]);
+  }, [activeSales, returnClassification, stockItems]);
 
   // ── GSTR-3B: Table 3.1 outward supplies ─────────────────────────────────
   // Partition taxable value correctly: 3.1(a) is "other than nil/exempt", so nil-rated
