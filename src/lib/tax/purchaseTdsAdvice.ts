@@ -7,8 +7,10 @@
  * s.393(1) Sl. 8(ii) Note 1(b), so the TDS of a bill = TDS(after) − TDS(before)).
  *
  * What it says it does NOT know (never filled in from memory):
- *  • the buyer-turnover gate (tds.194q.applies_if.buyer_turnover_min) — recorded, UNVERIFIED;
- *  • whether GST belongs in the base — the aggregate here is the bill value WITHOUT GST, and says so.
+ *  • the buyer-turnover gate (tds.194q.applies_if.buyer_turnover_min) — VERIFIED in s.402(6) (2026-10-03) but not
+ *    enforced: the books hold no single "preceding-year turnover", so the advice STATES the condition;
+ *  • GST in the base — the aggregate here is the bill value WITHOUT GST. That matches CBDT Circular 13/2021
+ *    para 4.3.2 (GST shown separately + TDS at credit); a 1961-Act circular, continuity unverified, and said so.
  */
 import { computeTds, isRefusal } from './computeTds';
 import { fyStartOf } from '../fyPeriod';
@@ -26,8 +28,8 @@ export type PurchaseTdsAdvice =
 const toMinorR = (r: number) => Math.round((Number(r) || 0) * 100) as Minor;
 
 export const PURCHASE_194Q_CAVEATS = [
-  'क्रेता (समिति) के पिछले वर्ष के turnover वाली शर्त अभी सत्यापित नहीं — CA से पुष्टि करें।',
-  'राशि बिना GST के मूल्य पर जोड़ी गई है; GST आधार में शामिल हो या नहीं, यह नियम अभी सत्यापित नहीं।',
+  '194Q तभी लागू है जब समिति का पिछले वर्ष का कुल बिक्री/turnover ₹10 करोड़ से अधिक था (आयकर अधिनियम 2025, धारा 402(6)) — इससे कम हो तो 194Q बिल्कुल नहीं कटेगा।',
+  'राशि बिना GST के जोड़ी गई है: CBDT Circular 13/2021 के अनुसार GST बिल में अलग दिखाया हो और TDS credit के समय कटे तो GST आधार में नहीं; भुगतान पहले हो तो पूरी राशि पर। यह 1961 अधिनियम का circular है — 2025 अधिनियम में लागू रहने की पुष्टि CA से करें।',
 ];
 
 export function purchaseTdsAdvice(args: {

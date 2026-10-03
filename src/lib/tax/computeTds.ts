@@ -24,6 +24,9 @@ export interface TdsInput {
   section: string;
   /** Aggregate value in the FY, in paise (ADR-0006). Not rupees — never rupees. */
   aggregateMinor: Minor;
+  /** THIS payment, in paise — needed only where a section also has a single-payment limit (194C: ₹30,000
+   *  "for any such sum"). Without it such a section refuses below its annual limit rather than guess. */
+  paymentMinor?: Minor;
   ctx: TaxContext;
 }
 
@@ -31,7 +34,7 @@ export interface TdsResult {
   applicable: boolean;
   /** TDS payable, in paise. 0 when below the threshold. */
   tdsMinor: Minor;
-  /** The portion the rate applied to — value in excess of the threshold. */
+  /** The portion the rate applied to — the excess over the threshold (194Q) or the entire sum (s.393(1)(a)). */
   taxableMinor: Minor;
   thresholdMinor: Minor;
   ratePct: number;
@@ -110,6 +113,29 @@ export function computeTds(input: TdsInput): TdsOutcome {
   const thresholdMinor = Math.round(thr.value * 100) as Minor;
 
   if (input.aggregateMinor <= thresholdMinor) {
+    // A single-payment limit (194C) can be crossed while the year's aggregate is still under its own.
+    // s.393(1)(a): then tax is due on the entire amount of THAT sum. No payment given ⇒ cannot tell ⇒ refuse.
+    const perPayment = verifiedValue(`tds.${s}.threshold.per_payment`, input.ctx);
+    if (perPayment) {
+      const perMinor = Math.round(perPayment.value * 100) as Minor;
+      if (input.paymentMinor === undefined || !isValidMinor(input.paymentMinor)) {
+        return {
+          applicable: false, refused: true,
+          reason: `धारा ${s.toUpperCase()} में एक भुगतान की सीमा (${inr(perMinor)}) भी है — इस भुगतान की राशि बताए बिना मैं नहीं कह सकता कि TDS बनता है या नहीं।`,
+          missing: ['paymentMinor'],
+        };
+      }
+      if (input.paymentMinor > perMinor) {
+        const { minor: tdsMinor } = applyPercent(input.paymentMinor, rate.value);
+        basis.push({ key: `tds.${s}.threshold.per_payment`, version: perPayment.version, effectiveFrom: perPayment.effectiveFrom, cite: perPayment.cite });
+        return {
+          applicable: true, tdsMinor, taxableMinor: input.paymentMinor, thresholdMinor: perMinor, ratePct: rate.value,
+          explain: `यह भुगतान ${inr(input.paymentMinor)} एक भुगतान की सीमा ${inr(perMinor)} से अधिक है — पूरी राशि पर ` +
+            `${rate.value}% TDS = ${inr(tdsMinor)}। (s.393(1)(a), नियम ${perPayment.effectiveFrom} से प्रभावी)`,
+          basis,
+        };
+      }
+    }
     return {
       applicable: false,
       tdsMinor: 0 as Minor,
@@ -125,8 +151,9 @@ export function computeTds(input: TdsInput): TdsOutcome {
   // (194Q: excess only — its Note 1(b)). It used to be "excess" for every section, which
   // understates TDS wherever the text charges the whole sum. Now it must be a verified rule;
   // without one this REFUSES rather than pick a basis (AI-N8).
+  // 1 = on the excess only (194Q, Note 1(b)) · 0 = on the entire sum (s.393(1)(a), the general rule).
   const excessOnly = verifiedValue(`tds.${s}.charge_on_excess_only`, input.ctx);
-  if (!excessOnly || excessOnly.value !== 1) {
+  if (!excessOnly || (excessOnly.value !== 1 && excessOnly.value !== 0)) {
     return {
       applicable: false,
       refused: true,
@@ -137,7 +164,8 @@ export function computeTds(input: TdsInput): TdsOutcome {
     };
   }
   basis.push({ key: `tds.${s}.charge_on_excess_only`, version: excessOnly.version, effectiveFrom: excessOnly.effectiveFrom, cite: excessOnly.cite });
-  const taxableMinor = (input.aggregateMinor - thresholdMinor) as Minor;
+  const onExcess = excessOnly.value === 1;
+  const taxableMinor = (onExcess ? input.aggregateMinor - thresholdMinor : input.aggregateMinor) as Minor;
   const { minor: tdsMinor } = applyPercent(taxableMinor, rate.value);
 
   return {
@@ -146,9 +174,11 @@ export function computeTds(input: TdsInput): TdsOutcome {
     taxableMinor,
     thresholdMinor,
     ratePct: rate.value,
-    explain:
-      `कुल ${inr(input.aggregateMinor)} में से सीमा ${inr(thresholdMinor)} घटाकर ${inr(taxableMinor)} पर ` +
-      `${rate.value}% TDS = ${inr(tdsMinor)}। (नियम ${thr.effectiveFrom} से प्रभावी)`,
+    explain: onExcess
+      ? `कुल ${inr(input.aggregateMinor)} में से सीमा ${inr(thresholdMinor)} घटाकर ${inr(taxableMinor)} पर ` +
+        `${rate.value}% TDS = ${inr(tdsMinor)}। (नियम ${thr.effectiveFrom} से प्रभावी)`
+      : `कुल ${inr(input.aggregateMinor)} सीमा ${inr(thresholdMinor)} से अधिक है — पूरी राशि पर ` +
+        `${rate.value}% TDS = ${inr(tdsMinor)}। (s.393(1)(a), नियम ${thr.effectiveFrom} से प्रभावी)`,
     basis,
   };
 }

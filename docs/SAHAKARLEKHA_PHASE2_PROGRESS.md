@@ -27,6 +27,22 @@
   - answer the CA questions
 - **Next dependency-safe task:** S4 design. The database refuses direct client writes to `vouchers`, `voucher_entries` and `ledger_events` for posting-ON societies, with the work done on the harness first, then staging.
 
+## 2026-10-03: 098 LIVE; CA tax answers checked against the Act's text
+- **098 LIVE** (founder: backup `sahakarlekha-prod-20261003-0343Z.dump`, then "SQL OK").
+  - Verified read-only: the migration row (03:53 UTC); `app_update_society_user_email` is SECURITY DEFINER; anon cannot execute it, authenticated can; 0 mixed-case emails.
+- **CA answers, each read against the text on incometaxindia.gov.in** (s.393 and s.402 of the 2025 Act; CBDT Circular 20/2021):
+  1. **The 194Q buyer gate is real.** The figure is right but the CA's cite was wrong: they pointed to "393(1) entry 6(i)", which is the contractor row. The gate lives in **s.402(6) Table Sl. 1, the definition of "buyer"**: preceding-year turnover above ₹10 crore. It is now VERIFIED, and recorded but not enforced: the advice states the condition.
+  2. **GST in the 194Q base:** Circular 20/2021 para 5.2.1 (restating 13/2021 para 4.3.2) excludes GST only when it is shown separately **and** TDS is deducted on credit. On a payment basis, TDS is on the whole amount; the CA's answer missed this half. It is a 1961-Act circular, and its continuity under the 2025 Act has not been read, so it is recorded UNVERIFIED.
+  3. **Whole sum, not excess:** s.393(1)(a), "on the entire amount… where the amount or aggregate… exceeds the threshold". `charge_on_excess_only = 0` for 194H/194C/194J/194I. computeTds now computes these, and also checks 194C's ₹30,000 single-payment limit (`paymentMinor`).
+- **NEW finding, 194A downgraded:** ₹50,000 / ₹1,00,000 is the banking-payers row (5(ii)).
+  - A non-banking society falls under 5(iii), with a ₹10,000 threshold.
+  - s.393(4) Sl. 7(b) exempts interest a non-bank co-operative pays to its members or to other co-operatives (unless turnover exceeds ₹50 crore).
+  - The rate is "Rates in force".
+  - It is now UNVERIFIED, so the F-lane and computeTds refuse instead of telling a PACS ₹50,000.
+- All CA_CHAIN cites were replaced by the text's own words plus the URL.
+- **099** records catalog version `98270a8826d27783` (22/26, 21 verified / 5 unverified).
+- **ai-ask needs a redeploy** after merge (the ask-core bundle changed).
+
 ## Roadmap status
 
 ### Phase A — Critical security
