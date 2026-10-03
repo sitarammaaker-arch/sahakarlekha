@@ -52,12 +52,47 @@ export interface ExportMeta {
 // ─── Pure builders ───────────────────────────────────────────────────────────────────
 
 /**
+ * PURE — CSV/Excel formula-injection guard (audit D-S01). A TEXT cell that starts with
+ * = + - @ TAB or CR is executed as a formula when the file is opened in Excel, so a
+ * hostile member name or narration could run it. Such strings get a leading apostrophe.
+ * Typed numbers and plain numeric-looking strings (e.g. "-1,250.50") are left alone so
+ * negative amounts stay numbers.
+ */
+export function neutraliseFormula(v: Cell): string {
+  const str = String(v ?? '');
+  if (typeof v === 'number') return str;
+  if (!/^[=+\-@\t\r]/.test(str)) return str;
+  if (/^[-+]?[\d,]*\.?\d+$/.test(str)) return str;
+  return "'" + str;
+}
+
+/** PURE — Excel sheet names: max 31 chars, none of \ / ? * [ ] :, not blank. */
+export function safeSheetName(name: string, used: Set<string> = new Set()): string {
+  const base = (name || 'Sheet').replace(/[\\/?*[\]:]/g, ' ').replace(/^'+|'+$/g, '').trim().slice(0, 31) || 'Sheet';
+  let out = base, n = 2;
+  while (used.has(out.toLowerCase())) {
+    const suffix = ` (${n++})`;
+    out = base.slice(0, 31 - suffix.length) + suffix;
+  }
+  used.add(out.toLowerCase());
+  return out;
+}
+
+/** PURE — drop a trailing extension the caller already supplied (avoids ".csv.csv"). */
+export function stripExt(filename: string, ext: string): string {
+  return filename.toLowerCase().endsWith('.' + ext) ? filename.slice(0, -(ext.length + 1)) : filename;
+}
+
+/** Excel's hard per-cell limit. */
+const XLSX_CELL_MAX = 32767;
+
+/**
  * PURE — RFC-4180-ish CSV. Every field is quoted (so commas, newlines and Devanagari
  * need no special casing) and embedded quotes are doubled. Rows joined with CRLF.
  * Does NOT prepend the BOM; `downloadCSV` does, because only the file needs it.
  */
 export function buildCsv(headers: string[], rows: Cell[][]): string {
-  const escape = (v: Cell) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const escape = (v: Cell) => `"${neutraliseFormula(v).replace(/"/g, '""')}"`;
   return [headers, ...rows]
     .map(row => row.map(escape).join(','))
     .join('\r\n');
@@ -103,12 +138,15 @@ export function buildWorkbook(sheets: Sheet[], meta?: ExportMeta): XLSX.WorkBook
   }
 
   const wb = XLSX.utils.book_new();
+  const usedNames = new Set<string>();
+  const guard = (v: Cell): Cell =>
+    typeof v === 'string' ? neutraliseFormula(v).slice(0, XLSX_CELL_MAX) : v;
   for (const sheet of all) {
-    const ws = XLSX.utils.aoa_to_sheet([sheet.headers, ...sheet.rows]);
+    const ws = XLSX.utils.aoa_to_sheet([sheet.headers.map(guard), ...sheet.rows.map(r => r.map(guard))]);
     ws['!cols'] = sheet.headers.map((h, i) => ({
       wch: Math.max(h.length, ...sheet.rows.map(r => String(r[i] ?? '').length)) + 2,
     }));
-    XLSX.utils.book_append_sheet(wb, ws, sheet.name.slice(0, 31));
+    XLSX.utils.book_append_sheet(wb, ws, safeSheetName(sheet.name, usedNames));
   }
   return wb;
 }
@@ -159,7 +197,7 @@ export function downloadCSV(headers: string[], rows: Cell[][], filename: string)
   // '\uFEFF' as an escape, not a literal: a bare BOM character is invisible and gets
   // silently eaten by editors and encoding round-trips.
   const blob = new Blob(['\uFEFF' + buildCsv(headers, rows)], { type: 'text/csv;charset=utf-8;' });
-  triggerDownload(blob, filename + '.csv');
+  triggerDownload(blob, stripExt(filename, 'csv') + '.csv');
 }
 
 /**
@@ -167,7 +205,7 @@ export function downloadCSV(headers: string[], rows: Cell[][], filename: string)
  * Supply `meta` to append a README sheet recording who exported what, when.
  */
 export function downloadExcel(sheets: Sheet[], filename: string, meta?: ExportMeta): void {
-  XLSX.writeFile(buildWorkbook(sheets, meta), filename + '.xlsx');
+  XLSX.writeFile(buildWorkbook(sheets, meta), stripExt(filename, 'xlsx') + '.xlsx');
 }
 
 /** Convenience: single-sheet Excel. */
@@ -194,5 +232,5 @@ export function downloadExcelSingle(
 export function downloadJSON(payload: unknown, filename: string, meta?: ExportMeta): void {
   const body = meta ? buildJsonEnvelope(payload, meta) : payload;
   const blob = new Blob([JSON.stringify(body, null, 2)], { type: 'application/json' });
-  triggerDownload(blob, filename + '.json');
+  triggerDownload(blob, stripExt(filename, 'json') + '.json');
 }

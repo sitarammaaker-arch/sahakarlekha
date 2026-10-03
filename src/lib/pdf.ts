@@ -1361,7 +1361,9 @@ export function generateDayBookPDF(
   society: SocietySettings,
   fromDate: string,
   toDate: string,
-  language: 'hi' | 'en'
+  language: 'hi' | 'en',
+  /** Page-computed opening cash (account OB + vouchers before the window, branch-scoped). */
+  openingCash?: number,
 ) {
   const doc = new jsPDF({ orientation: 'landscape' });
   const getAccName = (id: string) => accounts.find(a => a.id === id)?.name || id;
@@ -1383,8 +1385,8 @@ export function generateDayBookPDF(
   // C-2 FIX: Use getVoucherLines() to correctly calculate pre-period cash balance
   // including multi-line Expert Mode vouchers.
   const firstDate = entries.length > 0 ? entries[0].date : null;
-  let runCash = cashAccOB;
-  if (firstDate) {
+  let runCash = openingCash ?? cashAccOB;
+  if (firstDate && openingCash === undefined) {   // legacy fallback; `entries` never holds pre-period rows
     entries.forEach(v => {
       if (v.date >= firstDate) return;
       getVoucherLines(v).forEach(l => {

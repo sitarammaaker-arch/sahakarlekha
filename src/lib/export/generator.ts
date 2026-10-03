@@ -93,6 +93,7 @@ export function authorizeExport(
   entity: EntityDescriptor,
   principal: ExportPrincipal,
   format: TabularFormat,
+  mode?: ExportMode,
 ): AuthzResult {
   if (entity.backupPolicy === 'exclude') {
     return { ok: false, reason: `"${entity.key}" is excluded from every export path` };
@@ -105,6 +106,14 @@ export function authorizeExport(
   }
   if (entity.capability && !principal.capabilities.includes(entity.capability)) {
     return { ok: false, reason: `"${entity.key}" requires the ${entity.capability} capability` };
+  }
+  // Audit D-S02: viewer-rank roles may only take the REDACTED view of an entity that
+  // holds PII. Standard/full/statutory expose PAN/Aadhaar/phone, so they need accountant+.
+  // `mode` omitted = capability check only (UI listing); exportEntity always passes it.
+  if (mode && mode !== 'redacted'
+      && entity.columns.some(c => c.piiClass !== 'none')
+      && !roleAtLeast(principal.role, 'accountant')) {
+    return { ok: false, reason: `"${entity.key}" holds personal data — ${mode} export needs role accountant; use the redacted mode` };
   }
   return { ok: true };
 }
@@ -236,7 +245,7 @@ export async function exportEntity(
   const entity = getEntity(request.entityKey);
   if (!entity) throw new ExportDeniedError(`unknown entity "${request.entityKey}"`);
 
-  const authz = authorizeExport(entity, env.principal, request.format);
+  const authz = authorizeExport(entity, env.principal, request.format, request.mode);
   if (!authz.ok) throw new ExportDeniedError(authz.reason);
 
   const columns = selectColumns(entity, request.mode, request.columns);
