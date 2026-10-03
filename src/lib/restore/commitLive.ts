@@ -68,7 +68,7 @@ export async function commitRestoreLive(input: CommitRestoreLiveInput): Promise<
     societyId: input.societyId,
     sourceManifestHash: input.sourceManifestHash,
     preRestoreBackup: input.preRestoreBackup,
-    applyWrites: makeRestoreWriter(client, input.societyId, input.currentRows),
+    applyWrites: makeRestoreWriter(client, input.societyId, input.currentRows, input.archiveRows),
     recordAttempt: record,
     onProgress: input.onProgress,
   });

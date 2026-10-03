@@ -33,6 +33,8 @@
 import type { EntityDescriptor } from '../export/registry.types';
 import type { RestoreMode } from './diff';
 import { keyOf, type Row } from './naturalKeys';
+import { isMissingTableError } from '../export/missingTable';
+import { stripMemberPII } from '../memberIdentity';
 
 const CHUNK = 500;                 // matches DataContext's voucher_entries batching
 const VOUCHER_ENTRY_KEY = 'voucher_entry';
@@ -180,6 +182,76 @@ export async function applyEntityWrites(
   return { written };
 }
 
+// ─── Member PII routing (docs/reports-audit/design/MEMBER-PII-ROLE-SCOPED-READ.md, Phase 3 prerequisite) ──
+//
+// PAN / Aadhaar belong in `member_identity` (role-scoped RLS), not in the `members` row every role can
+// read. An archive taken BEFORE migration 106 carries them inside the member rows; restoring those
+// verbatim after Phase 3 would put them straight back where every role can read them. So when a member
+// row being written carries PII we route it:
+//
+//   1. members the archive's own member_identity does NOT cover → write an identity row derived from the
+//      member row (identity FIRST, before the members upsert);
+//   2. if that write succeeds (table exists) → strip aadhaar/pan from the member rows;
+//   3. if the table is MISSING (un-migrated destination) → fall back to LEGACY: members written as
+//      archived, so nothing is lost; any OTHER failure aborts the restore (never a silent PII leak);
+//   4. members the archive's member_identity already covers (an archive taken after 106) → strip, and the
+//      member_identity entity step restores them.
+
+const nonEmpty = (v: unknown) => typeof v === 'string' ? v.trim() !== '' : v !== null && v !== undefined;
+const hasPii = (r: Row) => nonEmpty(r.aadhaar) || nonEmpty(r.pan);
+
+/** PURE — identity rows to derive from member rows the archive's member_identity does not cover. */
+export function deriveIdentityRows(memberRows: readonly Row[], archiveIdentity: readonly Row[]): Row[] {
+  const covered = new Set(archiveIdentity.map(r => String(r.member_id)));
+  const out: Row[] = [];
+  for (const m of memberRows) {
+    if (!hasPii(m) || m.id === undefined || m.id === null || covered.has(String(m.id))) continue;
+    out.push({
+      member_id: m.id,
+      aadhaar: nonEmpty(m.aadhaar) ? String(m.aadhaar).trim() : null,
+      pan: nonEmpty(m.pan) ? String(m.pan).trim() : null,
+    });
+  }
+  return out;
+}
+
+/** PURE — member rows without aadhaar/pan. */
+export function stripMemberRows(rows: readonly Row[]): Row[] {
+  return rows.map(r => stripMemberPII(r) as Row);
+}
+
+/**
+ * Write the member entity with PII routed to member_identity (see the block comment above). Identity is
+ * written BEFORE the members rows so that a failure leaves the members untouched.
+ */
+export async function applyMemberWrites(
+  entity: EntityDescriptor,
+  plan: EntityWritePlan,
+  client: WriteClient,
+  societyId: string,
+  archiveIdentity: readonly Row[],
+): Promise<{ written: number }> {
+  const toWrite = [...plan.upsert, ...plan.insert];
+  const withPii = toWrite.filter(hasPii);
+  if (withPii.length === 0) return applyEntityWrites(entity, plan, client, societyId);
+
+  const derived = deriveIdentityRows(withPii, archiveIdentity);
+  let strip = true;
+  if (derived.length > 0) {
+    for (const batch of chunked(stamped(derived, societyId))) {
+      const { error } = await client.from('member_identity').upsert(batch);
+      if (error) {
+        if (isMissingTableError(error.message, 'member_identity')) { strip = false; break; }   // LEGACY destination
+        throw new RestoreWriteError('member_identity', `PAN/Aadhaar could not be routed — ${error.message}. Members were NOT written.`);
+      }
+    }
+  }
+  const routed: EntityWritePlan = strip
+    ? { insert: stripMemberRows(plan.insert), upsert: stripMemberRows(plan.upsert), deleteKeys: plan.deleteKeys }
+    : plan;
+  return applyEntityWrites(entity, routed, client, societyId);
+}
+
 /**
  * Build the `applyWrites` the commit saga expects, closing over the client, the society, and
  * the current rows the dry run already read. The saga passes (entity, archiveRows, mode);
@@ -189,9 +261,14 @@ export function makeRestoreWriter(
   client: WriteClient,
   societyId: string,
   currentRowsByKey: Record<string, readonly Row[]>,
+  /** The archive's rows per entity — lets the member step see which members member_identity already covers. */
+  archiveRowsByKey: Record<string, readonly Row[]> = {},
 ) {
   return async (entity: EntityDescriptor, archiveRows: readonly Row[], mode: RestoreMode): Promise<{ written: number }> => {
     const plan = planEntityWrites(entity, archiveRows, currentRowsByKey[entity.key] ?? [], mode);
+    if (entity.key === 'member') {
+      return applyMemberWrites(entity, plan, client, societyId, archiveRowsByKey['member_identity'] ?? []);
+    }
     return applyEntityWrites(entity, plan, client, societyId);
   };
 }

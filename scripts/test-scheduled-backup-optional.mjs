@@ -4,7 +4,7 @@
 // Source-level guard. Run: node scripts/test-scheduled-backup-optional.mjs
 import fs from 'node:fs';
 const fn = fs.readFileSync(new URL('../supabase/functions/scheduled-backup/index.ts', import.meta.url), 'utf8');
-const src = fs.readFileSync(new URL('../src/lib/export/source.ts', import.meta.url), 'utf8');
+const src = fs.readFileSync(new URL('../src/lib/export/missingTable.ts', import.meta.url), 'utf8');
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
 

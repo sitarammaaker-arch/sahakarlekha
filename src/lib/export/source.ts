@@ -34,6 +34,7 @@
 import { supabase } from '@/lib/supabase';
 import type { EntityDescriptor } from './registry.types';
 import type { SourceRow } from './generator';
+import { isMissingTableError } from './missingTable';
 
 /** Supabase's per-request row ceiling. Matches DataContext. */
 export const PAGE_SIZE = 1000;
@@ -130,12 +131,7 @@ export async function fetchEntityRows(
   }
 }
 
-/** PURE — is this PostgREST/Postgres message "that table does not exist (yet)"? Names the table, so an unrelated error never matches. */
-export function isMissingTableError(message: string | null | undefined, table: string): boolean {
-  const m = (message || '').toLowerCase();
-  const t = table.toLowerCase();
-  return m.includes(t) && (m.includes('does not exist') || m.includes('schema cache') || m.includes('could not find'));
-}
+export { isMissingTableError };
 
 async function readPage(
   client: typeof supabase,
