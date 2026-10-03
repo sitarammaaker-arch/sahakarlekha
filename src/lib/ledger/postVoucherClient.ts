@@ -38,6 +38,18 @@ export function buildPostVoucherPayload(v: Voucher, event: LedgerEvent): PostVou
   return { p_voucher, p_lines, p_event };
 }
 
+/** S4-a (104) · save_pending_voucher payload: the voucher row + its legs (getVoucherLines, RULE 2) — no event,
+ *  because a pending voucher is not posted until approve_voucher. */
+export function buildPendingVoucherPayload(v: Voucher): { p_voucher: Record<string, unknown>; p_lines: PostVoucherLeg[] } {
+  const p_voucher: Record<string, unknown> = { ...v };
+  for (const k of LOCAL_ONLY) delete p_voucher[k];
+  delete p_voucher.society_id;
+  const p_lines = getVoucherLines(v).map((l) => ({
+    id: l.id, accountId: l.accountId, drCr: l.type, amountMinor: toMinor(Number(l.amount) || 0), narration: l.narration ?? null,
+  }));
+  return { p_voucher, p_lines };
+}
+
 /** The fields edit_voucher (migration 078) accepts; the server ignores everything else anyway. */
 const EDITABLE = ['id', 'type', 'date', 'debitAccountId', 'creditAccountId', 'amount', 'narration', 'memberId', 'lines', 'editHistory'] as const;
 

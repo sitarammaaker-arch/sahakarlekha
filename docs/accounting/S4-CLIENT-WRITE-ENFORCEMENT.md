@@ -1,6 +1,6 @@
 # S4: the database enforces server posting
 
-> Status: **S4-0 LIVE** (102, applied 2026-10-03 13:35 UTC). **S4-a BUILT** (103 + app wiring, harness 41/41; awaiting founder apply, which must come BEFORE the app deploy). S4-b/c: design.
+> Status: **S4-0 LIVE** (102). **S4-a LIVE** for rows 1–6 (103, applied 2026-10-03 14:11 UTC); row 7 built (104, awaiting apply). S4-b: after the S4-0 week (ends 2026-10-10). S4-c: SSK decision.
 > Goal: for a society whose posting service is ON, the database itself refuses any direct client write
 > to the accounting tables. Today server posting is authoritative only because the client takes that path.
 
@@ -23,7 +23,7 @@ Mapped by reading `src/contexts/DataContext.tsx` on `main` (flag-off fallbacks e
 | 5 | `addAccount` / `updateAccount` (opening balance) | `ledger_events` INSERT (opening delta event via `persistLedgerEvent`) | journal write | none |
 | 6 | `persistLedgerEvent` callers (shadow appends, approval/cancel/edit repair helpers) | `ledger_events` INSERT | journal write | mostly flag-off; must be proven unreachable when ON |
 
-| 7 | `addVoucher` / `updateVoucher` for a **pending** (maker-checker) voucher | `vouchers` UPSERT (+ entries) | create/edit before approval | none: `post_voucher` refuses pending (`pending_not_supported`) | **found while building S4-a**; usage is tiny (3 pending vouchers ever, last 2026-07) |
+| 7 | `addVoucher` / `updateVoucher` for a **pending** (maker-checker) voucher | `vouchers` UPSERT (+ entries) | create/edit before approval | `save_pending_voucher` (104) | found while building S4-a; usage is tiny (3 pending vouchers ever, last 2026-07) |
 
 **Found while building S4-a, row 1:** with the flag ON, `reverseVoucher`'s two direct link updates ran right after `addVoucher` returned, *before* `post_voucher` had written the reversal row. The update could hit 0 rows and link nothing, silently. In prod, 1 of 2 reversals ever made (2026-08-23) is missing its `reversalOf`. S4-a links only after the server confirms (`onPersisted`).
 

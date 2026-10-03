@@ -150,7 +150,36 @@ await inRollback(async (tx) => {
   ok('merge: the cancelled voucher got no journal pair', (await tx.query(`select event_type from public.ledger_events where aggregate_id = $1 order by sequence`, [m3.id])).rows.map((e) => e.event_type).join(',') === 'voucher.posted,voucher.cancelled');
   ok('merge: audit row written', Number((await one(`select count(*) n from public.audit_log where entity_id = $1 and action = 'merge'`, [rem])).n) === 1);
 
+  /* 7 · save_pending_voucher (104) — a maker-checker voucher created and edited through the server */
+  const legs = (v) => [
+    { id: 'a', accountId: v.debitAccountId, drCr: 'Dr', amountMinor: Math.round(v.amount * 100), narration: null },
+    { id: 'b', accountId: v.creditAccountId, drCr: 'Cr', amountMinor: Math.round(v.amount * 100), narration: null },
+  ];
+  const pv = mk({ approvalStatus: 'pending', amount: 300, createdBy: 'Maker Person', voucherNo: 'JV/2026/27/001' });
+  await viewer();
+  ok('pending: a viewer is refused', code(await call('select public.save_pending_voucher($1::jsonb, $2::jsonb)', [JSON.stringify(pv), JSON.stringify(legs(pv))])) === 'role_cannot_write');
+  await admin();
+  ok('pending: a NON-pending voucher is refused (use post_voucher)', code(await call('select public.save_pending_voucher($1::jsonb, $2::jsonb)', [JSON.stringify({ ...pv, id: randomUUID(), approvalStatus: undefined }), JSON.stringify(legs(pv))])) === 'not_pending');
+  ok('pending: unbalanced legs refused', code(await call('select public.save_pending_voucher($1::jsonb, $2::jsonb)', [JSON.stringify(pv), JSON.stringify([legs(pv)[0], { ...legs(pv)[1], amountMinor: 1 }])])) === 'unbalanced');
+  const sp = await call('select public.save_pending_voucher($1::jsonb, $2::jsonb) r', [JSON.stringify(pv), JSON.stringify(legs(pv))]);
+  ok('pending: saved, with a server-issued number', sp.ok && sp.rows[0].r.status === 'saved' && !!sp.rows[0].r.voucherNo, code(sp));
+  await tx.asOwner();
+  const pRow = await one(`select "approvalStatus" s, amount::numeric a, (select count(*) from public.voucher_entries where "voucherId" = $1) ne,
+    (select count(*) from public.voucher_lines where voucher_id = $1) nl, (select count(*) from public.ledger_events where aggregate_id = $1) nev from public.vouchers where id = $1`, [pv.id]);
+  ok('pending: row is pending with NO lines / entries / journal event', pRow.s === 'pending' && Number(pRow.ne) === 0 && Number(pRow.nl) === 0 && Number(pRow.nev) === 0, JSON.stringify(pRow));
+  await admin();
+  const pv2 = { ...pv, amount: 350, narration: 'edited while pending' };
+  const ed = await call('select public.save_pending_voucher($1::jsonb, $2::jsonb) r', [JSON.stringify(pv2), JSON.stringify(legs(pv2))]);
+  ok('pending: an edit of the same id updates it', ed.ok && ed.rows[0].r.status === 'updated', code(ed));
+  await tx.asOwner();
+  ok('pending: the edit landed (amount 350)', Number((await one(`select amount::numeric a from public.vouchers where id = $1`, [pv.id])).a) === 350);
+  await admin();
+  const ap = await call('select public.approve_voucher($1, $2::jsonb, $3) r', [pv.id, JSON.stringify(legs(pv2)), 'S4A Admin']);
+  ok('pending → approve_voucher posts it (maker ≠ checker)', ap.ok && ap.rows[0].r.status === 'approved', code(ap));
+  ok('pending: once approved, save_pending_voucher refuses it', code(await call('select public.save_pending_voucher($1::jsonb, $2::jsonb)', [JSON.stringify(pv2), JSON.stringify(legs(pv2))])) === 'not_pending');
+
   /* 6 · invariants */
+  await tx.asOwner();
   const drift = (await tx.query(`select * from public.ledger_drift($1)`, [RANIA])).rows;
   ok('drift: ledger_drift for the society stays 0', drift.length === 0, JSON.stringify(drift));
   ok('S4-0: none of these server paths left an s4 note', Number((await one(`select count(*) n from public.error_log where source = 's4-direct-write'`)).n) === notesBefore);
