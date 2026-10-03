@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { computeStockMap, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
+import { toMinor, toRupees } from '@/lib/money';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -895,16 +896,20 @@ const Inventory: React.FC = () => {
     setIsAdjustOpen(false);
   };
 
-  const handleCSV = () => {
-    const headers = ['Item Code', 'Name', 'Name (Hindi)', 'Unit', 'Opening Stock', 'Current Stock', 'Purchase Rate', 'Sale Rate', 'Stock Value', 'Status', 'Barcode'];
-    const rows = filteredItems.map(i => { const cs = computedStockMap[i.id] ?? 0; return [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, cs, i.purchaseRate || 0, i.saleRate || 0, computeStockValue(i, reconciledStockMovements), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']; });
-    downloadCSV(headers, rows, 'inventory.csv');
-  };
-  const handleExcel = () => {
-    const headers = ['Item Code', 'Name', 'Name (Hindi)', 'Unit', 'Opening Stock', 'Current Stock', 'Purchase Rate', 'Sale Rate', 'Stock Value', 'Status', 'Barcode'];
-    const rows = filteredItems.map(i => { const cs = computedStockMap[i.id] ?? 0; return [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, cs, i.purchaseRate || 0, i.saleRate || 0, computeStockValue(i, reconciledStockMovements), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || '']; });
-    downloadExcelSingle(headers, rows, 'inventory.xlsx', 'Inventory');
-  };
+  // Stock Value is at weighted-average COST (RULE 2), so it is not "qty × master purchase rate" when
+  // purchases came in at different prices — and an average like 1283.333… leaked into the export
+  // unrounded (10266.666666…). Export the average cost rate as its own column, label the master rate
+  // as such, and round money to paise.
+  const r2 = (n: number) => toRupees(toMinor(n));
+  const exportHeaders = ['Item Code', 'Name', 'Name (Hindi)', 'Unit', 'Opening Stock', 'Current Stock', 'Purchase Rate (Master)', 'Avg Cost Rate', 'Sale Rate', 'Stock Value (at Avg Cost)', 'Status', 'Barcode'];
+  const exportRows = () => filteredItems.map(i => {
+    const cs = computedStockMap[i.id] ?? 0;
+    return [i.itemCode || '', i.name, i.nameHi || '', i.unit || '', i.openingStock || 0, cs,
+      i.purchaseRate || 0, r2(computeStockCostRate(i, reconciledStockMovements)), i.saleRate || 0,
+      r2(computeStockValue(i, reconciledStockMovements)), i.isActive ? 'Active' : 'Inactive', i.barcodeValue || ''];
+  });
+  const handleCSV = () => downloadCSV(exportHeaders, exportRows(), 'inventory.csv');
+  const handleExcel = () => downloadExcelSingle(exportHeaders, exportRows(), 'inventory.xlsx', 'Inventory');
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -1095,7 +1100,9 @@ const Inventory: React.FC = () => {
                           {hi ? 'वर्तमान स्टॉक' : 'Current Stock'}
                         </TableHead>
                         <TableHead className="font-semibold text-right">
-                          {hi ? 'खरीद दर' : 'Purchase Rate'}
+                          <span title={hi ? 'सभी खरीदों की भारित औसत लागत — स्टॉक मूल्य इसी से बनता है' : 'Weighted-average cost of all purchases — stock value uses this'}>
+                            {hi ? 'औसत लागत दर' : 'Avg Cost Rate'}
+                          </span>
                         </TableHead>
                         <TableHead className="font-semibold text-right">
                           {hi ? 'बिक्री दर' : 'Sale Rate'}
@@ -1153,7 +1160,15 @@ const Inventory: React.FC = () => {
                                 )}
                               </span>
                             </TableCell>
-                            <TableCell className="text-right">{fmt(costRate)}</TableCell>
+                            <TableCell className="text-right">
+                              {fmt(costRate)}
+                              {/* The average differs from the master rate when purchases came in at different prices. */}
+                              {(item.purchaseRate ?? 0) > 0 && Math.abs(costRate - (item.purchaseRate ?? 0)) >= 0.005 && (
+                                <span className="block text-[11px] text-muted-foreground">
+                                  {hi ? 'सूची दर' : 'Master'} {fmt(item.purchaseRate ?? 0)}
+                                </span>
+                              )}
+                            </TableCell>
                             <TableCell className="text-right">{fmt(item.saleRate ?? 0)}</TableCell>
                             <TableCell className="text-right font-semibold">
                               {fmt(stockValue)}
