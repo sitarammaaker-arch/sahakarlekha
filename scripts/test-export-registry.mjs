@@ -355,7 +355,7 @@ ok(/create table if not exists customers[\s\S]*?"gstNo" text/i.test(rawSql), 'th
 const keys = REGISTRY.map(e => e.key).sort();
 const EXPECTED = [
   // T-06 core + member
-  'account', 'member', 'society', 'voucher', 'voucher_entry',
+  'account', 'member', 'member_identity', 'society', 'voucher', 'voucher_entry',
   // T-07 inventory
   'branch', 'godown', 'stock_item', 'stock_movement',
   // T-07 trade

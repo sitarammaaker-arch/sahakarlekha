@@ -108,6 +108,12 @@ export interface EntityDescriptor {
   /** Key into the PDF generator map, for entities with a statutory print form. */
   pdfGenerator?: string;
   backupPolicy: BackupPolicy;
+  /**
+   * The table is introduced by a hand-run migration. Until it exists, reading it yields ZERO rows
+   * instead of failing the whole backup. Only a "table missing" error is tolerated (isMissingTableError);
+   * every other error still aborts. Remove the flag once the migration is applied everywhere.
+   */
+  optionalTable?: boolean;
 }
 
 export type ExportRegistry = readonly EntityDescriptor[];

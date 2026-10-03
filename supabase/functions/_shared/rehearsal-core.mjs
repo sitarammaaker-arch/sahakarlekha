@@ -245,6 +245,27 @@ var CORE_ENTITIES = [society, account, voucher, voucherEntry, societyActivities,
 var c2 = (key, header, headerHi, over = {}) => ({ key, header, headerHi, type: "string", piiClass: "none", defaultVisible: true, ...over });
 var money2 = (key, header, headerHi, over = {}) => c2(key, header, headerHi, { type: "currency", ...over });
 var internal2 = (key, header, headerHi, over = {}) => c2(key, header, headerHi, { defaultVisible: false, ...over });
+var memberIdentity = {
+  key: "member_identity",
+  table: "member_identity",
+  domain: "member",
+  label: "Member identity (PAN / Aadhaar)",
+  labelHi: "\u0938\u0926\u0938\u094D\u092F \u092A\u0939\u091A\u093E\u0928 (\u092A\u0948\u0928 / \u0906\u0927\u093E\u0930)",
+  minRole: "admin",
+  scope: "society",
+  nature: "master",
+  dependsOn: ["member"],
+  naturalKey: ["member_id"],
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  optionalTable: true,
+  columns: [
+    c2("member_id", "Member ID", "\u0938\u0926\u0938\u094D\u092F \u0906\u0908\u0921\u0940"),
+    c2("pan", "PAN", "\u092A\u0948\u0928", { piiClass: "identity" }),
+    c2("aadhaar", "Aadhaar", "\u0906\u0927\u093E\u0930", { piiClass: "identity" }),
+    c2("updated_at", "Updated At", "\u0905\u0926\u094D\u092F\u0924\u0928 \u0938\u092E\u092F", { type: "date", defaultVisible: false })
+  ]
+};
 var member = {
   key: "member",
   table: "members",
@@ -295,7 +316,7 @@ var member = {
     internal2("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]
 };
-var MEMBER_ENTITIES = [member];
+var MEMBER_ENTITIES = [member, memberIdentity];
 
 // src/lib/export/entities/inventory.ts
 var c3 = (key, header, headerHi, over = {}) => ({ key, header, headerHi, type: "string", piiClass: "none", defaultVisible: true, ...over });

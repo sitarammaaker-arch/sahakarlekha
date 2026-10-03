@@ -53,3 +53,11 @@ Implemented, **inert until Phase 1 SQL is applied** (the app detects the table a
 3. **Export Center `member` entity** reads `members.aadhaar/pan` — must source from `member_identity`.
 4. **Restore commit** writes `members` rows from a backup (incl. PII) — decide whether restore should route PII to `member_identity`.
 5. Re-run the staging rehearsal with the real app (not just SQL) after applying Phase 1 durably on staging.
+
+## Phase 3 prerequisite #1 (backup / restore) — DONE in branch feat/member-identity-backup
+* `member_identity` is now a registry entity (`backupPolicy: 'full'`, `optionalTable: true`, minRole admin, natural key `member_id`). Registry is 99 entities; count-pinned tests, schema-drift and `supabase-tables.sql` updated.
+* **A missing table is tolerated only for `optionalTable` entities** (`source.ts` and the `scheduled-backup` Edge Function's own copy of the reader — guarded by `test:scheduled-backup-optional`). Any other read error still aborts the backup, so merge order vs migration 106 does not matter.
+* Migration `supabase/migrations/106_member_identity.sql` (+ `_down`) promoted from the draft: same SQL as rehearsed on staging, plus the `app_migrations` row. **Hand-run; not applied anywhere.**
+* Old archives (no `member_identity` file) restore fine: the diff treats an entity absent from the archive as "never carried", not "none".
+* **Deploy steps after merge:** (1) apply 106 on staging, verify, then prod; (2) redeploy the `scheduled-backup` Edge Function (it embeds the new registry via `backup-core.mjs`); (3) trigger one manual backup and confirm `member_identity` appears in the archive manifest.
+* Still open before Phase 3: portal RPC 064, Export Center member entity, restore-commit PII routing.
