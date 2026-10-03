@@ -28,19 +28,18 @@
 
 **What stands between this and READY (all named in §14–16):**
 1. **The database does not yet enforce server posting.** Any signed-in writer can still insert or update `vouchers`, `voucher_entries`, `accounts` and `ledger_events` directly. Server posting is authoritative only because the client takes that path (S4).
-2. **Statutory tax rules still have open CA questions.** They are configurable and sourced where verified.
+2. **Statutory tax rules:** the CA's three answers were checked against the Act's text on 2026-10-03 (#671, 099). 194A and the GST-base circular stay unverified, with reasons (§6).
 3. **Payroll ledger posting is off by design (E3).**
 4. **The db-harness runs locally only, not in CI.**
-5. **Two founder actions are pending:** apply migration 098, and run Redeploy after today's Vercel rate limit.
+5. ~~Founder actions: apply 098, Vercel Redeploy~~ — done 2026-10-03 (098 and 099 applied, production redeployed, ai-ask redeployed).
 
 > **सार (हिन्दी):**
 > - Tenant isolation, 2FA, server posting (27 में से 26 समितियाँ), ledger drift 0, voucher numbering, FY close, audit trail, backup और public site — ये सब जाँचे हुए हैं।
 > - "Production-ready" कहने से पहले ये बाकी हैं:
 >   - database अभी client से सीधे voucher/journal लिखने देता है (S4)
->   - टैक्स के CA प्रश्न खुले हैं
+>   - 194A और GST-आधार वाला circular अभी असत्यापित हैं (CA के तीनों जवाब कानून के text से मिला लिए गए)
 >   - payroll की ledger posting बंद है
 >   - harness CI में नहीं है
->   - 098 apply करना और Vercel Redeploy अभी बाकी हैं
 
 ## 2. What was fixed (Phases A–M, 2026-09-30 → 10-02)
 
@@ -78,15 +77,16 @@
 ## 5. Database / RLS status — **READY**
 - 116 public tables, **0 without RLS** (prod, 2026-10-02).
 - Harness a6: all 104 society tables × read/update/delete/insert-copy/move, as S1 against S2, plus anon and a stranger: **469/469**.
-- Migrations: `app_migrations` reaches 097. **098 is merged but NOT applied** (founder action). Until it is applied, a User Management email edit shows "ईमेल नहीं बदला गया" and saves nothing. That is safe, but the feature is unavailable.
+- Migrations: `app_migrations` reaches 099 (098 applied 2026-10-03 03:53 UTC, 099 at 04:30 UTC; both verified read-only).
 
 ## 6. Tax status — **NEEDS VERIFICATION**
 - The TDS catalog is versioned (093), and charge-on-excess applies only where sourced (194Q, Note 1(b)). `computeTds` refuses what it cannot source.
 - GST: bill tax equals ledger 2201/3310 to the paisa in every taxed society (H4).
-- **Open CA questions (each needs an Act/circular URL):**
-  - Where is the 194Q buyer-turnover gate in the 2025 Act?
-  - Is GST in the 194Q base?
-  - Is 194C/194H above the threshold charged on the whole sum or on the excess?
+- **CA answers, checked against the text on 2026-10-03 (#671, migration 099):**
+  - The 194Q buyer gate is VERIFIED: s.402(6) Table Sl. 1, preceding-year turnover above ₹10 crore. The CA's cite (393 "6(i)") was wrong; the figure was right. It is recorded, not enforced; the advice states it.
+  - Whole sum, not excess: s.393(1)(a), VERIFIED for 194H/194C/194J/194I. computeTds computes these, including 194C's ₹30,000 single-payment limit.
+  - GST in the 194Q base: Circular 13/2021 ¶4.3.2. GST is excluded only when shown separately and TDS is deducted at credit. It is a 1961-Act circular, so it stays UNVERIFIED for the 2025 Act.
+  - **194A downgraded to UNVERIFIED:** ₹50,000 is the banking-payers row. A non-banking society falls under 5(iii) (₹10,000), and s.393(4) Sl. 7(b) exempts interest it pays members. The rate is "Rates in force".
 - Assandh RCS purchases: ₹16.19 lakh ITC was taken with no RCM liability. This is a data note for the society's CA.
 
 ## 7. Payroll status — **PARTIAL**
@@ -160,19 +160,18 @@
 - KAE evidence records (E2 → E3).
 
 ## 16. Required human / domain verification
-- **CA:** the three TDS questions (§6); the Assandh RCM/ITC note.
-- **Founder data actions (in the app, no SQL):**
-  - delete Rania's SRET/PRET/2026-27/001
-  - enter Rania's audited share-capital opening (₹32,150 short)
+- **CA:** the 194A treatment for a non-banking society; whether Circular 13/2021 continues under the 2025 Act; the Assandh RCM/ITC note.
+- **Founder data notes (in the app, no SQL):**
   - review 06cea2fb's half share-transfer
   - review Kisan's ₹2,400 opening imbalance
+  - Rania is a **practice / demo society** (founder, 2026-10-03). It has no openings and its data is accepted as-is. Its 2 returns were deleted on 2026-10-03 (verified: `/REV` stock movements present, drift 0).
 - **SME/legal:** every Level-B/C/D KI before activation; sourcing the KAE evidence records.
 
 ## 17. Production deployment checklist
-1. [ ] **Vercel Redeploy** of `main`. #665 and #668 are merged but rate-limited: live /guide still shows the old title.
-2. [ ] **Apply 098** (`scripts/apply-sql.ps1`, after `scripts/backup-prod.ps1`). Then check that an email edit in User Management succeeds.
+1. [x] **Vercel Redeploy** of `main`. Done: production `ee1b92e` carries #665 and #668 (verified on live /guide).
+2. [x] **Apply 098.** Done 2026-10-03 after backup `sahakarlekha-prod-20261003-0343Z.dump`; verified read-only.
 3. [ ] Confirm the next nightly drift run (02:00 IST) logs 0, and that the weekly backup and rehearsal (Sunday 02:00/03:00 UTC) succeed.
 4. [ ] Design and approve S4: database-level refusal of direct client writes to `vouchers`/`voucher_entries`/`ledger_events` for posting-ON societies. Do the migration on the harness first, then staging, then prod with a backup + undo file.
 5. [ ] Add `STAGING_DATABASE_URL` to GitHub secrets, so the db-harness can run in CI.
-6. [ ] Get the CA's answers, with sources, and update the TDS catalog.
+6. [x] Get the CA's answers, with sources, and update the TDS catalog. Done: #671 + 099 (backup `…-20261003-0420Z.dump`), ai-ask redeployed and checked on live /ask.
 7. [ ] Decide on storage-bucket backups, and on enabling PITR (paid plan).

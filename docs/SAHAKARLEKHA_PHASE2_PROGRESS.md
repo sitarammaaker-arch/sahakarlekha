@@ -20,11 +20,13 @@
   - open CA tax questions
   - E3 payroll posting is off
   - the db-harness is not in CI
-- **Founder actions open:**
-  - Vercel Redeploy (#665/#668 are rate-limited)
-  - apply 098
-  - Rania: delete its 2 returns, and enter its audited share-capital opening
-  - answer the CA questions
+- **Founder actions (2026-10-03): all done.**
+  - Vercel redeployed.
+  - 098 and 099 applied.
+  - CA answers checked against the text (#671).
+  - ai-ask redeployed.
+  - Rania's 2 returns deleted.
+- **Rania is a practice / demo society** (founder, 2026-10-03). It has no openings, its data is accepted as-is, and no repair is wanted. Use it only as evidence of system behaviour.
 - **Next dependency-safe task:** S4 design. The database refuses direct client writes to `vouchers`, `voucher_entries` and `ledger_events` for posting-ON societies, with the work done on the harness first, then staging.
 
 ## 2026-10-03: 098 LIVE; CA tax answers checked against the Act's text
