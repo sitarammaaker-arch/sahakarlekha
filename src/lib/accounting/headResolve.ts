@@ -20,6 +20,7 @@ export const FD_ACCOUNT_ID = '2108';
 export const PT_ACCOUNT_ID = '2207';
 export const TDS_PAYABLE_ACCOUNT_ID = '2202';
 export const PENALTY_ACCOUNT_ID = '5605';
+export const SHARE_REFUND_PAYABLE_ACCOUNT_ID = '2111';
 
 const text = (a: HeadAccount) => `${a.name} ${a.nameHi ?? ''}`.toLowerCase();
 
@@ -35,6 +36,8 @@ const TDS_NAME = /\btds\b|tax deducted|टीडीएस|स्रोत पर
 const TDS_EXCLUDE = /receivable|प्राप्य|\btcs\b/;
 /** Penalty / fine / late-charge expense — where interest and fees on a late tax deposit are booked. */
 const PENALTY_NAME = /penalt|\bfine\b|late fee|दंड|जुर्माना/;
+/** Share Refund Payable / शेयर वापसी देय — a liability, not the share capital itself. */
+const SHARE_REFUND_NAME = /share refund|refund of share|शेयर वापसी|शेयर पूँजी वापसी|शेयर पूंजी वापसी/;
 const NO_EXCLUDE = /(?!)/;
 
 type Leaf = 'liability' | 'expense';
@@ -68,6 +71,11 @@ export function penaltyAccountId(accounts: ReadonlyArray<HeadAccount>): string |
   return resolve(accounts, PENALTY_ACCOUNT_ID, PENALTY_NAME, NO_EXCLUDE, 'expense');
 }
 
+/** Liability head for a share refund that is approved but not yet paid (the member has left, the society still owes), or null. */
+export function shareRefundPayableAccountId(accounts: ReadonlyArray<HeadAccount>): string | null {
+  return resolve(accounts, SHARE_REFUND_PAYABLE_ACCOUNT_ID, SHARE_REFUND_NAME, NO_EXCLUDE);
+}
+
 /** What the user is told when a head cannot be resolved (Hindi-first, RULE 7). Nothing is posted in that case. */
 export const MISSING_HEAD_TOAST = {
   fd: {
@@ -85,6 +93,10 @@ export const MISSING_HEAD_TOAST = {
   penalty: {
     title: 'दंड / ब्याज का व्यय-खाता नहीं मिला',
     description: "चालान में ब्याज या अन्य शुल्क है, पर चार्ट में 'Penalty / Fine' (व्यय) खाता नहीं है। Ledger Heads में वह खाता जोड़ें, या ब्याज/शुल्क शून्य रखें। कोई वाउचर नहीं बना।",
+  },
+  shareRefund: {
+    title: 'शेयर वापसी देय का खाता नहीं मिला',
+    description: "इस सोसाइटी के चार्ट में 'Share Refund Payable' (देयता) खाता नहीं है। Ledger Heads में यह खाता जोड़ें, फिर दोबारा चलाएँ। कोई वाउचर नहीं बना।",
   },
   deposit: {
     title: 'जमा का देयता खाता नहीं मिला',

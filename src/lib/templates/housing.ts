@@ -27,6 +27,7 @@ export const HOUSING_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '2102', name: 'Expenses Payable',           nameHi: 'देय व्यय',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
   { id: '2103', name: 'Salary Payable',             nameHi: 'देय वेतन',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
   { id: '2107', name: 'Member Security Deposits',   nameHi: 'सदस्य सुरक्षा जमा',        type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'deposit' },
+  { id: '2111', name: 'Share Refund Payable',        nameHi: 'शेयर वापसी देय',           type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
   { id: '2108', name: 'Advance Maintenance Collected',nameHi: 'अग्रिम रखरखाव शुल्क',    type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' },
   { id: '2200', name: 'Statutory Liabilities',      nameHi: 'वैधानिक दायित्व',          type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '2000' },
   { id: '2201', name: 'GST Payable',                nameHi: 'देय GST',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200' },
