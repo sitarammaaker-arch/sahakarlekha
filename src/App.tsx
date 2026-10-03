@@ -74,6 +74,7 @@ const AuthorProfile = lazyWithRetry(() => import("./pages/AuthorProfile"));
 const Glossary = lazyWithRetry(() => import("./pages/Glossary"));
 const GlossaryTerm = lazyWithRetry(() => import("./pages/GlossaryTerm"));
 const CalculatorHub = lazyWithRetry(() => import("./pages/CalculatorHub"));
+const DownloadsHub = lazyWithRetry(() => import("./pages/DownloadsHub"));
 const CalculatorPage = lazyWithRetry(() => import("./pages/CalculatorPage"));
 const Login = lazyWithRetry(() => import("./pages/Login"));
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard"));
@@ -320,6 +321,7 @@ const AppRoutes = () => {
       <Route path="/glossary" element={<Glossary />} />
       <Route path="/glossary/:slug" element={<GlossaryTerm />} />
       <Route path="/tools" element={<CalculatorHub />} />
+      <Route path="/downloads" element={<DownloadsHub />} />
       <Route path="/tools/:slug" element={<CalculatorPage />} />
 
       {/* Protected Routes */}

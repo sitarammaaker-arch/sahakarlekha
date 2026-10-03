@@ -45,6 +45,7 @@ const FAQ_FILE = resolve(ROOT, 'src', 'content', 'faq.ts');
 const QUIZ_FILE = resolve(ROOT, 'src', 'content', 'guide', 'quizzes.ts');
 const GLOSSARY_LINKS_FILE = resolve(ROOT, 'src', 'content', 'glossaryLinks.ts');
 const HUB_META_FILE = resolve(ROOT, 'src', 'content', 'hubMeta.ts');
+const DOWNLOADS_FILE = resolve(ROOT, 'src', 'content', 'downloads.ts');
 const RELATED_FILE = resolve(ROOT, 'src', 'content', 'relatedContent.ts');
 const COURSE = 'सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स';
 
@@ -122,7 +123,7 @@ function blogFaqs(raw) {
 const HUB_LINKS = [
   ['/', 'होम'], ['/register', 'रजिस्टर करें'], ['/guide', 'गाइड'], ['/blog', 'ब्लॉग'],
   ['/help', 'मदद केंद्र'], ['/cookbook', 'एंट्री कुकबुक'], ['/glossary', 'शब्दकोश'],
-  ['/tools', 'कैलकुलेटर'], ['/software', 'सॉफ्टवेयर'], ['/faq', 'FAQ'],
+  ['/tools', 'कैलकुलेटर'], ['/downloads', 'मुफ्त प्रारूप'], ['/software', 'सॉफ्टवेयर'], ['/faq', 'FAQ'],
 ];
 
 /**
@@ -205,7 +206,7 @@ const registerCta = (next) =>
 
 /** Routes worth linking in CRAWLER-facing static bodies (public surfaces only —
     app-module deep links are noindexed and would just leak crawl signals). */
-const PUBLIC_PREFIXES = ['/guide', '/blog', '/help', '/cookbook', '/glossary', '/tools', '/software', '/cooperative-software', '/register', '/faq', '/pricing', '/about', '/contact', '/search', '/ask'];
+const PUBLIC_PREFIXES = ['/downloads', '/guide', '/blog', '/help', '/cookbook', '/glossary', '/tools', '/software', '/cooperative-software', '/register', '/faq', '/pricing', '/about', '/contact', '/search', '/ask'];
 const isPublicRoute = (l) => PUBLIC_PREFIXES.some((p) => l === p || l.startsWith(p + '/') || l.startsWith(p + '?'));
 
 /** A blog link is emitted in static bodies ONLY once the post is live (scheduled
@@ -258,6 +259,7 @@ async function loadData() {
     ['faq', FAQ_FILE, 'FAQ_CATEGORIES'],
     ['quizzes', QUIZ_FILE, 'GUIDE_QUIZZES'],
     ['glossaryLinks', GLOSSARY_LINKS_FILE, 'resolveGlossaryHref'],
+    ['downloads', DOWNLOADS_FILE, null], // /downloads hub — same registry as the page
     ['hub', HUB_META_FILE, null], // L5: hub title/description + glossary description — same module as the pages
     ['society', SOCIETY_TYPES, 'SOCIETY_TYPES'],
     ['states', STATES_FILE, 'STATES'],
@@ -923,6 +925,10 @@ function calcBody(c, DATA) {
         return liveArticles.length
           ? `<p>गहराई से पढ़ें: ${liveArticles.map((a) => `<a href="/blog/${a.slug}">${esc(a.title)}</a>`).join(' · ')}</p>` : '';
       })() +
+      (c.relatedGuide && c.relatedGuide.length
+        ? `<p>गाइड में सीखें: ${c.relatedGuide.map((g) => `<a href="/guide/${g.slug}">${esc(g.title)}</a>`).join(' · ')}</p>` : '') +
+      (c.relatedHelp && c.relatedHelp.length
+        ? `<p>ऐप में कैसे करें: ${c.relatedHelp.map((h) => `<a href="/help/${h.slug}">${esc(h.title)}</a>`).join(' · ')}</p>` : '') +
       (c.related && c.related.length
         ? `<p>और कैलकुलेटर: ${c.related.map((r) => `<a href="/tools/${r}">${r.replace(/-/g, ' ')}</a>`).join(' · ')}</p>` : '') +
       registerCta(),
@@ -1000,6 +1006,40 @@ function calculatorPages(DATA) {
     }
   }
   return pages;
+}
+
+/* ---------------- /downloads hub ---------------- */
+
+// Static body from src/content/downloads.ts: every resource with its format, use, state/year, review date and the
+// honest "expert review pending / not a statutory form" note — the same facts the React page shows.
+function downloadsPages(DATA) {
+  const D = DATA.downloads;
+  if (!D || !Array.isArray(D.DOWNLOADS)) return [];
+  const items = D.DOWNLOADS.map((r) =>
+    `<li id="${esc(r.slug)}"><h2>${esc(r.title)}</h2><p><em>${esc(r.englishTitle)}</em></p><ul>` +
+    `<li><strong>प्रारूप:</strong> ${esc(r.format)}</li><li><strong>उपयोग:</strong> ${esc(r.use)}</li>` +
+    `<li><strong>राज्य:</strong> ${esc(r.applicability)}</li><li><strong>वर्ष:</strong> ${esc(r.year)}</li>` +
+    `<li><strong>अंतिम समीक्षा:</strong> ${esc(r.reviewed)}</li><li>${esc(r.expertReview)}</li></ul>` +
+    (r.kind === 'page' && r.href ? `<p><a href="${esc(r.href)}">खोलें व प्रिंट करें</a></p>` : '<p>PDF पेज पर बटन दबाकर डाउनलोड करें (बिना ईमेल)।</p>') +
+    (r.related && r.related.length ? `<p>जुड़े पेज: ${r.related.map((l) => `<a href="${esc(l.href)}">${esc(l.label)}</a>`).join(' · ')}</p>` : '') +
+    `</li>`).join('');
+  return [{
+    path: '/downloads',
+    title: D.DOWNLOADS_META.title,
+    description: D.DOWNLOADS_META.description,
+    lastmod: notFuture(D.DOWNLOADS_REVIEWED),
+    body: shell({
+      current: 'मुफ्त प्रारूप',
+      html: `<h1>मुफ्त खाली प्रारूप (Downloads)</h1>` +
+        `<p>ये सामान्य कार्य-प्रारूप हैं, वैधानिक (statutory) प्रपत्र नहीं। आपके राज्य के सहकारी अधिनियम/नियम या समिति की उपविधि में कोई प्रारूप निर्धारित हो, तो वही मान्य है।</p>` +
+        `<ol>${items}</ol>` + registerCta(),
+    }),
+    jsonLd: [
+      crumb([{ name: 'डाउनलोड', item: `${SITE}/downloads` }]),
+      { '@context': 'https://schema.org', '@type': 'ItemList',
+        itemListElement: D.DOWNLOADS.map((r, i) => ({ '@type': 'ListItem', position: i + 1, name: r.title, url: `${SITE}/downloads#${r.slug}` })) },
+    ],
+  }];
 }
 
 /* ---------------- app-shell publics (L2) ---------------- */
@@ -1373,6 +1413,7 @@ try {
     ...calculatorPages(DATA),
     ...staticExtraPages(DATA),
     ...appShellPages(DATA),
+    ...downloadsPages(DATA),
   ];
 
   // L8: same rule as GuideMarkdown — a /glossary/<slug> link to a term that doesn't exist becomes plain
