@@ -34,6 +34,7 @@ import { issueOfficialNumber } from '@/lib/numbering';
 import { buildPostVoucherPayload, buildEditVoucherPayload, buildStockDocumentPayload, buildPendingVoucherPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
 import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
 import { fyStartOf, fyStartFromLabel } from '@/lib/fyPeriod';
+import { canReadMemberPii, stripMemberPII, applyMemberIdentity, isMissingIdentityTable, identityRowFor, type IdentityRow } from '@/lib/memberIdentity';
 import { computeTrialBalance } from '@/lib/reports/trialBalance';
 import { computeTradingAccount, computeProfitLoss } from '@/lib/reports/tradingAndProfitLoss';
 import { computeReceiptsPayments } from '@/lib/reports/receiptsPayments';
@@ -404,6 +405,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // pure primitive; the row's tenancy is set by context, never by whatever it carried.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const withSoc = (d: Record<string, any>) => stampTenant(d, { societyId: societyIdRef.current, jurisdiction: jurisdictionRef.current });
+  // Member PII split (Phase 2, docs/reports-audit/design/MEMBER-PII-ROLE-SCOPED-READ.md). true once the
+  // member_identity table is found at load: from then on `members` upserts never carry aadhaar/pan
+  // (they would re-expose PII to every role) and PII is saved to member_identity instead. false =
+  // LEGACY (table not migrated yet): behaviour is exactly as before, nothing is lost.
+  const identitySplitRef = useRef(false);
+  const memberRow = (m: Record<string, any>) => withSoc(identitySplitRef.current ? stripMemberPII(m) : m);
 
   // T-06 · best-effort append of a shadow ledger event to the WORM ledger_events table. Fire-and-
   // forget: the voucher save is authoritative and this never blocks or affects it; a failed insert
@@ -1169,7 +1176,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (vData && vData.length > 0) { setVouchersState(vData); storage.setVouchers(vData); }
         else if (!vErr) setVouchersState([]);
         // P0 #2: exclude soft-deleted rows so archived members never repopulate the array.
-        const activeMembers = (mData || []).filter(m => !m.isDeleted);
+        let activeMembers = (mData || []).filter(m => !m.isDeleted);
+        // Member PII split (Phase 2): table present => SPLIT mode (overlay identity, strip for roles that
+        // may not read PII); table missing => LEGACY (unchanged). Any other error stays LEGACY + warns.
+        identitySplitRef.current = false;
+        try {
+          const idRes = await fetchAllPaged<IdentityRow>('member_identity', ['member_id']);
+          if (!idRes.error) {
+            identitySplitRef.current = true;
+            activeMembers = applyMemberIdentity(activeMembers, idRes.data, canReadMemberPii(userRef.current?.role));
+          } else if (!isMissingIdentityTable(idRes.error)) {
+            console.warn('member_identity load failed — staying in legacy PII mode:', idRes.error.message);
+          }
+        } catch (e) { console.warn('member_identity load threw — staying in legacy PII mode:', e); }
         if (activeMembers.length > 0) { setMembersState(activeMembers); storage.setMembers(activeMembers); }
         else setMembersState([]);
 
@@ -3102,6 +3121,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guardPeriodLock, addVoucher]);
 
+  // Member PII split, step 2 of the two-step save (RULE 1): the base `members` row is already safe; this
+  // writes aadhaar/pan to member_identity. Failure never loses the member — it reverts the PII shown in
+  // state and tells the user clearly. No-op in LEGACY mode (PII rode in the members row).
+  const persistMemberIdentity = (memberId: string, pii: { aadhaar?: string; pan?: string }, revert: () => void) => {
+    if (!identitySplitRef.current) return;
+    if (!canReadMemberPii(userRef.current?.role)) {
+      // This role may not store PAN/Aadhaar (RLS would refuse). Never claim it saved: revert and say so (RULE 1).
+      revert();
+      toastRef.current({ title: 'PAN/Aadhaar सेव नहीं हुआ', description: 'यह भूमिका PAN/Aadhaar नहीं बदल सकती — सदस्य की बाकी जानकारी सेव हो गई है। Admin/Accountant से करवाएँ.', variant: 'destructive', duration: 10000 });
+      return;
+    }
+    const sid = societyIdRef.current;
+    const row = identityRowFor(sid, memberId, pii);
+    const req = row
+      ? supabase.from('member_identity').upsert(row, { onConflict: 'society_id,member_id' })
+      : supabase.from('member_identity').delete().eq('society_id', sid).eq('member_id', memberId);
+    req.then(({ error }) => {
+      if (!error) return;
+      console.error('member_identity sync error:', error.message); reportError('db-sync', error.message);
+      revert();
+      toastRef.current({ title: 'PAN/Aadhaar सेव नहीं हुआ', description: `सदस्य सेव हो गया, पर PAN/Aadhaar नहीं (${error.message}). Dobara try karein.`, variant: 'destructive', duration: 12000 });
+    });
+  };
+
   const addMember = useCallback((data: Omit<Member, 'id'>, opts: { quiet?: boolean } = {}): Member => {
     if (guardFYLocked()) return { ...data, id: '' } as Member;
     const newMember: Member = { ...data, id: crypto.randomUUID(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) };
@@ -3115,7 +3158,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // doesn't know "branchId" yet, retry once without it so the base save never fails
     // because of the branch column (RULE 1).
     const attemptMemberSave = (payload: Member) => {
-      supabase.from('members').upsert(withSoc(payload)).then(({ error }) => {
+      supabase.from('members').upsert(memberRow(payload)).then(({ error }) => {
         if (error) {
           if (isMissingBranchColumn(error) && 'branchId' in payload) {
             const { branchId: _b, ...noBranch } = payload;
@@ -3125,6 +3168,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           setMembersState(prev => prev.filter(m => m.id !== newMember.id));   // RULE 1: roll back local state
           toastRef.current({ title: 'सदस्य सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+          return;
+        }
+        if (newMember.aadhaar || newMember.pan) {
+          persistMemberIdentity(newMember.id, { aadhaar: newMember.aadhaar, pan: newMember.pan },
+            () => setMembersState(prev => prev.map(m => m.id === newMember.id ? { ...m, aadhaar: undefined, pan: undefined } : m)));
         }
       });
     };
@@ -3148,7 +3196,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ECR-17 Phase 5: branchId rides IN the base upsert (see addMember); stale-schema-cache
     // fallback keeps RULE 1 intact.
     const attemptMemberUpdate = (payload: Member) => {
-      supabase.from('members').upsert(withSoc(payload)).then(({ error }) => {
+      supabase.from('members').upsert(memberRow(payload)).then(({ error }) => {
         if (error) {
           if (isMissingBranchColumn(error) && 'branchId' in payload) {
             const { branchId: _b, ...noBranch } = payload;
@@ -3158,6 +3206,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           setMembersState(prev => prev.map(m => m.id === id ? oldMember : m));   // RULE 1: roll back to prior state
           toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+          return;
+        }
+        // Step 2 (PII split): only when aadhaar/pan actually changed.
+        if (('aadhaar' in data || 'pan' in data)
+            && ((updatedMember.aadhaar || '') !== (oldMember.aadhaar || '') || (updatedMember.pan || '') !== (oldMember.pan || ''))) {
+          persistMemberIdentity(id, { aadhaar: updatedMember.aadhaar, pan: updatedMember.pan },
+            () => setMembersState(prev => prev.map(m => m.id === id ? { ...m, aadhaar: oldMember.aadhaar, pan: oldMember.pan } : m)));
         }
       });
     };
@@ -3285,7 +3340,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updated = { ...member, shareCapital: toRupees(subMinor(toMinor(member.shareCapital || 0), toMinor(refund))) };
     membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
-    supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
+    supabase.from('members').upsert(memberRow(updated)).then(({ error }) => {
       if (error) {
         reportCascade('Share refund member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
@@ -3323,7 +3378,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updated = { ...member, shareCapital: toRupees(subMinor(toMinor(member.shareCapital || 0), toMinor(built.amount))) };
     membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
-    supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
+    supabase.from('members').upsert(memberRow(updated)).then(({ error }) => {
       if (error) {
         reportCascade('Share refund approval member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
@@ -3389,7 +3444,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updated = { ...member, shareCapital: applyShareOp(type, member.shareCapital || 0, amt) };
     membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
-    supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
+    supabase.from('members').upsert(memberRow(updated)).then(({ error }) => {
       if (error) {
         reportCascade('Share operation member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
@@ -3423,7 +3478,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updated = { ...member, shareCapital: toRupees(addMinor(toMinor(member.shareCapital || 0), toMinor(buy))) };
     membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
-    supabase.from('members').upsert(withSoc(updated)).then(({ error }) => {
+    supabase.from('members').upsert(memberRow(updated)).then(({ error }) => {
       if (error) {
         reportCascade('Share purchase member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
@@ -3495,9 +3550,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     applyBoth(updFrom, updTo);
     const rollback = () => { applyBoth(beforeFrom, beforeTo); toastRef.current({ title: 'शेयर स्थानांतरण सेव नहीं हुआ', description: 'Cloud save fail — transfer rolled back.', variant: 'destructive', duration: 12000 }); };
-    supabase.from('members').upsert(withSoc(updFrom)).then(({ error }) => {
+    supabase.from('members').upsert(memberRow(updFrom)).then(({ error }) => {
       if (error) { reportCascade('Share transfer (from) sync', error); rollback(); return; }
-      supabase.from('members').upsert(withSoc(updTo)).then(({ error: e2 }) => {
+      supabase.from('members').upsert(memberRow(updTo)).then(({ error: e2 }) => {
         if (e2) { reportCascade('Share transfer (to) sync', e2); rollback(); }
         else toastRef.current({ title: '✅ शेयर स्थानांतरित', description: `₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}${prem > 0 ? ` (+ प्रीमियम ₹${prem.toLocaleString('en-IN')})` : ''}` });
       });
@@ -3928,7 +3983,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!member) return;
     const approved = { ...member, approvalStatus: 'approved' as const };
     setMembersState(prev => prev.map(m => m.id === id ? approved : m));
-    supabase.from('members').upsert(withSoc(approved)).then(({ error }) => {
+    supabase.from('members').upsert(memberRow(approved)).then(({ error }) => {
       if (error) {   // RULE 1: revert the approval so state matches Supabase; NO auto-vouchers on a failed approve
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setMembersState(prev => prev.map(m => m.id === id ? member : m));
@@ -3950,7 +4005,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!member) return;
     const rejected = { ...member, approvalStatus: 'rejected' as const };
     setMembersState(prev => prev.map(m => m.id === id ? rejected : m));
-    supabase.from('members').upsert(withSoc(rejected)).then(({ error }) => {
+    supabase.from('members').upsert(memberRow(rejected)).then(({ error }) => {
       if (error) {   // RULE 1: revert so state matches Supabase
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setMembersState(prev => prev.map(m => m.id === id ? member : m));
