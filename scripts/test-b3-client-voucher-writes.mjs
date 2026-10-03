@@ -44,7 +44,8 @@ for (const [fn, cols] of [['clearVoucher', 'isCleared: true'], ['unclearVoucher'
 }
 
 const reverse = body('reverseVoucher');
-ok('reversal link failures reach error_log', (reverse.match(/reportError\('voucher-reversal-link'/g) || []).length === 2 && !/console\.warn/.test(reverse));
+// 2 on the legacy path (one per link) + the S4-a server path (rpc refusal + network failure).
+ok('reversal link failures reach error_log', (reverse.match(/reportError\('voucher-reversal-link'/g) || []).length >= 2 && !/console\.warn/.test(reverse));
 ok('editHistory records the editor', body('updateVoucher').includes('editedBy: userRef.current?.name ?? current.createdBy'));
 
 console.log(`\nB3 client voucher writes: ${pass} passed, ${fail} failed`);

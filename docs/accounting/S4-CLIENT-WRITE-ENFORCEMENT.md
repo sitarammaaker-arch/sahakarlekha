@@ -1,6 +1,6 @@
 # S4: the database enforces server posting
 
-> Status: **S4-0 BUILT** (migration 102, harness-verified 2026-10-03; awaiting founder apply). S4-a/b/c: design. Readiness report §4 / §17 item 4.
+> Status: **S4-0 LIVE** (102, applied 2026-10-03 13:35 UTC). **S4-a BUILT** (103 + app wiring, harness 41/41; awaiting founder apply, which must come BEFORE the app deploy). S4-b/c: design.
 > Goal: for a society whose posting service is ON, the database itself refuses any direct client write
 > to the accounting tables. Today server posting is authoritative only because the client takes that path.
 
@@ -22,6 +22,10 @@ Mapped by reading `src/contexts/DataContext.tsx` on `main` (flag-off fallbacks e
 | 4 | `mergeAccounts` | `vouchers` UPSERT (rewrites account ids on every affected voucher) + `voucher_entries` sync | **financial rewrite, client-side** | none |
 | 5 | `addAccount` / `updateAccount` (opening balance) | `ledger_events` INSERT (opening delta event via `persistLedgerEvent`) | journal write | none |
 | 6 | `persistLedgerEvent` callers (shadow appends, approval/cancel/edit repair helpers) | `ledger_events` INSERT | journal write | mostly flag-off; must be proven unreachable when ON |
+
+| 7 | `addVoucher` / `updateVoucher` for a **pending** (maker-checker) voucher | `vouchers` UPSERT (+ entries) | create/edit before approval | none: `post_voucher` refuses pending (`pending_not_supported`) | **found while building S4-a**; usage is tiny (3 pending vouchers ever, last 2026-07) |
+
+**Found while building S4-a, row 1:** with the flag ON, `reverseVoucher`'s two direct link updates ran right after `addVoucher` returned, *before* `post_voucher` had written the reversal row. The update could hit 0 rows and link nothing, silently. In prod, 1 of 2 reversals ever made (2026-08-23) is missing its `reversalOf`. S4-a links only after the server confirms (`onPersisted`).
 
 Anything not in this table that writes `vouchers` / `voucher_entries` / `ledger_events` while the flag is ON is a bug, and S4-b will surface it as a refused write in `error_log`.
 

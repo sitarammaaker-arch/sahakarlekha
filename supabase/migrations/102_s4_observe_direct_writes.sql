@@ -26,7 +26,7 @@ set search_path = public
 as $$
   select coalesce((select posting_service from public.society_flags where society_id = p_society_id), false);
 $$;
-revoke all on function public.posting_service_on(text) from public, anon;
+revoke execute on function public.posting_service_on(text) from public, anon;
 grant execute on function public.posting_service_on(text) to authenticated;
 
 create or replace function public._s4_note_direct_write(p_society_id text, p_table text, p_op text, p_rows integer)
@@ -41,7 +41,7 @@ as $$
           jsonb_build_object('table', p_table, 'op', p_op, 'rows', p_rows),
           nullif(coalesce(current_setting('request.jwt.claims', true), '{}')::jsonb ->> 'email', ''));
 $$;
-revoke all on function public._s4_note_direct_write(text, text, text, integer) from public, anon;
+revoke execute on function public._s4_note_direct_write(text, text, text, integer) from public, anon;
 -- authenticated needs EXECUTE because the invoker trigger calls it as the client. It writes a fixed shape
 -- (table / op / count) to error_log, which clients can already insert into — no new capability.
 grant execute on function public._s4_note_direct_write(text, text, text, integer) to authenticated;

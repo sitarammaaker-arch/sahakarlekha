@@ -46,7 +46,7 @@ ok("records '080' last; down drops both functions", /values \('080', 'post_stock
   && /drop function if exists public\.post_stock_document/.test(down) && /drop function if exists public\._official_doc_no/.test(down) && /version = '080'/.test(down));
 
 console.log('App wiring');
-ok('addVoucher: optional persistWith hands over voucher + event + rollback instead of saving', /opts\?: \{ persistWith\?: VoucherPersistWith \}/.test(dc)
+ok('addVoucher: optional persistWith hands over voucher + event + rollback instead of saving', /opts\?: \{ persistWith\?: VoucherPersistWith[;}]/.test(dc)
   && /if \(opts\?\.persistWith && shadowEvent\) \{ opts\.persistWith\(newVoucher, shadowEvent, rollbackOptimistic\); return newVoucher; \}/.test(dc));
 const ps = dc.slice(dc.indexOf('const postStockDocument = ('), dc.indexOf('// S3-e-1 · the ONE way a parent-record cascade'));
 ok("postStockDocument calls post_stock_document with the lib payload", /buildStockDocumentPayload\(kind, doc, voucher, event, movements\)/.test(ps) && /supabase\.rpc\('post_stock_document', p\)/.test(ps));
