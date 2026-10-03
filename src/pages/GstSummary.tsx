@@ -15,6 +15,9 @@ import { generateGstSummaryPDF } from '@/lib/pdf';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
+import { partyGstin, societyStateCode, placeOfSupply } from '@/lib/gstStates';
+import { INDIAN_STATES } from '@/lib/constants';
+import { useToast } from '@/hooks/use-toast';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -32,6 +35,7 @@ function fyBounds(fy: string): { from: string; to: string } {
 export default function GstSummary() {
   const { sales, purchases, customers, society, stockItems, matchesActiveBranch } = useData();
   const { salesReturns, purchaseReturns } = useConsumerData();
+  const { toast } = useToast();
   const { language } = useLanguage();
 
   const { from: defaultFrom, to: defaultTo } = fyBounds(society.financialYear);
@@ -88,7 +92,8 @@ export default function GstSummary() {
   //   registered customer (has GSTIN) → CDNR (reported separately; B2B stays gross)
   //   unregistered (B2C / member)     → netted into B2CS rate-wise
   //   all returns                     → net the HSN summary (qty + taxable + tax)
-  const stateCode = (society as unknown as { stateCode?: string }).stateCode || '09';
+  // Society's own GST state (GSTIN prefix, else state name). '' = unknown → GSTR-1 JSON refuses (C-11).
+  const stateCode = societyStateCode(society, INDIAN_STATES.find(st => st.value === society.state)?.label);
   const returnClassification = useMemo(() => {
     const cdnr = new Map<string, { ctin: string; custName: string; notes: Array<{ nt_num: string; nt_dt: string; val: number; rate: number; txval: number; iamt: number; camt: number; samt: number }> }>();
     const b2cByRate = new Map<number, { rate: number; taxableValue: number; igst: number; cgst: number; sgst: number }>();
@@ -98,10 +103,10 @@ export default function GstSummary() {
       const rate = sale ? (sale.cgstPct + sale.sgstPct + sale.igstPct)
         : (r.netAmount > 0 ? Math.round((r.taxAmount / r.netAmount) * 100) : 0);
       const cust = r.customerId ? customerMap.get(r.customerId) : undefined;
-      if (cust?.gstNo) {
-        const bucket = cdnr.get(cust.gstNo) ?? { ctin: cust.gstNo, custName: cust.name || r.customerName, notes: [] };
+      if (partyGstin(cust)) {
+        const bucket = cdnr.get(partyGstin(cust)) ?? { ctin: partyGstin(cust), custName: cust.name || r.customerName, notes: [] };
         bucket.notes.push({ nt_num: r.returnNo, nt_dt: r.date, val: r.grandTotal, rate, txval: r.netAmount, iamt: r.igstAmount, camt: r.cgstAmount, samt: r.sgstAmount });
-        cdnr.set(cust.gstNo, bucket);
+        cdnr.set(partyGstin(cust), bucket);
       } else {
         const b = b2cByRate.get(rate) ?? { rate, taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
         b.taxableValue += r.netAmount; b.igst += r.igstAmount; b.cgst += r.cgstAmount; b.sgst += r.sgstAmount;
@@ -201,7 +206,7 @@ export default function GstSummary() {
     activeSales.filter(s => {
       if (!s.customerId) return false;
       const cust = customerMap.get(s.customerId);
-      return !!(cust?.gstNo);
+      return !!partyGstin(cust);
     }),
     [activeSales, customerMap]);
 
@@ -472,13 +477,17 @@ export default function GstSummary() {
 
   // GSTR-1 JSON export (NIC format)
   const handleGstr1Json = () => {
+    if (!stateCode) {
+      toast({ title: 'GSTR-1 JSON nahi ban sakta', description: 'Society ka GSTIN ya State Society Setup mein bharein — place of supply bina state ke galat jaata hai.', variant: 'destructive', duration: 10000 });
+      return;
+    }
     const fp = fromDate.slice(5, 7) + fromDate.slice(0, 4); // MMYYYY
 
     // Group B2B by customer GSTIN
     const b2bMap = new Map<string, typeof b2bSales>();
     for (const s of b2bSales) {
       const cust = s.customerId ? customerMap.get(s.customerId) : undefined;
-      const gstin = cust?.gstNo || 'URP';
+      const gstin = partyGstin(cust) || 'URP';
       const arr = b2bMap.get(gstin) ?? [];
       arr.push(s);
       b2bMap.set(gstin, arr);
@@ -490,7 +499,7 @@ export default function GstSummary() {
         inum: s.saleNo,
         idt: s.date,
         val: s.grandTotal,
-        pos: (society as any).stateCode || '09',
+        pos: placeOfSupply(ctin === 'URP' ? undefined : ctin, undefined, stateCode),
         rchrg: 'N',
         itms: [{
           num: 1,
@@ -539,7 +548,7 @@ export default function GstSummary() {
         nt_num: n.nt_num,
         nt_dt: n.nt_dt,
         val: n.val,
-        pos: stateCode,
+        pos: placeOfSupply(c.ctin, undefined, stateCode),
         rchrg: 'N',
         inv_typ: 'R',
         itms: [{
@@ -587,7 +596,7 @@ export default function GstSummary() {
         head: [['Inv No', 'Date', 'Customer', 'GSTIN', 'Taxable', 'IGST', 'CGST', 'SGST', 'Total']],
         body: b2bSales.map(s => {
           const cust = s.customerId ? customerMap.get(s.customerId) : undefined;
-          return [s.saleNo, s.date, cust?.name || s.customerName, cust?.gstNo || '', s.netAmount.toFixed(2), s.igstAmount.toFixed(2), s.cgstAmount.toFixed(2), s.sgstAmount.toFixed(2), s.grandTotal.toFixed(2)];
+          return [s.saleNo, s.date, cust?.name || s.customerName, partyGstin(cust), s.netAmount.toFixed(2), s.igstAmount.toFixed(2), s.cgstAmount.toFixed(2), s.sgstAmount.toFixed(2), s.grandTotal.toFixed(2)];
         }),
         styles: { fontSize: 7, cellPadding: 1.5 },
         headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold', fontSize: 7 },
@@ -1045,7 +1054,7 @@ export default function GstSummary() {
                               <TableCell className="font-mono text-sm">{s.saleNo}</TableCell>
                               <TableCell>{s.date}</TableCell>
                               <TableCell>{cust?.name || s.customerName}</TableCell>
-                              <TableCell className="font-mono text-xs">{cust?.gstNo || '—'}</TableCell>
+                              <TableCell className="font-mono text-xs">{partyGstin(cust) || '—'}</TableCell>
                               <TableCell className="text-right font-mono">{fmt(s.netAmount)}</TableCell>
                               <TableCell className="text-right font-mono">{fmt(s.igstAmount)}</TableCell>
                               <TableCell className="text-right font-mono">{fmt(s.cgstAmount)}</TableCell>

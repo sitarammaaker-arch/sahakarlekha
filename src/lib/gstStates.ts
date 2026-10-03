@@ -36,3 +36,26 @@ export function stateCodeFromName(name?: string): string {
 export function resolveStateCode(gstin?: string, stateName?: string): string {
   return stateCodeFromGstin(gstin) || stateCodeFromName(stateName);
 }
+
+/** The party's GSTIN, accepting both field names (`gstin` is current, `gstNo` legacy). */
+export function partyGstin(party?: { gstin?: string; gstNo?: string } | null): string {
+  return ((party?.gstin || party?.gstNo) || '').trim().toUpperCase();
+}
+
+/**
+ * The society's OWN GST state code: GSTIN prefix first, else its state name. '' when
+ * neither resolves — callers must refuse to build a GSTR-1 rather than guess a state
+ * (audit C-11: the export used to hard-code '09', Uttar Pradesh, for every society).
+ */
+export function societyStateCode(society: { gstin?: string; state?: string }, stateLabel?: string): string {
+  return stateCodeFromGstin(society.gstin) || stateCodeFromName(stateLabel || society.state);
+}
+
+/**
+ * Place of supply for one outward invoice: the recipient's state (GSTIN prefix, then
+ * state name), else the supplier's own state (intra-state default for an unregistered
+ * recipient with no recorded location).
+ */
+export function placeOfSupply(recipientGstin: string | undefined, recipientState: string | undefined, supplierCode: string): string {
+  return resolveStateCode(recipientGstin, recipientState) || supplierCode;
+}
