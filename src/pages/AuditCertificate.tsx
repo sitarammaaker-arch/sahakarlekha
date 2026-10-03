@@ -19,6 +19,7 @@ import jsPDF from 'jspdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
 import { getBankAccountIds } from '@/lib/storage';
 import { INDIAN_STATES } from '@/lib/constants';
@@ -50,7 +51,7 @@ const AuditCertificate: React.FC = () => {
     const acc = accounts.find(a => a.id === id);
     if (!acc) return 0;
     let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
-    vouchers.filter(v => !v.isDeleted).forEach(v => {
+    vouchers.filter(v => isCountedVoucher(v, society.approvalRequired)).forEach(v => {
       getVoucherLines(v).forEach(l => {
         if (l.accountId !== id) return;
         if (l.type === 'Dr') bal -= l.amount;
@@ -60,9 +61,11 @@ const AuditCertificate: React.FC = () => {
     return bal;
   };
 
-  const cashBalance  = getBalance('3301'); // Cash in Hand
+  // getBalance is credit-positive; cash/bank are debit-nature assets, so negate to show the
+  // real Dr balance (audit A-04: the raw value was negative and Math.max(0, …) printed Rs 0).
+  const cashBalance  = -getBalance('3301'); // Cash in Hand
   const bankIds = getBankAccountIds(accounts);
-  const bankBalance = bankIds.reduce((sum, bid) => sum + getBalance(bid), 0);
+  const bankBalance = -bankIds.reduce((sum, bid) => sum + getBalance(bid), 0);
   // Paid-up Share Capital ONLY (1101/1102/1103) — NOT reserves/surplus, which are also
   // type 'equity' (subtype 'reserve'/'surplus' under 1200) and must stay a separate head.
   const shareCapital = accounts

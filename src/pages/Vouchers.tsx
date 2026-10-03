@@ -373,6 +373,8 @@ const Vouchers: React.FC = () => {
       approvalStatus: submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
     });
+    // addVoucher refuses (permission / FY lock / plan) with an empty id and has already shown why — never claim "saved".
+    if (!v?.id) return;
     setSavedVoucherNo(v.voucherNo);
     toast({ title: language === 'hi' ? 'वाउचर सहेजा गया' : 'Voucher saved', description: v.voucherNo });
     if (v.id) trackEvent('voucher_created', { type: v.type, mode: 'expert' });
@@ -405,6 +407,8 @@ const Vouchers: React.FC = () => {
         approvalStatus: submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
       });
+      // addVoucher refuses (permission / FY lock / plan) with an empty id and has already shown why — never claim "saved".
+      if (!v?.id) return;
       setSavedVoucherNo(v.voucherNo);
       toast({ title: language === 'hi' ? 'कोंट्रा वाउचर सहेजा गया' : 'Contra Voucher saved', description: v.voucherNo });
     if (v.id) trackEvent('voucher_created', { type: v.type, mode: 'contra' });
@@ -438,6 +442,8 @@ const Vouchers: React.FC = () => {
       approvalStatus: submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
     });
+    // addVoucher refuses (permission / FY lock / plan) with an empty id and has already shown why — never claim "saved".
+    if (!v?.id) return;
     setSavedVoucherNo(v.voucherNo);
     toast({ title: language === 'hi' ? 'वाउचर सहेजा गया' : 'Voucher saved', description: `${v.voucherNo}` });
     if (v.id) trackEvent('voucher_created', { type: v.type, mode: 'simple' });

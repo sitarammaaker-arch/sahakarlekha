@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,7 +66,7 @@ const Ledger: React.FC = () => {
     // A voucher touches this account if ANY of its lines has this accountId.
     // ECR-17: honour the active branch — this statement must tie to the branch-scoped TB.
     const accountVouchers = vouchers
-      .filter(v => !v.isDeleted && matchesActiveBranch(v.branchId) && getVoucherLines(v).some(l => l.accountId === selectedAccountId))
+      .filter(v => isCountedVoucher(v, society.approvalRequired) && matchesActiveBranch(v.branchId) && getVoucherLines(v).some(l => l.accountId === selectedAccountId))
       .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
 
     if (fromDate) {

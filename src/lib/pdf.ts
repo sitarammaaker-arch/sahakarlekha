@@ -13,6 +13,7 @@ import { statutoryLimits, scheduleLimitsLine } from '@/lib/rules/statutoryLimits
 import { trackEvent } from '@/lib/analytics';
 import { loanOutstanding } from '@/lib/memberSnapshot';
 import { installDevanagariCells } from '@/lib/pdfDevanagari';
+import { fitLine } from '@/lib/pdfFit';
 
 // Hindi DATA (names, narrations) in any PDF table is drawn by the browser — labels stay English.
 installDevanagariCells();
@@ -20,7 +21,7 @@ installDevanagariCells();
 
 // G1 FIX: Use Rs. prefix — Helvetica font lacks the ₹ glyph, causing garbled output
 const fmt = (amount: number): string =>
-  'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+  'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number.isFinite(amount) ? amount : 0);   // D-04: never print "Rs. NaN"
 
 const preparedOn = (): string => {
   const d = new Date();
@@ -237,7 +238,7 @@ export function addHeader(
   // Society name
   doc.setFontSize(14);
   doc.setFont(font, 'bold');
-  doc.text(society.name, cx, 15, { align: 'center' });
+  doc.text(fitLine(doc, society.name, pageW - 30, 14, 9), cx, 15, { align: 'center' });
 
   // Reg No + FY (center)
   doc.setFontSize(8);
@@ -253,7 +254,7 @@ export function addHeader(
   if (addrParts.length > 0) {
     doc.setFontSize(7.5);
     doc.setTextColor(60);
-    doc.text(addrParts.join(', '), cx, 26, { align: 'center' });
+    doc.text(fitLine(doc, addrParts.join(', '), pageW - 30, 7.5, 6), cx, 26, { align: 'center' });
     doc.setTextColor(0);
   }
 
@@ -1361,7 +1362,9 @@ export function generateDayBookPDF(
   society: SocietySettings,
   fromDate: string,
   toDate: string,
-  language: 'hi' | 'en'
+  language: 'hi' | 'en',
+  /** Page-computed opening cash (account OB + vouchers before the window, branch-scoped). */
+  openingCash?: number,
 ) {
   const doc = new jsPDF({ orientation: 'landscape' });
   const getAccName = (id: string) => accounts.find(a => a.id === id)?.name || id;
@@ -1383,8 +1386,8 @@ export function generateDayBookPDF(
   // C-2 FIX: Use getVoucherLines() to correctly calculate pre-period cash balance
   // including multi-line Expert Mode vouchers.
   const firstDate = entries.length > 0 ? entries[0].date : null;
-  let runCash = cashAccOB;
-  if (firstDate) {
+  let runCash = openingCash ?? cashAccOB;
+  if (firstDate && openingCash === undefined) {   // legacy fallback; `entries` never holds pre-period rows
     entries.forEach(v => {
       if (v.date >= firstDate) return;
       getVoucherLines(v).forEach(l => {

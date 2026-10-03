@@ -80,7 +80,9 @@ interface ValuationRow {
 export default function StockValuation() {
   const { stockItems, reconciledStockMovements, society } = useData();
   const { language } = useLanguage();
-  const [method, setMethod] = useState<'fifo' | 'weighted_avg'>('weighted_avg');
+  // Valuation is always weighted-average (the single closing-stock rule, RULE 2). The FIFO
+  // selector was a no-op that let the PDF print "Method: FIFO" over WA values (audit C-01).
+  const method = 'weighted_avg' as 'fifo' | 'weighted_avg';
 
   const hi = language === 'hi';
 
@@ -106,7 +108,7 @@ export default function StockValuation() {
         method: 'WA',
       };
     });
-  }, [activeItems, reconciledStockMovements, method]);
+  }, [activeItems, reconciledStockMovements]);
 
   const totalValue = useMemo(() => rows.reduce((s, r) => s + r.value, 0), [rows]);
   const totalItems = rows.filter(r => r.qty > 0).length;
@@ -194,7 +196,7 @@ export default function StockValuation() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{hi ? 'स्टॉक वैल्यूएशन' : 'Stock Valuation'}</h1>
-          <p className="text-muted-foreground text-sm">{hi ? 'FIFO / भारित औसत विधि से स्टॉक का मूल्य' : 'Inventory value using FIFO or Weighted Average method'}</p>
+          <p className="text-muted-foreground text-sm">{hi ? 'भारित औसत विधि से स्टॉक का मूल्य' : 'Inventory value using the Weighted Average method'}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button onClick={handlePDF} variant="outline">
@@ -241,20 +243,7 @@ export default function StockValuation() {
         </span>
       </div>
 
-      {/* Method selector */}
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-medium">{hi ? 'वैश्विक विधि:' : 'Default Method:'}</label>
-        <Select value={method} onValueChange={(v) => setMethod(v as 'fifo' | 'weighted_avg')}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="weighted_avg">{hi ? 'भारित औसत (WA)' : 'Weighted Average (WA)'}</SelectItem>
-            <SelectItem value="fifo">FIFO (First In First Out)</SelectItem>
-          </SelectContent>
-        </Select>
-        <span className="text-xs text-muted-foreground">{hi ? '(वस्तु-स्तर पर ओवरराइड किया जा सकता है)' : '(can be overridden per item in Inventory)'}</span>
-      </div>
+      <p className="text-xs text-muted-foreground">{hi ? 'मूल्यांकन विधि: भारित औसत (तुलन-पत्र व व्यापार खाते के समान)।' : 'Valuation method: Weighted Average (same as the Balance Sheet and Trading A/c).'}</p>
 
       <Tabs defaultValue="all">
         <TabsList>

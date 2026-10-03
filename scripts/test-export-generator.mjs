@@ -142,6 +142,20 @@ ok(!authorizeExport(member, { role: 'cashier', capabilities: [] }, 'csv').ok, 'c
 // Fail-closed on an unknown role (the ECR-06 17-role migration must not open a hole).
 ok(!authorizeExport(member, { role: 'nonsenseRole', capabilities: [] }, 'csv').ok, 'an unrecognised role is denied');
 
+// D-S02: viewer-rank may only take the redacted view of PII entities
+ok(!authorizeExport(member, viewer, 'csv', 'full').ok, 'viewer denied FULL member export (Aadhaar/PAN)');
+ok(!authorizeExport(member, viewer, 'csv', 'standard').ok, 'viewer denied STANDARD member export (PAN)');
+ok(authorizeExport(member, viewer, 'csv', 'redacted').ok, 'viewer may take REDACTED member export');
+ok(authorizeExport(member, accountant, 'csv', 'full').ok, 'accountant may take FULL member export');
+ok(authorizeExport(member, viewer, 'csv').ok, 'mode omitted: listing check unchanged');
+
+// D-S02: viewer-rank may only take the redacted view of PII entities
+ok(!authorizeExport(member, viewer, 'csv', 'full').ok, 'viewer denied FULL member export (Aadhaar/PAN)');
+ok(!authorizeExport(member, viewer, 'csv', 'standard').ok, 'viewer denied STANDARD member export (PAN)');
+ok(authorizeExport(member, viewer, 'csv', 'redacted').ok, 'viewer may take REDACTED member export');
+ok(authorizeExport(member, accountant, 'csv', 'full').ok, 'accountant may take FULL member export');
+ok(authorizeExport(member, viewer, 'csv').ok, 'mode omitted: listing check unchanged');
+
 // ── 2. Column selection per mode ─────────────────────────────────────────────
 const std = selectColumns(member, 'standard');
 const full = selectColumns(member, 'full');
@@ -232,7 +246,7 @@ const env = {
   societyId: 'SOC001',
   actor: { name: 'राजेश', email: 'a@b.com', role: 'viewer' },
   now: '2026-07-10T00:00:00.000Z',
-  principal: viewer,
+  principal: accountant,   // D-S02: standard member export needs accountant+
   language: 'hi',
 };
 const req = { entityKey: 'member', format: 'csv', mode: 'standard' };

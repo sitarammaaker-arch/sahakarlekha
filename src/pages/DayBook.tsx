@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import type { VoucherType } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 import { fmtDate as fmtDateShort, fmtDateLong } from '@/lib/dateUtils';
 
 const DayBook: React.FC = () => {
@@ -82,7 +83,7 @@ const DayBook: React.FC = () => {
 
   // ECR-17: honour the active branch — the Cash Book / Trial Balance are branch-scoped, so the
   // Day Book must be too, or the same day shows different totals across reports.
-  const activeVouchers = vouchers.filter(v => !v.isDeleted && matchesActiveBranch(v.branchId));
+  const activeVouchers = vouchers.filter(v => isCountedVoucher(v, society.approvalRequired) && matchesActiveBranch(v.branchId));
 
   const entries = useMemo(() => {
     return activeVouchers
@@ -174,7 +175,7 @@ const DayBook: React.FC = () => {
 
   const handleFilter = () => setFiltered(true);
   const handleReset = () => { setFromDate(fyStart); setToDate(today); setFiltered(false); };
-  const handlePDF = () => generateDayBookPDF(entries, accounts, society, fromDate, toDate, language);
+  const handlePDF = () => generateDayBookPDF(entries, accounts, society, fromDate, toDate, language, cashOB);
 
   const exportHeaders = ['Date', 'Voucher No.', 'Type', 'Account', 'Dr/Cr', 'Amount', 'Narration'];
 
