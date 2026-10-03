@@ -1,0 +1,7 @@
+Report,Print,PDF,XLSX,CSV,Other,HonoursFilters,WorkingStatus,Evidence
+Export Center,No,No (PDF stays with pdf.ts),Yes,Yes,JSON,NO - no FY/date/branch filter; only column selection and mode,WORKING but unfiltered; filename uses current FY,ExportCenter.tsx:140-175
+EntityExportButton,No,No,Yes,Yes,-,"NO - always whole table, standard mode",WORKING,EntityExportButton.tsx:73-100
+pdf.ts shared helpers,No,Yes,No,No,-,Caller-dependent,WORKING with layout defects,pdf.ts:43-294; D_visual_qa.md
+exportUtils CSV,No,No,No,Yes,-,n/a,WORKING; injection risk,exportUtils.ts:60-155
+exportUtils XLSX,No,No,Yes,No,JSON envelope,n/a,WORKING; fragile naming,exportUtils.ts:99-113
+Print (index.css),Partial,No,No,No,-,n/a,MINIMAL,index.css:264-290

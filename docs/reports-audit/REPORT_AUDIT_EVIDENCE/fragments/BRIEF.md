@@ -1,0 +1,13 @@
+# Shared brief for slice auditors (SahakarLekha reports audit, 2026-10-03)
+Repo: D:\Website\sahakarlekha (React+Vite+Supabase; jsPDF/jspdf-autotable; SheetJS xlsx). READ-ONLY on src/ — do NOT modify source. Only write into REPORT_AUDIT_EVIDENCE/fragments/ (and REPORT_AUDIT_EVIDENCE/ for generated sample files).
+Read CLAUDE.md RULES 1-8 and CONSTITUTION.md first (briefly). Evidence rule: every claim cites file:line you actually opened. If not verifiable -> write UNVERIFIED + what is missing. Never call a report "statutory compliant" just because it exists; statutory source must be a doc in the repo (docs/, AUDIT_NCDC_Compliance_Report.md, docs/CA-VERIFICATION-2026-07.md, src/lib/stateAuditFormats.ts, supabase/, etc.); else mark "EXTERNAL VALIDATION NEEDED".
+Entity types: check how the code distinguishes Cooperative Society vs Registered Society (grep societyType/SocietyType, 'registered', jurisdiction, capabilities); state clearly what is supported.
+Classification: STATUTORY (legally required, cite source) / AUDIT-USEFUL / MANAGEMENT-INTERNAL.
+For EACH report in your slice, trace: route (src/App.tsx) -> nav entry/permission (rbac.ts / navigation) -> page component -> data source/query -> formatter -> PDF/XLSX/CSV/print generator -> filename. Check: print button + window.print/print CSS, PDF button, XLSX, CSV, whether exports honour date/FY/branch/filter, page numbers, header (society name, reg no, FY), signatures, totals, opening/closing, negative/zero handling, Hindi font, rounding (money.ts), isDeleted filtering, orientation.
+OUTPUT (write these files, UTF-8, in REPORT_AUDIT_EVIDENCE/fragments/ using your slice letter X):
+1. X_inventory.csv  header: Report,Route,Component,EntityType,Category,DataSource,Formats,PrintAvailable,DownloadAvailable,Status,Evidence
+2. X_compliance.csv header: Report,EntityType,Class,RequirementUse,SourceAuthority,RequiredFields,CurrentStatus,Print,PDF,XLSX,CSV,MissingFields,FormattingIssues,DataIssues,ComplianceRisk,Severity,RecommendedFix,TestCase
+3. X_export.csv header: Report,Print,PDF,XLSX,CSV,Other,HonoursFilters,WorkingStatus,Evidence
+4. X_findings.md — numbered findings, each: ID (X-01..), SEVERITY (CRITICAL/HIGH/MEDIUM/LOW/INFORMATIONAL), title, evidence file:line, failure scenario, recommended fix, test. Group by: Accounting/Data, Statutory, Security, Print/PDF, Export, UX, Missing reports.
+5. X_gaps.md — missing reports/fields/formats expected from supported modules.
+CSV: quote fields containing commas, one row per report, no embedded newlines. Be exhaustive within slice; do not stop at the first few. Final reply: <=200 words summary with top 5 findings + counts. 

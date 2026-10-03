@@ -1,0 +1,71 @@
+=== test:reports-statements-wiring
+
+Reports statement-selection wiring: 12 passed, 0 failed
+EXIT=0
+=== test:statement-selection
+
+Statement selection (UCAS Part D): 22 passed, 0 failed
+EXIT=0
+=== test:money-tb
+
+Trial-balance money precision: 17 passed, 0 failed
+EXIT=0
+=== test:ledger-cash-book
+
+Cash book projection (T-09): 12 passed, 0 failed
+EXIT=0
+=== test:ledger-receipts-payments
+
+Receipts & Payments projection (T-09): 12 passed, 0 failed
+EXIT=0
+=== test:accounting
+[accounting-test] 23 passed, 0 failed
+EXIT=0
+=== test:ledger-split-tb
+
+Split trial balance (T-09): 14 passed, 0 failed
+EXIT=0
+=== test:ledger-parity
+
+Ledger parity (T-07): 11 passed, 0 failed
+EXIT=0
+=== test:ledger-rp-classify
+
+R&P classifier (T-09): 15 passed, 0 failed
+EXIT=0
+=== test:ledger-member-ledger
+
+Member ledger projection (T-09): 9 passed, 0 failed
+EXIT=0
+=== test:ledger-aggregate-state
+
+Current-voucher resolution (T-09): 9 passed, 0 failed
+EXIT=0
+=== test:ob
+
+Opening balances (pure): 22 passed, 0 failed
+EXIT=0
+=== test:appropriation
+
+Appropriation waterfall (pure): 15 passed, 0 failed
+EXIT=0
+=== test:soft-delete
+
+Soft-delete: 10 passed, 0 failed
+EXIT=0
+=== test:year-close
+
+Year-end close & opening balances: 11 passed, 0 failed
+EXIT=0
+=== test:period-lock
+
+Period lock (pure): 13 passed, 0 failed
+EXIT=0
+=== test:rp-label
+
+R&P label (paid/received clarity): 13 passed, 0 failed
+EXIT=0
+=== test:money
+
+Exact money (minor units): 42 passed, 0 failed
+EXIT=0
