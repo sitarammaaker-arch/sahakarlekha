@@ -165,3 +165,14 @@ Totals: STILL-PRESENT 45, CHANGED 7, FIXED-ON-MAIN 5, UNVERIFIED 0.
 ## Notes
 - Also observed: SaleRegister.tsx:358 still claims the register "can be used for GSTR-1 filing" (C-36, LOW).
 - Items needing external statutory validation (not code-fixable alone): B-20, B-23, C-13, C-14, C-15 layout, C-16 sections, C-21.
+
+---
+
+## Batch 2 (branch `fix/reports-audit-p2`)
+| Finding | Fix | Test |
+|---|---|---|
+| A-05 Cash/Bank Book opening/closing under date filter / branch | `bookWindow`: opening = running balance before the window (or in-scope account opening); closing = last running balance in the window | test:book-window |
+| A-07 BRS ignores clearing date | `isClearedAsOf`: cleared only if `clearedDate <= as-on date`; BRS also excludes rejected/pending vouchers (`isCountedVoucher`) | test:bank-clearing |
+| D-12 Export Center scope label | exports are whole-table: file named `<entity>-all-years-<date>`, README/audit record "all financial years, all branches" | test:export-buttons/generator |
+
+**Deliberately NOT done — A-08 (R&P not FY-bounded):** doing it the Trial-Balance way changes receipts/payments totals for multi-year societies and the prior-year snapshot taken at FY close (SocietySetup), and the ledger projection takes the same openings. That is a financial-calculation change that needs a design + CA sign-off, not a display fix.

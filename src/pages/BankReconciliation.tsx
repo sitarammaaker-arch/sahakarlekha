@@ -19,6 +19,8 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { isClearedAsOf } from '@/lib/reports/bankClearing';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { BankReconciliationRecord } from '@/types';
@@ -103,19 +105,19 @@ const BankReconciliation: React.FC = () => {
   const bankVouchers = useMemo(() => {
     return vouchers
       .filter(v =>
-        !v.isDeleted &&
+        isCountedVoucher(v, society.approvalRequired) &&
         v.date <= asOfDate &&
         getVoucherLines(v).some(l => l.accountId === activeBankId)
       )
       .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
-  }, [vouchers, asOfDate]);
+  }, [vouchers, asOfDate, society.approvalRequired]);
 
   // Uncleared deposits (Dr Bank — money coming in, not yet in bank statement)
-  const unclearedDeposits = bankVouchers.filter(v => !v.isCleared && bankDrAmt(v) > 0);
+  const unclearedDeposits = bankVouchers.filter(v => !isClearedAsOf(v, asOfDate) && bankDrAmt(v) > 0);
   // Uncleared payments/cheques (Cr Bank — cheques issued but not yet presented)
-  const unclearedPayments = bankVouchers.filter(v => !v.isCleared && bankCrAmt(v) > 0);
+  const unclearedPayments = bankVouchers.filter(v => !isClearedAsOf(v, asOfDate) && bankCrAmt(v) > 0);
   // Cleared vouchers
-  const clearedVouchers = bankVouchers.filter(v => v.isCleared);
+  const clearedVouchers = bankVouchers.filter(v => isClearedAsOf(v, asOfDate));
 
   const totalUnclearedDeposits = unclearedDeposits.reduce((s, v) => s + bankDrAmt(v), 0);
   const totalUnclearedPayments = unclearedPayments.reduce((s, v) => s + bankCrAmt(v), 0);
@@ -126,7 +128,7 @@ const BankReconciliation: React.FC = () => {
     if (!acct) return 0;
     let bal = acct.openingBalanceType === 'debit' ? acct.openingBalance : -acct.openingBalance;
     vouchers
-      .filter(v => !v.isDeleted && v.date <= asOfDate &&
+      .filter(v => isCountedVoucher(v, society.approvalRequired) && v.date <= asOfDate &&
         getVoucherLines(v).some(l => l.accountId === activeBankId))
       .forEach(v => {
         getVoucherLines(v).forEach(l => {

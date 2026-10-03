@@ -17,12 +17,13 @@ import { Plus, Wallet, Calendar, Filter, Download, ArrowDownLeft, ArrowUpRight, 
 import { useToast } from '@/hooks/use-toast';
 import { generateCashBookPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
+import { bookWindow } from '@/lib/reports/bookWindow';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 const CashBook: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { accounts, addVoucher, getCashBookEntries, getAccountBalance, society } = useData();
+  const { accounts, addVoucher, getCashBookEntries, society, matchesActiveBranch } = useData();
   const { toast } = useToast();
 
   const [fromDate, setFromDate] = useState('');
@@ -36,15 +37,17 @@ const CashBook: React.FC = () => {
   const [entryAmount, setEntryAmount] = useState('');
   const [entryNarration, setEntryNarration] = useState('');
 
-  const openingBalance = accounts.find(a => a.id === ACCOUNT_IDS.CASH)?.openingBalance || 0;
-  const entries = getCashBookEntries(appliedFrom || undefined, appliedTo || undefined);
+  // A-05: opening/closing follow the date window and branch scope (account openings belong to
+  // Head Office, same rule as the Trial Balance) instead of the all-time account figures.
+  const accountOpening = matchesActiveBranch(undefined) ? (accounts.find(a => a.id === ACCOUNT_IDS.CASH)?.openingBalance || 0) : 0;
+  const { opening: openingBalance, closing: closingBalance, window: entries } = bookWindow(
+    getCashBookEntries(undefined, appliedTo || undefined), appliedFrom || undefined, accountOpening);
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
   const totalReceipts = entries.filter(e => e.type === 'receipt').reduce((s, e) => s + e.amount, 0);
   const totalPayments = entries.filter(e => e.type === 'payment').reduce((s, e) => s + e.amount, 0);
-  const closingBalance = getAccountBalance(ACCOUNT_IDS.CASH);
 
 
   const handleAddEntry = (e: React.FormEvent) => {
