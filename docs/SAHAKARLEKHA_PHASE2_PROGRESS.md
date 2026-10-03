@@ -45,6 +45,21 @@
 - **099** records catalog version `98270a8826d27783` (22/26, 21 verified / 5 unverified).
 - **ai-ask needs a redeploy** after merge (the ask-core bundle changed).
 
+## 2026-10-03: S4 started — 102 observer (S4-0)
+- Design: `docs/accounting/S4-CLIENT-WRITE-ENFORCEMENT.md` (#677).
+- **102 `s4_observe_direct_writes`:** statement-level AFTER triggers on vouchers / voucher_entries / ledger_events. For a posting-ON society, a client write (`current_user = authenticated`) leaves one `error_log` row (source `s4-direct-write`, with table / op / rows).
+  - The posting functions run as postgres and leave nothing.
+  - Logger failures are swallowed, so the write always goes through.
+  - Adds `posting_service_on(sid)`, for S4-b's restrictive policies.
+- **Harness** (dump `20261003-0420Z`): s4-0-observe 13/13.
+  - server post/cancel → no note
+  - direct UPDATE/DELETE → succeeds, plus one note per statement with table/op/society/rows
+  - OFF society → none
+  - logger down → the write still succeeds
+  - anon cannot call `posting_service_on`
+  - Regression: s3a/d/e2/f1/f2/f3, 096, 095, b7 and a6 (478) are all green; a7 definer grants 19/19.
+- **Next:** the founder applies 102. After a week, read the notes, then build S4-a, one server function per path seen.
+
 ## Roadmap status
 
 ### Phase A — Critical security

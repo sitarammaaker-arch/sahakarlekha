@@ -1,6 +1,6 @@
 # S4: the database enforces server posting
 
-> Status: **DESIGN** (2026-10-03). Readiness report §4 / §17 item 4.
+> Status: **S4-0 BUILT** (migration 102, harness-verified 2026-10-03; awaiting founder apply). S4-a/b/c: design. Readiness report §4 / §17 item 4.
 > Goal: for a society whose posting service is ON, the database itself refuses any direct client write
 > to the accounting tables. Today server posting is authoritative only because the client takes that path.
 
