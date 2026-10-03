@@ -818,6 +818,9 @@ function parseAttrs(q) {
   return attrs;
 }
 var label = (section, ctx) => resolveSectionRef(section.toUpperCase(), ctx.asOf).label;
+function isCentralTaxQuestion(query) {
+  return SECTIONS.some(([re]) => re.test(query)) || /\bt\.?d\.?s\b|टीडीएस|\bgst\b|जीएसटी|gstr|आयकर|income[\s-]?tax|\b80\s*-?\s*p\b|धारा\s*80|194\s*-?\s*[a-z]|\b393\b/i.test(query);
+}
 function answerFact(query, ctx) {
   const q = query.toLowerCase();
   let section = null;
@@ -1304,7 +1307,8 @@ function ask(req, docs, flags, today, limit = 8, society) {
       lane: "F",
       // "I don't know" and "the rule is there but nobody checked it" are different
       // truths. The second one tells the user exactly what would fix it.
-      unanswered: (pending ? SAY.unverified(pending) : SAY.regulated) + (jurisdiction ? "" : " " + SAY.stateVaries),
+      // "differs by state" is true of cooperative law, false of Income-tax/GST (national) — say it only where true.
+      unanswered: (pending ? SAY.unverified(pending) : SAY.regulated) + (jurisdiction || isCentralTaxQuestion(req.text) ? "" : " " + SAY.stateVaries),
       cites: hits2.map(cite),
       trace: {
         reason: intent.reason,

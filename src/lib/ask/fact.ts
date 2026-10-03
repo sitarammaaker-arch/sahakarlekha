@@ -104,6 +104,16 @@ const label = (section: string, ctx: TaxContext) => resolveSectionRef(section.to
  *
  * Returning null means: no verified rule. The caller hedges. No guessing, ever.
  */
+/**
+ * A CENTRAL tax question — Income-tax (TDS sections, 80P) or GST. Their rules are national, so the
+ * "may differ by state" note is wrong for them (it is right for cooperative law: reserve fund %,
+ * dividend cap, audit dates). Recognised by the sections this lane knows plus the tax names.
+ */
+export function isCentralTaxQuestion(query: string): boolean {
+  return SECTIONS.some(([re]) => re.test(query)) ||
+    /\bt\.?d\.?s\b|टीडीएस|\bgst\b|जीएसटी|gstr|आयकर|income[\s-]?tax|\b80\s*-?\s*p\b|धारा\s*80|194\s*-?\s*[a-z]|\b393\b/i.test(query);
+}
+
 export function answerFact(query: string, ctx: TaxContext): FactAnswer | null {
   const q = query.toLowerCase();
 

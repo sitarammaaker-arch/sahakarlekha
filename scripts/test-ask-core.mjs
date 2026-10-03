@@ -256,5 +256,16 @@ console.log('\n  ask-core — the mechanism, with no model\n');
   ok('D-lane: AI off ⇒ degraded, the books are never touched', off.degraded === true && off.answer === null);
 }
 
+/* "differs by state" is true of cooperative law, false of Income-tax/GST (national rules). */
+{
+  const STATE = 'हर राज्य में अलग';
+  const tax = run('194A की सीमा कितनी है', { asOf: '2026-10-03' });
+  ok('state note: NOT on an Income-tax (TDS) refusal', tax.lane === 'F' && !!tax.unanswered && !tax.unanswered.includes(STATE), tax.unanswered);
+  const gst = run('GST की दर क्या है');
+  ok('state note: NOT on a GST refusal', gst.lane === 'F' && !(gst.unanswered || '').includes(STATE), gst.unanswered);
+  const coop = run('आरक्षित निधि कितने प्रतिशत है');
+  ok('state note: still on a cooperative-law refusal (reserve fund %)', coop.lane === 'F' && (coop.unanswered || '').includes(STATE), coop.unanswered);
+}
+
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
