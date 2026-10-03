@@ -14,6 +14,7 @@ import { trackEvent } from '@/lib/analytics';
 import { loanOutstanding } from '@/lib/memberSnapshot';
 import { installDevanagariCells } from '@/lib/pdfDevanagari';
 import { fitLine } from '@/lib/pdfFit';
+import type { BlankPdfSpec } from '@/content/downloads';
 
 // Hindi DATA (names, narrations) in any PDF table is drawn by the browser — labels stay English.
 installDevanagariCells();
@@ -3633,4 +3634,44 @@ export function generatePurchaseRecordPDF(input: PurchaseRecordInput, society: S
   const safePurchaseNo = input.purchaseNo.replace(/[^a-zA-Z0-9]/g, '_');
   const safeSupplier = (input.supplier.legalName || input.supplier.name || 'Supplier').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
   doc.save(`PurchaseRecord_${safePurchaseNo}_${safeSupplier}.pdf`);
+}
+
+// ─── Blank working formats (/downloads) ───────────────────────────────────────
+// A blank register / form drawn with the SAME helpers as every report (addHeader, autoTable, signatures,
+// page numbers), so a downloaded format looks like the app's own output. The society block is left blank to be
+// filled by hand. Generic formats only — the footer says so on every page (no statutory claim).
+export function generateBlankFormatPDF(spec: BlankPdfSpec): void {
+  const doc = new jsPDF({ orientation: spec.orientation, format: spec.pageSize ?? 'a4' });
+  const blankSociety = {
+    name: 'Name of the Society: ______________________________',
+    registrationNo: '____________', financialYear: '20____-____',
+  } as unknown as SocietySettings;
+  // No reportCode → no "Report ID" line: a blank form has no report identity (and on A5 it collided with the subtitle).
+  const { startY, font } = addHeader(doc, spec.title, blankSociety, spec.subtitle);
+  const form = Array.isArray(spec.rows);
+  const body = form
+    ? (spec.rows as string[]).map((label) => [label, ''])
+    : Array.from({ length: spec.rows as number }, () => spec.columns.map(() => ''));
+  autoTable(doc, {
+    startY: startY + 2,
+    head: [spec.columns],
+    body,
+    theme: 'grid',
+    styles: { fontSize: spec.pageSize === 'a5' ? 8 : 7.5, minCellHeight: form ? 9 : 7, valign: 'middle' },
+    headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
+    columnStyles: form ? { 0: { cellWidth: spec.pageSize === 'a5' ? 48 : 70, fontStyle: 'bold' } } : {},
+  });
+  const endY = (doc as any).lastAutoTable.finalY + 6;
+  const pageW = doc.internal.pageSize.width;
+  doc.setFontSize(6.5);
+  doc.setFont(font, 'normal');
+  doc.setTextColor(90);
+  doc.text(
+    doc.splitTextToSize('Generic working format from SahakarLekha (sahakarlekha.com/downloads). Not a statutory form: where your State Act, Rules or bye-laws prescribe a format, that format applies.', pageW - 30),
+    15, endY,
+  );
+  doc.setTextColor(0);
+  addSignatureBlock(doc, font, spec.signatures, endY + 8);
+  addPageNumbers(doc, font);
+  doc.save(`${spec.file}.pdf`);
 }

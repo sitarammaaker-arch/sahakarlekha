@@ -55,6 +55,7 @@ export interface CalcConfig {
   relatedKIs: string[];                      // source KI ids (shown as evidence)
   relatedArticles: { slug: string; title: string }[];
   relatedHelp?: { slug: string; title: string }[];
+  relatedGuide: { slug: string; title: string }[];  // course chapter(s) — /guide/<slug> (docs/seo/TOPIC-LINK-MAP.md)
   relatedModules: { route: string; label: string }[];
   faqs?: CalcFaq[];                          // → FAQ section + FAQPage JSON-LD
   related?: string[];                        // related calculator slugs (cluster)
@@ -100,9 +101,10 @@ export const CALCULATORS: CalcConfig[] = [
     explanation: 'डेप्रिसिएशन संपत्ति की घटती कीमत को हर साल खर्च के रूप में दर्ज करता है। **SLM** में हर साल बराबर राशि घटती है; **WDV** में शुरुआती साल ज़्यादा, बाद में कम। दर आप दर्ज करते हैं — कोई कानूनी दर यहाँ तय नहीं की गई।',
     example: 'लागत ₹1,00,000, दर 10%, 5 वर्ष — SLM में हर साल ₹10,000; WDV में पहले साल ₹10,000, दूसरे साल ₹9,000 (₹90,000 का 10%), और इसी तरह घटते हुए।',
     mistakes: '- ❌ SLM और WDV को मिला देना — दोनों का तरीका अलग है।\n- ❌ कानूनी दर मान लेना — सही दर अपने CA/नियमों से लें, यहाँ आप ही डालें।\n- ❌ सैल्वेज वैल्यू भूलना (SLM में बही मूल्य उससे नीचे नहीं जाता)।',
-    relatedGlossary: ['asset', 'accounting-period', 'expense'],
+    relatedGlossary: ['depreciation', 'asset', 'accounting-period', 'expense'],
     relatedKIs: ['KI-000112', 'KI-000111', 'KI-000034'],
     relatedArticles: [{ slug: 'depreciation-explained', title: 'डेप्रिसिएशन कैसे करें' }],
+    relatedGuide: [{ slug: 'depreciation', title: 'गाइड: डेप्रिसिएशन (Depreciation)' }],
     relatedModules: [{ route: '/depreciation-schedule', label: 'डेप्रिसिएशन शेड्यूल' }, { route: '/asset-register', label: 'एसेट रजिस्टर' }],
     nev: true,
   },
@@ -134,9 +136,11 @@ export const CALCULATORS: CalcConfig[] = [
     explanation: 'सिंपल इंटरेस्ट हर साल केवल **मूलधन** पर लगता है — ब्याज पर ब्याज नहीं। यह छोटे-अवधि के कर्ज़ या जमा के अनुमान के लिए उपयोगी है।',
     example: 'मूलधन ₹50,000, दर 8%, समय 2 वर्ष — ब्याज = (50000 × 8 × 2) ÷ 100 = ₹8,000; कुल राशि = ₹58,000।',
     mistakes: '- ❌ समय को महीनों में डालना (इसे वर्षों में डालें — 6 महीने = 0.5)।\n- ❌ साधारण और कंपाउंड इंटरेस्ट को एक मानना।',
-    relatedGlossary: [],
+    relatedGlossary: ['deposit', 'credit-society'],
     relatedKIs: ['KI-000070', 'KI-000069'],
     relatedArticles: [{ slug: 'loan-and-interest-accounting', title: 'ऋण व ब्याज लेखांकन' }],
+    relatedHelp: [{ slug: 'loan-entry', title: 'Loan Entry कैसे करें' }],
+    relatedGuide: [{ slug: 'special-registers', title: 'गाइड: विशिष्ट रजिस्टर (ऋण रजिस्टर)' }],
     relatedModules: [{ route: '/loan-register', label: 'ऋण रजिस्टर' }, { route: '/loan-interest', label: 'ऋण ब्याज' }],
   },
 
@@ -168,9 +172,11 @@ export const CALCULATORS: CalcConfig[] = [
     explanation: 'कंपाउंड इंटरेस्ट में हर अवधि का ब्याज मूलधन में जुड़ जाता है, इसलिए अगली अवधि में **ब्याज पर भी ब्याज** लगता है। कंपाउंड जितनी बार-बार, राशि उतनी ज़्यादा।',
     example: 'मूलधन ₹50,000, दर 8%, 3 वर्ष, वार्षिक — A = 50000 × (1.08)³ ≈ ₹62,986; ब्याज ≈ ₹12,986।',
     mistakes: '- ❌ सिंपल इंटरेस्ट का सूत्र लगाना।\n- ❌ कंपाउंड की संख्या (n) गलत चुनना।',
-    relatedGlossary: [],
+    relatedGlossary: ['deposit', 'credit-society'],
     relatedKIs: ['KI-000070', 'KI-000080'],
     relatedArticles: [{ slug: 'loan-and-interest-accounting', title: 'ऋण व ब्याज लेखांकन' }],
+    relatedHelp: [{ slug: 'loan-entry', title: 'Loan Entry कैसे करें' }],
+    relatedGuide: [{ slug: 'special-registers', title: 'गाइड: विशिष्ट रजिस्टर (ऋण रजिस्टर)' }],
     relatedModules: [{ route: '/loan-register', label: 'ऋण रजिस्टर' }],
   },
 
@@ -207,6 +213,7 @@ export const CALCULATORS: CalcConfig[] = [
     relatedGlossary: ['share', 'face-value', 'authorised-capital', 'issued-capital', 'paid-up-capital', 'share-certificate'],
     relatedKIs: ['KI-000153', 'KI-000155', 'KI-000156', 'KI-000157', 'KI-000158'],
     relatedArticles: [{ slug: 'share-capital-authorised-issued-paidup', title: 'शेयर कैपिटल के प्रकार' }, { slug: 'member-and-share-accounting', title: 'सदस्य व शेयर रजिस्टर' }],
+    relatedGuide: [{ slug: 'member-management', title: 'गाइड: सदस्य व सदस्यता प्रबंधन' }],
     relatedModules: [{ route: '/share-register', label: 'शेयर रजिस्टर' }],
   },
 
@@ -240,9 +247,11 @@ export const CALCULATORS: CalcConfig[] = [
     explanation: 'GST राशि पर लगने वाला कर है। **Exclusive** का मतलब राशि कर रहित है (कर जोड़ना है); **Inclusive** का मतलब राशि में कर पहले से शामिल है (अलग करना है)। राज्य के भीतर GST आम तौर पर CGST व SGST में बँटता है।',
     example: 'राशि ₹10,000, दर 18% (exclusive) — GST = ₹1,800 (CGST ₹900 + SGST ₹900); कुल = ₹11,800।',
     mistakes: '- ❌ Exclusive और Inclusive को उलटना।\n- ❌ कोई "मानक" दर मान लेना — सही दर आइटम/नियमों के अनुसार आप डालें। **विशेषज्ञ सत्यापन ज़रूरी।**',
-    relatedGlossary: [],
+    relatedGlossary: ['gst', 'sale', 'purchase'],
     relatedKIs: ['KI-000124'],
     relatedArticles: [{ slug: 'gst-for-cooperatives', title: 'GST सहकारी समिति के लिए' }],
+    relatedHelp: [{ slug: 'gst-return', title: 'GST सारांश व भुगतान कैसे देखें' }],
+    relatedGuide: [{ slug: 'gst-management', title: 'गाइड: GST प्रबंधन' }],
     relatedModules: [{ route: '/gst-summary', label: 'GST सारांश' }, { route: '/hsn-master', label: 'HSN मास्टर' }],
     nev: true,
   },
@@ -273,9 +282,11 @@ export const CALCULATORS: CalcConfig[] = [
     explanation: 'TDS (स्रोत पर कर कटौती) में भुगतान करते समय एक हिस्सा काटकर सरकार को जमा किया जाता है, और शेष भुगतान पाने वाले को मिलता है। **दर और लागू होना** भुगतान के प्रकार पर निर्भर करता है — यह कैलकुलेटर कोई दर नहीं सुझाता; आप दर डालते हैं।',
     example: 'राशि ₹50,000, दर 10% — TDS = ₹5,000; शुद्ध भुगतान = ₹45,000।',
     mistakes: '- ❌ हर भुगतान पर TDS मान लेना — लागू होना नियमों पर निर्भर। **विशेषज्ञ सत्यापन ज़रूरी।**\n- ❌ गलत दर डालना — सही दर/अनुभाग अपने CA से पक्का करें।',
-    relatedGlossary: [],
+    relatedGlossary: ['tds', 'payment-voucher'],
     relatedKIs: ['KI-000134'],
     relatedArticles: [{ slug: 'tds-and-26q-for-societies', title: 'TDS और 26Q गाइड' }],
+    relatedHelp: [{ slug: 'tds-deduct', title: 'TDS रजिस्टर कैसे देखें' }],
+    relatedGuide: [{ slug: 'tds-and-26q', title: 'गाइड: TDS व 26Q' }],
     relatedModules: [{ route: '/tds-register', label: 'TDS रजिस्टर' }, { route: '/tds-form16a', label: 'फॉर्म 16A' }],
     nev: true,
   },
@@ -308,10 +319,11 @@ export const CALCULATORS: CalcConfig[] = [
     explanation: 'EMI हर महीने की समान किस्त है जिसमें मूलधन और ब्याज दोनों होते हैं। शुरुआती किस्तों में ब्याज का हिस्सा ज़्यादा, बाद में मूलधन का। amortization तालिका दिखाती है कि हर साल कितना मूलधन घटा।',
     example: 'मूलधन ₹3,00,000, दर 9%, 36 महीने — EMI ≈ ₹9,540; कुल ब्याज ≈ ₹43,430।',
     mistakes: '- ❌ वार्षिक दर को सीधे मासिक मान लेना (दर ÷ 12 करें)।\n- ❌ अवधि को वर्षों में डालना (इसे महीनों में डालें)।',
-    relatedGlossary: [],
+    relatedGlossary: ['credit-society', 'member'],
     relatedKIs: ['KI-000070', 'KI-000077'],
     relatedArticles: [{ slug: 'loan-and-interest-accounting', title: 'ऋण व ब्याज लेखांकन' }, { slug: 'kcc-crop-loan-accounting', title: 'KCC व फसल ऋण' }],
     relatedHelp: [{ slug: 'loan-entry', title: 'Loan Entry कैसे करें' }],
+    relatedGuide: [{ slug: 'special-registers', title: 'गाइड: विशिष्ट रजिस्टर (ऋण रजिस्टर)' }],
     relatedModules: [{ route: '/loan-register', label: 'ऋण रजिस्टर' }, { route: '/loan-interest', label: 'ऋण ब्याज' }],
   },
 
@@ -345,6 +357,7 @@ export const CALCULATORS: CalcConfig[] = [
     relatedKIs: ['KI-000099', 'KI-000102', 'KI-000101'],
     relatedArticles: [{ slug: 'cash-handling-and-verification', title: 'कैश संभाल व सत्यापन' }, { slug: 'cash-book-vs-bank-book', title: 'कैश बुक vs बैंक बुक' }],
     relatedHelp: [{ slug: 'cash-book', title: 'Cash Book कैसे देखें' }],
+    relatedGuide: [{ slug: 'daybook-and-ledger', title: 'गाइड: डे बुक व लेजर' }],
     relatedModules: [{ route: '/cash-book', label: 'कैश बुक' }],
   },
 
@@ -381,9 +394,10 @@ export const CALCULATORS: CalcConfig[] = [
     explanation: 'प्रतिशत रोज़ के हिसाब में काम आता है — वसूली%, खर्च में वृद्धि/कमी, या दो वर्षों के आँकड़ों की तुलना। यहाँ तीन सामान्य प्रकार हैं।',
     example: '1,000 में 10% वृद्धि → 1,100 (जुड़ी राशि 100)। 800 से 1,000 का % अंतर → +25%।',
     mistakes: '- ❌ "% वृद्धि" और "% अंतर" को एक मानना।\n- ❌ आधार (A) और तुलना मान (B) उलट देना।',
-    relatedGlossary: [],
+    relatedGlossary: ['how-to-read-financial-reports'],
     relatedKIs: ['KI-000212'],
     relatedArticles: [{ slug: 'how-to-read-financial-reports', title: 'वित्तीय रिपोर्ट्स कैसे पढ़ें' }],
+    relatedGuide: [{ slug: 'financial-ratios-and-lifecycle', title: 'गाइड: वित्तीय संकेतक व अनुपात' }],
     relatedModules: [{ route: '/reports', label: 'रिपोर्ट' }],
   },
 
@@ -416,6 +430,7 @@ export const CALCULATORS: CalcConfig[] = [
     relatedGlossary: ['asset', 'liability', 'capital'],
     relatedKIs: ['KI-000034', 'KI-000035', 'KI-000212'],
     relatedArticles: [{ slug: 'how-to-read-financial-reports', title: 'वित्तीय रिपोर्ट्स कैसे पढ़ें' }, { slug: 'half-year-financial-review', title: 'साल के बीच की समीक्षा' }],
+    relatedGuide: [{ slug: 'financial-ratios-and-lifecycle', title: 'गाइड: वित्तीय संकेतक व अनुपात' }, { slug: 'balance-sheet', title: 'गाइड: बैलेंस शीट' }],
     relatedModules: [{ route: '/reports', label: 'रिपोर्ट' }, { route: '/balance-sheet', label: 'बैलेंस शीट' }],
   },
 ];

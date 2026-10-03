@@ -311,9 +311,12 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
         })()}
 
         {/* Related articles + help */}
-        {(config.relatedArticles.length > 0 || (config.relatedHelp && config.relatedHelp.length > 0)) && (
+        {(config.relatedArticles.length > 0 || config.relatedGuide.length > 0 || (config.relatedHelp && config.relatedHelp.length > 0)) && (
           <Section icon={<FileText className="h-4 w-4 text-indigo-500" />} title="और पढ़ें">
             <div className="space-y-2 text-sm">
+              {config.relatedGuide.map((g) => (
+                <Link key={g.slug} to={`/guide/${g.slug}`} className="flex items-center gap-2 text-primary hover:underline"><GraduationCap className="h-3.5 w-3.5" /> {g.title}</Link>
+              ))}
               {config.relatedArticles.map((a) => (
                 <Link key={a.slug} to={`/blog/${a.slug}`} className="flex items-center gap-2 text-primary hover:underline"><ArrowRight className="h-3.5 w-3.5" /> {a.title}</Link>
               ))}

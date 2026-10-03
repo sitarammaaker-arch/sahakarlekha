@@ -112,10 +112,24 @@ for (const child of smIndex.matchAll(/<loc>([^<]+)<\/loc>/g)) {
     if (path !== '/' && title === homeTitle) errors.push(`${name}: ${path} carries the homepage <title>`);
   }
 }
+// 4. Private app routes never reach the sitemap or a prerendered file (they carry X-Robots-Tag: noindex —
+//    vercel.json, kept in sync by scripts/private-noindex.mjs).
+const vercelCfg = JSON.parse(readFileSync(resolve(ROOT, 'vercel.json'), 'utf-8'));
+const privateSegs = new Set(vercelCfg.headers.filter((h) => h.headers?.some((x) => x.key === 'X-Robots-Tag'))
+  .flatMap((h) => (h.source.match(/^\/\(([^)]+)\)/)?.[1] ?? '').split('|')).filter(Boolean));
+for (const loc of seenLoc) {
+  const first = loc.replace(SITE, '').split('/')[1] || '';
+  if (privateSegs.has(first)) errors.push(`sitemap lists a private (noindex) route: ${loc}`);
+}
+for (const p of prerendered) {
+  const first = p.split('/')[1] || '';
+  if (privateSegs.has(first)) errors.push(`a private (noindex) route was prerendered: ${p}`);
+}
+
 for (const file of htmlFiles(DIST)) {
   const rel = file.slice(DIST.length + 1).replace(/\\/g, '/');
   const html = readFileSync(file, 'utf-8');
-  const desc = (html.match(/<meta name="description" content="([^"]*)"/) || [])[1];
+  const desc =(html.match(/<meta name="description" content="([^"]*)"/) || [])[1];
   if (!desc) errors.push(`${rel}: empty meta description`);
   const i = html.indexOf('<div id="root">');
   const j = html.indexOf('<script type="module"', i);

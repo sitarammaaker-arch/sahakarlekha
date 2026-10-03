@@ -24,6 +24,7 @@ const MOBILE_NAV_LINKS: { to: string; label: string }[] = [
   { to: '/cookbook', label: 'एंट्री कुकबुक' },
   { to: '/help', label: 'मदद केंद्र / Help' },
   { to: '/tools', label: 'कैलकुलेटर / Calculators' },
+  { to: '/downloads', label: 'मुफ्त प्रारूप / Downloads' },
   { to: '/blog', label: 'ब्लॉग / Blog' },
   { to: '/faq', label: 'सामान्य प्रश्न / FAQ' },
   { to: '/ask', label: 'पूछें / Ask' },
