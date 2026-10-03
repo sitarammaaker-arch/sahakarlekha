@@ -41,3 +41,15 @@ Checked schema/policies/counts on prod (no PII values read):
 
 ## Draft Phase-1 SQL
 See `member_identity_phase1.draft.sql` (same folder).
+
+## Phase 2 status (branch feat/member-pii-phase2)
+Implemented, **inert until Phase 1 SQL is applied** (the app detects the table at load; missing table = LEGACY mode, behaviour unchanged):
+* `src/lib/memberIdentity.ts` (pure; role list mirrors the SQL gate) — `test:member-identity`.
+* `DataContext`: load overlays `member_identity` (role-gated); every `members` upsert goes through `memberRow()` which strips aadhaar/pan in SPLIT mode; add/update persist PII to `member_identity` as step 2 of the two-step save, reverting + destructive toast on failure; roles that may not write PII get an explicit "not saved" toast — `test:member-identity-wiring` guards against bypassing `memberRow`.
+
+### Phase 3 prerequisites (NOT done — do not blank `members.aadhaar/pan` until these are handled)
+1. **Backup / restore:** `member_identity` is not in the export/backup registry, so a backup taken after Phase 3 would LOSE PII. Add it to the registry (+ regenerate the committed edge bundles, update count-pinning tests) and rehearse a restore round-trip.
+2. **Member portal RPC 064** reads `v_member.aadhaar` from `members` for the masked value — must read `member_identity` first.
+3. **Export Center `member` entity** reads `members.aadhaar/pan` — must source from `member_identity`.
+4. **Restore commit** writes `members` rows from a backup (incl. PII) — decide whether restore should route PII to `member_identity`.
+5. Re-run the staging rehearsal with the real app (not just SQL) after applying Phase 1 durably on staging.
