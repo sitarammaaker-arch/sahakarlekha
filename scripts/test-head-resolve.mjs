@@ -82,4 +82,4 @@ const open = dc.slice(dc.indexOf('const addDepositAccount'), dc.indexOf('const p
 ok(open.indexOf('resolveDepositLiabilityAccount(') > 0 && open.indexOf('resolveDepositLiabilityAccount(') < open.indexOf('const acct: DepositAccount = {'), 'addDepositAccount refuses BEFORE it creates the account');
 
 console.log(`head resolve: ${pass} passed, ${fail} failed`);
-if (fail) process.exit(1);
+process.exitCode = fail ? 1 : 0;   // not process.exit(): it races the register() loader worker on Windows (#670)

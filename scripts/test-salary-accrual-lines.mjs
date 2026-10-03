@@ -106,4 +106,4 @@ ok(!/accountId: '5201', type: 'Dr', amount: merged\.netSalary/.test(dc), 'update
 ok(/salaryAccrualChanged\(oldRecord, merged\)/.test(dc), 'updateSalaryRecord re-syncs on any accrual-relevant change, not only netSalary');
 
 console.log(`salary accrual lines: ${pass} passed, ${fail} failed`);
-if (fail) process.exit(1);
+process.exitCode = fail ? 1 : 0;   // not process.exit(): it races the register() loader worker on Windows (#670)

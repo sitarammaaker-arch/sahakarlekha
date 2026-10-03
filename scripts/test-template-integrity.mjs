@@ -233,4 +233,4 @@ ok(Object.keys(charts).length === 8, `8 society types resolve to a chart (${Obje
 ok(Object.values(charts).every((c) => c.length > 90), 'every chart has more than 90 accounts');
 
 console.log(`template integrity: ${pass} passed, ${fail} failed (baseline ${KNOWN.length} known violations)`);
-if (fail) process.exit(1);
+process.exitCode = fail ? 1 : 0;   // not process.exit(): it races the register() loader worker on Windows (#670)

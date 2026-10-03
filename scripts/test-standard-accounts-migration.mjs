@@ -99,4 +99,4 @@ const files = readdirSync(path.join(ROOT, 'supabase/migrations')).filter((f) => 
 ok(files.length === 2 && files.every((f) => f.startsWith('100_add_missing_standard_accounts')), `only this migration claims number 100 (${files.join(', ')})`);
 
 console.log(`standard-accounts migration 100: ${pass} passed, ${fail} failed`);
-if (fail) process.exit(1);
+process.exitCode = fail ? 1 : 0;   // not process.exit(): it races the register() loader worker on Windows (#670)
