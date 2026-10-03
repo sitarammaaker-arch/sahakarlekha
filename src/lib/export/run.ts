@@ -26,6 +26,8 @@
  */
 import type { EntityDescriptor } from './registry.types';
 import { fetchEntityRows } from './source';
+import { getEntity } from './registry';
+import { applyMemberIdentity, canReadMemberPii } from '@/lib/memberIdentity';
 import {
   exportEntity, ExportDeniedError,
   type ExportEnvironment, type ExportRequest,
@@ -74,6 +76,20 @@ export async function runEntityExport(
 
   if (error) return { status: 'read-failed', message: error };
   if (truncated) return { status: 'too-large', fetched };
+
+  // Member PII split (docs/reports-audit/design/MEMBER-PII-ROLE-SCOPED-READ.md): PAN / Aadhaar live in
+  // member_identity, so the member export must overlay them or it silently loses them once Phase 3 blanks
+  // the members columns. A missing table reads as zero rows (optionalTable) and leaves rows untouched;
+  // a role that may not read PII gets the columns removed (the redacted view masks them anyway).
+  if (entity.key === 'member') {
+    const identityEntity = getEntity('member_identity');
+    if (identityEntity) {
+      const idRes = await fetchRows(identityEntity, societyId);
+      if (idRes.error) return { status: 'read-failed', message: `member_identity: ${idRes.error}` };
+      if (idRes.truncated) return { status: 'too-large', fetched: idRes.fetched };
+      rows = applyMemberIdentity(rows as { id: string; aadhaar?: string; pan?: string }[], idRes.rows as { member_id: string; aadhaar?: string | null; pan?: string | null }[], canReadMemberPii(env.principal.role)) as typeof rows;
+    }
+  }
 
   try {
     const rowCount = await runExport(rows, request, env);

@@ -328,6 +328,45 @@ out = await runEntityExport(userMfa, 'SOC-A', req8, env8, {
 });
 ok(out.status === 'denied' && /excluded/.test(out.message), 'an excluded entity is reported as denied, not as a read error');
 
+// 8e. Member PII split: the member export overlays member_identity (PAN/Aadhaar) so Phase 3 cannot
+// silently empty those columns in the export; a role that may not read PII never receives them.
+{
+  const idEntity = getEntity('member_identity');
+  const memberRows = [{ id: 'm1', name: 'A', aadhaar: 'LEGACY-A', pan: 'LEGACY-P' }, { id: 'm2', name: 'B' }];
+  const idRows = [{ member_id: 'm2', aadhaar: '999988887777', pan: 'ZZZZZ9999Z' }];
+  const routed = (byKey) => async (entity) => {
+    const r = byKey[entity.key] ?? [];
+    return { rows: r, truncated: false, fetched: r.length, error: null };
+  };
+  let seen = null;
+  const capture = async (r) => { seen = r; return r.length; };
+  const accountantEnv = { ...env, principal: accountant };
+
+  await runEntityExport(member, 'SOC-A', req8, accountantEnv, { fetchRows: routed({ member: memberRows, member_identity: idRows }), runExport: capture });
+  ok(seen[1].aadhaar === '999988887777' && seen[1].pan === 'ZZZZZ9999Z', 'accountant: identity overlaid onto a member whose members columns are blank');
+  ok(seen[0].aadhaar === 'LEGACY-A', 'accountant: member without an identity row keeps the legacy column (not yet backfilled)');
+
+  await runEntityExport(member, 'SOC-A', { ...req8, mode: 'redacted' }, env8, { fetchRows: routed({ member: memberRows, member_identity: idRows }), runExport: capture });
+  ok(seen.every(r => !('aadhaar' in r) && !('pan' in r)), 'viewer: PAN/Aadhaar removed from the rows entirely');
+
+  await runEntityExport(member, 'SOC-A', req8, accountantEnv, { fetchRows: routed({ member: memberRows }), runExport: capture });
+  ok(seen[0].aadhaar === 'LEGACY-A' && seen[1].aadhaar === undefined, 'table missing / empty (pre-migration): rows pass through untouched');
+
+  out = await runEntityExport(member, 'SOC-A', req8, accountantEnv, {
+    fetchRows: async (e) => e.key === 'member_identity'
+      ? { rows: [], truncated: false, fetched: 0, error: 'permission denied' }
+      : { rows: memberRows, truncated: false, fetched: 2, error: null },
+    runExport: spyExport,
+  });
+  ok(out.status === 'read-failed' && /member_identity/.test(out.message), 'a real identity read failure aborts the export (never a silent PII-less file)');
+
+  let other = 0;
+  await runEntityExport(getEntity('voucher'), 'SOC-A', { ...req8, entityKey: 'voucher' }, accountantEnv, {
+    fetchRows: async (e) => { other++; return { rows: [], truncated: false, fetched: 0, error: null }; }, runExport: capture,
+  });
+  ok(other === 1, 'non-member entities never trigger the identity read');
+}
+
 // 8e. Authorization failure from the generator.
 out = await runEntityExport(member, 'SOC-A', req8, env8, {
   fetchRows: okFetch(rows),
