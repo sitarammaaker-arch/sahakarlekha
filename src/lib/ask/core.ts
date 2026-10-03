@@ -28,7 +28,7 @@ import type { AiFlags } from '../ai/killSwitch';
 import { resolveJurisdiction } from '../jurisdiction';
 import { classify, REGULATED_REFUSAL } from './classify';
 import type { Intent, Lane } from './classify';
-import { answerFact, unverifiedHint } from './fact';
+import { answerFact, unverifiedHint, isCentralTaxQuestion } from './fact';
 import { cashBalance } from './tools/cashBalance';
 import { trialBalanceCheck } from './tools/trialBalance';
 import { bankBalance } from './tools/bankBalance';
@@ -215,7 +215,8 @@ export function ask(
       lane: 'F',
       // "I don't know" and "the rule is there but nobody checked it" are different
       // truths. The second one tells the user exactly what would fix it.
-      unanswered: (pending ? SAY.unverified(pending) : SAY.regulated) + (jurisdiction ? '' : ' ' + SAY.stateVaries),
+      // "differs by state" is true of cooperative law, false of Income-tax/GST (national) — say it only where true.
+      unanswered: (pending ? SAY.unverified(pending) : SAY.regulated) + (jurisdiction || isCentralTaxQuestion(req.text) ? '' : ' ' + SAY.stateVaries),
       cites: hits.map(cite),
       trace: {
         reason: intent.reason, jurisdiction, asOf, corpus: [],
