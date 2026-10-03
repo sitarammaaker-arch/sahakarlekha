@@ -107,6 +107,7 @@ export const HOUSING_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5501', name: 'Dep. - Building',            nameHi: 'भवन ह्रास',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
   { id: '5502', name: 'Dep. - Lift',                nameHi: 'लिफ्ट ह्रास',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
   { id: '5503', name: 'Dep. - Equipment',           nameHi: 'उपकरण ह्रास',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
+  { id: '5504', name: 'Dep. - Plant & Machinery', nameHi: 'संयंत्र ह्रास',   type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500' },
   { id: '5600', name: 'Statutory Expenses',         nameHi: 'वैधानिक व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
   { id: '5601', name: 'Property Tax',               nameHi: 'संपत्ति कर',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600' },
   { id: '5602', name: 'GST Expense',                nameHi: 'GST व्यय',                 type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600' },

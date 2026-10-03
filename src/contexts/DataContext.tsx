@@ -24,6 +24,7 @@ import { getVoucherLines, buildVoucherEntries, splitNetByAccount } from '@/lib/v
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
+import { salaryAccrualLines, salaryAccrualChanged } from '@/lib/payroll/accrualLines';
 import { CORE_PARTS, setLoadFailures, refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import type { VoucherOwnerCheck } from '@/lib/voucherOwnership';
 import { buildMemberShareLedger } from '@/lib/memberSnapshot';
@@ -78,7 +79,8 @@ import { sumActiveAssetCost, reconcileAssetRegister, type AssetReconciliation } 
 import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { splitVoucherExtras, extrasFailureToast } from '@/lib/voucherPersistence';
 import { shareOpPosting, validateShareOp, applyShareOp, type ShareOpType } from '@/lib/shareOps';
-import { depositLiabilityAccount, depositPosting, applyDepositTxn, validateDepositTxn } from '@/lib/depositEngine';
+import { resolveDepositLiabilityAccount, depositPosting, applyDepositTxn, validateDepositTxn } from '@/lib/depositEngine';
+import { professionalTaxAccountId, MISSING_HEAD_TOAST, missingDepositHeadToast } from '@/lib/accounting/headResolve';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, PROCUREMENT_POSTING_BINDING, buildEngineVoucherLines } from '@/lib/procurement';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, nextFY } from '@/lib/depreciation';
@@ -3377,7 +3379,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Post the cash voucher + sub-ledger transaction for a deposit movement. Returns the
   // new balance, or null if the voucher was blocked (FY/period lock / unbalanced).
   const postDepositLeg = (acct: DepositAccount, txnType: DepositTxnType, amount: number, mode: 'cash' | 'bank', date: string): number | null => {
-    const liability = depositLiabilityAccount(acct.depositType);
+    // FD sits in 2108 only where that id really is Fixed Deposits (PACS); elsewhere it is another head or absent.
+    const liability = resolveDepositLiabilityAccount(acct.depositType, accounts);
+    if (!liability) { toastRef.current({ ...missingDepositHeadToast(acct.depositType), variant: 'destructive', duration: 12000 }); return null; }
     const cashBank = mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     const posting = depositPosting(txnType, { liability, cashBank });
     const member = membersRef.current.find(m => m.id === acct.memberId);
@@ -3409,6 +3413,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addDepositAccount = useCallback((data: Omit<DepositAccount, 'id' | 'accountNo' | 'balance' | 'status' | 'createdAt'> & { openingAmount?: number; mode?: 'cash' | 'bank' }): DepositAccount | null => {
     if (guardFYLocked()) return null;
     const { openingAmount = 0, mode = 'cash', ...rest } = data;
+    // Refuse BEFORE creating anything when the chart has no liability head for this product — otherwise the account
+    // would be created empty and every later deposit would fail, with a "जमा खाता खुला" toast on top of the error.
+    if (!resolveDepositLiabilityAccount(data.depositType, accounts)) { toastRef.current({ ...missingDepositHeadToast(data.depositType), variant: 'destructive', duration: 12000 }); return null; }
     const acct: DepositAccount = {
       ...rest, id: crypto.randomUUID(), accountNo: nextDepositAccountNo(data.depositType),
       balance: 0, status: 'active', createdAt: new Date().toISOString(),
@@ -3480,7 +3487,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (acct.status !== 'active') { toastRef.current({ title: 'खाता सक्रिय नहीं', description: 'Only active deposit accounts can accrue interest.', variant: 'destructive' }); return false; }
     const amt = toRupees(toMinor(amount));
     if (!(amt > 0)) { toastRef.current({ title: 'अमान्य राशि', description: 'Interest must be greater than 0.', variant: 'destructive' }); return false; }
-    const liability = depositLiabilityAccount(acct.depositType);
+    const liability = resolveDepositLiabilityAccount(acct.depositType, accounts);
+    if (!liability) { toastRef.current({ ...missingDepositHeadToast(acct.depositType), variant: 'destructive', duration: 12000 }); return false; }
     const member = membersRef.current.find(m => m.id === acct.memberId);
     const voucher = addVoucher({
       type: 'journal', date, debitAccountId: '5604', creditAccountId: liability, amount: amt,
@@ -6721,6 +6729,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const m = r.slipNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
     }, 0);
     const slipNo = `SAL/${fy}/${String(maxSlipNum + 1).padStart(3, '0')}`;
+    // Professional Tax is booked to its own payable head. 2207 is Property Tax in a housing chart, so the head is resolved by
+    // meaning; with PT deducted and no such head the slip is NOT saved (a silent mis-booking is worse than a refusal).
+    const ptAcc = professionalTaxAccountId(accounts);
+    if ((data.pt || 0) > 0 && !ptAcc) { toastRef.current({ ...MISSING_HEAD_TOAST.pt, variant: 'destructive', duration: 12000 }); return { ...data, id: '' } as unknown as SalaryRecord; }
     const base: SalaryRecord = { ...data, id: crypto.randomUUID(), slipNo, createdAt: new Date().toISOString() };
     // Accrual (H8+): recognise the salary expense + liability the moment it is processed,
     // regardless of payment — Dr Salary Expense 5201 / Cr Salary Payable 2103. Payment later
@@ -6732,42 +6744,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const accrualDate = /^\d{4}-\d{2}$/.test(base.month || '')
         ? new Date(Number(base.month.slice(0, 4)), Number(base.month.slice(5, 7)), 0).toISOString().split('T')[0]
         : base.createdAt.split('T')[0];
-      const lid = () => crypto.randomUUID();
-      const r2 = (n: number) => toRupees(toMinor(n));
       // ECR-14: when a statutory breakdown is present, book gross + employer contributions
       // to Salary Expense and split the employee dues + employer contributions to their
       // payable heads (EPF 2203 / ESI 2204 / PT 2207 / TDS 2202). Otherwise keep the legacy
-      // net-basis accrual so old salary flows are unchanged.
-      const pfEmp = base.pfEmployee || 0, pfEr = base.pfEmployer || 0;
-      const esiEmp = base.esiEmployee || 0, esiEr = base.esiEmployer || 0;
-      const ptAmt = base.pt || 0, tdsAmt = base.tds || 0;
-      const hasStatutory = (pfEmp + pfEr + esiEmp + esiEr + ptAmt + tdsAmt) > 0;
+      // net-basis accrual so old salary flows are unchanged. The lines come from the ONE shared
+      // builder (lib/payroll/accrualLines.ts) that updateSalaryRecord also uses.
+      const { lines, drTotal, hasStatutory } = salaryAccrualLines(base, payableAcc, undefined, { ptPayable: ptAcc ?? undefined });
       try {
-        let av;
-        if (hasStatutory) {
-          const gross = r2((base.basicSalary || 0) + (base.allowances || 0));
-          const drTotal = r2(gross + pfEr + esiEr);   // employer contributions add to expense
-          const lines = [
-            { id: lid(), accountId: '5201', type: 'Dr' as const, amount: drTotal },
-            { id: lid(), accountId: payableAcc, type: 'Cr' as const, amount: base.netSalary },
-          ];
-          if (pfEmp + pfEr > 0) lines.push({ id: lid(), accountId: '2203', type: 'Cr' as const, amount: r2(pfEmp + pfEr) });
-          if (esiEmp + esiEr > 0) lines.push({ id: lid(), accountId: '2204', type: 'Cr' as const, amount: r2(esiEmp + esiEr) });
-          if (ptAmt > 0) lines.push({ id: lid(), accountId: '2207', type: 'Cr' as const, amount: r2(ptAmt) });
-          if (tdsAmt > 0) lines.push({ id: lid(), accountId: '2202', type: 'Cr' as const, amount: r2(tdsAmt) });
-          av = addVoucher({
-            type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: drTotal, lines,
-            narration: `Salary accrual (statutory): ${emp?.name || ''} - ${base.month} (${slipNo})`,
-            createdBy: 'System',
-          });
-        } else {
-          av = addVoucher({
-            type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: base.netSalary,
-            lines: [{ id: lid(), accountId: '5201', type: 'Dr', amount: base.netSalary }, { id: lid(), accountId: payableAcc, type: 'Cr', amount: base.netSalary }],
-            narration: `Salary accrual: ${emp?.name || ''} - ${base.month} (${slipNo})`,
-            createdBy: 'System',
-          });
-        }
+        const av = addVoucher({
+          type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: drTotal, lines,
+          narration: hasStatutory
+            ? `Salary accrual (statutory): ${emp?.name || ''} - ${base.month} (${slipNo})`
+            : `Salary accrual: ${emp?.name || ''} - ${base.month} (${slipNo})`,
+          createdBy: 'System',
+        });
         accrualVoucherId = av?.id || undefined;
       } catch { /* accrual best-effort; record still saves */ }
     }
@@ -6797,13 +6787,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // rewrote the rows directly and never touched the journal, so journal-read statements drifted.
     // Pre-check both vouchers: if either may not be edited in place, change NOTHING (not even the record).
     const amountChanged = data.netSalary !== undefined && data.netSalary !== oldRecord.netSalary;
+    // The accrual voucher carries the statutory split (EPF / ESI / PT / TDS + employer share), so ANY
+    // accrual-relevant field change re-syncs it — not only the net. Payment vouchers stay net-based.
+    const accrualChanged = salaryAccrualChanged(oldRecord, merged);
     {
       const payV = oldRecord.isPaid && data.isPaid && oldRecord.voucherId ? vouchersRef.current.find(x => x.id === oldRecord.voucherId) : undefined;
-      const accV = amountChanged && oldRecord.accrualVoucherId ? vouchersRef.current.find(x => x.id === oldRecord.accrualVoucherId) : undefined;
+      const accV = accrualChanged && oldRecord.accrualVoucherId ? vouchersRef.current.find(x => x.id === oldRecord.accrualVoucherId) : undefined;
       const payTouched = payV && !payV.isDeleted && (amountChanged || (data.paidDate !== undefined && data.paidDate !== oldRecord.paidDate) || (data.paymentMode !== undefined && data.paymentMode !== oldRecord.paymentMode));
       for (const v of [payTouched ? payV : undefined, accV && !accV.isDeleted && !isEngineVoucher(accV) ? accV : undefined]) {
         if (v && isEditLocked(v, !!societyRef.current?.approvalRequired)) {
           toastRef.current({ title: 'वेतन बदलाव नहीं हुआ', description: `वाउचर ${v.voucherNo} सीधे edit नहीं हो सकता (approved / reversed) — पहले उसे reverse करें, फिर वेतन बदलें।`, variant: 'destructive', duration: 12000 });
+          return;
+        }
+      }
+      // An unbalanced statutory breakdown cannot be re-booked: refuse the whole edit rather than save a
+      // slip whose accrual voucher disagrees with it (RULE 1 — never let local state and books diverge).
+      if (accV && !accV.isDeleted && !isEngineVoucher(accV)) {
+        const payableAccCheck = accounts.find(a => a.id === '2103')?.id || '2103';
+        if ((merged.pt || 0) > 0 && !professionalTaxAccountId(accounts)) {
+          toastRef.current({ ...MISSING_HEAD_TOAST.pt, variant: 'destructive', duration: 12000 });
+          return;
+        }
+        if (!salaryAccrualLines(merged, payableAccCheck, lid, { ptPayable: professionalTaxAccountId(accounts) ?? undefined }).balanced) {
+          toastRef.current({ title: 'वेतन बदलाव नहीं हुआ', description: 'रकमें संतुलित नहीं हैं — (मूल वेतन + भत्ते + नियोक्ता PF/ESI) = (नेट वेतन + सभी देय कटौतियाँ) होना चाहिए। नेट वेतन और कटौतियाँ दोबारा जाँचकर डालें।', variant: 'destructive', duration: 12000 });
           return;
         }
       }
@@ -6863,17 +6869,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }
 
-    // Accrual re-sync: if the salary AMOUNT changed and the record was accrued, keep the
-    // accrual voucher (Dr 5201 / Cr 2103) in step so the expense + liability stay correct.
-    if (amountChanged && oldRecord.accrualVoucherId) {
+    // Accrual re-sync: if any accrual-relevant amount changed and the record was accrued, keep the
+    // accrual voucher in step so the expense and EVERY payable (net, EPF, ESI, PT, TDS) stay correct.
+    // The lines come from the same builder addSalaryRecord uses, so the statutory split is never dropped.
+    if (accrualChanged && oldRecord.accrualVoucherId) {
       const av = vouchersRef.current.find(x => x.id === oldRecord.accrualVoucherId);
       if (av && !av.isDeleted && !isEngineVoucher(av)) {
         const payableAcc = accounts.find(a => a.id === '2103')?.id || '2103';
-        const accLines: VoucherLine[] = [
-          { id: lid(), accountId: '5201', type: 'Dr', amount: merged.netSalary },
-          { id: lid(), accountId: payableAcc, type: 'Cr', amount: merged.netSalary },
-        ];
-        if (!updateVoucher(av.id, { amount: merged.netSalary, debitAccountId: '5201', creditAccountId: payableAcc, lines: accLines })) return;
+        const accrual = salaryAccrualLines(merged, payableAcc, lid, { ptPayable: professionalTaxAccountId(accounts) ?? undefined });
+        if (!updateVoucher(av.id, { amount: accrual.drTotal, debitAccountId: '5201', creditAccountId: payableAcc, lines: accrual.lines })) return;
       }
     }
 
