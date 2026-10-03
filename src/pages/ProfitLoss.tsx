@@ -12,6 +12,7 @@ import { generateIncomeExpenditurePDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { deltaProfitLoss, isEmptyPL } from '@/lib/reportComparative';
+import { PrintButton, PrintHeader } from '@/components/ReportPrint';
 
 // Appropriation account IDs (must match ReserveFund.tsx)
 const ACC_NET_SURPLUS = '1208';   // Net Surplus / (Deficit)
@@ -112,6 +113,7 @@ const ProfitLoss: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
+          <PrintHeader />
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <TrendingUp className="h-7 w-7 text-success" />
             {hi ? 'आय-व्यय खाता' : 'Income & Expenditure Account'}
@@ -123,6 +125,7 @@ const ProfitLoss: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <PrintButton />
           <Button
             variant="outline"
             size="sm"

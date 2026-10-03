@@ -22,6 +22,7 @@ import { fmtDate } from '@/lib/dateUtils';
 import { isEmptyPeriod, comparative } from '@/lib/reportComparative';
 import { useToast } from '@/hooks/use-toast';
 import type { AccountBalance } from '@/types';
+import { PrintButton, PrintHeader } from '@/components/ReportPrint';
 
 interface BSItem {
   account: AccountBalance;
@@ -390,6 +391,7 @@ const BalanceSheet: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
+          <PrintHeader />
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <FileSpreadsheet className="h-7 w-7 text-primary" />
             {t('balanceSheet')}
@@ -397,6 +399,7 @@ const BalanceSheet: React.FC = () => {
           <p className="text-muted-foreground">{hi ? 'बैलेंस शीट - वित्तीय स्थिति विवरण' : 'Statement of Financial Position'}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <PrintButton />
           <Button variant="outline" size="sm" className="gap-2" onClick={handlePDF}><Download className="h-4 w-4" />PDF</Button>
           {canExport && <>
             <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}><FileSpreadsheet className="h-4 w-4" />Excel</Button>

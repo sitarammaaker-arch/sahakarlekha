@@ -19,6 +19,7 @@ import { generateCashBookPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import { bookWindow } from '@/lib/reports/bookWindow';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { PrintButton, PrintHeader } from '@/components/ReportPrint';
 
 const CashBook: React.FC = () => {
   const { t, language } = useLanguage();
@@ -122,6 +123,7 @@ const CashBook: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
+          <PrintHeader />
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Wallet className="h-7 w-7 text-primary" />
             {t('cashBook')}
@@ -130,6 +132,7 @@ const CashBook: React.FC = () => {
         </div>
         <div className="flex gap-2">
           <div className="flex gap-2 flex-wrap">
+            <PrintButton />
             <Button variant="outline" size="sm" className="gap-2" onClick={handlePDF}>
               <Download className="h-4 w-4" />PDF
             </Button>
