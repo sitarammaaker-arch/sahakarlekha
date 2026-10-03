@@ -45,10 +45,15 @@ export interface SalaryAccrual {
 
 const r2 = (n: number) => toRupees(toMinor(n));
 
+/** Heads that are not the same account in every chart. Professional Tax defaults to 2207, which is Property Tax in a
+ *  housing chart — the caller resolves it (lib/accounting/headResolve.ts) and passes the real head. */
+export interface SalaryAccrualHeads { ptPayable?: string }
+
 export function salaryAccrualLines(
   rec: SalaryAccrualInput,
   payableAccountId: string,
   newId: () => string = () => crypto.randomUUID(),
+  heads: SalaryAccrualHeads = {},
 ): SalaryAccrual {
   const pfEmp = rec.pfEmployee || 0, pfEr = rec.pfEmployer || 0;
   const esiEmp = rec.esiEmployee || 0, esiEr = rec.esiEmployer || 0;
@@ -66,7 +71,7 @@ export function salaryAccrualLines(
     ];
     if (pfEmp + pfEr > 0) lines.push({ id: newId(), accountId: ACC_EPF_PAYABLE, type: 'Cr', amount: r2(pfEmp + pfEr) });
     if (esiEmp + esiEr > 0) lines.push({ id: newId(), accountId: ACC_ESI_PAYABLE, type: 'Cr', amount: r2(esiEmp + esiEr) });
-    if (ptAmt > 0) lines.push({ id: newId(), accountId: ACC_PT_PAYABLE, type: 'Cr', amount: r2(ptAmt) });
+    if (ptAmt > 0) lines.push({ id: newId(), accountId: heads.ptPayable ?? ACC_PT_PAYABLE, type: 'Cr', amount: r2(ptAmt) });
     if (tdsAmt > 0) lines.push({ id: newId(), accountId: ACC_TDS_PAYABLE, type: 'Cr', amount: r2(tdsAmt) });
   } else {
     drTotal = rec.netSalary;

@@ -8,10 +8,24 @@
  * Slice 1 wires SB open/deposit/withdraw; FD/RD/Pigmy + interest/maturity are later slices.
  */
 import type { DepositType, DepositTxnType } from '@/types';
+import { fixedDepositAccountId, type HeadAccount } from '@/lib/accounting/headResolve';
 
-/** Liability account (COA) that a product's balance sits in. */
+/** Liability account (COA) that a product's balance sits in. The chart-blind id convention — the posting code
+ *  uses resolveDepositLiabilityAccount, which also checks that the account really is that head. */
 export function depositLiabilityAccount(type: DepositType): string {
   return type === 'FD' ? '2108' : '2107'; // 2108 Fixed Deposits; 2107 Member/Savings Deposits
+}
+
+/**
+ * The liability account a deposit product's balance sits in, FOR THIS CHART — or null when the chart has none.
+ * 2108 means Fixed Deposits in a PACS chart but Advance Maintenance in a housing chart and does not exist in most
+ * others, so FD is resolved by meaning (lib/accounting/headResolve.ts). SB / RD / Pigmy keep the 2107 convention
+ * and need it to exist as a liability leaf.
+ */
+export function resolveDepositLiabilityAccount(type: DepositType, accounts: ReadonlyArray<HeadAccount>): string | null {
+  if (type === 'FD') return fixedDepositAccountId(accounts);
+  const a = accounts.find((x) => x.id === depositLiabilityAccount(type));
+  return a && !a.isGroup && a.type === 'liability' ? a.id : null;
 }
 
 export interface DepositPosting {
