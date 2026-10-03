@@ -31,5 +31,13 @@ Phase 1: `drop table member_identity` (nothing depends on it yet). Phase 3: rest
 2. Do auditors / external CAs need PAN for 26Q/KYC checks? If yes, they need a read-only PII grant.
 3. Staging environment to rehearse Phases 1–3 before prod (cross-tenant isolation test is also skipped today for lack of staging credentials).
 
+## Prod pre-flight (read-only, 2026-10-03) — corrections to the first draft
+Checked schema/policies/counts on prod (no PII values read):
+* `members.id`, `members.society_id`, `aadhaar`, `pan` are all `text`; `member_identity` does not exist yet.
+* Prod `members` policies are `members_tenant_*` (`society_id IN (SELECT current_user_society_ids())`) plus `members_branch_*`; the SELECT policy is tenant-only, confirming the exposure.
+* **`jwt_can_write()` must NOT gate PII**: it admits cashier, storeKeeper, procurementOfficer, salesOperator, employee, dataEntry, boardMember, chairman, and returns TRUE when the role claim is NULL. The draft now uses a new explicit, fail-closed `jwt_can_read_pii()` (admin, societyAdmin, accountant, secretary, manager — decision #1).
+* Only **2 of 507** members have Aadhaar/PAN filled, so the backfill and blast radius are tiny; Phase 2 is the real work.
+* Side finding: `jwt_can_write()` / `jwt_can_delete()` are fail-open on a NULL role claim (already in memory m0-preflight). Not changed here; separate decision.
+
 ## Draft Phase-1 SQL
 See `member_identity_phase1.draft.sql` (same folder).
