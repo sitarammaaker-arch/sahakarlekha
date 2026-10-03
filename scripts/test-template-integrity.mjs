@@ -120,21 +120,8 @@ const KNOWN = [
   "*|id-meaning|5503",
   "*|id-meaning|5504",
   "*|id-meaning|5601",
-  "consumer|engine-ids|2108 missing",
-  "consumer|engine-ids|5504 missing",
-  "dairy|engine-ids|2108 missing",
-  "dairy|engine-ids|5504 missing",
   "dairy|normal-balance|1210(equity/debit)",
   "housing|engine-ids|3403 missing",
-  "housing|engine-ids|5504 missing",
-  "marketing_processing|engine-ids|2108 missing",
-  "pacs|engine-ids|2201 missing",
-  "pacs|engine-ids|3105 missing",
-  "pacs|engine-ids|3403 missing",
-  "pacs|engine-ids|5503 missing",
-  "pacs|engine-ids|5504 missing",
-  "sugar|engine-ids|2108 missing",
-  "sugar|engine-ids|3304 missing",
 ];
 
 // Types whose natural opening side is debit; the rest are credit.
