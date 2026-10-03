@@ -460,6 +460,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'अंतिम सत्ता आम सभा की, रोज़ का प्रबंधन निर्वाचित समिति का; अध्यक्ष का अधिकार अध्यक्षता, निर्णायक मत और सौंपे गए काम तक।',
     accent: 'violet',
     tags: ['अध्यक्ष', 'प्रबंध समिति', 'आम सभा', 'अधिकार'],
+    image: '/blog/can-chairman-decide-alone-committee-general-body-powers.webp',
+    imageAlt: 'सहकारी समिति की बैठक में अध्यक्ष और प्रबंध समिति के सदस्य हाथ उठाकर सामूहिक मतदान करते हुए — अध्यक्ष अकेले नहीं, समिति मिलकर निर्णय लेती है',
   },
   {
     slug: 'office-bearers-chairman-secretary-treasurer',
