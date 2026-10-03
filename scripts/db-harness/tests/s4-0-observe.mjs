@@ -38,6 +38,9 @@ const SSK = 'd0dd474f-71db-4282-a4c3-ae7d0e02b2e2';     // posting OFF
 await inRollback(async (tx) => {
   const notes = async () => (await tx.query(`select society_id, message, context from public.error_log where source = 's4-direct-write' order by created_at, id`)).rows;
   const before = (await notes()).length;
+  // Once 105 (S4-b) is applied, direct writes are refused before the observer can see them. Test the observer
+  // in isolation: drop the guard inside this rolled-back transaction (the real one is untouched).
+  for (const t of ['vouchers', 'voucher_entries', 'ledger_events']) await tx.query(`drop trigger if exists s4_refuse_direct_write on public.${t}`);
   const flags = (await tx.query(`select society_id, posting_service from public.society_flags where society_id in ($1, $2)`, [RANIA, SSK])).rows;
   ok('fixture: Rania ON, SSK OFF', flags.find((f) => f.society_id === RANIA)?.posting_service === true && !flags.find((f) => f.society_id === SSK)?.posting_service);
 

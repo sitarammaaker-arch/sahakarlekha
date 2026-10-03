@@ -1,6 +1,6 @@
 # S4: the database enforces server posting
 
-> Status: **S4-0 LIVE** (102). **S4-a LIVE** for rows 1–6 (103, applied 2026-10-03 14:11 UTC); row 7 built (104, awaiting apply). S4-b: after the S4-0 week (ends 2026-10-10). S4-c: SSK decision.
+> Status: **S4-0 LIVE** (102). **S4-a LIVE** for rows 1–6 (103, applied 2026-10-03 14:11 UTC); row 7 built (104, awaiting apply). S4-b: built as 105 (trigger, harness 15/15), to apply after the S4-0 week (ends 2026-10-10). S4-c: SSK decision.
 > Goal: for a society whose posting service is ON, the database itself refuses any direct client write
 > to the accounting tables. Today server posting is authoritative only because the client takes that path.
 
@@ -44,15 +44,7 @@ Anything not in this table that writes `vouchers` / `voucher_entries` / `ledger_
 | 5 | `set_opening_balance(p_account, p_minor, p_side)` | writes the account and its opening delta event together |
 | 6 | (no new fn) | prove each `persistLedgerEvent` caller is flag-off only, or route it through 1–5 |
 
-**S4-b: restrictive RLS**, one migration, after S4-a is live and the S4-0 trigger has logged no direct writes for 7 days:
-
-```sql
--- for authenticated clients only; SECURITY DEFINER posting fns and the service role bypass RLS
-create policy s4_no_direct_write on public.vouchers as restrictive for insert to authenticated
-  with check (not public.posting_service_on(society_id));
--- + update/delete on vouchers, all writes on voucher_entries and ledger_events
-```
-`posting_service_on(sid)` is a STABLE SECURITY DEFINER helper reading `society_flags`. Down file: drop the policies.
+**S4-b: the guard (105, built and harness-verified 2026-10-03; apply after the S4-0 week).** It was designed as restrictive RLS and **built as a BEFORE trigger instead**. A restrictive `USING` clause makes a refused UPDATE/DELETE match zero rows and *return success*, which is a silent no-op the app would take for a save (RULE 1). The trigger `_s4_refuse_direct_write` raises `post_voucher:direct_write_refused` (42501) for `current_user = authenticated` on a posting-ON society. The posting functions (owner postgres), the service role and the owner pass. Harness `s4-b-enforce` 15/15: direct INSERT/UPDATE/DELETE on all three tables refused loudly; post/clear/cancel/pending/reject still work; SSK unaffected; drift 0. The full regression (s3*, s4-a, 095/096, b7, c1/c2, a6 478, a7, b2) is green. Down file: drop the triggers.
 
 **S4-c: SSK.** Either turn its flag ON (posting-readiness → heal → flip, the B2 rule), or leave it as the single legacy society documented as such.
 
