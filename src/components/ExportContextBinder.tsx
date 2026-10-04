@@ -2,11 +2,9 @@ import { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useSubscription } from '@/hooks/useSubscription';
-import { setExportContext } from '@/lib/exportUtils';
 import { setReportBranding, brandFooterFor } from '@/lib/reportBranding';
 import { setReportAuditSink, buildReportAuditInput } from '@/lib/reportAudit';
 import { logAudit } from '@/lib/auditLog';
-import { setAppVocabulary } from '@/lib/pdfDevanagari';
 import { translations } from '@/contexts/LanguageContext';
 
 /**
@@ -21,15 +19,24 @@ export default function ExportContextBinder() {
   const { society } = useData();
   const { plan } = useSubscription();
 
+  // exportUtils pulls in xlsx and pdfDevanagari pulls in jspdf. This component is mounted on EVERY page
+  // (login, landing, blog), so both are imported lazily and only for a signed-in user — a static import
+  // put the xlsx/pdf chunks on the public pages (e2e/initial-bundle.spec.ts). Same-module dynamic imports
+  // resolve in call order, so a cleanup's reset always lands before the next effect's set.
+  const signedIn = !!user?.societyId;
   useEffect(() => {
-    setExportContext(society?.name
-      ? { society: { name: society.name, registrationNo: society.registrationNo, financialYear: society.financialYear }, userName: user?.name }
-      : null);
-    return () => setExportContext(null);
-  }, [society?.name, society?.registrationNo, society?.financialYear, user?.name]);
+    if (!signedIn || !society?.name) return;
+    const ctx = { society: { name: society.name, registrationNo: society.registrationNo, financialYear: society.financialYear }, userName: user?.name };
+    let live = true;
+    void import('@/lib/exportUtils').then((m) => { if (live) m.setExportContext(ctx); });
+    return () => { live = false; void import('@/lib/exportUtils').then((m) => m.setExportContext(null)); };
+  }, [signedIn, society?.name, society?.registrationNo, society?.financialYear, user?.name]);
 
   // The app's own Hindi vocabulary, so a Hindi PDF says things the way the screens do (R12).
-  useEffect(() => { setAppVocabulary(translations); }, []);
+  useEffect(() => {
+    if (!signedIn) return;
+    void import('@/lib/pdfDevanagari').then((m) => m.setAppVocabulary(translations));
+  }, [signedIn]);
 
   useEffect(() => {
     setReportBranding({ showBrandFooter: brandFooterFor(plan) });
