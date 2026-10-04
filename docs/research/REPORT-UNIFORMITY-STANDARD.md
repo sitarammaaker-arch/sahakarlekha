@@ -92,9 +92,10 @@ Approved as recommended: 1 remove the brand footer on paid plans' statutory stat
 | R13 one file-name scheme | **DONE (this change)** — `src/lib/exportNaming.ts`; PDF names via `pdfFileName`, every Excel/CSV via `downloadCSV`/`downloadExcel`; Bank Reconciliation and GSTR-1/3B PDFs moved onto it |
 | R14 Excel provenance | **DONE (this change)** — `ExportContextBinder` binds society + user; every Excel gets the README sheet |
 | R16 enforcement | **DONE as a ratchet** — `test:report-uniformity-guard` fails on any NEW bypass; the allowlist can only shrink |
-| R1, R5, R7, R8 header / orientation / footer / margins | next (PDF rework, steps 2–3) |
-| R2 content-hash Report ID | next — needs the report content passed to the header, so it ships with step 2 (an ID hashed over the header alone would not be verifiable) |
-| R9 brand footer on paid plans | next (needs plan awareness in `addPageNumbers`) |
+| R8 footer (Page x of y + Report ID on every page) | **DONE** for everything that goes through `addHeader`/`addPageNumbers` |
+| R1, R5, R7 header / orientation / margins; R8 signature never alone on a page | next (PDF rework — needs per-generator render checks) |
+| R2 content-hash Report ID | **DONE** — `SL-<TYPE>-<society tag>-<yyyymmdd>-<10-hex fingerprint>`; the fingerprint is a hash of the document's drawn content, computed when the footer is stamped (so it covers the figures, not just the header) and printed in the footer of **every** page. Same report + same day = same ID; any changed figure = different ID. It is a fingerprint, not a signature. **Not yet recorded in an audit trail** (PDF generation still leaves no server-side trace — D-17), and PDFs that bypass `addHeader` (Bank Reconciliation, GSTR-1/3B, Form 1, consolidation) get no ID until step 3 |
+| R9 brand footer on paid plans | **DONE** — `starter`, `plus`, `pro`, `enterprise` get no marketing line; `trial`, `legacy`, unknown and not-yet-loaded keep it (safe default). Decided by plan NAME (Enterprise has a null price) and tested against `lib/plans.ts` |
 | R3 status line | waiting for CA wording |
 | R12 Hindi labels | later (font embedding) |
 
