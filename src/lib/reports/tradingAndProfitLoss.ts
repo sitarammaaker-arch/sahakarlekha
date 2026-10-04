@@ -222,6 +222,9 @@ export interface ProfitLossInput {
   tradingGrossProfit: () => number;
 }
 
+/** A P&L line. accountId / parentId let a report roll lines up into Head / Sub-head subtotals (presentation only). */
+export interface PlLine { name: string; nameHi: string; amount: number; accountId?: string; parentId?: string }
+
 export function computeProfitLoss({ tb, hasTrading, tradingGrossProfit }: ProfitLossInput) {
   // ── Audit C-9: NCDC two-statement structure (Trading A/c → P&L/I&E) ──────
   // Per NCDC Annexure II + III, trading heads (Sales, Purchases, direct expenses,
@@ -242,13 +245,13 @@ export function computeProfitLoss({ tb, hasTrading, tradingGrossProfit }: Profit
   // figure the ledger holds, otherwise the Balance Sheet won't tie. (BS-tie fix.)
   const incomeItems = tb
     .filter(b => b.account.type === 'income' && (!hasTrading || !isTradingIncome(b.account.parentId)) && b.netBalance !== 0)
-    .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: -b.netBalance }));
+    .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: -b.netBalance, accountId: b.account.id, parentId: b.account.parentId } as PlLine));
 
   // Indirect (operating) EXPENSES — establishment, admin, depreciation, statutory.
   // P2-4: keep sign so a Cr balance (refund/over-credit) REDUCES total expenses.
   const expenseItems = tb
     .filter(b => b.account.type === 'expense' && (!hasTrading || !isTradingExpense(b.account.parentId)) && b.netBalance !== 0)
-    .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance }));
+    .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, amount: b.netBalance, accountId: b.account.id, parentId: b.account.parentId } as PlLine));
 
   // Bridge line from the Trading Account (Annexure III opens P&L Cr side with it).
   // Service societies (no trading) skip this — their 4100/5100 are already included above.

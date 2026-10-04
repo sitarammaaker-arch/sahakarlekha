@@ -24,7 +24,7 @@ const ProfitLoss: React.FC = () => {
   const { can } = useAuth();
   const canExport = can('export');   // ECR-19
   const navigate = useNavigate();
-  const { getProfitLoss, society, vouchers } = useData();
+  const { getProfitLoss, society, vouchers, accounts } = useData();
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -130,7 +130,7 @@ const ProfitLoss: React.FC = () => {
             variant="outline"
             size="sm"
             className="gap-2"
-            onClick={() => generateIncomeExpenditurePDF(incomeItems, expenseItems, society, language, postedReserve)}
+            onClick={() => generateIncomeExpenditurePDF(incomeItems, expenseItems, society, language, postedReserve, accounts)}
           >
             <Download className="h-4 w-4" />PDF
           </Button>

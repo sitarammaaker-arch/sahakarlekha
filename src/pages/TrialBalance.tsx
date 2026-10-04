@@ -21,7 +21,7 @@ const TrialBalance: React.FC = () => {
   const { t, language } = useLanguage();
   const { can } = useAuth();
   const canExport = can('export');   // ECR-19
-  const { getTrialBalance, society } = useData();
+  const { getTrialBalance, society, accounts } = useData();
   const navigate = useNavigate();
   // P1-5: Default to the last day of the selected FY (31 March), not today's date.
   const fyEndDate = (() => {
@@ -189,7 +189,7 @@ const TrialBalance: React.FC = () => {
         </div>
         <div className="flex gap-2 flex-wrap">
           <PrintButton />
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateTrialBalancePDF(balances, society, asOnDate, language)}>
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateTrialBalancePDF(balances, society, asOnDate, language, accounts)}>
             <Download className="h-4 w-4" />PDF
           </Button>
           {canExport && <>

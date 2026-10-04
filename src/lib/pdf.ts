@@ -22,6 +22,7 @@ import { emitReportGenerated } from '@/lib/reportAudit';
 import { fitLine } from '@/lib/pdfFit';
 import { reportStatus, STATUS_REPORT_CODES } from '@/lib/reports/reportStatus';
 import { reclassifyIncomeExpenditure, splitNegativeLines } from '@/lib/reports/negativeLines';
+import { groupWithSubtotals, type GroupableLine } from '@/lib/reports/groupSubtotals';
 import type { BlankPdfSpec } from '@/content/downloads';
 
 // Hindi DATA (names, narrations) in any PDF table is drawn by the browser — labels stay English.
@@ -527,7 +528,7 @@ export function generateBankBookPDF(
   doc.save(pdfFileName('BankBook', society));
 }
 
-export function generateTrialBalancePDF(balances: AccountBalance[], society: SocietySettings, asOnDate: string, language: 'hi' | 'en') {
+export function generateTrialBalancePDF(balances: AccountBalance[], society: SocietySettings, asOnDate: string, language: 'hi' | 'en', allAccounts?: LedgerAccount[]) {
   const doc = new jsPDF({ orientation: 'landscape' });
   const { startY, font } = addHeader(doc, 'Trial Balance', society, `As on: ${fmtDate(asOnDate)} | FY: ${society.financialYear}`, { reportCode: 'TB' });
 
@@ -559,13 +560,31 @@ export function generateTrialBalancePDF(balances: AccountBalance[], society: Soc
   const num = (n: number) => new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
   const openL = (b: AccountBalance) => b.openingDebit > 0 ? `${num(b.openingDebit)} Dr` : b.openingCredit > 0 ? `${num(b.openingCredit)} Cr` : '';
   const closeL = (b: AccountBalance) => b.netBalance > 0 ? `${num(b.netBalance)} Dr` : b.netBalance < 0 ? `${num(-b.netBalance)} Cr` : ((b.transactionDebit || 0) > 0 || (b.transactionCredit || 0) > 0 ? 'Nil (Dr = Cr)' : '');
-  const sideRows = (rows: AccountBalance[]): string[][] => rows.map(b => [
-    b.account.name,
-    openL(b),
-    (b.transactionDebit || 0) > 0 ? num(b.transactionDebit) : '',
-    (b.transactionCredit || 0) > 0 ? num(b.transactionCredit) : '',
-    closeL(b),
-  ]);
+  // Head / Sub-head subtotal rows (bold) over the flat list: opening / debit / credit / closing of every ledger beneath.
+  // Presentation only — each ledger row is unchanged and the side Totals still sum the ledgers.
+  const side = (net: number) => (net > 0.004 ? `${num(net)} Dr` : net < -0.004 ? `${num(-net)} Cr` : '');
+  const chartRoots = (allAccounts ?? []).filter(a => !a.parentId).map(a => a.id);
+  const sideGroups: { left: number[]; right: number[] } = { left: [], right: [] };
+  const sideRows = (rows: AccountBalance[], groupIdx: number[]): string[][] => {
+    const byId = new Map(rows.map(b => [b.account.id, b]));
+    const lines = rows.map(b => ({
+      name: b.account.name, amount: b.netBalance, parentId: b.account.parentId,
+      vals: [b.openingDebit - b.openingCredit, b.transactionDebit || 0, b.transactionCredit || 0],
+      id: b.account.id,
+    }));
+    const out: string[][] = [];
+    for (const r of groupWithSubtotals(lines, allAccounts, chartRoots)) {
+      if (r.kind === 'group') {
+        groupIdx.push(out.length);
+        const v = r.vals ?? [0, 0, 0];
+        out.push([`${'  '.repeat(r.depth)}${r.name}`, side(v[0]), v[1] > 0 ? num(v[1]) : '', v[2] > 0 ? num(v[2]) : '', side(r.amount)]);
+      } else {
+        const b = byId.get((r.line as { id: string }).id)!;
+        out.push([`${'  '.repeat(r.depth)}${b.account.name}`, openL(b), (b.transactionDebit || 0) > 0 ? num(b.transactionDebit) : '', (b.transactionCredit || 0) > 0 ? num(b.transactionCredit) : '', closeL(b)]);
+      }
+    }
+    return out;
+  };
   const sideTotal = (rows: AccountBalance[], title: string): string[] => {
     const movDr = rows.reduce((s, b) => s + (b.transactionDebit || 0), 0);
     const movCr = rows.reduce((s, b) => s + (b.transactionCredit || 0), 0);
@@ -573,8 +592,8 @@ export function generateTrialBalancePDF(balances: AccountBalance[], society: Soc
     const clCr = rows.reduce((s, b) => s + closingCr(b), 0);
     return [title, '', num(movDr), num(movCr), clDr >= clCr ? `${num(clDr - clCr)} Dr` : `${num(clCr - clDr)} Cr`];
   };
-  const L = sideRows(liabInc);
-  const R = sideRows(assetExp);
+  const L = sideRows(liabInc, sideGroups.left);
+  const R = sideRows(assetExp, sideGroups.right);
   const blank = ['', '', '', '', ''];
   const zipped: string[][] = [];
   for (let i = 0; i < Math.max(L.length, R.length); i++) zipped.push([...(L[i] ?? blank), ...(R[i] ?? blank)]);
@@ -605,6 +624,10 @@ export function generateTrialBalancePDF(balances: AccountBalance[], society: Soc
       if (data.section === 'head') {
         data.cell.styles.fillColor = data.column.index < 5 ? [41, 82, 163] : [25, 135, 84];
         if (data.column.index % 5 !== 0) data.cell.styles.halign = 'right';   // heads line up with their figures
+      }
+      if (data.section === 'body' && (data.column.index < 5 ? sideGroups.left : sideGroups.right).includes(data.row.index)) {
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fillColor = data.column.index < 5 ? [232, 240, 254] : [232, 245, 233];
       }
     },
     // Vertical rule between the two sides, drawn per cell so it survives page breaks.
@@ -638,12 +661,37 @@ export function generateTrialBalancePDF(balances: AccountBalance[], society: Soc
   doc.save(pdfFileName('TrialBalance', society));
 }
 
+/**
+ * Body rows for one side of a two-column-of-figures statement, rolled up into Head / Sub-head subtotals the way the
+ * Balance Sheet prints them: a group row carries its subtotal in the last ("Grand") column, the lines beneath it show
+ * their own amount in the "Amount" column, a nested sub-group's subtotal sits in "Amount" and rolls into its parent.
+ * Top-level lines (no group) print in "Total". Presentation only — every line is printed once with its own amount.
+ */
+function groupedSideBody(
+  lines: readonly GroupableLine[],
+  chart: readonly LedgerAccount[] | undefined,
+  rootIds: readonly string[],
+  extraTotalRows: string[][] = [],
+): { body: string[][]; groupRows: number[] } {
+  const rows = groupWithSubtotals(lines, chart, rootIds);
+  const body: string[][] = [];
+  const groupRows: number[] = [];
+  for (const r of rows) {
+    const label = `${'  '.repeat(r.depth)}${r.name}`;
+    if (r.kind === 'group') groupRows.push(body.length);
+    body.push(r.depth === 0 ? [label, '', fmt(r.amount)] : [label, fmt(r.amount), '']);
+  }
+  extraTotalRows.forEach(r => body.push(r));
+  return { body, groupRows };
+}
+
 export function generateIncomeExpenditurePDF(
-  incomeItems: { name: string; nameHi: string; amount: number }[],
-  expenseItems: { name: string; nameHi: string; amount: number }[],
+  incomeItems: { name: string; nameHi: string; amount: number; parentId?: string }[],
+  expenseItems: { name: string; nameHi: string; amount: number; parentId?: string }[],
   society: SocietySettings,
   language: 'hi' | 'en',
-  reserveFund: number = 0
+  reserveFund: number = 0,
+  allAccounts?: LedgerAccount[],
 ) {
   const doc = new jsPDF('landscape');
   const { startY, font } = addHeader(doc, 'Income & Expenditure Account', society, `Financial Year: ${society.financialYear}`, { reportCode: 'IE' });
@@ -667,28 +715,30 @@ export function generateIncomeExpenditurePDF(
   const printExpenseTotal = printExpense.reduce((s, i) => s + i.amount, 0);
   const grandTotal = isSurplus ? printIncomeTotal : printExpenseTotal;
 
-  const expBody: string[][] = [
-    ...printExpense.map(i => [i.name, fmt(i.amount)]),
-    // A surplus balances the EXPENDITURE side; a deficit balances the INCOME side (below) — never both.
-    ...(isSurplus ? [['Surplus carried to Balance Sheet', fmt(surplusToBS)]] : []),
-  ];
-  const incBody: string[][] = [
-    ...printIncome.map(i => [i.name, fmt(i.amount)]),
-    ...(!isSurplus ? [['Deficit carried from Expenditure', fmt(Math.abs(netProfit))]] : []),
-  ];
+  // Head / Sub-head subtotals (presentation only). A surplus balances the EXPENDITURE side; a deficit balances the
+  // INCOME side — never both.
+  const expSide = groupedSideBody(printExpense as GroupableLine[], allAccounts, ['5000'],
+    isSurplus ? [['Surplus carried to Balance Sheet', '', fmt(surplusToBS)]] : []);
+  const incSide = groupedSideBody(printIncome as GroupableLine[], allAccounts, ['4000'],
+    !isSurplus ? [['Deficit carried from Expenditure', '', fmt(Math.abs(netProfit))]] : []);
+  const expBody = expSide.body;
+  const incBody = incSide.body;
+  const groupStyle = (groupRows: number[]) => (data: { section: string; row: { index: number }; cell: { styles: { fontStyle?: string; fillColor?: unknown } } }) => {
+    if (data.section === 'body' && groupRows.includes(data.row.index)) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [232, 240, 254]; }
+  };
 
   // Expenditure side (left half)
   autoTable(doc, {
     startY,
     margin: { left: 15, right: 158 },
-    head: [['Expenditure (Dr)', 'Amount']],
+    head: [['Expenditure (Dr)', 'Amount', 'Grand']],
     body: expBody,
-    foot: [['Total', fmt(grandTotal)]],
+    foot: [['Total', '', fmt(grandTotal)]],
     styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [220, 53, 69], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
-    columnStyles: { 1: { halign: 'right' } },
-    didParseCell: rightAlignAmountColumns(1),
+    columnStyles: { 1: { halign: 'right', cellWidth: 28 }, 2: { halign: 'right', cellWidth: 28 } },
+    didParseCell: (data) => { rightAlignAmountColumns(1, 2)(data); groupStyle(expSide.groupRows)(data); },
   });
   const expFinalY = (doc as any).lastAutoTable.finalY;
 
@@ -696,14 +746,14 @@ export function generateIncomeExpenditurePDF(
   autoTable(doc, {
     startY,
     margin: { left: 154, right: 15 },
-    head: [['Income (Cr)', 'Amount']],
+    head: [['Income (Cr)', 'Amount', 'Grand']],
     body: incBody,
-    foot: [['Total', fmt(grandTotal)]],
+    foot: [['Total', '', fmt(grandTotal)]],
     styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
-    columnStyles: { 1: { halign: 'right' } },
-    didParseCell: rightAlignAmountColumns(1),
+    columnStyles: { 1: { halign: 'right', cellWidth: 28 }, 2: { halign: 'right', cellWidth: 28 } },
+    didParseCell: (data) => { rightAlignAmountColumns(1, 2)(data); groupStyle(incSide.groupRows)(data); },
   });
 
   const ieFinalY = Math.max(expFinalY, (doc as any).lastAutoTable.finalY) + 10;
@@ -713,7 +763,7 @@ export function generateIncomeExpenditurePDF(
   doc.save(pdfFileName('IncomeExpenditure', society));
 }
 
-export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society: SocietySettings) {
+export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society: SocietySettings, allAccounts?: LedgerAccount[]) {
   const doc = new jsPDF('landscape');
   const { startY, font } = addHeader(doc, 'Receipts & Payments Account', society, `Financial Year: ${society.financialYear}`, { reportCode: 'RP' });
 
@@ -724,32 +774,44 @@ export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society:
   const crTotal = totalPayments + closingCash + closingBank;
 
   // Audit C-12: group lines Capital → Revenue under subheader bands.
+  // Each side has TWO figure columns: lines print their own amount in "Amount"; a Head / Sub-head row carries its
+  // subtotal in "Total" (same convention as the Balance Sheet). Presentation only — every line keeps its amount.
+  const chartParent = new Map((allAccounts ?? []).map(a => [a.id, a.parentId]));
+  const chartRoots = (allAccounts ?? []).filter(a => !a.parentId).map(a => a.id);
   const natureBand = (label: string): RowInput =>
-    [{ content: label, colSpan: 2, styles: { fontStyle: 'bold' as const, fillColor: [225, 232, 245] as [number, number, number] } }];
-  const groupedLines = (items: typeof receipts, prefix: 'To' | 'By'): RowInput[] => {
-    const cap = items.filter(i => i.nature === 'capital');
-    const rev = items.filter(i => i.nature === 'revenue');
-    const out: RowInput[] = [];
-    if (cap.length) { out.push(natureBand('Capital')); cap.forEach(i => out.push([`${prefix} ${rpParticulars(i, prefix, false)}`, fmt(i.amount)])); }
-    if (rev.length) { out.push(natureBand('Revenue')); rev.forEach(i => out.push([`${prefix} ${rpParticulars(i, prefix, false)}`, fmt(i.amount)])); }
-    return out;
+    [{ content: label, colSpan: 3, styles: { fontStyle: 'bold' as const, fillColor: [225, 232, 245] as [number, number, number] } }];
+  // Rows are tracked per side so group rows can be highlighted after the two sides are zipped.
+  interface SideRows { rows: RowInput[]; groupIdx: number[] }
+  const groupedLines = (items: typeof receipts, prefix: 'To' | 'By', out: SideRows): void => {
+    const emitBand = (label: string, band: typeof receipts) => {
+      if (!band.length) return;
+      out.rows.push(natureBand(label));
+      const lines = band.map(i => ({ name: `${prefix} ${rpParticulars(i, prefix, false)}`, amount: i.amount, parentId: chartParent.get(i.accountId) }));
+      for (const r of groupWithSubtotals(lines, allAccounts, chartRoots)) {
+        const label2 = `${'  '.repeat(r.depth)}${r.name}`;
+        if (r.kind === 'group') out.groupIdx.push(out.rows.length);
+        out.rows.push(r.depth === 0 ? [label2, '', fmt(r.amount)] : [label2, fmt(r.amount), '']);
+      }
+    };
+    emitBand('Capital', items.filter(i => i.nature === 'capital'));
+    emitBand('Revenue', items.filter(i => i.nature === 'revenue'));
   };
 
   // Dr side: Opening Balance + Receipts (grouped Capital/Revenue)
-  const drBody: RowInput[] = [
-    ['To Balance b/d (Opening)', ''],
-    ['  Cash in Hand', fmt(openingCash)],
-    ['  Cash at Bank', fmt(openingBank)],
-    ...groupedLines(receipts, 'To'),
-  ];
+  const dr: SideRows = { rows: [
+    ['To Balance b/d (Opening)', '', fmt(openingCash + openingBank)],
+    ['  Cash in Hand', fmt(openingCash), ''],
+    ['  Cash at Bank', fmt(openingBank), ''],
+  ], groupIdx: [0] };
+  groupedLines(receipts, 'To', dr);
 
   // Cr side: Payments (grouped Capital/Revenue) + Closing Balance
-  const crBody: RowInput[] = [
-    ...groupedLines(payments, 'By'),
-    ['By Balance c/d (Closing)', ''],
-    ['  Cash in Hand', fmt(closingCash)],
-    ['  Cash at Bank', fmt(closingBank)],
-  ];
+  const cr: SideRows = { rows: [], groupIdx: [] };
+  groupedLines(payments, 'By', cr);
+  cr.groupIdx.push(cr.rows.length);
+  cr.rows.push(['By Balance c/d (Closing)', '', fmt(closingCash + closingBank)], ['  Cash in Hand', fmt(closingCash), ''], ['  Cash at Bank', fmt(closingBank), '']);
+  const drBody = dr.rows;
+  const crBody = cr.rows;
 
   // ONE zipped table: Dr — Receipts on the LEFT, Cr — Payments on the RIGHT, row by row. Two separate
   // half-width tables (the old layout) paginated independently — each repeated its own Total on every
@@ -759,39 +821,46 @@ export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society:
   // A side row is [band] (ONE cell, colSpan 2 — it covers both of that side's columns) or [label, amount].
   const L = drBody as unknown as unknown[][];
   const R = crBody as unknown as unknown[][];
-  const blankSide: unknown[] = ['', ''];
+  const blankSide: unknown[] = ['', '', ''];
   const zipped: RowInput[] = [];
   for (let i = 0; i < Math.max(L.length, R.length); i++) zipped.push([...(L[i] ?? blankSide), ...(R[i] ?? blankSide)] as RowInput);
 
   const rpW = doc.internal.pageSize.width - 30;          // 15 mm margins, aligned with header/footer text
-  const rpAmt = 40;                                       // wide enough for "Rs. 8,20,09,232.17" bold without wrapping
-  const rpLabel = rpW / 2 - rpAmt;
+  const rpAmt = 33;                                       // wide enough for "Rs. 8,20,09,232.17" bold without wrapping
+  const rpLabel = rpW / 2 - rpAmt * 2;
 
   autoTable(doc, {
     startY,
     margin: { left: 15, right: 15 },
     tableWidth: rpW,
-    head: [['Dr — Receipts', 'Amount', 'Cr — Payments', 'Amount']],
+    head: [['Dr — Receipts', 'Amount', 'Grand', 'Cr — Payments', 'Amount', 'Grand']],
     body: zipped,
-    foot: [['Total', fmt(drTotal), 'Total', fmt(crTotal)]],
+    foot: [['Total', '', fmt(drTotal), 'Total', '', fmt(crTotal)]],
     showFoot: 'lastPage',
     columnStyles: {
-      0: { cellWidth: rpLabel }, 1: { cellWidth: rpAmt, halign: 'right' },
-      2: { cellWidth: rpLabel }, 3: { cellWidth: rpAmt, halign: 'right' },
+      0: { cellWidth: rpLabel }, 1: { cellWidth: rpAmt, halign: 'right' }, 2: { cellWidth: rpAmt, halign: 'right' },
+      3: { cellWidth: rpLabel }, 4: { cellWidth: rpAmt, halign: 'right' }, 5: { cellWidth: rpAmt, halign: 'right' },
     },
     styles: { fontSize: 7.5, cellPadding: 1.8, font, overflow: 'linebreak' },
     headStyles: { textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     didParseCell: (data) => {
       if (data.section === 'head') {
-        data.cell.styles.fillColor = data.column.index < 2 ? [25, 135, 84] : [220, 53, 69];
-        if (data.column.index % 2 === 1) data.cell.styles.halign = 'right';
+        data.cell.styles.fillColor = data.column.index < 3 ? [25, 135, 84] : [220, 53, 69];
+        if (data.column.index % 3 !== 0) data.cell.styles.halign = 'right';
       }
-      if (data.section === 'foot' && data.column.index % 2 === 1) data.cell.styles.halign = 'right';
+      if (data.section === 'foot' && data.column.index % 3 !== 0) data.cell.styles.halign = 'right';
+      if (data.section === 'body') {
+        const grp = data.column.index < 3 ? dr.groupIdx : cr.groupIdx;
+        if (grp.includes(data.row.index)) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = data.column.index < 3 ? [232, 245, 233] : [253, 232, 234];
+        }
+      }
     },
     // Vertical rule between Receipts and Payments, drawn per cell so it survives page breaks.
     didDrawCell: (data) => {
-      if (data.column.index === 2) {
+      if (data.column.index === 3) {
         doc.setDrawColor(120);
         doc.setLineWidth(0.3);
         doc.line(data.cell.x, data.cell.y, data.cell.x, data.cell.y + data.cell.height);
@@ -1748,11 +1817,13 @@ export function generateTradingAccountPDF(
   if (data.purchaseItems.length > 0) {
     drBody.push([{ content: 'Purchases', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, '']);
     data.purchaseItems.forEach(i => drBody.push([`  ${i.name}`, fmt(i.amount)]));
+    drBody.push([{ content: 'Total Purchases', styles: { fontStyle: 'bold' } }, fmt(data.totalPurchases)]);
   }
 
   if (directSplit.kept.length > 0) {
     drBody.push([{ content: 'Direct Expenses', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, '']);
     directSplit.kept.forEach(i => drBody.push([`  ${i.name}`, fmt(i.amount)]));
+    drBody.push([{ content: 'Total Direct Expenses', styles: { fontStyle: 'bold' } }, fmt(directSplit.kept.reduce((t, i) => t + i.amount, 0))]);
   }
 
   if (isProfit && data.grossProfit > 0) {
@@ -1777,6 +1848,7 @@ export function generateTradingAccountPDF(
   if (directSplit.moved.length > 0) {
     crBody.push([{ content: 'Recoveries / credit balances in expense accounts', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, '']);
     directSplit.moved.forEach(i => crBody.push([`  ${i.name}`, fmt(i.amount)]));
+    crBody.push([{ content: 'Total Recoveries', styles: { fontStyle: 'bold' } }, fmt(directSplit.movedTotal)]);
   }
 
   if (!isProfit) {

@@ -35,7 +35,7 @@ export function reclassifyIncomeExpenditure<T extends NamedAmount>(income: T[], 
   const inc = splitNegativeLines(income, '(debit balance in income A/c)');
   const exp = splitNegativeLines(expense, '(credit balance in expense A/c)');
   return {
-    income: [...inc.kept, ...exp.moved] as NamedAmount[],
-    expense: [...exp.kept, ...inc.moved] as NamedAmount[],
+    income: [...inc.kept, ...exp.moved] as (T | NamedAmount)[],
+    expense: [...exp.kept, ...inc.moved] as (T | NamedAmount)[],
   };
 }

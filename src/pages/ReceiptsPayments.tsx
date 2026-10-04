@@ -16,7 +16,7 @@ const ReceiptsPayments: React.FC = () => {
   const { language } = useLanguage();
   const { can } = useAuth();
   const canExport = can('export');   // ECR-19
-  const { getReceiptsPayments, society } = useData();
+  const { getReceiptsPayments, society, accounts } = useData();
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -106,7 +106,7 @@ const ReceiptsPayments: React.FC = () => {
         </div>
         <div className="flex gap-2 flex-wrap">
           <PrintButton />
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateReceiptsPaymentsPDF(data, society)}>
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateReceiptsPaymentsPDF(data, society, accounts)}>
             <Download className="h-4 w-4" />PDF
           </Button>
           {canExport && <>

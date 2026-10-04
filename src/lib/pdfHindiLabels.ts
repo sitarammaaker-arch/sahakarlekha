@@ -28,6 +28,10 @@ export const PDF_HI_EXTRA: Record<string, string> = {
   'debit': 'नामे (डेबिट)',
   'credit': 'जमा (क्रेडिट)',
   'total': 'कुल',
+  'total purchases': 'कुल खरीद',
+  'total direct expenses': 'कुल प्रत्यक्ष व्यय',
+  'total recoveries': 'कुल वसूली / उलटाव',
+  'recoveries / credit balances in expense accounts': 'वसूली / व्यय खातों के जमा शेष',
   'trial balance is balanced - debit total equals credit total.': 'तलपट संतुलित है — नामे का योग जमा के योग के बराबर है।',
   'certified that the above trial balance has been prepared from the books of account of the society.':
     'प्रमाणित किया जाता है कि उपरोक्त तलपट समिति की लेखा-पुस्तकों से तैयार किया गया है।',
