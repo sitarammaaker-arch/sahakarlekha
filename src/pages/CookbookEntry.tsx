@@ -19,6 +19,7 @@ import { HELP_TASKS } from '@/content/help';
 import { Home, ChevronRight, ArrowRight, BookOpen, AlertTriangle } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
+const inr = (n?: number) => (n == null ? '' : `₹${n.toLocaleString('en-IN')}`);
 
 const CookbookEntry: React.FC = () => {
   const { slug = '' } = useParams();
@@ -110,6 +111,60 @@ const CookbookEntry: React.FC = () => {
         </Card>
         <p className="text-sm text-muted-foreground mt-2"><span className="font-semibold text-foreground">विवरण (narration):</span> {entry.narration}</p>
 
+        {/* Worked example with real amounts */}
+        {entry.example && (
+          <div className="mt-8">
+            <h2 className="text-lg font-bold text-foreground mb-2">उदाहरण (₹ में)</h2>
+            <p className="text-sm text-foreground mb-3">{entry.example.text}</p>
+            <Card>
+              <CardContent className="p-0 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="py-2 px-4 font-semibold">खाता</th>
+                      <th className="py-2 px-4 font-semibold text-right">Dr</th>
+                      <th className="py-2 px-4 font-semibold text-right">Cr</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entry.example.rows.map((r, i) => (
+                      <tr key={i} className="border-b last:border-0">
+                        <td className={`py-2 px-4 ${r.cr != null ? 'pl-10' : ''}`}>{r.account}</td>
+                        <td className="py-2 px-4 text-right tabular-nums">{inr(r.dr)}</td>
+                        <td className="py-2 px-4 text-right tabular-nums">{inr(r.cr)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {(entry.useWhen || entry.avoidWhen) && (
+          <div className="mt-6 grid sm:grid-cols-2 gap-3">
+            {entry.useWhen && (
+              <div className="rounded-lg border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm">
+                <p className="font-semibold text-emerald-800 dark:text-emerald-300 mb-1">✅ कब इस्तेमाल करें</p>
+                <p className="text-foreground">{entry.useWhen}</p>
+              </div>
+            )}
+            {entry.avoidWhen && (
+              <div className="rounded-lg border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 px-4 py-3 text-sm">
+                <p className="font-semibold text-rose-800 dark:text-rose-300 mb-1">⛔ कब नहीं</p>
+                <p className="text-foreground">{entry.avoidWhen}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {entry.correction && (
+          <div className="mt-6">
+            <h2 className="text-lg font-bold text-foreground mb-2">गलती हो गई तो — सुधार</h2>
+            <p className="text-sm text-foreground">{entry.correction}</p>
+          </div>
+        )}
+
         {entry.societyTypes && entry.societyTypes.length > 0 && (
           <p className="text-xs text-muted-foreground mt-2">समिति प्रकार: {entry.societyTypes.join(' · ')}</p>
         )}
@@ -179,6 +234,8 @@ const CookbookEntry: React.FC = () => {
             </div>
           </div>
         )}
+
+        {entry.updated && <p className="mt-8 text-xs text-muted-foreground">अंतिम अपडेट: {entry.updated}</p>}
 
         {/* Reference disclaimer (Constitution: education, not a ruling) */}
         <p className="mt-8 text-xs text-muted-foreground border-t pt-4">

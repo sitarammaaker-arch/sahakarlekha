@@ -10,6 +10,10 @@
  * Slugs English; titles/body everyday Hinglish. IMPORTANT: this is reference
  * education, not a ruling — entries note when to verify with the auditor.
  */
+import { COOKBOOK_EXTRAS, COOKBOOK_UPDATED, type CookbookExtras } from './extras';
+
+export type { CookbookExampleRow, CookbookExtras } from './extras';
+
 export interface CookbookLine { account: string; type: 'Dr' | 'Cr'; note?: string }
 
 export interface CookbookEntry {
@@ -36,9 +40,14 @@ export interface CookbookEntry {
   related?: string[];
   /** ISO date of the last real content change — drives the sitemap <lastmod> */
   updated?: string;
+  /** depth layer (extras.ts): worked ₹ example, when to use / not, how to correct */
+  example?: CookbookExtras['example'];
+  useWhen?: string;
+  avoidWhen?: string;
+  correction?: string;
 }
 
-export const COOKBOOK_ENTRIES: CookbookEntry[] = [
+const BASE_ENTRIES: CookbookEntry[] = [
   {
     slug: 'cash-sale',
     metaTitle: 'नकद बिक्री की एंट्री — Dr/Cr कैसे करें | SahakarLekha',
@@ -630,17 +639,17 @@ export const COOKBOOK_ENTRIES: CookbookEntry[] = [
   {
     slug: 'patronage-bonus',
     metaTitle: 'व्यवहार बोनस (Patronage) की एंट्री — Dr/Cr | SahakarLekha',
-    metaDescription: 'सदस्य के व्यवहार के अनुपात में बोनस का journal — Dr लाभ-बँटवारा, Cr Bonus Payable।',
+    metaDescription: 'सदस्य के व्यवहार के अनुपात में बोनस का journal — Dr शुद्ध अधिशेष (1208), Cr Bonus Payable।',
     category: 'सदस्य व शेयर',
     title: 'व्यवहार बोनस (Patronage Bonus)',
     intent: 'patronage bonus vyavhar bonus entry',
     scenario: 'मुनाफ़े में से सदस्यों को उनके व्यवहार (खरीद/बिक्री) के अनुपात में बोनस।',
     lines: [
-      { account: 'Profit & Loss Appropriation / लाभ-बँटवारा', type: 'Dr' },
-      { account: 'Patronage Bonus Payable / देय बोनस', type: 'Cr' },
+      { account: 'Net Surplus / शुद्ध अधिशेष (1208)', type: 'Dr' },
+      { account: 'Patronage Bonus Payable / देय संरक्षण छूट', type: 'Cr' },
     ],
     narration: 'व्यवहार बोनस — वर्ष ___',
-    notes: ['डिविडेंड शेयर पूँजी पर मिलता है; व्यवहार बोनस सदस्य के लेन-देन के अनुपात में — दोनों अलग हैं।'],
+    notes: ['डिविडेंड शेयर पूँजी पर मिलता है; व्यवहार बोनस सदस्य के लेन-देन के अनुपात में — दोनों अलग हैं।', 'यह लाभ का बँटवारा है, व्यय नहीं — इसलिए Dr शुद्ध अधिशेष (1208)। कर्मचारी बोनस अलग है: वह व्यय (5207) है।'],
     guideSlug: 'profit-distribution',
     related: ['dividend-paid', 'profit-distribution-reserve'],
   },
@@ -902,6 +911,11 @@ export const COOKBOOK_ENTRIES: CookbookEntry[] = [
     related: ['subsidy-received', 'donation-csr-paid'],
   },
 ];
+
+export const COOKBOOK_ENTRIES: CookbookEntry[] = BASE_ENTRIES.map((e) => {
+  const x = COOKBOOK_EXTRAS[e.slug];
+  return x ? { ...e, ...x, updated: e.updated ?? COOKBOOK_UPDATED } : e;
+});
 
 export function findCookbookEntry(slug: string): CookbookEntry | null {
   return COOKBOOK_ENTRIES.find((e) => e.slug === slug) ?? null;

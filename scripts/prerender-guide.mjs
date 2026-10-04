@@ -698,11 +698,20 @@ function cookbookBody(e, DATA) {
           `</tbody></table>`
         : '') +
       (e.narration ? `<p><strong>विवरण (Narration):</strong> ${esc(e.narration)}</p>` : '') +
+      (e.example
+        ? `<h2>उदाहरण (₹ में)</h2><p>${esc(e.example.text)}</p><table border="1" cellpadding="6" style="border-collapse:collapse"><thead><tr><th>खाता</th><th>Dr</th><th>Cr</th></tr></thead><tbody>` +
+          e.example.rows.map((r) => `<tr><td>${esc(r.account)}</td><td>${r.dr != null ? '₹' + r.dr.toLocaleString('en-IN') : ''}</td><td>${r.cr != null ? '₹' + r.cr.toLocaleString('en-IN') : ''}</td></tr>`).join('') +
+          `</tbody></table>`
+        : '') +
+      (e.useWhen ? `<p><strong>कब इस्तेमाल करें:</strong> ${esc(e.useWhen)}</p>` : '') +
+      (e.avoidWhen ? `<p><strong>कब नहीं:</strong> ${esc(e.avoidWhen)}</p>` : '') +
+      (e.correction ? `<h2>गलती हो गई तो — सुधार</h2><p>${esc(e.correction)}</p>` : '') +
       (e.notes && e.notes.length ? `<h2>ध्यान रखें</h2><ul>${e.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : '') +
       (e.guideSlug ? `<p>पूरा समझें: <a href="/guide/${e.guideSlug}">गाइड अध्याय</a></p>` : '') +
       surfaceLinksHtml({ help: helpSlugs }, DATA, 'स्टेप-बाय-स्टेप (मदद केंद्र)') +
       (e.related && e.related.length
         ? `<p>जुड़ी एंट्रियाँ: ${e.related.map((r) => `<a href="/cookbook/${r}">${r.replace(/-/g, ' ')}</a>`).join(' · ')}</p>` : '') +
+      (e.updated ? `<p><small>अंतिम अपडेट: ${esc(e.updated)}</small></p>` : '') +
       registerCta(e.deepLink && e.deepLink.route),
   });
 }
