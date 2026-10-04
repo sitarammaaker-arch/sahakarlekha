@@ -13,8 +13,13 @@ export function reverseEntryLines(lines: VoucherLine[]): VoucherLine[] {
 /**
  * In-place edit forbidden (correct via reversal instead) when the voucher is already reversed, IS a
  * reversal (it must mirror its original exactly — an edited reversal left a pair ₹50,000 apart in
- * prod), or is posted-under-control (opt-in maker-checker regime + approved).
+ * prod), or is posted-under-control: approved under the maker-checker regime, OR actually approved by
+ * a checker (approvedBy set — only approveVoucher / approve_voucher write it with status 'approved').
+ * The second arm covers vouchers held by the amount-threshold / voucher-type matrix while
+ * approvalRequired is OFF. `approvalStatus === 'approved'` ALONE is not proof of approval: the
+ * vouchers.approvalStatus column DEFAULTS to 'approved' in prod, so it is on nearly every voucher.
  */
-export function isEditLocked(v: Pick<Voucher, 'reversedBy' | 'approvalStatus'> & { reversalOf?: string }, approvalRequired: boolean): boolean {
-  return !!v.reversedBy || !!v.reversalOf || (!!approvalRequired && v.approvalStatus === 'approved');
+export function isEditLocked(v: Pick<Voucher, 'reversedBy' | 'approvalStatus'> & { reversalOf?: string; approvedBy?: string }, approvalRequired: boolean): boolean {
+  return !!v.reversedBy || !!v.reversalOf
+    || (v.approvalStatus === 'approved' && (!!approvalRequired || !!v.approvedBy));
 }

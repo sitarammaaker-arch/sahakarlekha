@@ -56,7 +56,7 @@ const AuditCertificate: React.FC = () => {
     const acc = accounts.find(a => a.id === id);
     if (!acc) return 0;
     let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
-    vouchers.filter(v => isCountedVoucher(v, society.approvalRequired)).forEach(v => {
+    vouchers.filter(v => isCountedVoucher(v)).forEach(v => {
       getVoucherLines(v).forEach(l => {
         if (l.accountId !== id) return;
         if (l.type === 'Dr') bal -= l.amount;

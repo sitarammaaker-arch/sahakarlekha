@@ -67,7 +67,7 @@ const Ledger: React.FC = () => {
     // A voucher touches this account if ANY of its lines has this accountId.
     // ECR-17: honour the active branch — this statement must tie to the branch-scoped TB.
     const accountVouchers = vouchers
-      .filter(v => isCountedVoucher(v, society.approvalRequired) && matchesActiveBranch(v.branchId) && getVoucherLines(v).some(l => l.accountId === selectedAccountId))
+      .filter(v => isCountedVoucher(v) && matchesActiveBranch(v.branchId) && getVoucherLines(v).some(l => l.accountId === selectedAccountId))
       .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
 
     if (fromDate) {

@@ -19,6 +19,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 import { loanOutstanding, kccOutstanding } from '@/lib/memberSnapshot';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -53,7 +54,7 @@ const FederationReport: React.FC = () => {
     const acc = accounts.find(a => a.id === id);
     if (!acc) return 0;
     let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
-    vouchers.filter(v => !v.isDeleted).forEach(v => {
+    vouchers.filter(isCountedVoucher).forEach(v => {
       getVoucherLines(v).forEach(l => {
         if (l.accountId !== id) return;
         if (l.type === 'Dr') bal -= l.amount;

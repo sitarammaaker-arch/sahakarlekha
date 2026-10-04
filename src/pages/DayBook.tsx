@@ -84,7 +84,7 @@ const DayBook: React.FC = () => {
 
   // ECR-17: honour the active branch — the Cash Book / Trial Balance are branch-scoped, so the
   // Day Book must be too, or the same day shows different totals across reports.
-  const activeVouchers = vouchers.filter(v => isCountedVoucher(v, society.approvalRequired) && matchesActiveBranch(v.branchId));
+  const activeVouchers = vouchers.filter(v => isCountedVoucher(v) && matchesActiveBranch(v.branchId));
 
   const entries = useMemo(() => {
     return activeVouchers

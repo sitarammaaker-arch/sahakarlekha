@@ -37,6 +37,7 @@ import { validateVoucher } from '@/lib/validation';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { isEngineVoucher } from '@/lib/accounting/voucherImmutability';
+import { isEditLocked } from '@/lib/voucherReversal';
 
 type EntryMode = 'aasan' | 'expert';
 
@@ -1219,8 +1220,8 @@ const Vouchers: React.FC = () => {
                       const debitAcc = accounts.find(a => a.id === drLines[0]?.accountId);
                       const creditAcc = accounts.find(a => a.id === crLines[0]?.accountId);
                       const cancelled = !!v.isDeleted;
-                      // ECR-08: reversed / reversal entries are edit-locked; correct via reversal.
-                      const editLocked = !!v.reversedBy || (!!society.approvalRequired && v.approvalStatus === 'approved');
+                      // ECR-08: reversed / reversal / checker-approved entries are edit-locked (same rule as updateVoucher).
+                      const editLocked = isEditLocked(v, !!society.approvalRequired);
                       return (
                         <TableRow key={v.id} className={cn('hover:bg-muted/30', cancelled && 'opacity-50 bg-red-50/30 dark:bg-red-900/10', selectedIds.has(v.id) && 'bg-destructive/5')}>
                           {isAdmin && !showCancelled && (
