@@ -23,6 +23,7 @@ import { isEmptyPeriod, comparative } from '@/lib/reportComparative';
 import { useToast } from '@/hooks/use-toast';
 import type { AccountBalance } from '@/types';
 import { PrintButton, PrintHeader } from '@/components/ReportPrint';
+import YearEndChecklist from '@/components/YearEndChecklist';
 
 interface BSItem {
   account: AccountBalance;
@@ -448,6 +449,8 @@ const BalanceSheet: React.FC = () => {
           </p>
         </CardContent>
       </Card>
+
+      <YearEndChecklist balances={trialBalance} asOnDate={asOnDate} bsBalanced={isBalanced} />
 
       <Card className="shadow-card">
         <CardHeader className="border-b text-center">

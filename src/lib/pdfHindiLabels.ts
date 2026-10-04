@@ -29,6 +29,9 @@ export const PDF_HI_EXTRA: Record<string, string> = {
   'credit': 'जमा (क्रेडिट)',
   'total': 'कुल',
   'total purchases': 'कुल खरीद',
+  'gross sales': 'सकल बिक्री',
+  'net sales': 'शुद्ध बिक्री',
+  'less: sales returns / debit balances in sales accounts': 'घटाएँ: बिक्री वापसी / बिक्री खातों के नामे शेष',
   'total direct expenses': 'कुल प्रत्यक्ष व्यय',
   'total recoveries': 'कुल वसूली / उलटाव',
   'recoveries / credit balances in expense accounts': 'वसूली / व्यय खातों के जमा शेष',
@@ -261,8 +264,10 @@ export function interimNoticeHi(o: { reportName: string; financialYear: string; 
 
 export function auditorCertificateHi(o: {
   societyName: string; registrationNo: string; reportName: string; financialYear: string; actName: string;
+  /** dd/mm/yyyy the accounts are made up to; empty falls back to the old wording. */
+  asAtDdMmYyyy?: string;
 }): string {
   return `हमने ${o.societyName} (पंजीकरण सं. ${o.registrationNo}) का ${reportNameHi(o.reportName)} वित्तीय वर्ष ${o.financialYear} के लिए जाँचा है ` +
     `और प्रमाणित करते हैं कि यह ${o.actName} तथा उसके अंतर्गत बने नियमों के अनुसार तैयार किया गया है ` +
-    'और 31 मार्च को समिति की वित्तीय स्थिति का सही एवं यथार्थ चित्र प्रस्तुत करता है।';
+    (o.asAtDdMmYyyy ? `और ${o.asAtDdMmYyyy} को समिति की वित्तीय स्थिति का सही एवं यथार्थ चित्र प्रस्तुत करता है।` : 'और 31 मार्च को समिति की वित्तीय स्थिति का सही एवं यथार्थ चित्र प्रस्तुत करता है।');
 }

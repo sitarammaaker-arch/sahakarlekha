@@ -58,6 +58,8 @@ export function scheduleLimitsLine(
   } else {
     parts.push(`${hi ? 'शिक्षा फंड' : 'Education Fund'}: ${format.educationFundPct}%`);
     parts.push(`${hi ? 'सहकारी विकास फंड' : 'Coop Dev Fund'}: ${format.coopDevFundPct}%`);
+    // These come from the format's own defaults, not from the Act / Rules text — say so on the printout.
+    parts.push(hi ? '(असत्यापित डिफ़ॉल्ट)' : '(unverified defaults)');
   }
   return parts.join(sep);
 }

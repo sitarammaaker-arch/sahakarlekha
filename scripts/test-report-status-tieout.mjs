@@ -77,10 +77,13 @@ const inc = [{ name: 'Service Charges', nameHi: '', amount: 1333971 }, { name: '
 const exp = [{ name: 'Salary', nameHi: '', amount: 906807 }];
 run('ie_open', () => pdf.generateIncomeExpenditurePDF(inc, exp, open, 'en', 0));
 run('ie_locked', () => pdf.generateIncomeExpenditurePDF(inc, exp, locked, 'en', 0));
+run('ie_zz', () => pdf.generateIncomeExpenditurePDF(inc, exp, { ...locked, state: 'zz' }, 'en', 0));
 const ta: any = { salesItems: [{ name: 'Fertilizer Sales', amount: 1000000 }], closingStockItems: [{ name: 'Closing Stock (Physical)', amount: 200000 }], openingStockItems: [],
   purchaseItems: [{ name: 'Fertilizer Purchase', amount: 800000 }], directExpItems: [{ name: 'Fertilizer Trading Exp A/c', amount: -521756.8 }],
   totalSales: 1000000, totalClosingStock: 200000, totalOpeningStock: 0, totalPurchases: 800000, totalDirectExp: -521756.8, grossProfit: 1000000 + 200000 - 800000 + 521756.8 };
 run('ta', () => pdf.generateTradingAccountPDF(ta, open));
+const ta2: any = { ...ta, salesItems: [{ name: 'Fertilizer Sales', amount: 1000000 }, { name: 'Sales Return', amount: -50000 }], directExpItems: [], totalSales: 950000, totalDirectExp: 0, grossProfit: 950000 + 200000 - 800000 };
+run('ta_ret', () => pdf.generateTradingAccountPDF(ta2, open));
 run('bb', () => pdf.generateBankBookPDF([], open, 0, 'en', 'SBI BANK ASSANDH CURRENT A/C', 'Check the bank account.'));
 run('tb', () => pdf.generateTrialBalancePDF([bal(accounts[4], -327250), bal(accounts[5], 327250)], open, '2027-03-31', 'en'));
 module.exports = { docs };
@@ -97,10 +100,14 @@ for (const t of ['bs_open', 'ie_open']) ok(!raw(t).includes("AUDITOR'S CERTIFICA
 for (const t of ['bs_locked', 'ie_locked']) ok(raw(t).includes("AUDITOR'S CERTIFICATE"), `${t}: certificate present once audit-locked`);
 ok(raw('bs_open').includes('Provisional position') && !raw('bs_open').includes('As at 31st March'), 'open-FY Balance Sheet does not claim "As at 31st March"');
 ok(raw('bs_locked').includes('As at 31st March 2027'), 'locked Balance Sheet keeps the year-end date');
+ok(raw('ie_locked').includes('as at 31/03/2027'), 'certificate names the date the accounts are made up to');
+ok(!raw('ie_zz').includes('Multi-State') && raw('ie_zz').includes('applicable to the'), 'unconfigured state: certificate does not name the Multi-State Act');
 ok(!raw('bs_open').includes('Rs. -'), 'Balance Sheet comparative column has no negative liability');
 ok(!raw('ie_open').includes('Rs. -'), 'I&E prints no negative amount');
 ok(!raw('ta').includes('Rs. -') && raw('ta').includes('Recoveries'), 'Trading prints the credit-balance expense as a recovery line, not a negative');
 ok(raw('bb').includes('SBI BANK ASSANDH CURRENT A/C'), 'Bank Book PDF names the bank account');
+ok(raw('ta_ret').includes('(Net Sales)') && raw('ta_ret').includes('(Gross Sales)') && !raw('ta_ret').includes('Rs. -'), 'Trading shows Gross Sales, Less: Sales Returns, Net Sales - no negative sales line');
+ok(raw('ta').includes('(Total Sales)') && !raw('ta').includes('(Net Sales)'), 'Trading without returns keeps the single Total Sales line');
 
 console.log(`report-status-tieout: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -507,11 +507,17 @@ export const RAJASTHAN_FORMAT: StateAuditFormat = {
 
 // ── Generic Format (for unconfigured states) ────────────────────────────────
 
+// This is the fallback for ANY state that has no entry in the registry below — it is NOT the Multi-State Act.
+// (It used to be labelled "Multi-State Cooperative Societies Act, 2002", so a society of an unconfigured state got
+// an audit certificate naming the wrong Act. The Multi-State Act's own appropriation rules — at least 25% reserve,
+// 1% education fund, at least 10% reserve for unforeseen losses (s.63) — are NOT these percentages.)
+// The percentages below are UNVERIFIED display defaults; only figures that carry a source in lib/rules (UCAS) are
+// ever treated as statutory.
 export const GENERIC_FORMAT: StateAuditFormat = {
   stateCode: 'generic',
-  actName: 'Multi-State Cooperative Societies Act, 2002',
-  actNameHi: 'बहु-राज्य सहकारी समिति अधिनियम, 2002',
-  actYear: 2002,
+  actName: 'Cooperative Societies Act applicable to the Society',
+  actNameHi: 'समिति पर लागू सहकारी समिति अधिनियम',
+  actYear: 0,
   schedules: HARYANA_SCHEDULES, // Generic uses same structure
   reservePct: 25,
   educationFundPct: 1,
