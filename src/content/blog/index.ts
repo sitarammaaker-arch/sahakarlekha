@@ -1226,6 +1226,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'महीना बंद करने के सात मिलान: नकद, बैंक, उप-रजिस्टर, ट्रायल बैलेंस, हस्ताक्षर और लॉक: एक तय क्रम में।',
     accent: 'amber',
     tags: ['मासिक मिलान', 'BRS', 'ट्रायल बैलेंस', 'महीना बंदी'],
+    image: '/blog/monthly-reconciliation-checklist-cashbook-bank-trial-balance.webp',
+    imageAlt: 'समिति के कार्यालय में सचिव और लेखाकार मेज़ पर कैश बुक, बैंक पासबुक, वाउचर और लैपटॉप के साथ महीने के अंत का हिसाब मिलाते हुए',
   },
   {
     slug: 'bank-reconciliation-guide',
