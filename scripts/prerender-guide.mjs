@@ -46,6 +46,7 @@ const QUIZ_FILE = resolve(ROOT, 'src', 'content', 'guide', 'quizzes.ts');
 const GLOSSARY_LINKS_FILE = resolve(ROOT, 'src', 'content', 'glossaryLinks.ts');
 const HUB_META_FILE = resolve(ROOT, 'src', 'content', 'hubMeta.ts');
 const DOWNLOADS_FILE = resolve(ROOT, 'src', 'content', 'downloads.ts');
+const GUIDE_UPDATED_FILE = resolve(ROOT, 'src', 'content', 'guide', 'updated.ts');
 const RELATED_FILE = resolve(ROOT, 'src', 'content', 'relatedContent.ts');
 const COURSE = 'सहकारी समिति लेखांकन व ऑडिट — सम्पूर्ण कोर्स';
 
@@ -259,6 +260,7 @@ async function loadData() {
     ['faq', FAQ_FILE, 'FAQ_CATEGORIES'],
     ['quizzes', QUIZ_FILE, 'GUIDE_QUIZZES'],
     ['glossaryLinks', GLOSSARY_LINKS_FILE, 'resolveGlossaryHref'],
+    ['guideUpdated', GUIDE_UPDATED_FILE, null], // per-chapter "अंतिम अपडेट" + lastmod
     ['downloads', DOWNLOADS_FILE, null], // /downloads hub — same registry as the page
     ['hub', HUB_META_FILE, null], // L5: hub title/description + glossary description — same module as the pages
     ['society', SOCIETY_TYPES, 'SOCIETY_TYPES'],
@@ -285,12 +287,13 @@ function guidePages(DATA) {
   if (!existsSync(MANIFEST)) return [];
   const entries = JSON.parse(readFileSync(MANIFEST, 'utf-8'));
   const chapters = entries.filter((e) => e && e.slug);
+  const updatedOf = (slug) => (DATA.guideUpdated && DATA.guideUpdated.guideUpdated ? DATA.guideUpdated.guideUpdated(slug) : LASTMOD.guide);
 
   const pages = [{
     path: '/guide',
     title: DATA.hub.HUB_META.guide.title,
     description: DATA.hub.HUB_META.guide.description,
-    lastmod: LASTMOD.guide,
+    lastmod: maxDate(chapters.map((e) => updatedOf(e.slug)), LASTMOD.guide),
     jsonLd: [
       {
         '@context': 'https://schema.org', '@type': 'Course', name: COURSE,
@@ -333,7 +336,7 @@ function guidePages(DATA) {
         body = shell({
           crumbs: [['/guide', 'गाइड']],
           current: e.title,
-          html: md(readFileSync(mdFile, 'utf-8')) + registerCta(),
+          html: md(readFileSync(mdFile, 'utf-8')) + `<p><small>अंतिम अपडेट: ${esc(updatedOf(e.slug))}</small></p>` + registerCta(),
         });
       }
     } catch { /* body optional */ }
@@ -341,7 +344,7 @@ function guidePages(DATA) {
       path,
       title: `${e.title} — सहकार लेखा गाइड`,
       description: e.description || '',
-      lastmod: LASTMOD.guide,
+      lastmod: updatedOf(e.slug),
       body,
       jsonLd: [
         {
@@ -355,7 +358,7 @@ function guidePages(DATA) {
           ...(e.section ? { articleSection: e.section } : {}),
           image: `${SITE}/og-image.png`,
           datePublished: LASTMOD.guide,
-          dateModified: LASTMOD.guide,
+          dateModified: updatedOf(e.slug),
           author: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
           publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE, logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` } },
         },
@@ -708,6 +711,7 @@ function cookbookBody(e, DATA) {
         : '') +
       (e.useWhen ? `<p><strong>कब इस्तेमाल करें:</strong> ${esc(e.useWhen)}</p>` : '') +
       (e.avoidWhen ? `<p><strong>कब नहीं:</strong> ${esc(e.avoidWhen)}</p>` : '') +
+      (e.inApp ? `<h2>ऐप में कैसे करें</h2><p>${esc(e.inApp)}</p>` : '') +
       (e.correction ? `<h2>गलती हो गई तो — सुधार</h2><p>${esc(e.correction)}</p>` : '') +
       (e.notes && e.notes.length ? `<h2>ध्यान रखें</h2><ul>${e.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : '') +
       (e.guideSlug ? `<p>पूरा समझें: <a href="/guide/${e.guideSlug}">गाइड अध्याय</a></p>` : '') +

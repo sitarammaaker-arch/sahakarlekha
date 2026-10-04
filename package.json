@@ -40,6 +40,7 @@
     "test:s4a-server-paths": "node scripts/test-s4a-server-paths.mjs",
     "test:private-noindex": "node scripts/private-noindex.mjs",
     "test:calculator-links": "node scripts/test-calculator-links.mjs",
+    "test:content-standards": "node scripts/test-content-standards.mjs",
     "test:downloads": "node scripts/test-downloads.mjs",
     "test:hub-meta": "node scripts/test-hub-meta.mjs",
     "test:batched-loads": "node scripts/test-batched-loads.mjs",

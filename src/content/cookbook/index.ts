@@ -11,6 +11,7 @@
  * education, not a ruling — entries note when to verify with the auditor.
  */
 import { COOKBOOK_EXTRAS, COOKBOOK_UPDATED, type CookbookExtras } from './extras';
+import { COOKBOOK_IN_APP } from './inApp';
 
 export type { CookbookExampleRow, CookbookExtras } from './extras';
 
@@ -45,6 +46,8 @@ export interface CookbookEntry {
   useWhen?: string;
   avoidWhen?: string;
   correction?: string;
+  /** which screen and button records it in the app (inApp.ts) */
+  inApp?: string;
 }
 
 const BASE_ENTRIES: CookbookEntry[] = [
@@ -915,7 +918,8 @@ const BASE_ENTRIES: CookbookEntry[] = [
 
 export const COOKBOOK_ENTRIES: CookbookEntry[] = BASE_ENTRIES.map((e) => {
   const x = COOKBOOK_EXTRAS[e.slug];
-  return x ? { ...e, ...x, updated: e.updated ?? COOKBOOK_UPDATED } : e;
+  const inApp = COOKBOOK_IN_APP[e.slug];
+  return x ? { ...e, ...x, ...(inApp ? { inApp } : {}), updated: e.updated ?? COOKBOOK_UPDATED } : e;
 });
 
 export function findCookbookEntry(slug: string): CookbookEntry | null {

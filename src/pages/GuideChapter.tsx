@@ -11,6 +11,7 @@ import GuideMarkdown, { slugifyHeading } from '@/components/guide/GuideMarkdown'
 import HelpfulWidget from '@/components/HelpfulWidget';
 import LangToggle from '@/components/guide/LangToggle';
 import { findEntry, GUIDE_ORDER, GUIDE_PARTS } from '@/content/guide';
+import { guideUpdated } from '@/content/guide/updated';
 import { blogForGuide } from '@/content/crossLinks';
 import { loadGuideContent, localizedEntry, localizedPartTitle } from '@/content/guide/i18n';
 import { useGuideProgress, toggleGuideDone } from '@/lib/guideProgress';
@@ -189,6 +190,8 @@ const GuideChapter: React.FC = () => {
                 {isDone ? t('ch.done') : t('ch.markdone')}
               </Button>
             </div>
+
+            <p className="mt-8 text-center text-xs text-muted-foreground">अंतिम अपडेट: {guideUpdated(slug)}</p>
 
             {/* Was this helpful? */}
             <HelpfulWidget />
