@@ -26,6 +26,7 @@
  * still the data.
  */
 import * as XLSX from 'xlsx';
+import { standardFileStem, type NamingSociety } from './exportNaming.ts';
 
 /** Bumped when the JSON envelope's shape changes. Consumers key off this. */
 export const EXPORT_SCHEMA_VERSION = '1.0';
@@ -169,6 +170,49 @@ export function buildJsonEnvelope(payload: unknown, meta: ExportMeta = {}) {
   };
 }
 
+// ─── Export context (uniform identity on every Excel / CSV) ─────────────────────────────
+
+/**
+ * Who/what the current session is, bound once by <ExportContextBinder/>. With it set, every
+ * downloadCSV / downloadExcel gets the standard file name (exportNaming.ts) and every Excel gets the
+ * README provenance sheet — without touching the ~110 call sites. Unset (tests, logged out) = the legacy
+ * behaviour: the page's own name, no README.
+ */
+export interface ExportContext {
+  society: NamingSociety & { financialYear?: string };
+  userName?: string;
+}
+let exportContext: ExportContext | null = null;
+export function setExportContext(ctx: ExportContext | null): void { exportContext = ctx; }
+export function getExportContext(): ExportContext | null { return exportContext; }
+
+/** PURE — ISO 8601 in LOCAL time with its offset ("2026-10-04T08:41:00+05:30") — what the user's clock showed. */
+export function localIso(now: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  const off = -now.getTimezoneOffset();
+  const sign = off >= 0 ? '+' : '-';
+  const a = Math.abs(off);
+  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}T${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}${sign}${p(Math.floor(a / 60))}:${p(a % 60)}`;
+}
+
+/** PURE — README provenance for the session (callers' own meta wins field by field). */
+export function contextMeta(ctx: ExportContext | null, now: Date): ExportMeta | undefined {
+  if (!ctx?.society) return undefined;
+  return {
+    societyName: ctx.society.name,
+    registrationNo: ctx.society.registrationNo,
+    financialYear: ctx.society.financialYear,
+    generatedAt: localIso(now),
+    generatedBy: ctx.userName,
+  };
+}
+
+/** PURE — the downloaded file's name: the standard stem when a session is bound, else the legacy name. */
+export function exportFileName(filename: string, ext: 'csv' | 'xlsx', ctx: ExportContext | null, now: Date): string {
+  if (!ctx?.society) return stripExt(filename, ext) + '.' + ext;
+  return standardFileStem({ base: filename, society: ctx.society, now }) + '.' + ext;
+}
+
 // ─── DOM wrappers ────────────────────────────────────────────────────────────────────
 
 /**
@@ -197,7 +241,7 @@ export function downloadCSV(headers: string[], rows: Cell[][], filename: string)
   // '\uFEFF' as an escape, not a literal: a bare BOM character is invisible and gets
   // silently eaten by editors and encoding round-trips.
   const blob = new Blob(['\uFEFF' + buildCsv(headers, rows)], { type: 'text/csv;charset=utf-8;' });
-  triggerDownload(blob, stripExt(filename, 'csv') + '.csv');
+  triggerDownload(blob, exportFileName(filename, 'csv', exportContext, new Date()));
 }
 
 /**
@@ -205,7 +249,10 @@ export function downloadCSV(headers: string[], rows: Cell[][], filename: string)
  * Supply `meta` to append a README sheet recording who exported what, when.
  */
 export function downloadExcel(sheets: Sheet[], filename: string, meta?: ExportMeta): void {
-  XLSX.writeFile(buildWorkbook(sheets, meta), stripExt(filename, 'xlsx') + '.xlsx');
+  const now = new Date();
+  const base = contextMeta(exportContext, now);
+  const merged = base ? { ...base, ...meta } : meta;       // a caller's own meta (e.g. the registry exporter) wins
+  XLSX.writeFile(buildWorkbook(sheets, merged), exportFileName(filename, 'xlsx', exportContext, now));
 }
 
 /** Convenience: single-sheet Excel. */
