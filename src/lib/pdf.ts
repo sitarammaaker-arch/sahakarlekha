@@ -287,7 +287,7 @@ function addAuditorCertificate(doc: jsPDF, font: string, society: SocietySetting
     `We have examined the ${reportName} of ${society.name} (Reg. No. ${society.registrationNo}) ` +
     `for the Financial Year ${society.financialYear} and certify that the same is drawn up in accordance ` +
     `with the provisions of the ${stateFormat.actName} and the rules made thereunder ` +
-    `and presents a true and fair view of the state of affairs of the Society as on 31st March.`;
+    `and presents a true and fair view of the state of affairs of the Society as at ${certStatus.fyEnd ? certStatus.fyEnd.split('-').reverse().join('/') : '31st March'}.`;
   const certLang = getPdfLang();
   if (certLang === 'en') {
     const lines = doc.splitTextToSize(certText, pageW - 30);
@@ -296,7 +296,7 @@ function addAuditorCertificate(doc: jsPDF, font: string, society: SocietySetting
   } else {
     // Hindi paragraph, passed WHOLE with maxWidth so the browser canvas wraps it (jsPDF cannot measure Devanagari).
     // EXTERNAL VALIDATION NEEDED: the wording is a presentation translation, not statutory text.
-    const certHi = auditorCertificateHi({ societyName: society.name, registrationNo: society.registrationNo, reportName, financialYear: society.financialYear, actName: stateFormat.actName });
+    const certHi = auditorCertificateHi({ societyName: society.name, registrationNo: society.registrationNo, reportName, financialYear: society.financialYear, actName: stateFormat.actName, asAtDdMmYyyy: certStatus.fyEnd ? certStatus.fyEnd.split('-').reverse().join('/') : undefined });
     const hiLines = Math.ceil((certHi.length * 1.5) / (pageW - 30));
     doc.text(certHi, 15, startY, { maxWidth: pageW - 30 });
     startY += hiLines * 4 + 4;
@@ -1834,9 +1834,19 @@ export function generateTradingAccountPDF(
   const crBody: (string | { content: string; styles: object })[][] = [];
 
   if (data.salesItems.length > 0) {
+    // A sales ledger in debit (sales returns) is shown as "Less: Sales Returns" under Gross Sales, giving Net Sales
+    // (NABARD CAS Annexure II: Sales, less Sales Returns, Net Sales). Net Sales equals the old single total.
+    const salesSplit = splitNegativeLines(data.salesItems, '');
     crBody.push([{ content: 'Sales (Trading Income)', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, '']);
-    data.salesItems.forEach(i => crBody.push([`  ${i.name}`, fmt(i.amount)]));
-    crBody.push([{ content: 'Total Sales', styles: { fontStyle: 'bold' } }, fmt(data.totalSales)]);
+    salesSplit.kept.forEach(i => crBody.push([`  ${i.name}`, fmt(i.amount)]));
+    if (salesSplit.moved.length > 0) {
+      crBody.push([{ content: 'Gross Sales', styles: { fontStyle: 'bold' } }, fmt(data.totalSales + salesSplit.movedTotal)]);
+      crBody.push([{ content: 'Less: Sales Returns / debit balances in sales accounts', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, '']);
+      salesSplit.moved.forEach(i => crBody.push([`  ${i.name}`, `(${fmt(i.amount)})`]));
+      crBody.push([{ content: 'Net Sales', styles: { fontStyle: 'bold' } }, fmt(data.totalSales)]);
+    } else {
+      crBody.push([{ content: 'Total Sales', styles: { fontStyle: 'bold' } }, fmt(data.totalSales)]);
+    }
   }
 
   if (data.closingStockItems.length > 0) {

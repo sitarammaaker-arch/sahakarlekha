@@ -24,7 +24,7 @@ export function splitNegativeLines<T extends NamedAmount>(items: T[], movedSuffi
   const kept: T[] = [];
   const moved: NamedAmount[] = [];
   for (const it of items) {
-    if (it.amount < 0) moved.push({ name: `${it.name} ${movedSuffix}`, amount: r2(-it.amount) });
+    if (it.amount < 0) moved.push({ name: `${it.name} ${movedSuffix}`.trim(), amount: r2(-it.amount) });
     else kept.push(it);
   }
   return { kept, moved, movedTotal: r2(moved.reduce((s, m) => s + m.amount, 0)) };

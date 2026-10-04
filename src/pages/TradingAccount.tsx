@@ -39,6 +39,7 @@ const TradingAccount: React.FC = () => {
 
   // A direct-expense ledger in credit (a recovery / reversal) is shown as a positive credit-side line, not a negative
   // debit line. Gross profit is the net and does not change; both sides grow by the same amount.
+  const salesSplit = splitNegativeLines(salesItems, '');   // sales ledgers in debit (returns) -> "Less: Sales Returns"
   const directSplit = splitNegativeLines(directExpItems, '(credit balance in expense A/c)');
   const directKept = directSplit.kept;
   const directKeptTotal = totalDirectExp + directSplit.movedTotal;
@@ -57,7 +58,7 @@ const TradingAccount: React.FC = () => {
     directKept.forEach(i => r.push(['Dr', i.name, i.amount]));
     directSplit.moved.forEach(i => r.push(['Cr', i.name, i.amount]));
     if (isProfit) r.push(['Dr', 'Gross Profit c/d', grossProfit]);
-    salesItems.forEach(i => r.push(['Cr', i.name, i.amount]));
+    salesItems.forEach(i => r.push(['Cr', i.name, i.amount]));   // export keeps the ledger-signed lines
     closingStockItems.forEach(i => r.push(['Cr', `Closing Stock — ${i.name}`, i.amount]));
     if (!isProfit) r.push(['Cr', 'Gross Loss c/d', Math.abs(grossProfit)]);
     r.push(['', 'GRAND TOTAL', grandTotal]);
@@ -299,14 +300,33 @@ const TradingAccount: React.FC = () => {
                           {hi ? 'बिक्री (Trading Income)' : 'Sales (Trading Income)'}
                         </TableCell>
                       </TableRow>
-                      {salesItems.map((item, i) => (
+                      {salesSplit.kept.map((item, i) => (
                         <TableRow key={i}>
                           <TableCell className="pl-6 text-sm">{hi ? item.nameHi : item.name}</TableCell>
                           <TableCell className="text-right">{fmt(item.amount)}</TableCell>
                         </TableRow>
                       ))}
+                      {salesSplit.moved.length > 0 && (
+                        <>
+                          <TableRow className="font-medium">
+                            <TableCell className="pl-6">{hi ? 'सकल बिक्री' : 'Gross Sales'}</TableCell>
+                            <TableCell className="text-right">{fmt(totalSales + salesSplit.movedTotal)}</TableCell>
+                          </TableRow>
+                          <TableRow className="bg-muted/30">
+                            <TableCell className="font-medium text-muted-foreground" colSpan={2}>
+                              {hi ? 'घटाएँ: बिक्री वापसी / बिक्री खातों के नामे शेष' : 'Less: Sales Returns / debit balances in sales accounts'}
+                            </TableCell>
+                          </TableRow>
+                          {salesSplit.moved.map((item, i) => (
+                            <TableRow key={'m' + i}>
+                              <TableCell className="pl-6 text-sm">{item.name}</TableCell>
+                              <TableCell className="text-right">({fmt(item.amount)})</TableCell>
+                            </TableRow>
+                          ))}
+                        </>
+                      )}
                       <TableRow className="font-medium">
-                        <TableCell className="pl-6">{hi ? 'कुल बिक्री' : 'Total Sales'}</TableCell>
+                        <TableCell className="pl-6">{salesSplit.moved.length > 0 ? (hi ? 'शुद्ध बिक्री' : 'Net Sales') : (hi ? 'कुल बिक्री' : 'Total Sales')}</TableCell>
                         <TableCell className="text-right">{fmt(totalSales)}</TableCell>
                       </TableRow>
                     </>

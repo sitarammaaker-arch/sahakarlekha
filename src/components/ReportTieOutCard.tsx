@@ -9,10 +9,9 @@ import type { AccountBalance } from '@/types';
 
 const inr = (n: number) => new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
-/** Read-only check that the Trial Balance, the Bank Books and Receipts & Payments agree on the bank balance. */
-const ReportTieOutCard: React.FC<{ balances: AccountBalance[]; asOnDate: string; closingDr: number; closingCr: number }> = ({ balances, asOnDate, closingDr, closingCr }) => {
+/** The tie-out rows (Trial Balance vs all Bank Books vs Receipts & Payments). Shared by the tie-out card and the year-end checklist. */
+export function useTieOutRows(balances: AccountBalance[], asOnDate: string, closingDr: number, closingCr: number) {
   const { accounts, getBankBookEntries, getReceiptsPayments } = useData();
-  const { language } = useLanguage();
 
   const bankIds = getBankAccountIds(accounts);
   const tbBankClosing = balances.filter(b => bankIds.includes(b.account.id)).reduce((s, b) => s + b.netBalance, 0);
@@ -24,7 +23,13 @@ const ReportTieOutCard: React.FC<{ balances: AccountBalance[]; asOnDate: string;
   }, 0);
   const rpClosingBank = getReceiptsPayments(asOnDate).closingBank;
 
-  const rows = buildTieOut({ tbClosingDr: closingDr, tbClosingCr: closingCr, tbBankClosing, bankBooksClosing, rpClosingBank });
+  return buildTieOut({ tbClosingDr: closingDr, tbClosingCr: closingCr, tbBankClosing, bankBooksClosing, rpClosingBank });
+}
+
+/** Read-only check that the Trial Balance, the Bank Books and Receipts & Payments agree on the bank balance. */
+const ReportTieOutCard: React.FC<{ balances: AccountBalance[]; asOnDate: string; closingDr: number; closingCr: number }> = ({ balances, asOnDate, closingDr, closingCr }) => {
+  const { language } = useLanguage();
+  const rows = useTieOutRows(balances, asOnDate, closingDr, closingCr);
   const allOk = rows.every(r => r.ok);
 
   return (

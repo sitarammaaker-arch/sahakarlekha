@@ -28,6 +28,7 @@ import ProfitLoss from '@/pages/ProfitLoss';
 import TradingAccount from '@/pages/TradingAccount';
 import ReceiptsPayments from '@/pages/ReceiptsPayments';
 import TrialBalance from '@/pages/TrialBalance';
+import YearEndChecklist from '@/components/YearEndChecklist';
 
 const acct = (id: string, name: string, type: string, parentId?: string, isGroup = false): any => ({ id, name, nameHi: name, type, parentId, isGroup, openingBalance: 0, openingBalanceType: 'debit' });
 const accounts = [
@@ -47,10 +48,10 @@ Object.assign(store, {
     totalIncome: 889, totalExpenses: 400, netProfit: 489,
   }),
   getTradingAccount: () => ({
-    salesItems: [{ name: 'Fertilizer Sales', nameHi: 'Fertilizer Sales', amount: 1000 }], closingStockItems: [{ name: 'Closing Stock (Physical)', nameHi: 'x', amount: 200 }],
+    salesItems: [{ name: 'Fertilizer Sales', nameHi: 'Fertilizer Sales', amount: 1000 }, { name: 'Sales Return', nameHi: 'Sales Return', amount: -50 }], closingStockItems: [{ name: 'Closing Stock (Physical)', nameHi: 'x', amount: 200 }],
     openingStockItems: [], purchaseItems: [{ name: 'Fertilizer Purchase', nameHi: 'x', amount: 800 }],
     directExpItems: [{ name: 'Fertilizer Trading Exp A/c', nameHi: 'x', amount: -521 }],
-    totalSales: 1000, totalClosingStock: 200, totalOpeningStock: 0, totalPurchases: 800, totalDirectExp: -521, grossProfit: 921,
+    totalSales: 950, totalClosingStock: 200, totalOpeningStock: 0, totalPurchases: 800, totalDirectExp: -521, grossProfit: 871,
     activities: [], unallocated: { purchases: 0, directExp: 0, otherSales: 0 },
   }),
   getReceiptsPayments: () => ({
@@ -61,9 +62,12 @@ Object.assign(store, {
   }),
   getTrialBalance: () => [bal('c1', -1000, 0, 1000), bal('c2', -500, 0, 500), bal('e1', 400, 400, 0), bal('b1', 1100, 1100, 0)],
   getBankBookEntries: () => [], getAccountBalance: () => 0,
+  getShareCapitalReconciliation: () => ({ subsidiaryTotal: 100, controlBalance: 90, difference: 10, reconciled: false }),
+  getAssetRegisterReconciliation: () => ({ registerTotal: 5, controlBalance: 5, difference: 0, reconciled: true }),
 });
 const html = (C: any) => renderToStaticMarkup(<MemoryRouter><C /></MemoryRouter>);
-module.exports = { pl: html(ProfitLoss), ta: html(TradingAccount), rp: html(ReceiptsPayments), tb: html(TrialBalance) };
+const ye = renderToStaticMarkup(<YearEndChecklist balances={store.getTrialBalance()} asOnDate="2027-03-31" bsBalanced={true} />);
+module.exports = { pl: html(ProfitLoss), ta: html(TradingAccount), rp: html(ReceiptsPayments), tb: html(TrialBalance), ye };
 `);
 const out = join(dir, 'bundle.cjs');
 const stubPlugin = {
@@ -91,6 +95,7 @@ const ta = text(pages.ta);
 ok(ta.includes('Total Purchases'), 'Trading shows Total Purchases');
 ok(ta.includes('Recoveries') && ta.includes('Total Recoveries'), 'Trading shows the credit-balance expense as a recovery');
 ok(!/-\s?[\d,]+\.\d\d/.test(ta), 'Trading shows no negative amount');
+ok(ta.includes('Gross Sales') && ta.includes('Net Sales') && ta.includes('Sales Returns'), 'Trading shows Gross Sales, Less: Sales Returns, Net Sales');
 
 const rp = text(pages.rp);
 ok(rp.includes('Commission Income') && rp.includes('Establishment Expenses'), 'R&P shows the Head rows');
@@ -99,6 +104,11 @@ ok(rp.includes('Grand'), 'R&P has the Grand column');
 const tb = text(pages.tb);
 ok(tb.includes('Commission Income') && tb.includes('Establishment Expenses') && tb.includes('Cash & Bank'), 'Trial Balance shows the Head rows');
 ok(tb.includes('Service Charges') && tb.includes('SBI Current'), 'Trial Balance still shows every ledger');
+
+const ye = text(pages.ye);
+ok(ye.includes('Year-end pre-print checklist') && ye.includes('NABARD CAS, Annexure VI'), 'Balance Sheet year-end checklist renders with its source');
+ok(ye.includes('Member-wise share capital') && /Difference Rs\. 10\.00/.test(ye), 'a share-capital mismatch is flagged with the figure');
+ok(ye.includes('check by hand') && ye.includes('physically counted'), 'manual steps are listed as hand checks');
 
 console.log(`statement-pages-render: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
