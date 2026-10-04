@@ -322,6 +322,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'कार्यवृत्त का बारह हिस्सों का ढाँचा, पूरा नमूना, लिखने के नियम और सचिव के लिए चेकलिस्ट।',
     accent: 'violet',
     tags: ['कार्यवृत्त', 'बोर्ड मीटिंग', 'सचिव', 'नमूना'],
+    image: '/blog/board-meeting-minutes-format-secretary-sample-checklist.webp',
+    imageAlt: 'समिति की बैठक में सदस्य मेज़ के चारों ओर बैठे हैं और सचिव बड़ी कार्यवृत्त-पुस्तिका में बैठक की कार्यवाही लिख रहा है',
   },
   {
     slug: 'haryana-cooperative-society-board-resolution-guide',
