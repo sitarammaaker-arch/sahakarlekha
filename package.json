@@ -162,6 +162,7 @@
     "seo:ping": "node scripts/indexnow-ping.mjs",
     "test:accounting": "node scripts/test-accounting.mjs",
     "test:procurement": "node scripts/test-procurement.mjs",
+    "test:procurement-agent-flow": "node scripts/test-procurement-agent-flow.mjs",
     "test:housing": "node scripts/test-housing.mjs",
     "test:dairy": "node scripts/test-dairy.mjs",
     "test:marketing": "node scripts/test-marketing.mjs",

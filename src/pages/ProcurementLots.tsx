@@ -12,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
-import { Wheat, Plus } from 'lucide-react';
+import { resolveProcurementAccountId, missingProcurementRoles, PROCUREMENT_ROLE_LABEL_HI } from '@/lib/procurement/accounts';
+import { deriveLotStage, LOT_STAGE_LABEL, isRejectedQuality, suggestDeductionAccountId, deductionAccountWarning, DEDUCTION_WARNING_TEXT } from '@/lib/procurement/agentFlow';
+import { Wheat, Plus, AlertTriangle } from 'lucide-react';
 
 // Legacy crop ids (used before the M1a Crop master). Kept only so lots created earlier still
 // render a readable crop name; new lots pick from the Crop master (useMarketingData().crops).
@@ -30,18 +32,18 @@ const QUALITY_RESULTS = [
   { id: 'rejected', en: 'Rejected', hi: 'अस्वीकृत' },
 ];
 
-// MSP deduction types. `acc` is a default credit account ONLY where the chart binding is unambiguous
-// (TDS → 2202 TDS Payable). For the rest the operator selects the account from the chart (no invented
-// IDs / no baked-in accounting treatment).
+// MSP deduction types. The pre-selected account comes from suggestDeductionAccountId: a PAYABLE
+// (liability) for money withheld for someone else (TDS / मंडी शुल्क / HRDF / हमाली), found in this
+// society's chart by name — never an invented id. Otherwise the operator selects the account.
 const DEDUCTION_TYPES = [
-  { id: 'tds', en: 'TDS', hi: 'TDS', acc: '2202' },
-  { id: 'market_fee', en: 'Market Fee', hi: 'मंडी शुल्क', acc: '' },
-  { id: 'hrdf', en: 'HRDF', hi: 'HRDF', acc: '' },
-  { id: 'labour', en: 'Labour', hi: 'हमाली', acc: '' },
-  { id: 'weighment', en: 'Weighment', hi: 'तौल', acc: '' },
-  { id: 'bardana', en: 'Bardana', hi: 'बारदाना', acc: '' },
-  { id: 'transport', en: 'Transportation', hi: 'परिवहन', acc: '' },
-  { id: 'other', en: 'Other Recovery', hi: 'अन्य वसूली', acc: '' },
+  { id: 'tds', en: 'TDS', hi: 'TDS' },
+  { id: 'market_fee', en: 'Market Fee', hi: 'मंडी शुल्क' },
+  { id: 'hrdf', en: 'HRDF', hi: 'HRDF' },
+  { id: 'labour', en: 'Labour', hi: 'हमाली' },
+  { id: 'weighment', en: 'Weighment', hi: 'तौल' },
+  { id: 'bardana', en: 'Bardana', hi: 'बारदाना' },
+  { id: 'transport', en: 'Transportation', hi: 'परिवहन' },
+  { id: 'other', en: 'Other Recovery', hi: 'अन्य वसूली' },
 ];
 
 export default function ProcurementLots() {
@@ -125,6 +127,7 @@ export default function ProcurementLots() {
   };
   const farmerLabel = (id: string) => { const f = procurementFarmers.find(x => x.id === id); return f ? `${f.farmerName} (${f.farmerCode})` : id; };
   const lotQuality = (lotId: string) => procurementQualityTests.find(q => q.lotId === lotId);
+  const lotRejected = (lotId: string) => isRejectedQuality(lotQuality(lotId)?.result);
   const lotMoisture = (lotId: string) => procurementMoistureRecords.find(m => m.lotId === lotId);
   const resultLabel = (id: string) => { const r = QUALITY_RESULTS.find(x => x.id === id); return r ? (hi ? r.hi : r.en) : id; };
   const openQuality = (lotId: string) => { setQualityLotId(lotId); setQualityResult(''); setMoistureValue(''); setInspector(''); setQualityOpen(true); };
@@ -173,8 +176,11 @@ export default function ProcurementLots() {
   const bankAccounts = accounts.filter(a => bankIds.includes(a.id));
   // Agency-receivable candidates for "agency paid directly" mode: non-group asset accounts
   // (the society's Hafed / agency control account lives here). MSP Receivable (3308) first.
+  const mspReceivableId = resolveProcurementAccountId(accounts, 'agencyReceivable');
   const agencyAccounts = accounts.filter(a => a.type === 'asset' && !a.isGroup)
-    .sort((a, b) => (a.id === '3308' ? -1 : b.id === '3308' ? 1 : 0));
+    .sort((a, b) => (a.id === mspReceivableId ? -1 : b.id === mspReceivableId ? 1 : 0));
+  // MSP ledgers missing (PACS / sugar charts) → tell the operator where to create them, up front.
+  const missingMsp = missingProcurementRoles(accounts, ['agencyReceivable', 'farmerPayable']);
   // Settlement is the SOURCE OF TRUTH — gross/deductions/net/paid read STORED fields, never vouchers.
   const settlementForLot = (lotId: string) => { const ev = lotEngineVoucher(lotId); return ev ? procurementSettlements.find(s => !s.isDeleted && s.engineVoucherId === ev.id) : undefined; };
   const currentSettlement = procurementSettlements.find(s => s.id === setlId && !s.isDeleted);
@@ -213,7 +219,9 @@ export default function ProcurementLots() {
     const s = createFarmerSettlement({ engineVoucherId: ev.id });
     if (s.id) { setSetlId(s.id); setDedType(''); setDedAccId(''); setDedAmount(''); setDedRef(''); setDedRemarks(''); setSetlOpen(true); }
   };
-  const onDedType = (id: string) => { setDedType(id); const t = DEDUCTION_TYPES.find(x => x.id === id); setDedAccId(t?.acc || ''); };
+  const onDedType = (id: string) => { setDedType(id); setDedAccId(suggestDeductionAccountId(id, accounts) || ''); };
+  const dedWarning = deductionAccountWarning(dedType, accounts.find(a => a.id === dedAccId));
+  const ruleWarning = (r: (typeof deductionRules)[number]) => deductionAccountWarning(r.basis, accounts.find(a => a.id === r.accountId));
   const addLine = () => {
     const amt = Number(dedAmount);
     if (!dedType) { toast({ title: hi ? 'प्रकार चुनें' : 'Select type', variant: 'destructive' }); return; }
@@ -251,11 +259,21 @@ export default function ProcurementLots() {
     if (v.id) { const modeLabel = payMode === 'cash' ? (hi ? 'नकद' : 'Cash') : payMode === 'bank' ? (hi ? 'बैंक' : 'Bank') : (hi ? 'एजेंसी सीधे' : 'Agency direct'); toast({ title: hi ? 'भुगतान दर्ज हुआ' : 'Payment recorded', description: `${money(amt)} · ${modeLabel}` }); setPayOpen(false); }
   };
 
-  const saveFarmer = () => {
+  const [farmerSaving, setFarmerSaving] = useState(false);
+  const saveFarmer = async () => {
     if (!farmerName.trim()) { toast({ title: hi ? 'किसान का नाम आवश्यक है' : 'Farmer name is required', variant: 'destructive' }); return; }
-    const f = addFarmer({ farmerName: farmerName.trim(), fatherName: fatherName.trim() || undefined, mobile: mobile.trim() || undefined });
-    if (f.id) { setFarmerId(f.id); toast({ title: hi ? 'किसान जोड़ा गया' : 'Farmer added', description: `${f.farmerName} (${f.farmerCode})` }); }
-    setFarmerName(''); setFatherName(''); setMobile(''); setFarmerOpen(false);
+    if (farmerSaving) return;
+    setFarmerSaving(true);
+    try {
+      // The farmer code is issued by the server (unique across devices), so this waits for it.
+      const f = await addFarmer({ farmerName: farmerName.trim(), fatherName: fatherName.trim() || undefined, mobile: mobile.trim() || undefined });
+      if (!f.id) return;   // addFarmer already showed why (FY lock / no code) — keep the dialog open
+      setFarmerId(f.id);
+      toast({ title: hi ? 'किसान जोड़ा गया' : 'Farmer added', description: `${f.farmerName} (${f.farmerCode})` });
+      setFarmerName(''); setFatherName(''); setMobile(''); setFarmerOpen(false);
+    } finally {
+      setFarmerSaving(false);
+    }
   };
 
   const saveLot = () => {
@@ -285,6 +303,17 @@ export default function ProcurementLots() {
           <p className="text-sm text-muted-foreground">{hi ? 'किसान चुनें और नया लॉट बनाएँ' : 'Select a farmer and create a new lot'}</p>
         </div>
       </div>
+
+      {missingMsp.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <div>
+            {hi
+              ? <>इस समिति के चार्ट में <b>{missingMsp.map(r => PROCUREMENT_ROLE_LABEL_HI[r]).join(' और ')}</b> खाता नहीं है, इसलिए लॉट बहीखाते में पोस्ट नहीं होगा। <Link to="/ledger-hygiene" className="underline font-medium">लेजर स्वच्छता</Link> पेज पर “डोमेन खाते बनाएँ” दबाएँ।</>
+              : <>This society's chart has no MSP Receivable / MSP Payable ledger, so lots cannot be posted. Open <Link to="/ledger-hygiene" className="underline font-medium">Ledger Hygiene</Link> and click “Create domain accounts”.</>}
+          </div>
+        </div>
+      )}
 
       {/* Create form */}
       <Card>
@@ -407,6 +436,11 @@ export default function ProcurementLots() {
                     {hi ? 'कमीशन' : 'Commission'}: {money(commissionForLot(l.id)!.amount)} · {commissionForLot(l.id)!.voucherNo}
                   </div>
                 )}
+                {lotRejected(l.id) && (
+                  <div className="text-xs text-red-600 mt-0.5">
+                    {hi ? 'क्वालिटी में अस्वीकृत — J-Form, पोस्टिंग, निपटान और भुगतान बंद।' : 'Rejected in quality — no J-Form, posting, settlement or payment.'}
+                  </div>
+                )}
                 {(() => {
                   const pi = payInfo(l.id);
                   const s = pi?.settlement;
@@ -425,8 +459,12 @@ export default function ProcurementLots() {
                 })()}
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <Badge variant="secondary">{l.operationalStatus}</Badge>
+                {(() => {
+                  const st = deriveLotStage({ qualityResult: lotQuality(l.id)?.result, hasJForm: !!lotJForm(l.id), hasPosting: !!lotEngineVoucher(l.id), settlementStatus: settlementForLot(l.id)?.status, outstanding: payInfo(l.id)?.outstanding });
+                  return <Badge variant={st === 'rejected' ? 'destructive' : 'secondary'}>{hi ? LOT_STAGE_LABEL[st].hi : LOT_STAGE_LABEL[st].en}</Badge>;
+                })()}
                 {!lotQuality(l.id) && <Button size="sm" variant="outline" onClick={() => openQuality(l.id)}>{hi ? 'क्वालिटी' : 'Quality'}</Button>}
+                {!lotRejected(l.id) && <>
                 {!lotJForm(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateJForm(l.id)}>J-Form</Button>}
                 {lotJForm(l.id) && !lotEngineVoucher(l.id) && <Button size="sm" onClick={() => handlePostToLedger(l.id)}>{hi ? 'बहीखाता में पोस्ट' : 'Post to Ledger'}</Button>}
                 {lotEngineVoucher(l.id) && !settlementForLot(l.id) && <Button size="sm" variant="outline" onClick={() => handleCreateSettlement(l.id)}>{hi ? 'निपटान बनाएँ' : 'Create Settlement'}</Button>}
@@ -434,8 +472,11 @@ export default function ProcurementLots() {
                 {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="ghost" onClick={() => openSettlement(l.id)}>{hi ? 'देखें' : 'View'}</Button>}
                 {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openPay(l.id)}>{hi ? 'किसान को भुगतान' : 'Pay Farmer'}</Button>}
                 {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding <= 0 && <span className="text-xs text-green-600 font-medium">{hi ? '✓ पूर्ण भुगतान' : '✓ Fully Paid'}</span>}
-                {lotEngineVoucher(l.id) && !commissionForLot(l.id) && lotCommissionInfo(l) && (
-                  <Button size="sm" variant="outline" onClick={() => { const ci = lotCommissionInfo(l); if (ci) accrueProcurementCommission({ lotId: l.id, amount: ci.amount, note: `${ci.rate}% · ${ci.agency.name}` }); }}>
+                </>}
+                {!lotRejected(l.id) && lotEngineVoucher(l.id) && !commissionForLot(l.id) && lotCommissionInfo(l) && (
+                  // Manual click by design (founder decision pending: automate on posting?). Dated with
+                  // the lot's posting (J-Form) day, not today.
+                  <Button size="sm" variant="outline" onClick={() => { const ci = lotCommissionInfo(l); const ev = lotEngineVoucher(l.id); if (ci) accrueProcurementCommission({ lotId: l.id, amount: ci.amount, note: `${ci.rate}% · ${ci.agency.name}`, date: ev?.date }); }}>
                     {hi ? 'कमीशन' : 'Commission'} {money(lotCommissionInfo(l)!.amount)}
                   </Button>
                 )}
@@ -465,7 +506,7 @@ export default function ProcurementLots() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFarmerOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
-            <Button onClick={saveFarmer}>{hi ? 'जोड़ें' : 'Add'}</Button>
+            <Button onClick={saveFarmer} disabled={farmerSaving}>{farmerSaving ? (hi ? 'जोड़ रहे हैं…' : 'Adding…') : (hi ? 'जोड़ें' : 'Add')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -594,9 +635,17 @@ export default function ProcurementLots() {
                     {deductionRules.map(r => (
                       <Button key={r.id} size="sm" variant="secondary" className="h-7 gap-1 text-xs font-normal" onClick={() => addRuleDeduction(r.id)}>
                         <Plus className="h-3 w-3" />{hi && r.nameHi ? r.nameHi : (r.name || r.code)} {r.rate.value}% · {money(ruleAmount(r.rate.value, currentSettlement.gross.amount))}
+                        {ruleWarning(r) && <AlertTriangle className="h-3 w-3 text-amber-600" />}
                       </Button>
                     ))}
                   </div>
+                  {deductionRules.some(r => ruleWarning(r) === 'income_for_third_party') && (
+                    <p className="text-[11px] text-amber-700">
+                      {hi
+                        ? '⚠ निशान वाले नियम कटौती को आय खाते में डालते हैं। किसान से किसी और के लिए काटी गई राशि देनदारी है — प्रोक्योरमेंट मास्टर में नियम का खाता बदलें।'
+                        : '⚠ Marked rules credit an income account. Money withheld for someone else is a liability — change the rule\'s account in Procurement Masters.'}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -613,6 +662,7 @@ export default function ProcurementLots() {
                       <SelectContent>{postableAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} · {hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
+                  {dedWarning && <p className="text-[11px] text-amber-700">{hi ? DEDUCTION_WARNING_TEXT[dedWarning].hi : DEDUCTION_WARNING_TEXT[dedWarning].en}</p>}
                   <Input type="number" min={0} value={dedAmount} onChange={e => setDedAmount(e.target.value)} placeholder={hi ? 'राशि' : 'Amount'} />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <Input value={dedRef} onChange={e => setDedRef(e.target.value)} placeholder={hi ? 'संदर्भ (वैकल्पिक)' : 'Reference (optional)'} />
