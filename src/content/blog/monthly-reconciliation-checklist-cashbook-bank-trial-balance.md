@@ -226,7 +226,7 @@
 
 > ✅ **अपनी पात्र सहकारी समिति का खाता SahakarLekha पर शुरू करें**: [रजिस्टर करें](/register) और कैश बुक, बैंक मिलान, ट्रायल बैलेंस और अवधि-लॉक एक ही बही में रखें। शुरुआत के लिए [Cash Book कैसे देखें](/help/cash-book) और [Trial Balance कैसे देखें](/help/view-trial-balance) पढ़ें। (PACS: कृपया पहले अपने निर्धारित पोर्टल की प्रक्रिया देखें।)
 
-आगे पढ़ें: [बैंक समाधान (BRS)](/blog/bank-reconciliation-guide) · [कैश बुक और बैंक बुक](/blog/cash-book-vs-bank-book) · [ट्रायल बैलेंस](/blog/trial-balance-explained) · [कोषाध्यक्ष का लेखा-काम](/blog/treasurer-accounting-work-checklist) · [वर्षांत के 10 काम](/blog/year-end-readiness-checklist) · [ऑडिट की तैयारी](/blog/audit-preparation-checklist)
+आगे पढ़ें: [बैंक समाधान (BRS)](/blog/bank-reconciliation-guide) · [कैश बुक और बैंक बुक](/blog/cash-book-vs-bank-book) · [ट्रायल बैलेंस](/blog/trial-balance-explained) · [कोषाध्यक्ष का लेखा-काम](/blog/treasurer-accounting-work-checklist) · [वित्तीय वर्ष और लेखा-अवधि](/blog/financial-year-and-accounting-period) · [ऑडिट की तैयारी](/blog/audit-preparation-checklist)
 
 > 📌 यह लेख सामान्य जानकारी के लिए है। किसी विशेष मामले में लागू अधिनियम, नियम, अधिसूचना, उपविधि या सक्षम प्राधिकारी के निर्देश को प्राथमिकता दी जानी चाहिए। PACS अपने निर्धारित पोर्टल और ऊपरी संस्था के निर्देशों का पालन करें।
 
