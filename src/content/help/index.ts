@@ -10,8 +10,11 @@
  * Slugs are English (per the project convention); titles/body are everyday Hinglish
  * (per the writing-style rule). Keep articles short (<= ~600 words, steps-first, L8).
  */
+import { HELP_EXTRAS, HELP_UPDATED } from './extras';
+
 export interface HelpFaq { q: string; a: string }
 export interface HelpPrereq { label: string; slug?: string }
+export interface HelpTrouble { problem: string; fix: string }
 
 export interface HelpTask {
   /** English, stable URL slug → /help/<slug> */
@@ -44,9 +47,11 @@ export interface HelpTask {
   related?: string[];
   /** ISO date of the last real content change — drives the sitemap <lastmod> */
   updated?: string;
+  /** "अगर दिक्कत आए" — real guards/messages the user may hit, with the fix */
+  troubleshooting?: HelpTrouble[];
 }
 
-export const HELP_TASKS: HelpTask[] = [
+const BASE_TASKS: HelpTask[] = [
   {
     slug: 'add-member',
     metaTitle: 'सहकारी समिति में Member कैसे जोड़ें — स्टेप बाय स्टेप | SahakarLekha',
@@ -743,6 +748,25 @@ export const HELP_TASKS: HelpTask[] = [
     related: ['view-profit-loss', 'view-balance-sheet'],
   },
 ];
+
+/* Content refresh 2026-10-04: steps re-checked against the app's real screens, plus troubleshooting.
+   Merged by slug from extras.ts so the base task list stays readable. */
+export const HELP_TASKS: HelpTask[] = BASE_TASKS.map((t) => {
+  const x = HELP_EXTRAS[t.slug];
+  if (!x) return t;
+  const drop = new Set(x.dropFaqs ?? []);
+  const faqs = [...(t.faqs ?? []).filter((f) => !drop.has(f.q)), ...(x.faqs ?? [])]
+    .filter((f, i, arr) => arr.findIndex((g) => g.q === f.q) === i);
+  return {
+    ...t,
+    tldr: x.tldr ?? t.tldr,
+    steps: x.steps,
+    commonMistakes: x.commonMistakes ?? t.commonMistakes,
+    troubleshooting: x.troubleshooting,
+    faqs,
+    updated: t.updated ?? HELP_UPDATED,
+  };
+});
 
 export function findHelpTask(slug: string): HelpTask | null {
   return HELP_TASKS.find((t) => t.slug === slug) ?? null;

@@ -399,6 +399,7 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
         {/* Evidence note */}
         <div className="mt-6 pt-4 border-t flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> शैक्षिक · Evidence Level A</span>
+          {config.updated && <span>अंतिम अपडेट: {config.updated}</span>}
           {config.relatedKIs.length > 0 && <span className="font-mono opacity-70">ज्ञान-स्रोत: {config.relatedKIs.join(', ')}</span>}
         </div>
       </main>

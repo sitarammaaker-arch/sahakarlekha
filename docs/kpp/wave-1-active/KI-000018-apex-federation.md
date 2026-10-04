@@ -15,7 +15,7 @@ nev_status: false
 content_readiness: A
 user_persona: [CHR, MGR, AUD]
 status: active
-last_updated: 2026-06-27
+last_updated: 2026-10-04
 review_schedule: 2027-06-27
 ---
 
@@ -37,7 +37,7 @@ review_schedule: 2027-06-27
 
 **Related concepts:** [[KI-000009]] Society types · [[KI-000007]] RCS · [[KI-000001]] Cooperative society
 
-**Internal links:** /software · /federation-report
+**Internal links:** /software · /federation-report · /blog/cooperative-society-tiers-primary-central-state-apex · /blog/nabard-and-federation-returns
 
 **Suggested FAQ:** "शीर्ष संस्था / संघ (federation) क्या होती है?"
 **Suggested article title:** "सहकारी संघ — समितियों की समिति"

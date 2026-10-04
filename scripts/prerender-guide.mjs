@@ -606,12 +606,15 @@ function helpBody(t, DATA) {
         ? `<h2>स्टेप-बाय-स्टेप</h2><ol>${t.steps.map((s) => `<li>${mdInline(s)}</li>`).join('')}</ol>` : '') +
       (t.commonMistakes && t.commonMistakes.length
         ? `<h2>आम गलतियाँ</h2><ul>${t.commonMistakes.map((s) => `<li>${mdInline(s)}</li>`).join('')}</ul>` : '') +
+      (t.troubleshooting && t.troubleshooting.length
+        ? `<h2>अगर दिक्कत आए</h2><ul>${t.troubleshooting.map((x) => `<li><strong>${mdInline(x.problem)}</strong> — ${mdInline(x.fix)}</li>`).join('')}</ul>` : '') +
       (t.faqs && t.faqs.length
         ? `<h2>अक्सर पूछे जाने वाले प्रश्न</h2>` + t.faqs.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join('') : '') +
       (t.guideSlug ? `<p>पूरा समझें: <a href="/guide/${t.guideSlug}">गहराई से गाइड अध्याय</a></p>` : '') +
       surfaceLinksHtml({ cookbook: cookbookSlugs }, DATA, 'इससे जुड़ी entries (कुकबुक)') +
       (t.related && t.related.length
         ? `<p>जुड़े काम: ${t.related.map((r) => `<a href="/help/${r}">${r.replace(/-/g, ' ')}</a>`).join(' · ')}</p>` : '') +
+      (t.updated ? `<p><small>अंतिम अपडेट: ${esc(t.updated)}</small></p>` : '') +
       registerCta(t.deepLink && t.deepLink.route),
   });
 }
@@ -698,11 +701,20 @@ function cookbookBody(e, DATA) {
           `</tbody></table>`
         : '') +
       (e.narration ? `<p><strong>विवरण (Narration):</strong> ${esc(e.narration)}</p>` : '') +
+      (e.example
+        ? `<h2>उदाहरण (₹ में)</h2><p>${esc(e.example.text)}</p><table border="1" cellpadding="6" style="border-collapse:collapse"><thead><tr><th>खाता</th><th>Dr</th><th>Cr</th></tr></thead><tbody>` +
+          e.example.rows.map((r) => `<tr><td>${esc(r.account)}</td><td>${r.dr != null ? '₹' + r.dr.toLocaleString('en-IN') : ''}</td><td>${r.cr != null ? '₹' + r.cr.toLocaleString('en-IN') : ''}</td></tr>`).join('') +
+          `</tbody></table>`
+        : '') +
+      (e.useWhen ? `<p><strong>कब इस्तेमाल करें:</strong> ${esc(e.useWhen)}</p>` : '') +
+      (e.avoidWhen ? `<p><strong>कब नहीं:</strong> ${esc(e.avoidWhen)}</p>` : '') +
+      (e.correction ? `<h2>गलती हो गई तो — सुधार</h2><p>${esc(e.correction)}</p>` : '') +
       (e.notes && e.notes.length ? `<h2>ध्यान रखें</h2><ul>${e.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : '') +
       (e.guideSlug ? `<p>पूरा समझें: <a href="/guide/${e.guideSlug}">गाइड अध्याय</a></p>` : '') +
       surfaceLinksHtml({ help: helpSlugs }, DATA, 'स्टेप-बाय-स्टेप (मदद केंद्र)') +
       (e.related && e.related.length
         ? `<p>जुड़ी एंट्रियाँ: ${e.related.map((r) => `<a href="/cookbook/${r}">${r.replace(/-/g, ' ')}</a>`).join(' · ')}</p>` : '') +
+      (e.updated ? `<p><small>अंतिम अपडेट: ${esc(e.updated)}</small></p>` : '') +
       registerCta(e.deepLink && e.deepLink.route),
   });
 }
@@ -931,6 +943,7 @@ function calcBody(c, DATA) {
         ? `<p>ऐप में कैसे करें: ${c.relatedHelp.map((h) => `<a href="/help/${h.slug}">${esc(h.title)}</a>`).join(' · ')}</p>` : '') +
       (c.related && c.related.length
         ? `<p>और कैलकुलेटर: ${c.related.map((r) => `<a href="/tools/${r}">${r.replace(/-/g, ' ')}</a>`).join(' · ')}</p>` : '') +
+      (c.updated ? `<p><small>अंतिम अपडेट: ${esc(c.updated)}</small></p>` : '') +
       registerCta(),
   });
 }

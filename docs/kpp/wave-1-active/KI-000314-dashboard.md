@@ -15,7 +15,7 @@ nev_status: false
 content_readiness: A
 user_persona: [MGR, CHR, SEC]
 status: active
-last_updated: 2026-06-27
+last_updated: 2026-10-04
 review_schedule: 2027-06-27
 ---
 
@@ -37,7 +37,7 @@ review_schedule: 2027-06-27
 
 **Related concepts:** [[KI-000212]] How to read financial reports · [[KI-000025]] Accounting · [[KI-000049]] Accounting cycle
 
-**Internal links:** /reports · /dashboard
+**Internal links:** /reports · /dashboard · /blog/how-to-read-financial-reports · /guide/financial-ratios-and-lifecycle
 
 **Suggested FAQ:** "डैशबोर्ड पर क्या दिखता है?"
 **Suggested article title:** "डैशबोर्ड — समिति की स्थिति एक नज़र में"

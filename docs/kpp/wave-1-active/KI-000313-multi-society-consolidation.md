@@ -15,7 +15,7 @@ nev_status: false
 content_readiness: A
 user_persona: [MGR, AUD, CHR]
 status: active
-last_updated: 2026-06-27
+last_updated: 2026-10-04
 review_schedule: 2027-06-27
 ---
 
@@ -37,7 +37,7 @@ review_schedule: 2027-06-27
 
 **Related concepts:** [[KI-000018]] Apex / Federation · [[KI-000305]] Society setup · [[KI-000314]] Dashboard
 
-**Internal links:** /software · /multi-society-consolidation
+**Internal links:** /software · /multi-society-consolidation · /guide/balance-sheet · /blog/nabard-and-federation-returns
 
 **Suggested FAQ:** "कई समितियाँ एक साथ कैसे संभालें?"
 **Suggested article title:** "बहु-समिति समेकन — कई समितियाँ एक जगह"

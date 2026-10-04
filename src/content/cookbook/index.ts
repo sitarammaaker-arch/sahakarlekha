@@ -10,6 +10,10 @@
  * Slugs English; titles/body everyday Hinglish. IMPORTANT: this is reference
  * education, not a ruling — entries note when to verify with the auditor.
  */
+import { COOKBOOK_EXTRAS, COOKBOOK_UPDATED, type CookbookExtras } from './extras';
+
+export type { CookbookExampleRow, CookbookExtras } from './extras';
+
 export interface CookbookLine { account: string; type: 'Dr' | 'Cr'; note?: string }
 
 export interface CookbookEntry {
@@ -36,9 +40,14 @@ export interface CookbookEntry {
   related?: string[];
   /** ISO date of the last real content change — drives the sitemap <lastmod> */
   updated?: string;
+  /** depth layer (extras.ts): worked ₹ example, when to use / not, how to correct */
+  example?: CookbookExtras['example'];
+  useWhen?: string;
+  avoidWhen?: string;
+  correction?: string;
 }
 
-export const COOKBOOK_ENTRIES: CookbookEntry[] = [
+const BASE_ENTRIES: CookbookEntry[] = [
   {
     slug: 'cash-sale',
     metaTitle: 'नकद बिक्री की एंट्री — Dr/Cr कैसे करें | SahakarLekha',
@@ -282,19 +291,21 @@ export const COOKBOOK_ENTRIES: CookbookEntry[] = [
   {
     slug: 'profit-distribution-reserve',
     metaTitle: 'लाभ बँटवारा व रिज़र्व फंड की एंट्री — Dr/Cr | SahakarLekha',
-    metaDescription: 'नेट प्रॉफ़िट से रिज़र्व फंड व डिविडेंड: Dr Profit Appropriation, Cr Reserve Fund / Dividend Payable।',
+    metaDescription: 'शुद्ध लाभ से संचय निधि, अशोध्य ऋण निधि व लाभांश: Dr शुद्ध अधिशेष (1208), Cr निधियाँ / लाभांश वितरण (1211) — प्रतिशत राज्य के कानून से।',
     category: 'साल-अंत',
     title: 'लाभ बँटवारा — रिज़र्व व डिविडेंड',
     intent: 'profit distribution reserve fund dividend entry',
     scenario: 'साल का नेट प्रॉफ़िट बाँटना है — पहले रिज़र्व फंड, फिर डिविडेंड/बोनस।',
     lines: [
-      { account: 'Profit & Loss Appropriation / लाभ-बँटवारा', type: 'Dr' },
-      { account: 'Reserve Fund / रिज़र्व फंड (25%)', type: 'Cr', note: 'पहले यही' },
-      { account: 'Dividend Payable / देय डिविडेंड', type: 'Cr', note: 'मंज़ूरी के बाद' },
+      { account: 'Net Surplus / शुद्ध अधिशेष (1208)', type: 'Dr' },
+      { account: 'Statutory Reserve Fund / वैधानिक संचय निधि (1201)', type: 'Cr', note: 'पहले यही — % राज्य के अधिनियम से' },
+      { account: 'Bad Debt Fund / अशोध्य ऋण निधि (1205)', type: 'Cr', note: 'हरियाणा में अनिवार्य' },
+      { account: 'Dividend Distribution / लाभांश वितरण (1211)', type: 'Cr', note: 'आम सभा की मंज़ूरी के बाद' },
     ],
     narration: 'लाभ बँटवारा — वर्ष ___',
     notes: [
-      'क्रम मायने रखता है: पहले कानूनी रिज़र्व फंड (आमतौर पर 25%), फिर बाँटने लायक मुनाफ़ा।',
+      'क्रम मायने रखता है: पहले कानूनी निधियाँ, फिर बाँटने लायक मुनाफ़ा। हरियाणा: संचय निधि व अशोध्य ऋण निधि, दोनों लाभ का कम से कम 10% (अधिनियम 1984, धारा 87(1)(a)); लाभांश चुकता पूँजी पर अधिकतम 10% (नियम 72(1))। दूसरे राज्य अपना अधिनियम देखें।',
+      'कर्मचारी बोनस यहाँ नहीं — वह शुद्ध लाभ से पहले कर्मचारी बोनस (5207) व्यय में जाता है।',
       'डिविडेंड दर व बँटवारा आम सभा/बायलॉज़ व राज्य नियमों से तय होता है — अपने RCS/ऑडिटर से पुष्टि करें।',
     ],
     deepLink: { route: '/profit-distribution', label: 'App में लाभ बँटवारा करें' },
@@ -611,34 +622,34 @@ export const COOKBOOK_ENTRIES: CookbookEntry[] = [
   {
     slug: 'dividend-paid',
     metaTitle: 'डिविडेंड भुगतान की एंट्री — Dr/Cr | SahakarLekha',
-    metaDescription: 'घोषित डिविडेंड सदस्यों को देने का journal — Dr Dividend Payable, Cr Cash/Bank।',
+    metaDescription: 'घोषित लाभांश सदस्यों को देने का journal — Dr लाभांश वितरण (1211), Cr नकद/बैंक।',
     category: 'सदस्य व शेयर',
     title: 'डिविडेंड भुगतान (Dividend Paid)',
     intent: 'dividend payment bhugtan entry',
     scenario: 'आम सभा में घोषित डिविडेंड अब सदस्यों को दिया।',
     lines: [
-      { account: 'Dividend Payable / देय डिविडेंड', type: 'Dr', note: 'पहले बँटवारे में बनी देनदारी' },
+      { account: 'Dividend Distribution / लाभांश वितरण (1211)', type: 'Dr', note: 'पहले बँटवारे में बनी देनदारी' },
       { account: 'Cash / Bank', type: 'Cr' },
     ],
     narration: 'डिविडेंड भुगतान — वर्ष ___',
-    notes: ['डिविडेंड पहले लाभ-बँटवारे में घोषित (Cr Dividend Payable) होता है, फिर यहाँ भुगतान।'],
+    notes: ['लाभांश पहले लाभ-बँटवारे में घोषित (Cr लाभांश वितरण 1211) होता है, फिर यहाँ सदस्य-वार भुगतान।'],
     guideSlug: 'profit-distribution',
     related: ['profit-distribution-reserve', 'patronage-bonus'],
   },
   {
     slug: 'patronage-bonus',
     metaTitle: 'व्यवहार बोनस (Patronage) की एंट्री — Dr/Cr | SahakarLekha',
-    metaDescription: 'सदस्य के व्यवहार के अनुपात में बोनस का journal — Dr लाभ-बँटवारा, Cr Bonus Payable।',
+    metaDescription: 'सदस्य के व्यवहार के अनुपात में बोनस का journal — Dr शुद्ध अधिशेष (1208), Cr Bonus Payable।',
     category: 'सदस्य व शेयर',
     title: 'व्यवहार बोनस (Patronage Bonus)',
     intent: 'patronage bonus vyavhar bonus entry',
     scenario: 'मुनाफ़े में से सदस्यों को उनके व्यवहार (खरीद/बिक्री) के अनुपात में बोनस।',
     lines: [
-      { account: 'Profit & Loss Appropriation / लाभ-बँटवारा', type: 'Dr' },
-      { account: 'Patronage Bonus Payable / देय बोनस', type: 'Cr' },
+      { account: 'Net Surplus / शुद्ध अधिशेष (1208)', type: 'Dr' },
+      { account: 'Patronage Bonus Payable / देय संरक्षण छूट', type: 'Cr' },
     ],
     narration: 'व्यवहार बोनस — वर्ष ___',
-    notes: ['डिविडेंड शेयर पूँजी पर मिलता है; व्यवहार बोनस सदस्य के लेन-देन के अनुपात में — दोनों अलग हैं।'],
+    notes: ['डिविडेंड शेयर पूँजी पर मिलता है; व्यवहार बोनस सदस्य के लेन-देन के अनुपात में — दोनों अलग हैं।', 'यह लाभ का बँटवारा है, व्यय नहीं — इसलिए Dr शुद्ध अधिशेष (1208)। कर्मचारी बोनस अलग है: वह व्यय (5207) है।'],
     guideSlug: 'profit-distribution',
     related: ['dividend-paid', 'profit-distribution-reserve'],
   },
@@ -900,6 +911,11 @@ export const COOKBOOK_ENTRIES: CookbookEntry[] = [
     related: ['subsidy-received', 'donation-csr-paid'],
   },
 ];
+
+export const COOKBOOK_ENTRIES: CookbookEntry[] = BASE_ENTRIES.map((e) => {
+  const x = COOKBOOK_EXTRAS[e.slug];
+  return x ? { ...e, ...x, updated: e.updated ?? COOKBOOK_UPDATED } : e;
+});
 
 export function findCookbookEntry(slug: string): CookbookEntry | null {
   return COOKBOOK_ENTRIES.find((e) => e.slug === slug) ?? null;
