@@ -24,6 +24,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { useToast } from '@/hooks/use-toast';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { accountCode } from '@/lib/accountCode';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -77,7 +78,7 @@ const VoucherApproval: React.FC = () => {
 
   const getAccName = (id: string) => {
     const a = accounts.find(a => a.id === id);
-    return a ? `${a.id} — ${hi ? a.nameHi : a.name}` : id;
+    return a ? `${accountCode(a) || '—'} — ${hi ? a.nameHi : a.name}` : id;
   };
 
   const handleApprove = (id: string) => {

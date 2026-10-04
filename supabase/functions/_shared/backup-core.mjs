@@ -67,6 +67,8 @@ var account = {
   backupPolicy: "full",
   columns: [
     c("id", "Account Code", "\u0916\u093E\u0924\u093E \u0915\u094B\u0921"),
+    c("code", "Ledger Code", "\u0932\u0947\u091C\u0930 \u0915\u094B\u0921"),
+    // migration 109: readable code for UUID-id accounts
     c("name", "Account Name", "\u0916\u093E\u0924\u093E \u0928\u093E\u092E"),
     c("nameHi", "Name (Hindi)", "\u0928\u093E\u092E (\u0939\u093F\u0928\u094D\u0926\u0940)"),
     c("type", "Type", "\u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),

@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { ListChecks, Trash2, Sparkles } from 'lucide-react';
+import { accountCode } from '@/lib/accountCode';
 
 const BASES = [
   { id: 'fixed', en: 'Fixed ₹ / flat', hi: 'निश्चित ₹ / फ्लैट' },
@@ -61,7 +62,7 @@ export default function ChargeHeads() {
     if (t === 'liability') return hi ? 'पास-थ्रू' : 'Pass-through';
     return hi ? 'आय' : 'Income';
   };
-  const accLabel = (id: string) => { const a = acc(id); return a ? `${a.id} — ${hi ? a.nameHi : a.name}` : id; };
+  const accLabel = (id: string) => { const a = acc(id); return a ? `${accountCode(a) || '—'} — ${hi ? a.nameHi : a.name}` : id; };
 
   const reset = () => { setNameEn(''); setNameHi(''); setAccountId(''); setBasis('fixed'); setRate(''); setGstable(false); setKind('service'); };
 

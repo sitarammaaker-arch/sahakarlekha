@@ -91,7 +91,8 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
   // Standard COA accounts have short numeric codes (e.g. "5103"); user-created
   // accounts (banks, suppliers) carry long UUIDs — never show those, they crowd
   // the row and look like overlapping junk.
-  const shortCode = (id: string) => (id.length <= 6 && !id.includes('-') ? id : '');
+  // Readable code: accounts.code (migration 109) for UUID-id accounts, else a short template id.
+  const codeOf = (a: { id: string; code?: string }) => a.code || (a.id.length <= 6 && !a.id.includes('-') ? a.id : '');
   const balLabel = (id: string) => {
     const b = balanceMap.get(id) || 0;
     return `${fmt(b)} ${b >= 0 ? 'Dr' : 'Cr'}`;
@@ -110,7 +111,7 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
         >
           <span className="truncate">
             {selected
-              ? `${hi ? selected.nameHi : selected.name}${shortCode(selected.id) ? ` (${selected.id})` : ''}`
+              ? `${hi ? selected.nameHi : selected.name}${codeOf(selected) ? ` (${codeOf(selected)})` : ''}`
               : (placeholder || (hi ? 'खाता चुनें' : 'Select account'))}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -128,13 +129,13 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
                   return (
                     <CommandItem
                       key={a.id}
-                      value={`${a.name} ${a.nameHi} ${a.id}`}
+                      value={`${a.name} ${a.nameHi} ${a.id} ${a.code || ''}`}
                       onSelect={() => { onChange(a.id); setOpen(false); }}
                     >
                       <Check className={cn('mr-2 h-4 w-4 shrink-0', value === a.id ? 'opacity-100' : 'opacity-0')} />
                       <span className="flex-1 truncate">{hi ? a.nameHi : a.name}</span>
-                      {shortCode(a.id) && (
-                        <span className="ml-2 text-[10px] text-muted-foreground shrink-0">{a.id}</span>
+                      {codeOf(a) && (
+                        <span className="ml-2 text-[10px] text-muted-foreground shrink-0">{codeOf(a)}</span>
                       )}
                       {showBalance && (
                         <span className={cn('ml-3 text-xs tabular-nums shrink-0', bal >= 0 ? 'text-muted-foreground' : 'text-amber-600')}>

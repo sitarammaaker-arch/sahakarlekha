@@ -30,6 +30,7 @@ import { ucasReserveMinPct } from '@/lib/rules/ucas';
 import { SOCIETY_TEMPLATES } from '@/lib/storage';
 import { resolveCapabilities } from '@/lib/navigation';
 import type { SocietyType, VoucherType } from '@/types';
+import { accountCode } from '@/lib/accountCode';
 
 const SocietySetup: React.FC = () => {
   const { t, language } = useLanguage();
@@ -1303,7 +1304,7 @@ const SocietySetup: React.FC = () => {
                             {acc.openingBalanceType === 'debit' ? 'Dr' : 'Cr'}
                           </span>
                           <span className="truncate">{language === 'hi' ? acc.nameHi : acc.name}</span>
-                          <span className="text-gray-400 text-xs ml-auto">#{acc.id}</span>
+                          <span className="text-gray-400 text-xs ml-auto">#{accountCode(acc) || '—'}</span>
                         </Label>
                         <Input
                           type="number"

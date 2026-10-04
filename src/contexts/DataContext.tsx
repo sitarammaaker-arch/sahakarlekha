@@ -21,6 +21,7 @@ import type {
 import { matchesBranch, branchToStamp, resolveActiveBranch, unbranchedInScope, ALL_BRANCHES } from '@/lib/branchScope';
 import { buildInterBranchTransfer, INTER_BRANCH_CONTROL_ID } from '@/lib/interBranch';
 import { getVoucherLines, buildVoucherEntries, splitNetByAccount } from '@/lib/voucherUtils';
+import { nextAccountCode, planMissingCodes } from '@/lib/accountCode';
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
@@ -245,6 +246,9 @@ interface DataContextType {
 
   addAccount: (data: Omit<LedgerAccount, 'id'>, opts?: { id?: string }) => LedgerAccount;
   updateAccount: (id: string, data: Partial<LedgerAccount>) => boolean;
+  /** Give a readable code (accounts.code, migration 109) to every account whose id is a UUID and
+   *  has none. Explicit admin action — the load path never writes (RM-01). */
+  assignMissingAccountCodes: () => Promise<{ assigned: number; failed: number; refused?: boolean }>;
   deleteAccount: (id: string) => boolean;
   /** Resolves null when a guard blocked the merge or the save failed (each shows its own toast). */
   mergeAccounts: (keepId: string, removeId: string) => Promise<AccountMergeResult | null>;
@@ -4067,13 +4071,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'खाता पहले से है', description: `खाता संख्या ${opts.id} इस चार्ट में पहले से मौजूद है — नया नहीं बनाया।`, variant: 'destructive', duration: 10000 });
       return { ...data, id: '' } as LedgerAccount;
     }
-    const newAccount: LedgerAccount = { ...data, id: opts?.id || crypto.randomUUID() };
+    // Readable code for a UUID id (next free in the parent group's range, or the type's root range
+    // when there is no parent). A conventional template id (opts.id) IS its own code — none stored.
+    const code = opts?.id ? undefined : (data.code || nextAccountCode(accountsRef.current, data.parentId, !!data.isGroup, data.type));
+    const newAccount: LedgerAccount = { ...data, id: opts?.id || crypto.randomUUID(), ...(code ? { code } : {}) };
     setAccountsState(prev => [...prev, newAccount]);
     const openingViaServer = postingServiceRef.current;
     const openingEvent = openingViaServer ? null : buildOpeningDelta(newAccount);
     if (openingEvent) ledgerEventsRef.current = [...ledgerEventsRef.current, openingEvent];
-    const write = opts?.id ? supabase.from('accounts').insert(withSoc(newAccount)) : supabase.from('accounts').upsert(withSoc(newAccount));
+    // RULE 1 two-step: `code` is a late-added column (migration 109) — keep it OUT of the base
+    // upsert so the account still saves on a DB that hasn't run 109; set it in step 2.
+    const { code: _code, ...baseAccount } = newAccount;
+    void _code;
+    const write = opts?.id ? supabase.from('accounts').insert(withSoc(baseAccount)) : supabase.from('accounts').upsert(withSoc(baseAccount));
     write.then(({ error }) => {
+      if (!error && code) {
+        supabase.from('accounts').update({ code }).eq('id', newAccount.id).eq('society_id', societyIdRef.current).select('id').then(({ data: codeRows, error: codeErr0 }) => {
+          // RLS refusing an update returns 0 rows and no error — treat that as a failure too.
+          const codeErr = codeErr0 ?? (codeRows && codeRows.length > 0 ? null : { message: 'code update matched 0 rows' });
+          if (!codeErr) return;
+          // Step 2 failure: the account is safe; only the readable code is missing. Drop it locally so
+          // the screen matches the cloud, and say so mildly (no rollback).
+          reportError('db-sync', codeErr.message);
+          setAccountsState(prev => prev.map(a => a.id === newAccount.id ? { ...a, code: undefined } : a));
+          toastRef.current({ title: 'खाता सेव हुआ — पर कोड नहीं', description: `Ledger code save nahi hua (${codeErr.message}). Migration 109 chalayein, phir Ledger Heads par "कोड दें" dabayein.`, duration: 10000 });
+        });
+      }
       if (error) {   // RULE 1: roll back so a failed cloud save can't silently diverge on F5
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setAccountsState(prev => prev.filter(a => a.id !== newAccount.id));
@@ -4145,6 +4168,35 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return true;
   }, []);
+
+  // Explicit admin action (Ledger Heads → "कोड दें"): give a readable code to every account whose id
+  // is a UUID and has none. The load path never writes (RM-01), so existing UUID accounts are coded
+  // only here. RULE 1: optimistic, then per-row update; any row the cloud refuses is reverted locally
+  // and reported. Codes are metadata, but RULE 6 still applies (no chart changes in a locked FY).
+  const assignMissingAccountCodes = useCallback(async (): Promise<{ assigned: number; failed: number; refused?: boolean }> => {
+    // A guard bail already toasted — `refused` lets the page stay silent instead of guessing why.
+    if (guardPermission('config', 'खातों को कोड देने')) return { assigned: 0, failed: 0, refused: true };
+    if (guardFYLocked()) return { assigned: 0, failed: 0, refused: true };
+    if (refuseIfWriteBlocked(toastRef.current)) return { assigned: 0, failed: 0, refused: true };
+    const plan = planMissingCodes(accountsRef.current);
+    if (plan.size === 0) return { assigned: 0, failed: 0 };
+    setAccountsState(prev => prev.map(a => plan.has(a.id) ? { ...a, code: plan.get(a.id) } : a));
+    const sid = societyIdRef.current;
+    const results = await Promise.all([...plan].map(([id, code]) =>
+      supabase.from('accounts').update({ code }).eq('id', id).eq('society_id', sid).select('id')
+        .then(({ data, error }) => ({ id, ok: !error && !!data && data.length > 0, msg: error?.message }),
+              () => ({ id, ok: false, msg: 'network' }))));
+    const failed = results.filter(r => !r.ok);
+    if (failed.length) {
+      const failedIds = new Set(failed.map(f => f.id));
+      setAccountsState(prev => prev.map(a => failedIds.has(a.id) ? { ...a, code: undefined } : a));   // RULE 1: revert
+      reportError('db-sync', failed[0].msg || 'account code update matched 0 rows', { failed: failed.length });
+      toastRef.current({ title: 'कुछ खातों का कोड सेव नहीं हुआ', description: `${failed.length} खाते — Cloud save fail (${failed[0].msg || 'अनुमति नहीं'}). Migration 109 चला है? Refresh par ye kode nahi rahenge; dobara koshish karein.`, variant: 'destructive', duration: 12000 });
+    }
+    const assigned = results.length - failed.length;
+    if (assigned) emitAudit({ entityType: 'account', entityId: 'bulk', action: 'update', reason: `Assigned readable codes to ${assigned} account(s)` });
+    return { assigned, failed: failed.length };
+  }, [guardPermission, guardFYLocked]);
 
   // Returns true only when the account was actually removed; false on any guard bail. Callers
   // (e.g. LedgerHeads) must gate their "deleted" success toast on this, or a blocked delete
@@ -7566,7 +7618,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
-    addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety, closeFinancialYear,
+    addAccount, updateAccount, assignMissingAccountCodes, deleteAccount, mergeAccounts, resetAccounts, updateSociety, closeFinancialYear,
     addLoan, updateLoan, deleteLoan,
     addAsset, updateAsset, disposeAsset, deleteAsset, postDepreciation,
     addAuditObjection, updateAuditObjection, deleteAuditObjection,
@@ -7605,7 +7657,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
-    addAccount, updateAccount, deleteAccount, mergeAccounts, resetAccounts, updateSociety, closeFinancialYear,
+    addAccount, updateAccount, assignMissingAccountCodes, deleteAccount, mergeAccounts, resetAccounts, updateSociety, closeFinancialYear,
     addLoan, updateLoan, deleteLoan,
     addAsset, updateAsset, disposeAsset, deleteAsset, postDepreciation,
     addAuditObjection, updateAuditObjection, deleteAuditObjection,
