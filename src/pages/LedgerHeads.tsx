@@ -28,6 +28,9 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 
 type AccountType = LedgerAccount['type'];
 
+// A user-created ledger id (crypto.randomUUID) — shown as "—" in the Code column.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const EMPTY_FORM = {
   name: '',
   nameHi: '',
@@ -525,7 +528,12 @@ const LedgerHeads: React.FC = () => {
                         acc.isGroup && 'bg-muted/20 font-semibold',
                       )}
                     >
-                      <TableCell className="font-mono text-xs text-muted-foreground">{acc.id}</TableCell>
+                      {/* User-created accounts have a UUID id (DataContext addAccount) — not a code anyone can
+                          read or quote. Show "—" (full id on hover) instead; the id itself is never changed
+                          because vouchers reference it. */}
+                      <TableCell className="font-mono text-xs text-muted-foreground" title={UUID_RE.test(acc.id) ? acc.id : undefined}>
+                        {UUID_RE.test(acc.id) ? '—' : acc.id}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 16}px` }}>
                           {acc.isGroup && <FolderOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}

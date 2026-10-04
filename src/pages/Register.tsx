@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react';
+import { Building2, AlertCircle, CheckCircle, Eye, EyeOff, Languages } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { SOCIETY_TEMPLATES, CMS_SOCIETY_ACCOUNTS } from '@/lib/storage';
 import type { SocietyType } from '@/types';
 
@@ -17,6 +18,9 @@ const STATES = INDIAN_STATES;
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
+  const { language, setLanguage } = useLanguage();
+  // RULE 7: Hindi first; English when the visitor switches language.
+  const L = (hiText: string, enText: string) => (language === 'hi' ? hiText : enText);
   const [step, setStep] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -61,7 +65,7 @@ const Register: React.FC = () => {
   const handleStep1 = (e: React.FormEvent) => {
     e.preventDefault();
     if (!societyName || !registrationNo || !district || !state || !societyType) {
-      setError('Please fill all required fields');
+      setError(L('कृपया सभी ज़रूरी (*) जानकारी भरें', 'Please fill all required fields'));
       return;
     }
     setError('');
@@ -71,15 +75,15 @@ const Register: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminName || !adminEmail || !adminPassword) {
-      setError('Please fill all required fields');
+      setError(L('कृपया सभी ज़रूरी (*) जानकारी भरें', 'Please fill all required fields'));
       return;
     }
     if (adminPassword !== confirmPassword) {
-      setError('Passwords do not match');
+      setError(L('दोनों पासवर्ड एक जैसे नहीं हैं', 'Passwords do not match'));
       return;
     }
     if (adminPassword.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError(L('पासवर्ड कम से कम 6 अक्षर का होना चाहिए', 'Password must be at least 6 characters'));
       return;
     }
 
@@ -135,13 +139,13 @@ const Register: React.FC = () => {
       if (rpcError || !result.ok) {
         const code = result.error_code;
         if (code === 'duplicate_registration') {
-          setError('Registration number already exists. Please use a different registration number.');
+          setError(L('यह पंजीकरण संख्या पहले से दर्ज है — कृपया दूसरी पंजीकरण संख्या डालें।', 'Registration number already exists. Please use a different registration number.'));
         } else if (code === 'duplicate_email') {
-          setError('This email is already registered. Please use a different email.');
+          setError(L('यह ईमेल पहले से पंजीकृत है — कृपया दूसरा ईमेल डालें।', 'This email is already registered. Please use a different email.'));
         } else if (code === 'society_exists') {
-          setError('This society is already registered.');
+          setError(L('यह समिति पहले से पंजीकृत है।', 'This society is already registered.'));
         } else {
-          setError(result.error_message || rpcError?.message || 'Could not complete registration. Please try again.');
+          setError(result.error_message || rpcError?.message || L('पंजीकरण पूरा नहीं हो सका — कृपया दोबारा कोशिश करें।', 'Could not complete registration. Please try again.'));
         }
         setLoading(false);
         return;
@@ -151,7 +155,7 @@ const Register: React.FC = () => {
       // GOS-20: the #1 conversion event of the whole funnel (no PII in params).
       trackEvent('sign_up', { method: 'email' });
     } catch {
-      setError('Registration failed. Please check your connection and try again.');
+      setError(L('पंजीकरण नहीं हुआ — इंटरनेट कनेक्शन जाँचकर दोबारा कोशिश करें।', 'Registration failed. Please check your connection and try again.'));
     } finally {
       setLoading(false);
     }
@@ -166,16 +170,16 @@ const Register: React.FC = () => {
               <CheckCircle className="h-10 w-10 text-green-600" />
             </div>
             <h2 className="text-2xl font-bold text-foreground mb-2">
-              Registration Successful!
+              {L('पंजीकरण सफल!', 'Registration Successful!')}
             </h2>
             <p className="text-muted-foreground mb-1">
-              <strong>{societyName}</strong> has been registered successfully.
+              <strong>{societyName}</strong>{L(' का पंजीकरण सफलतापूर्वक हो गया।', ' has been registered successfully.')}
             </p>
             <p className="text-sm text-muted-foreground mb-8">
-              Login with: <strong className="text-primary">{adminEmail}</strong>
+              {L('इस ईमेल से लॉगिन करें:', 'Login with:')} <strong className="text-primary">{adminEmail}</strong>
             </p>
             <Button className="w-full" size="lg" onClick={() => navigate('/login')}>
-              Go to Login →
+              {L('लॉगिन पर जाएँ →', 'Go to Login →')}
             </Button>
           </CardContent>
         </Card>
@@ -209,19 +213,26 @@ const Register: React.FC = () => {
           <div className="mt-12 flex items-center gap-4">
             <div className={`flex items-center gap-2 transition-all ${step === 1 ? 'opacity-100' : 'opacity-50'}`}>
               <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${step === 1 ? 'bg-white text-primary' : 'bg-white/20 text-white'}`}>1</div>
-              <span className="text-sm">Society Info</span>
+              <span className="text-sm">{L('समिति की जानकारी', 'Society Info')}</span>
             </div>
             <div className="h-px w-8 bg-white/30" />
             <div className={`flex items-center gap-2 transition-all ${step === 2 ? 'opacity-100' : 'opacity-50'}`}>
               <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${step === 2 ? 'bg-white text-primary' : 'bg-white/20 text-white'}`}>2</div>
-              <span className="text-sm">Admin Account</span>
+              <span className="text-sm">{L('एडमिन खाता', 'Admin Account')}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Right Panel - Form */}
-      <div className="flex-1 flex flex-col justify-center items-center p-6 lg:p-12 bg-background overflow-y-auto">
+      <div className="relative flex-1 flex flex-col justify-center items-center p-6 lg:p-12 bg-background overflow-y-auto">
+        {/* Language Toggle (same as Login) */}
+        <div className="absolute top-4 right-4">
+          <Button variant="outline" size="sm" onClick={() => setLanguage(language === 'hi' ? 'en' : 'hi')} className="gap-2">
+            <Languages className="h-4 w-4" />
+            {language === 'hi' ? 'English' : 'हिंदी'}
+          </Button>
+        </div>
         {/* Mobile logo */}
         <div className="lg:hidden mb-6 text-center">
           <div className="h-14 w-14 rounded-xl bg-primary text-primary-foreground flex items-center justify-center mx-auto mb-3">
@@ -233,12 +244,12 @@ const Register: React.FC = () => {
         <Card className="w-full max-w-md shadow-lg">
           <CardHeader>
             <CardTitle className="text-xl">
-              {step === 1 ? '🏢 Society Information' : '👤 Admin Account'}
+              {step === 1 ? L('🏢 समिति की जानकारी', '🏢 Society Information') : L('👤 एडमिन खाता', '👤 Admin Account')}
             </CardTitle>
             <CardDescription>
               {step === 1
-                ? 'Step 1 of 2 — Enter your cooperative society details'
-                : 'Step 2 of 2 — Create the administrator account'}
+                ? L('चरण 1 / 2 — अपनी सहकारी समिति का विवरण भरें', 'Step 1 of 2 — Enter your cooperative society details')
+                : L('चरण 2 / 2 — एडमिन (प्रशासक) खाता बनाएँ', 'Step 2 of 2 — Create the administrator account')}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -252,7 +263,7 @@ const Register: React.FC = () => {
             {step === 1 ? (
               <form onSubmit={handleStep1} className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Society Name (English) <span className="text-destructive">*</span></Label>
+                  <Label>{L('समिति का नाम (English में)', 'Society Name (English)')} <span className="text-destructive">*</span></Label>
                   <Input
                     value={societyName}
                     onChange={e => setSocietyName(e.target.value)}
@@ -262,7 +273,7 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Society Name (Hindi)</Label>
+                  <Label>{L('समिति का नाम (हिंदी में)', 'Society Name (Hindi)')}</Label>
                   <Input
                     value={societyNameHi}
                     onChange={e => setSocietyNameHi(e.target.value)}
@@ -271,7 +282,7 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Registration Number <span className="text-destructive">*</span></Label>
+                  <Label>{L('पंजीकरण संख्या', 'Registration Number')} <span className="text-destructive">*</span></Label>
                   <Input
                     value={registrationNo}
                     onChange={e => setRegistrationNo(e.target.value)}
@@ -282,19 +293,19 @@ const Register: React.FC = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label>District <span className="text-destructive">*</span></Label>
+                    <Label>{L('ज़िला', 'District')} <span className="text-destructive">*</span></Label>
                     <Input
                       value={district}
                       onChange={e => setDistrict(e.target.value)}
-                      placeholder="District name"
+                      placeholder={L('ज़िले का नाम', 'District name')}
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>State <span className="text-destructive">*</span></Label>
+                    <Label>{L('राज्य', 'State')} <span className="text-destructive">*</span></Label>
                     <Select value={state} onValueChange={setState}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select state" />
+                        <SelectValue placeholder={L('राज्य चुनें', 'Select state')} />
                       </SelectTrigger>
                       <SelectContent>
                         {STATES.map(s => (
@@ -306,7 +317,7 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Phone</Label>
+                  <Label>{L('फ़ोन', 'Phone')}</Label>
                   <Input
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
@@ -315,7 +326,7 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>GSTIN (Optional)</Label>
+                  <Label>{L('GSTIN (वैकल्पिक)', 'GSTIN (Optional)')}</Label>
                   <Input
                     value={gstin}
                     onChange={e => setGstin(e.target.value.toUpperCase())}
@@ -326,19 +337,19 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Address</Label>
+                  <Label>{L('पता', 'Address')}</Label>
                   <Input
                     value={address}
                     onChange={e => setAddress(e.target.value)}
-                    placeholder="Full address"
+                    placeholder={L('पूरा पता', 'Full address')}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Society Type <span className="text-destructive">*</span></Label>
+                  <Label>{L('समिति का प्रकार', 'Society Type')} <span className="text-destructive">*</span></Label>
                   <Select value={societyType} onValueChange={v => setSocietyType(v as SocietyType)}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select society type" />
+                      <SelectValue placeholder={L('समिति का प्रकार चुनें', 'Select society type')} />
                     </SelectTrigger>
                     <SelectContent>
                       {SOCIETY_TYPES.map(t => (
@@ -352,7 +363,7 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Financial Year</Label>
+                  <Label>{L('वित्तीय वर्ष', 'Financial Year')}</Label>
                   <Select value={financialYear} onValueChange={setFinancialYear}>
                     <SelectTrigger>
                       <SelectValue />
@@ -360,7 +371,7 @@ const Register: React.FC = () => {
                     <SelectContent>
                       {fyOptions.map(fy => (
                         <SelectItem key={fy} value={fy}>
-                          {fy}{fy === currentFY ? ' (Current)' : ''}
+                          {fy}{fy === currentFY ? L(' (चालू)', ' (Current)') : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -368,23 +379,23 @@ const Register: React.FC = () => {
                 </div>
 
                 <Button type="submit" className="w-full" size="lg">
-                  Next: Admin Account →
+                  {L('आगे: एडमिन खाता →', 'Next: Admin Account →')}
                 </Button>
               </form>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Admin Full Name <span className="text-destructive">*</span></Label>
+                  <Label>{L('एडमिन का पूरा नाम', 'Admin Full Name')} <span className="text-destructive">*</span></Label>
                   <Input
                     value={adminName}
                     onChange={e => setAdminName(e.target.value)}
-                    placeholder="Your full name"
+                    placeholder={L('आपका पूरा नाम', 'Your full name')}
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Email <span className="text-destructive">*</span></Label>
+                  <Label>{L('ईमेल', 'Email')} <span className="text-destructive">*</span></Label>
                   <Input
                     type="email"
                     value={adminEmail}
@@ -395,13 +406,13 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Password <span className="text-destructive">*</span></Label>
+                  <Label>{L('पासवर्ड', 'Password')} <span className="text-destructive">*</span></Label>
                   <div className="relative">
                     <Input
                       type={showPassword ? 'text' : 'password'}
                       value={adminPassword}
                       onChange={e => setAdminPassword(e.target.value)}
-                      placeholder="Minimum 6 characters"
+                      placeholder={L('कम से कम 6 अक्षर', 'Minimum 6 characters')}
                       className="pr-10"
                       required
                     />
@@ -416,12 +427,12 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Confirm Password <span className="text-destructive">*</span></Label>
+                  <Label>{L('पासवर्ड दोबारा', 'Confirm Password')} <span className="text-destructive">*</span></Label>
                   <Input
                     type="password"
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
-                    placeholder="Repeat password"
+                    placeholder={L('पासवर्ड दोबारा लिखें', 'Repeat password')}
                     required
                   />
                 </div>
@@ -433,16 +444,16 @@ const Register: React.FC = () => {
                     className="flex-1"
                     onClick={() => { setStep(1); setError(''); }}
                   >
-                    ← Back
+                    {L('← पीछे', '← Back')}
                   </Button>
                   <Button type="submit" className="flex-1" disabled={loading}>
                     {loading ? (
                       <span className="flex items-center gap-2">
                         <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                        Registering...
+                        {L('पंजीकरण हो रहा है…', 'Registering...')}
                       </span>
                     ) : (
-                      'Register Society'
+                      L('समिति पंजीकृत करें', 'Register Society')
                     )}
                   </Button>
                 </div>
@@ -450,9 +461,9 @@ const Register: React.FC = () => {
             )}
 
             <div className="mt-5 text-center text-sm text-muted-foreground">
-              Already registered?{' '}
+              {L('पहले से पंजीकृत हैं?', 'Already registered?')}{' '}
               <Link to="/login" className="text-primary font-medium hover:underline">
-                Login here
+                {L('यहाँ लॉगिन करें', 'Login here')}
               </Link>
             </div>
           </CardContent>

@@ -15,6 +15,7 @@ import { Plus, Download, Search, Edit, Trash2, ShieldCheck, AlertTriangle, Check
 import { useToast } from '@/hooks/use-toast';
 import { generateAuditRegisterPDF } from '@/lib/pdf';
 import type { AuditObjection, ObjectionStatus, ObjectionCategory } from '@/types';
+import { auditYearOptions, isFyString } from '@/lib/auditYear';
 
 const CATEGORIES: { value: ObjectionCategory; en: string; hi: string }[] = [
   { value: 'cash', en: 'Cash', hi: 'नकद' },
@@ -25,8 +26,11 @@ const CATEGORIES: { value: ObjectionCategory; en: string; hi: string }[] = [
   { value: 'other', en: 'Other', hi: 'अन्य' },
 ];
 
+// auditYear is filled with the society's FY string ("2026-27") when the form opens — never the
+// calendar year: the Audit Certificate matches objections on the FY string, so a "2026" row
+// never reached the certificate.
 const EMPTY_FORM = {
-  auditYear: new Date().getFullYear().toString(),
+  auditYear: '',
   paraNo: '',
   category: 'accounts' as ObjectionCategory,
   objection: '',
@@ -42,16 +46,26 @@ interface ObjectionFormProps {
   form: typeof EMPTY_FORM;
   setForm: React.Dispatch<React.SetStateAction<typeof EMPTY_FORM>>;
   hi: boolean;
+  yearOptions: string[];
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
 }
 
-const ObjectionForm: React.FC<ObjectionFormProps> = ({ form, setForm, hi, onSubmit, onCancel }) => (
+const ObjectionForm: React.FC<ObjectionFormProps> = ({ form, setForm, hi, yearOptions, onSubmit, onCancel }) => (
   <form onSubmit={onSubmit} className="space-y-4">
     <div className="grid grid-cols-2 gap-3">
       <div className="space-y-1">
         <Label>{hi ? 'लेखा परीक्षा वर्ष *' : 'Audit Year *'}</Label>
-        <Input value={form.auditYear} onChange={e => setForm(f => ({ ...f, auditYear: e.target.value }))} placeholder="2023-24" />
+        <Select value={form.auditYear} onValueChange={v => setForm(f => ({ ...f, auditYear: v }))}>
+          <SelectTrigger><SelectValue placeholder="2026-27" /></SelectTrigger>
+          <SelectContent>
+            {yearOptions.map(y => (
+              <SelectItem key={y} value={y}>
+                {isFyString(y) ? y : `${y} ${hi ? '(पुराना — सही वित्तीय वर्ष चुनें)' : '(old — pick the correct FY)'}`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="space-y-1">
         <Label>{hi ? 'पैरा सं. *' : 'Para No. *'}</Label>
@@ -122,10 +136,13 @@ const AuditRegister: React.FC = () => {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editObj, setEditObj] = useState<AuditObjection | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const freshForm = () => ({ ...EMPTY_FORM, auditYear: society.financialYear || '' });
+  const [form, setForm] = useState(freshForm);
+  const yearOptions = auditYearOptions(society.financialYear, [...auditObjections.map(o => o.auditYear), form.auditYear]);
 
   const fmt = (n: number) => n > 0 ? new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n) : '—';
   const cancelledCount = vouchers.filter(v => v.isDeleted).length;
+  const legacyYearCount = auditObjections.filter(o => !isFyString(o.auditYear)).length;
 
   const filtered = auditObjections.filter(o => {
     const matchSearch = o.objection.toLowerCase().includes(search.toLowerCase()) || o.paraNo.toLowerCase().includes(search.toLowerCase()) || o.objectionNo.toLowerCase().includes(search.toLowerCase());
@@ -157,7 +174,7 @@ const AuditRegister: React.FC = () => {
       remarks: form.remarks,
     });
     toast({ title: hi ? 'आपत्ति जोड़ी गई' : 'Objection added' });
-    setForm(EMPTY_FORM);
+    setForm(freshForm());
     setIsAddOpen(false);
   };
 
@@ -219,7 +236,7 @@ const AuditRegister: React.FC = () => {
           <Button variant="outline" size="sm" className="gap-2" onClick={() => generateAuditRegisterPDF(auditObjections, society)}>
             <Download className="h-4 w-4" />PDF
           </Button>
-          <Button size="sm" className="gap-2" onClick={() => { setForm(EMPTY_FORM); setIsAddOpen(true); }}>
+          <Button size="sm" className="gap-2" onClick={() => { setForm(freshForm()); setIsAddOpen(true); }}>
             <Plus className="h-4 w-4" />{hi ? 'नई आपत्ति' : 'Add Objection'}
           </Button>
         </div>
@@ -234,6 +251,20 @@ const AuditRegister: React.FC = () => {
               {hi
                 ? `${cancelledCount} रद्द वाउचर ऑडिट रिकॉर्ड में हैं। इन्हें वाउचर पृष्ठ पर देखा जा सकता है।`
                 : `${cancelledCount} cancelled voucher(s) are in the audit trail. View them on the Vouchers page.`}
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Legacy calendar-year rows ("2026") never reach the FY-keyed Audit Certificate */}
+      {legacyYearCount > 0 && (
+        <Card className="bg-amber-50 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700">
+          <CardContent className="pt-4 pb-4 flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+            <span className="text-sm text-amber-800 dark:text-amber-200">
+              {hi
+                ? `${legacyYearCount} आपत्ति(यों) में लेखा परीक्षा वर्ष सिर्फ़ साल (जैसे "2026") है, वित्तीय वर्ष (जैसे "2025-26") नहीं — ये ऑडिट प्रमाणपत्र में नहीं दिखेंगी। Edit करके सही वित्तीय वर्ष चुनें।`
+                : `${legacyYearCount} objection(s) have a calendar year (e.g. "2026") instead of a financial year (e.g. "2025-26") and will not appear on the Audit Certificate. Edit them and pick the correct FY.`}
             </span>
           </CardContent>
         </Card>
@@ -349,7 +380,7 @@ const AuditRegister: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'नई ऑडिट आपत्ति' : 'Add Audit Objection'}</DialogTitle>
           </DialogHeader>
-          <ObjectionForm form={form} setForm={setForm} hi={hi} onSubmit={handleAdd} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
+          <ObjectionForm form={form} setForm={setForm} hi={hi} yearOptions={yearOptions} onSubmit={handleAdd} onCancel={() => { setIsAddOpen(false); setForm(freshForm()); }} />
         </DialogContent>
       </Dialog>
 
@@ -359,7 +390,7 @@ const AuditRegister: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'आपत्ति संपादित करें' : 'Edit Objection'} — {editObj?.objectionNo}</DialogTitle>
           </DialogHeader>
-          <ObjectionForm form={form} setForm={setForm} hi={hi} onSubmit={handleEdit} onCancel={() => setEditObj(null)} />
+          <ObjectionForm form={form} setForm={setForm} hi={hi} yearOptions={yearOptions} onSubmit={handleEdit} onCancel={() => setEditObj(null)} />
         </DialogContent>
       </Dialog>
 
