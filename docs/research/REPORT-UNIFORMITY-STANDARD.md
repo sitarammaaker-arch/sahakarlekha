@@ -85,21 +85,25 @@ Everything marked `[S]` is a presentation choice for a statutory document and is
 ---
 
 ## 6. Decisions (founder, 2026-10-04) and implementation status
-Approved as recommended: 1 remove the brand footer on paid plans' statutory statements · 2 R13 file-name scheme · 3 content-hash Report ID · 4 orientation matrix (books portrait) · 5 status line only after CA confirms its wording · 6 Hindi labels later · 7 keep `Rs.` · 8 foundation + exports first.
+Approved as recommended: 1 remove the brand footer on paid plans' statutory statements · 2 R13 file-name scheme · 3 content-hash Report ID · 4 orientation matrix · 5 status line only after CA confirms its wording · 6 Hindi labels later · 7 keep `Rs.` · 8 foundation + exports first. Later (2026-10-04): "yes to everything that was left — skip anything you judge risky".
 
 | Rule | Status |
 |---|---|
-| R13 one file-name scheme | **DONE (this change)** — `src/lib/exportNaming.ts`; PDF names via `pdfFileName`, every Excel/CSV via `downloadCSV`/`downloadExcel`; Bank Reconciliation and GSTR-1/3B PDFs moved onto it |
-| R14 Excel provenance | **DONE (this change)** — `ExportContextBinder` binds society + user; every Excel gets the README sheet |
-| R16 enforcement | **DONE as a ratchet** — `test:report-uniformity-guard` fails on any NEW bypass; the allowlist can only shrink |
-| R8 footer (Page x of y + Report ID on every page) | **DONE** for everything that goes through `addHeader`/`addPageNumbers` |
-| R1, R5, R7 header / orientation / margins; R8 signature never alone on a page | next (PDF rework — needs per-generator render checks) |
-| R2 content-hash Report ID | **DONE** — `SL-<TYPE>-<society tag>-<yyyymmdd>-<10-hex fingerprint>`; a hash of the document's drawn content, computed when the footer is stamped and printed in the footer of **every** page. Same report + same day = same ID; any changed figure = different ID. A fingerprint, not a signature. **Now on every page-level PDF too** (Bank Reconciliation, GSTR-1/3B moved onto the shared header/footer; Form 1 keeps its statutory heading and registers its identity). Still **not recorded in a server-side audit trail** (D-17 — needs your approval: new table or `audit_log`). Exceptions with no ID: lead-magnet downloads, the guide completion certificate, multi-society consolidation |
-| R9 brand footer on paid plans | **DONE** — `starter`, `plus`, `pro`, `enterprise` get no marketing line; `trial`, `legacy`, unknown and not-yet-loaded keep it (safe default). Decided by plan NAME (Enterprise has a null price) and tested against `lib/plans.ts` |
-| R3 status line | waiting for CA wording |
-| R12 Hindi labels | later (font embedding) |
+| R13 one file-name scheme | **DONE** — `src/lib/exportNaming.ts`; every PDF, Excel and CSV |
+| R14 Excel provenance (README sheet, local-time stamp) | **DONE** — `ExportContextBinder` |
+| R16 enforcement | **DONE as a ratchet** — `test:report-uniformity-guard`: no new bypass of the shared name/header/footer/Report ID helpers; allowlists can only shrink |
+| R2 content-hash Report ID | **DONE** — `SL-<TYPE>-<society tag>-<yyyymmdd>-<10-hex fingerprint>` printed in the footer of every page; same report + same day = same ID, any changed figure = different ID (a fingerprint, not a signature) |
+| R2 audit trail | **DONE, non-blocking** — every PDF with a Report ID writes `audit_log` (`entity 'report'`, action `create`: code, title, page count — no figures, no names). It uses the NON-blocking contract on purpose (PDF generation is synchronous; an audit outage must not stop a society printing its statements). **Not done:** a *blocking* custody trail for PDFs that contain member personal data (Form 1, registers) — that would make PDF generation asynchronous and is a separate decision |
+| R5 orientation | **DONE (pinned)** — the audit found the generators already match the matrix; `test:pdf-orientation` now fails if one flips or a new `generate*PDF` is not classified. **Deliberate deviation:** the GST Summary report stays portrait (moving it to landscape needs a per-table layout check) |
+| R8 footer (Page x of y + Report ID on every page) | **DONE** |
+| R8 signatures never alone on an anonymous page | **PARTLY** — a signature block that has to move to its own page now carries the report title ("Trial Balance — certificate & signatures (continued)"). Keeping the last table rows with the signatures was **not** done: it needs a bottom reserve on every page of every table and risks reshaping all reports |
+| R9 brand footer on paying plans | **DONE** (by plan name; Enterprise included) |
+| R7 margins / typography | **SKIPPED as risky** — the shared header uses 15 mm, plain tables 14 mm (a 1 mm difference); a global margin change could overflow tables with fixed column widths in ~30 generators |
+| R1 header content per report | **PARTLY** — every report now shares one identity block; subtitle derivation (e.g. the Balance Sheet's "As at 31st March") already comes from the financial year |
+| R3 status line ("Provisional — FY open") | **WAITING on the CA's wording** — not invented |
+| R12 Hindi labels | **LATER** — needs a Devanagari font embedded in every generator |
 
 **Deliberate deviations from the draft**
-- **CSV carries no in-file metadata.** Accountants import CSVs into other tools; extra rows would break them. The standard file name (society, scope, timestamp) carries the identity; Excel carries the README sheet.
-- **JSON is untouched** (statutory GSTR/e-Way Bill files must stay byte-exact; their names are chosen by the filing tools).
-- **Per-document PDFs** (invoice, voucher, salary slip, purchase record) keep their document-number names — they are documents, not reports.
+- **CSV carries no in-file metadata** (accountants import CSVs elsewhere); the standard file name carries the identity, Excel carries the README sheet.
+- **JSON is untouched** (statutory GSTR / e-Way Bill files must stay byte-exact).
+- **Per-document PDFs** (invoice, voucher, salary slip, purchase record) keep document-number names — they are documents, not reports.

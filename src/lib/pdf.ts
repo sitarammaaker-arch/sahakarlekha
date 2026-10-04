@@ -16,6 +16,7 @@ import { installDevanagariCells } from '@/lib/pdfDevanagari';
 import { standardFileStem, scopeFor } from '@/lib/exportNaming';
 import { makeReportId } from '@/lib/reportId';
 import { getReportBranding } from '@/lib/reportBranding';
+import { emitReportGenerated } from '@/lib/reportAudit';
 import { fitLine } from '@/lib/pdfFit';
 import type { BlankPdfSpec } from '@/content/downloads';
 
@@ -39,14 +40,14 @@ function setupFont(_doc: jsPDF): string {
 
 // R2: a report's ID is a fingerprint of its own drawn content, computed when the footer is stamped
 // (addPageNumbers) — see lib/reportId.ts. addHeader only records which report this document is.
-const docIdentity = new WeakMap<object, { code: string; society: SocietySettings }>();
+const docIdentity = new WeakMap<object, { code: string; title: string; society: SocietySettings }>();
 
 /**
  * For documents that keep their OWN heading (a statutory form such as Form 1) but still need a
  * verifiable Report ID in the footer: record the identity, then call addPageNumbers as usual.
  */
-export function registerReportIdentity(doc: jsPDF, code: string, society: SocietySettings): void {
-  docIdentity.set(doc, { code, society });
+export function registerReportIdentity(doc: jsPDF, code: string, society: SocietySettings, title: string = code): void {
+  docIdentity.set(doc, { code, title, society });
 }
 
 // G12: Look up full state name from code
@@ -107,6 +108,7 @@ export function addPageNumbers(doc: jsPDF, font: string, societyName?: string): 
         content: ((doc as unknown as { internal: { pages: unknown[] } }).internal.pages || []).map(pg => (Array.isArray(pg) ? pg.join('|') : '')).join('#'),
       })
     : '';
+  if (reportId && identity) emitReportGenerated({ reportId, code: identity.code, title: identity.title, pages: total });
   const { showBrandFooter } = getReportBranding();
   for (let i = 1; i <= total; i++) {
     doc.setPage(i);
@@ -159,6 +161,16 @@ export function addSignatureBlock(doc: jsPDF, font: string, labels: string[], st
   if (startY + 35 > pageH - 20) {
     doc.addPage();
     startY = 20;
+    // A page that holds only the signatures must say what it belongs to (it used to be an anonymous sheet).
+    const ident = docIdentity.get(doc);
+    if (ident) {
+      doc.setFontSize(8);
+      doc.setFont(font, 'bold');
+      doc.setTextColor(90);
+      doc.text(`${ident.title} \u2014 certificate & signatures (continued)`, 15, 16);
+      doc.setTextColor(0);
+      startY = 24;
+    }
   }
   // Inset signatures with proper margins (40px from each edge)
   const marginIn = 40;
@@ -309,7 +321,7 @@ export function addHeader(
   const metaY = 39 + taxIdOffset;
   doc.setFontSize(6.5);
   doc.setTextColor(130);
-  if (options?.reportCode) docIdentity.set(doc, { code: options.reportCode, society });
+  if (options?.reportCode) docIdentity.set(doc, { code: options.reportCode, title, society });
   doc.text(`Prepared on: ${preparedOn()}`, marginR, metaY, { align: 'right' });
   doc.setTextColor(0);
 
