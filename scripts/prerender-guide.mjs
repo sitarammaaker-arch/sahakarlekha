@@ -940,6 +940,7 @@ function calcBody(c, DATA) {
         ? `<p>ऐप में कैसे करें: ${c.relatedHelp.map((h) => `<a href="/help/${h.slug}">${esc(h.title)}</a>`).join(' · ')}</p>` : '') +
       (c.related && c.related.length
         ? `<p>और कैलकुलेटर: ${c.related.map((r) => `<a href="/tools/${r}">${r.replace(/-/g, ' ')}</a>`).join(' · ')}</p>` : '') +
+      (c.updated ? `<p><small>अंतिम अपडेट: ${esc(c.updated)}</small></p>` : '') +
       registerCta(),
   });
 }
