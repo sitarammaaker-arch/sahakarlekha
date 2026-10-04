@@ -101,9 +101,29 @@ Approved as recommended: 1 remove the brand footer on paid plans' statutory stat
 | R7 margins / typography | **SKIPPED as risky** — the shared header uses 15 mm, plain tables 14 mm (a 1 mm difference); a global margin change could overflow tables with fixed column widths in ~30 generators |
 | R1 header content per report | **PARTLY** — every report now shares one identity block; subtitle derivation (e.g. the Balance Sheet's "As at 31st March") already comes from the financial year |
 | R3 status line ("Provisional — FY open") | **WAITING on the CA's wording** — not invented |
-| R12 Hindi labels | **LATER** — needs a Devanagari font embedded in every generator |
+| R12 Hindi labels | **DONE for the report and register generators** (see §7). Not for per-document forms (invoice, voucher, salary slip, notices, application form, maintenance bill/receipt) |
 
 **Deliberate deviations from the draft**
 - **CSV carries no in-file metadata** (accountants import CSVs elsewhere); the standard file name carries the identity, Excel carries the README sheet.
 - **JSON is untouched** (statutory GSTR / e-Way Bill files must stay byte-exact).
 - **Per-document PDFs** (invoice, voucher, salary slip, purchase record) keep document-number names — they are documents, not reports.
+
+## 7. Hindi PDFs (R12) — how it works, what it covers, what it does not
+
+**Choice.** Header menu → language icon → *Report PDF language*: **English** (default — nothing changes for anyone who does not opt in), **हिंदी**, or **हिंदी + English** (the safest for an auditor / the Registrar: the English sits beside every Hindi label). Independent of the screen language; remembered per browser.
+
+**Why a font is NOT embedded.** jsPDF cannot shape Devanagari (matras, conjuncts) even with a font embedded — it would print wrong Hindi. The browser shapes it correctly, so Hindi text is drawn by the browser on a canvas and placed in the PDF as an image (the technique already used for Hindi member names since #547, now extended to every label, heading, header line and footer). Consequence: **Hindi text in these PDFs is not selectable/searchable** (English labels and all figures are).
+
+**Coverage.** Report and register generators: Trial Balance, Balance Sheet, Receipts & Payments, Income & Expenditure, Trading Account, Cash Book, Bank Book, Ledger, Day Book, Share Register, Loan Register, Asset Register, Audit Rectification Register, Budget vs Actual, Closing Stock, Depreciation Schedule, Sale / Purchase Register, GST Summary, Housing Share & Nomination Register, Member Share Ledger — plus the shared header (Hindi society name when it has one), footer, signature lines and the auditor's certificate paragraph. Enforced by `test:pdf-lang` (ratchet: every static label of a report generator must have a Hindi form) and `test:pdf-hindi-render` (the 11 core reports, rendered, in Hindi / bilingual / English).
+
+**Vocabulary.** The app's own screen Hindi (`LanguageContext`) first, then `src/lib/pdfHindiLabels.ts` (report-only terms; wins on a clash). नामे/जमा, प्रति/द्वारा, तुलन-पत्र, आय एवं व्यय खाता, प्राप्ति एवं भुगतान खाता are the common cooperative-accounting words. **EXTERNAL VALIDATION NEEDED** — these are presentation choices, not statutory text; have the CA / cooperative department confirm them (one file to correct) before a statutory submission relies on the Hindi version.
+
+**Not translated, by design**
+- *Data* — account names, narrations, party names, the address — print as typed (an account named in English stays English; Hindi names print correctly).
+- *Per-document forms* (see above): legal documents with their own review. They keep English labels, but the society's Hindi name, the footer and any Hindi data on them now draw correctly.
+- The act name inside the auditor's certificate (e.g. "Haryana Cooperative Societies Act, 1984") stays English.
+- Dates and figures keep Latin digits (a figure must read the same in every language).
+
+**Cost.** Hindi PDFs are larger and slower than English: a one-page Hindi Trial Balance ≈ 170 KB (English ≈ 30 KB); a **1,000-row** Trial Balance took ≈ 4.8 s and 1.4 MB (English 0.5 s, 1.2 MB) because every Hindi label/suffix becomes a compressed image (identical ones are stored once). Images are deflate-compressed (`'FAST'`); without it a one-page statement was 2.5–5 MB.
+
+**Known limits.** (1) Hindi lines drawn through `doc.text` are spaced by the canvas, not jsPDF's line height — a multi-line Hindi paragraph can sit slightly looser than Latin. (2) Verified by eye in a real browser for Trial Balance, Balance Sheet, Receipts & Payments, Day Book, Share Register and a very long society name (shrinks to one line); the other generators are covered by the label-translation tests but were not each opened in a browser.

@@ -16,6 +16,8 @@ import { installDevanagariCells } from '@/lib/pdfDevanagari';
 import { standardFileStem, scopeFor } from '@/lib/exportNaming';
 import { makeReportId } from '@/lib/reportId';
 import { getReportBranding } from '@/lib/reportBranding';
+import { getPdfLang } from '@/lib/pdfLang';
+import { auditorCertificateHi } from '@/lib/pdfHindiLabels';
 import { emitReportGenerated } from '@/lib/reportAudit';
 import { fitLine } from '@/lib/pdfFit';
 import type { BlankPdfSpec } from '@/content/downloads';
@@ -245,9 +247,26 @@ function addAuditorCertificate(doc: jsPDF, font: string, society: SocietySetting
     `for the Financial Year ${society.financialYear} and certify that the same is drawn up in accordance ` +
     `with the provisions of the ${stateFormat.actName} and the rules made thereunder ` +
     `and presents a true and fair view of the state of affairs of the Society as on 31st March.`;
-  const lines = doc.splitTextToSize(certText, pageW - 30);
-  doc.text(lines, 15, startY);
-  startY += lines.length * 4 + 4;
+  const certLang = getPdfLang();
+  if (certLang === 'en') {
+    const lines = doc.splitTextToSize(certText, pageW - 30);
+    doc.text(lines, 15, startY);
+    startY += lines.length * 4 + 4;
+  } else {
+    // Hindi paragraph, passed WHOLE with maxWidth so the browser canvas wraps it (jsPDF cannot measure Devanagari).
+    // EXTERNAL VALIDATION NEEDED: the wording is a presentation translation, not statutory text.
+    const certHi = auditorCertificateHi({ societyName: society.name, registrationNo: society.registrationNo, reportName, financialYear: society.financialYear, actName: stateFormat.actName });
+    const hiLines = Math.ceil((certHi.length * 1.5) / (pageW - 30));
+    doc.text(certHi, 15, startY, { maxWidth: pageW - 30 });
+    startY += hiLines * 4 + 4;
+    if (certLang === 'bi') {
+      const lines = doc.splitTextToSize(certText, pageW - 30);
+      doc.setTextColor(90);
+      doc.text(lines, 15, startY);
+      doc.setTextColor(0);
+      startY += lines.length * 4 + 4;
+    }
+  }
 
   const certSig = getSignatoryNames(society);
   addSignatureBlock(doc, font,
@@ -273,7 +292,15 @@ export function addHeader(
   // Society name
   doc.setFontSize(14);
   doc.setFont(font, 'bold');
-  doc.text(fitLine(doc, society.name, pageW - 30, 14, 9), cx, 15, { align: 'center' });
+  // R12: in Hindi / bilingual PDFs the society is named in Hindi when it has a Hindi name (drawn by the browser;
+  // fitWidth makes the canvas shrink a long Hindi name to one line instead of overflowing the page).
+  const pdfLang = getPdfLang();
+  const nameHi = (society as { nameHi?: string }).nameHi?.trim();
+  const headerName = pdfLang !== 'en' && nameHi ? (pdfLang === 'bi' ? `${nameHi} / ${society.name}` : nameHi) : society.name;
+  doc.text(
+    /[\u0900-\u097F]/.test(headerName) ? headerName : fitLine(doc, headerName, pageW - 30, 14, 9),
+    cx, 15, { align: 'center', fitWidth: pageW - 30 } as Record<string, unknown>,
+  );
 
   // Reg No + FY (center)
   doc.setFontSize(8);
