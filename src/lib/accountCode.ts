@@ -47,7 +47,7 @@ function usedCodes(accounts: ReadonlyArray<CodeFields>): Set<string> {
  *  - parent 'X000' (top level): groups take X100…X900, ledgers X001…X099
  *  - parent 'XY00' (group):     XY01…XY99
  *  - anything else, or the numeric range is full: '<parentCode>-01', '-02', … (unbounded)
- * No parent → the type's root group ('2000' for a liability, …). Returns undefined when the parent
+ * No parent (or a deleted UUID parent) → the type's root group ('2000' for a liability, …). Returns undefined when the parent
  * has no readable code (or neither parent nor a known type) — the account then shows "—" until it
  * is given one.
  */
@@ -57,12 +57,15 @@ export function nextAccountCode(
   isGroup: boolean,
   type?: LedgerAccount['type'],
 ): string | undefined {
+  const root = (type && ROOT_BY_TYPE[type]) || '';
   let pc: string;
   if (!parentId) {
-    pc = (type && ROOT_BY_TYPE[type]) || '';
+    pc = root;
   } else {
     const parent = accounts.find(a => a.id === parentId);
-    pc = parent ? accountCode(parent) : (isUuidId(parentId) ? '' : parentId);
+    // An orphan (its UUID parent group was deleted) sits at the top of the chart — code it in its
+    // type's root range, like a parentless account. Prod had 176 of these.
+    pc = parent ? accountCode(parent) : (isUuidId(parentId) ? root : parentId);
   }
   if (!pc) return undefined;
   const used = usedCodes(accounts);
@@ -89,8 +92,12 @@ export function nextAccountCode(
 /**
  * Codes for every account that has none (UUID id, no stored code), parents before children so a
  * child of a just-coded group derives from that group's new code. Deterministic: siblings in
- * name order. Returns id → code for the accounts that could be coded.
+ * name order (code-unit / COLLATE "C"). Returns id → code for the accounts that could be coded.
  */
+// Plain code-unit order (not localeCompare): identical to Postgres `COLLATE "C"`, so migration 110's
+// SQL backfill (assign_missing_account_codes) assigns exactly the codes this planner would.
+const cmp = (x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0);
+
 export function planMissingCodes(accounts: ReadonlyArray<LedgerAccount & { code?: string | null }>): Map<string, string> {
   const plan = new Map<string, string>();
   const working = accounts.map(a => ({ ...a }));
@@ -104,7 +111,7 @@ export function planMissingCodes(accounts: ReadonlyArray<LedgerAccount & { code?
   };
   const missing = working
     .filter(a => isUuidId(a.id) && !a.code)
-    .sort((a, b) => depth(a) - depth(b) || (a.name || '').localeCompare(b.name || '') || a.id.localeCompare(b.id));
+    .sort((a, b) => depth(a) - depth(b) || cmp(a.name || '', b.name || '') || cmp(a.id, b.id));
   for (const a of missing) {
     const code = nextAccountCode(working, a.parentId, !!a.isGroup, a.type);
     if (!code) continue;

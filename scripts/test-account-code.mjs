@@ -34,7 +34,8 @@ eq(nextAccountCode(chart, undefined, false, 'liability'), '2001', 'parentless li
 eq(nextAccountCode(chart, '', false, 'expense'), '5001', 'empty parentId treated as parentless');
 const crowded = [...chart, ...Array.from({ length: 99 }, (_, i) => acc(String(2001 + i).padStart(4, '0'), undefined)), ...Array.from({ length: 150 }, (_, i) => acc(U(100 + i), undefined, { code: `2000-${String(i + 1).padStart(2, '0')}` }))];
 eq(nextAccountCode(crowded, undefined, false, 'liability'), '2000-151', 'suffix range is unbounded (300 party ledgers fit)');
-eq(nextAccountCode(chart, U(9), false), undefined, 'unknown UUID parent → no code');
+eq(nextAccountCode(chart, U(9), false), undefined, 'unknown UUID parent and no type → no code');
+eq(nextAccountCode(chart, U(9), false, 'asset'), '3001', 'orphan (deleted UUID parent) → type root range');
 
 const full = [acc('5100', undefined, { isGroup: true }), ...Array.from({ length: 99 }, (_, i) => acc(String(5101 + i), '5100'))];
 eq(nextAccountCode(full, '5100', false), '5100-01', 'full numeric range → suffix form');
