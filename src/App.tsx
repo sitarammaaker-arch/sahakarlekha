@@ -12,6 +12,7 @@ import { HousingProvider } from "@/contexts/HousingDataContext";
 import { DairyProvider } from "@/contexts/DairyDataContext";
 import { MarketingProvider } from "@/contexts/MarketingDataContext";
 import { ConsumerProvider } from "@/contexts/ConsumerDataContext";
+import ExportContextBinder from "@/components/ExportContextBinder";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { CapabilityGuard } from "@/components/CapabilityGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -480,6 +481,7 @@ const App = () => (
         <MarketingProvider>
         <ConsumerProvider>
         <TooltipProvider>
+          <ExportContextBinder />
           <Toaster />
           <Sonner />
           <BrowserRouter>

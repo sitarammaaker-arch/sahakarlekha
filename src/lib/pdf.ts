@@ -13,6 +13,7 @@ import { statutoryLimits, scheduleLimitsLine } from '@/lib/rules/statutoryLimits
 import { trackEvent } from '@/lib/analytics';
 import { loanOutstanding } from '@/lib/memberSnapshot';
 import { installDevanagariCells } from '@/lib/pdfDevanagari';
+import { standardFileStem, scopeFor } from '@/lib/exportNaming';
 import { fitLine } from '@/lib/pdfFit';
 import type { BlankPdfSpec } from '@/content/downloads';
 
@@ -48,14 +49,14 @@ function getStateName(code: string): string {
 }
 
 // G10: Standardized PDF file naming
-export function pdfFileName(reportType: string, society: SocietySettings, fromDate?: string, toDate?: string): string {
-  const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').substring(0, 40);
-  const societySlug = sanitize(society.name);
-  const fmtDt = (d: string) => d.split('-').reverse().join('-'); // YYYY-MM-DD → DD-MM-YYYY
-  if (fromDate && toDate) {
-    return `${reportType}_${societySlug}_${fmtDt(fromDate)}_${fmtDt(toDate)}.pdf`;
-  }
-  return `${reportType}_${societySlug}_FY_${society.financialYear}.pdf`;
+// R13: the SAME scheme as every Excel/CSV (lib/exportNaming.ts) — <Type>_<Society>_<Scope>_<yyyymmdd-hhmm>.pdf
+export function pdfFileName(reportType: string, society: SocietySettings, fromDate?: string, toDate?: string, scope?: string): string {
+  return standardFileStem({
+    base: reportType,
+    society,
+    now: new Date(),
+    scope: scope ?? scopeFor({ fromDate, toDate, financialYear: society.financialYear }),
+  }) + '.pdf';
 }
 
 // G9: Empty data message

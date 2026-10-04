@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileText, Download, TrendingUp, TrendingDown, Percent, ClipboardList, FileSpreadsheet, Undo2, AlertTriangle } from 'lucide-react';
 import { checkHsnDigits, requiredHsnDigits } from '@/lib/hsn/validity';
-import { generateGstSummaryPDF } from '@/lib/pdf';
+import { generateGstSummaryPDF, pdfFileName } from '@/lib/pdf';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
@@ -473,7 +473,7 @@ export default function GstSummary() {
       columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
     });
 
-    doc.save(`GSTR3B_${society.gstin || 'society'}_${fromDate.slice(0, 7)}.pdf`);
+    doc.save(pdfFileName('GSTR3B', society, undefined, undefined, fromDate.slice(0, 7)));
   };
 
   // GSTR-1 JSON export (NIC format)
@@ -638,7 +638,7 @@ export default function GstSummary() {
       });
     }
 
-    doc.save(`GSTR1_${society.gstin || 'society'}_${fromDate.slice(0, 7)}.pdf`);
+    doc.save(pdfFileName('GSTR1', society, undefined, undefined, fromDate.slice(0, 7)));
   };
 
   const handleDownload = () => {

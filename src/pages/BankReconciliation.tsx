@@ -22,6 +22,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { isClearedAsOf } from '@/lib/reports/bankClearing';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 import jsPDF from 'jspdf';
+import { pdfFileName } from '@/lib/pdf';
 import autoTable from 'jspdf-autotable';
 import type { BankReconciliationRecord } from '@/types';
 
@@ -289,7 +290,7 @@ const BankReconciliation: React.FC = () => {
     doc.setFontSize(9);
     doc.text(`Reconciled by: ${r.reconciledBy}     On: ${new Date(r.reconciledAt).toLocaleString('en-IN')}`, 14, fy);
     doc.text('Prepared by: ____________            Verified by: ____________', 14, fy + 10);
-    doc.save(`BRS_${r.bankAccountName.replace(/\s+/g, '_')}_${r.asOfDate}.pdf`);
+    doc.save(pdfFileName('BankReconciliation', society, undefined, undefined, `${r.bankAccountName}-asat-${r.asOfDate}`));
   };
 
   const downloadCurrentBrs = () => {
