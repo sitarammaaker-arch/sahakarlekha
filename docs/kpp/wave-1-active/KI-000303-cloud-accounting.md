@@ -15,7 +15,7 @@ nev_status: false
 content_readiness: A
 user_persona: [CHR, MGR, BUY, SEC]
 status: active
-last_updated: 2026-06-27
+last_updated: 2026-10-04
 review_schedule: 2027-06-27
 ---
 
@@ -37,7 +37,7 @@ review_schedule: 2027-06-27
 
 **Related concepts:** [[KI-000304]] SaaS (planned) · [[KI-000306]] Data backup · [[KI-000322]] Why go digital · [[KI-000305]] Society setup
 
-**Internal links:** /software · /register
+**Internal links:** /software · /register · /guide/data-security-and-backup · /blog/data-security-and-backup
 
 **Suggested FAQ:** "क्लाउड लेखांकन क्या है और क्या यह सुरक्षित है?"
 **Suggested article title:** "क्लाउड लेखांकन क्या है — समिति के लिए फ़ायदे"

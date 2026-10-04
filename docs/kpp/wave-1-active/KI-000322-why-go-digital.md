@@ -15,7 +15,7 @@ nev_status: false
 content_readiness: A
 user_persona: [CHR, SEC, MGR]
 status: active
-last_updated: 2026-06-27
+last_updated: 2026-10-04
 review_schedule: 2027-06-27
 ---
 
@@ -37,7 +37,7 @@ review_schedule: 2027-06-27
 
 **Related concepts:** [[KI-000303]] Cloud accounting · [[KI-000306]] Data backup · [[KI-000305]] Society setup · [[KI-000001]] Cooperative society
 
-**Internal links:** /software · /register · /blog
+**Internal links:** /software · /register · /blog · /blog/digital-accounting-for-cooperatives · /blog/migrate-from-tally-or-excel
 
 **Suggested FAQ:** "समिति को डिजिटल क्यों होना चाहिए?"
 **Suggested article title:** "समिति को डिजिटल क्यों अपनाना चाहिए — 7 ठोस फ़ायदे"

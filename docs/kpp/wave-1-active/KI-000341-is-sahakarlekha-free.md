@@ -15,7 +15,7 @@ nev_status: false
 content_readiness: A
 user_persona: [BUY, CHR, SEC]
 status: active
-last_updated: 2026-06-27
+last_updated: 2026-10-04
 review_schedule: 2027-06-27
 ---
 
@@ -36,12 +36,12 @@ review_schedule: 2027-06-27
 > Level-A but **must reflect the latest official pricing** — update this KI whenever pricing changes.
 
 **Common misconceptions:**
-- ❌ "Free means limited or unsafe." → Free availability does not imply fewer safety/backup protections.
+- ❌ "The software is free." → The accounting app is a paid annual plan (see `/pricing`); the guide, help centre, cookbook, glossary and calculators are free for everyone.
 - ❌ "Pricing is the same forever." → Treat pricing as live; always source it from `/pricing`.
 
 **Related concepts:** [[KI-000303]] Cloud accounting · [[KI-000321]] Choosing accounting software (planned) · [[KI-000322]] Why go digital
 
-**Internal links:** /pricing · /register · /software
+**Internal links:** /pricing · /register · /software · /guide/introduction · /tools/gst-calculator
 
 **Suggested FAQ:** "क्या SahakarLekha मुफ्त है?"
 **Suggested article title:** — (FAQ-type; renders as an FAQ entry, not an article)

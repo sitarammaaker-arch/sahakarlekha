@@ -15,7 +15,7 @@ nev_status: false
 content_readiness: A
 user_persona: [BUY, CHR, SEC]
 status: active
-last_updated: 2026-06-27
+last_updated: 2026-10-04
 review_schedule: 2027-06-27
 ---
 
@@ -37,7 +37,7 @@ review_schedule: 2027-06-27
 
 **Related concepts:** [[KI-000303]] Cloud accounting · [[KI-000304]] SaaS · [[KI-000322]] Why go digital · [[KI-000306]] Data backup
 
-**Internal links:** /software · /pricing
+**Internal links:** /software · /pricing · /blog/choosing-cooperative-accounting-software · /blog/migrate-from-tally-or-excel
 
 **Suggested FAQ:** "समिति के लिए कौन-सा लेखा सॉफ्टवेयर चुनें?"
 **Suggested article title:** "लेखा सॉफ्टवेयर कैसे चुनें — समिति के लिए चेकलिस्ट"
