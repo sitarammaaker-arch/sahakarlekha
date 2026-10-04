@@ -22,6 +22,7 @@ import { MfaSetupDialog } from '@/components/security/MfaSetupDialog';
 import { helpForRoute } from '@/content/help';
 import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
 import { todayStr } from '@/lib/dateUtils';
+import { usePdfLang } from '@/hooks/usePdfLang';
 
 interface HeaderProps {
   sidebarCollapsed: boolean;
@@ -30,6 +31,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuToggle }) => {
   const { language, setLanguage, t } = useLanguage();
+  const [pdfLang, setPdfLang] = usePdfLang();
   const { user, logout } = useAuth();
   const { society, loans, auditObjections, vouchers, employees, getComplianceFiledIds, branches, activeBranchId, setActiveBranch, godowns, activeGodownId, setActiveGodown, isBranchRestricted } = useData();
   const navigate = useNavigate();
@@ -236,6 +238,20 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setLanguage('en')}>
                   <span className={cn(language === 'en' && 'font-semibold')}>English</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {/* Language of the report PDFs that are downloaded (independent of the screen language). */}
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  {language === 'hi' ? 'रिपोर्ट PDF की भाषा' : 'Report PDF language'}
+                </DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => setPdfLang('en')}>
+                  <span className={cn(pdfLang === 'en' && 'font-semibold')}>English</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setPdfLang('hi')}>
+                  <span className={cn(pdfLang === 'hi' && 'font-semibold')}>हिंदी</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setPdfLang('bi')}>
+                  <span className={cn(pdfLang === 'bi' && 'font-semibold')}>{language === 'hi' ? 'हिंदी + English (दोनों)' : 'Hindi + English (both)'}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

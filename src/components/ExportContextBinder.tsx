@@ -6,6 +6,8 @@ import { setExportContext } from '@/lib/exportUtils';
 import { setReportBranding, brandFooterFor } from '@/lib/reportBranding';
 import { setReportAuditSink, buildReportAuditInput } from '@/lib/reportAudit';
 import { logAudit } from '@/lib/auditLog';
+import { setAppVocabulary } from '@/lib/pdfDevanagari';
+import { translations } from '@/contexts/LanguageContext';
 
 /**
  * Binds the current society + user + plan to the shared report helpers (renders nothing):
@@ -25,6 +27,9 @@ export default function ExportContextBinder() {
       : null);
     return () => setExportContext(null);
   }, [society?.name, society?.registrationNo, society?.financialYear, user?.name]);
+
+  // The app's own Hindi vocabulary, so a Hindi PDF says things the way the screens do (R12).
+  useEffect(() => { setAppVocabulary(translations); }, []);
 
   useEffect(() => {
     setReportBranding({ showBrandFooter: brandFooterFor(plan) });

@@ -266,6 +266,8 @@
     "test:export-hardening": "node scripts/test-export-hardening.mjs",
     "test:report-id": "node scripts/test-report-id.mjs",
     "test:pdf-orientation": "node scripts/test-pdf-orientation.mjs",
+    "test:pdf-lang": "node scripts/test-pdf-lang.mjs",
+    "test:pdf-hindi-render": "node scripts/test-pdf-hindi-render.mjs",
     "test:report-audit": "node scripts/test-report-audit.mjs",
     "test:pdf-report-id-footer": "node scripts/test-pdf-report-id-footer.mjs",
     "test:export-naming": "node scripts/test-export-naming.mjs",
