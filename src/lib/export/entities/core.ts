@@ -100,6 +100,7 @@ const account: EntityDescriptor = {
   backupPolicy: 'full',
   columns: [
     c('id', 'Account Code', 'खाता कोड'),
+    c('code', 'Ledger Code', 'लेजर कोड'),   // migration 109: readable code for UUID-id accounts
     c('name', 'Account Name', 'खाता नाम'),
     c('nameHi', 'Name (Hindi)', 'नाम (हिन्दी)'),
     c('type', 'Type', 'प्रकार', { type: 'enum' }),

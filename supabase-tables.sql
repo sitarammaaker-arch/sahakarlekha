@@ -903,6 +903,9 @@ alter table society_settings add column if not exists "bankBranch" text;
 alter table society_settings add column if not exists "upiId" text;
 -- 108: Audit Certificate details per FY (auditor, dates, class, observations) — jsonb keyed by FY string.
 alter table society_settings add column if not exists "auditCertificates" jsonb;
+-- 109: readable ledger code for UUID-id accounts (display/search only; id stays the key).
+alter table accounts add column if not exists code text;
+create unique index if not exists accounts_society_code_uniq on accounts (society_id, code) where code is not null;
 
 -- ── P0 #2: Soft-delete parent records ───────────────────────────────────────
 -- Members / purchases / assets / audit-objections are now ARCHIVED (isDeleted=true)

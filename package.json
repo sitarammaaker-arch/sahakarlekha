@@ -22,6 +22,7 @@
     "test:b3-client-voucher-writes": "node scripts/test-b3-client-voucher-writes.mjs",
     "test:role-access": "node scripts/test-role-access.mjs",
     "test:audit-year": "node scripts/test-audit-year.mjs",
+    "test:account-code": "node scripts/test-account-code.mjs",
     "test:calc": "node scripts/test-calculators.mjs",
     "test:nav": "node scripts/test-nav.mjs",
     "test:jurisdiction": "node scripts/test-jurisdiction.mjs",

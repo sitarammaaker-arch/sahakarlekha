@@ -855,6 +855,7 @@ export interface LedgerAccount {
   isSystem?: boolean;
   parentId?: string;   // parent account code for hierarchy (e.g. '1100' → parent of '1101')
   isGroup?: boolean;   // true = group/header account, cannot be used in vouchers directly
+  code?: string;       // readable code for accounts whose id is a UUID (migration 109) — display/search only, never a key
 }
 
 // ── Recoverables (HAFED Proforma 2 — Recoverable Position) ─────────────────

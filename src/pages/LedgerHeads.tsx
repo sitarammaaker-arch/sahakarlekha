@@ -20,16 +20,15 @@ import type { EntityLink } from '@/types';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { ListTree, Pencil, Trash2, Plus, Search, FolderOpen, FileSpreadsheet, Download, Merge, AlertTriangle } from 'lucide-react';
+import { ListTree, Pencil, Trash2, Plus, Search, FolderOpen, FileSpreadsheet, Download, Merge, AlertTriangle, Hash } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { LedgerAccount } from '@/types';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { accountCode, isUuidId } from '@/lib/accountCode';
 
 type AccountType = LedgerAccount['type'];
 
-// A user-created ledger id (crypto.randomUUID) — shown as "—" in the Code column.
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const EMPTY_FORM = {
   name: '',
@@ -59,8 +58,24 @@ const TYPE_BADGE_CLASS: Record<AccountType, string> = {
 
 const LedgerHeads: React.FC = () => {
   const { language } = useLanguage();
-  const { accounts, vouchers, society, addAccount, updateAccount, deleteAccount, mergeAccounts, getEntityLinks, getAccountBalance } = useData();
+  const { accounts, vouchers, society, addAccount, updateAccount, assignMissingAccountCodes, deleteAccount, mergeAccounts, getEntityLinks, getAccountBalance } = useData();
   const { toast } = useToast();
+
+  // UUID-id accounts with no readable code yet (created before migration 109) — explicit admin action.
+  const missingCodeCount = accounts.filter(a => isUuidId(a.id) && !a.code).length;
+  const [assigningCodes, setAssigningCodes] = useState(false);
+  const handleAssignCodes = async () => {
+    setAssigningCodes(true);
+    try {
+      const { assigned, failed, refused } = await assignMissingAccountCodes();
+      if (refused) return;
+      // Success toast only for rows the cloud accepted; failures already got a destructive toast.
+      if (assigned > 0) toast({ title: hi ? `${assigned} खातों को कोड दिया गया` : `${assigned} account(s) coded`, description: failed ? (hi ? `${failed} खाते बाक़ी — दोबारा कोशिश करें।` : `${failed} left — try again.`) : undefined });
+      else if (failed === 0 && missingCodeCount > 0) toast({ title: hi ? 'कोड नहीं दिए जा सके' : 'No codes assigned', description: hi ? 'इन खातों के मूल समूह (parent) का अपना कोड नहीं है — पहले समूह को कोड मिलना चाहिए।' : 'The parent group of these accounts has no readable code.' });
+    } finally {
+      setAssigningCodes(false);
+    }
+  };
   const hi = language === 'hi';
 
   const [search, setSearch] = useState('');
@@ -106,7 +121,8 @@ const LedgerHeads: React.FC = () => {
           const matchSearch = !search.trim() ||
             acc.name.toLowerCase().includes(search.toLowerCase()) ||
             (acc.nameHi && acc.nameHi.includes(search)) ||
-            acc.id.includes(search);
+            acc.id.includes(search) ||
+            (!!acc.code && acc.code.includes(search));
           const matchType = typeFilter === 'all' || acc.type === typeFilter;
           return matchSearch && matchType;
         })
@@ -211,13 +227,13 @@ const LedgerHeads: React.FC = () => {
   };
 
   const handleCSV = () => {
-    const headers = ['Name', 'Name (Hindi)', 'Type', 'Opening Balance', 'Balance Type', 'Group'];
-    const rows = displayList.map(({ acc }) => [acc.name, acc.nameHi || '', acc.type, acc.openingBalance || 0, acc.openingBalanceType || '', acc.isGroup ? 'Group' : 'Ledger']);
+    const headers = ['Code', 'Name', 'Name (Hindi)', 'Type', 'Opening Balance', 'Balance Type', 'Group'];
+    const rows = displayList.map(({ acc }) => [accountCode(acc), acc.name, acc.nameHi || '', acc.type, acc.openingBalance || 0, acc.openingBalanceType || '', acc.isGroup ? 'Group' : 'Ledger']);
     downloadCSV(headers, rows, 'ledger_heads.csv');
   };
   const handleExcel = () => {
-    const headers = ['Name', 'Name (Hindi)', 'Type', 'Opening Balance', 'Balance Type', 'Group'];
-    const rows = displayList.map(({ acc }) => [acc.name, acc.nameHi || '', acc.type, acc.openingBalance || 0, acc.openingBalanceType || '', acc.isGroup ? 'Group' : 'Ledger']);
+    const headers = ['Code', 'Name', 'Name (Hindi)', 'Type', 'Opening Balance', 'Balance Type', 'Group'];
+    const rows = displayList.map(({ acc }) => [accountCode(acc), acc.name, acc.nameHi || '', acc.type, acc.openingBalance || 0, acc.openingBalanceType || '', acc.isGroup ? 'Group' : 'Ledger']);
     downloadExcelSingle(headers, rows, 'ledger_heads.xlsx', 'Ledger Heads');
   };
 
@@ -335,6 +351,13 @@ const LedgerHeads: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {missingCodeCount > 0 && (
+            <Button variant="outline" size="sm" className="gap-1" onClick={handleAssignCodes} disabled={assigningCodes}
+              title={hi ? 'आपके बनाए खातों को पढ़ने लायक कोड (जैसे 2112) दें — खाते की पहचान (id) नहीं बदलती' : 'Give readable codes (e.g. 2112) to user-created accounts — account ids do not change'}>
+              <Hash className="h-4 w-4" />
+              {assigningCodes ? (hi ? 'कोड दे रहे हैं…' : 'Assigning…') : (hi ? `कोड दें (${missingCodeCount})` : `Assign codes (${missingCodeCount})`)}
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="gap-1" onClick={handleExcel}>
             <FileSpreadsheet className="h-4 w-4" /> Excel
           </Button>
@@ -378,7 +401,7 @@ const LedgerHeads: React.FC = () => {
                     <ul className="mt-1 text-xs text-muted-foreground space-y-0.5">
                       {sorted.map(a => (
                         <li key={a.id} className="flex flex-wrap gap-x-2">
-                          <span className="font-mono">{a.id.length > 8 ? a.id.slice(0, 8) + '…' : a.id}</span>
+                          <span className="font-mono">{accountCode(a) || a.id.slice(0, 8) + '…'}</span>
                           <span>{hi ? 'शेष' : 'Balance'}: {fmt(getAccountBalance(a.id))}</span>
                         </li>
                       ))}
@@ -528,11 +551,11 @@ const LedgerHeads: React.FC = () => {
                         acc.isGroup && 'bg-muted/20 font-semibold',
                       )}
                     >
-                      {/* User-created accounts have a UUID id (DataContext addAccount) — not a code anyone can
-                          read or quote. Show "—" (full id on hover) instead; the id itself is never changed
-                          because vouchers reference it. */}
-                      <TableCell className="font-mono text-xs text-muted-foreground" title={UUID_RE.test(acc.id) ? acc.id : undefined}>
-                        {UUID_RE.test(acc.id) ? '—' : acc.id}
+                      {/* User-created accounts have a UUID id (DataContext addAccount). Show their readable
+                          accounts.code (migration 109) — or "—" until one is assigned; full id on hover. The id
+                          itself never changes because vouchers reference it. */}
+                      <TableCell className="font-mono text-xs text-muted-foreground" title={isUuidId(acc.id) ? acc.id : undefined}>
+                        {accountCode(acc) || '—'}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 16}px` }}>
@@ -779,7 +802,7 @@ const LedgerHeads: React.FC = () => {
                   <SelectContent>
                     {mergeTarget.group.map(a => (
                       <SelectItem key={a.id} value={a.id}>
-                        {a.name} · {a.id.length > 8 ? a.id.slice(0, 8) + '…' : a.id}{a.isSystem ? (hi ? ' (सिस्टम)' : ' (system)') : ''}
+                        {a.name} · {accountCode(a) || a.id.slice(0, 8) + '…'}{a.isSystem ? (hi ? ' (सिस्टम)' : ' (system)') : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
