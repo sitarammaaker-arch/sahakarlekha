@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { generateTradingAccountPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { PrintButton, PrintHeader } from '@/components/ReportPrint';
+import { splitNegativeLines } from '@/lib/reports/negativeLines';
 
 const TradingAccount: React.FC = () => {
   const { language } = useLanguage();
@@ -36,9 +37,15 @@ const TradingAccount: React.FC = () => {
     Math.abs(unallocated.directExp) > 0.005 ||
     Math.abs(unallocated.otherSales) > 0.005;
 
+  // A direct-expense ledger in credit (a recovery / reversal) is shown as a positive credit-side line, not a negative
+  // debit line. Gross profit is the net and does not change; both sides grow by the same amount.
+  const directSplit = splitNegativeLines(directExpItems, '(credit balance in expense A/c)');
+  const directKept = directSplit.kept;
+  const directKeptTotal = totalDirectExp + directSplit.movedTotal;
+
   const isProfit   = grossProfit >= 0;
-  const crTotal    = totalSales + totalClosingStock + (isProfit ? 0 : Math.abs(grossProfit));
-  const drTotal    = totalOpeningStock + totalPurchases + totalDirectExp + (isProfit ? grossProfit : 0);
+  const crTotal    = totalSales + totalClosingStock + directSplit.movedTotal + (isProfit ? 0 : Math.abs(grossProfit));
+  const drTotal    = totalOpeningStock + totalPurchases + directKeptTotal + (isProfit ? grossProfit : 0);
   const grandTotal = Math.max(crTotal, drTotal);
 
   // Excel / CSV export — mirrors the on-screen Dr/Cr statement and grand total.
@@ -47,7 +54,8 @@ const TradingAccount: React.FC = () => {
     const r: (string | number)[][] = [];
     openingStockItems.forEach(i => r.push(['Dr', `Opening Stock — ${i.name}`, i.amount]));
     purchaseItems.forEach(i => r.push(['Dr', i.name, i.amount]));
-    directExpItems.forEach(i => r.push(['Dr', i.name, i.amount]));
+    directKept.forEach(i => r.push(['Dr', i.name, i.amount]));
+    directSplit.moved.forEach(i => r.push(['Cr', i.name, i.amount]));
     if (isProfit) r.push(['Dr', 'Gross Profit c/d', grossProfit]);
     salesItems.forEach(i => r.push(['Cr', i.name, i.amount]));
     closingStockItems.forEach(i => r.push(['Cr', `Closing Stock — ${i.name}`, i.amount]));
@@ -214,23 +222,31 @@ const TradingAccount: React.FC = () => {
                           <TableCell className="text-right">{fmt(item.amount)}</TableCell>
                         </TableRow>
                       ))}
+                      <TableRow className="font-medium">
+                        <TableCell className="pl-6">{hi ? 'कुल क्रय' : 'Total Purchases'}</TableCell>
+                        <TableCell className="text-right">{fmt(totalPurchases)}</TableCell>
+                      </TableRow>
                     </>
                   )}
 
                   {/* Direct Expenses */}
-                  {directExpItems.length > 0 && (
+                  {directKept.length > 0 && (
                     <>
                       <TableRow className="bg-muted/30">
                         <TableCell className="font-medium text-muted-foreground" colSpan={2}>
                           {hi ? 'प्रत्यक्ष व्यय' : 'Direct Expenses'}
                         </TableCell>
                       </TableRow>
-                      {directExpItems.map((item, i) => (
+                      {directKept.map((item, i) => (
                         <TableRow key={i}>
                           <TableCell className="pl-6 text-sm">{hi ? item.nameHi : item.name}</TableCell>
                           <TableCell className="text-right">{fmt(item.amount)}</TableCell>
                         </TableRow>
                       ))}
+                      <TableRow className="font-medium">
+                        <TableCell className="pl-6">{hi ? 'कुल प्रत्यक्ष व्यय' : 'Total Direct Expenses'}</TableCell>
+                        <TableCell className="text-right">{fmt(directKeptTotal)}</TableCell>
+                      </TableRow>
                     </>
                   )}
 
@@ -245,7 +261,7 @@ const TradingAccount: React.FC = () => {
                   )}
 
                   {/* Empty state */}
-                  {openingStockItems.length === 0 && purchaseItems.length === 0 && directExpItems.length === 0 && (
+                  {openingStockItems.length === 0 && purchaseItems.length === 0 && directKept.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={2} className="text-center text-muted-foreground py-8">
                         {hi ? 'कोई एंट्री नहीं' : 'No entries'}
@@ -313,6 +329,27 @@ const TradingAccount: React.FC = () => {
                       <TableRow className="font-medium">
                         <TableCell className="pl-6">{hi ? 'कुल अंतिम स्टॉक' : 'Total Closing Stock'}</TableCell>
                         <TableCell className="text-right">{fmt(totalClosingStock)}</TableCell>
+                      </TableRow>
+                    </>
+                  )}
+
+                  {/* Direct-expense ledgers in credit (recoveries / reversals) */}
+                  {directSplit.moved.length > 0 && (
+                    <>
+                      <TableRow className="bg-muted/30">
+                        <TableCell className="font-medium text-muted-foreground" colSpan={2}>
+                          {hi ? 'वसूली / व्यय खातों के जमा शेष' : 'Recoveries / credit balances in expense accounts'}
+                        </TableCell>
+                      </TableRow>
+                      {directSplit.moved.map((item, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="pl-6 text-sm">{item.name}</TableCell>
+                          <TableCell className="text-right">{fmt(item.amount)}</TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="font-medium">
+                        <TableCell className="pl-6">{hi ? 'कुल वसूली / उलटाव' : 'Total Recoveries'}</TableCell>
+                        <TableCell className="text-right">{fmt(directSplit.movedTotal)}</TableCell>
                       </TableRow>
                     </>
                   )}
