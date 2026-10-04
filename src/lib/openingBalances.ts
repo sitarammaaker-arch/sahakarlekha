@@ -23,6 +23,39 @@ export function carryForwardOpenings(previousYearBalances: Record<string, number
     .sort((a, b) => a.accountId.localeCompare(b.accountId));
 }
 
+// ─── One continuous ledger: when may openings be (re)filled? ─────────────────────────
+
+/**
+ * PURE — how many live vouchers sit BEFORE the current financial year.
+ *
+ * The ledger is continuous (Phase-2 C, D1): a year's opening = account.openingBalance + every
+ * earlier-year voucher, so account.openingBalance is the GENESIS opening, never a per-year figure.
+ * Once the app holds earlier-year vouchers the 31-Mar closing already becomes the 1-Apr opening by
+ * itself, and writing a closing into openingBalance counts every earlier voucher twice. A non-zero
+ * count therefore disables the "fill from audited closing" shortcut (first-time onboarding only).
+ * Pending vouchers count (they post once approved); rejected and deleted ones never do.
+ */
+export function earlierYearVoucherCount(
+  vouchers: { date: string; isDeleted?: boolean; approvalStatus?: string }[],
+  fyStart: string | undefined,
+): number {
+  if (!fyStart) return 0;
+  // Not isCountedVoucher (#705 excludes pending): a pending voucher still blocks — it posts once approved.
+  return vouchers.filter(v => !v.isDeleted && v.approvalStatus !== 'rejected' && v.date < fyStart).length;
+}
+
+/** PURE — total Dr / Cr of opening entries in exact paise, and whether they tie. */
+export function openingTotals(entries: { amount: number; type: 'debit' | 'credit' }[]): {
+  debit: number; credit: number; difference: number; balanced: boolean;
+} {
+  let dr = 0, cr = 0;
+  for (const e of entries) {
+    const p = Math.round((Number(e.amount) || 0) * 100);
+    if (e.type === 'debit') dr += p; else cr += p;
+  }
+  return { debit: dr / 100, credit: cr / 100, difference: Math.abs(dr - cr) / 100, balanced: dr === cr };
+}
+
 // ─── Universal Importer → opening balances (T-04) ────────────────────────────────────
 
 /** The three columns the Opening Balances import template carries. */
