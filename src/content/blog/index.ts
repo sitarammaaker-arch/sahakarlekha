@@ -312,6 +312,18 @@ export const BLOG_POSTS: BlogPost[] = [
     tags: ['सदस्यता आवेदन', 'Rule 1989', 'हरियाणा'],
   },
   {
+    slug: 'board-meeting-minutes-format-secretary-sample-checklist',
+    metaTitle: 'बोर्ड मीटिंग की कार्यवाही कैसे लिखें: नमूना व चेकलिस्ट | SahakarLekha',
+    metaDescription: 'सहकारी समिति की बोर्ड मीटिंग की कार्यवाही (कार्यवृत्त) कैसे लिखें — बारह हिस्सों का ढाँचा, पूरा नमूना, लिखने के नियम और सचिव के लिए बैठक से पहले-दौरान-बाद की चेकलिस्ट।',
+    date: '2026-10-11',
+    category: 'बैठक व प्रशासन',
+    title: 'सहकारी समिति की बोर्ड मीटिंग की कार्यवाही कैसे लिखें? सचिव के लिए नमूना और चेकलिस्ट',
+    shortTitle: 'बोर्ड मीटिंग की कार्यवाही',
+    excerpt: 'कार्यवृत्त का बारह हिस्सों का ढाँचा, पूरा नमूना, लिखने के नियम और सचिव के लिए चेकलिस्ट।',
+    accent: 'violet',
+    tags: ['कार्यवृत्त', 'बोर्ड मीटिंग', 'सचिव', 'नमूना'],
+  },
+  {
     slug: 'haryana-cooperative-society-board-resolution-guide',
     metaTitle: 'हरियाणा सहकारी समिति Board Resolution: पूरी गाइड | SahakarLekha',
     metaDescription: 'Resolution में RESOLVED THAT बनाम RESOLVED FURTHER THAT, Rule 30 conflict-of-interest, financial sanction व Certified True Copy — पूरी गाइड।',
