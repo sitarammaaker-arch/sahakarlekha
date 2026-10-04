@@ -148,6 +148,21 @@ const HelpArticle: React.FC = () => {
           </div>
         )}
 
+        {/* Troubleshooting */}
+        {task.troubleshooting && task.troubleshooting.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-lg font-bold text-foreground mb-3">अगर दिक्कत आए</h2>
+            <div className="space-y-3">
+              {task.troubleshooting.map((t, i) => (
+                <div key={i} className="rounded-lg border px-4 py-3">
+                  <p className="font-semibold text-foreground text-sm">{boldify(t.problem)}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{boldify(t.fix)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* FAQs */}
         {task.faqs && task.faqs.length > 0 && (
           <div className="mt-8">
@@ -193,6 +208,8 @@ const HelpArticle: React.FC = () => {
             </div>
           </div>
         )}
+
+        {task.updated && <p className="mt-8 text-xs text-muted-foreground">अंतिम अपडेट: {task.updated}</p>}
 
         {/* Was this helpful? */}
         <div className="mt-8"><HelpfulWidget /></div>

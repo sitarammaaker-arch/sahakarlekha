@@ -606,12 +606,15 @@ function helpBody(t, DATA) {
         ? `<h2>स्टेप-बाय-स्टेप</h2><ol>${t.steps.map((s) => `<li>${mdInline(s)}</li>`).join('')}</ol>` : '') +
       (t.commonMistakes && t.commonMistakes.length
         ? `<h2>आम गलतियाँ</h2><ul>${t.commonMistakes.map((s) => `<li>${mdInline(s)}</li>`).join('')}</ul>` : '') +
+      (t.troubleshooting && t.troubleshooting.length
+        ? `<h2>अगर दिक्कत आए</h2><ul>${t.troubleshooting.map((x) => `<li><strong>${mdInline(x.problem)}</strong> — ${mdInline(x.fix)}</li>`).join('')}</ul>` : '') +
       (t.faqs && t.faqs.length
         ? `<h2>अक्सर पूछे जाने वाले प्रश्न</h2>` + t.faqs.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join('') : '') +
       (t.guideSlug ? `<p>पूरा समझें: <a href="/guide/${t.guideSlug}">गहराई से गाइड अध्याय</a></p>` : '') +
       surfaceLinksHtml({ cookbook: cookbookSlugs }, DATA, 'इससे जुड़ी entries (कुकबुक)') +
       (t.related && t.related.length
         ? `<p>जुड़े काम: ${t.related.map((r) => `<a href="/help/${r}">${r.replace(/-/g, ' ')}</a>`).join(' · ')}</p>` : '') +
+      (t.updated ? `<p><small>अंतिम अपडेट: ${esc(t.updated)}</small></p>` : '') +
       registerCta(t.deepLink && t.deepLink.route),
   });
 }
