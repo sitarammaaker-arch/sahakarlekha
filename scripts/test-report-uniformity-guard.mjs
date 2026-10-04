@@ -65,6 +65,41 @@ guard('raw download outside exportUtils', /\.download\s*=\s|createObjectURL/, [
   'src/pages/UniversalImporter.tsx',
 ], { exclude: ['src/lib/exportUtils.ts'] });
 
+// 4b. Every page-level PDF carries the shared identity (header or registered identity) AND the shared footer
+//     (Page x of y + Report ID). Only these have a good reason not to: public marketing downloads, a
+//     completion certificate, and the multi-society consolidation (no single society to identify).
+const pdfPages = [...src].filter(([f, s]) => /new jsPDF\s*\(/.test(s) && f !== 'src/lib/pdf.ts').map(([f]) => f);
+guard('page-level PDF without addHeader/registerReportIdentity', /new jsPDF\s*\(/, [
+  'src/lib/leadMagnets.ts', 'src/pages/GuideCertificate.tsx', 'src/pages/MultiSocietyConsolidation.tsx',
+].map(f => f), { exclude: pdfPages.filter(f => /addHeader\(|registerReportIdentity\(/.test(src.get(f))).concat(['src/lib/pdf.ts']) });
+guard('page-level PDF without addPageNumbers', /new jsPDF\s*\(/, [
+  'src/lib/leadMagnets.ts', 'src/pages/GuideCertificate.tsx',
+], { exclude: pdfPages.filter(f => /addPageNumbers\(/.test(src.get(f))).concat(['src/lib/pdf.ts']) });
+
+// 4c. Every addHeader call names its report (reportCode) so the footer can stamp a Report ID. The only
+//     exception is the blank-form generator, whose "report" is an empty template.
+function callExpressions(text, name) {
+  const out = []; let i = text.indexOf(name + '(');
+  while (i !== -1) {
+    let depth = 0, j = i + name.length;
+    for (; j < text.length; j++) { if (text[j] === '(') depth++; else if (text[j] === ')') { depth--; if (depth === 0) break; } }
+    out.push({ at: i, call: text.slice(i, j + 1) });
+    i = text.indexOf(name + '(', j);
+  }
+  return out;
+}
+{
+  const bare = [];
+  for (const [f, s] of src) {
+    for (const { at, call } of callExpressions(s, 'addHeader')) {
+      if (/export function addHeader/.test(s.slice(Math.max(0, at - 16), at))) continue;   // the definition itself
+      if (!/reportCode/.test(call)) bare.push(`${f}: ${call.replace(/\s+/g, ' ').slice(0, 70)}`);
+    }
+  }
+  const expected = bare.filter(x => /spec\.title, blankSociety/.test(x));
+  ok(bare.length === expected.length, `addHeader without a reportCode (no Report ID): ${bare.filter(x => !/spec\.title, blankSociety/.test(x)).join(' || ')}`);
+}
+
 // 5. The shared helpers still do their job.
 const eu = src.get('src/lib/exportUtils.ts');
 ok(/exportFileName\(filename, 'csv', exportContext/.test(eu) && /exportFileName\(filename, 'xlsx', exportContext/.test(eu), 'downloadCSV and downloadExcel both use the standard file name');
