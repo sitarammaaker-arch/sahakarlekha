@@ -906,6 +906,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'मांग → प्राप्य → वसूली: शुल्क-अनुसूची, मासिक बिल, बकाये की आयु, देर का ब्याज, निधियाँ और फ़्लैट-हस्तांतरण।',
     accent: 'rose',
     tags: ['हाउसिंग समिति', 'मेंटेनेंस', 'बकाया', 'सिंकिंग फंड'],
+    image: '/blog/housing-society-maintenance-dues-accounting.webp',
+    imageAlt: 'आवास सहकारी समिति के कार्यालय के काउंटर पर सचिव लैपटॉप पर हिसाब देखते हुए एक निवासी को रखरखाव का बिल दे रहे हैं और निवासी भुगतान कर रहा है',
   },
   {
     slug: 'dairy-milk-procurement-farmer-payment-accounting',
