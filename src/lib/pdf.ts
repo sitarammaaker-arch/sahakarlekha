@@ -404,7 +404,7 @@ export function generateBankBookPDF(
 }
 
 export function generateTrialBalancePDF(balances: AccountBalance[], society: SocietySettings, asOnDate: string, language: 'hi' | 'en') {
-  const doc = new jsPDF();
+  const doc = new jsPDF({ orientation: 'landscape' });
   const { startY, font } = addHeader(doc, 'Trial Balance', society, `As on: ${fmtDate(asOnDate)} | FY: ${society.financialYear}`, { reportCode: 'TB' });
 
   // G9: Empty data guard
@@ -422,61 +422,75 @@ export function generateTrialBalancePDF(balances: AccountBalance[], society: Soc
   const isLiabInc = (b: AccountBalance) => !(b.account.type === 'asset' || b.account.type === 'expense');
   const closingDr = (b: AccountBalance) => Math.max(b.netBalance, 0);
   const closingCr = (b: AccountBalance) => Math.max(-b.netBalance, 0);
-  const openingLabel = (b: AccountBalance) =>
-    b.openingDebit > 0 ? `${fmt(b.openingDebit)} Dr` : b.openingCredit > 0 ? `${fmt(b.openingCredit)} Cr` : '';
-  const closingLabel = (b: AccountBalance) =>
-    b.netBalance > 0 ? `${fmt(b.netBalance)} Dr` : b.netBalance < 0 ? `${fmt(-b.netBalance)} Cr` : '';
 
   const liabInc = balances.filter(isLiabInc);
   const assetExp = balances.filter(b => !isLiabInc(b));
 
-  const sectionRows = (rows: AccountBalance[], title: string): RowInput[] => {
+  const grandClosingDr = balances.reduce((s, b) => s + closingDr(b), 0);
+  const grandClosingCr = balances.reduce((s, b) => s + closingCr(b), 0);
+
+  // HORIZONTAL (T-format, landscape): Liabilities & Income on the LEFT, Assets & Expenditure on the
+  // RIGHT, zipped row-by-row into ONE table so the two halves paginate together (header repeats on every
+  // page, totals print once). Amounts drop the "Rs." prefix (heading says Rs.) to fit four figures a side.
+  const num = (n: number) => new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  const openL = (b: AccountBalance) => b.openingDebit > 0 ? `${num(b.openingDebit)} Dr` : b.openingCredit > 0 ? `${num(b.openingCredit)} Cr` : '';
+  const closeL = (b: AccountBalance) => b.netBalance > 0 ? `${num(b.netBalance)} Dr` : b.netBalance < 0 ? `${num(-b.netBalance)} Cr` : '';
+  const sideRows = (rows: AccountBalance[]): string[][] => rows.map(b => [
+    b.account.name,
+    openL(b),
+    (b.transactionDebit || 0) > 0 ? num(b.transactionDebit) : '',
+    (b.transactionCredit || 0) > 0 ? num(b.transactionCredit) : '',
+    closeL(b),
+  ]);
+  const sideTotal = (rows: AccountBalance[], title: string): string[] => {
     const movDr = rows.reduce((s, b) => s + (b.transactionDebit || 0), 0);
     const movCr = rows.reduce((s, b) => s + (b.transactionCredit || 0), 0);
     const clDr = rows.reduce((s, b) => s + closingDr(b), 0);
     const clCr = rows.reduce((s, b) => s + closingCr(b), 0);
-    const out: RowInput[] = [];
-    // Section header band.
-    out.push([{ content: title, colSpan: 6, styles: { fillColor: [225, 232, 245], fontStyle: 'bold', halign: 'left' } }]);
-    rows.forEach((b, i) => out.push([
-      String(i + 1),
-      b.account.name,
-      openingLabel(b),
-      (b.transactionDebit || 0) > 0 ? fmt(b.transactionDebit) : '',
-      (b.transactionCredit || 0) > 0 ? fmt(b.transactionCredit) : '',
-      closingLabel(b),
-    ]));
-    if (rows.length === 0) out.push([{ content: 'No accounts', colSpan: 6, styles: { halign: 'center', textColor: [120, 120, 120] } }]);
-    // Subtotal row.
-    out.push([
-      { content: `${title} — Subtotal`, colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
-      '',
-      fmt(movDr),
-      fmt(movCr),
-      clDr >= clCr ? `${fmt(clDr - clCr)} Dr` : `${fmt(clCr - clDr)} Cr`,
-    ].map((c, idx) => typeof c === 'string' ? { content: c, styles: { fontStyle: 'bold', halign: idx >= 3 ? 'right' : 'left', fillColor: [240, 243, 248] } } : { ...c, styles: { ...(c as any).styles, fillColor: [240, 243, 248] } }) as any);
-    return out;
+    return [title, '', num(movDr), num(movCr), clDr >= clCr ? `${num(clDr - clCr)} Dr` : `${num(clCr - clDr)} Cr`];
   };
+  const L = sideRows(liabInc);
+  const R = sideRows(assetExp);
+  const blank = ['', '', '', '', ''];
+  const zipped: string[][] = [];
+  for (let i = 0; i < Math.max(L.length, R.length); i++) zipped.push([...(L[i] ?? blank), ...(R[i] ?? blank)]);
 
-  const totalMovDr = balances.reduce((s, b) => s + (b.transactionDebit || 0), 0);
-  const totalMovCr = balances.reduce((s, b) => s + (b.transactionCredit || 0), 0);
-  const grandClosingDr = balances.reduce((s, b) => s + closingDr(b), 0);
-  const grandClosingCr = balances.reduce((s, b) => s + closingCr(b), 0);
-
-  const body: RowInput[] = [
-    ...sectionRows(liabInc, 'Section I — Liabilities & Income'),
-    ...sectionRows(assetExp, 'Section II — Assets & Expenditure'),
-  ];
+  const sideHead = (label: string) => [label, 'Opening', 'Debit', 'Credit', 'Closing'];
+  const tbW = doc.internal.pageSize.width - 30;     // 15 mm margins, aligned with the header/footer text
+  const tbSide = tbW / 2;
+  const tbAmt = 24;
+  const tbCols: Record<number, { cellWidth: number; halign?: 'right' }> = {};
+  for (let sd = 0; sd < 2; sd++) {
+    tbCols[sd * 5] = { cellWidth: tbSide - tbAmt * 4 };
+    for (let k = 1; k < 5; k++) tbCols[sd * 5 + k] = { cellWidth: tbAmt, halign: 'right' };
+  }
 
   autoTable(doc, {
     startY,
-    head: [['#', 'Account Name', 'Opening', 'Debit (period)', 'Credit (period)', 'Closing']],
-    body,
-    foot: [['', 'Grand Total (Closing)', '', fmt(totalMovDr), fmt(totalMovCr), `${fmt(grandClosingDr)} Dr = ${fmt(grandClosingCr)} Cr`]],
-    styles: { fontSize: 7.5, cellPadding: 1.8, font },
-    headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    margin: { left: 15, right: 15 },
+    tableWidth: tbW,
+    head: [[...sideHead('Liabilities & Income (Rs.)'), ...sideHead('Assets & Expenditure (Rs.)')]],
+    body: zipped,
+    foot: [[...sideTotal(liabInc, 'Total'), ...sideTotal(assetExp, 'Total')]],
+    showFoot: 'lastPage',
+    columnStyles: tbCols,
+    styles: { fontSize: 6.8, cellPadding: 1.4, font, overflow: 'linebreak' },
+    headStyles: { textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
-    columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+    didParseCell: (data) => {
+      if (data.section === 'head') {
+        data.cell.styles.fillColor = data.column.index < 5 ? [41, 82, 163] : [25, 135, 84];
+        if (data.column.index % 5 !== 0) data.cell.styles.halign = 'right';   // heads line up with their figures
+      }
+    },
+    // Vertical rule between the two sides, drawn per cell so it survives page breaks.
+    didDrawCell: (data) => {
+      if (data.column.index === 5) {
+        doc.setDrawColor(120);
+        doc.setLineWidth(0.3);
+        doc.line(data.cell.x, data.cell.y, data.cell.x, data.cell.y + data.cell.height);
+      }
+    },
   });
 
   const tbFinalY = (doc as any).lastAutoTable.finalY + 10;
@@ -803,65 +817,74 @@ export function generateBalanceSheetPDF(
       : [csLabel, '', fmt(unpostedClosingStock)]);
   }
 
-  const liabHead = hasPY
-    ? [['Capital & Liabilities', pyYear, 'Amount', 'Grand']]
-    : [['Capital & Liabilities', 'Amount', 'Grand']];
-  const assetHead = hasPY
-    ? [['Assets', pyYear, 'Amount', 'Grand']]
-    : [['Assets', 'Amount', 'Grand']];
+  // HORIZONTAL (T-format) — Capital & Liabilities on the LEFT, Assets on the RIGHT, one table.
+  // Both sides are zipped row-by-row into ONE autoTable so they paginate together: the header repeats on
+  // every page and the single GRAND TOTAL row prints once (showFoot:'lastPage'). (The earlier two
+  // separate half-width tables broke on long sheets — double totals, assets offset into the right half.)
+  const nSide = hasPY ? 4 : 3;                       // label [, prev-year], amount, grand
+  const blankSide = Array.from({ length: nSide }, () => '');
+  const rowsN = Math.max(liab.body.length, asset.body.length);
+  const zipped: string[][] = [];
+  for (let i = 0; i < rowsN; i++) {
+    const L = liab.body[i] ?? blankSide;
+    const R = asset.body[i] ?? blankSide;
+    // Pad a short row (no "Grand" cell) so both halves always have exactly nSide cells.
+    const padSide = (r: string[]) => (r.length >= nSide ? r.slice(0, nSide) : [...r, ...Array.from({ length: nSide - r.length }, () => '')]);
+    zipped.push([...padSide(L), ...padSide(R)]);
+  }
+  const sideHead = (label: string) => hasPY ? [label, pyYear, 'Amount', 'Grand'] : [label, 'Amount', 'Grand'];
+  const totalFoot = (total: number, py: number) => hasPY ? ['GRAND TOTAL', fmt(py), fmt(total), fmt(total)] : ['GRAND TOTAL', fmt(total), fmt(total)];
 
-  const amtCols = hasPY ? [1, 2, 3] : [1, 2];
+  const pageW = doc.internal.pageSize.width;
+  const tblW = pageW - 30;                          // 15 mm margins both sides, aligned with the header/footer text
+  const sideW = tblW / 2;
+  const amtW = hasPY ? 26 : 32;
+  const labW = sideW - amtW * (nSide - 1);
+  const columnStyles: Record<number, { cellWidth: number; halign?: 'right' }> = {};
+  for (let side = 0; side < 2; side++) {
+    columnStyles[side * nSide] = { cellWidth: labW };
+    for (let k = 1; k < nSide; k++) columnStyles[side * nSide + k] = { cellWidth: amtW, halign: 'right' };
+  }
+  const isLeft = (col: number) => col < nSide;
 
-  // VERTICAL (stacked) format — Capital & Liabilities full width, then Assets full width
-  // below it. The old side-by-side half-width layout broke on long sheets: a liabilities
-  // list that overflowed one page repeated its GRAND TOTAL footer on every page (double
-  // total), and the assets table then started on whichever page the cursor had reached,
-  // offset into the right half with large empty gaps. Full-width stacking paginates cleanly,
-  // and showFoot:'lastPage' prints each GRAND TOTAL exactly once.
-
-  // Capital & Liabilities — full width
   autoTable(doc, {
     startY,
     margin: { left: 15, right: 15 },
-    head: liabHead,
-    body: liab.body,
-    foot: [hasPY ? ['GRAND TOTAL', fmt(liab.pyTotal), fmt(totalLiabilities), fmt(totalLiabilities)] : ['GRAND TOTAL', fmt(totalLiabilities), fmt(totalLiabilities)]],
+    tableWidth: tblW,
+    head: [[...sideHead('Capital & Liabilities'), ...sideHead('Assets')]],
+    body: zipped,
+    foot: [[...totalFoot(totalLiabilities, liab.pyTotal), ...totalFoot(totalAssets, asset.pyTotal)]],
     showFoot: 'lastPage',
-    styles: { fontSize: 7.5, cellPadding: 1.5, font },
-    headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    columnStyles,
+    styles: { fontSize: 7, cellPadding: 1.4, font, overflow: 'linebreak' },
+    headStyles: { textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
     didParseCell: (data) => {
-      amtCols.forEach(c => { if (data.column.index === c) data.cell.styles.halign = 'right'; });
-      if (data.section === 'body' && liab.groupRows.includes(data.row.index)) {
-        data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fillColor = [232, 240, 254];
+      const left = isLeft(data.column.index);
+      if (data.section === 'head') {
+        data.cell.styles.fillColor = left ? [41, 82, 163] : [25, 135, 84];
+        if (data.column.index % nSide !== 0) data.cell.styles.halign = 'right';   // heads line up with their figures
+      }
+      if (data.section === 'body') {
+        const grp = left ? liab.groupRows : asset.groupRows;
+        if (grp.includes(data.row.index)) {          // group heading row on THIS side only
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = left ? [232, 240, 254] : [232, 245, 233];
+        }
       }
     },
-  });
-  const liabFinalY = (doc as any).lastAutoTable.finalY;
-
-  // Assets — full width, stacked directly below Liabilities
-  autoTable(doc, {
-    startY: liabFinalY + 8,
-    margin: { left: 15, right: 15 },
-    head: assetHead,
-    body: asset.body,
-    foot: [hasPY ? ['GRAND TOTAL', fmt(asset.pyTotal), fmt(totalAssets), fmt(totalAssets)] : ['GRAND TOTAL', fmt(totalAssets), fmt(totalAssets)]],
-    showFoot: 'lastPage',
-    styles: { fontSize: 7.5, cellPadding: 1.5, font },
-    headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
-    footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
-    didParseCell: (data) => {
-      amtCols.forEach(c => { if (data.column.index === c) data.cell.styles.halign = 'right'; });
-      if (data.section === 'body' && asset.groupRows.includes(data.row.index)) {
-        data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fillColor = [232, 245, 233];
+    // Vertical rule between the two sides (the T), drawn per cell so it survives page breaks.
+    didDrawCell: (data) => {
+      if (data.column.index === nSide) {
+        doc.setDrawColor(120);
+        doc.setLineWidth(0.3);
+        doc.line(data.cell.x, data.cell.y, data.cell.x, data.cell.y + data.cell.height);
       }
     },
   });
   const assetFinalY = (doc as any).lastAutoTable.finalY;
 
-  const bsFinalY = assetFinalY + 10;   // Assets is now the lower (last) table
+  const bsFinalY = assetFinalY + 10;
   addAuditorCertificate(doc, font, society, 'Balance Sheet', bsFinalY);
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('BalanceSheet', society));

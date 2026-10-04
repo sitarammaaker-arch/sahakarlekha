@@ -271,6 +271,7 @@
     "test:bank-clearing": "node scripts/test-bank-clearing.mjs",
     "test:counted-voucher": "node scripts/test-counted-voucher.mjs",
     "test:pdf-fit": "node scripts/test-pdf-fit.mjs",
+    "test:bs-tb-pdf-layout": "node scripts/test-bs-tb-pdf-layout.mjs",
     "test:gst-pos": "node scripts/test-gst-pos.mjs",
     "test:export-generator": "node scripts/test-export-generator.mjs",
     "test:export-jobs": "node scripts/test-export-jobs.mjs",
