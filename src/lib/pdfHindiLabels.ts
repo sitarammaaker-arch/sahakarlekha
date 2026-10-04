@@ -14,6 +14,7 @@ export const PDF_HI_EXTRA: Record<string, string> = {
   'income & expenditure account': 'आय एवं व्यय खाता',
   'trading account': 'व्यापार खाता',
   'balance sheet': 'तुलन-पत्र',
+  'unaudited - interim statement': 'अलेखापरीक्षित - अंतरिम विवरण',
   'trial balance': 'तलपट (ट्रायल बैलेंस)',
   'ledger account statement': 'खाता-बही विवरण',
   'share register': 'अंश रजिस्टर',
@@ -244,6 +245,16 @@ function reportNameHi(name: string): string {
  * English (stateAuditFormats has no Hindi name for it). EXTERNAL VALIDATION NEEDED: presentation wording, not
  * statutory text.
  */
+/**
+ * Notice printed INSTEAD of the auditor's certificate while the financial year is open / not audit-locked.
+ * EXTERNAL VALIDATION NEEDED: presentation wording, not statutory text.
+ */
+export function interimNoticeHi(o: { reportName: string; financialYear: string; fyEndDdMmYyyy: string }): string {
+  return `यह ${reportNameHi(o.reportName)} तैयार करने की तिथि तक की बहियों से वित्तीय वर्ष ${o.financialYear}` +
+    (o.fyEndDdMmYyyy ? ` (समाप्ति ${o.fyEndDdMmYyyy})` : '') +
+    ' के लिए बनाया गया है। इसका अंकेक्षण नहीं हुआ है। अंकेक्षक का प्रमाणपत्र वर्ष-समाप्ति के अंकेक्षण के बाद ही जारी होगा।';
+}
+
 export function auditorCertificateHi(o: {
   societyName: string; registrationNo: string; reportName: string; financialYear: string; actName: string;
 }): string {

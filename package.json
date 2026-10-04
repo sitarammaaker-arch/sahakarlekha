@@ -280,6 +280,7 @@
     "test:member-identity-wiring": "node scripts/test-member-identity-wiring.mjs",
     "test:member-portal-identity-107": "node scripts/test-member-portal-identity-107.mjs",
     "test:book-window": "node scripts/test-book-window.mjs",
+    "test:report-status-tieout": "node scripts/test-report-status-tieout.mjs",
     "test:bank-clearing": "node scripts/test-bank-clearing.mjs",
     "test:counted-voucher": "node scripts/test-counted-voucher.mjs",
     "test:pdf-fit": "node scripts/test-pdf-fit.mjs",

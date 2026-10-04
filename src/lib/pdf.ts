@@ -17,9 +17,11 @@ import { standardFileStem, scopeFor } from '@/lib/exportNaming';
 import { makeReportId } from '@/lib/reportId';
 import { getReportBranding } from '@/lib/reportBranding';
 import { getPdfLang } from '@/lib/pdfLang';
-import { auditorCertificateHi } from '@/lib/pdfHindiLabels';
+import { auditorCertificateHi, interimNoticeHi } from '@/lib/pdfHindiLabels';
 import { emitReportGenerated } from '@/lib/reportAudit';
 import { fitLine } from '@/lib/pdfFit';
+import { reportStatus, STATUS_REPORT_CODES } from '@/lib/reports/reportStatus';
+import { reclassifyIncomeExpenditure, splitNegativeLines } from '@/lib/reports/negativeLines';
 import type { BlankPdfSpec } from '@/content/downloads';
 
 // Hindi DATA (names, narrations) in any PDF table is drawn by the browser — labels stay English.
@@ -224,6 +226,44 @@ export function addSignatureBlock(doc: jsPDF, font: string, labels: string[], st
 function addAuditorCertificate(doc: jsPDF, font: string, society: SocietySettings, reportName: string, startY: number): void {
   const pageW = doc.internal.pageSize.width;
   const pageH = doc.internal.pageSize.height;
+  // Interim statement: NO auditor's certificate (it asserts a year-end "true and fair view"). A plain
+  // unaudited notice is printed instead; the certificate appears only once the FY is audit-locked.
+  const certStatus = reportStatus(society);
+  if (!certStatus.final) {
+    if (startY + 30 > pageH - 15) { doc.addPage(); startY = 15; }
+    doc.setDrawColor(190, 90, 0);
+    doc.setLineWidth(0.3);
+    doc.line(15, startY, pageW - 15, startY);
+    startY += 5;
+    doc.setFontSize(8);
+    doc.setFont(font, 'bold');
+    doc.setTextColor(190, 90, 0);
+    doc.text('UNAUDITED - INTERIM STATEMENT', pageW / 2, startY, { align: 'center' });
+    startY += 5;
+    doc.setFont(font, 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(60);
+    const fyEndDmy = certStatus.fyEnd ? certStatus.fyEnd.split('-').reverse().join('/') : '';
+    const noticeEn = `This ${reportName} is drawn from the books as on the date of preparation for the Financial Year ${society.financialYear}` +
+      (certStatus.fyEnd ? ` (ending ${certStatus.fyEnd.split('-').reverse().join('/')})` : '') +
+      ". It has not been audited. The Auditor's Certificate will be issued only after the year-end audit.";
+    const noticeLang = getPdfLang();
+    if (noticeLang !== 'en') {
+      // Hindi paragraph passed WHOLE with maxWidth: the browser canvas wraps it (jsPDF cannot measure Devanagari).
+      const noticeHi = interimNoticeHi({ reportName, financialYear: society.financialYear, fyEndDdMmYyyy: fyEndDmy });
+      doc.text(noticeHi, 15, startY, { maxWidth: pageW - 30 });
+      startY += Math.ceil((noticeHi.length * 1.5) / (pageW - 30)) * 4 + 4;
+    }
+    if (noticeLang !== 'hi') {
+      const noticeLines = doc.splitTextToSize(noticeEn, pageW - 30);
+      doc.text(noticeLines, 15, startY);
+      startY += noticeLines.length * 4 + 4;
+    }
+    doc.setTextColor(0);
+    const noticeSig = getSignatoryNames(society);
+    addSignatureBlock(doc, font, ['Secretary\n(Seal)', 'President\n(Seal)'], startY, undefined, [noticeSig.secretary, noticeSig.president]);
+    return;
+  }
   if (startY + 50 > pageH - 15) {
     doc.addPage();
     startY = 15;
@@ -351,6 +391,18 @@ export function addHeader(
   if (options?.reportCode) docIdentity.set(doc, { code: options.reportCode, title, society });
   doc.text(`Prepared on: ${preparedOn()}`, marginR, metaY, { align: 'right' });
   doc.setTextColor(0);
+  // Interim vs final: a mid-year statement must never read like the audited year-end accounts.
+  if (options?.reportCode && STATUS_REPORT_CODES.has(options.reportCode)) {
+    const st = reportStatus(society);
+    doc.setFontSize(7);
+    doc.setFont(font, 'bold');
+    if (st.final) doc.setTextColor(25, 120, 70); else doc.setTextColor(190, 90, 0);
+    const stLang = getPdfLang();
+    const stText = stLang === 'en' ? st.en : stLang === 'hi' ? st.hi : `${st.hi}  /  ${st.en}`;
+    doc.text(stText, 15, metaY, stLang === 'en' ? undefined : ({ fitWidth: pageW - 90 } as Record<string, unknown>));
+    doc.setFont(font, 'normal');
+    doc.setTextColor(0);
+  }
 
   doc.setDrawColor(41, 82, 163);
   doc.setLineWidth(0.5);
@@ -418,10 +470,24 @@ export function generateBankBookPDF(
   entries: BankBookEntry[],
   society: SocietySettings,
   openingBalance: number,
-  language: 'hi' | 'en'
+  language: 'hi' | 'en',
+  bankName?: string,
+  warning?: string,
 ) {
   const doc = new jsPDF();
-  const { startY, font } = addHeader(doc, 'Bank Book', society, `Financial Year: ${society.financialYear}`, { reportCode: 'BB' });
+  // The book is per bank account: the account must be named on the printout, or "0.00" looks like "no bank money".
+  const { startY: headerY, font } = addHeader(doc, 'Bank Book', society, bankName ? `Account: ${bankName} | Financial Year: ${society.financialYear}` : `Financial Year: ${society.financialYear}`, { reportCode: 'BB' });
+  let startY = headerY;
+  if (warning) {
+    doc.setFontSize(7.5);
+    doc.setFont(font, 'bold');
+    doc.setTextColor(190, 90, 0);
+    const wl = doc.splitTextToSize(warning, doc.internal.pageSize.width - 30);
+    doc.text(wl, 15, startY + 2);
+    doc.setFont(font, 'normal');
+    doc.setTextColor(0);
+    startY += wl.length * 4 + 4;
+  }
 
   const totalDeposits = entries.filter(e => e.type === 'deposit').reduce((s, e) => s + e.amount, 0);
   const totalWithdrawals = entries.filter(e => e.type === 'withdrawal').reduce((s, e) => s + e.amount, 0);
@@ -492,7 +558,7 @@ export function generateTrialBalancePDF(balances: AccountBalance[], society: Soc
   // page, totals print once). Amounts drop the "Rs." prefix (heading says Rs.) to fit four figures a side.
   const num = (n: number) => new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
   const openL = (b: AccountBalance) => b.openingDebit > 0 ? `${num(b.openingDebit)} Dr` : b.openingCredit > 0 ? `${num(b.openingCredit)} Cr` : '';
-  const closeL = (b: AccountBalance) => b.netBalance > 0 ? `${num(b.netBalance)} Dr` : b.netBalance < 0 ? `${num(-b.netBalance)} Cr` : '';
+  const closeL = (b: AccountBalance) => b.netBalance > 0 ? `${num(b.netBalance)} Dr` : b.netBalance < 0 ? `${num(-b.netBalance)} Cr` : ((b.transactionDebit || 0) > 0 || (b.transactionCredit || 0) > 0 ? 'Nil (Dr = Cr)' : '');
   const sideRows = (rows: AccountBalance[]): string[][] => rows.map(b => [
     b.account.name,
     openL(b),
@@ -592,15 +658,22 @@ export function generateIncomeExpenditurePDF(
   const surplusToBS = isSurplus ? netProfit : 0;
 
   // Both sides of T-account must show the same grand total
-  const grandTotal = isSurplus ? totalIncome : totalExpenses;
+  // A line that is negative on its own side (an income ledger in debit, an expense ledger in credit) is printed
+  // positive on the opposite side. The surplus/deficit above is the net and does not change; both sides grow equally.
+  const ieSides = reclassifyIncomeExpenditure(incomeItems, expenseItems);
+  const printIncome = ieSides.income;
+  const printExpense = ieSides.expense;
+  const printIncomeTotal = printIncome.reduce((s, i) => s + i.amount, 0);
+  const printExpenseTotal = printExpense.reduce((s, i) => s + i.amount, 0);
+  const grandTotal = isSurplus ? printIncomeTotal : printExpenseTotal;
 
   const expBody: string[][] = [
-    ...expenseItems.map(i => [i.name, fmt(i.amount)]),
+    ...printExpense.map(i => [i.name, fmt(i.amount)]),
     // A surplus balances the EXPENDITURE side; a deficit balances the INCOME side (below) — never both.
     ...(isSurplus ? [['Surplus carried to Balance Sheet', fmt(surplusToBS)]] : []),
   ];
   const incBody: string[][] = [
-    ...incomeItems.map(i => [i.name, fmt(i.amount)]),
+    ...printIncome.map(i => [i.name, fmt(i.amount)]),
     ...(!isSurplus ? [['Deficit carried from Expenditure', fmt(Math.abs(netProfit))]] : []),
   ];
 
@@ -749,7 +822,9 @@ export function generateBalanceSheetPDF(
   unpostedClosingStock: number = 0,  // closing stock auto-valued from inventory (no journal)
 ) {
   const doc = new jsPDF('landscape');
-  const { startY, font } = addHeader(doc, 'Balance Sheet', society, `As at 31st March 20${society.financialYear.split('-')[1]}`, { reportCode: 'BS' });
+  const bsFinal = reportStatus(society).final;
+  const bsYearEnd = `31st March 20${society.financialYear.split('-')[1]}`;
+  const { startY, font } = addHeader(doc, 'Balance Sheet', society, bsFinal ? `As at ${bsYearEnd}` : `Provisional position - as on ${preparedOn()} (FY ends ${bsYearEnd})`, { reportCode: 'BS' });
 
   const totalAssets = assetBalances.reduce((s, b) => s + b.netBalance, 0) + unpostedClosingStock;
   const totalLiabilities = liabilityBalances.reduce((s, b) => s + (-b.netBalance), 0) + netProfit;
@@ -762,6 +837,9 @@ export function generateBalanceSheetPDF(
   const buildGroupedBody = (
     balances: AccountBalance[], parentIds: string[], signFlip: boolean
   ): { body: string[][]; groupRows: number[]; pyTotal: number } => {
+    // Prior-year balances are stored signed (credit negative). The liability side flips sign, exactly like the
+    // on-screen Balance Sheet; otherwise the comparative column prints every fund/liability as a negative.
+    const getPY = (id: string) => ((signFlip ? -1 : 1) * (pyBalances[id] ?? 0)) || 0;
     const body: string[][] = [];
     const groupRows: number[] = [];
     let pyTotal = 0;
@@ -866,8 +944,8 @@ export function generateBalanceSheetPDF(
     : { body: liabilityBalances.filter(b => b.netBalance !== 0 || getPY(b.account.id) !== 0).map(b => {
         const isContra = b.netBalance > 0;
         const val = isContra ? `(${fmt(b.netBalance)})` : fmt(Math.abs(b.netBalance));
-        return hasPY ? [b.account.name, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', val] : [b.account.name, val];
-      }), groupRows: [] as number[], pyTotal: liabilityBalances.reduce((s, b) => s + getPY(b.account.id), 0) };
+        return hasPY ? [b.account.name, getPY(b.account.id) ? fmt(-getPY(b.account.id)) : '—', val] : [b.account.name, val];
+      }), groupRows: [] as number[], pyTotal: liabilityBalances.reduce((s, b) => s - getPY(b.account.id), 0) };
 
   // Add P&L row
   if (netProfit !== 0) {
@@ -910,7 +988,8 @@ export function generateBalanceSheetPDF(
     zipped.push([...padSide(L), ...padSide(R)]);
   }
   const sideHead = (label: string) => hasPY ? [label, pyYear, 'Amount', 'Grand'] : [label, 'Amount', 'Grand'];
-  const totalFoot = (total: number, py: number) => hasPY ? ['GRAND TOTAL', fmt(py), fmt(total), fmt(total)] : ['GRAND TOTAL', fmt(total), fmt(total)];
+  const pyTies = Math.abs(liab.pyTotal - asset.pyTotal) < 1;   // the comparative column only totals when both sides agree
+  const totalFoot = (total: number, py: number) => hasPY ? ['GRAND TOTAL', pyTies ? fmt(py) : '\u2014', fmt(total), fmt(total)] : ['GRAND TOTAL', fmt(total), fmt(total)];
 
   const pageW = doc.internal.pageSize.width;
   const tblW = pageW - 30;                          // 15 mm margins both sides, aligned with the header/footer text
@@ -961,7 +1040,14 @@ export function generateBalanceSheetPDF(
   });
   const assetFinalY = (doc as any).lastAutoTable.finalY;
 
-  const bsFinalY = assetFinalY + 10;
+  let bsFinalY = assetFinalY + 10;
+  if (hasPY && !pyTies) {
+    doc.setFontSize(7);
+    doc.setTextColor(120);
+    doc.text(`${pyYear} column is indicative: the previous-year balances do not form a balanced statement, so no comparative total is shown.`, 15, bsFinalY - 3);
+    doc.setTextColor(0);
+    bsFinalY += 4;
+  }
   addAuditorCertificate(doc, font, society, 'Balance Sheet', bsFinalY);
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('BalanceSheet', society));
@@ -1641,10 +1727,14 @@ export function generateTradingAccountPDF(
   const { startY, font } = addHeader(doc, 'Trading Account', society, `Financial Year: ${society.financialYear}`, { reportCode: 'TA' });
 
   const isProfit  = data.grossProfit >= 0;
+  // A direct-expense ledger in credit (recovery / reversal) is shown as a positive credit-side line instead of a
+  // negative debit line. Gross profit is the net and does not change; both sides grow by the same amount.
+  const directSplit = splitNegativeLines(data.directExpItems, '(credit balance in expense A/c)');
+  const directExpPrinted = data.totalDirectExp + directSplit.movedTotal;
   const grandTotal = Math.abs(data.grossProfit) +
     (isProfit
-      ? data.totalOpeningStock + data.totalPurchases + data.totalDirectExp
-      : data.totalSales + data.totalClosingStock);
+      ? data.totalOpeningStock + data.totalPurchases + directExpPrinted
+      : data.totalSales + data.totalClosingStock + directSplit.movedTotal);
 
   // ── Dr side (left) ────────────────────────────────────────────────────────
   const drBody: (string | { content: string; styles: object })[][] = [];
@@ -1660,9 +1750,9 @@ export function generateTradingAccountPDF(
     data.purchaseItems.forEach(i => drBody.push([`  ${i.name}`, fmt(i.amount)]));
   }
 
-  if (data.directExpItems.length > 0) {
+  if (directSplit.kept.length > 0) {
     drBody.push([{ content: 'Direct Expenses', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, '']);
-    data.directExpItems.forEach(i => drBody.push([`  ${i.name}`, fmt(i.amount)]));
+    directSplit.kept.forEach(i => drBody.push([`  ${i.name}`, fmt(i.amount)]));
   }
 
   if (isProfit && data.grossProfit > 0) {
@@ -1682,6 +1772,11 @@ export function generateTradingAccountPDF(
     crBody.push([{ content: 'Closing Stock', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, '']);
     data.closingStockItems.forEach(i => crBody.push([`  ${i.name}`, fmt(i.amount)]));
     crBody.push([{ content: 'Total Closing Stock', styles: { fontStyle: 'bold' } }, fmt(data.totalClosingStock)]);
+  }
+
+  if (directSplit.moved.length > 0) {
+    crBody.push([{ content: 'Recoveries / credit balances in expense accounts', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, '']);
+    directSplit.moved.forEach(i => crBody.push([`  ${i.name}`, fmt(i.amount)]));
   }
 
   if (!isProfit) {
