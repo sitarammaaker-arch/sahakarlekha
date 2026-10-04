@@ -38,6 +38,15 @@ d = build(120, 20);
 run('bs_long', () => pdf.generateBalanceSheetPDF(d.asset, d.liab, 0, society, 'en', 0, d.accounts, [], true, 0));
 run('tb_small', () => pdf.generateTrialBalancePDF(tb(8), society, '2027-03-31', 'en'));
 run('tb_long', () => pdf.generateTrialBalancePDF(tb(200), society, '2027-03-31', 'en'));
+const rpItem = (i: number, nature: 'capital'|'revenue', amt: number) => ({ accountId:'x'+i, accountName:'Head '+i, accountNameHi:'Head '+i, amount:amt, nature, glType:'income' });
+const rp = (nR: number, nP: number): any => {
+  const receipts: any[] = [], payments: any[] = []; let tr = 0, tp = 0;
+  for (let i = 0; i < nR; i++) { tr += 1000 + i; receipts.push(rpItem(i, i === 0 ? 'capital' : 'revenue', 1000 + i)); }
+  for (let i = 0; i < nP; i++) { tp += 500 + i; payments.push(rpItem(100 + i, i === 0 ? 'capital' : 'revenue', 500 + i)); }
+  return { openingCash: 100, openingBank: 200, receipts, payments, closingCash: 50, closingBank: 300 + tr - tp - 50 };
+};
+run('rp_small', () => pdf.generateReceiptsPaymentsPDF(rp(4, 3), society));
+run('rp_long', () => pdf.generateReceiptsPaymentsPDF(rp(120, 70), society));
 module.exports = { docs };
 `);
 const out = join(dir, 'bundle.cjs');
@@ -83,5 +92,25 @@ for (const tag of ['tb_small', 'tb_long']) {
   ok(s.includes('Trial Balance is Balanced'), 'tb_long: the balanced / not-balanced statement is still printed');
 }
 
-console.log(`\nBS/TB horizontal landscape PDFs: ${pass} passed, ${fail} failed`);
+// ── Receipts & Payments: the same single-table T-format (two independent tables used to repeat a partial
+//    Total at the foot of every page and start Payments on a later page with an empty left half) ──
+for (const tag of ['rp_small', 'rp_long']) {
+  const d = docs[tag], s = raw(d);
+  const w = d.internal.pageSize.getWidth(), h = d.internal.pageSize.getHeight();
+  ok(w > h, `${tag}: LANDSCAPE page`);
+  const posOf = (re) => { const m = s.match(new RegExp('([\\d.]+) ([\\d.]+) Td\\s*\\(' + re + '\\) Tj')); return m ? { x: +m[1], y: +m[2] } : null; };
+  const pr = posOf('Dr [^)]{1,8}Receipts'), pp = posOf('Cr [^)]{1,8}Payments');
+  ok(pr && pp && Math.abs(pr.y - pp.y) < 0.5, `${tag}: Receipts and Payments headings share one baseline (y ${pr && pr.y.toFixed(1)} vs ${pp && pp.y.toFixed(1)})`);
+  ok(pr && pp && pp.x > pr.x + 250, `${tag}: Payments sits in the right half, Receipts in the left`);
+  ok(count(s, '(Total)') === 2, `${tag}: the two Totals print ONCE (one per side, last page), got ${count(s, '(Total)')}`);
+  ok(!/\(Rs\.\)\s*Tj/.test(s), `${tag}: no amount wraps "Rs." onto a line of its own`);
+}
+{
+  const d = docs.rp_long, s = raw(d);
+  ok(d.getNumberOfPages() >= 3, `rp_long spans multiple pages (${d.getNumberOfPages()})`);
+  ok(count(s, 'Receipts') >= d.getNumberOfPages(), 'rp_long: the Receipts / Payments header repeats on every page');
+  ok(s.includes('Certified that the above Receipts'), 'rp_long: the certificate and signatures are still printed');
+}
+
+console.log(`\nBS/TB/R&P horizontal landscape PDFs: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

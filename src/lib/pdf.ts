@@ -620,36 +620,55 @@ export function generateReceiptsPaymentsPDF(data: ReceiptsPaymentsData, society:
     ['  Cash at Bank', fmt(closingBank)],
   ];
 
-  // Dr (Receipts) side — left half
+  // ONE zipped table: Dr — Receipts on the LEFT, Cr — Payments on the RIGHT, row by row. Two separate
+  // half-width tables (the old layout) paginated independently — each repeated its own Total on every
+  // page (a partial Total at the foot of page 1), the Payments table started on a later page with a blank
+  // left half, and the narrow amount column wrapped "Rs." onto its own line. A single table keeps both
+  // sides on the same page, repeats the header on every page and prints the two Totals once, side by side.
+  // A side row is [band] (ONE cell, colSpan 2 — it covers both of that side's columns) or [label, amount].
+  const L = drBody as unknown as unknown[][];
+  const R = crBody as unknown as unknown[][];
+  const blankSide: unknown[] = ['', ''];
+  const zipped: RowInput[] = [];
+  for (let i = 0; i < Math.max(L.length, R.length); i++) zipped.push([...(L[i] ?? blankSide), ...(R[i] ?? blankSide)] as RowInput);
+
+  const rpW = doc.internal.pageSize.width - 30;          // 15 mm margins, aligned with header/footer text
+  const rpAmt = 40;                                       // wide enough for "Rs. 8,20,09,232.17" bold without wrapping
+  const rpLabel = rpW / 2 - rpAmt;
+
   autoTable(doc, {
     startY,
-    margin: { left: 15, right: 158 },
-    head: [['Dr — Receipts', 'Amount']],
-    body: drBody,
-    foot: [['Total', fmt(drTotal)]],
-    styles: { fontSize: 8, cellPadding: 2, font },
-    headStyles: { fillColor: [25, 135, 84], textColor: 255, fontStyle: 'bold' },
+    margin: { left: 15, right: 15 },
+    tableWidth: rpW,
+    head: [['Dr — Receipts', 'Amount', 'Cr — Payments', 'Amount']],
+    body: zipped,
+    foot: [['Total', fmt(drTotal), 'Total', fmt(crTotal)]],
+    showFoot: 'lastPage',
+    columnStyles: {
+      0: { cellWidth: rpLabel }, 1: { cellWidth: rpAmt, halign: 'right' },
+      2: { cellWidth: rpLabel }, 3: { cellWidth: rpAmt, halign: 'right' },
+    },
+    styles: { fontSize: 7.5, cellPadding: 1.8, font, overflow: 'linebreak' },
+    headStyles: { textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
-    columnStyles: { 1: { halign: 'right' } },
-    didParseCell: rightAlignAmountColumns(1),
-  });
-  const drFinalY = (doc as any).lastAutoTable.finalY;
-
-  // Cr (Payments) side — right half
-  autoTable(doc, {
-    startY,
-    margin: { left: 154, right: 15 },
-    head: [['Cr — Payments', 'Amount']],
-    body: crBody,
-    foot: [['Total', fmt(crTotal)]],
-    styles: { fontSize: 8, cellPadding: 2, font },
-    headStyles: { fillColor: [220, 53, 69], textColor: 255, fontStyle: 'bold' },
-    footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
-    columnStyles: { 1: { halign: 'right' } },
-    didParseCell: rightAlignAmountColumns(1),
+    didParseCell: (data) => {
+      if (data.section === 'head') {
+        data.cell.styles.fillColor = data.column.index < 2 ? [25, 135, 84] : [220, 53, 69];
+        if (data.column.index % 2 === 1) data.cell.styles.halign = 'right';
+      }
+      if (data.section === 'foot' && data.column.index % 2 === 1) data.cell.styles.halign = 'right';
+    },
+    // Vertical rule between Receipts and Payments, drawn per cell so it survives page breaks.
+    didDrawCell: (data) => {
+      if (data.column.index === 2) {
+        doc.setDrawColor(120);
+        doc.setLineWidth(0.3);
+        doc.line(data.cell.x, data.cell.y, data.cell.x, data.cell.y + data.cell.height);
+      }
+    },
   });
 
-  const rpFinalY = Math.max(drFinalY, (doc as any).lastAutoTable.finalY) + 10;
+  const rpFinalY = (doc as any).lastAutoTable.finalY + 10;
   const rpSig = getSignatoryNames(society);
   addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], rpFinalY,
     'Certified that the above Receipts & Payments Account is correct as per the Books of Account of the Society.',
