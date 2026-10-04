@@ -58,7 +58,12 @@ const BankBook: React.FC = () => {
   const zeroWarn = bankBookZeroWarning({
     selectedOpening: openingBalance,
     selectedEntryCount: entries.length,
-    otherBalances: bankIds.filter(id => id !== activeBankId).map(id => getAccountBalance(id)),
+    otherBalances: bankIds.filter(id => id !== activeBankId).map(id => {
+      const rows = getBankBookEntries(undefined, undefined, id);
+      if (rows.length > 0) return rows[rows.length - 1].runningBalance;
+      const acc = accounts.find(x => x.id === id);
+      return acc ? (acc.openingBalanceType === 'debit' ? acc.openingBalance : -acc.openingBalance) : 0;
+    }),
   });
   const zeroWarnText = zeroWarn.warn
     ? `Is bank khate mein koi entry ya shesh nahi hai, jabki dusre bank khaaton mein Rs. ${zeroWarn.otherTotal.toLocaleString('en-IN')} ka shesh hai — upar se sahi bank khata chuniye.`
