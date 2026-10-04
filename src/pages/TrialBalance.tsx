@@ -16,12 +16,13 @@ import { fmtDate } from '@/lib/dateUtils';
 import { isEmptyPeriod } from '@/lib/reportComparative';
 import { PrintButton, PrintHeader } from '@/components/ReportPrint';
 import ReportTieOutCard from '@/components/ReportTieOutCard';
+import { groupWithSubtotals } from '@/lib/reports/groupSubtotals';
 
 const TrialBalance: React.FC = () => {
   const { t, language } = useLanguage();
   const { can } = useAuth();
   const canExport = can('export');   // ECR-19
-  const { getTrialBalance, society } = useData();
+  const { getTrialBalance, society, accounts } = useData();
   const navigate = useNavigate();
   // P1-5: Default to the last day of the selected FY (31 March), not today's date.
   const fyEndDate = (() => {
@@ -113,6 +114,16 @@ const TrialBalance: React.FC = () => {
     headerClass: string,
   ) => {
     const t2 = sectionTotals(rows);
+    // Head / Sub-head rows (bold) over the ledger rows: opening / debit / credit / closing of every ledger beneath.
+    // Presentation only — each ledger row is unchanged and the section subtotal still sums the ledgers.
+    const chartRoots = accounts.filter(a => !a.parentId).map(a => a.id);
+    const gRows = groupWithSubtotals(rows.map(b => ({
+      name: b.account.name, amount: b.netBalance, parentId: b.account.parentId, b,
+      vals: [b.openingDebit - b.openingCredit, b.transactionDebit || 0, b.transactionCredit || 0],
+    })), accounts, chartRoots);
+    const drCr = (n: number) => n > 0.004 ? <>{fmt(n)} <span className="text-[10px] text-info">Dr</span></>
+      : n < -0.004 ? <>{fmt(-n)} <span className="text-[10px] text-warning">Cr</span></> : '—';
+    let serial = 0;
     return (
       <>
         <TableRow className={headerClass}>
@@ -126,10 +137,20 @@ const TrialBalance: React.FC = () => {
               {language === 'hi' ? 'कोई खाता नहीं' : 'No accounts'}
             </TableCell>
           </TableRow>
-        ) : rows.map((b, i) => (
+        ) : gRows.map(r => r.kind === 'group' ? (
+          <TableRow key={'g' + r.groupId} className="bg-muted/40 font-semibold">
+            <TableCell />
+            <TableCell style={{ paddingLeft: `${0.5 + r.depth}rem` }}>{r.name}</TableCell>
+            <TableCell className="text-right text-sm">{drCr(r.vals?.[0] ?? 0)}</TableCell>
+            <TableCell className="text-right">{(r.vals?.[1] ?? 0) > 0 ? fmt(r.vals![1]) : '—'}</TableCell>
+            <TableCell className="text-right">{(r.vals?.[2] ?? 0) > 0 ? fmt(r.vals![2]) : '—'}</TableCell>
+            <TableCell className="text-right">{drCr(r.amount)}</TableCell>
+            {hasPY && <TableCell />}
+          </TableRow>
+        ) : ((b: typeof allBalances[number], i: number, depth: number) => (
           <TableRow key={b.account.id} className="hover:bg-muted/30">
-            <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-            <TableCell className="font-medium">
+            <TableCell className="text-muted-foreground">{i}</TableCell>
+            <TableCell className="font-medium" style={{ paddingLeft: `${0.5 + depth}rem` }}>
               <button className="text-left hover:text-primary hover:underline" onClick={() => navigate(`/ledger?account=${b.account.id}`)} title={language === 'hi' ? 'खाता-बही खोलें' : 'Open ledger'}>
                 {language === 'hi' ? b.account.nameHi : b.account.name}
               </button>
@@ -154,7 +175,7 @@ const TrialBalance: React.FC = () => {
                 : getPY(b.account.id) < 0 ? <>{fmt(-getPY(b.account.id))} <span className="text-[9px]">Cr</span></> : '—'}
             </TableCell>}
           </TableRow>
-        ))}
+        ))((r.line as { b: typeof allBalances[number] }).b, ++serial, r.depth))}
         <TableRow className="bg-muted/50 font-semibold">
           <TableCell colSpan={2} className="text-right">
             {(language === 'hi' ? titleHi : titleEn)} — {language === 'hi' ? 'उप-योग' : 'Subtotal'}
@@ -189,7 +210,7 @@ const TrialBalance: React.FC = () => {
         </div>
         <div className="flex gap-2 flex-wrap">
           <PrintButton />
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateTrialBalancePDF(balances, society, asOnDate, language)}>
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateTrialBalancePDF(balances, society, asOnDate, language, accounts)}>
             <Download className="h-4 w-4" />PDF
           </Button>
           {canExport && <>

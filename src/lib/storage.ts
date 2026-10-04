@@ -152,6 +152,17 @@ export function getBankAccountIds(accounts: { id: string; parentId?: string; isG
   return [ACCOUNT_IDS.BANK, ...children];
 }
 
+/**
+ * The bank account a posting should use when the caller named none. Real sub-accounts win: the head 3302
+ * is stored as a plain (non-group) account on some societies, so getBankAccountIds()[0] would be the
+ * head itself and the entry would land on the parent "Bank Accounts" instead of a bank. The head is the
+ * default only when it has no sub-accounts.
+ */
+export function defaultBankAccountId(accounts: { id: string; parentId?: string; isGroup?: boolean; subtype?: string }[]): string {
+  const children = accounts.filter(a => !a.isGroup && a.parentId === ACCOUNT_IDS.BANK).map(a => a.id);
+  return children[0] || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK;
+}
+
 /** Check if an account ID is a bank account (direct or sub-account of 3302) */
 export function isBankAccount(accountId: string, accounts: { id: string; parentId?: string; isGroup?: boolean }[]): boolean {
   if (accountId === ACCOUNT_IDS.BANK) return true;

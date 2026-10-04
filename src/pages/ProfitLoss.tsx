@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TrendingUp, TrendingDown, Download, ArrowUp, ArrowDown, FileSpreadsheet, Shield, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateIncomeExpenditurePDF } from '@/lib/pdf';
+import { reclassifyIncomeExpenditure } from '@/lib/reports/negativeLines';
+import { groupWithSubtotals, type GroupableLine } from '@/lib/reports/groupSubtotals';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { deltaProfitLoss, isEmptyPL } from '@/lib/reportComparative';
@@ -24,7 +26,7 @@ const ProfitLoss: React.FC = () => {
   const { can } = useAuth();
   const canExport = can('export');   // ECR-19
   const navigate = useNavigate();
-  const { getProfitLoss, society, vouchers } = useData();
+  const { getProfitLoss, society, vouchers, accounts } = useData();
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -35,7 +37,15 @@ const ProfitLoss: React.FC = () => {
   const fyEndDate = `20${society.financialYear.split('-')[1]}-03-31`;
   const { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit } = getProfitLoss(fyEndDate);
   const isSurplus = netProfit >= 0;
-  const grandTotal = isSurplus ? totalIncome : totalExpenses;
+  // A line that is negative on its own side (an income ledger in debit, an expense ledger in credit) is shown positive on
+  // the opposite side; Head / Sub-head rows carry subtotals. Presentation only: the surplus / deficit is the net and
+  // does not change, and every ledger line keeps its own amount.
+  const ieSides = reclassifyIncomeExpenditure(incomeItems, expenseItems);
+  const expRows = groupWithSubtotals(ieSides.expense as (typeof ieSides.expense[number] & GroupableLine)[], accounts, ['5000']);
+  const incRows = groupWithSubtotals(ieSides.income as (typeof ieSides.income[number] & GroupableLine)[], accounts, ['4000']);
+  const printIncomeTotal = ieSides.income.reduce((s, i) => s + i.amount, 0);
+  const printExpenseTotal = ieSides.expense.reduce((s, i) => s + i.amount, 0);
+  const grandTotal = isSurplus ? printIncomeTotal : printExpenseTotal;
 
   // ECR-19: prior-year I&E is now COMPUTED as a period-delta — the flows DURING the
   // prior FY = cumulative(prior FY end) − cumulative(prior FY start). Falls back to
@@ -54,6 +64,20 @@ const ProfitLoss: React.FC = () => {
     : (society.previousFinancialYear || '');
   const getPYIncome = (name: string) => pyIE?.incomeItems.find(i => i.name === name)?.amount ?? 0;
   const getPYExpense = (name: string) => pyIE?.expenseItems.find(i => i.name === name)?.amount ?? 0;
+  // One row per Head (bold, subtotal in "Grand") or ledger line (amount in "Amount"; top-level lines in "Grand").
+  const renderRows = (rows: ReturnType<typeof groupWithSubtotals>, py: (name: string) => number) => rows.map((r, i) => {
+    const line = r.line as { nameHi?: string } | undefined;
+    const label = r.kind === 'item' && hi && line?.nameHi ? line.nameHi : r.name;
+    const isGroup = r.kind === 'group';
+    return (
+      <TableRow key={i} className={isGroup ? 'bg-muted/40 font-semibold' : undefined}>
+        <TableCell style={{ paddingLeft: `${0.5 + r.depth * 1}rem` }}>{label}</TableCell>
+        {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{!isGroup && py(r.name) ? fmt(py(r.name)) : '—'}</TableCell>}
+        <TableCell className="text-right font-medium">{r.depth > 0 ? fmt(r.amount) : ''}</TableCell>
+        <TableCell className="text-right font-medium">{r.depth === 0 ? fmt(r.amount) : ''}</TableCell>
+      </TableRow>
+    );
+  });
 
   // ── Audit C-10: read ACTUAL journalled appropriations, not hardcoded 25% ────
   // NCDC principle (l): appropriation of surplus is SEPARATE from the P&L/I&E.
@@ -130,7 +154,7 @@ const ProfitLoss: React.FC = () => {
             variant="outline"
             size="sm"
             className="gap-2"
-            onClick={() => generateIncomeExpenditurePDF(incomeItems, expenseItems, society, language, postedReserve)}
+            onClick={() => generateIncomeExpenditurePDF(incomeItems, expenseItems, society, language, postedReserve, accounts)}
           >
             <Download className="h-4 w-4" />PDF
           </Button>
@@ -275,23 +299,18 @@ const ProfitLoss: React.FC = () => {
                     <TableHead>{hi ? 'विवरण' : 'Particulars'}</TableHead>
                     {hasPY && <TableHead className="text-right text-muted-foreground text-xs">{pyLabel}</TableHead>}
                     <TableHead className="text-right">{hi ? 'राशि' : 'Amount'}</TableHead>
+                    <TableHead className="text-right">{hi ? 'योग' : 'Grand'}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {expenseItems.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={hasPY ? 3 : 2} className="text-center text-muted-foreground">
+                      <TableCell colSpan={hasPY ? 4 : 3} className="text-center text-muted-foreground">
                         {hi ? 'कोई व्यय नहीं' : 'No expenses'}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    expenseItems.map((item, i) => (
-                      <TableRow key={i}>
-                        <TableCell>{hi ? item.nameHi : item.name}</TableCell>
-                        {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{getPYExpense(item.name) ? fmt(getPYExpense(item.name)) : '—'}</TableCell>}
-                        <TableCell className="text-right font-medium">{fmt(item.amount)}</TableCell>
-                      </TableRow>
-                    ))
+                    renderRows(expRows, getPYExpense)
                   )}
                   {/* Net Surplus / Deficit row — FULL surplus to Balance Sheet.
                       Appropriation (reserve/education) is shown SEPARATELY below,
@@ -302,12 +321,14 @@ const ProfitLoss: React.FC = () => {
                         {hi ? 'नेट सरप्लस (बैलेंस शीट में)' : 'Net Surplus (to Balance Sheet)'}
                       </TableCell>
                       {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyIE && pyIE.netProfit >= 0 ? fmt(pyIE.netProfit) : '—'}</TableCell>}
+                      <TableCell />
                       <TableCell className="text-right text-success">{fmt(netProfit)}</TableCell>
                     </TableRow>
                   )}
                   <TableRow className="bg-muted font-bold text-lg">
                     <TableCell>{hi ? 'कुल' : 'Total'}</TableCell>
                     {hasPY && <TableCell className="text-right text-muted-foreground">{pyIE ? fmt(pyIE.totalIncome) : '—'}</TableCell>}
+                    <TableCell />
                     <TableCell className="text-right">{fmt(grandTotal)}</TableCell>
                   </TableRow>
                 </TableBody>
@@ -326,23 +347,18 @@ const ProfitLoss: React.FC = () => {
                     <TableHead>{hi ? 'विवरण' : 'Particulars'}</TableHead>
                     {hasPY && <TableHead className="text-right text-muted-foreground text-xs">{pyLabel}</TableHead>}
                     <TableHead className="text-right">{hi ? 'राशि' : 'Amount'}</TableHead>
+                    <TableHead className="text-right">{hi ? 'योग' : 'Grand'}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {incomeItems.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={hasPY ? 3 : 2} className="text-center text-muted-foreground">
+                      <TableCell colSpan={hasPY ? 4 : 3} className="text-center text-muted-foreground">
                         {hi ? 'कोई आय नहीं' : 'No income'}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    incomeItems.map((item, i) => (
-                      <TableRow key={i}>
-                        <TableCell>{hi ? item.nameHi : item.name}</TableCell>
-                        {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{getPYIncome(item.name) ? fmt(getPYIncome(item.name)) : '—'}</TableCell>}
-                        <TableCell className="text-right font-medium">{fmt(item.amount)}</TableCell>
-                      </TableRow>
-                    ))
+                    renderRows(incRows, getPYIncome)
                   )}
                   {/* A deficit is the BALANCING figure on the income side (excess of expenditure over
                       income) — shown once, here, so the income column foots to the total. */}
@@ -352,12 +368,14 @@ const ProfitLoss: React.FC = () => {
                         {hi ? 'घाटा (बैलेंस शीट में)' : 'Deficit (to Balance Sheet)'}
                       </TableCell>
                       {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyIE && pyIE.netProfit < 0 ? fmt(Math.abs(pyIE.netProfit)) : '—'}</TableCell>}
+                      <TableCell />
                       <TableCell className="text-right text-destructive">{fmt(Math.abs(netProfit))}</TableCell>
                     </TableRow>
                   )}
                   <TableRow className="bg-muted font-bold text-lg">
                     <TableCell>{hi ? 'कुल' : 'Total'}</TableCell>
                     {hasPY && <TableCell className="text-right text-muted-foreground">{pyIE ? fmt(pyIE.totalIncome) : '—'}</TableCell>}
+                    <TableCell />
                     <TableCell className="text-right">{fmt(grandTotal)}</TableCell>
                   </TableRow>
                 </TableBody>

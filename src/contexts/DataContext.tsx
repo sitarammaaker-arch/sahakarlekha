@@ -47,7 +47,7 @@ import { computeStock, computeStockValue, computeStockCostRate, reconcileMovemen
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
 import * as storage from '@/lib/storage';
-import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds } from '@/lib/storage';
+import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
 import { isUniqueViolation, isMissingBranchColumn, payloadWithoutMissingColumn, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
@@ -2096,7 +2096,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       });
     }
-    const acct = input.mode === 'bank' ? (input.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const acct = input.mode === 'bank' ? (input.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     const t = buildInterBranchTransfer({ fromBranchId: input.fromBranchId, toBranchId: input.toBranchId, amount: amt, fromAccountId: acct, toAccountId: acct });
     const lid = () => crypto.randomUUID();
     const nameOf = (id: string) => branches.find(b => b.id === id)?.name || 'branch';
@@ -2132,7 +2132,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     const debitAcc = data.paymentMode === 'cash'
       ? ACCOUNT_IDS.CASH
-      : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+      : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
     const billAllocations: BillAllocation[] = [
       ...allocs.map(a => {
         const sale = salesRef.current.find(s => s.id === a.saleId);
@@ -2190,7 +2190,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     const creditAcc = data.paymentMode === 'cash'
       ? ACCOUNT_IDS.CASH
-      : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+      : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
     const billAllocations: BillAllocation[] = [
       ...allocs.map(a => {
         const p = purchasesRef.current.find(x => x.id === a.purchaseId);
@@ -3067,7 +3067,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const plan = planJoiningReceipts(m, {
       financialYear: societyRef.current?.financialYear || '',
       today: new Date().toISOString().slice(0, 10),
-      bankAccountId: getBankAccountIds(accountsRef.current)[0] || null,
+      bankAccountId: defaultBankAccountId(accountsRef.current) || null,
     });
     if (plan.mode === 'historical') {
       if (!opts.quiet) {
@@ -3341,7 +3341,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!member) return;
     const refund = toRupees(toMinor(Math.max(0, Math.min(amount, member.shareCapital || 0))));
     if (!(refund > 0)) { toastRef.current({ title: 'Invalid amount', description: 'Refund must be > 0 and ≤ current share capital.', variant: 'destructive' }); return; }
-    const creditAcc = mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const creditAcc = mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     addVoucher({
       type: 'payment', date,
       debitAccountId: ACCOUNT_IDS.SHARE_CAP, creditAccountId: creditAcc, amount: refund,
@@ -3411,7 +3411,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardPeriodLock(date)) return false;
     const payableId = shareRefundPayableAccountId(accounts);
     if (!payableId) { toastRef.current({ ...MISSING_HEAD_TOAST.shareRefund, variant: 'destructive', duration: 12000 }); return false; }
-    const cashBank = mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const cashBank = mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     const built = buildShareRefundPayment({ amount, outstanding: shareRefundOutstanding(vouchersRef.current, memberId), payableAccountId: payableId, cashBankAccountId: cashBank });
     if (built.ok === false) {
       if (built.error !== 'no_payable_head') toastRef.current({ title: 'शेयर वापसी का भुगतान नहीं हुआ', description: SHARE_REFUND_MESSAGE[built.error], variant: 'destructive', duration: 10000 });
@@ -3441,7 +3441,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!v.ok) { toastRef.current({ title: 'अमान्य शेयर संचालन', description: v.error, variant: 'destructive', duration: 9000 }); return false; }
     const date = opts?.date || new Date().toISOString().split('T')[0];
     if (guardPeriodLock(date)) return false;
-    const payout = opts?.mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const payout = opts?.mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     const reserve = opts?.reserveAccountId || '1201';
     const posting = shareOpPosting(type, { shareCap: ACCOUNT_IDS.SHARE_CAP, payout, reserve });
     const LABELS: Record<ShareOpType, string> = { bonus: 'Bonus shares issued to', forfeit: 'Shares forfeited from', redeem: 'Shares redeemed for', surrender: 'Shares surrendered by' };
@@ -3479,7 +3479,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!member) return;
     const buy = toRupees(toMinor(Math.max(0, amount)));
     if (!(buy > 0)) { toastRef.current({ title: 'Invalid amount', description: 'Amount must be > 0.', variant: 'destructive' }); return; }
-    const debitAcc = mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const debitAcc = mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     addVoucher({
       type: 'receipt', date,
       debitAccountId: debitAcc, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: buy,
@@ -3546,7 +3546,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     // ECR-16 (MS-11): premium paid to the society → Dr Cash/Bank / Cr Reserve (capped above).
     if (prem > 0) {
-      const payout = opts?.mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+      const payout = opts?.mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
       addVoucher({
         type: 'receipt', date, debitAccountId: payout, creditAccountId: opts?.reserveAccountId || '1201', amount: prem,
         narration: `Share transfer premium from ${to.name} (transfer from ${from.name}) — ${date}`,
@@ -3587,7 +3587,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // FD sits in 2108 only where that id really is Fixed Deposits (PACS); elsewhere it is another head or absent.
     const liability = resolveDepositLiabilityAccount(acct.depositType, accounts);
     if (!liability) { toastRef.current({ ...missingDepositHeadToast(acct.depositType), variant: 'destructive', duration: 12000 }); return null; }
-    const cashBank = mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const cashBank = mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     const posting = depositPosting(txnType, { liability, cashBank });
     const member = membersRef.current.find(m => m.id === acct.memberId);
     const voucher = addVoucher({
@@ -3950,7 +3950,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const accruedPortion = toRupees(sumMinor(allocs.filter(a => a.entry.accrued).map(a => toMinor(a.amount))));
     const directPortion = toRupees(subMinor(toMinor(total), toMinor(accruedPortion)));
     const wo = workOrders.find(w => w.id === data.workOrderId);
-    const creditAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const creditAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
     const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
@@ -5151,7 +5151,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ECR: credit side by mode. 'agency' = the agency (Hafed) paid the farmers directly, so
     // the society's cash/bank are untouched — we Cr the agency receivable instead (crediting
     // cash/bank there wrongly drove those balances negative).
-    const bankFallback = data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK;
+    const bankFallback = data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK;
     const creditAcc = resolveFarmerPaymentCredit(data.mode, { cash: ACCOUNT_IDS.CASH, bank: bankFallback, agency: data.agencyAccountId });
     if (data.mode === 'agency' && (!creditAcc || !accounts.some(a => a.id === creditAcc && !a.isGroup))) {
       toastRef.current({ title: 'एजेंसी खाता चुनें', description: 'सीधे-एजेंसी भुगतान के लिए एक वैध एजेंसी प्राप्य खाता (जैसे Hafed Control) चुनें।', variant: 'destructive', duration: 9000 });
@@ -5302,7 +5302,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'प्रस्ताव संख्या आवश्यक', description: `₹${FUND_RESOLUTION_THRESHOLD.toLocaleString('en-IN')} से ऊपर निधि उपयोग के लिए समिति/AGM प्रस्ताव संख्या दर्ज करें।`, variant: 'destructive', duration: 12000 });
       return null;
     }
-    const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const resNote = data.resolutionNo?.trim() ? `प्रस्ताव ${data.resolutionNo.trim()}` : '';
     const note = [data.purpose?.trim(), resNote].filter(Boolean).join(' · ');
@@ -5369,7 +5369,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [accounts, activeVouchers, ledgerReport, openingsInScope]);
 
   const getBankBookEntries = useCallback((fromDate?: string, toDate?: string, bankAccountId?: string): BankBookEntry[] => {
-    const targetBankId = bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK;
+    const targetBankId = bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK;
     // K4: the voucher-state compute is a pure module (lib/reports/accountBook) — same formula, testable alone.
     const book = computeBankBook({ accounts, vouchers: activeVouchers, accountId: targetBankId, fromDate, toDate, openingsInScope });
     if (!book) return [];
@@ -5568,7 +5568,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ECR-15: capitalize a NEW purchase — Dr Fixed-Asset / Cr Cash-Bank. Off by default so
     // opening/historical assets stay register-only (no voucher, no double-count).
     if (opts?.capitalize && (data.cost || 0) > 0) {
-      const cashBank = opts.mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+      const cashBank = opts.mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
       const posting = assetAcquisitionPosting(data.category, data.cost, cashBank);
       const v = addVoucher({
         type: 'payment', date: data.purchaseDate || new Date().toISOString().split('T')[0],
@@ -5629,7 +5629,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let accum = 0, cursor = fyOfDate(new Date(asset.purchaseDate)), guard = 0;
     while (cursor <= disposalFY && guard++ < 200) { accum += calcDepForFY(asset, cursor, accum); cursor = nextFY(cursor); }
     accum = Math.min(accum, asset.cost - (asset.residualValue || 0));
-    const cashBank = opts.mode === 'bank' ? (getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
+    const cashBank = opts.mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     const posting = assetDisposalPosting({ category: asset.category, cost: asset.cost, accumDep: accum, saleProceeds: opts.saleProceeds, cashBankAccount: cashBank });
     const firstDr = posting.lines.find(l => l.type === 'Dr');
     const firstCr = posting.lines.find(l => l.type === 'Cr');
@@ -6223,7 +6223,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Dr: Cash / Bank / Debtor for grand total
     const debitAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
-      : data.paymentMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
+      : data.paymentMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK)
       // Credit: an explicit receivable account (e.g. Consumer member-receivable control) wins,
       // else the linked customer's sub-ledger, else Sundry Debtors.
       : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303'));
@@ -6502,7 +6502,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const grandTotal = data.grandTotal ?? data.netAmount;
     const lines: VoucherLine[] = [];
     const debitAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
-      : data.paymentMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
+      : data.paymentMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK)
       // Credit: an explicit receivable account (e.g. Consumer member-receivable control) wins,
       // else the linked customer's sub-ledger, else Sundry Debtors.
       : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303'));
@@ -6625,7 +6625,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const lines: VoucherLine[] = [];
     const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || '2101') : '2101';
     const creditAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
-      : data.paymentMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
+      : data.paymentMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK)
       : supplierAccId;
 
     // Dr: Purchases A/c — split by each item's purchaseAccountId so multi-product
@@ -6904,7 +6904,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const lines: VoucherLine[] = [];
     const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || '2101') : '2101';
     const creditAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
-      : data.paymentMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK)
+      : data.paymentMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK)
       : supplierAccId;
 
     // T-02 / RULE 4: exact-paise split by purchaseAccountId (same shared rule as addPurchase / repair).
@@ -7174,7 +7174,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // back to the old expense-on-pay (Dr 5201 / Cr Bank) so their books stay correct.
       const emp = employees.find(e => e.id === oldRecord.employeeId);
       // Pay from the chosen bank; fall back to the first bank when none picked (unchanged default).
-      const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (merged.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+      const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (merged.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
       const debitAcc = oldRecord.accrualVoucherId ? (accounts.find(a => a.id === '2103')?.id || '2103') : '5201';
       const newV = addVoucher({
         type: 'payment' as const,
@@ -7194,7 +7194,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const v = vouchersRef.current.find(x => x.id === oldRecord.voucherId);
         if (v && !v.isDeleted) {
           const emp = employees.find(e => e.id === oldRecord.employeeId);
-          const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (merged.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+          const creditAcc = merged.paymentMode === 'cash' ? ACCOUNT_IDS.CASH : (merged.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
           const payDebit = oldRecord.accrualVoucherId ? (accounts.find(a => a.id === '2103')?.id || '2103') : '5201';
           const newLines: VoucherLine[] = [
             { id: lid(), accountId: payDebit, type: 'Dr', amount: merged.netSalary },

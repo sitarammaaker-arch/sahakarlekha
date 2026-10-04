@@ -25,7 +25,7 @@ import { fetchAllPaged } from '@/lib/supabasePaging';
 import { resolveJurisdiction } from '@/lib/jurisdiction';
 import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
-import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
+import { ACCOUNT_IDS, getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
 import { computeBillLines, demandLegs, billTotal, round2, gstLineForBill } from '@/lib/housing/billing';
 import { plannedBillInterest } from '@/lib/housing/arrears';
 import { buildMemberStatement } from '@/lib/housing/statement';
@@ -424,7 +424,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (data.amount > outstanding) { toastRef.current({ title: 'राशि बकाया से अधिक', description: `भुगतान ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकता।`, variant: 'destructive', duration: 9000 }); return sentinel; }
     // Credit the exact account the demand debited (owner-member sub-ledger, or the 3303 control).
     const creditAcc = bill.receivableAccountId || '3303';
-    const debitAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const debitAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
     const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
@@ -469,7 +469,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const fund = accounts.find(a => a.id === data.fundAccountId);
     if (!fund) { toastRef.current({ title: 'निधि खाता नहीं मिला', description: 'Fund account not found', variant: 'destructive', duration: 8000 }); return sentinel; }
     if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
-    const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const note = data.note?.trim() ? ` · ${data.note.trim()}` : '';
     const debitAcc = data.toFund ? bankAcc : data.fundAccountId;   // toFund → Dr bank/Cr fund; else Dr fund/Cr bank
@@ -549,7 +549,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       toastRef.current({ title: 'खाता नहीं मिला', description: 'निधि या निवेश खाता चार्ट में नहीं है।', variant: 'destructive', duration: 9000 }); return blank;
     }
     if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'निवेश राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return blank; }
-    const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
     const fund = accounts.find(a => a.id === data.fundAccountId)!;
     const lid = () => crypto.randomUUID();
     const id = crypto.randomUUID();
@@ -583,7 +583,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return;
     const inv = fundInvestments.find(i => i.id === data.id && !i.isDeleted);
     if (!inv || inv.status === 'redeemed') return;
-    const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+    const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     // Redeem at maturity value if given: principal returns to bank, and any interest earned accrues
     // DIRECTLY to the fund's own corpus (ring-fenced fund investment income) — consistent with the
@@ -747,7 +747,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const lid = () => crypto.randomUUID();
     let voucherId: string | undefined;
     if (fee + prem > 0) {
-      const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK);
+      const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
       const feeAcc = accounts.some(a => a.id === '4201') ? '4201' : '4400';
       const premAcc = accounts.some(a => a.id === '1202') ? '1202' : feeAcc;
       const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: bankAcc, type: 'Dr', amount: round2(fee + prem) }];
