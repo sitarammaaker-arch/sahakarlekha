@@ -143,8 +143,9 @@ const materialise = (specs, prefix) => specs.map((s, i) => ({ ...s.template, id:
   ok(/society\.fyLocked/.test(hook), 'hook: FY-lock guard (RULE 6)');
   ok(/can\('config'\)/.test(hook) && /isSuperAdmin/.test(hook), 'hook: permission + super-admin guard');
   ok(/inFlight\.current/.test(hook), 'hook: in-flight lock');
-  const iErr = hook.indexOf('if (error)'), iAdd = hook.indexOf('addAccount(spec.template)');
+  const iErr = hook.indexOf('if (error)'), iAdd = hook.indexOf('addAccount(m.template');
   ok(iErr > 0 && iAdd > iErr, 'hook: DB read error bails before any addAccount');
+  ok(/materialiseDomainAccount\(spec, chart\)/.test(hook), 'hook: creates from the template materialised against the DB-fresh chart');
 }
 
 console.log(`domain-account-provisioning: ${pass} passed, ${fail} failed`);

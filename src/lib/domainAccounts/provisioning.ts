@@ -34,10 +34,13 @@ import {
   resolveMilkProcurementAccountId, resolveMilkBulkSalesAccountId, resolveMemberInputReceivableAccountId,
   resolveBonusDistributionAccountId, resolveBonusPayableAccountId,
 } from '@/lib/dairy/accounts';
+import {
+  procurementAccountMatches, resolveProcurementAccountId, PROCUREMENT_ACCOUNT_IDS, type ProcurementAccountRole,
+} from '@/lib/procurement/accounts';
 
-export type DomainCapability = 'pos_billing' | 'dairy_collection';
+export type DomainCapability = 'pos_billing' | 'dairy_collection' | 'procurement_msp';
 
-type Acc = Pick<LedgerAccount, 'id' | 'name' | 'nameHi' | 'subtype' | 'isGroup' | 'openingBalance' | 'openingBalanceType'>;
+type Acc = Pick<LedgerAccount, 'id' | 'name' | 'nameHi' | 'subtype' | 'isGroup' | 'openingBalance' | 'openingBalanceType'> & Partial<Pick<LedgerAccount, 'type'>>;
 
 export interface DomainAccountSpec {
   key: string;
@@ -48,6 +51,13 @@ export interface DomainAccountSpec {
   resolve: (accounts: ReadonlyArray<Acc>) => string | null;
   /** Every account that resolver COULD pick (its passes, unioned). */
   matches: (a: Acc) => boolean;
+  /**
+   * Create with this conventional template id when the society's chart does not already use it —
+   * fixed-id reports (state audit formats, CAS) then pick the ledger up. Taken → a fresh UUID.
+   */
+  preferredId?: string;
+  /** Parents to try, in order, when template.parentId is not in this chart (sugar has no 4200 group). */
+  parentFallbacks?: string[];
 }
 
 const consumer = (key: string, subtype: string, hints: string[], resolve: DomainAccountSpec['resolve'], template: Omit<LedgerAccount, 'id'>): DomainAccountSpec =>
@@ -55,6 +65,17 @@ const consumer = (key: string, subtype: string, hints: string[], resolve: Domain
 
 const dairy = (key: keyof typeof DAIRY_HINTS, subtype: string | null, resolve: DomainAccountSpec['resolve'], template: Omit<LedgerAccount, 'id'>): DomainAccountSpec =>
   ({ key: `dairy.${key}`, capability: 'dairy_collection', template, resolve, matches: a => dairyAccountMatches(a, subtype, DAIRY_ACCOUNT_IDS[key], DAIRY_HINTS[key]) });
+
+// The resolver needs `type` (the same id means different things across charts); a diagnostic row
+// built from a type-less account simply never matches.
+const typed = (a: Acc) => a as Acc & Pick<LedgerAccount, 'type'>;
+const procurement = (role: ProcurementAccountRole, template: Omit<LedgerAccount, 'id'>, parentFallbacks?: string[]): DomainAccountSpec =>
+  ({
+    key: `procurement.${role}`, capability: 'procurement_msp', template,
+    resolve: accounts => resolveProcurementAccountId(accounts.map(typed), role),
+    matches: a => procurementAccountMatches(typed(a), role),
+    preferredId: PROCUREMENT_ACCOUNT_IDS[role], parentFallbacks,
+  });
 
 export const DOMAIN_ACCOUNT_SPECS: ReadonlyArray<DomainAccountSpec> = [
   consumer('consumer.memberReceivable', MEMBER_RECEIVABLE_SUBTYPE, MEMBER_RECEIVABLE_HINTS, resolveMemberReceivableAccountId,
@@ -80,7 +101,36 @@ export const DOMAIN_ACCOUNT_SPECS: ReadonlyArray<DomainAccountSpec> = [
     { name: 'Patronage Bonus Distribution', nameHi: 'संरक्षण बोनस वितरण', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' }),
   dairy('bonusPayable', null, resolveBonusPayableAccountId,
     { name: 'Bonus Payable', nameHi: 'देय बोनस', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' }),
+
+  // MSP procurement (agent model) — exactly the marketing-chart ledgers (src/lib/storage.ts), so a
+  // PACS / sugar society posts the same way a CMS society does.
+  procurement('agencyReceivable',
+    { name: 'MSP Receivable', nameHi: 'प्राप्य MSP', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' }),
+  procurement('farmerPayable',
+    { name: 'MSP Payable to Farmers', nameHi: 'किसानों को देय MSP', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' }),
+  procurement('commissionReceivable',
+    { name: 'Commission Receivable', nameHi: 'प्राप्य कमीशन', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' }),
+  procurement('commissionIncome',
+    { name: 'Procurement Commission', nameHi: 'खरीद कमीशन', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200', subtype: 'commission_income' },
+    ['4400', '4000']),
 ];
+
+/**
+ * What to actually create for a planned spec against THIS chart (pass the DB-fresh chart): the
+ * template with a parent that exists here, and the conventional id if no account already has it.
+ * PURE — used by useDomainAccountProvisioning.
+ */
+export function materialiseDomainAccount(
+  spec: DomainAccountSpec,
+  chart: ReadonlyArray<Pick<LedgerAccount, 'id' | 'isGroup'>>,
+): { template: Omit<LedgerAccount, 'id'>; id?: string } {
+  const ids = new Set(chart.map(a => a.id));
+  const groups = new Set(chart.filter(a => a.isGroup).map(a => a.id));
+  let parentId = spec.template.parentId;
+  if (parentId && !groups.has(parentId)) parentId = (spec.parentFallbacks || []).find(p => groups.has(p)) ?? parentId;
+  const template = parentId === spec.template.parentId ? spec.template : { ...spec.template, parentId };
+  return spec.preferredId && !ids.has(spec.preferredId) ? { template, id: spec.preferredId } : { template };
+}
 
 /**
  * Specs the society's capabilities call for whose resolver finds NOTHING in `accounts`.

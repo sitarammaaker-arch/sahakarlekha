@@ -1,5 +1,5 @@
 /**
- * Domain accounts (Consumer / Dairy) — shown on Ledger Hygiene.
+ * Domain accounts (Consumer / Dairy / MSP procurement) — shown on Ledger Hygiene.
  *
  * The diagnostic part is READ-ONLY: it lists each domain role's candidate accounts, which one the
  * resolver currently posts to, and live-voucher counts, so duplicates left by the removed load-time
@@ -29,6 +29,12 @@ const STATUS_LABEL: Record<DomainAccountStatus, { hi: string; en: string }> = {
   duplicate: { hi: 'दोहरा', en: 'Duplicate' },
 };
 
+const CAPABILITY_LABEL: Record<string, { hi: string; en: string }> = {
+  pos_billing: { hi: 'उपभोक्ता', en: 'Consumer' },
+  dairy_collection: { hi: 'डेयरी', en: 'Dairy' },
+  procurement_msp: { hi: 'MSP खरीद', en: 'MSP procurement' },
+};
+
 const DomainAccountsCard: React.FC<{ hi: boolean }> = ({ hi }) => {
   const { accounts, vouchers, getAccountBalance } = useData();
   const { capabilities } = useCapabilities();
@@ -46,14 +52,14 @@ const DomainAccountsCard: React.FC<{ hi: boolean }> = ({ hi }) => {
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2 flex-wrap">
           <Layers className="h-4 w-4 text-primary" />
-          {hi ? 'डोमेन खाते (Consumer / Dairy)' : 'Domain accounts (Consumer / Dairy)'}
+          {hi ? 'डोमेन खाते (उपभोक्ता / डेयरी / MSP खरीद)' : 'Domain accounts (Consumer / Dairy / MSP procurement)'}
           {dupCount > 0 && <Badge variant="outline" className={cn('text-[10px]', STATUS_CLS.duplicate)}>{hi ? `${dupCount} दोहरे` : `${dupCount} duplicated`}</Badge>}
           {missing.length > 0 && <Badge variant="outline" className={cn('text-[10px]', STATUS_CLS.missing)}>{hi ? `${missing.length} नहीं हैं` : `${missing.length} missing`}</Badge>}
         </CardTitle>
         <p className="text-xs text-muted-foreground pl-6">
           {hi
-            ? 'Consumer/Dairy posting इन खातों पर जाती है। "पोस्टिंग यहाँ" वाला खाता ही अभी इस्तेमाल हो रहा है। दोहरे खाते पुराने auto-seeding से बने हैं — यह सूची सिर्फ़ जाँच है, इनमें से किसी को अभी merge या delete न करें।'
-            : 'Consumer/Dairy postings go to these accounts; the one marked "posts here" is in use today. Duplicates come from the old auto-seeding — this list is diagnostic only; do not merge or delete any of them yet.'}
+            ? 'Consumer/Dairy/MSP खरीद की posting इन खातों पर जाती है। "पोस्टिंग यहाँ" वाला खाता ही अभी इस्तेमाल हो रहा है। दोहरे खाते पुराने auto-seeding से बने हैं — यह सूची सिर्फ़ जाँच है, इनमें से किसी को अभी merge या delete न करें।'
+            : 'Consumer/Dairy/MSP procurement postings go to these accounts; the one marked "posts here" is in use today. Duplicates come from the old auto-seeding — this list is diagnostic only; do not merge or delete any of them yet.'}
         </p>
       </CardHeader>
       <CardContent className="pl-6 space-y-3">
@@ -70,7 +76,7 @@ const DomainAccountsCard: React.FC<{ hi: boolean }> = ({ hi }) => {
             <div className="flex items-center gap-2 text-xs flex-wrap">
               <Badge variant="outline" className={cn('text-[10px]', STATUS_CLS[r.status])}>{hi ? STATUS_LABEL[r.status].hi : STATUS_LABEL[r.status].en}</Badge>
               <span className="font-medium">{hi ? r.nameHi : r.name}</span>
-              <span className="text-muted-foreground">· {r.capability === 'pos_billing' ? 'Consumer' : 'Dairy'}</span>
+              <span className="text-muted-foreground">· {hi ? CAPABILITY_LABEL[r.capability]?.hi : CAPABILITY_LABEL[r.capability]?.en}</span>
               {!r.required && <span className="text-muted-foreground">· {hi ? 'capability बंद' : 'capability off'}</span>}
               {r.postingsSplit && <span className="text-red-700">· {hi ? 'posting बँटी हुई' : 'postings split'}</span>}
             </div>

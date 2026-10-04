@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Wheat, Plus, Sprout, Pencil, Trash2, CalendarDays, Building2, IndianRupee, Percent } from 'lucide-react';
+import { suggestDeductionAccountId, deductionAccountWarning, DEDUCTION_WARNING_TEXT } from '@/lib/procurement/agentFlow';
+import { Wheat, Plus, Sprout, Pencil, Trash2, CalendarDays, Building2, IndianRupee, Percent, AlertTriangle } from 'lucide-react';
 
 // Generic, national categories (every state has its own apex marketing federation);
 // the society enters its specific agency NAME and picks a category here.
@@ -173,6 +174,11 @@ export default function ProcurementMasters() {
     setDedOpen(false);
   };
   const basisLabel = (id: string) => { const b = DED_BASES.find(x => x.id === id); return b ? (hi ? b.hi : b.en) : id; };
+  // Picking a basis pre-selects a PAYABLE for third-party deductions (only if none chosen yet) — a
+  // suggestion only; existing rules are never remapped, they just get a warning below.
+  const onDedBasis = (b: string) => { setDBasis(b); if (!dAccountId) setDAccountId(suggestDeductionAccountId(b, accounts) || ''); };
+  const dDialogWarning = deductionAccountWarning(dBasis, accounts.find(a => a.id === dAccountId));
+  const ruleWarning = (r: { basis: string; accountId?: string }) => deductionAccountWarning(r.basis, accounts.find(a => a.id === r.accountId));
 
   // ── Quality-spec dialog ────────────────────────────────────────────────────────
   const [qsOpen, setQsOpen] = useState(false);
@@ -374,6 +380,12 @@ export default function ProcurementMasters() {
                   <div className="min-w-0">
                     <div className="font-medium">{hi && r.nameHi ? r.nameHi : (r.name || r.code)} <Badge variant="secondary" className="ml-1">{basisLabel(r.basis)}</Badge></div>
                     <div className="text-xs text-muted-foreground">{r.rate.value}% {hi ? 'सकल का' : 'of gross'}{r.accountId ? ` → ${r.accountId} ${accountName(r.accountId)}` : ''}</div>
+                    {ruleWarning(r) && (
+                      <div className="text-[11px] text-amber-700 flex items-start gap-1 mt-0.5">
+                        <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                        <span>{hi ? DEDUCTION_WARNING_TEXT[ruleWarning(r)!].hi : DEDUCTION_WARNING_TEXT[ruleWarning(r)!].en} {hi ? '(नियम हटाकर सही खाते से दोबारा बनाएँ — पुराने निपटान नहीं बदलेंगे।)' : '(Delete the rule and re-create it with the right account — past settlements are unchanged.)'}</span>
+                      </div>
+                    )}
                   </div>
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => deleteDeductionRule(r.id)} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
                 </div>
@@ -488,7 +500,7 @@ export default function ProcurementMasters() {
             <div className="space-y-1.5">
               <Label>{hi ? 'कमीशन दर (% खरीद मूल्य का)' : 'Commission rate (% of procurement value)'}</Label>
               <Input type="number" min={0} step="0.01" value={aCommission} onChange={e => setACommission(e.target.value)} placeholder="2.5" />
-              <p className="text-[11px] text-muted-foreground">{hi ? 'लॉट पोस्ट होने पर इसी दर से खरीद कमीशन (Dr 3314 / Cr 4206) दर्ज होगा।' : 'Procurement commission (Dr 3314 / Cr 4206) accrues at this rate when a lot is posted.'}</p>
+              <p className="text-[11px] text-muted-foreground">{hi ? 'लॉट बहीखाते में पोस्ट होने के बाद लॉट पर "कमीशन ₹…" बटन दबाने पर इसी दर से खरीद कमीशन (Dr प्राप्य कमीशन / Cr खरीद कमीशन) दर्ज होता है — यह अपने-आप नहीं होता।' : 'After a lot is posted, click its "Commission ₹…" button to accrue procurement commission at this rate (Dr Commission Receivable / Cr Procurement Commission) — it is not automatic.'}</p>
             </div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setAgOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button><Button onClick={saveAgency}>{hi ? 'सेव करें' : 'Save'}</Button></DialogFooter>
@@ -554,7 +566,7 @@ export default function ProcurementMasters() {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <Label>{hi ? 'आधार' : 'Basis'} *</Label>
-                <Select value={dBasis} onValueChange={setDBasis}>
+                <Select value={dBasis} onValueChange={onDedBasis}>
                   <SelectTrigger><SelectValue placeholder={hi ? 'आधार' : 'Basis'} /></SelectTrigger>
                   <SelectContent>{DED_BASES.map(b => <SelectItem key={b.id} value={b.id}>{hi ? b.hi : b.en}</SelectItem>)}</SelectContent>
                 </Select>
@@ -567,7 +579,10 @@ export default function ProcurementMasters() {
                 <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
                 <SelectContent>{postableAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} · {hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
               </Select>
-              <p className="text-[11px] text-muted-foreground">{hi ? 'जैसे: TDS→2202, मंडी शुल्क→4202, HRDF→2205, हमाली→4203, कमीशन→4205' : 'e.g. TDS→2202, Market Fee→4202, HRDF→2205, Labour→4203, Commission→4205'}</p>
+              {dDialogWarning && <p className="text-[11px] text-amber-700">{hi ? DEDUCTION_WARNING_TEXT[dDialogWarning].hi : DEDUCTION_WARNING_TEXT[dDialogWarning].en}</p>}
+              <p className="text-[11px] text-muted-foreground">{hi
+                ? 'किसान से किसी और के लिए काटी गई राशि "देय" (liability) खाते में जाती है: TDS→देय TDS, मंडी शुल्क→देय मंडी शुल्क (या देय व्यय), HRDF→देय HRDF, हमाली→देय हमाली (या देय व्यय)। आढ़त/समिति कमीशन तभी आय खाते में जाए जब समिति ख़ुद आढ़ती हो।'
+                : 'Money withheld for someone else goes to a payable (liability): TDS→TDS Payable, Market Fee→Market Fee Payable (or Expenses Payable), HRDF→HRDF Payable, Labour→Labour Payable (or Expenses Payable). Commission is income only when the society itself is the arhtiya.'}</p>
             </div>
             <p className="text-xs text-muted-foreground">{hi ? 'निपटान के समय यह नियम चुनते ही राशि (दर% × सकल) अपने-आप बनकर इसी खाते में पोस्ट होगी।' : 'At settlement, picking this rule auto-computes the amount (rate% × gross) and posts to this account.'}</p>
           </div>

@@ -17,7 +17,7 @@
  * M1a (this slice) adds the Crop & Variety masters + a "seed standard crops" helper. Seasons /
  * agencies / centres land in M1b, effective-dated MSP rates in M1c, deduction/quality/bardana in M1d.
  */
-import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -29,15 +29,15 @@ import { resolveJurisdiction } from '@/lib/jurisdiction';
 import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
 import { pickEffectiveMspRate } from '@/lib/marketing/msp';
-import { getVoucherLines } from '@/lib/voucherUtils';
+import { resolveProcurementAccountId } from '@/lib/procurement/accounts';
+import { todayStr } from '@/lib/dateUtils';
+import {
+  agencyBalances, receiptCap, isRejectedQuality,
+  AGENCY_RECEIPT_REF_TYPE, COMMISSION_RECEIPT_REF_TYPE, COMMISSION_ACCRUAL_REF_TYPE, type AgencyBalances,
+} from '@/lib/procurement/agentFlow';
 import type { Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
 import type { Transporter } from '@/lib/marketing/transport';
 import type { Voucher } from '@/types';
-
-// Dedicated marketing-chart ledgers (storage.ts).
-const MSP_RECEIVABLE_ACCOUNT = '3308';        // MSP recoverable from the agency
-const COMMISSION_RECEIVABLE_ACCOUNT = '3314'; // procurement commission receivable
-const PROCUREMENT_COMMISSION_ACCOUNT = '4206';// procurement commission income
 
 interface MarketingDataContextValue {
   marketingReady: boolean;
@@ -88,12 +88,18 @@ interface MarketingDataContextValue {
   addBardanaType: (data: { name: string; capacityKg: number; nameHi?: string }) => BardanaType;
   deleteBardanaType: (id: string) => void;
 
-  // Agency receipts against MSP Receivable (M3c) — derived from vouchers, no stored balance.
+  // Agency receipts (M3c) — derived from vouchers, no stored balance.
+  /** MSP reimbursements received (Dr bank|cash / Cr MSP Receivable). */
   agencyReceipts: Voucher[];
-  /** Net MSP Receivable outstanding = Σ(3308 Dr) − Σ(3308 Cr) across live vouchers. */
+  /** Commission received from the agency (Dr bank|cash / Cr Commission Receivable). */
+  commissionReceipts: Voucher[];
+  /** Net MSP Receivable outstanding (all agencies) = Σ Dr − Σ Cr across live vouchers. */
   agencyReceivableOutstanding: number;
-  /** Record money received from the agency: Dr bank|cash / Cr 3308 MSP Receivable. */
-  recordAgencyReceipt: (data: { amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string }) => Voucher;
+  /** MSP / commission receivable split per agency (traced lot → centre → agency; receipts by refId). */
+  mspBalances: AgencyBalances;
+  commissionBalances: AgencyBalances;
+  /** Money received from an agency against MSP (default) or commission. Refused above what is owed. */
+  recordAgencyReceipt: (data: { amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string; agencyId?: string; against?: 'msp' | 'commission' }) => Voucher;
   deleteAgencyReceipt: (voucherId: string) => void;
 
   // Transport — transporter master (T1)
@@ -104,8 +110,8 @@ interface MarketingDataContextValue {
 
   // Procurement commission accrual (M3d) — Dr 3314 Commission Receivable / Cr 4206 Procurement Commission.
   commissionAccruals: Voucher[];
-  /** Accrue commission for a lot (one per lot). amount = agency rate% × procurement value (caller computes). */
-  accrueProcurementCommission: (data: { lotId: string; amount: number; note?: string }) => Voucher;
+  /** Accrue commission for a lot (one per lot). amount = agency rate% × procurement value (caller computes); date = the lot's posting (J-Form) date. */
+  accrueProcurementCommission: (data: { lotId: string; amount: number; note?: string; date?: string }) => Voucher;
   deleteCommissionAccrual: (voucherId: string) => void;
 }
 
@@ -120,7 +126,7 @@ const STANDARD_CROPS: Array<{ name: string; code: string; nameHi: string }> = [
 ];
 
 export function MarketingProvider({ children }: { children: ReactNode }) {
-  const { society, procurementLots, accounts, vouchers, addVoucher, cancelVoucher } = useData();
+  const { society, procurementLots, procurementPostingRuleResults, procurementSettlements, procurementQualityTests, accounts, vouchers, addVoucher, cancelVoucher } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -652,36 +658,61 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     });
   }, [transporters, societyId]);
 
-  // ── Agency receipts against MSP Receivable (M3c) ──────────────────────────
+  // ── Agency receipts (M3c) + procurement commission (M3d) ──────────────────────────
   // Derived from vouchers (the voucher IS the record — no stored balance, mirrors farmer payments).
-  const agencyReceipts = vouchers.filter(v => !v.isDeleted && v.refType === 'procurement.agency.receipt');
-  const agencyReceivableOutstanding = +vouchers
-    .filter(v => !v.isDeleted)
-    .reduce((sum, v) => sum + getVoucherLines(v).reduce((s, l) => s + (l.accountId === MSP_RECEIVABLE_ACCOUNT ? (l.type === 'Dr' ? l.amount : -l.amount) : 0), 0), 0)
-    .toFixed(2);
+  // Ledgers are resolved per society (template id or name) — a PACS / sugar chart may carry its own id.
+  const mspReceivableId = resolveProcurementAccountId(accounts, 'agencyReceivable');
+  const commissionReceivableId = resolveProcurementAccountId(accounts, 'commissionReceivable');
+  const commissionIncomeId = resolveProcurementAccountId(accounts, 'commissionIncome');
+  const agencyReceipts = vouchers.filter(v => !v.isDeleted && v.refType === AGENCY_RECEIPT_REF_TYPE);
+  const commissionReceipts = vouchers.filter(v => !v.isDeleted && v.refType === COMMISSION_RECEIPT_REF_TYPE);
+  const [mspBalances, commissionBalances] = useMemo(() => {
+    const agencyIds = new Set(agencies.map(a => a.id));
+    const balancesFor = (accountId: string | null): AgencyBalances => accountId
+      ? agencyBalances({ vouchers, accountId, postingRuleResults: procurementPostingRuleResults, settlements: procurementSettlements, lots: procurementLots, centres, agencyIds })
+      : { total: 0, byAgency: {}, unallocated: 0 };
+    return [balancesFor(mspReceivableId), balancesFor(commissionReceivableId)];
+  }, [vouchers, agencies, centres, procurementLots, procurementPostingRuleResults, procurementSettlements, mspReceivableId, commissionReceivableId]);
+  const agencyReceivableOutstanding = mspBalances.total;
 
-  const recordAgencyReceipt = useCallback((data: { amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string }): Voucher => {
+  const recordAgencyReceipt = useCallback((data: { amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string; agencyId?: string; against?: 'msp' | 'commission' }): Voucher => {
     const sentinel = { id: '', voucherNo: '', type: 'receipt', date: '', debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     const amt = +Number(data.amount).toFixed(2);
-    if (!(amt > 0)) { toastRef.current({ title: 'राशि डालें', variant: 'destructive' }); return sentinel; }
-    if (!accounts.some(a => a.id === MSP_RECEIVABLE_ACCOUNT)) {
-      toastRef.current({ title: 'MSP Receivable खाता नहीं', description: 'इस समिति के चार्ट में 3308 MSP Receivable नहीं है — एजेंसी रसीद पोस्ट नहीं हो सकती।', variant: 'destructive', duration: 10000 });
+    if (!(amt > 0)) { toastRef.current({ title: 'राशि डालें', description: 'प्राप्त राशि 0 से अधिक होनी चाहिए।', variant: 'destructive' }); return sentinel; }
+    const isCommission = data.against === 'commission';
+    const crAcc = isCommission ? commissionReceivableId : mspReceivableId;
+    if (!crAcc) {
+      toastRef.current({ title: isCommission ? 'प्राप्य कमीशन खाता नहीं' : 'प्राप्य MSP खाता नहीं', description: 'इस समिति के चार्ट में यह खाता नहीं है। "लेजर स्वच्छता" पेज पर "डोमेन खाते बनाएँ" दबाएँ।', variant: 'destructive', duration: 12000 });
+      return sentinel;
+    }
+    const agency = data.agencyId ? agencies.find(a => a.id === data.agencyId) : undefined;
+    if (data.agencyId && !agency) { toastRef.current({ title: 'एजेंसी नहीं मिली', description: 'एजेंसी दोबारा चुनें।', variant: 'destructive' }); return sentinel; }
+    // Over-receipt guard: never more than what is owed (that agency's share, capped by the total).
+    const cap = receiptCap(isCommission ? commissionBalances : mspBalances, data.agencyId);
+    if (amt > cap) {
+      toastRef.current({
+        title: 'बकाया से अधिक राशि',
+        description: `${agency ? `${agency.nameHi || agency.name} का ` : ''}${isCommission ? 'प्राप्य कमीशन' : 'प्राप्य MSP'} बकाया ₹${cap.toLocaleString('en-IN')} है — ₹${amt.toLocaleString('en-IN')} की रसीद नहीं बन सकती। अधिक राशि आई है तो पहले बकाया/लॉट जाँचें।`,
+        variant: 'destructive', duration: 12000,
+      });
       return sentinel;
     }
     const drAcc = data.mode === 'bank' ? (data.bankAccountId || '3302') : '3301';
+    const what = isCommission ? 'कमीशन प्राप्ति' : 'MSP प्राप्ति';
     const voucher = addVoucher({
       type: 'receipt', date: data.date,
-      debitAccountId: drAcc, creditAccountId: MSP_RECEIVABLE_ACCOUNT, amount: amt,
-      lines: [{ id: crypto.randomUUID(), accountId: drAcc, type: 'Dr', amount: amt }, { id: crypto.randomUUID(), accountId: MSP_RECEIVABLE_ACCOUNT, type: 'Cr', amount: amt }],
-      narration: `एजेंसी से MSP प्राप्ति${data.note ? ` — ${data.note}` : ''}`,
-      refType: 'procurement.agency.receipt',
+      debitAccountId: drAcc, creditAccountId: crAcc, amount: amt,
+      lines: [{ id: crypto.randomUUID(), accountId: drAcc, type: 'Dr', amount: amt }, { id: crypto.randomUUID(), accountId: crAcc, type: 'Cr', amount: amt }],
+      narration: `एजेंसी से ${what}${agency ? ` — ${agency.code || agency.name}` : ''}${data.note ? ` — ${data.note}` : ''}`,
+      refType: isCommission ? COMMISSION_RECEIPT_REF_TYPE : AGENCY_RECEIPT_REF_TYPE,
+      refId: agency?.id,
       createdBy: user?.name || 'admin',
     } as Parameters<typeof addVoucher>[0]);
     if (!voucher?.id) return sentinel;
-    toastRef.current({ title: '✅ रसीद दर्ज', description: `₹${amt.toLocaleString('en-IN')} — बकाया MSP प्राप्य ₹${(agencyReceivableOutstanding - amt).toLocaleString('en-IN')}` });
+    toastRef.current({ title: '✅ रसीद दर्ज', description: `₹${amt.toLocaleString('en-IN')} — बचा बकाया ₹${(cap - amt).toLocaleString('en-IN')}` });
     return voucher;
-  }, [accounts, addVoucher, agencyReceivableOutstanding, user]);
+  }, [agencies, addVoucher, mspReceivableId, commissionReceivableId, mspBalances, commissionBalances, user]);
 
   const deleteAgencyReceipt = useCallback((voucherId: string) => {
     if (guardFYLocked()) return;
@@ -689,32 +720,36 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   }, [cancelVoucher, user]);
 
   // ── Procurement commission accrual (M3d) ──────────────────────────────────────────
-  const commissionAccruals = vouchers.filter(v => !v.isDeleted && v.refType === 'procurement.commission');
+  const commissionAccruals = vouchers.filter(v => !v.isDeleted && v.refType === COMMISSION_ACCRUAL_REF_TYPE);
 
-  const accrueProcurementCommission = useCallback((data: { lotId: string; amount: number; note?: string }): Voucher => {
+  const accrueProcurementCommission = useCallback((data: { lotId: string; amount: number; note?: string; date?: string }): Voucher => {
     const sentinel = { id: '', voucherNo: '', type: 'journal', date: '', debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     const amt = +Number(data.amount).toFixed(2);
     if (!(amt > 0)) { toastRef.current({ title: 'कमीशन शून्य', description: 'एजेंसी की commission दर 0 है या procurement value शून्य।', variant: 'destructive' }); return sentinel; }
+    if (procurementQualityTests.some(q => q.lotId === data.lotId && isRejectedQuality(q.result))) {
+      toastRef.current({ title: 'लॉट अस्वीकृत है', description: 'अस्वीकृत लॉट पर कमीशन दर्ज नहीं हो सकता।', variant: 'destructive', duration: 10000 }); return sentinel;
+    }
     // One commission accrual per lot.
-    if (vouchers.some(v => !v.isDeleted && v.refType === 'procurement.commission' && v.refId === data.lotId)) {
+    if (vouchers.some(v => !v.isDeleted && v.refType === COMMISSION_ACCRUAL_REF_TYPE && v.refId === data.lotId)) {
       toastRef.current({ title: 'कमीशन पहले से', description: 'इस लॉट का commission पहले ही दर्ज है।', variant: 'destructive' }); return sentinel;
     }
-    if (!accounts.some(a => a.id === COMMISSION_RECEIVABLE_ACCOUNT) || !accounts.some(a => a.id === PROCUREMENT_COMMISSION_ACCOUNT)) {
-      toastRef.current({ title: 'कमीशन खाता नहीं', description: 'चार्ट में 3314 Commission Receivable या 4206 Procurement Commission नहीं मिला।', variant: 'destructive', duration: 10000 }); return sentinel;
+    if (!commissionReceivableId || !commissionIncomeId) {
+      toastRef.current({ title: 'कमीशन खाता नहीं', description: 'चार्ट में "प्राप्य कमीशन" या "खरीद कमीशन" खाता नहीं मिला। "लेजर स्वच्छता" पेज पर "डोमेन खाते बनाएँ" दबाएँ।', variant: 'destructive', duration: 12000 }); return sentinel;
     }
     const voucher = addVoucher({
-      type: 'journal', date: new Date().toISOString().slice(0, 10),
-      debitAccountId: COMMISSION_RECEIVABLE_ACCOUNT, creditAccountId: PROCUREMENT_COMMISSION_ACCOUNT, amount: amt,
-      lines: [{ id: crypto.randomUUID(), accountId: COMMISSION_RECEIVABLE_ACCOUNT, type: 'Dr', amount: amt }, { id: crypto.randomUUID(), accountId: PROCUREMENT_COMMISSION_ACCOUNT, type: 'Cr', amount: amt }],
+      // Commission is earned on the purchase — dated with the lot's posting (J-Form) day.
+      type: 'journal', date: data.date || todayStr(),
+      debitAccountId: commissionReceivableId, creditAccountId: commissionIncomeId, amount: amt,
+      lines: [{ id: crypto.randomUUID(), accountId: commissionReceivableId, type: 'Dr', amount: amt }, { id: crypto.randomUUID(), accountId: commissionIncomeId, type: 'Cr', amount: amt }],
       narration: `खरीद कमीशन${data.note ? ` — ${data.note}` : ''}`,
-      refType: 'procurement.commission', refId: data.lotId,
+      refType: COMMISSION_ACCRUAL_REF_TYPE, refId: data.lotId,
       createdBy: user?.name || 'admin',
     } as Parameters<typeof addVoucher>[0]);
     if (!voucher?.id) return sentinel;
-    toastRef.current({ title: '✅ कमीशन दर्ज', description: `₹${amt.toLocaleString('en-IN')} — Dr 3314 / Cr 4206` });
+    toastRef.current({ title: '✅ कमीशन दर्ज', description: `₹${amt.toLocaleString('en-IN')} · ${voucher.date}` });
     return voucher;
-  }, [vouchers, accounts, addVoucher, user]);
+  }, [vouchers, procurementQualityTests, commissionReceivableId, commissionIncomeId, addVoucher, user]);
 
   const deleteCommissionAccrual = useCallback((voucherId: string) => {
     if (guardFYLocked()) return;
@@ -765,6 +800,9 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       updateTransporter,
       deleteTransporter,
       agencyReceipts,
+      commissionReceipts,
+      mspBalances,
+      commissionBalances,
       agencyReceivableOutstanding,
       recordAgencyReceipt,
       deleteAgencyReceipt,
