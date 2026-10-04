@@ -16,18 +16,19 @@ writeFileSync(entry, `
 import jsPDF from 'jspdf';
 import * as pdf from '@/lib/pdf';
 import { setReportBranding } from '@/lib/reportBranding';
+import { setReportAuditSink } from '@/lib/reportAudit';
 (globalThis as any).window = (globalThis as any).window || {};
 let last: any = null;
 (jsPDF as any).API.save = function () { last = this; };
 const society: any = { name: 'Kapil Nutri Store', registrationNo: 'UDYAM-HR-17-0062406', financialYear: '2026-27', address: 'x', district: 'y', state: 'hr', pinCode: '1', signatories: {} };
 const tb = (n: number, amt = 100): any[] => Array.from({ length: n }, (_, i) => { const t = ['asset','liability','income','expense'][i%4]; return { account:{ id:'a'+i, name:'Head '+i, type:t }, openingDebit:0, openingCredit:0, transactionDebit:amt, transactionCredit:amt, totalDebit:0, totalCredit:0, netBalance:(t==='asset'||t==='expense')?amt:-amt }; });
 const render = (balances: any[]) => { pdf.generateTrialBalancePDF(balances, society, '2027-03-31', 'en'); return { text: last.output(), pages: last.getNumberOfPages() }; };
-module.exports = { render, tb, setReportBranding, pdf, society, jsPDF };
+module.exports = { render, tb, setReportBranding, setReportAuditSink, pdf, society, jsPDF };
 `);
 const out = join(dir, 'bundle.cjs');
 await build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'cjs', outfile: out, logLevel: 'error',
   alias: { '@': join(ROOT, 'src'), jspdf: shim }, absWorkingDir: ROOT });
-const { render, tb, setReportBranding, pdf, society, jsPDF } = createRequire(import.meta.url)(out);
+const { render, tb, setReportBranding, setReportAuditSink, pdf, society, jsPDF } = createRequire(import.meta.url)(out);
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -62,6 +63,37 @@ setReportBranding({ showBrandFooter: true });
 const doc = new jsPDF();
 pdf.addPageNumbers(doc, 'helvetica', 'Some Society');
 ok(ids(doc.output()).length === 0, 'a document without a report identity gets no Report ID (and no crash)');
+
+// Audit trail: the event carries the SAME ID that is printed, once per PDF; a failing sink cannot break the PDF
+{
+  const events = [];
+  setReportAuditSink(e => events.push(e));
+  const r = render(tb(8));
+  ok(events.length === 1, `one audit event per generated PDF (got ${events.length})`);
+  ok(events[0] && events[0].reportId === ids(r.text)[0], 'the audit event carries the very ID printed in the footer');
+  ok(events[0] && events[0].code === 'TB' && events[0].title === 'Trial Balance' && events[0].pages === r.pages, 'event has code, title and the true page count');
+  setReportAuditSink(() => { throw new Error('audit table down'); });
+  let broke = false, r2 = null;
+  try { r2 = render(tb(8)); } catch { broke = true; }
+  ok(!broke && r2 && ids(r2.text).length === 1, 'a failing audit sink does NOT stop the PDF being produced');
+  setReportAuditSink(null);
+  ok(render(tb(8)).pages === 1 && events.length === 1, 'no sink bound: PDF still produced, nothing emitted');
+}
+
+// A signature block pushed onto its own page says what it belongs to; one that fits does not get a stray label
+{
+  let withLabel = null, withoutLabel = null;
+  for (let n = 10; n <= 90 && !(withLabel && withoutLabel); n++) {
+    const r = render(tb(n));
+    // PDF string literals escape parentheses with a backslash, so match "(continued" loosely
+    const labelled = /certificate & signatures [^T]{0,3}continued/.test(r.text);
+    if (labelled && !withLabel) withLabel = { n, text: r.text, pages: r.pages };
+    if (!labelled && !withoutLabel) withoutLabel = { n };
+  }
+  ok(!!withLabel, 'found a Trial Balance size where the signatures spill onto their own page');
+  ok(!!withLabel && /Trial Balance .{1,8}certificate & signatures/.test(withLabel.text), 'the spilled page is labelled with the report title');
+  ok(!!withoutLabel, 'and small reports (signatures fit) get no stray label');
+}
 
 console.log(`\nPDF Report ID + footer: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

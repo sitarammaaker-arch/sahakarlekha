@@ -147,7 +147,7 @@ const Form1MemberList: React.FC = () => {
     const sigNames = getSignatoryNames(society);
     addSignatureBlock(doc, 'helvetica', ['Secretary / Manager', 'President / Chairman', 'Registrar / Auditor'], finalY, undefined,
       [sigNames.secretary, sigNames.president, '']);
-    registerReportIdentity(doc, 'F1', society);   // keeps the statutory Form 1 heading, adds the verifiable Report ID
+    registerReportIdentity(doc, 'F1', society, 'Form 1 - Register of Members');   // keeps the statutory Form 1 heading, adds the verifiable Report ID
     addPageNumbers(doc, 'helvetica', society?.name);
 
     doc.save(pdfFileName('Form1_MemberList', society));

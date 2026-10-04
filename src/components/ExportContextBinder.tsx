@@ -4,11 +4,14 @@ import { useData } from '@/contexts/DataContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { setExportContext } from '@/lib/exportUtils';
 import { setReportBranding, brandFooterFor } from '@/lib/reportBranding';
+import { setReportAuditSink, buildReportAuditInput } from '@/lib/reportAudit';
+import { logAudit } from '@/lib/auditLog';
 
 /**
  * Binds the current society + user + plan to the shared report helpers (renders nothing):
  *  - EVERY Excel / CSV carries the standard file name and the README provenance sheet (R13/R14);
- *  - the PDF footer drops the "Generated free with SahakarLekha" marketing line for PAYING plans (R9).
+ *  - the PDF footer drops the "Generated free with SahakarLekha" marketing line for PAYING plans (R9);
+ *  - every PDF that gets a Report ID is recorded in the audit trail (who, when, which report) — non-blocking.
  * See docs/research/REPORT-UNIFORMITY-STANDARD.md.
  */
 export default function ExportContextBinder() {
@@ -27,6 +30,13 @@ export default function ExportContextBinder() {
     setReportBranding({ showBrandFooter: brandFooterFor(plan) });
     return () => setReportBranding({ showBrandFooter: true });
   }, [plan]);
+
+  useEffect(() => {
+    if (!user?.societyId) { setReportAuditSink(null); return; }
+    const ctx = { societyId: user.societyId, actor: { name: user.name, email: user.email, role: user.role } };
+    setReportAuditSink(event => logAudit(buildReportAuditInput(event), ctx));
+    return () => setReportAuditSink(null);
+  }, [user?.societyId, user?.name, user?.email, user?.role]);
 
   return null;
 }
