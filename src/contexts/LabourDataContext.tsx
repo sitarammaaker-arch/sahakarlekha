@@ -319,7 +319,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     // TDS may equal the gross (100%-withheld settlement → netCash 0); only > gross is invalid.
     if (tds < 0 || tds > data.amount + 0.005) { toastRef.current({ title: 'TDS राशि गलत', description: 'TDS 0 से कम या वसूली-राशि से अधिक नहीं हो सकता।', variant: 'destructive', duration: 9000 }); return sentinel; }
     const netCash = +(data.amount - tds).toFixed(2);
-    const debitAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.getBankAccountIds(accounts)[0] || storage.ACCOUNT_IDS.BANK);
+    const debitAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.defaultBankAccountId(accounts) || storage.ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
     const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
@@ -385,7 +385,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const id = crypto.randomUUID();
     const maxNum = workerAdvances.reduce((m, a) => { const x = a.advanceNo?.match(/ADV\/(\d+)/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0);
     const advanceNo = `ADV/${String(maxNum + 1).padStart(3, '0')}`;
-    const creditAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.getBankAccountIds(accounts)[0] || storage.ACCOUNT_IDS.BANK);
+    const creditAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.defaultBankAccountId(accounts) || storage.ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const voucher = addVoucher({
       type: 'payment', date: data.date,
@@ -422,7 +422,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const outstanding = +(adv.amount - adv.recovered).toFixed(2);
     if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'वसूली 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
     if (data.amount > outstanding + 0.005) { toastRef.current({ title: 'राशि बकाया से अधिक', description: `वसूली ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकती।`, variant: 'destructive', duration: 9000 }); return sentinel; }
-    const debitAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.getBankAccountIds(accounts)[0] || storage.ACCOUNT_IDS.BANK);
+    const debitAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.defaultBankAccountId(accounts) || storage.ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const voucher = addVoucher({
       type: 'receipt', date: data.date,
@@ -549,7 +549,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const epfTotal = +(run.epfEmployee + run.epfEmployer + (run.epfAdminEdli || 0)).toFixed(2);
     const esiTotal = +(run.esiEmployee + run.esiEmployer).toFixed(2);
     const total = +(epfTotal + esiTotal).toFixed(2);
-    const creditAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.getBankAccountIds(accounts)[0] || storage.ACCOUNT_IDS.BANK);
+    const creditAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.defaultBankAccountId(accounts) || storage.ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const voucher = addVoucher({
       type: 'payment', date: data.date,

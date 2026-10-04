@@ -37,7 +37,7 @@ const VARIANCE_LABEL: Record<MatchReason, string> = {
   'short-delivery': 'कम डिलीवरी', 'over-delivery': 'ज़्यादा डिलीवरी', 'over-billed-qty': 'ज़्यादा बिल (मात्रा)',
   'under-billed-qty': 'कम बिल (मात्रा)', 'price-variance': 'दर अंतर', 'unbilled': 'बिल नहीं', 'extra-invoice-line': 'अतिरिक्त बिल पंक्ति',
 };
-import { getBankAccountIds } from '@/lib/storage';
+import { getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
 import { salesReturnCreditAccountId } from '@/lib/consumer/salesReturnAccount';
 import { isUniqueViolation, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun, PurchaseOrder, PurchaseOrderItem, Purchase, SalesReturn, SalesReturnItem, SalesReturnRefund, PurchaseReturn, PurchaseReturnItem, PurchaseReturnRefund } from '@/types';
@@ -203,7 +203,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return null;
     if (!(data.amount > 0)) { toastRef.current({ title: 'मान्य राशि दर्ज करें', variant: 'destructive' }); return null; }
     if (!memberReceivableAccountId) { toastRef.current({ title: 'सदस्य प्राप्य खाता नहीं मिला', description: 'Member receivable account missing — Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', variant: 'destructive' }); return null; }
-    const debit = data.mode === 'cash' ? CASH_ACCOUNT : (data.bankAccountId || getBankAccountIds(accounts)[0] || '3302');
+    const debit = data.mode === 'cash' ? CASH_ACCOUNT : (data.bankAccountId || defaultBankAccountId(accounts) || '3302');
     return addVoucher({
       type: 'receipt',
       date: data.date,
@@ -303,7 +303,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const isDiv = cur.kind === 'dividend';
     const payAcc = isDiv ? resolveDividendPayableAccountId(accounts) : resolveRebatePayableAccountId(accounts);
     if (!payAcc) { toastRef.current({ title: 'देय खाता नहीं मिला', description: 'Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', variant: 'destructive', duration: 12000 }); return null; }
-    const creditAcc = args.mode === 'bank' ? (args.bankAccountId || getBankAccountIds(accounts)[0] || '3302') : CASH_ACCOUNT;
+    const creditAcc = args.mode === 'bank' ? (args.bankAccountId || defaultBankAccountId(accounts) || '3302') : CASH_ACCOUNT;
     const voucher = addVoucher({
       type: 'payment', date: args.date,
       debitAccountId: payAcc, creditAccountId: creditAcc, amount,
@@ -703,7 +703,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     // Refund source: cash/bank received back, else adjust the supplier's payable.
     const supplierAccId = purchase.supplierId ? (suppliers.find(s => s.id === purchase.supplierId)?.accountId || '2101') : '2101';
     const debitAccId = data.refundMode === 'cash' ? '3301'
-      : data.refundMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || '3302')
+      : data.refundMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || '3302')
       : supplierAccId;
     const lid = () => crypto.randomUUID();
     // Cr: Purchases A/c — split by each item's purchaseAccountId (faithful inverse of the purchase Dr).
@@ -778,7 +778,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     // 2) Post the NEW voucher (same return no. kept on the record).
     const supplierAccId = purchase.supplierId ? (suppliers.find(s => s.id === purchase.supplierId)?.accountId || '2101') : '2101';
     const debitAccId = data.refundMode === 'cash' ? '3301'
-      : data.refundMode === 'bank' ? (data.bankAccountId || getBankAccountIds(accounts)[0] || '3302')
+      : data.refundMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || '3302')
       : supplierAccId;
     const lid = () => crypto.randomUUID();
     const totalItemAmount = items.reduce((s, i) => s + i.amount, 0) || 1;

@@ -14,7 +14,7 @@ import {
 import { LedgerAccount, Member, VoucherType } from '@/types';
 import { mapImportedOpenings, type ImportedOpeningRow } from '@/lib/openingBalances';
 import { planJoiningReceipts, summariseJoiningPlans, type JoiningReceiptPlan } from '@/lib/members/joiningReceipts';
-import { getBankAccountIds } from '@/lib/storage';
+import { getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -386,7 +386,7 @@ const UniversalImporter: React.FC = () => {
     let skipped = 0;
     // Same rule addMember applies per member (joiningReceipts) — collected for ONE summary instead of a toast per row.
     const plans: JoiningReceiptPlan[] = [];
-    const planOpts = { financialYear: society.financialYear, today: new Date().toISOString().split('T')[0], bankAccountId: getBankAccountIds(accounts)[0] || null };
+    const planOpts = { financialYear: society.financialYear, today: new Date().toISOString().split('T')[0], bankAccountId: defaultBankAccountId(accounts) || null };
     for (const row of validRows) {
       const mid = row.data.member_id.trim();
       const exists = members.find(m => m.memberId === mid);
