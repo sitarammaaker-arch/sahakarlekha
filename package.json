@@ -264,6 +264,8 @@
     "test:drift": "node scripts/test-schema-drift.mjs",
     "test:export-utils": "node scripts/test-export-utils.mjs",
     "test:export-hardening": "node scripts/test-export-hardening.mjs",
+    "test:report-id": "node scripts/test-report-id.mjs",
+    "test:pdf-report-id-footer": "node scripts/test-pdf-report-id-footer.mjs",
     "test:export-naming": "node scripts/test-export-naming.mjs",
     "test:report-uniformity-guard": "node scripts/test-report-uniformity-guard.mjs",
     "test:member-identity": "node scripts/test-member-identity.mjs",
