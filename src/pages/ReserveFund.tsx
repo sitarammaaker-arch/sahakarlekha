@@ -20,6 +20,7 @@ import { appropriationWaterfall } from '@/lib/appropriation';
 import { ucasReserveMinPct } from '@/lib/rules/ucas';
 import { statutoryLimits, appropriationIssues, hasVerifiedLimits, ACC_BAD_DEBT } from '@/lib/rules/statutoryLimits';
 import { useToast } from '@/hooks/use-toast';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 
 const fmt = (amount: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -125,7 +126,7 @@ const ReserveFund: React.FC = () => {
     const acc = accounts.find(a => a.id === id);
     if (!acc) return 0;
     let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
-    vouchers.filter(v => !v.isDeleted).forEach(v => {
+    vouchers.filter(isCountedVoucher).forEach(v => {
       getVoucherLines(v).forEach(l => {
         if (l.accountId !== id) return;
         if (l.type === 'Dr') bal -= l.amount;

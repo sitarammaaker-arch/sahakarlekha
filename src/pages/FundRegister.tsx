@@ -21,6 +21,7 @@ import { PiggyBank, ArrowDownCircle } from 'lucide-react';
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { fundBackingCoverage } from '@/lib/fundBacking';
 import { getBankAccountIds } from '@/lib/storage';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 
 const TODAY = () => new Date().toISOString().split('T')[0];
 const KIND_LABEL: Record<string, { hi: string; en: string; cls: string }> = {
@@ -39,7 +40,7 @@ const FundRegister: React.FC = () => {
   const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n);
 
   const funds = useMemo(() => accounts.filter(isFundAccount), [accounts]);
-  const activeVouchers = useMemo(() => vouchers.filter(v => !v.isDeleted), [vouchers]);
+  const activeVouchers = useMemo(() => vouchers.filter(isCountedVoucher), [vouchers]);
   const corpusOf = useMemo(() => new Map(funds.map(f => [f.id, buildFundStatement(f, activeVouchers).closing])), [funds, activeVouchers]);
 
   // ECR-27: are the statutory funds backed by earmarked investments (FDR / securities)?

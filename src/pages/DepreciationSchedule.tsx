@@ -15,6 +15,7 @@ import { generateDepreciationSchedulePDF } from '@/lib/pdf';
 import { calcDepForFY, parseFY, DEP_ACCOUNTS, wdvAccumulatedBefore } from '@/lib/depreciation';
 import { fmtDate } from '@/lib/dateUtils';
 import type { Asset, AssetCategory } from '@/types';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 
 const fmtAmt = (n: number) =>
   'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -70,7 +71,7 @@ const DepreciationSchedule: React.FC = () => {
     if (!acc) return 0;
 
     let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
-    vouchers.filter(v => !v.isDeleted).forEach(v => {
+    vouchers.filter(isCountedVoucher).forEach(v => {
       if (v.debitAccountId === accumId) bal -= v.amount;
       if (v.creditAccountId === accumId) bal += v.amount;
     });

@@ -1,50 +1,51 @@
-// Approval-gating verification (P0 #1 / ECR-01) — asserts the pure reporting predicate
-// that decides whether a voucher counts toward financial reports. Mirrors the
-// `activeVouchers` filter in DataContext (the single reporting chokepoint), exactly as
-// scripts/test-nav.mjs mirrors navVisibility. Run: node scripts/test-approval-gating.mjs
-// (exit 1 on any failure).
-
-// ── Mirror of the DataContext `activeVouchers` predicate ──────────────────────
-// A voucher is active (counts in reports) iff: not deleted, not rejected, and — only
-// when the society opted into approvalRequired — not a held pending voucher.
-const isActive = (v, approvalRequired) =>
-  !v.isDeleted &&
-  v.approvalStatus !== 'rejected' &&
-  !(approvalRequired && v.approvalStatus === 'pending');
+// Approval-gating verification (P0 #1 / ECR-01) — asserts the reporting predicate that decides
+// whether a voucher counts toward financial reports. Imports the REAL rule (lib/countedVoucher —
+// the one predicate DataContext.activeVouchers and the raw-voucher pages share) instead of a
+// mirror, plus source guards so the chokepoints can't drift back to a private copy.
+// Run: node scripts/test-approval-gating.mjs   (exit 1 on any failure).
+import { readFileSync } from 'node:fs';
+import { isCountedVoucher as isActive } from '../src/lib/countedVoucher.ts';
+import { requiresApproval } from '../src/lib/approvalMatrix.ts';
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
-
 const V = (o) => ({ isDeleted: false, approvalStatus: undefined, ...o });
 
-// 1. Deleted vouchers never count (unchanged invariant).
-ok(!isActive(V({ isDeleted: true }), false), 'deleted excluded (gating off)');
-ok(!isActive(V({ isDeleted: true }), true), 'deleted excluded (gating on)');
+// 1. Deleted / rejected never count.
+ok(!isActive(V({ isDeleted: true })), 'deleted excluded');
+ok(!isActive(V({ isDeleted: true, approvalStatus: 'approved' })), 'deleted+approved excluded');
+ok(!isActive(V({ approvalStatus: 'rejected' })), 'rejected excluded');
 
-// 2. Rejected vouchers are ALWAYS excluded — the client-vs-SQL divergence fix.
-ok(!isActive(V({ approvalStatus: 'rejected' }), false), 'rejected excluded even when gating OFF (the fix)');
-ok(!isActive(V({ approvalStatus: 'rejected' }), true), 'rejected excluded when gating on');
+// 2. PENDING never counts — whatever approvalRequired says. The matrix holds by threshold / type
+//    with the flag OFF; such a voucher has no journal event until approve_voucher posts it.
+ok(!isActive(V({ approvalStatus: 'pending' })), 'pending excluded');
+const matrixOff = { approvalRequired: false, threshold: 50000, types: ['journal'] };
+const heldByThreshold = requiresApproval(75000, 'payment', matrixOff);
+const heldByType = requiresApproval(100, 'journal', matrixOff);
+ok(heldByThreshold && heldByType, 'matrix holds by threshold / type even with approvalRequired OFF');
+ok(!isActive(V({ approvalStatus: heldByThreshold ? 'pending' : undefined })), 'threshold-held voucher (flag OFF) does NOT count — the fix');
+ok(!isActive(V({ approvalStatus: heldByType ? 'pending' : undefined })), 'type-held voucher (flag OFF) does NOT count — the fix');
 
-// 3. Backward-compat: with gating OFF, everything except deleted/rejected counts —
-//    this proves existing societies see NO behaviour change beyond the rejected fix.
-ok(isActive(V({ approvalStatus: undefined }), false), 'undefined counts (gating off) — legacy default');
-ok(isActive(V({ approvalStatus: 'pending' }), false), 'pending STILL counts when gating off — no behaviour change');
-ok(isActive(V({ approvalStatus: 'approved' }), false), 'approved counts (gating off)');
+// 3. Approved / unmarked always count (engine & system vouchers carry no status; the vouchers
+//    column defaults to 'approved' in prod).
+ok(isActive(V({ approvalStatus: 'approved' })), 'approved counts');
+ok(isActive(V({ approvalStatus: undefined })), 'unmarked counts');
+ok(isActive({}), 'bare voucher counts');
 
-// 4. Gating ON: pending is held out; approved / unmarked still count (engine & other
-//    system vouchers carry no approvalStatus, so they are never held).
-ok(!isActive(V({ approvalStatus: 'pending' }), true), 'pending HELD when gating on (maker-checker)');
-ok(isActive(V({ approvalStatus: 'approved' }), true), 'approved counts when gating on');
-ok(isActive(V({ approvalStatus: undefined }), true), 'unmarked (undefined) counts when gating on — system/auto vouchers unaffected');
-
-// 5. Truth-table completeness across the 3 statuses × 2 flags × deleted.
-for (const approvalRequired of [false, true]) {
-  ok(isActive(V({ approvalStatus: 'approved' }), approvalRequired), `approved active (gating=${approvalRequired})`);
-  ok(!isActive(V({ approvalStatus: 'rejected' }), approvalRequired), `rejected inactive (gating=${approvalRequired})`);
-  ok(isActive(V({ approvalStatus: 'approved', isDeleted: false }), approvalRequired), `approved+live active (gating=${approvalRequired})`);
+// 4. Source guards — every chokepoint uses the shared predicate, none keeps a flag-gated copy.
+const src = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+const dc = src('src/contexts/DataContext.tsx');
+ok(/const activeVouchers = useMemo\(\(\) => vouchers\.filter\(v =>\s*isCountedVoucher\(v\)/.test(dc), 'activeVouchers uses isCountedVoucher');
+ok(!/approvalRequired && v\.approvalStatus === 'pending'/.test(dc), 'DataContext has no flag-gated pending rule left');
+ok(/const syncEntries = \(v: Voucher\) => \{[\s\S]{0,400}if \(!isCountedVoucher\(v\)\) return;/.test(dc), 'syncEntries writes no voucher_entries for a pending voucher');
+for (const page of ['Dashboard', 'DepreciationSchedule', 'FederationReport', 'FundRegister', 'NabardReport', 'ProfitDistribution', 'ReserveFund', 'AuditCertificate', 'BankReconciliation', 'DayBook', 'Ledger']) {
+  const s = src(`src/pages/${page}.tsx`);
+  ok(s.includes('isCountedVoucher'), `${page} uses isCountedVoucher`);
+  ok(!/isCountedVoucher\(v, /.test(s), `${page} passes no approvalRequired flag`);
 }
-ok(isActive(V({ approvalStatus: 'pending' }), false) && !isActive(V({ approvalStatus: 'pending' }), true),
-   'pending toggles exactly on the approvalRequired flag');
+const dash = src('src/pages/Dashboard.tsx');
+ok(!/const activeVouchers = vouchers\.filter\(v => !v\.isDeleted\)/.test(dash), 'Dashboard compliance checks (reserve-posted) use the counted rule');
+ok(!/const activeV = vouchers\.filter\(v => !v\.isDeleted\)/.test(dash), 'Dashboard monthly chart uses the counted rule');
 
 console.log(`\nApproval-gating predicate: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

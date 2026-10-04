@@ -63,6 +63,12 @@ ok(isEditLocked({ approvalStatus: 'approved' }, false) === false, 'approved vouc
 ok(isEditLocked({ approvalStatus: 'pending' }, true) === false, 'pending voucher not locked');
 ok(isEditLocked({ approvalStatus: undefined }, true) === false, 'unstamped voucher not locked');
 ok(isEditLocked({}, false) === false, 'plain voucher, default regime → editable');
+// 5b. Checker-approved (approvedBy set) is locked even with approvalRequired OFF — the matrix holds by
+//     threshold / voucher type with the flag off. A bare 'approved' (the prod column DEFAULT) is not.
+ok(isEditLocked({ approvalStatus: 'approved', approvedBy: 'checker' }, false) === true, 'checker-approved voucher locked when approvalRequired OFF (threshold/type hold)');
+ok(isEditLocked({ approvalStatus: 'approved', approvedBy: 'checker' }, true) === true, 'checker-approved voucher locked when approvalRequired ON');
+ok(isEditLocked({ approvalStatus: 'rejected', approvedBy: 'checker' }, false) === false, 'rejected (approvedBy = rejecter) is not edit-locked by this rule');
+ok(isEditLocked({ approvalStatus: 'pending', approvedBy: 'x' }, false) === false, 'pending never locked');
 
 console.log(`\nVoucher reversal (pure): ${pass} passed, ${fail} failed`);
 process.exitCode = fail > 0 ? 1 : 0;

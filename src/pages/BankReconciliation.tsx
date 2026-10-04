@@ -106,12 +106,12 @@ const BankReconciliation: React.FC = () => {
   const bankVouchers = useMemo(() => {
     return vouchers
       .filter(v =>
-        isCountedVoucher(v, society.approvalRequired) &&
+        isCountedVoucher(v) &&
         v.date <= asOfDate &&
         getVoucherLines(v).some(l => l.accountId === activeBankId)
       )
       .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
-  }, [vouchers, asOfDate, society.approvalRequired]);
+  }, [vouchers, asOfDate]);
 
   // Uncleared deposits (Dr Bank — money coming in, not yet in bank statement)
   const unclearedDeposits = bankVouchers.filter(v => !isClearedAsOf(v, asOfDate) && bankDrAmt(v) > 0);
@@ -129,7 +129,7 @@ const BankReconciliation: React.FC = () => {
     if (!acct) return 0;
     let bal = acct.openingBalanceType === 'debit' ? acct.openingBalance : -acct.openingBalance;
     vouchers
-      .filter(v => isCountedVoucher(v, society.approvalRequired) && v.date <= asOfDate &&
+      .filter(v => isCountedVoucher(v) && v.date <= asOfDate &&
         getVoucherLines(v).some(l => l.accountId === activeBankId))
       .forEach(v => {
         getVoucherLines(v).forEach(l => {

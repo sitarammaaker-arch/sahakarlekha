@@ -94,6 +94,7 @@ import { fetchAllPaged as fetchAllPagedFor } from '@/lib/supabasePaging';
 import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib/diagnostics/phantomVouchers';
 import { accountDeleteFailure, coaResetBlockers } from '@/lib/accounting/accountDelete';
 import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 
 /* T-09 — the `ledger_events` row → LedgerEvent mapper now lives in lib/ledger/rows.ts.
    It moved because the CAIOS D-lane must read the SAME journal from the Edge Function,
@@ -1436,6 +1437,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Write (upsert) entries for a voucher — fire-and-forget, non-blocking.
   const syncEntries = (v: Voucher) => {
+    // A PENDING (maker-checker / threshold-held) voucher has no accounting effect until approved —
+    // approveVoucher syncs its entries then (as save_pending_voucher / approve_voucher do server-side).
+    if (!isCountedVoucher(v)) return;
     const sid = societyIdRef.current;
     // T-01: stamp jurisdiction alongside society_id. voucher_entries is replay-derived, and
     // REPLAY_FIELDS deliberately excludes tenant/storage columns (society_id, jurisdiction), so the
@@ -5136,20 +5140,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   //  • not soft-deleted, AND
   //  • not REJECTED — rejected vouchers must never affect reports (the SQL side already
   //    drops them via deleteEntries; this closes the client-vs-SQL divergence so both agree), AND
-  //  • not a held PENDING voucher when the society has opted into approval-gating
-  //    (society.approvalRequired = maker-checker). Approved / unmarked (undefined) vouchers
-  //    always count, so behaviour is unchanged for every society that has NOT opted in.
+  //  • not a held PENDING voucher — whatever society.approvalRequired says: the approval matrix
+  //    also holds by amount threshold / voucher type with the flag OFF, and a pending voucher has
+  //    no journal event until approve_voucher posts it (lib/countedVoucher — the ONE shared rule).
   // Memoised so its reference is stable across renders: it's the base list nearly every report
   // reads, and an inline .filter() made a fresh array each render — needlessly re-running the
   // report useCallbacks (and defeating any downstream memo) that depend on it. Same contents.
   const activeVouchers = useMemo(() => vouchers.filter(v =>
-    !v.isDeleted &&
-    v.approvalStatus !== 'rejected' &&
-    !(society.approvalRequired && v.approvalStatus === 'pending') &&
+    isCountedVoucher(v) &&
     // ECR-17: branch scope — 'all' (default) = consolidated (no filter). Legacy
     // unbranched vouchers map to the Head Office. Additive — no regression on 'all'.
     matchesBranch(v.branchId, activeBranchId, headOfficeBranchId)
-  ), [vouchers, society.approvalRequired, activeBranchId, headOfficeBranchId]);
+  ), [vouchers, activeBranchId, headOfficeBranchId]);
 
   // ECR-17 Phase 4: shared predicate for branch-scoping non-voucher entities
   // (sales / purchases / members) in report pages. Same rule as activeVouchers.
@@ -5238,7 +5240,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!fund || !isFundAccount(fund)) { toastRef.current({ title: 'निधि खाता नहीं मिला', description: 'Fund account not found or not a reserve fund.', variant: 'destructive', duration: 8000 }); return null; }
     if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return null; }
     // Balance guard — never spend more than the fund currently holds (corpus).
-    const corpus = buildFundStatement(fund, vouchersRef.current.filter(v => !v.isDeleted)).closing;
+    const corpus = buildFundStatement(fund, vouchersRef.current.filter(isCountedVoucher)).closing;
     if (data.amount > corpus + 0.005) {
       toastRef.current({ title: 'निधि में पर्याप्त शेष नहीं', description: `${fund.nameHi || fund.name} में केवल ₹${corpus.toLocaleString('en-IN')} उपलब्ध है — इससे अधिक उपयोग नहीं हो सकता।`, variant: 'destructive', duration: 12000 });
       return null;

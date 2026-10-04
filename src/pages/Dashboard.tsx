@@ -21,6 +21,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
 } from 'recharts';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 
 const MONTHS_HI = ['अप्रैल', 'मई', 'जून', 'जुलाई', 'अग.', 'सित.', 'अक्टू.', 'नव.', 'दिस.', 'जन.', 'फर.', 'मार्च'];
 const MONTHS_EN = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
@@ -60,7 +61,7 @@ const Dashboard: React.FC = () => {
   // P3-3 + P4-1/P4-2: Cooperative compliance checks, health score, advisories
   const complianceChecks = useMemo(() => {
     const fy = society.financialYear;
-    const activeVouchers = vouchers.filter(v => !v.isDeleted);
+    const activeVouchers = vouchers.filter(isCountedVoucher);
     // Bound the tally to the FY end so it matches netProfit / getTradingAccount
     // (which default to the FY end) — otherwise a voucher mis-dated into the next
     // FY would make the Balance Sheet tally falsely fail.
@@ -180,7 +181,7 @@ const Dashboard: React.FC = () => {
       { year: fyStart + 1, month: 1 }, { year: fyStart + 1, month: 2 },
     ];
 
-    const activeV = vouchers.filter(v => !v.isDeleted);
+    const activeV = vouchers.filter(isCountedVoucher);
 
     return months.map((m, i) => {
       const receipts = activeV

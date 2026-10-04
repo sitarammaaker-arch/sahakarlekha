@@ -28,6 +28,7 @@ import { statutoryLimits, dividendRateIssue } from '@/lib/rules/statutoryLimits'
 import { useDistributionRuns } from '@/hooks/useDistributionRuns';
 import { linesTotal } from '@/lib/distribution/engine';
 import { dividendRunLines, liveRunFor, existingRunFor, dividendBreakdown, snapshotLines, postedAppropriation, dividendPaymentsByMember } from '@/lib/distribution/dividendRuns';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 
 // ── Account IDs ─────────────────────────────────────────────────────────────
 const ACC_NET_SURPLUS   = '1208';
@@ -146,7 +147,7 @@ const ProfitDistribution: React.FC = () => {
     const acc = accounts.find(a => a.id === id);
     if (!acc) return 0;
     let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
-    vouchers.filter(v => !v.isDeleted).forEach(v => {
+    vouchers.filter(isCountedVoucher).forEach(v => {
       getVoucherLines(v).forEach(l => {
         if (l.accountId !== id) return;
         if (l.type === 'Dr') bal -= l.amount;
