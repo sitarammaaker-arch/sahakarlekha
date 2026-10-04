@@ -15,6 +15,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { isEmptyPeriod } from '@/lib/reportComparative';
 import { PrintButton, PrintHeader } from '@/components/ReportPrint';
+import ReportTieOutCard from '@/components/ReportTieOutCard';
 
 const TrialBalance: React.FC = () => {
   const { t, language } = useLanguage();
@@ -217,6 +218,8 @@ const TrialBalance: React.FC = () => {
           </AlertDescription>
         </Alert>
       )}
+
+      <ReportTieOutCard balances={allBalances} asOnDate={asOnDate} closingDr={grandClosingDr} closingCr={grandClosingCr} />
 
       <Card>
         <CardContent className="pt-6">

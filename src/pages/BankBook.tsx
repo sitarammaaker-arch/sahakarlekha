@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Plus, Building2, Download, CreditCard, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateBankBookPDF } from '@/lib/pdf';
+import { selectableBankIds, bankBookZeroWarning } from '@/lib/reports/bankBookPick';
 import { fmtDate } from '@/lib/dateUtils';
 import { bookWindow } from '@/lib/reports/bookWindow';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -38,9 +39,13 @@ const BankBook: React.FC = () => {
   const [showAddBank, setShowAddBank] = useState(false);
   const [bankForm, setBankForm] = useState({ name: '', nameHi: '', opening: '0' });
 
-  const bankIds = useMemo(() => getBankAccountIds(accounts), [accounts]);
+  const allBankIds = useMemo(() => getBankAccountIds(accounts), [accounts]);
+  // The head 3302 can be stored as a plain account; it is offered (and chosen by default) only when it holds money itself.
+  const headAccount = accounts.find(a => a.id === ACCOUNT_IDS.BANK);
+  const headHasMoney = allBankIds.includes(ACCOUNT_IDS.BANK) && ((headAccount?.openingBalance || 0) !== 0 || getBankBookEntries(undefined, undefined, ACCOUNT_IDS.BANK).length > 0);
+  const bankIds = useMemo(() => selectableBankIds(allBankIds, ACCOUNT_IDS.BANK, headHasMoney), [allBankIds, headHasMoney]);
   const [selectedBank, setSelectedBank] = useState('');
-  const activeBankId = selectedBank || bankIds[0] || ACCOUNT_IDS.BANK;
+  const activeBankId = (selectedBank && bankIds.includes(selectedBank) ? selectedBank : '') || bankIds[0] || ACCOUNT_IDS.BANK;
 
   const bankAccount = accounts.find(a => a.id === activeBankId);
   // A-05: account opening belongs to Head Office; a branch view must not show it. Closing = last
@@ -48,6 +53,16 @@ const BankBook: React.FC = () => {
   const accountOpening = matchesActiveBranch(undefined) ? (bankAccount?.openingBalance || 0) : 0;
   const { opening: openingBalance, closing: bankBalance, window: entries } = bookWindow(
     getBankBookEntries(undefined, undefined, activeBankId), undefined, accountOpening);
+
+  // Warn instead of printing a convincing zero when this account is empty but the other bank accounts hold money.
+  const zeroWarn = bankBookZeroWarning({
+    selectedOpening: openingBalance,
+    selectedEntryCount: entries.length,
+    otherBalances: bankIds.filter(id => id !== activeBankId).map(id => getAccountBalance(id)),
+  });
+  const zeroWarnText = zeroWarn.warn
+    ? `Is bank khate mein koi entry ya shesh nahi hai, jabki dusre bank khaaton mein Rs. ${zeroWarn.otherTotal.toLocaleString('en-IN')} ka shesh hai — upar se sahi bank khata chuniye.`
+    : '';
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -155,7 +170,7 @@ const BankBook: React.FC = () => {
         <div className="flex gap-2">
           <div className="flex gap-2 flex-wrap">
             <PrintButton />
-            <Button variant="outline" size="sm" className="gap-2" onClick={() => generateBankBookPDF(entries, society, openingBalance, language)}>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => generateBankBookPDF(entries, society, openingBalance, language, bankAccount?.name, zeroWarnText || undefined)}>
               <Download className="h-4 w-4" />PDF
             </Button>
             <Button variant="outline" size="sm" className="gap-2" onClick={handleExcel}>
@@ -224,7 +239,7 @@ const BankBook: React.FC = () => {
                   <AccountPicker
                     value={otherAccount}
                     onChange={setOtherAccount}
-                    excludeIds={[...bankIds, ACCOUNT_IDS.CASH]}
+                    excludeIds={[...allBankIds, ACCOUNT_IDS.CASH]}
                   />
                 </div>
                 <div className="space-y-2">
@@ -244,6 +259,10 @@ const BankBook: React.FC = () => {
           </Dialog>
         </div>
       </div>
+
+      {zeroWarnText && (
+        <div role="alert" className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-sm">{zeroWarnText}</div>
+      )}
 
       {/* Bank Selector */}
       {bankIds.length > 1 && (

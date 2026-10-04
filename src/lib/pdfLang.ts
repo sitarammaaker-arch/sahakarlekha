@@ -95,6 +95,7 @@ export const PATTERNS: Rule[] = [
   // Day Book subtitle: "01/04/2026 to 30/04/2026 | FY: 2026-27"
   { re: /^(\d{2}\/\d{2}\/\d{4}) to (\d{2}\/\d{2}\/\d{4})\s*\|\s*FY:\s*(.+)$/i, to: m => `${m[1]} से ${m[2]} | वित्तीय वर्ष: ${m[3]}` },
   { re: /^As on:\s*(.+?)(\s*\|\s*FY:\s*(.+))?$/i, to: m => `दिनांक: ${m[1]}${m[3] ? ` | वित्तीय वर्ष: ${m[3]}` : ''}` },
+  { re: /^Provisional position - as on (.+?) \(FY ends 31st March (\d{4})\)$/i, to: m => `अनंतिम स्थिति - ${m[1]} को (वित्त वर्ष 31 मार्च ${m[2]} को समाप्त)` },
   { re: /^As at 31st March (\d{4})$/i, to: m => `31 मार्च ${m[1]} को` },
   { re: /^Account:\s*(.+?)\s*\|\s*(.+)$/i, to: m => `खाता: ${m[1]} | ${toHiRange(m[2])}` },
   { re: /^Date:\s*(_+)$/i, to: m => `दिनांक: ${m[1]}`, keepEnglishInBi: true },
