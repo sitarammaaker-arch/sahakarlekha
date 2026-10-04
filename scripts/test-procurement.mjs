@@ -2,9 +2,11 @@
 // construction in DataContext.addFarmer / addProcurementLot (tsc verifies the TS itself).
 // Run: node scripts/test-procurement.mjs   (exit 1 on any failure)
 
-function buildFarmer(data, count, now, uuid) {
+// The farmer code is no longer "local count + 1" — DataContext.addFarmer takes it from the server
+// counter via allocateFarmerCode (tested against the real module in test-procurement-agent-flow.mjs).
+function buildFarmer(data, farmerCode, now, uuid) {
   return {
-    id: uuid, farmerCode: `F${String(count + 1).padStart(4, '0')}`,
+    id: uuid, farmerCode,
     farmerName: data.farmerName, fatherName: data.fatherName || undefined, mobile: data.mobile || undefined,
     createdAt: now, updatedAt: now,
   };
@@ -28,12 +30,11 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
 
 // 1. Farmer shape — auto code, exactly the 5 fields + BaseEntity, nothing more
-const f = buildFarmer({ farmerName: 'Ram', fatherName: 'Shyam', mobile: '9999999999' }, 0, 'T', 'F-UUID');
-ok(f.farmerCode === 'F0001', 'farmer auto-code = F0001 for the first farmer');
+const f = buildFarmer({ farmerName: 'Ram', fatherName: 'Shyam', mobile: '9999999999' }, 'F0001', 'T', 'F-UUID');
+ok(f.farmerCode === 'F0001', 'farmer carries the server-issued code');
 ok(f.farmerName === 'Ram' && f.fatherName === 'Shyam' && f.mobile === '9999999999', 'farmer captures name / father / mobile');
 ok('id' in f && 'createdAt' in f && 'updatedAt' in f, 'farmer extends BaseEntity (id/createdAt/updatedAt)');
 ok(!('aadhaar' in f) && !('bankAccount' in f) && !('address' in f) && !('village' in f), 'farmer has NO aadhaar/bank/address/land (scope)');
-ok(buildFarmer({ farmerName: 'X' }, 4, 'T', 'U').farmerCode === 'F0005', 'farmer code increments with count');
 
 // 2. ProcurementLot default statuses + value objects
 const lot = buildLot({ farmerId: f.id, cropId: 'wheat', quantity: { value: 10, unit: 'qtl' }, mspRate: { amount: 2275, currency: 'INR' } }, 'T', 'LOT-UUID', 'SOC1', '2026-27');

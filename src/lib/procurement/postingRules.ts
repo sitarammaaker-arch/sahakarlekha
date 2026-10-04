@@ -21,6 +21,10 @@ import { freezePostingLegs } from '@/lib/posting/freezePostingLegs';
  * raises a receivable from the agency (Dr MSP Receivable) against the amount owed to the farmer
  * (Cr MSP Payable). MSP is recovered from the agency later; the society's commission is a separate
  * intent. (This replaced the earlier principal/stock treatment `Dr Trading Goods 3403`.)
+ *
+ * These are the MARKETING-chart template ids only. Live posting resolves the binding against each
+ * society's own chart via procurementPostingBinding (./accounts) — a PACS / sugar society's MSP
+ * ledgers may carry a different id.
  */
 export const PROCUREMENT_POSTING_BINDING: Record<string, string> = {
   'agency.receivable': '3308',   // MSP Receivable (asset) — amount recoverable from the agency

@@ -9,7 +9,8 @@
  *      rows, so an account whose save is still in flight is not planned twice). Planning against the
  *      in-memory chart alone is exactly what created the duplicates — that chart can be the CMS
  *      template fallback after a failed fetch. If the read fails, nothing is created.
- *   3. Creates only the still-missing accounts through core addAccount, which already rolls back and
+ *   3. Creates only the still-missing accounts through core addAccount (with the conventional template
+ *      id — e.g. MSP 3308 — when the cloud chart does not already use it), which already rolls back and
  *      shows a destructive toast when the cloud save fails (RULE 1).
  * An in-flight lock stops a double click from racing two plans.
  */
@@ -19,7 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { useToast } from '@/hooks/use-toast';
 import { fetchAllPaged } from '@/lib/supabasePaging';
-import { planMissingDomainAccounts, type DomainAccountSpec } from '@/lib/domainAccounts/provisioning';
+import { planMissingDomainAccounts, materialiseDomainAccount, type DomainAccountSpec } from '@/lib/domainAccounts/provisioning';
 import type { LedgerAccount } from '@/types';
 
 export interface DomainAccountProvisioning {
@@ -74,7 +75,10 @@ export function useDomainAccountProvisioning(): DomainAccountProvisioning {
         toast({ title: 'सभी डोमेन खाते मौजूद हैं', description: 'कोई नया खाता बनाने की ज़रूरत नहीं। (All domain accounts already exist.)' });
         return;
       }
-      const created = plan.map(spec => addAccount(spec.template)).filter(a => !!a.id);
+      // Conventional id (e.g. 3308) when the cloud chart does not use it; parent re-homed when this
+      // chart lacks the template's group (sugar has no 4200).
+      const chart = [...byId.values()];
+      const created = plan.map(spec => { const m = materialiseDomainAccount(spec, chart); return addAccount(m.template, m.id ? { id: m.id } : undefined); }).filter(a => !!a.id);
       if (created.length === 0) return; // addAccount bailed on a guard and already toasted
       toast({
         title: `${created.length} डोमेन खाते जोड़े गए`,
