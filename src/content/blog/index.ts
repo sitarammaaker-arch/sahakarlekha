@@ -892,6 +892,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'पाली का संग्रह, फैट×SNF दर, चक्र-अंत का सेटलमेंट, कटौती, संघ मिलान और ऑडिट: पाँच कदमों में पूरा हिसाब।',
     accent: 'sky',
     tags: ['दुग्ध समिति', 'दूध खरीद', 'किसान भुगतान', 'सेटलमेंट'],
+    image: '/blog/dairy-milk-procurement-farmer-payment-accounting.webp',
+    imageAlt: 'गाँव की दुग्ध सहकारी समिति के संग्रह-केंद्र में सदस्य किसान का दूध तौला जा रहा है, सामने ऑपरेटर लैपटॉप पर प्रविष्टि कर रहा है और पीछे अन्य किसान कतार में हैं',
   },
   {
     slug: 'dairy-cooperative-accounting-basics',
