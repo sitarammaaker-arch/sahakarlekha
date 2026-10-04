@@ -158,6 +158,13 @@ const CookbookEntry: React.FC = () => {
           </div>
         )}
 
+        {entry.inApp && (
+          <div className="mt-6">
+            <h2 className="text-lg font-bold text-foreground mb-2">ऐप में कैसे करें</h2>
+            <p className="text-sm text-foreground">{entry.inApp}</p>
+          </div>
+        )}
+
         {entry.correction && (
           <div className="mt-6">
             <h2 className="text-lg font-bold text-foreground mb-2">गलती हो गई तो — सुधार</h2>
