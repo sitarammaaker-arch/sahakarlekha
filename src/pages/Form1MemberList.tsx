@@ -24,7 +24,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
-import { addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName } from '@/lib/pdf';
+import { addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, registerReportIdentity } from '@/lib/pdf';
 
 const Form1MemberList: React.FC = () => {
   const { language } = useLanguage();
@@ -147,6 +147,7 @@ const Form1MemberList: React.FC = () => {
     const sigNames = getSignatoryNames(society);
     addSignatureBlock(doc, 'helvetica', ['Secretary / Manager', 'President / Chairman', 'Registrar / Auditor'], finalY, undefined,
       [sigNames.secretary, sigNames.president, '']);
+    registerReportIdentity(doc, 'F1', society);   // keeps the statutory Form 1 heading, adds the verifiable Report ID
     addPageNumbers(doc, 'helvetica', society?.name);
 
     doc.save(pdfFileName('Form1_MemberList', society));

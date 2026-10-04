@@ -41,6 +41,14 @@ function setupFont(_doc: jsPDF): string {
 // (addPageNumbers) — see lib/reportId.ts. addHeader only records which report this document is.
 const docIdentity = new WeakMap<object, { code: string; society: SocietySettings }>();
 
+/**
+ * For documents that keep their OWN heading (a statutory form such as Form 1) but still need a
+ * verifiable Report ID in the footer: record the identity, then call addPageNumbers as usual.
+ */
+export function registerReportIdentity(doc: jsPDF, code: string, society: SocietySettings): void {
+  docIdentity.set(doc, { code, society });
+}
+
 // G12: Look up full state name from code
 function getStateName(code: string): string {
   const state = INDIAN_STATES.find(s => s.value === code);
@@ -1819,7 +1827,7 @@ export function generateGstSummaryPDF(params: GstSummaryPDFParams): void {
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const font = setupFont(doc);
-  const { startY } = addHeader(doc, 'GST Summary Report', society, `Period: ${fmtDate(fromDate)} to ${fmtDate(toDate)}`);
+  const { startY } = addHeader(doc, 'GST Summary Report', society, `Period: ${fmtDate(fromDate)} to ${fmtDate(toDate)}`, { reportCode: 'GSR' });
 
   let y = startY + 4;
 

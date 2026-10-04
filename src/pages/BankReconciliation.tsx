@@ -22,7 +22,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { isClearedAsOf } from '@/lib/reports/bankClearing';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 import jsPDF from 'jspdf';
-import { pdfFileName } from '@/lib/pdf';
+import { pdfFileName, addHeader, addPageNumbers } from '@/lib/pdf';
 import autoTable from 'jspdf-autotable';
 import type { BankReconciliationRecord } from '@/types';
 
@@ -246,15 +246,11 @@ const BankReconciliation: React.FC = () => {
     const drOf = (v: typeof vouchers[0]) => getVoucherLines(v).filter(l => l.accountId === r.bankAccountId && l.type === 'Dr').reduce((s, l) => s + l.amount, 0);
     const crOf = (v: typeof vouchers[0]) => getVoucherLines(v).filter(l => l.accountId === r.bankAccountId && l.type === 'Cr').reduce((s, l) => s + l.amount, 0);
     const doc = new jsPDF();
-    const w = doc.internal.pageSize.getWidth();
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-    doc.text('BANK RECONCILIATION STATEMENT', w / 2, 16, { align: 'center' });
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-    doc.text(society.name, w / 2, 23, { align: 'center' });
-    const sub = [society.registrationNo ? `Reg: ${society.registrationNo}` : null, `Bank: ${r.bankAccountName}`, `As of: ${r.asOfDate}`].filter(Boolean).join('   |   ');
-    doc.text(sub, w / 2, 29, { align: 'center' });
+    // Shared header (society identity, FY, prepared-on) + footer (Page x of y, Report ID) — R1/R2/R8.
+    const { startY: hdrY } = addHeader(doc, 'Bank Reconciliation Statement', society,
+      `Bank: ${r.bankAccountName}  |  As at ${fmtDate(r.asOfDate)}`, { reportCode: 'BRS' });
     autoTable(doc, {
-      startY: 36,
+      startY: hdrY,
       head: [['Particulars', 'Amount (Rs.)']],
       body: [
         ['Balance as per Cash Book (Bank A/c)', r.bookBalance.toFixed(2)],
@@ -290,6 +286,7 @@ const BankReconciliation: React.FC = () => {
     doc.setFontSize(9);
     doc.text(`Reconciled by: ${r.reconciledBy}     On: ${new Date(r.reconciledAt).toLocaleString('en-IN')}`, 14, fy);
     doc.text('Prepared by: ____________            Verified by: ____________', 14, fy + 10);
+    addPageNumbers(doc, 'helvetica', society.name);
     doc.save(pdfFileName('BankReconciliation', society, undefined, undefined, `${r.bankAccountName}-asat-${r.asOfDate}`));
   };
 

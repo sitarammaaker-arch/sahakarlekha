@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileText, Download, TrendingUp, TrendingDown, Percent, ClipboardList, FileSpreadsheet, Undo2, AlertTriangle } from 'lucide-react';
 import { checkHsnDigits, requiredHsnDigits } from '@/lib/hsn/validity';
-import { generateGstSummaryPDF, pdfFileName } from '@/lib/pdf';
+import { generateGstSummaryPDF, pdfFileName, addHeader, addPageNumbers } from '@/lib/pdf';
+import { fmtDate } from '@/lib/dateUtils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
@@ -411,15 +412,11 @@ export default function GstSummary() {
   // GSTR-3B PDF
   const handleGstr3bPdf = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const w = doc.internal.pageSize.getWidth();
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-    doc.text('FORM GSTR-3B', w / 2, 14, { align: 'center' });
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.text(`[See rule 61(5)]`, w / 2, 20, { align: 'center' });
-    doc.text(`GSTIN: ${society.gstin || 'N/A'}  |  ${society.name}  |  Period: ${fromDate} to ${toDate}`, w / 2, 26, { align: 'center' });
+    // Shared header (society, GSTIN, FY, prepared-on) + footer (Page x of y, Report ID) — R1/R2/R8.
+    const { startY: hdrY } = addHeader(doc, 'FORM GSTR-3B', society, `[See rule 61(5)]  |  Period: ${fmtDate(fromDate)} to ${fmtDate(toDate)}`, { reportCode: 'G3B' });
 
     autoTable(doc, {
-      startY: 34,
+      startY: hdrY,
       head: [['3.1', 'Nature of Supplies', 'Total Taxable Value', 'IGST', 'CGST', 'SGST', 'Cess']],
       body: [
         ['(a)', 'Outward taxable supplies (other than zero rated, nil, exempted)', outwardTaxable.taxable.toFixed(2), outwardTaxable.igst.toFixed(2), outwardTaxable.cgst.toFixed(2), outwardTaxable.sgst.toFixed(2), '0.00'],
@@ -473,6 +470,7 @@ export default function GstSummary() {
       columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
     });
 
+    addPageNumbers(doc, 'helvetica', society.name);
     doc.save(pdfFileName('GSTR3B', society, undefined, undefined, fromDate.slice(0, 7)));
   };
 
@@ -582,18 +580,15 @@ export default function GstSummary() {
   // GSTR-1 PDF
   const handleGstr1Pdf = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const w = doc.internal.pageSize.getWidth();
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-    doc.text('FORM GSTR-1', w / 2, 14, { align: 'center' });
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.text(`GSTIN: ${society.gstin || 'N/A'}  |  ${society.name}  |  Period: ${fromDate} to ${toDate}`, w / 2, 22, { align: 'center' });
+    // Shared header (society, GSTIN, FY, prepared-on) + footer (Page x of y, Report ID) — R1/R2/R8.
+    const { startY: hdrY } = addHeader(doc, 'FORM GSTR-1', society, `Period: ${fmtDate(fromDate)} to ${fmtDate(toDate)}`, { reportCode: 'G1' });
 
     // B2B table
     doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-    doc.text('4A, 4B, 4C — B2B Invoices', 14, 32);
+    doc.text('4A, 4B, 4C — B2B Invoices', 14, hdrY + 2);
     if (b2bSales.length > 0) {
       autoTable(doc, {
-        startY: 36,
+        startY: hdrY + 6,
         head: [['Inv No', 'Date', 'Customer', 'GSTIN', 'Taxable', 'IGST', 'CGST', 'SGST', 'Total']],
         body: b2bSales.map(s => {
           const cust = s.customerId ? customerMap.get(s.customerId) : undefined;
@@ -605,10 +600,10 @@ export default function GstSummary() {
       });
     } else {
       doc.setFontSize(8); doc.setFont('helvetica', 'normal');
-      doc.text('No B2B invoices in this period.', 14, 38);
+      doc.text('No B2B invoices in this period.', 14, hdrY + 8);
     }
 
-    const y2 = b2bSales.length > 0 ? (doc as any).lastAutoTable.finalY + 8 : 44;
+    const y2 = b2bSales.length > 0 ? (doc as any).lastAutoTable.finalY + 8 : hdrY + 14;
     doc.setFontSize(10); doc.setFont('helvetica', 'bold');
     doc.text('B2CS — Consumer Sales by Rate', 14, y2);
     if (b2csSummary.length > 0) {
@@ -638,6 +633,7 @@ export default function GstSummary() {
       });
     }
 
+    addPageNumbers(doc, 'helvetica', society.name);
     doc.save(pdfFileName('GSTR1', society, undefined, undefined, fromDate.slice(0, 7)));
   };
 
