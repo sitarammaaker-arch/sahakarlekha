@@ -245,9 +245,10 @@ interface DataContextType {
   /** Resolves null when a guard blocked the merge or the save failed (each shows its own toast). */
   mergeAccounts: (keepId: string, removeId: string) => Promise<AccountMergeResult | null>;
   resetAccounts: (templateAccounts: LedgerAccount[]) => Promise<boolean>;
-  /** opts.onSaved fires once the cloud accepted the save; opts.onFailed after a refusal was rolled back
+  /** opts.onSaved fires once the cloud accepted the save (with any un-migrated columns that were trimmed
+   *  from it — those values did NOT persist); opts.onFailed after a refusal was rolled back
    *  (e.g. the server refusing an FY rollover — migration 090). Callers announce success only in onSaved. */
-  updateSociety: (data: Partial<SocietySettings>, opts?: { onSaved?: () => void; onFailed?: (message: string) => void }) => void;
+  updateSociety: (data: Partial<SocietySettings>, opts?: { onSaved?: (droppedColumns: string[]) => void; onFailed?: (message: string) => void }) => void;
   /** T-23: lock the FY as a finalization. When society.fyCloseAuthorityRequired is on, a valid board
    *  resolution must authorize it (else refused). Returns true when locked. */
   closeFinancialYear: (opts?: { attestation?: AuthorityAttestation }) => boolean;
@@ -4430,7 +4431,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // RULE-1: optimistic + rollback. society_settings writes are admin-only at the RLS layer
   // (is_society_admin), so a non-admin's save is REJECTED by the DB — we must restore local
   // state (not just toast) or the change would silently diverge and vanish on refresh.
-  const updateSociety = useCallback((data: Partial<SocietySettings>, opts?: { onSaved?: () => void; onFailed?: (message: string) => void }) => {
+  const updateSociety = useCallback((data: Partial<SocietySettings>, opts?: { onSaved?: (droppedColumns: string[]) => void; onFailed?: (message: string) => void }) => {
     // F1: settings deliberately skip the FY guard (unlocking the FY is a settings save), so the
     // online-only rule is applied here directly. Without it, a load whose society_settings failed
     // would upsert the device's STALE cached settings over the live row.
@@ -4450,7 +4451,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           ({ error }) => {
             if (!error) {
               if (dropped.length) toastRef.current({ title: 'सहेजा गया — पर कुछ कॉलम इस DB में नहीं हैं', description: `बाक़ी सब सेव हुआ; ye column is DB mein missing hain — pending migration chalayein: ${dropped.join(', ')}.`, duration: 12000 });
-              opts?.onSaved?.();
+              opts?.onSaved?.(dropped);
               return;
             }
             const trimmed = dropped.length < 24 ? payloadWithoutMissingColumn(error, payload) : null;

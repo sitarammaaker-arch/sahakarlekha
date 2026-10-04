@@ -6,7 +6,7 @@
  * Editable fields for auditor's observations and signatures.
  * PDF + browser print.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { FileCheck, Download, Info, FileSpreadsheet } from 'lucide-react';
+import { FileCheck, Download, Info, FileSpreadsheet, Save } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -23,13 +23,18 @@ import { isCountedVoucher } from '@/lib/countedVoucher';
 import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
 import { getBankAccountIds } from '@/lib/storage';
 import { INDIAN_STATES } from '@/lib/constants';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import type { AuditCertificateDetails } from '@/types';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 const AuditCertificate: React.FC = () => {
   const { language } = useLanguage();
-  const { society, accounts, vouchers, members, getProfitLoss, auditObjections } = useData();
+  const { society, accounts, vouchers, members, getProfitLoss, auditObjections, updateSociety } = useData();
+  const { user } = useAuth();
+  const { toast } = useToast();
 
   const hi = language === 'hi';
   const fy = society.financialYear;
@@ -90,6 +95,52 @@ const AuditCertificate: React.FC = () => {
   // Cash book balance (manual override if needed)
   const [cashBookBal, setCashBookBal]     = useState(String(Math.max(0, Math.round(cashBalance * 100) / 100)));
   const [bankBookBal, setBankBookBal]     = useState(String(Math.max(0, Math.round(bankBalance * 100) / 100)));
+
+  // ── Saved details (per FY) ─────────────────────────────────────────────────
+  // The editable fields used to be screen state only — lost on reload, so a certificate could not
+  // be reopened/reprinted. They now live in society_settings."auditCertificates"[fy] and are saved
+  // through updateSociety (RULE 1: optimistic + rollback + destructive toast on failure).
+  // society_settings writes are admin-only at RLS, so only admin/secretary get the Save button.
+  const saved: AuditCertificateDetails | undefined = society.auditCertificates?.[fy];
+  const canSave = user?.role === 'admin' || user?.role === 'secretary';
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!saved) return;
+    if (saved.auditDate) setAuditDate(saved.auditDate);
+    setAuditFrom(saved.auditFrom || '');
+    setAuditTo(saved.auditTo || '');
+    setAuditorName(saved.auditorName || '');
+    setAuditorRegNo(saved.auditorRegNo || '');
+    setAuditorAddress(saved.auditorAddress || '');
+    setObservations(saved.observations || '');
+    if (saved.classification) setClassif(saved.classification);
+    if (saved.cashBookBalance) setCashBookBal(saved.cashBookBalance);
+    if (saved.bankBookBalance) setBankBookBal(saved.bankBookBalance);
+    // Re-hydrate only when the FY or the saved record itself changes (not on every keystroke).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fy, saved?.savedAt]);
+
+  const handleSave = () => {
+    if (!fy) return;
+    const details: AuditCertificateDetails = {
+      auditDate, auditFrom, auditTo, auditorName, auditorRegNo, auditorAddress, observations,
+      classification: classif, cashBookBalance: cashBookBal, bankBookBalance: bankBookBal,
+      savedAt: new Date().toISOString(), savedBy: user?.name || '',
+    };
+    setSaving(true);
+    updateSociety({ auditCertificates: { ...(society.auditCertificates || {}), [fy]: details } }, {
+      onSaved: (dropped) => {
+        setSaving(false);
+        if (dropped.includes('auditCertificates')) {
+          // Base settings row saved, but this DB has no "auditCertificates" column yet — the details
+          // are NOT in the cloud. Say so loudly (RULE 1): a refresh would lose them.
+          toast({ title: hi ? 'प्रमाणपत्र विवरण cloud में सेव नहीं हुए' : 'Certificate details not saved to cloud', description: hi ? 'Database में "auditCertificates" column नहीं है — migration 108 चलाएँ। अभी refresh करने पर ये विवरण नहीं रहेंगे।' : 'The database has no "auditCertificates" column — run migration 108. A refresh now will lose these details.', variant: 'destructive', duration: 12000 });
+          return;
+        }
+        toast({ title: hi ? 'ऑडिट प्रमाणपत्र सहेजा गया' : 'Audit certificate saved', description: hi ? `वित्तीय वर्ष ${fy} — दोबारा खोलकर कभी भी प्रिंट कर सकते हैं।` : `FY ${fy} — reopen and reprint any time.` }); },
+      onFailed: () => setSaving(false), // updateSociety already rolled back + showed the destructive toast
+    });
+  };
 
   // ── CSV / Excel ────────────────────────────────────────────────────────────
   const csvHeaders = ['Particulars', 'Value'];
@@ -249,6 +300,12 @@ const AuditCertificate: React.FC = () => {
           </p>
         </div>
         <div className="ml-auto flex gap-2 flex-wrap">
+          {canSave && (
+            <Button size="sm" variant="outline" className="gap-2" onClick={handleSave} disabled={saving || !fy}>
+              <Save className="h-4 w-4" />
+              {saving ? (hi ? 'सहेज रहे हैं…' : 'Saving…') : (hi ? 'सहेजें' : 'Save')}
+            </Button>
+          )}
           <Button size="sm" className="gap-2 bg-teal-700 hover:bg-teal-800" onClick={handleDownloadPDF}>
             <Download className="h-4 w-4" />
             {hi ? 'PDF डाउनलोड' : 'Download PDF'}
@@ -277,6 +334,10 @@ const AuditCertificate: React.FC = () => {
                 ? `ऑडिट रजिस्टर से ${yearObjections.length} आपत्ति${yearObjections.length > 1 ? 'याँ' : ''} इस रिपोर्ट में शामिल होंगी।`
                 : `${yearObjections.length} objection${yearObjections.length > 1 ? 's' : ''} from the Audit Register will be included in this report.`)
             : (hi ? 'ऑडिट रजिस्टर में इस वर्ष कोई आपत्ति नहीं।' : 'No Audit Register objections for this year.')}
+          {saved?.savedAt && (
+            <>{' '}{hi ? `सहेजा गया: ${fmtDate(saved.savedAt.slice(0, 10))}${saved.savedBy ? ` (${saved.savedBy})` : ''}।` : `Saved: ${fmtDate(saved.savedAt.slice(0, 10))}${saved.savedBy ? ` (${saved.savedBy})` : ''}.`}</>
+          )}
+          {!canSave && (hi ? ' विवरण सहेजने का अधिकार सिर्फ़ admin/सचिव को है — आप PDF बना सकते हैं।' : ' Only admin/secretary can save these details — you can still generate the PDF.')}
         </span>
       </div>
 

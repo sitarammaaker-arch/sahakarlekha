@@ -1059,6 +1059,25 @@ export interface SocietySettings {
     secretary?: SignatoryConfig;
     president?: SignatoryConfig;
   };
+  // Audit Certificate details per FY ("2026-27" → details) so a certificate can be reopened and
+  // reprinted. jsonb column "auditCertificates" (migration 108); the settings upsert trims it
+  // (mild warning, base row safe) on a DB that has not run the migration yet.
+  auditCertificates?: Record<string, AuditCertificateDetails>;
+}
+
+export interface AuditCertificateDetails {
+  auditDate?: string;        // YYYY-MM-DD
+  auditFrom?: string;
+  auditTo?: string;
+  auditorName?: string;
+  auditorRegNo?: string;
+  auditorAddress?: string;
+  observations?: string;
+  classification?: string;   // 'A' | 'B' | 'C' | 'D'
+  cashBookBalance?: string;  // manual override as typed
+  bankBookBalance?: string;
+  savedAt?: string;          // ISO
+  savedBy?: string;
 }
 
 export interface VoucherCounters {

@@ -127,6 +127,13 @@ for (const worker of ['admin', 'accountant']) {
   const seen = new Set(visibleIds(worker, ALL));
   ok(OPS_ENTRY.every((id) => seen.has(id)), `${worker} keeps every operations entry page (byte-identical)`);
 }
+// The audit documents reach every auditor-family role (legacy auditor via requiredRoles, the new
+// ones via the registers domain) — the auditor used to be the one role that could not open them.
+for (const r of ['auditor', 'internalAuditor', 'externalCA']) {
+  const seen = new Set(visibleIds(r, ALL));
+  ok(seen.has('auditCertificate') && seen.has('auditSchedules') && seen.has('auditRegister'), `${r} sees Audit Certificate + Schedules + Register`);
+}
+ok(!new Set(visibleIds('viewer', ALL)).has('auditCertificate'), 'viewer still does not see the Audit Certificate');
 // New operational roles reach their pages via ROLE_MODULE_ACCESS, unaffected by requiredRoles.
 ok(new Set(visibleIds('salesOperator', ALL)).has('sales'), 'salesOperator still sees Sales (map governs, requiredRoles ignored)');
 ok(new Set(visibleIds('storeKeeper', ALL)).has('inventory'), 'storeKeeper still sees Inventory (map governs)');

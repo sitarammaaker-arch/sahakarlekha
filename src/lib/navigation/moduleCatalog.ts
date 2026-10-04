@@ -167,8 +167,10 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'meetingRegister',      titleKey: 'meetingRegister',      icon: Users2,       route: '/meeting-register',      domain: 'registers', requiredCapabilities: U, order: 6 },
   { id: 'nominationRegister',   titleKey: 'nominationRegister',   icon: UserCheck,    route: '/nomination-register',   domain: 'registers', requiredCapabilities: U, order: 7 },
   { id: 'form1MemberList',      titleKey: 'form1MemberList',      icon: ClipboardList, route: '/form1-member-list',    domain: 'registers', requiredCapabilities: U, order: 8 },
-  { id: 'auditCertificate',     titleKey: 'auditCertificate',     icon: FileCheck,    route: '/audit-certificate',     domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 9 },
-  { id: 'auditSchedules',       titleKey: 'auditSchedules',       icon: ClipboardList, route: '/audit-schedules',      domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 10 },
+  // The legacy 'auditor' sees the certificate + schedules (read/print; saving is admin/secretary) —
+  // internalAuditor/externalCA already reach them through the registers domain.
+  { id: 'auditCertificate',     titleKey: 'auditCertificate',     icon: FileCheck,    route: '/audit-certificate',     domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant', 'auditor'], order: 9 },
+  { id: 'auditSchedules',       titleKey: 'auditSchedules',       icon: ClipboardList, route: '/audit-schedules',      domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant', 'auditor'], order: 10 },
   { id: 'reserveFund',          titleKey: 'reserveFund',          icon: Shield,       route: '/reserve-fund',          domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 11 },
   { id: 'fundRegister',         titleKey: 'fundRegister',         icon: PiggyBank,    route: '/fund-register',         domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant', 'auditor'], order: 11.5 },
   { id: 'profitDistribution',   titleKey: 'profitDistribution',   icon: Coins,        route: '/profit-distribution',   domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 12 },
