@@ -91,6 +91,11 @@ const COMPONENTS: Record<string, { kind: string; method: string; formula: string
   // Staff advance recovery. `loanRecovery` is a per-employee FACT (pay-run loads the active loan), so
   // unlike a formula that reads other components this can never leak across employees' structures.
   LOAN_RECOVERY: { kind: 'loan_recovery', method: 'formula', formula: SFL.LOAN_RECOVERY, label: 'Loan / Advance Recovery' },
+  // Professional Tax — MANUAL on purpose: a fixed monthly amount the admin enters per employee. There is NO slab formula:
+  // no state's PT slab has been checked against its Act / notification text (lib/professionalTax.ts PT_SLAB_SOURCES is empty;
+  // RM-22 decision A, 2026-09-27), so nothing may auto-fill. The ledger books it to the society's professional_tax.payable
+  // head and REFUSES to post if that head is not mapped.
+  PT:           { kind: 'deduction', method: 'fixed',   formula: null,    label: 'Professional Tax' },
 };
 // Salary TDS (P2): one component per structure family — the formulas are the tested ones in lib/pay/tax/salaryTds.ts.
 // They sit in the society's catalog but are bound to NO structure until an admin turns TDS on for an employee

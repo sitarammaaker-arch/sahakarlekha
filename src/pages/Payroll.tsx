@@ -90,8 +90,10 @@ const ADDABLE_COMPONENTS = [
   { code: 'STIPEND', hi: 'छात्रवृत्ति', en: 'Stipend' },
   { code: 'DAILY_RATE', hi: 'दैनिक दर', en: 'Daily Rate' },
   { code: 'DAILY_WAGE', hi: 'दैनिक वेतन', en: 'Daily Wages' },
+  // Manual only — no state's PT slab is verified yet, so nothing is computed: enter the monthly amount.
+  { code: 'PT', hi: 'व्यावसायिक कर (PT) — रक़म हाथ से भरें', en: 'Professional Tax (enter the amount)' },
 ];
-const FIXED_COMPONENTS = ['BASIC', 'DEP_ALLOW', 'CONSOLIDATED', 'STIPEND', 'DAILY_RATE'];
+const FIXED_COMPONENTS = ['BASIC', 'DEP_ALLOW', 'CONSOLIDATED', 'STIPEND', 'DAILY_RATE', 'PT'];
 const empTypeLabel = (code: string | null | undefined, hi: boolean) => {
   const t = EMP_TYPES.find((x) => x.code === code);
   return t ? (hi ? t.hi : t.en) : (code || '');
