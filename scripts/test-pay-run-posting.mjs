@@ -35,10 +35,12 @@ register(
     `),
 );
 
-let P, S;
+let P, S, C, M;
 try {
   P = await import(abs('../src/lib/pay/posting/runPosting.ts'));
   S = await import(abs('../src/lib/payroll/accrualLines.ts'));
+  C = await import(abs('../src/lib/ledger/postVoucherClient.ts'));
+  M = await import(abs('../src/lib/ledger/postVoucherMessages.ts'));
 } catch (e) {
   console.error('import failed:', e.message);
   process.exit(1);
@@ -134,6 +136,48 @@ console.log('\n7. bucketOf');
 eq(['LOP', 'LOP_DEP', 'PF', 'EPF', 'ESI', 'PT', 'TDS', 'LOAN_RECOVERY', 'ODD'].map((c) => P.bucketOf(c, c === 'LOAN_RECOVERY' ? 'loan_recovery' : 'deduction')), ['lop', 'lop', 'pf', 'pf', 'esi', 'pt', 'tds', 'loan', 'other_deduction'], 'deduction buckets');
 ok(P.bucketOf('DAILY_RATE', 'employer_contrib') === 'ignore', 'a hidden input component is ignored');
 ok(P.bucketOf('DAILY_WAGE', 'earning') === 'earning', 'daily wage is an earning');
+
+console.log('\n8. the post_voucher payload — same shape as the app builds (lib/ledger/postVoucherClient.ts)');
+{
+  const acc = P.buildRunAccrual([
+    { code: 'BASIC', kind: 'earning', amountMinor: 2500000 }, { code: 'DA', kind: 'earning', amountMinor: 500000 }, { code: 'HRA', kind: 'earning', amountMinor: 1000000 },
+    { code: 'PF', kind: 'deduction', amountMinor: 360000 }, { code: 'LOAN_RECOVERY', kind: 'loan_recovery', amountMinor: 100000 },
+  ], 3540000, HEADS, id);
+  ok(acc.ok, 'accrual builds');
+  const at = '2026-09-30T10:00:00.000Z';
+  const mine = P.makePostVoucherPayload({ id: 'payrun-R1-accrual', eventId: 'payrun-R1-accrual-posted', voucherNo: 'PAY-PR-2026-09-000001', type: 'journal', date: '2026-09-30', narration: 'Payroll PR-2026-09-000001', createdBy: 'u@x', occurredAt: at, legs: acc.legs });
+
+  // The server's own invariants, re-checked here exactly as migration 077 does them.
+  const dr = mine.p_lines.filter((l) => l.drCr === 'Dr').reduce((s, l) => s + l.amountMinor, 0);
+  const cr = mine.p_lines.filter((l) => l.drCr === 'Cr').reduce((s, l) => s + l.amountMinor, 0);
+  ok(dr === cr && dr > 0, '077: ΣDr = ΣCr > 0');
+  ok(Math.round(mine.p_voucher.amount * 100) === dr, "077: the voucher's own total = ΣDr");
+  const vTotal = mine.p_voucher.lines.filter((l) => l.type === 'Dr').reduce((s, l) => s + Math.round(l.amount * 100), 0);
+  ok(vTotal === dr, "077: sum of the voucher's Dr 'lines' (rupees) = ΣDr (paise)");
+  eq(mine.p_event.payload.lines, mine.p_lines.map((l) => ({ accountId: l.accountId, drCr: l.drCr, amountMinor: l.amountMinor })), "077: the event's legs equal p_lines, in order");
+  ok(mine.p_event.event_type === 'voucher.posted' && mine.p_event.sequence === 1 && mine.p_event.aggregate_id === mine.p_voucher.id, '077: voucher.posted, sequence 1, this voucher');
+  ok(!('society_id' in mine.p_voucher), 'no society in the payload (the server takes it from the JWT)');
+
+  // Same shape as the real client builder for a voucher with the same legs.
+  const voucher = { ...mine.p_voucher };
+  const event = { eventId: mine.p_event.event_id, eventType: 'voucher.posted', schemaVersion: 1, tenantId: 'T', jurisdiction: '', aggregateType: 'voucher', aggregateId: mine.p_voucher.id, sequence: 1, occurredAt: at, producer: { kind: 'human', id: 'u@x', onBehalfOf: null }, payload: mine.p_event.payload };
+  const real = C.buildPostVoucherPayload(voucher, event);
+  eq(real.p_lines.map((l) => [l.id, l.accountId, l.drCr, l.amountMinor]), mine.p_lines.map((l) => [l.id, l.accountId, l.drCr, l.amountMinor]), 'p_lines equal what buildPostVoucherPayload produces');
+  eq(Object.keys(real.p_event).sort(), Object.keys(mine.p_event).sort(), 'p_event has the same keys as the app builds');
+  eq(real.p_event.payload.lines, mine.p_event.payload.lines, 'event legs equal');
+}
+
+console.log('\n9. account_roles -> heads; deterministic ids; shared refusal messages');
+{
+  const h = P.headsFromRoles([{ role: 'salary.expense', account_id: '5201' }, { role: 'salary.payable', account_id: '2103' }, { role: 'pf.payable', account_id: '2203' }, { role: 'unrelated', account_id: '9' }]);
+  eq(h, { salaryExpense: '5201', salaryPayable: '2103', pfPayable: '2203' }, 'only the payroll roles are picked up; missing ones stay undefined');
+  const a = P.payrollDocIds('abc'), b = P.payrollDocIds('abc');
+  ok(JSON.stringify(a) === JSON.stringify(b) && a.accrualVoucherId !== a.paymentVoucherId, 'ids are deterministic per run, and accrual ≠ payment');
+  ok(P.payrollDocIds('x').accrualVoucherId !== P.payrollDocIds('y').accrualVoucherId, 'different runs get different ids');
+  ok(M.postVoucherErrorCode('x post_voucher:fy_locked y') === 'fy_locked', 'refusal code is parsed');
+  ok(M.postVoucherMessage('fy_locked').includes('audit-locked'), 'Hindi-first message for fy_locked');
+  ok(C.postVoucherMessage === M.postVoucherMessage, 'postVoucherClient re-exports the SAME function (one home for the messages)');
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

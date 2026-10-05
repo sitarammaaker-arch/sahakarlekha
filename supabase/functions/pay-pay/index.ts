@@ -1,26 +1,26 @@
 /**
- * pay-pay — disburse a POSTED payroll run (record the net-salary payment). Closes the cycle.
- * Built with the user's explicit authorisation (2026-07-22); STAGING-verified only.
+ * pay-pay — disburse a POSTED payroll run: the payment voucher, through the posting service (P1).
  *
- * A posted run's Salaries Payable is settled from the bank: a payment voucher clears the liability,
- * the WORM 'paid' event is appended, and the run moves to 'paid'. Double-entry, balanced:
+ *   Dr  Salary payable                 net pay           (clears what pay-post accrued)
+ *   Cr  the bank / cash account        net pay           (chosen by the caller — NOT a made-up payroll account)
  *
- *   Dr  Salaries Payable  = net   (clear the liability raised at posting)
- *   Cr  Bank / Cash       = net   (money paid out)
+ * Like pay-post, this function writes NO voucher itself: it builds the legs (pure, tested — runPosting.ts) and
+ * calls public.post_voucher AS THE USER, so FY-lock / period-lock / open-FY / balance / the journal event are
+ * enforced by the database. The voucher id is derived from the run id (idempotent on retry).
  *
- * ⚠ FOR THE SOCIETY'S REVIEW before real books: the "Bank / Cash" account is auto-created with a
- * standard name — map it to the ACTUAL bank/cash account you pay salaries from. Amounts in rupees.
- * FINANCIAL PATH — direct DB connection bypasses RLS, so MFA is enforced in-function via the JWT `aal`
- * claim (PAY_REQUIRE_AAL2=true after MFA go-live, ADR-0012); admin-JWT + role gate it meanwhile.
+ * Body: { runId, paidFrom: <bank/cash account id>, paidDate?: 'YYYY-MM-DD' (default today) }.
  *
- * Auth: verified JWT → society + admin role. Caller only pays their own society's runs.
+ * Staff-advance recovery is credited against the loan ONLY here, where the money actually leaves — a run that is
+ * cancelled or reversed must never reduce what an employee still owes (pay-rollback undoes it if a PAID run is
+ * reversed).
+ *
+ * Gate: PAY_LEDGER_POSTING_ENABLED must be 'true'. Auth: verified JWT → society + admin role.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js';
-import { canTransition } from '../_shared/pay-core.mjs';
+import { canTransition, buildRunPayment, makePostVoucherPayload, payrollDocIds, PAYROLL_ROLES } from '../_shared/pay-core.mjs';
+import { rpc, loadHeads } from '../_shared/pay-ledger.ts';
 
-// SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
-// token; its payload is read only to refuse more (unreadable → pending).
 const mfaPending = (t: string): boolean => {
   try { return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).mfa_pending === true; } catch { return true; }
 };
@@ -37,12 +37,8 @@ Deno.serve(async (req: Request) => {
   const CORS = corsFor(req);
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json(405, { error: 'POST only' }, CORS);
-  // Kill-switch (M0 finding R23, approved 2026-09-27): this path writes vouchers via a direct DB
-  // connection — no `lines`, no ledger_events journal event, no FY / period-lock check, RLS
-  // bypassed. OFF until payroll posts through the Phase-3 posting service; set
-  // PAY_LEDGER_POSTING_ENABLED=true only once it does. Checked before any auth or DB work.
   if ((Deno.env.get('PAY_LEDGER_POSTING_ENABLED') ?? '').toLowerCase() !== 'true') {
-    return json(503, { error: 'Payroll की बही-posting अभी बंद है — नई posting service आने तक। (Payroll ledger posting is disabled.)', code: 'PAY_LEDGER_POSTING_DISABLED' }, CORS);
+    return json(503, { error: 'Payroll की बही-posting अभी चालू नहीं है — admin इसे चालू करेगा। (Payroll ledger posting is not enabled.)', code: 'PAY_LEDGER_POSTING_DISABLED' }, CORS);
   }
 
   const supaUrl = Deno.env.get('SUPABASE_URL') ?? '', anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -53,17 +49,18 @@ Deno.serve(async (req: Request) => {
   const { data: { user } } = await createClient(supaUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } }).auth.getUser();
   if (!user?.email) return json(401, { error: 'invalid session' }, CORS);
 
-  // MFA gate (see pay-post): direct-DB writes bypass the aal2 RLS gate, so enforce AAL2 in-function from
-  // the verified JWT. Off unless PAY_REQUIRE_AAL2=true (set after MFA go-live) — never fail-closes early.
   if ((Deno.env.get('PAY_REQUIRE_AAL2') ?? '').toLowerCase() === 'true') {
     let aal = '';
     try { aal = JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).aal ?? ''; } catch { /* malformed → treat as no MFA */ }
     if (aal !== 'aal2') return json(403, { error: 'MFA (AAL2) required to disburse payroll — step up your session' }, CORS);
   }
 
-  let body: { runId?: string };
+  let body: { runId?: string; paidFrom?: string; paidDate?: string };
   try { body = await req.json(); } catch { return json(400, { error: 'bad JSON' }, CORS); }
   if (!body.runId) return json(400, { error: 'runId required' }, CORS);
+  if (!body.paidFrom) return json(400, { error: 'भुगतान किस बैंक / नकद खाते से हुआ — paidFrom चुनें। / paidFrom (bank or cash account) required' }, CORS);
+  const paidDate = (body.paidDate ?? '').trim() || new Date().toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paidDate)) return json(400, { error: 'paidDate must be YYYY-MM-DD' }, CORS);
 
   const sql = postgres(dbUrl, { prepare: false, max: 3 });
   try {
@@ -73,33 +70,40 @@ Deno.serve(async (req: Request) => {
     const societyId = su.society_id as string;
     const societyText = String(societyId);
 
-    const [run] = await sql`select id, society_id, state, run_no, period_month from pay_calc.payroll_run where id = ${body.runId} limit 1`;
+    const [run] = await sql`select id, society_id, state, run_no from pay_calc.payroll_run where id = ${body.runId} limit 1`;
     if (!run) return json(404, { error: 'run not found' }, CORS);
     if (run.society_id !== societyId) return json(403, { error: 'run belongs to another society' }, CORS);
     if (!canTransition(run.state, 'paid')) return json(409, { error: `cannot pay a run in state '${run.state}' (must be 'posted')` }, CORS);
 
+    // the account the money leaves from: must be this society's, and an asset (a bank / cash head)
+    const [from] = await sql`select id, type from public.accounts where society_id::text = ${societyText} and id = ${body.paidFrom} limit 1`;
+    if (!from) return json(400, { error: `खाता '${body.paidFrom}' इस समिति में नहीं है। / paidFrom account not found in this society` }, CORS);
+    if (from.type !== 'asset') return json(400, { error: 'भुगतान सिर्फ़ बैंक / नकद (asset) खाते से हो सकता है। / paidFrom must be a bank or cash (asset) account' }, CORS);
+
     const [tot] = await sql`select coalesce(sum(net_minor),0)::bigint n from pay_calc.payslip where pay_run_id = ${body.runId}`;
-    const net = Number(tot.n);
-    if (net <= 0) return json(400, { error: 'nothing to pay (zero net)' }, CORS);
+    const netMinor = Number(tot.n);
+    const { heads, missing } = await loadHeads(sql, societyText, [PAYROLL_ROLES.salaryPayable]);
+    if (missing.length || !heads.salaryPayable) {
+      return json(409, { error: `इस समिति के खातों में ये भूमिकाएँ तय नहीं हैं: ${PAYROLL_ROLES.salaryPayable} — पहले Ledger Heads में तय करें। / account role not mapped`, code: 'PAY-POST-HEAD', missingHeads: missing }, CORS);
+    }
 
-    const acc = { pay: `${societyText}:PAY-SALPAY`, bank: `${societyText}:PAY-BANK` };
-    const out = await sql.begin(async (tx: postgres.TransactionSql) => {
-      await tx`insert into public.accounts(id,society_id,name,"nameHi",type,"isSystem") values
-        (${acc.bank},${societyText},'Bank / Cash (Payroll)','बैंक / नकद (पेरोल)','asset',true)
-        on conflict (id) do nothing`;
-      const vId = crypto.randomUUID();
-      await tx`insert into public.vouchers(id,society_id,"voucherNo",date,type,amount,narration,"createdBy")
-        values(${vId},${societyText},${'PAYMT-' + run.run_no},${String(run.period_month)},'payment',${rup(net)},${`Salary payment ${run.run_no}`},${String(su.id)})`;
-      const line = (accId: string, dr: number, cr: number, n: string) =>
-        tx`insert into public.voucher_entries(id,"voucherId","accountId",dr,cr,narration,society_id) values(${crypto.randomUUID()},${vId},${accId},${dr},${cr},${n},${societyText})`;
-      await line(acc.pay, rup(net), 0, 'Clear salaries payable');
-      await line(acc.bank, 0, rup(net), 'Net salaries paid');
+    const built = buildRunPayment(netMinor, heads.salaryPayable, String(body.paidFrom));
+    if (!built.ok) return json(409, { error: built.message, code: built.code }, CORS);
 
+    const ids = payrollDocIds(body.runId);
+    const payload = makePostVoucherPayload({
+      id: ids.paymentVoucherId, eventId: ids.paymentEventId, voucherNo: `PAYMT-${run.run_no}`, type: 'payment',
+      date: paidDate, narration: `Salary payment ${run.run_no}`, createdBy: user.email, occurredAt: new Date().toISOString(), legs: built.legs,
+    });
+    const posted = await rpc(supaUrl, anonKey, jwt, 'post_voucher', payload);
+    if (!posted.ok) return json(409, { error: posted.message, code: posted.code ? `post_voucher:${posted.code}` : 'PAY-POST-REFUSED' }, CORS);
+    const voucherId = String(posted.data?.id ?? ids.paymentVoucherId);
+
+    await sql.begin(async (tx: postgres.TransactionSql) => {
       const [{ nextseq }] = await tx`select coalesce(max(sequence),0)+1 as nextseq from pay_calc.pay_event where aggregate_id = ${body.runId}`;
       await tx`insert into pay_calc.pay_event(society_id,aggregate_type,aggregate_id,sequence,event_type,producer_kind,actor_email,payload)
-        values(${societyId},'pay_run',${body.runId},${nextseq},'paid'::pay_core.pay_event_type,'human',${user.email},${JSON.stringify({ voucher: vId, net: rup(net) })})`;
-      // Credit staff-advance recovery — ONLY here, where the money actually leaves. A run that is
-      // cancelled or later reversed must never reduce what an employee still owes.
+        values(${societyId},'pay_run',${body.runId},${nextseq},'paid'::pay_core.pay_event_type,'human',${user.email},${JSON.stringify({ voucher: voucherId, net: rup(netMinor), paidFrom: body.paidFrom, paidDate, via: 'post_voucher' })})`;
+      // Credit staff-advance recovery — ONLY here, where the money actually leaves.
       await tx`
         with rec as (
           select p.employee_id, sum(pl.computed_minor)::bigint as amt
@@ -118,10 +122,9 @@ Deno.serve(async (req: Request) => {
         where l.employee_id = rec.employee_id and l.society_id = ${societyId} and l.status = 'active' and rec.amt > 0`;
       await tx`update pay_calc.payslip set status = 'paid'::pay_core.payslip_status where pay_run_id = ${body.runId}`;
       await tx`update pay_calc.payroll_run set state = 'paid'::pay_core.pay_run_state, updated_at = now(), updated_by = ${su.id} where id = ${body.runId}`;
-      return { voucherId: vId };
     });
 
-    return json(200, { ok: true, runId: body.runId, state: 'paid', voucherId: out.voucherId, net: rup(net) }, CORS);
+    return json(200, { ok: true, runId: body.runId, state: 'paid', voucherId, voucherNo: `PAYMT-${run.run_no}`, net: rup(netMinor), status: String(posted.data?.status ?? 'posted') }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {

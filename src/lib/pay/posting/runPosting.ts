@@ -142,3 +142,79 @@ export function buildRunPayment(
     ],
   };
 }
+
+// ── hand-off to the posting service (public.post_voucher, migration 077) ────────────────────────────
+
+/** The account_roles a payroll posting needs (heads are resolved per society from account_roles). */
+export const PAYROLL_ROLES = {
+  salaryExpense: 'salary.expense',
+  salaryPayable: 'salary.payable',
+  pfPayable: 'pf.payable',
+  esiPayable: 'esi.payable',
+  ptPayable: 'professional_tax.payable',
+  tdsPayable: 'tds.payable',
+  employeeAdvance: 'employee.advance',
+} as const;
+
+/** PURE — account_roles rows ({role, account_id}) → the heads buildRunAccrual wants (missing ones stay undefined). */
+export function headsFromRoles(rows: readonly { role: string; account_id: string }[]): Partial<PostingHeads> {
+  const by = new Map(rows.map((r) => [r.role, r.account_id]));
+  const h: Partial<PostingHeads> = {};
+  const set = (k: keyof PostingHeads, role: string) => { const v = by.get(role); if (v) h[k] = v; };
+  set('salaryExpense', PAYROLL_ROLES.salaryExpense); set('salaryPayable', PAYROLL_ROLES.salaryPayable);
+  set('pfPayable', PAYROLL_ROLES.pfPayable); set('esiPayable', PAYROLL_ROLES.esiPayable);
+  set('ptPayable', PAYROLL_ROLES.ptPayable); set('tdsPayable', PAYROLL_ROLES.tdsPayable);
+  set('employeeAdvance', PAYROLL_ROLES.employeeAdvance);
+  return h;
+}
+
+/**
+ * PURE — the ids of a run's vouchers and journal events. DETERMINISTIC (derived from the run id) so a retry
+ * after a dropped connection posts the SAME voucher again: post_voucher is idempotent on the voucher id and
+ * answers 'exists' instead of creating a second salary voucher.
+ */
+export function payrollDocIds(runId: string) {
+  return {
+    accrualVoucherId: `payrun-${runId}-accrual`, accrualEventId: `payrun-${runId}-accrual-posted`,
+    paymentVoucherId: `payrun-${runId}-payment`, paymentEventId: `payrun-${runId}-payment-posted`,
+  };
+}
+
+export interface PostVoucherPayloadInput {
+  id: string; eventId: string; voucherNo: string; type: 'journal' | 'payment';
+  /** YYYY-MM-DD — must fall in an OPEN financial year of the society (checked by post_voucher). */
+  date: string; narration: string; createdBy: string; occurredAt: string;
+  legs: readonly PostingLeg[];
+}
+
+const rupees = (minor: number) => minor / 100;
+
+/**
+ * PURE — the exact `{p_voucher, p_lines, p_event}` that public.post_voucher takes, in the same shape the app's
+ * buildPostVoucherPayload (lib/ledger/postVoucherClient.ts) produces: the voucher with its legs as `lines`
+ * (rupees), the legs in paise, and the `voucher.posted` event (sequence 1) carrying the SAME legs. The society
+ * is never in the payload — the server takes it from the JWT.
+ */
+export function makePostVoucherPayload(i: PostVoucherPayloadInput) {
+  const drLegs = i.legs.filter((l) => l.drCr === 'Dr');
+  const crLegs = i.legs.filter((l) => l.drCr === 'Cr');
+  const totalMinor = drLegs.reduce((s, l) => s + l.amountMinor, 0);
+  const p_voucher = {
+    id: i.id, voucherNo: i.voucherNo, type: i.type, date: i.date,
+    debitAccountId: drLegs[0]?.accountId ?? '', creditAccountId: crLegs[0]?.accountId ?? '',
+    amount: rupees(totalMinor), narration: i.narration, createdBy: i.createdBy, createdAt: i.occurredAt,
+    approvalStatus: 'approved', memberId: '', branchId: '',
+    lines: i.legs.map((l) => ({ id: l.id, accountId: l.accountId, type: l.drCr, amount: rupees(l.amountMinor) })),
+  };
+  const p_lines = i.legs.map((l) => ({ id: l.id, accountId: l.accountId, drCr: l.drCr, amountMinor: l.amountMinor, narration: l.narration }));
+  const p_event = {
+    event_id: i.eventId, event_type: 'voucher.posted', schema_version: 1, aggregate_type: 'voucher', aggregate_id: i.id,
+    sequence: 1, occurred_at: i.occurredAt, producer_kind: 'human', producer_id: i.createdBy, on_behalf_of: null,
+    payload: {
+      lines: i.legs.map((l) => ({ accountId: l.accountId, drCr: l.drCr, amountMinor: l.amountMinor })),
+      voucherNo: i.voucherNo, type: i.type, amount: rupees(totalMinor), date: i.date, narration: i.narration,
+      createdAt: i.occurredAt, memberId: '', branchId: '', createdBy: i.createdBy,
+    },
+  };
+  return { p_voucher, p_lines, p_event };
+}
