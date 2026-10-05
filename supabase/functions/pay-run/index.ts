@@ -120,6 +120,7 @@ Deno.serve(async (req: Request) => {
     const sourcesByCode: Record<string, string> = {};
     const fixedCodes = new Set<string>();
     const tdsOwners: string[] = [];   // employees in this run who have salary TDS turned on
+    const tdsOutcomes = new Map<string, { excessMinor: number }>();   // employee code → what tds_192 worked out
     for (const emp of employees) {
       const comps = await sql`
         select cc.code, cc.id as component_id, cv.kind, cv.calc_method, fv.expression_text, ao.fixed_minor, ao.fixed_currency
@@ -191,7 +192,8 @@ Deno.serve(async (req: Request) => {
         tdsYtdMinor = Number(y.ytd);
       }
       const facts = { attendance: { paidDays, lopDays, otHours: 0 }, leave: [], loan, tax: { ytdByHead: tdsComp ? { [TDS_YTD_HEAD]: tdsYtdMinor } : {}, monthsRemaining: monthsLeftInFy(period), regime: 'new' } };
-      const fns = { [TDS_192_NAME]: tdsComp ? makeTds192({ regime: 'new', asOf: periodMonth, currency: 'INR' }) : () => makeMoney(0, 'INR') };
+      // `onResult` collects what the Money result cannot carry: an OVER-deduction (the CA ruling: never a silent ₹0).
+      const fns = { [TDS_192_NAME]: tdsComp ? makeTds192({ regime: 'new', asOf: periodMonth, currency: 'INR' }, (o: { excessMinor: number }) => { tdsOutcomes.set(String(emp.employee_code), o); }) : () => makeMoney(0, 'INR') };
       emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, paidDays, paidDaysShown, lopDays, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
     }
 
@@ -258,7 +260,12 @@ Deno.serve(async (req: Request) => {
         values(${societyId},'pay_run',${runId},${ev.sequence},${ev.eventType}::pay_core.pay_event_type,${ev.producerKind}::pay_core.producer_kind,${ev.actorEmail},${ev.occurredAt},${JSON.stringify(ev.payload)})`;
     });
 
-    return json(200, { ok: true, runId, runNo, employeeCount: assembled.payslips.length, period }, CORS);
+    // Over-deducted employees: their TDS is ₹0 this month, and a person must be TOLD — payroll cannot refund, the
+    // employee only recovers it by filing a return (unless it was never deposited, when the society can return it).
+    const warnings = [...tdsOutcomes.entries()]
+      .filter(([, o]) => o.excessMinor > 0)
+      .map(([employeeCode, o]) => ({ code: 'TDS-EXCESS', employeeCode, excess: Math.round(o.excessMinor) / 100 }));
+    return json(200, { ok: true, runId, runNo, employeeCount: assembled.payslips.length, period, warnings }, CORS);
   } catch (e) {
     const msg = String((e as Error)?.message ?? e);
     // backstop for the pre-check race: if two runs for the same period land together, the DB index

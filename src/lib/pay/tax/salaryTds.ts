@@ -68,12 +68,30 @@ export function assertVerifiedLaw(regime: TaxRegime, asOf: string): void {
   if (!basis.set.verified) refuse('PAY-TAX-501', `${basis.set.fy} slabs are not verified (carried over, unsourced) — refusing; enter TDS by hand`);
 }
 
+/** What `tds_192` worked out for one employee-month — reported to the caller, which the formula language cannot do. */
+export interface Tds192Outcome {
+  tdsMinor: number;
+  annualTaxMinor: number;
+  ytdMinor: number;
+  /**
+   * > 0 ⇒ MORE has already been deducted this year than the year's tax. The month's TDS is then ₹0 (payroll cannot
+   * refund) — but the CA's ruling (docs/CA-VERIFICATION-2026-07.md) is that this must never be a SILENT zero: the
+   * employee only recovers it by filing their return, so a person has to be told. The Salary page surfaces this; the
+   * caller of this function must too.
+   */
+  excessMinor: number;
+}
+
 /**
  * PURE — the `tds_192` function for ONE employee-month.
  *   tds_192(annualGross: Money, ytdDeducted: Money | null, monthsRemaining: Number) → Money
  * Whole rupees, never negative (payroll cannot refund). A missing year-to-date (no TDS head yet) is ₹0.
+ * `onResult` (optional) receives the full outcome, including the over-deduction the Money result cannot carry.
  */
-export function makeTds192(ctx: Tds192Context): (annual: unknown, ytd: unknown, months: unknown) => MoneyValue {
+export function makeTds192(
+  ctx: Tds192Context,
+  onResult?: (o: Tds192Outcome) => void,
+): (annual: unknown, ytd: unknown, months: unknown) => MoneyValue {
   return (annual, ytd, months) => {
     assertVerifiedLaw(ctx.regime, ctx.asOf);
     if (!isMoney(annual)) refuse('PAY-DSL-TYPE-015', 'tds_192: the annual gross must be Money');
@@ -89,6 +107,13 @@ export function makeTds192(ctx: Tds192Context): (annual: unknown, ytd: unknown, 
       monthsRemaining: months as number,
       asOf: ctx.asOf,
     });
-    return makeMoney(Math.round(rupees.tds * 100), ctx.currency);
+    const tdsMinor = Math.round(rupees.tds * 100);
+    if (onResult) {
+      onResult({
+        tdsMinor, annualTaxMinor: Math.round(rupees.annualTax * 100),
+        ytdMinor: Math.round(rupees.ytdDeducted * 100), excessMinor: Math.round(rupees.excess * 100),
+      });
+    }
+    return makeMoney(tdsMinor, ctx.currency);
   };
 }

@@ -168,5 +168,29 @@ console.log('\n7. the ledger builder books EVERY TDS variant to the TDS payable 
   }
 }
 
+console.log('\n8. over-deduction is REPORTED, never a silent zero (the CA ruling)');
+{
+  // basic ₹80,000 → the year's tax is ₹1,03,116 (hand-derived). Already ₹1,50,000 deducted ⇒ ₹46,884 too much.
+  let got = null;
+  const f = T.makeTds192({ regime: 'new', asOf: '2026-10-01', currency: 'INR' }, (o) => { got = o; });
+  const out = f(money(80000 * 1.6 * 12), money(150000), 6);
+  ok(out.minor === 0, 'over-deducted ⇒ this month is ₹0');
+  ok(got && got.excessMinor === (150000 - 103116) * 100, 'the outcome reports the excess: ₹' + (got && got.excessMinor / 100) + ' (want ₹46,884)');
+  ok(got && got.annualTaxMinor === 103116 * 100, "the outcome reports the year's tax ₹1,03,116");
+  ok(got && got.ytdMinor === 150000 * 100 && got.tdsMinor === 0, 'and the year-to-date and the TDS it returned');
+  // not over-deducted: excess is 0 and the callback agrees with the returned Money
+  let g2 = null;
+  const f2 = T.makeTds192({ regime: 'new', asOf: '2026-10-01', currency: 'INR' }, (o) => { g2 = o; });
+  const m2 = f2(money(80000 * 1.6 * 12), money(20000), 6);
+  ok(g2 && g2.excessMinor === 0, 'a normal month reports no excess');
+  ok(g2 && g2.tdsMinor === m2.minor && m2.minor > 0, 'the reported TDS equals the Money the formula gets (' + (m2.minor / 100) + ' ₹)');
+  // no callback is still fine (pay-run passes one only for employees who have TDS)
+  ok(T.makeTds192({ regime: 'new', asOf: '2026-10-01', currency: 'INR' })(money(2000000), null, 6).minor > 0, 'works without a callback');
+  // a refusal never calls it (nothing was computed)
+  let called = false;
+  try { T.makeTds192({ regime: 'new', asOf: '2025-12-01', currency: 'INR' }, () => { called = true; })(money(2000000), null, 6); } catch { /* PAY-TAX-501 */ }
+  ok(called === false, 'a refused month reports nothing');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

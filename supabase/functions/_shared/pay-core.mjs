@@ -1659,7 +1659,7 @@ function assertVerifiedLaw(regime, asOf) {
   if (regime === "old") refuse("PAY-TAX-502", "the OLD-regime slabs are not verified \u2014 refusing; enter TDS by hand or use the new regime");
   if (!basis.set.verified) refuse("PAY-TAX-501", `${basis.set.fy} slabs are not verified (carried over, unsourced) \u2014 refusing; enter TDS by hand`);
 }
-function makeTds192(ctx) {
+function makeTds192(ctx, onResult) {
   return (annual, ytd, months) => {
     assertVerifiedLaw(ctx.regime, ctx.asOf);
     if (!isMoney3(annual)) refuse("PAY-DSL-TYPE-015", "tds_192: the annual gross must be Money");
@@ -1674,7 +1674,16 @@ function makeTds192(ctx) {
       monthsRemaining: months,
       asOf: ctx.asOf
     });
-    return makeMoney(Math.round(rupees2.tds * 100), ctx.currency);
+    const tdsMinor = Math.round(rupees2.tds * 100);
+    if (onResult) {
+      onResult({
+        tdsMinor,
+        annualTaxMinor: Math.round(rupees2.annualTax * 100),
+        ytdMinor: Math.round(rupees2.ytdDeducted * 100),
+        excessMinor: Math.round(rupees2.excess * 100)
+      });
+    }
+    return makeMoney(tdsMinor, ctx.currency);
   };
 }
 export {
