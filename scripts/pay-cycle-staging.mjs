@@ -97,10 +97,30 @@ await db.query('begin read only'); // every DB statement below is a SELECT
 const created = [];
 let createdRunId = '';        // the run this script made (for end-of-test cleanup)
 let runFinalised = false;     // true once posted/paid/rolled back — those must not be cancelled
+// declared HERE, not inside the try: the cleanup in `finally` reads them (a block-scoped `let` made that a ReferenceError)
+let tdsEmpId = '', tdsExpectedMinor = 0n;
 
 try {
   TOKEN = await signIn(email, password);
   console.log('signed in to STAGING');
+
+  // CLEANUP_ONLY=1 — leftovers of an earlier run that died before its own cleanup: switch TDS off and deactivate every
+  // still-active "Cycle …" test employee, then stop. Touches nothing else.
+  if (process.env.CLEANUP_ONLY === '1') {
+    step('cleanup only: leftover "Cycle …" test employees');
+    const lst = await fn('pay-employee', { action: 'list' });
+    const nameOf = (e) => (e.full_name && (e.full_name.en || e.full_name.hi)) || '';
+    const left = (lst.body.employees || []).filter((e) => /^Cycle /.test(nameOf(e)) && !e.left_on);
+    const day = new Date().toISOString().slice(0, 10);
+    for (const e of left) {
+      if (e.tds_code) { const off = await fn('pay-employee', { action: 'tds-set', employeeId: e.id, enabled: false }); console.log(`  - ${nameOf(e)}: TDS off -> ${off.status === 200 ? 'ok' : 'status ' + off.status + ' ' + (off.body.error || '')}`); }
+      const d = await fn('pay-employee', { action: 'deactivate', employeeId: e.id, lastDay: day });
+      console.log(`  - ${nameOf(e)} (${e.employee_code}): ${d.status === 200 ? 'deactivated' : 'status ' + d.status + ' ' + (d.body.error || '')}`);
+    }
+    console.log(`\n${left.length} leftover test employee(s) handled.`);
+    await db.query('rollback').catch(() => {}); await db.end().catch(() => {});
+    process.exit(0);
+  }
 
   step('0. pick a period inside an OPEN financial year (post_voucher refuses any other date)');
   const [suRow] = (await db.query(`select society_id::text sid from public.society_users where lower(email) = lower($1) and is_active = true limit 1`, [email])).rows;
@@ -137,7 +157,6 @@ try {
     if (r.body.employeeId) created.push(r.body.employeeId);
   }
 
-  let tdsEmpId = '', tdsExpectedMinor = 0n;
   if (WITH_TDS) {
     step('1b. salary TDS — switch it on for one well-paid employee, and prove it refuses unverified law');
     const t = await fn('pay-employee', { action: 'add', name: 'Cycle TDS', code: `CYC${stamp}T`, type: 'permanent', basicMinor: 8000000, dateOfJoin: '2025-01-01' });
