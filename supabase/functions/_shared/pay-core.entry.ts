@@ -12,3 +12,5 @@ export { postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVouch
 // formulas, the verified-law gate, and the financial-year helpers the year-to-date needs.
 export { makeTds192, assertVerifiedLaw, TDS_FORMULAS, TDS_192_SIG, TDS_192_NAME, TDS_YTD_HEAD, isTdsCode } from '@/lib/pay/tax/salaryTds.ts';
 export { monthsLeftInFy, fyBounds } from '@/lib/payroll/cumulativeTds.ts';
+// PF / ESI parameters as dated, flagged-unverified data (the one place to change them): the seed defaults read it.
+export { resolveParam } from '@/lib/rules/epfEsi.ts';

@@ -14,7 +14,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js';
-import { TDS_FORMULAS, assertVerifiedLaw } from '../_shared/pay-core.mjs';
+import { TDS_FORMULAS, assertVerifiedLaw, resolveParam } from '../_shared/pay-core.mjs';
 
 // SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
 // token; its payload is read only to refuse more (unreadable → pending).
@@ -230,12 +230,15 @@ async function ensureSocietyComponents(tx: postgres.TransactionSql, societyId: s
     await tx`insert into pay_config.component_version(component_id,kind,calc_method,gl_symbolic_role,formula_ref,effective_from,created_by,status)
       values(${ids[code]},${def.kind},${def.method}::pay_core.calc_method,${code.toLowerCase()},${formulaRef},${from},${creator},'active')`;
   }
+  // The defaults come from the DATED parameter table (lib/rules/epfEsi.ts) for TODAY — the one place a statutory number
+  // changes. They are still only DEFAULTS, still unverified, and still the society's to confirm and edit (statutory-set).
+  const today = new Date().toISOString().slice(0, 10);
   const seedRates: [string, number, string][] = [
-    ['pf_rate', 12, 'PF employee contribution %'],
-    ['employer_pf_rate', 12, 'PF employer contribution % (EPS + EPF split)'],
-    ['eps_rate', 8.33, 'EPS (pension) contribution % of EPS wages'],
-    ['edli_rate', 0.5, 'EDLI contribution %'],
-    ['eps_wage_ceiling', 15000, 'EPS / EDLI wage ceiling (₹, whole rupees)'],
+    ['pf_rate', resolveParam('pf.employeeRate', today).value, 'PF employee contribution %'],
+    ['employer_pf_rate', resolveParam('epf.employerRate', today).value, 'PF employer contribution % (EPS + EPF split)'],
+    ['eps_rate', resolveParam('eps.rate', today).value, 'EPS (pension) contribution % of EPS wages'],
+    ['edli_rate', resolveParam('edli.rate', today).value, 'EDLI contribution %'],
+    ['eps_wage_ceiling', resolveParam('pf.wageCeiling', today).value, 'EPS / EDLI wage ceiling (₹, whole rupees)'],
   ];
   for (const [k, v, lbl] of seedRates) {
     await tx`insert into pay_config.statutory_setting(society_id,key,value_num,label,source,created_by)

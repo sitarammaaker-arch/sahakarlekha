@@ -490,6 +490,7 @@ const SalaryManagement: React.FC = () => {
   const rowStatutory = (row: ProcessRow, withOverrides = true) => {
     const monthDays = daysInMonth(processingMonth);
     return computeStatutory({
+      asOf: `${processingMonth}-01`,   // the law of the MONTH BEING PROCESSED, never today (lib/rules/epfEsi.ts)
       basic: prorate(row.employee.basicSalary, row.paidDays, monthDays),
       allowances: prorate(row.allowances, row.paidDays, monthDays),
       pfApplicable: row.employee.pfApplicable ?? true,
