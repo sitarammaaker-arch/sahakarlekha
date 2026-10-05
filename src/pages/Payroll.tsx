@@ -42,6 +42,7 @@ interface Employee {
   employment_type?: string | null; uan?: string | null; pan?: string | null; esic_ip?: string | null;
   left_on?: string | null;            // set once they have left — basic_minor goes null with it
   last_basic_minor?: number | null;   // what they were on in their final assignment
+  tds_code?: string | null;           // the salary-TDS component on their structure, or null when TDS is off
 }
 interface StatSetting { key: string; value_num: number; label: string | null; source: string | null; }
 interface AttRow {
@@ -478,6 +479,27 @@ const Payroll: React.FC = () => {
   const [addCode, setAddCode] = useState('');
   const [addVal, setAddVal] = useState('');
 
+  // Salary TDS on / off for THIS employee. The server adds (or removes) the TDS component that fits their structure;
+  // it applies from today, so past months stay as they were. The run itself refuses a month whose law is not verified.
+  const [tdsBusy, setTdsBusy] = useState(false);
+  const setTds = async (enabled: boolean) => {
+    if (!attEmp) return;
+    setTdsBusy(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'tds-set', employeeId: attEmp.id, enabled } });
+    setTdsBusy(false);
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'TDS नहीं बदला' : 'TDS not changed', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    const d = data as { code?: string; lawWarning?: string | null };
+    toast({
+      title: enabled ? (hi ? 'TDS चालू ✓' : 'TDS on ✓') : (hi ? 'TDS बंद ✓' : 'TDS off ✓'),
+      description: enabled ? (hi ? `अगले payroll से हर माह संचयी हिसाब से कटेगा (${d.code})` : `Withheld monthly from the next payroll on the cumulative rule (${d.code})`) : (hi ? 'अब से कोई TDS नहीं कटेगा' : 'Nothing will be withheld from now on'),
+    });
+    if (enabled && d.lawWarning) {
+      toast({ title: hi ? '⚠ इस माह का क़ानून सत्यापित नहीं' : '⚠ This month\'s law is not verified', description: `${d.lawWarning}`, variant: 'destructive', duration: 15000 });
+    }
+    setAttEmp((prev) => (prev ? { ...prev, tds_code: enabled ? (d.code ?? 'TDS') : null } : prev));
+    loadStructure(attEmp.id); loadHistory(attEmp.id); loadEmployees();
+  };
+
   // Add / remove a component for THIS employee only. The server creates a new structure version so
   // past periods keep the structure they were paid on.
   const changeComponent = async (action: 'structure-add' | 'structure-remove', code: string) => {
@@ -594,8 +616,20 @@ const Payroll: React.FC = () => {
       toast({ title: hi ? 'पेरोल नहीं चला' : 'Payroll run failed', description: await invokeError(error, data) || '', variant: 'destructive' });
       return;
     }
-    const d = data as { runNo?: string; employeeCount?: number };
+    const d = data as { runNo?: string; employeeCount?: number; warnings?: { code: string; employeeCode: string; excess: number }[] };
     toast({ title: hi ? 'पेरोल चल गया ✓' : 'Payroll run complete ✓', description: `${d.runNo} — ${d.employeeCount} ${hi ? 'पेस्लिप' : 'payslip(s)'}` });
+    // An employee who has ALREADY had more TDS deducted this year than the year's tax gets ₹0 this month — payroll cannot
+    // refund. That must never pass silently: the employee only recovers it by filing a return.
+    const over = (d.warnings || []).filter((w) => w.code === 'TDS-EXCESS');
+    if (over.length) {
+      toast({
+        title: hi ? '⚠ ज़्यादा TDS कट चुका है' : '⚠ TDS already over-deducted',
+        description: hi
+          ? `${over.map((w) => `${w.employeeCode}: ₹${w.excess}`).join(', ')} — इस साल के कर से इतना अधिक कट चुका है, इसलिए इस माह TDS ₹0 है। Payroll इसे लौटा नहीं सकता: कर्मचारी को बताएँ कि वे अपने return में दावा करें (या, अगर यह जमा नहीं हुआ है, तो समिति लौटा सकती है)।`
+          : `${over.map((w) => `${w.employeeCode}: ₹${w.excess}`).join(', ')} — more than this year's tax has already been deducted, so TDS is ₹0 this month. Payroll cannot refund it: tell the employee to claim it in their return (or, if it was never deposited, the society can return it).`,
+        variant: 'destructive', duration: 20000,
+      });
+    }
     setRunOpen(false);
     loadRuns();
   };
@@ -1218,6 +1252,26 @@ const Payroll: React.FC = () => {
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground">{hi ? 'कोई भी मान इस कर्मचारी के लिए तय कर सकते हैं — सूत्र वाले घटक पर भी। बदलाव इतिहास में सुरक्षित रहता है।' : 'You can pin any amount for THIS employee — even on a formula component. Every change is kept in history.'}</p>
+            </div>
+
+            <div className="border-t pt-3 space-y-2">
+              <Label className="text-sm font-medium">{hi ? 'TDS (आय-कर, धारा 192)' : 'TDS (income tax, s.192)'}</Label>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {attEmp?.tds_code
+                    ? (hi ? 'चालू — हर माह संचयी हिसाब से कटता है' : 'On — withheld monthly on the cumulative rule')
+                    : (hi ? 'बंद — अभी कोई TDS नहीं कटता' : 'Off — nothing is withheld')}
+                </span>
+                <Button size="sm" variant={attEmp?.tds_code ? 'outline' : 'default'} className={`shrink-0 ${hasLeft ? 'hidden' : ''}`} disabled={tdsBusy}
+                  onClick={() => setTds(!attEmp?.tds_code)}>
+                  {tdsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (attEmp?.tds_code ? (hi ? 'बंद करें' : 'Turn off') : (hi ? 'चालू करें' : 'Turn on'))}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {hi
+                  ? 'सिर्फ़ सत्यापित क़ानून पर (वित्त-वर्ष 2026-27, नई कर-व्यवस्था) अपने-आप गणना होती है; अन्यथा payroll मना कर देता है। हाथ से तय करना हो तो ऊपर की सूची में TDS की पंक्ति पर "बदलें" दबाएँ। केवल admin बदल सकता है।'
+                  : 'Computed automatically only on verified law (FY 2026-27, new regime); otherwise the payroll refuses. To set it by hand, use "Edit" on the TDS row above. Only an admin can change this.'}
+              </p>
             </div>
 
             <div className="border-t pt-3 space-y-2">

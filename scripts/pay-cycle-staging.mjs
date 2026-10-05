@@ -17,6 +17,7 @@ import pg from 'pg';
 
 const STAGING_REF = 'ivmrlhjrqtwftdlxajxk';
 const PROD_REF = 'rwffxupenwdtrmyabytk';
+const WITH_TDS = process.env.WITH_TDS === '1';   // also exercise salary TDS (P2): $env:WITH_TDS='1'
 
 // ── env + staging guard ───────────────────────────────────────────────────────────────────
 const env = Object.fromEntries(
@@ -96,10 +97,30 @@ await db.query('begin read only'); // every DB statement below is a SELECT
 const created = [];
 let createdRunId = '';        // the run this script made (for end-of-test cleanup)
 let runFinalised = false;     // true once posted/paid/rolled back — those must not be cancelled
+// declared HERE, not inside the try: the cleanup in `finally` reads them (a block-scoped `let` made that a ReferenceError)
+let tdsEmpId = '', tdsExpectedMinor = 0n;
 
 try {
   TOKEN = await signIn(email, password);
   console.log('signed in to STAGING');
+
+  // CLEANUP_ONLY=1 — leftovers of an earlier run that died before its own cleanup: switch TDS off and deactivate every
+  // still-active "Cycle …" test employee, then stop. Touches nothing else.
+  if (process.env.CLEANUP_ONLY === '1') {
+    step('cleanup only: leftover "Cycle …" test employees');
+    const lst = await fn('pay-employee', { action: 'list' });
+    const nameOf = (e) => (e.full_name && (e.full_name.en || e.full_name.hi)) || '';
+    const left = (lst.body.employees || []).filter((e) => /^Cycle /.test(nameOf(e)) && !e.left_on);
+    const day = new Date().toISOString().slice(0, 10);
+    for (const e of left) {
+      if (e.tds_code) { const off = await fn('pay-employee', { action: 'tds-set', employeeId: e.id, enabled: false }); console.log(`  - ${nameOf(e)}: TDS off -> ${off.status === 200 ? 'ok' : 'status ' + off.status + ' ' + (off.body.error || '')}`); }
+      const d = await fn('pay-employee', { action: 'deactivate', employeeId: e.id, lastDay: day });
+      console.log(`  - ${nameOf(e)} (${e.employee_code}): ${d.status === 200 ? 'deactivated' : d.body.code === 'PAY-EMP-SAMEDAY' ? 'left active — its structure changed today; run  $env:CLEANUP_ONLY=1  tomorrow' : 'status ' + d.status + ' ' + (d.body.error || '')}`);
+    }
+    console.log(`\n${left.length} leftover test employee(s) handled.`);
+    await db.query('rollback').catch(() => {}); await db.end().catch(() => {});
+    process.exit(0);
+  }
 
   step('0. pick a period inside an OPEN financial year (post_voucher refuses any other date)');
   const [suRow] = (await db.query(`select society_id::text sid from public.society_users where lower(email) = lower($1) and is_active = true limit 1`, [email])).rows;
@@ -112,7 +133,9 @@ try {
   const taken = new Set((await db.query(`select period::text p from pay_calc.payroll_run where state in ('verified','approved','locked','posted','paid')`)).rows.map((r) => r.p));
   let period = process.env.PERIOD || '';
   if (!period) {
-    const start = new Date(fy.s + 'T00:00:00Z'), end = new Date(fy.e + 'T00:00:00Z');
+    let start = new Date(fy.s + 'T00:00:00Z'); const end = new Date(fy.e + 'T00:00:00Z');
+    // WITH_TDS: switching TDS on is history-safe — it applies from today — so the run must be THIS month or later.
+    if (WITH_TDS) { const n = new Date(); const cur = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1)); if (cur > start) start = cur; }
     for (let d = new Date(start); d <= end && !period; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
       const p = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
       if (!taken.has(p)) period = p;
@@ -120,6 +143,8 @@ try {
   }
   ok(period && !taken.has(period), `period ${period} is inside the open year and has no verified/locked/posted/paid run`);
   if (!period || taken.has(period)) throw new Error('no free period in the open financial year');
+  const [pYear, pMon] = period.split('-').map(Number);
+  const monthsLeft = pMon >= 4 ? 12 - (pMon - 4) : 4 - pMon;   // April = 12 … March = 1 (the Salary page's own count)
   const PAID_FROM = process.env.PAID_FROM || '3302';   // staging chart: 3302 = Bank Accounts
   const today = new Date().toISOString().slice(0, 10);
 
@@ -132,6 +157,31 @@ try {
     if (r.body.employeeId) created.push(r.body.employeeId);
   }
 
+  if (WITH_TDS) {
+    step('1b. salary TDS — switch it on for one well-paid employee, and prove it refuses unverified law');
+    const t = await fn('pay-employee', { action: 'add', name: 'Cycle TDS', code: `CYC${stamp}T`, type: 'permanent', basicMinor: 8000000, dateOfJoin: '2025-01-01' });
+    ok(t.status === 200 && t.body.employeeId, `added Cycle TDS, basic ₹80,000 (status ${t.status}${t.body.error ? ' ' + t.body.error : ''})`);
+    tdsEmpId = t.body.employeeId || '';
+    if (tdsEmpId) created.push(tdsEmpId);
+    const on = await fn('pay-employee', { action: 'tds-set', employeeId: tdsEmpId, enabled: true });
+    ok(on.status === 200 && on.body.code === 'TDS' && on.body.changed === true, `TDS switched on (component ${on.body.code}, status ${on.status}${on.body.error ? ' ' + on.body.error : ''})`);
+    ok(!on.body.lawWarning, `no law warning for the current month${on.body.lawWarning ? ': ' + on.body.lawWarning : ''}`);
+    const on2 = await fn('pay-employee', { action: 'tds-set', employeeId: tdsEmpId, enabled: true });
+    ok(on2.status === 200 && on2.body.changed === false, 'switching it on again changes nothing (idempotent)');
+    const lst = await fn('pay-employee', { action: 'list' });
+    const me = (lst.body.employees || []).find((e) => e.id === tdsEmpId);
+    ok(!!me && me.tds_code === 'TDS', 'the employee list shows tds_code = TDS');
+    // ₹80,000 basic → gross ₹1,28,000/month = ₹15.36 lakh/yr → ₹1,03,116 tax for FY 2026-27 (derived by hand: slabs 0/5/10/15% on ₹14.61 lakh + 4% cess)
+    tdsExpectedMinor = BigInt(Math.round(103116 / monthsLeft)) * 100n;
+    // a month no slab set covers (2031): the run must be REFUSED, name the employee, and create nothing
+    const before = (await db.query(`select count(*)::int n from pay_calc.payroll_run where period::text = '2031-07'`)).rows[0].n;
+    const refused = await fn('pay-run', { period: '2031-07' });
+    ok(refused.status === 409 && refused.body.code === 'PAY-TAX-LAW', `a run for 2031-07 (no slab set covers it) is REFUSED (status ${refused.status}${refused.body.code ? ' ' + refused.body.code : ''})`);
+    ok(String(refused.body.error || '').includes(`CYC${stamp}T`), 'the refusal names the employee whose TDS cannot be computed');
+    const afterN = (await db.query(`select count(*)::int n from pay_calc.payroll_run where period::text = '2031-07'`)).rows[0].n;
+    ok(afterN === before, 'and no run was created');
+  }
+
   step('2. compute the run');
   const run = await fn('pay-run', { period });
   ok(run.status === 200 && run.body.runId, `pay-run created ${run.body.runNo || ''} for ${period} (${run.body.employeeCount} payslips)${run.body.error ? ' ' + run.body.error : ''}`);
@@ -142,6 +192,15 @@ try {
   const ps = (await db.query(`select count(*)::int n, coalesce(sum(gross_minor),0)::bigint g, coalesce(sum(net_minor),0)::bigint nt, coalesce(sum(deductions_minor),0)::bigint d from pay_calc.payslip where pay_run_id=$1`, [runId])).rows[0];
   ok(ps.n === run.body.employeeCount, `payslip rows (${ps.n}) = employeeCount`);
   ok(BigInt(ps.g) - BigInt(ps.d) === BigInt(ps.nt), 'every payslip: gross - deductions = net (in total)');
+  if (WITH_TDS) {
+    const tl = (await db.query(`select pl.computed_minor::bigint amt from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id
+      join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and p.employee_id = $2 and cc.code = 'TDS'`, [runId, tdsEmpId])).rows;
+    ok(tl.length === 1 && BigInt(tl[0].amt) === tdsExpectedMinor,
+      `the TDS payslip line is ₹${Number(tdsExpectedMinor) / 100} (₹1,03,116 for the year ÷ ${monthsLeft} months left)${tl.length ? ' — got ₹' + Number(tl[0].amt) / 100 : ' — NO TDS line'}`);
+    const others = (await db.query(`select count(*)::int n from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id
+      join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and p.employee_id <> $2 and (cc.code = 'TDS' or cc.code like 'TDS\\_%') and pl.computed_minor > 0`, [runId, tdsEmpId])).rows[0].n;
+    ok(others === 0, 'no other employee in the run got a TDS deduction');
+  }
 
   step('3. verify -> approve -> lock (and an invalid jump is refused)');
   const early = await fn('pay-post', { runId });
@@ -171,6 +230,10 @@ try {
   const l1 = await legsOf(accId), t1 = sumLegs(l1);
   ok(l1.length >= 2 && t1.dr > 0n && t1.dr === t1.cr, `voucher_lines balanced: ${l1.length} legs, Dr ${t1.dr} = Cr ${t1.cr} paise`);
   ok(v1 && Math.round(Number(v1.amt) * 100) === Number(t1.dr), 'voucher amount = ΣDr');
+  if (WITH_TDS) {
+    const leg = l1.find((r) => r.a === '2202');
+    ok(!!leg && BigInt(leg.cr) === tdsExpectedMinor, `the voucher credits TDS payable 2202 with the run's TDS (₹${Number(tdsExpectedMinor) / 100})${leg ? ' — got ₹' + Number(leg.cr) / 100 : ' — NO 2202 leg'}`);
+  }
   const e1 = (await db.query(`select event_type, sequence, payload from public.ledger_events where society_id::text = $1 and aggregate_type = 'voucher' and aggregate_id = $2 order by sequence`, [SOC, accId])).rows;
   ok(e1.length === 1 && e1[0].event_type === 'voucher.posted' && Number(e1[0].sequence) === 1, 'the JOURNAL has exactly one voucher.posted event (the old direct-DB path wrote none)');
   const ev1 = e1[0] ? (e1[0].payload.lines || []).reduce((t, x) => ({ dr: t.dr + (x.drCr === 'Dr' ? BigInt(x.amountMinor) : 0n), cr: t.cr + (x.drCr === 'Cr' ? BigInt(x.amountMinor) : 0n) }), { dr: 0n, cr: 0n }) : { dr: -1n, cr: -2n };
@@ -230,10 +293,14 @@ try {
     const r = await fn('pay-transition', { runId: createdRunId, action: 'cancel' });
     console.log(`\ncleanup: cancel run ${createdRunId.slice(0, 8)} -> ${r.status === 200 ? 'cancelled' : 'status ' + r.status + ' ' + (r.body.error || '')}`);
   }
+  if (WITH_TDS && tdsEmpId && TOKEN) {
+    const off = await fn('pay-employee', { action: 'tds-set', employeeId: tdsEmpId, enabled: false });
+    console.log(`\ncleanup: TDS switched off -> ${off.status === 200 ? 'ok' : 'status ' + off.status + ' ' + (off.body.error || '')}`);
+  }
   if (created.length && TOKEN) {
     step('cleanup: deactivate the 3 test employees');
     const today = new Date().toISOString().slice(0, 10);
-    for (const id of created) { const r = await fn('pay-employee', { action: 'deactivate', employeeId: id, lastDay: today }); console.log('  -', id.slice(0, 8), r.status === 200 ? 'deactivated' : `status ${r.status}`); }
+    for (const id of created) { const r = await fn('pay-employee', { action: 'deactivate', employeeId: id, lastDay: today }); console.log('  -', id.slice(0, 8), r.status === 200 ? 'deactivated' : r.body.code === 'PAY-EMP-SAMEDAY' ? 'left active — its structure changed today; run  $env:CLEANUP_ONLY=1  tomorrow' : `status ${r.status}`); }
   }
   console.log(`\nRESULT: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

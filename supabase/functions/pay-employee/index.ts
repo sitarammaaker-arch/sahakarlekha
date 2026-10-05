@@ -14,6 +14,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js';
+import { TDS_FORMULAS, assertVerifiedLaw } from '../_shared/pay-core.mjs';
 
 // SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
 // token; its payload is read only to refuse more (unreadable → pending).
@@ -90,6 +91,21 @@ const COMPONENTS: Record<string, { kind: string; method: string; formula: string
   // Staff advance recovery. `loanRecovery` is a per-employee FACT (pay-run loads the active loan), so
   // unlike a formula that reads other components this can never leak across employees' structures.
   LOAN_RECOVERY: { kind: 'loan_recovery', method: 'formula', formula: SFL.LOAN_RECOVERY, label: 'Loan / Advance Recovery' },
+};
+// Salary TDS (P2): one component per structure family — the formulas are the tested ones in lib/pay/tax/salaryTds.ts.
+// They sit in the society's catalog but are bound to NO structure until an admin turns TDS on for an employee
+// (`tds-set`), so adding them changes no existing run.
+for (const [code, formula] of Object.entries(TDS_FORMULAS as Record<string, string>)) {
+  COMPONENTS[code] = { kind: 'deduction', method: 'formula', formula, label: 'TDS (salary, s.192)' };
+}
+// Which TDS component fits an employment type (it projects the pay THAT structure earns). Daily-wage types have no
+// stable monthly pay to project, so they have none — their TDS, if ever due, is entered by hand.
+const TDS_CODE_BY_TYPE: Record<string, string> = {
+  permanent: 'TDS', probation: 'TDS',
+  seasonal: 'TDS_NOHRA', fixedterm: 'TDS_NOHRA',
+  deputation: 'TDS_DEP',
+  contract: 'TDS_CONSOL', honorary: 'TDS_CONSOL', parttime: 'TDS_CONSOL', consultant: 'TDS_CONSOL',
+  apprentice: 'TDS_STIPEND',
 };
 
 // Add or remove ONE component on ONE employee's structure, history-safely: the version past
@@ -280,7 +296,7 @@ Deno.serve(async (req: Request) => {
   const { data: { user } } = await createClient(supaUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } }).auth.getUser();
   if (!user?.email) return json(401, { error: 'invalid session' }, CORS);
 
-  let body: { action?: string; name?: string; code?: string; basicMinor?: number; type?: string; employeeId?: string; period?: string; lopDays?: number; key?: string; value?: number; label?: string; source?: string; uan?: string; pan?: string; esicIp?: string; principal?: number; installment?: number; purpose?: string; loanId?: string; dateOfJoin?: string };
+  let body: { action?: string; name?: string; code?: string; basicMinor?: number; type?: string; employeeId?: string; period?: string; lopDays?: number; key?: string; value?: number; label?: string; source?: string; uan?: string; pan?: string; esicIp?: string; principal?: number; installment?: number; purpose?: string; loanId?: string; dateOfJoin?: string; enabled?: boolean };
   try { body = await req.json(); } catch { return json(400, { error: 'bad JSON' }, CORS); }
 
   const sql = postgres(dbUrl, { prepare: false, max: 3 });
@@ -295,6 +311,11 @@ Deno.serve(async (req: Request) => {
         select e.id, e.employee_code, e.full_name, e.date_of_join,
                si.uan, si.pan, si.esic_ip,
                e.employment_type,
+               -- P2: the TDS component on the open structure, if TDS is turned on for this employee (else null)
+               (select cc.code from pay_config.structure_assignment sa
+                  join pay_config.component_binding cb on cb.structure_version_id = sa.structure_version_id
+                  join pay_config.component_catalog cc on cc.id = cb.component_id and (cc.code = 'TDS' or cc.code like 'TDS\_%')
+                where sa.employee_id = e.id and sa.effective_to is null limit 1) as tds_code,
                (select ao.fixed_minor from pay_config.structure_assignment sa
                   join pay_config.assignment_override ao on ao.assignment_id = sa.id
                   join pay_config.component_catalog cc on cc.id = ao.component_id and cc.code in ('BASIC','CONSOLIDATED','DAILY_RATE','STIPEND')
@@ -464,6 +485,33 @@ Deno.serve(async (req: Request) => {
       return json(200, { ok: true, loanId: out.loanId, employeeId: empId }, CORS);
     }
 
+    // ── Salary TDS on / off for one employee (P2) ───────────────────────────────────────────────────────────────
+    // Adds or removes the TDS component that fits the employee's structure. History-safe like every structure change:
+    // the new structure applies from TODAY, so runs of past months stay exactly as they were. Admin only — it changes
+    // what is withheld from a person's pay.
+    if (body.action === 'tds-set') {
+      if (su.role !== 'admin') return json(403, { error: 'only admin may turn salary TDS on or off' }, CORS);
+      const empId = body.employeeId ?? '';
+      const enable = body.enabled === true;
+      const [emp] = await sql`select employment_type from pay_core.employee where id = ${empId} and society_id = ${societyId} limit 1`;
+      if (!emp) return json(404, { error: 'employee not found in your society' }, CORS);
+      const code = TDS_CODE_BY_TYPE[String(emp.employment_type)];
+      if (!code) return json(400, { error: `TDS cannot be automated for '${emp.employment_type}' (daily-wage) — enter it by hand if it is ever due` }, CORS);
+      const out = await sql.begin(async (tx: postgres.TransactionSql) => {
+        const compIds = await ensureSocietyComponents(tx, societyId, su.id);
+        const [bound] = await tx`select 1 from pay_config.component_binding cb
+          join pay_config.structure_assignment sa on sa.structure_version_id = cb.structure_version_id
+          where sa.employee_id = ${empId} and sa.effective_to is null and cb.component_id = ${compIds[code]} limit 1`;
+        if (enable && !bound) await changeStructureComponent(tx, societyId, empId, code, true, compIds, su.id, 0);
+        if (!enable && bound) await changeStructureComponent(tx, societyId, empId, code, false, compIds, su.id, 0);
+        return { changed: enable ? !bound : !!bound };
+      });
+      // Say it NOW if the law for the current month is not verified — the run would refuse; better to know at the switch.
+      let lawWarning: string | null = null;
+      if (enable) { try { assertVerifiedLaw('new', `${new Date().toISOString().slice(0, 7)}-01`); } catch (e) { lawWarning = String((e as Error)?.message ?? e); } }
+      return json(200, { ok: true, employeeId: empId, code, enabled: enable, changed: out.changed, lawWarning }, CORS);
+    }
+
     if (body.action === 'loan-close') {
       const rows = await sql`update pay_calc.employee_loan set status = 'closed', closed_on = current_date, updated_at = now(), updated_by = ${su.id}
         where id = ${body.loanId ?? ''} and society_id = ${societyId} and status = 'active' returning id`;
@@ -595,6 +643,18 @@ Deno.serve(async (req: Request) => {
           ? owner.date_of_join.toLocaleDateString('en-CA') : owner.date_of_join).slice(0, 10);
         if (last < doj) return json(400, { error: `last working day cannot be before the joining date (${doj})` }, CORS);
         if (Date.parse(`${last}T00:00:00Z`) > Date.now()) return json(400, { error: 'last working day cannot be in the future' }, CORS);
+      }
+      // An assignment must END after it BEGAN (assignment_eff_ck: effective_to > effective_from). A structure change —
+      // turning TDS on, adding an advance, editing a component — starts a new assignment TODAY, so ending it today (or
+      // earlier) cannot be stored. Say so plainly instead of surfacing a raw constraint error as a 500.
+      const [open] = await sql`select effective_from::text as f from pay_config.structure_assignment
+        where employee_id = ${empId} and society_id = ${societyId} and effective_to is null limit 1`;
+      const endsOn = last || new Date().toISOString().slice(0, 10);
+      if (open && endsOn <= String(open.f).slice(0, 10)) {
+        return json(409, {
+          error: `इस कर्मचारी की वेतन-संरचना ${String(open.f).slice(0, 10)} को बदली गई है, इसलिए आख़िरी कार्य-दिवस उससे बाद का होना चाहिए — कल फिर कोशिश करें। / The salary structure was changed on ${String(open.f).slice(0, 10)}; the last working day must be after it — try again tomorrow.`,
+          code: 'PAY-EMP-SAMEDAY', structureChangedOn: String(open.f).slice(0, 10),
+        }, CORS);
       }
       // end the active assignment → paid up to that day, out of every run after it
       const rows = last

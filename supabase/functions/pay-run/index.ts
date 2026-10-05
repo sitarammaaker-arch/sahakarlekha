@@ -15,7 +15,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js';
-import { freezeViews, mapCatalog, assembleRun, makeMoney } from '../_shared/pay-core.mjs';
+import { freezeViews, mapCatalog, assembleRun, makeMoney, makeTds192, assertVerifiedLaw, TDS_192_SIG, TDS_192_NAME, TDS_YTD_HEAD, isTdsCode, monthsLeftInFy, fyBounds } from '../_shared/pay-core.mjs';
 
 // SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
 // token; its payload is read only to refuse more (unreadable → pending).
@@ -119,6 +119,8 @@ Deno.serve(async (req: Request) => {
     const emReqs: Record<string, unknown>[] = [];
     const sourcesByCode: Record<string, string> = {};
     const fixedCodes = new Set<string>();
+    const tdsOwners: string[] = [];   // employees in this run who have salary TDS turned on
+    const tdsOutcomes = new Map<string, { excessMinor: number }>();   // employee code → what tds_192 worked out
     for (const emp of employees) {
       const comps = await sql`
         select cc.code, cc.id as component_id, cv.kind, cv.calc_method, fv.expression_text, ao.fixed_minor, ao.fixed_currency
@@ -168,8 +170,41 @@ Deno.serve(async (req: Request) => {
       const loan = ln
         ? [{ loanId: String(ln.id), amountMinor: Math.max(0, Math.min(Number(ln.installment_minor), Number(ln.principal_minor) - Number(ln.recovered_minor))) }]
         : [];
-      const facts = { attendance: { paidDays, lopDays, otHours: 0 }, leave: [], loan, tax: { ytdByHead: {}, monthsRemaining: 12, regime: 'new' } };
-      emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, paidDays, paidDaysShown, lopDays, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns: {}, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
+      // Salary TDS (P2): only an employee who HAS a TDS component gets the real function and a year-to-date.
+      // Everyone else gets a function that returns ₹0 — the shared plan evaluates a TDS formula for them too (it is
+      // then excluded from their payslip), and it must never refuse on law they have nothing to do with.
+      // Year-to-date = TDS already deducted this financial year in this employee's EARLIER, reviewed runs (past draft;
+      // never the period being computed, never a rolled-back/cancelled run) — the Salary page's own rule.
+      const tdsComp = comps.find((c: Record<string, unknown>) => isTdsCode(String(c.code)));
+      let tdsYtdMinor = 0;
+      if (tdsComp) {
+        tdsOwners.push(String(emp.employee_code));
+        const [y] = await sql`
+          select coalesce(sum(pl.computed_minor), 0)::bigint as ytd
+          from pay_calc.payslip_line pl
+          join pay_calc.payslip p on p.id = pl.payslip_id
+          join pay_calc.payroll_run r on r.id = p.pay_run_id
+          join pay_config.component_catalog cc on cc.id = pl.component_id
+          where p.employee_id = ${emp.id} and r.society_id = ${societyId}
+            and r.state in ('verified','approved','locked','posted','paid')
+            and p.period_month >= ${`${fyBounds(period).from}-01`}::date and p.period_month < ${periodMonth}::date
+            and (cc.code = 'TDS' or cc.code like 'TDS\_%')`;
+        tdsYtdMinor = Number(y.ytd);
+      }
+      const facts = { attendance: { paidDays, lopDays, otHours: 0 }, leave: [], loan, tax: { ytdByHead: tdsComp ? { [TDS_YTD_HEAD]: tdsYtdMinor } : {}, monthsRemaining: monthsLeftInFy(period), regime: 'new' } };
+      // `onResult` collects what the Money result cannot carry: an OVER-deduction (the CA ruling: never a silent ₹0).
+      const fns = { [TDS_192_NAME]: tdsComp ? makeTds192({ regime: 'new', asOf: periodMonth, currency: 'INR' }, (o: { excessMinor: number }) => { tdsOutcomes.set(String(emp.employee_code), o); }) : () => makeMoney(0, 'INR') };
+      emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, paidDays, paidDaysShown, lopDays, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
+    }
+
+    // 5a. Salary TDS is computed on law that must be VERIFIED. Ask now — before the engine runs — and say plainly who
+    // is affected, instead of failing deep inside a formula. (Same law for everyone in the run: it depends on the month.)
+    // Nothing is guessed: the admin enters those employees' TDS by hand (a fixed amount overrides the formula) or turns
+    // TDS off for them.
+    if (tdsOwners.length) {
+      try { assertVerifiedLaw('new', periodMonth); } catch (e) {
+        return json(409, { error: `${String((e as Error)?.message ?? e)} — इस run में TDS वाले कर्मचारी: ${tdsOwners.join(', ')}। उनका TDS हाथ से भरें या इस महीने के लिए TDS बंद करें। / employees with TDS in this run: ${tdsOwners.join(', ')}`, code: 'PAY-TAX-LAW' }, CORS);
+      }
     }
 
     // 5b. Employees now have HETEROGENEOUS per-employee structures, but assembleRun compiles ONE shared
@@ -194,7 +229,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // 6. assemble the run (one shared plan; typeBase declares fixed components + fact vars)
-    const typeBase = { vars: { ...Object.fromEntries([...fixedCodes].map((c) => [c, 'Money'])), ...Object.fromEntries(Object.keys(scalars).map((k) => [k, 'Number'])), attendance: 'Map', tax: 'Map', leaveBalance: 'Map', loanRecovery: 'Money', loanRecoveries: 'List' }, fns: {} };
+    const typeBase = { vars: { ...Object.fromEntries([...fixedCodes].map((c) => [c, 'Money'])), ...Object.fromEntries(Object.keys(scalars).map((k) => [k, 'Number'])), attendance: 'Map', tax: 'Map', leaveBalance: 'Map', loanRecovery: 'Money', loanRecoveries: 'List' }, fns: { [TDS_192_NAME]: TDS_192_SIG } };
     const runId = crypto.randomUUID();
     const assembled = assembleRun({
       societyId, runId, sequence: 1,
@@ -225,7 +260,12 @@ Deno.serve(async (req: Request) => {
         values(${societyId},'pay_run',${runId},${ev.sequence},${ev.eventType}::pay_core.pay_event_type,${ev.producerKind}::pay_core.producer_kind,${ev.actorEmail},${ev.occurredAt},${JSON.stringify(ev.payload)})`;
     });
 
-    return json(200, { ok: true, runId, runNo, employeeCount: assembled.payslips.length, period }, CORS);
+    // Over-deducted employees: their TDS is ₹0 this month, and a person must be TOLD — payroll cannot refund, the
+    // employee only recovers it by filing a return (unless it was never deposited, when the society can return it).
+    const warnings = [...tdsOutcomes.entries()]
+      .filter(([, o]) => o.excessMinor > 0)
+      .map(([employeeCode, o]) => ({ code: 'TDS-EXCESS', employeeCode, excess: Math.round(o.excessMinor) / 100 }));
+    return json(200, { ok: true, runId, runNo, employeeCount: assembled.payslips.length, period, warnings }, CORS);
   } catch (e) {
     const msg = String((e as Error)?.message ?? e);
     // backstop for the pre-check race: if two runs for the same period land together, the DB index

@@ -1319,7 +1319,7 @@ function bucketOf(code, kind) {
     if (c === "PF" || c === "EPF") return "pf";
     if (c === "ESI") return "esi";
     if (c === "PT" || c === "PROFESSIONAL_TAX") return "pt";
-    if (c === "TDS" || c === "TDS_192") return "tds";
+    if (c === "TDS" || c === "TDS_192" || c.startsWith("TDS_")) return "tds";
     return "other_deduction";
   }
   return "ignore";
@@ -1518,17 +1518,194 @@ function postVoucherMessage(code, raw) {
   const hi = code && MESSAGES[code];
   return hi ? `${hi} (${code})` : `Cloud \u0928\u0947 \u0935\u093E\u0909\u091A\u0930 \u092E\u0928\u093E \u0915\u093F\u092F\u093E \u2014 ${raw ?? "unknown error"}`;
 }
+
+// src/lib/rules/incomeTax.ts
+var FY_2024_25 = {
+  fy: "FY 2024-25",
+  effectiveFrom: "2024-04-01",
+  effectiveTo: "2025-04-01",
+  new: [[3e5, 0], [7e5, 0.05], [1e6, 0.1], [12e5, 0.15], [15e5, 0.2], [Infinity, 0.3]],
+  old: [[25e4, 0], [5e5, 0.05], [1e6, 0.2], [Infinity, 0.3]],
+  stdDeduction: { new: 75e3, old: 5e4 },
+  rebateLimit: { new: 7e5, old: 5e5 },
+  cess: 1.04,
+  verified: false,
+  cite: "Income-tax Act s.115BAC / Finance Act 2024 \u2014 VERIFY against the current Finance Act"
+};
+var FY_2025_26 = {
+  fy: "FY 2025-26",
+  effectiveFrom: "2025-04-01",
+  effectiveTo: "2026-04-01",
+  // SOURCED — incometax.gov.in, arithmetic reconciled (see above).
+  new: [[4e5, 0], [8e5, 0.05], [12e5, 0.1], [16e5, 0.15], [2e6, 0.2], [24e5, 0.25], [Infinity, 0.3]],
+  // CARRIED OVER from FY 2024-25 — NOT sourced. Verify before relying on it.
+  old: [[25e4, 0], [5e5, 0.05], [1e6, 0.2], [Infinity, 0.3]],
+  // CARRIED OVER — the ITD page does not state the standard deduction. Sources conflict.
+  stdDeduction: { new: 75e3, old: 5e4 },
+  // SOURCED — "Rebate Limit: ₹60,000 … Taxable income shall not exceed 12,00,000".
+  rebateLimit: { new: 12e5, old: 5e5 },
+  // SOURCED — "4% to be paid on the amount of income tax plus Surcharge (if any)".
+  cess: 1.04,
+  verified: false,
+  cite: "incometax.gov.in AY 2026-27 (new regime slabs + 87A + cess SOURCED; standard deduction & old-regime slabs CARRIED OVER, unsourced) \u2014 VERIFY"
+};
+var FY_2026_27 = {
+  fy: "FY 2026-27",
+  effectiveFrom: "2026-04-01",
+  effectiveTo: "2027-04-01",
+  new: [[4e5, 0], [8e5, 0.05], [12e5, 0.1], [16e5, 0.15], [2e6, 0.2], [24e5, 0.25], [Infinity, 0.3]],
+  old: [[25e4, 0], [5e5, 0.05], [1e6, 0.2], [Infinity, 0.3]],
+  stdDeduction: { new: 75e3, old: 5e4 },
+  rebateLimit: { new: 12e5, old: 5e5 },
+  cess: 1.04,
+  verified: true,
+  cite: "Income-tax Act 2025 (in force 1-4-2026) \u2014 new-regime slabs, std deduction \u20B975,000, s.87A rebate \u20B960,000 up to \u20B912,00,000 taxable, cess 4%. Confirmed by the society's CA against docs/CA-VERIFICATION-2026-07.md on 2026-07-16; slabs independently corroborated against incometax.gov.in (AY 2026-27), which the CA states carry forward unchanged."
+};
+var SLAB_SETS = [FY_2026_27, FY_2025_26, FY_2024_25];
+function resolveTaxBasis(asOf) {
+  const t = Date.parse(asOf);
+  if (!Number.isNaN(t)) {
+    for (const s of SLAB_SETS) {
+      if (t >= Date.parse(s.effectiveFrom) && t < Date.parse(s.effectiveTo)) {
+        return { set: s, stale: false, asOf };
+      }
+    }
+  }
+  return { set: SLAB_SETS[0], stale: true, asOf };
+}
+
+// src/lib/tdsProjection.ts
+var r0 = (n) => Math.round(n);
+var todayIso = () => (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+function slabTax(taxable, slabs) {
+  let tax = 0, prev = 0;
+  for (const [limit, rate] of slabs) {
+    if (taxable <= prev) break;
+    tax += (Math.min(taxable, limit) - prev) * rate;
+    prev = limit;
+  }
+  return tax;
+}
+function annualIncomeTax(grossAnnual, regime, otherDeductions = 0, asOf) {
+  return annualIncomeTaxWithBasis(grossAnnual, regime, otherDeductions, asOf).tax;
+}
+function annualIncomeTaxWithBasis(grossAnnual, regime, otherDeductions = 0, asOf) {
+  const basis = resolveTaxBasis(asOf || todayIso());
+  const s = basis.set;
+  const gross = Math.max(0, grossAnnual || 0);
+  const std = s.stdDeduction[regime];
+  const deductions = regime === "old" ? Math.max(0, otherDeductions || 0) : 0;
+  const taxable = Math.max(0, gross - std - deductions);
+  let tax = slabTax(taxable, s[regime]);
+  if (taxable <= s.rebateLimit[regime]) tax = 0;
+  return { tax: r0(tax * s.cess), basis };
+}
+
+// src/lib/payroll/cumulativeTds.ts
+function cumulativeMonthlyTds(input) {
+  const annualTax = annualIncomeTax(
+    Math.max(0, input.annualGross || 0),
+    input.regime,
+    input.otherDeductions || 0,
+    input.asOf
+  );
+  const ytdDeducted = Math.max(0, input.ytdDeducted || 0);
+  const months = Math.max(1, Math.floor(input.monthsRemaining || 1));
+  const remaining = annualTax - ytdDeducted;
+  if (remaining <= 0) {
+    return { tds: 0, annualTax, ytdDeducted, balance: 0, excess: ytdDeducted - annualTax };
+  }
+  return { tds: Math.round(remaining / months), annualTax, ytdDeducted, balance: remaining, excess: 0 };
+}
+function monthsLeftInFy(processingMonth) {
+  const m = Number((processingMonth || "").slice(5, 7));
+  if (!Number.isFinite(m) || m < 1 || m > 12) return 1;
+  return m >= 4 ? 12 - (m - 4) : 4 - m;
+}
+function fyBounds(processingMonth) {
+  const y = Number((processingMonth || "").slice(0, 4));
+  const m = Number((processingMonth || "").slice(5, 7));
+  const startYear = Number.isFinite(y) && Number.isFinite(m) && m >= 4 ? y : y - 1;
+  const s = String(startYear);
+  return {
+    from: `${s}-04`,
+    to: `${startYear + 1}-03`,
+    label: `FY ${s}-${String(startYear + 1).slice(2)}`
+  };
+}
+
+// src/lib/pay/tax/salaryTds.ts
+var TDS_192_SIG = { params: ["Money", "Money", "Number"], ret: "Money" };
+var TDS_192_NAME = "tds_192";
+var TDS_YTD_HEAD = "TDS";
+var TDS_FORMULAS = {
+  TDS: 'formula "TDS" :: Money let g = (BASIC + DA + HRA) * 12 in tds_192(g, tax.ytd.TDS, tax.monthsRemaining)',
+  TDS_NOHRA: 'formula "TDS_NOHRA" :: Money let g = (BASIC + DA) * 12 in tds_192(g, tax.ytd.TDS, tax.monthsRemaining)',
+  TDS_DEP: 'formula "TDS_DEP" :: Money let g = (BASIC + DA + DEP_ALLOW) * 12 in tds_192(g, tax.ytd.TDS, tax.monthsRemaining)',
+  TDS_CONSOL: 'formula "TDS_CONSOL" :: Money let g = CONSOLIDATED * 12 in tds_192(g, tax.ytd.TDS, tax.monthsRemaining)',
+  TDS_STIPEND: 'formula "TDS_STIPEND" :: Money let g = STIPEND * 12 in tds_192(g, tax.ytd.TDS, tax.monthsRemaining)'
+};
+var isTdsCode = (code) => {
+  const c = code.toUpperCase();
+  return c === "TDS" || c.startsWith("TDS_");
+};
+var refuse = (code, msg) => {
+  throw new RangeError(`${code}: ${msg}`);
+};
+var isMoney3 = (v) => !!v && typeof v === "object" && v.kind === "money";
+function assertVerifiedLaw(regime, asOf) {
+  const basis = resolveTaxBasis(asOf);
+  if (basis.stale) refuse("PAY-TAX-503", `no income-tax slab set covers ${asOf} \u2014 refusing (it would be computed on ${basis.set.fy}'s law); enter TDS by hand`);
+  if (regime === "old") refuse("PAY-TAX-502", "the OLD-regime slabs are not verified \u2014 refusing; enter TDS by hand or use the new regime");
+  if (!basis.set.verified) refuse("PAY-TAX-501", `${basis.set.fy} slabs are not verified (carried over, unsourced) \u2014 refusing; enter TDS by hand`);
+}
+function makeTds192(ctx, onResult) {
+  return (annual, ytd, months) => {
+    assertVerifiedLaw(ctx.regime, ctx.asOf);
+    if (!isMoney3(annual)) refuse("PAY-DSL-TYPE-015", "tds_192: the annual gross must be Money");
+    const a = annual;
+    if (a.currency !== ctx.currency) refuse("PAY-DSL-TYPE-011", `tds_192: currency mismatch (${a.currency} vs ${ctx.currency})`);
+    if (ytd !== null && ytd !== void 0 && !isMoney3(ytd)) refuse("PAY-DSL-TYPE-015", "tds_192: year-to-date must be Money");
+    if (typeof months !== "number" || !Number.isFinite(months)) refuse("PAY-DSL-TYPE-015", "tds_192: months remaining must be a Number");
+    const rupees2 = cumulativeMonthlyTds({
+      annualGross: a.minor / 100,
+      regime: ctx.regime,
+      ytdDeducted: isMoney3(ytd) ? ytd.minor / 100 : 0,
+      monthsRemaining: months,
+      asOf: ctx.asOf
+    });
+    const tdsMinor = Math.round(rupees2.tds * 100);
+    if (onResult) {
+      onResult({
+        tdsMinor,
+        annualTaxMinor: Math.round(rupees2.annualTax * 100),
+        ytdMinor: Math.round(rupees2.ytdDeducted * 100),
+        excessMinor: Math.round(rupees2.excess * 100)
+      });
+    }
+    return makeMoney(tdsMinor, ctx.currency);
+  };
+}
 export {
   PAYROLL_ROLES,
+  TDS_192_NAME,
+  TDS_192_SIG,
+  TDS_FORMULAS,
+  TDS_YTD_HEAD,
   assembleRun,
+  assertVerifiedLaw,
   buildRunAccrual,
   buildRunPayment,
   canTransition,
   freezeViews,
+  fyBounds,
   headsFromRoles,
+  isTdsCode,
   makeMoney,
   makePostVoucherPayload,
+  makeTds192,
   mapCatalog,
+  monthsLeftInFy,
   payrollDocIds,
   postVoucherErrorCode,
   postVoucherMessage,
