@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Wallet, Users, IndianRupee, Loader2, Play, UserPlus, Printer, Download, Settings2 } from 'lucide-react';
 import { buildEcr, type EcrMember } from '@/lib/pay/filing/ecr';
 import { ledgerPostingBlocked, LEDGER_POSTING_OFF_HI, LEDGER_POSTING_OFF_EN } from '@/lib/payroll/ledgerPostingGate';
+import { getBankAccountIds, defaultBankAccountId, ACCOUNT_IDS } from '@/lib/storage';
 
 interface PayRun {
   run_id: string; run_no: string; period: string; period_month: string;
@@ -155,7 +156,7 @@ const stateLabel = (s: string, hi: boolean): string => (hi ? (STATE_LABEL_HI[s] 
 
 const Payroll: React.FC = () => {
   const { language } = useLanguage();
-  const { society } = useData();   // letterhead for the printed payslip / service record
+  const { society, accounts } = useData();   // letterhead for the printed payslip / service record; accounts → the paying bank / cash
   const { toast } = useToast();
   const hi = language === 'hi';
 
@@ -179,6 +180,14 @@ const Payroll: React.FC = () => {
     setRunAtt(!error && data ? ((data as { attendance?: AttRow[] }).attendance || []) : []);
   };
   const [transitioning, setTransitioning] = useState<string | null>(null);
+  // P1: paying salaries asks WHICH bank / cash account the money leaves from (the payment voucher credits it) and on what date.
+  const [payDlg, setPayDlg] = useState<{ runId: string } | null>(null);
+  const [payFrom, setPayFrom] = useState('');
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const payChoices = [...new Set([...getBankAccountIds(accounts), ACCOUNT_IDS.CASH])]
+    .map((id) => accounts.find((a) => a.id === id))
+    .filter((a): a is NonNullable<typeof a> => !!a)
+    .map((a) => ({ id: a.id, label: (hi ? a.nameHi : a.name) || a.name || a.id }));
 
   const [statList, setStatList] = useState<StatSetting[]>([]);
   const [statOpen, setStatOpen] = useState(false);
@@ -627,16 +636,23 @@ const Payroll: React.FC = () => {
     return null;
   };
 
-  const doTransition = async (runId: string, action: string) => {
+  const doTransition = async (runId: string, action: string, pay?: { paidFrom: string; paidDate: string }) => {
     if (ledgerPostingBlocked(action)) {
       toast({ title: hi ? 'बही-posting बंद है' : 'Ledger posting is off', description: hi ? LEDGER_POSTING_OFF_HI : LEDGER_POSTING_OFF_EN, variant: 'destructive' });
+      return;
+    }
+    // Paying needs the bank / cash account first — ask, then come back here with it.
+    if (action === 'pay' && !pay) {
+      setPayFrom(defaultBankAccountId(accounts));
+      setPayDlg({ runId });
       return;
     }
     setTransitioning(runId);
     // 'post' → pay-post · 'pay' → pay-pay · 'rollback' → pay-rollback · rest → pay-transition
     const fn = action === 'post' ? 'pay-post' : action === 'pay' ? 'pay-pay' : action === 'rollback' ? 'pay-rollback' : 'pay-transition';
     const isFinancial = action === 'post' || action === 'pay' || action === 'rollback';
-    const { data, error } = await supabase.functions.invoke(fn, { body: isFinancial ? { runId } : { runId, action } });
+    const body = action === 'pay' ? { runId, paidFrom: pay!.paidFrom, paidDate: pay!.paidDate } : isFinancial ? { runId } : { runId, action };
+    const { data, error } = await supabase.functions.invoke(fn, { body });
     setTransitioning(null);
     if (error || (data as { error?: string })?.error) {
       toast({ title: hi ? 'बदलाव नहीं हुआ' : 'Action failed', description: await invokeError(error, data), variant: 'destructive' });
@@ -649,8 +665,8 @@ const Payroll: React.FC = () => {
       const d = data as { net?: number };
       toast({ title: hi ? 'भुगतान हो गया ✓' : 'Salaries paid ✓', description: hi ? `payment voucher बना (₹${d.net})` : `payment voucher created (₹${d.net})` });
     } else if (action === 'rollback') {
-      const d = data as { reversed?: { rev: string }[] };
-      toast({ title: hi ? 'रन उलट दिया गया ✓' : 'Run reversed ✓', description: hi ? `${d.reversed?.length ?? 0} reversing voucher बने (books शून्य पर)` : `${d.reversed?.length ?? 0} reversing voucher(s) — books net to zero` });
+      const d = data as { cancelled?: { voucherId: string }[] };
+      toast({ title: hi ? 'रन उलट दिया गया ✓' : 'Run reversed ✓', description: hi ? `${d.cancelled?.length ?? 0} voucher रद्द हुए (books शून्य पर; मूल रिकॉर्ड audit के लिए रहेगा)` : `${d.cancelled?.length ?? 0} voucher(s) cancelled — books net to zero, originals kept for audit` });
     } else if (action === 'cancel') {
       toast({ title: hi ? 'रन रद्द ✓' : 'Run cancelled ✓', description: hi ? 'इस अवधि का नया run बनाया जा सकता है' : 'You can start a fresh run for this period' });
     } else {
@@ -978,6 +994,29 @@ const Payroll: React.FC = () => {
             <Button variant="outline" onClick={() => setAttListOpen(false)} disabled={attListBusy}>{hi ? 'बंद करें' : 'Close'}</Button>
             <Button onClick={saveAttList} disabled={attListBusy || attRows.length === 0}>
               {attListBusy ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {hi ? 'सहेज रहा है…' : 'Saving…'}</> : (hi ? 'सहेजें' : 'Save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!payDlg} onOpenChange={(o) => { if (!o) setPayDlg(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>{hi ? 'वेतन का भुगतान' : 'Pay salaries'}</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="pay-from">{hi ? 'किस बैंक / नकद खाते से भुगतान हुआ' : 'Paid from (bank / cash account)'}</Label>
+            <select id="pay-from" className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm" value={payFrom} onChange={(e) => setPayFrom(e.target.value)}>
+              {payChoices.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+            <Label htmlFor="pay-date">{hi ? 'भुगतान की तारीख़' : 'Payment date'}</Label>
+            <Input id="pay-date" type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+            <p className="text-xs text-muted-foreground">{hi ? 'यह खाता payment voucher में जमा (Cr) होगा और देय वेतन नाम (Dr)। तारीख़ चालू वित्तीय वर्ष में होनी चाहिए।' : 'This account is credited in the payment voucher and Salary Payable is debited. The date must fall in an open financial year.'}</p>
+            {payChoices.length === 0 && <p className="text-xs text-destructive">{hi ? 'कोई बैंक / नकद खाता नहीं मिला — पहले Ledger Heads में बनाएँ।' : 'No bank / cash account found — create one in Ledger Heads first.'}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayDlg(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button disabled={!payFrom || !/^\d{4}-\d{2}-\d{2}$/.test(payDate) || payChoices.length === 0}
+              onClick={() => { const id = payDlg!.runId; setPayDlg(null); doTransition(id, 'pay', { paidFrom: payFrom, paidDate: payDate }); }}>
+              {hi ? 'भुगतान करें' : 'Pay now'}
             </Button>
           </DialogFooter>
         </DialogContent>

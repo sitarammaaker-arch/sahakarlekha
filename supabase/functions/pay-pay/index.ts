@@ -38,7 +38,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json(405, { error: 'POST only' }, CORS);
   if ((Deno.env.get('PAY_LEDGER_POSTING_ENABLED') ?? '').toLowerCase() !== 'true') {
-    return json(503, { error: 'Payroll की बही-posting अभी चालू नहीं है — admin इसे चालू करेगा। (Payroll ledger posting is not enabled.)', code: 'PAY_LEDGER_POSTING_DISABLED' }, CORS);
+    return json(503, { error: 'Payroll की बही-posting अभी बंद है — admin इसे चालू करेगा। (Payroll ledger posting is switched off.)', code: 'PAY_LEDGER_POSTING_DISABLED' }, CORS);
   }
 
   const supaUrl = Deno.env.get('SUPABASE_URL') ?? '', anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
