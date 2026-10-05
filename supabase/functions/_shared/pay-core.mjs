@@ -1686,6 +1686,65 @@ function makeTds192(ctx, onResult) {
     return makeMoney(tdsMinor, ctx.currency);
   };
 }
+
+// src/lib/rules/epfEsi.ts
+var CARRIED = (what) => `CARRIED OVER from ${what}. No start date is established for this value (hence 1970-01-01, "always so far") and it is not sourced here \u2014 VERIFY against the Act / notification before relying on it.`;
+var PARAMS = {
+  "pf.wageCeiling": [
+    {
+      value: 15e3,
+      effectiveFrom: "1970-01-01",
+      verified: false,
+      cite: CARRIED("the Salary page constant PF_CEILING (lib/payrollStatutory.ts)") + " A rise to \u20B925,000 from 2026-09-17 is REPORTED (PIB releases PRID 2314111 / 2313829 / 2310973 / 2311548, per search results) but the primary text was not read \u2014 not entered."
+    }
+  ],
+  "pf.employeeRate": [
+    { value: 12, effectiveFrom: "1970-01-01", verified: false, cite: CARRIED("the Salary page (employee PF 12% of min(basic, ceiling))") }
+  ],
+  "pf.employerRate": [
+    { value: 13, effectiveFrom: "1970-01-01", verified: false, cite: CARRIED("the Salary page (employer PF 13% = 12% + 1% admin/EDLI)") }
+  ],
+  "epf.employerRate": [
+    { value: 12, effectiveFrom: "1970-01-01", verified: false, cite: CARRIED("the Payroll engine seed employer_pf_rate (EPS + EPF split)") }
+  ],
+  "eps.rate": [
+    { value: 8.33, effectiveFrom: "1970-01-01", verified: false, cite: CARRIED("the Payroll engine seed eps_rate (EPS share of EPS wages)") }
+  ],
+  "edli.rate": [
+    { value: 0.5, effectiveFrom: "1970-01-01", verified: false, cite: CARRIED("the Payroll engine seed edli_rate") }
+  ],
+  "esi.wageLimit": [
+    {
+      value: 21e3,
+      effectiveFrom: "2017-01-01",
+      verified: false,
+      cite: 'ESIC coverage page https://esic.gov.in/coverage \u2014 read 2026-10-06 by an automated fetch, which quotes: "The existing wage limit for coverage under the Act, effective from 01.01.2017, is Rs.21,000/- per month (Rs.25,000/- per month in the case of Persons with Disability)." The date and figure agree with the code; a PERSON must still sign it off before it is marked verified. Not entered: the \u20B925,000 limit for persons with disability (the Salary page has no such case).'
+    }
+  ],
+  "esi.employeeRate": [
+    {
+      value: 0.75,
+      effectiveFrom: "1970-01-01",
+      verified: false,
+      cite: CARRIED("the Salary page (employee ESI 0.75% of gross)") + " A search snippet describing a 2019 PIB release gives 01.07.2019 as the start of 0.75% / 3.25%; that page was not opened, so the date is not entered."
+    }
+  ],
+  "esi.employerRate": [
+    { value: 3.25, effectiveFrom: "1970-01-01", verified: false, cite: CARRIED("the Salary page (employer ESI 3.25% of gross)") }
+  ]
+};
+function resolveParam(key, asOf) {
+  return resolveRows(PARAMS[key], asOf);
+}
+function resolveRows(rows, asOf) {
+  const t = Date.parse(asOf);
+  if (!Number.isNaN(t)) {
+    for (const r of rows) {
+      if (t >= Date.parse(r.effectiveFrom)) return { value: r.value, row: r, stale: false, asOf };
+    }
+  }
+  return { value: rows[0].value, row: rows[0], stale: true, asOf };
+}
 export {
   PAYROLL_ROLES,
   TDS_192_NAME,
@@ -1709,5 +1768,6 @@ export {
   payrollDocIds,
   postVoucherErrorCode,
   postVoucherMessage,
+  resolveParam,
   stateAfterEvent
 };

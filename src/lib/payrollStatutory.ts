@@ -2,20 +2,28 @@
  * Payroll statutory engine (ECR-14 — PF / ESI / PT / TDS).
  *
  * Turns basic + allowances into the statutory deductions a society must withhold and the
- * employer contributions it owes. Standard rates:
- *   PF  — employee 12% of min(basic, ₹15,000 ceiling); employer 13% (12% + 1% admin/EDLI).
- *   ESI — eligible when gross ≤ ₹21,000: employee 0.75%, employer 3.25% of gross.
+ * employer contributions it owes:
+ *   PF  — employee share of min(basic, wage ceiling); employer share likewise.
+ *   ESI — eligible when gross ≤ the ESI limit: employee and employer shares of gross.
  *   PT / TDS(192) — passed in this slice (state-specific slabs / annual projection come later).
+ * The ceiling, the limit and every rate are DATED, flagged-unverified data in lib/rules/epfEsi.ts — read by date, never
+ * restated here (a second copy of a statutory number is how the two drift apart).
  *
  * Pure & deterministic → unit-tested by scripts/test-payroll-statutory.mjs.
  */
 
 import { toMinor, toRupees, addMinor, subMinor, applyPercent } from '@/lib/money';
+import { resolveStatutory, type StatutoryParamKey } from '@/lib/rules/epfEsi';
 
-export const PF_CEILING = 15000;      // EPF wage ceiling (₹/month)
-export const ESI_THRESHOLD = 21000;   // ESI applies when gross ≤ this (₹/month)
+// The PF wage ceiling, the ESI limit and the PF / ESI rates are EFFECTIVE-DATED DATA now (lib/rules/epfEsi.ts), not constants
+// here — so when the law moves a row is appended instead of a number overwritten, and an older month still gets its own law.
 
 export interface StatutoryInput {
+  /**
+   * The date whose law applies — the first day of the month being processed, NEVER today. REQUIRED, deliberately: a
+   * defaulted date silently prices an old slip on today's law (the defect lib/rules/incomeTax.ts was written to end).
+   */
+  asOf: string;
   basic: number;
   allowances: number;
   pfApplicable: boolean;
@@ -34,6 +42,8 @@ export interface StatutoryInput {
 }
 
 export interface StatutoryResult {
+  /** Which PF / ESI parameters are not yet verified by a person, and which no dated row covers — so a screen can say so. */
+  basis: { unverified: StatutoryParamKey[]; stale: StatutoryParamKey[] };
   gross: number;
   pfEmployee: number;
   pfEmployer: number;
@@ -48,8 +58,9 @@ export interface StatutoryResult {
 }
 
 export function computeStatutory(input: StatutoryInput): StatutoryResult {
-  const pfCeiling = input.pfCeiling ?? PF_CEILING;
-  const esiThreshold = input.esiThreshold ?? ESI_THRESHOLD;
+  const law = resolveStatutory(input.asOf);
+  const pfCeiling = input.pfCeiling ?? law.pfWageCeiling;
+  const esiThreshold = input.esiThreshold ?? law.esiWageLimit;
   // T-02: every statutory figure born exact in integer paise — PF/ESI via money.applyPercent
   // (disciplined half-up), sums via addMinor/subMinor. Ceilings, thresholds, eligibility and
   // the interface are unchanged; only the rounding + accumulation moved to minor units.
@@ -62,12 +73,12 @@ export function computeStatutory(input: StatutoryInput): StatutoryResult {
     ov == null ? auto : toMinor(Math.max(0, Number(ov) || 0));
 
   const pfWageMinor = Math.min(basicMinor, toMinor(pfCeiling));
-  const pfEmployeeMinor = override(input.pfApplicable ? applyPercent(pfWageMinor, 12).minor : 0, input.pfEmployeeOverride);
-  const pfEmployerMinor = override(input.pfApplicable ? applyPercent(pfWageMinor, 13).minor : 0, input.pfEmployerOverride);   // 12% + 1% admin/EDLI
+  const pfEmployeeMinor = override(input.pfApplicable ? applyPercent(pfWageMinor, law.pfEmployeeRate).minor : 0, input.pfEmployeeOverride);
+  const pfEmployerMinor = override(input.pfApplicable ? applyPercent(pfWageMinor, law.pfEmployerRate).minor : 0, input.pfEmployerOverride);
 
   const esiEligible = !!input.esiApplicable && grossMinor > 0 && grossMinor <= toMinor(esiThreshold);
-  const esiEmployeeMinor = override(esiEligible ? applyPercent(grossMinor, 0.75).minor : 0, input.esiEmployeeOverride);
-  const esiEmployerMinor = override(esiEligible ? applyPercent(grossMinor, 3.25).minor : 0, input.esiEmployerOverride);
+  const esiEmployeeMinor = override(esiEligible ? applyPercent(grossMinor, law.esiEmployeeRate).minor : 0, input.esiEmployeeOverride);
+  const esiEmployerMinor = override(esiEligible ? applyPercent(grossMinor, law.esiEmployerRate).minor : 0, input.esiEmployerOverride);
 
   const ptMinor = toMinor(Math.max(0, Number(input.pt) || 0));
   const tdsMinor = toMinor(Math.max(0, Number(input.tds) || 0));
@@ -77,6 +88,7 @@ export function computeStatutory(input: StatutoryInput): StatutoryResult {
   const netSalaryMinor = subMinor(grossMinor, totalEmployeeDeductionsMinor);
 
   return {
+    basis: { unverified: law.unverified, stale: law.stale },
     gross: toRupees(grossMinor),
     pfEmployee: toRupees(pfEmployeeMinor),
     pfEmployer: toRupees(pfEmployerMinor),

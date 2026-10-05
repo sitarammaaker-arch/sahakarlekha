@@ -78,6 +78,7 @@
     "test:pay-ecr": "node scripts/test-pay-ecr.mjs",
     "test:pay-run-posting": "node scripts/test-pay-run-posting.mjs",
     "test:pay-tds": "node scripts/test-pay-tds.mjs",
+    "test:epf-esi-rules": "node scripts/test-epf-esi-rules.mjs",
     "test:pay-engine": "node scripts/test-pay-engine.mjs",
     "test:pay-assemble-run": "node scripts/test-pay-assemble-run.mjs",
     "test:interest-day-count": "node scripts/test-interest-day-count.mjs",
