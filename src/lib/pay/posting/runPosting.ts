@@ -58,7 +58,7 @@ export function bucketOf(code: string, kind: string): Bucket {
     if (c === 'PF' || c === 'EPF') return 'pf';
     if (c === 'ESI') return 'esi';
     if (c === 'PT' || c === 'PROFESSIONAL_TAX') return 'pt';
-    if (c === 'TDS' || c === 'TDS_192') return 'tds';
+    if (c === 'TDS' || c === 'TDS_192' || c.startsWith('TDS_')) return 'tds';   // TDS_NOHRA / TDS_DEP / TDS_CONSOL / TDS_STIPEND (lib/pay/tax/salaryTds.ts)
     return 'other_deduction';
   }
   return 'ignore'; // info / employer_contrib / anything that is not on the payslip money
