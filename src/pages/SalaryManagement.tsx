@@ -3,6 +3,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { computeStatutory } from '@/lib/payrollStatutory';
+import { resolveStatutory } from '@/lib/rules/epfEsi';
 import { tdsBasisNote, type TaxRegime } from '@/lib/tdsProjection';
 import { resolveTaxBasis } from '@/lib/rules/incomeTax';
 import { cumulativeMonthlyTds, monthsLeftInFy, fyBounds, isInFy } from '@/lib/payroll/cumulativeTds';
@@ -445,6 +446,12 @@ const SalaryManagement: React.FC = () => {
   // RM-22: PT applies here but its slab is unsourced → nothing auto-fills; tell the clerk to enter it.
   const ptState = ptAutoFill(0, society.state);
   const ptNotice = ptState.levies && !ptState.verified;
+  // PF / ESI: the wage ceiling, the ESI limit and the rates are dated data (lib/rules/epfEsi.ts) and NONE of them has been signed off
+  // by a person yet. Say so — but only when it matters: some employee in this month's list actually has PF or ESI applied.
+  const pfEsiBasis = resolveStatutory(`${processingMonth}-01`);
+  const pfEsiNotice = rowsLoaded
+    && processRows.some((r) => (r.employee.pfApplicable ?? true) || (r.employee.esiApplicable ?? true))
+    && (pfEsiBasis.unverified.length > 0 || pfEsiBasis.stale.length > 0);
 
   const loadEmployees = () => {
     const active = employees.filter(e => e.status === 'active');
@@ -864,6 +871,13 @@ const SalaryManagement: React.FC = () => {
                       {hi
                         ? 'इस राज्य में व्यावसायिक कर (PT) लगता है, पर उसकी दर अभी सत्यापित नहीं है — इसलिए PT अपने-आप नहीं भरा गया। हर कर्मचारी का PT हाथ से भरें।'
                         : 'Professional Tax applies in this state, but its slab is not yet verified — PT is not auto-filled. Enter PT for each employee manually.'}
+                    </p>
+                  )}
+                  {pfEsiNotice && (
+                    <p className="mx-6 mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                      {hi
+                        ? `PF / ESI की वेतन-सीमा और दरें (PF सीमा ₹${pfEsiBasis.pfWageCeiling.toLocaleString('en-IN')}, ESI सीमा ₹${pfEsiBasis.esiWageLimit.toLocaleString('en-IN')}) अभी किसी ने अधिसूचना से सत्यापित नहीं कीं। EPFO की सीमा बदलने की ख़बर है — अधिसूचना देखकर मिलान करें; ज़रूरत हो तो हर कर्मचारी की PF/ESI रक़म ख़ुद बदल सकते हैं।`
+                        : `The PF / ESI wage ceiling and rates (PF ceiling ₹${pfEsiBasis.pfWageCeiling.toLocaleString('en-IN')}, ESI limit ₹${pfEsiBasis.esiWageLimit.toLocaleString('en-IN')}) have not yet been verified against the notification. A change to the EPFO ceiling has been reported — check the notification; you can override any employee's PF/ESI amount.`}
                     </p>
                   )}
                   <CardContent className="p-0 overflow-x-auto">
