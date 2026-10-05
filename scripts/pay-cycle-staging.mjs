@@ -115,7 +115,7 @@ try {
     for (const e of left) {
       if (e.tds_code) { const off = await fn('pay-employee', { action: 'tds-set', employeeId: e.id, enabled: false }); console.log(`  - ${nameOf(e)}: TDS off -> ${off.status === 200 ? 'ok' : 'status ' + off.status + ' ' + (off.body.error || '')}`); }
       const d = await fn('pay-employee', { action: 'deactivate', employeeId: e.id, lastDay: day });
-      console.log(`  - ${nameOf(e)} (${e.employee_code}): ${d.status === 200 ? 'deactivated' : 'status ' + d.status + ' ' + (d.body.error || '')}`);
+      console.log(`  - ${nameOf(e)} (${e.employee_code}): ${d.status === 200 ? 'deactivated' : d.body.code === 'PAY-EMP-SAMEDAY' ? 'left active — its structure changed today; run  $env:CLEANUP_ONLY=1  tomorrow' : 'status ' + d.status + ' ' + (d.body.error || '')}`);
     }
     console.log(`\n${left.length} leftover test employee(s) handled.`);
     await db.query('rollback').catch(() => {}); await db.end().catch(() => {});
@@ -300,7 +300,7 @@ try {
   if (created.length && TOKEN) {
     step('cleanup: deactivate the 3 test employees');
     const today = new Date().toISOString().slice(0, 10);
-    for (const id of created) { const r = await fn('pay-employee', { action: 'deactivate', employeeId: id, lastDay: today }); console.log('  -', id.slice(0, 8), r.status === 200 ? 'deactivated' : `status ${r.status}`); }
+    for (const id of created) { const r = await fn('pay-employee', { action: 'deactivate', employeeId: id, lastDay: today }); console.log('  -', id.slice(0, 8), r.status === 200 ? 'deactivated' : r.body.code === 'PAY-EMP-SAMEDAY' ? 'left active — its structure changed today; run  $env:CLEANUP_ONLY=1  tomorrow' : `status ${r.status}`); }
   }
   console.log(`\nRESULT: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

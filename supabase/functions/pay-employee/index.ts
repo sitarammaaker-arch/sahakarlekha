@@ -644,6 +644,18 @@ Deno.serve(async (req: Request) => {
         if (last < doj) return json(400, { error: `last working day cannot be before the joining date (${doj})` }, CORS);
         if (Date.parse(`${last}T00:00:00Z`) > Date.now()) return json(400, { error: 'last working day cannot be in the future' }, CORS);
       }
+      // An assignment must END after it BEGAN (assignment_eff_ck: effective_to > effective_from). A structure change —
+      // turning TDS on, adding an advance, editing a component — starts a new assignment TODAY, so ending it today (or
+      // earlier) cannot be stored. Say so plainly instead of surfacing a raw constraint error as a 500.
+      const [open] = await sql`select effective_from::text as f from pay_config.structure_assignment
+        where employee_id = ${empId} and society_id = ${societyId} and effective_to is null limit 1`;
+      const endsOn = last || new Date().toISOString().slice(0, 10);
+      if (open && endsOn <= String(open.f).slice(0, 10)) {
+        return json(409, {
+          error: `इस कर्मचारी की वेतन-संरचना ${String(open.f).slice(0, 10)} को बदली गई है, इसलिए आख़िरी कार्य-दिवस उससे बाद का होना चाहिए — कल फिर कोशिश करें। / The salary structure was changed on ${String(open.f).slice(0, 10)}; the last working day must be after it — try again tomorrow.`,
+          code: 'PAY-EMP-SAMEDAY', structureChangedOn: String(open.f).slice(0, 10),
+        }, CORS);
+      }
       // end the active assignment → paid up to that day, out of every run after it
       const rows = last
         ? await sql`update pay_config.structure_assignment set effective_to = ${last}::date, updated_at = now(), updated_by = ${su.id}
