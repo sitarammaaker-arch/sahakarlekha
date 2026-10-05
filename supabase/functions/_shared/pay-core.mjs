@@ -1308,11 +1308,229 @@ function assembleRun(input, evCtx) {
   );
   return { frozenViews, plan, payslips, event };
 }
+
+// src/lib/pay/posting/runPosting.ts
+function bucketOf(code, kind) {
+  const c = code.toUpperCase();
+  if (kind === "earning") return "earning";
+  if (kind === "loan_recovery" || c === "LOAN_RECOVERY") return "loan";
+  if (kind === "deduction") {
+    if (c === "LOP" || c.startsWith("LOP_")) return "lop";
+    if (c === "PF" || c === "EPF") return "pf";
+    if (c === "ESI") return "esi";
+    if (c === "PT" || c === "PROFESSIONAL_TAX") return "pt";
+    if (c === "TDS" || c === "TDS_192") return "tds";
+    return "other_deduction";
+  }
+  return "ignore";
+}
+var isMinor = (n) => typeof n === "number" && Number.isSafeInteger(n) && n >= 0;
+function buildRunAccrual(lines, netMinor, heads, newId = () => crypto.randomUUID()) {
+  if (!isMinor(netMinor) || lines.some((l) => !isMinor(l.amountMinor))) {
+    return { ok: false, code: "PAY-POST-INPUT", message: "amounts must be whole paise \u2265 0" };
+  }
+  const sum = { earning: 0, lop: 0, pf: 0, esi: 0, pt: 0, tds: 0, loan: 0, other_deduction: 0, ignore: 0 };
+  const unknown = /* @__PURE__ */ new Set();
+  for (const l of lines) {
+    const b = bucketOf(l.code, l.kind);
+    sum[b] += l.amountMinor;
+    if (b === "other_deduction" && l.amountMinor > 0) unknown.add(l.code);
+  }
+  if (unknown.size) {
+    return {
+      ok: false,
+      code: "PAY-POST-UNKNOWN-DEDUCTION",
+      unknown: [...unknown],
+      message: `deduction(s) ${[...unknown].join(", ")} have no ledger head \u2014 refusing to book (add the mapping first)`
+    };
+  }
+  const expenseMinor = sum.earning - sum.lop;
+  const deductionsMinor = sum.lop + sum.pf + sum.esi + sum.pt + sum.tds + sum.loan;
+  if (expenseMinor <= 0) return { ok: false, code: "PAY-POST-NOTHING", message: "nothing to post (zero expense)" };
+  if (sum.earning - deductionsMinor !== netMinor) {
+    return {
+      ok: false,
+      code: "PAY-POST-IMBALANCE",
+      message: `net ${netMinor} \u2260 earnings ${sum.earning} \u2212 deductions ${deductionsMinor} \u2014 refusing to book`
+    };
+  }
+  const missing = [];
+  if (sum.pf > 0 && !heads.pfPayable) missing.push("pf.payable");
+  if (sum.esi > 0 && !heads.esiPayable) missing.push("esi.payable");
+  if (sum.pt > 0 && !heads.ptPayable) missing.push("professional_tax.payable");
+  if (sum.tds > 0 && !heads.tdsPayable) missing.push("tds.payable");
+  if (sum.loan > 0 && !heads.employeeAdvance) missing.push("employee.advance");
+  if (missing.length) {
+    return {
+      ok: false,
+      code: "PAY-POST-HEAD",
+      missingHeads: missing,
+      message: `no ledger head for ${missing.join(", ")} \u2014 refusing to book (map the head in Ledger Heads first)`
+    };
+  }
+  const legs = [
+    { id: newId(), accountId: heads.salaryExpense, drCr: "Dr", amountMinor: expenseMinor, narration: "Salary & wages (net of loss of pay)" },
+    { id: newId(), accountId: heads.salaryPayable, drCr: "Cr", amountMinor: netMinor, narration: "Net salary payable" }
+  ];
+  const credit = (acc, amt, narration) => {
+    if (amt > 0 && acc) legs.push({ id: newId(), accountId: acc, drCr: "Cr", amountMinor: amt, narration });
+  };
+  credit(heads.pfPayable, sum.pf, "PF withheld");
+  credit(heads.esiPayable, sum.esi, "ESI withheld");
+  credit(heads.ptPayable, sum.pt, "Professional tax withheld");
+  credit(heads.tdsPayable, sum.tds, "TDS on salary withheld");
+  credit(heads.employeeAdvance, sum.loan, "Staff advance recovered from pay");
+  let dr = 0, cr = 0;
+  for (const g of legs) {
+    if (g.drCr === "Dr") dr += g.amountMinor;
+    else cr += g.amountMinor;
+  }
+  if (dr !== cr) return { ok: false, code: "PAY-POST-IMBALANCE", message: `legs do not balance: Dr ${dr} \u2260 Cr ${cr}` };
+  return { ok: true, legs, expenseMinor, netMinor, deductionsMinor };
+}
+function buildRunPayment(netMinor, salaryPayable, paidFrom, newId = () => crypto.randomUUID()) {
+  if (!isMinor(netMinor)) return { ok: false, code: "PAY-POST-INPUT", message: "amount must be whole paise \u2265 0" };
+  if (netMinor <= 0) return { ok: false, code: "PAY-POST-NOTHING", message: "nothing to pay (zero net)" };
+  return {
+    ok: true,
+    expenseMinor: netMinor,
+    netMinor,
+    deductionsMinor: 0,
+    legs: [
+      { id: newId(), accountId: salaryPayable, drCr: "Dr", amountMinor: netMinor, narration: "Clear salaries payable" },
+      { id: newId(), accountId: paidFrom, drCr: "Cr", amountMinor: netMinor, narration: "Net salaries paid" }
+    ]
+  };
+}
+var PAYROLL_ROLES = {
+  salaryExpense: "salary.expense",
+  salaryPayable: "salary.payable",
+  pfPayable: "pf.payable",
+  esiPayable: "esi.payable",
+  ptPayable: "professional_tax.payable",
+  tdsPayable: "tds.payable",
+  employeeAdvance: "employee.advance"
+};
+function headsFromRoles(rows) {
+  const by = new Map(rows.map((r) => [r.role, r.account_id]));
+  const h = {};
+  const set = (k, role) => {
+    const v = by.get(role);
+    if (v) h[k] = v;
+  };
+  set("salaryExpense", PAYROLL_ROLES.salaryExpense);
+  set("salaryPayable", PAYROLL_ROLES.salaryPayable);
+  set("pfPayable", PAYROLL_ROLES.pfPayable);
+  set("esiPayable", PAYROLL_ROLES.esiPayable);
+  set("ptPayable", PAYROLL_ROLES.ptPayable);
+  set("tdsPayable", PAYROLL_ROLES.tdsPayable);
+  set("employeeAdvance", PAYROLL_ROLES.employeeAdvance);
+  return h;
+}
+function payrollDocIds(runId) {
+  return {
+    accrualVoucherId: `payrun-${runId}-accrual`,
+    accrualEventId: `payrun-${runId}-accrual-posted`,
+    paymentVoucherId: `payrun-${runId}-payment`,
+    paymentEventId: `payrun-${runId}-payment-posted`
+  };
+}
+var rupees = (minor) => minor / 100;
+function makePostVoucherPayload(i) {
+  const drLegs = i.legs.filter((l) => l.drCr === "Dr");
+  const crLegs = i.legs.filter((l) => l.drCr === "Cr");
+  const totalMinor = drLegs.reduce((s, l) => s + l.amountMinor, 0);
+  const p_voucher = {
+    id: i.id,
+    voucherNo: i.voucherNo,
+    type: i.type,
+    date: i.date,
+    debitAccountId: drLegs[0]?.accountId ?? "",
+    creditAccountId: crLegs[0]?.accountId ?? "",
+    amount: rupees(totalMinor),
+    narration: i.narration,
+    createdBy: i.createdBy,
+    createdAt: i.occurredAt,
+    approvalStatus: "approved",
+    memberId: "",
+    branchId: "",
+    lines: i.legs.map((l) => ({ id: l.id, accountId: l.accountId, type: l.drCr, amount: rupees(l.amountMinor) }))
+  };
+  const p_lines = i.legs.map((l) => ({ id: l.id, accountId: l.accountId, drCr: l.drCr, amountMinor: l.amountMinor, narration: l.narration }));
+  const p_event = {
+    event_id: i.eventId,
+    event_type: "voucher.posted",
+    schema_version: 1,
+    aggregate_type: "voucher",
+    aggregate_id: i.id,
+    sequence: 1,
+    occurred_at: i.occurredAt,
+    producer_kind: "human",
+    producer_id: i.createdBy,
+    on_behalf_of: null,
+    payload: {
+      lines: i.legs.map((l) => ({ accountId: l.accountId, drCr: l.drCr, amountMinor: l.amountMinor })),
+      voucherNo: i.voucherNo,
+      type: i.type,
+      amount: rupees(totalMinor),
+      date: i.date,
+      narration: i.narration,
+      createdAt: i.occurredAt,
+      memberId: "",
+      branchId: "",
+      createdBy: i.createdBy
+    }
+  };
+  return { p_voucher, p_lines, p_event };
+}
+
+// src/lib/ledger/postVoucherMessages.ts
+function postVoucherErrorCode(message) {
+  const m = String(message ?? "").match(/post_voucher:(\w+)/);
+  return m ? m[1] : null;
+}
+var MESSAGES = {
+  not_a_society_user: "\u0906\u092A\u0915\u093E login \u0915\u093F\u0938\u0940 \u0938\u092E\u093F\u0924\u093F \u0938\u0947 \u091C\u0941\u0921\u093C\u093E \u0928\u0939\u0940\u0902 \u0939\u0948\u0964",
+  no_role_claim: "\u0906\u092A\u0915\u0940 \u092D\u0942\u092E\u093F\u0915\u093E (role) \u092A\u0924\u093E \u0928\u0939\u0940\u0902 \u091A\u0932\u0940 \u2014 \u090F\u0915 \u092C\u093E\u0930 logout \u0915\u0930\u0915\u0947 \u092B\u093F\u0930 login \u0915\u0930\u0947\u0902\u0964",
+  role_cannot_write: "\u0906\u092A\u0915\u0940 \u092D\u0942\u092E\u093F\u0915\u093E \u0915\u094B \u0935\u093E\u0909\u091A\u0930 \u092C\u0928\u093E\u0928\u0947 \u0915\u0940 \u0905\u0928\u0941\u092E\u0924\u093F \u0928\u0939\u0940\u0902 \u0939\u0948\u0964",
+  fy_locked: "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937 audit-locked \u0939\u0948 \u2014 \u0935\u093E\u0909\u091A\u0930 \u0928\u0939\u0940\u0902 \u092C\u0928 \u0938\u0915\u0924\u093E\u0964",
+  period_locked: "\u092F\u0939 \u0924\u093E\u0930\u0940\u0916\u093C \u0932\u0949\u0915 \u0939\u0941\u0908 \u0905\u0935\u0927\u093F \u092E\u0947\u0902 \u0939\u0948 \u2014 \u0935\u093E\u0909\u091A\u0930 \u0928\u0939\u0940\u0902 \u092C\u0928 \u0938\u0915\u0924\u093E\u0964",
+  no_open_fy_for_date: "\u092F\u0939 \u0924\u093E\u0930\u0940\u0916\u093C \u091A\u093E\u0932\u0942 (\u0916\u0941\u0932\u0947) \u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937 \u092E\u0947\u0902 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964",
+  unbalanced: "\u0928\u093E\u092E (Dr) \u0914\u0930 \u091C\u092E\u093E (Cr) \u092C\u0930\u093E\u092C\u0930 \u0928\u0939\u0940\u0902 \u0939\u0948\u0902\u0964",
+  too_few_legs: "\u0935\u093E\u0909\u091A\u0930 \u092E\u0947\u0902 \u0915\u092E \u0938\u0947 \u0915\u092E \u0926\u094B \u092A\u0902\u0915\u094D\u0924\u093F\u092F\u093E\u0901 \u091A\u093E\u0939\u093F\u090F\u0964",
+  negative_amount: "\u0930\u093E\u0936\u093F \u090B\u0923\u093E\u0924\u094D\u092E\u0915 \u0928\u0939\u0940\u0902 \u0939\u094B \u0938\u0915\u0924\u0940\u0964",
+  legs_do_not_match_voucher: "\u092A\u0902\u0915\u094D\u0924\u093F\u092F\u094B\u0902 \u0915\u093E \u091C\u094B\u0921\u093C \u0935\u093E\u0909\u091A\u0930 \u0915\u0940 \u0930\u093E\u0936\u093F \u0938\u0947 \u092E\u0947\u0932 \u0928\u0939\u0940\u0902 \u0916\u093E\u0924\u093E\u0964",
+  event_lines_differ: "\u0935\u093E\u0909\u091A\u0930 \u0915\u0940 \u092A\u0902\u0915\u094D\u0924\u093F\u092F\u093E\u0901 \u0914\u0930 \u092C\u0939\u0940 \u0915\u0940 entry \u092E\u0947\u0932 \u0928\u0939\u0940\u0902 \u0916\u093E\u0924\u0940\u0902\u0964",
+  bad_event: "\u092C\u0939\u0940 \u0915\u0940 entry \u0938\u0939\u0940 \u0928\u0939\u0940\u0902 \u092C\u0928\u0940\u0964",
+  pending_not_supported: "\u0938\u094D\u0935\u0940\u0915\u0943\u0924\u093F \u0915\u0947 \u0932\u093F\u090F \u0930\u0941\u0915\u093E \u0935\u093E\u0909\u091A\u0930 \u0905\u092D\u0940 \u0907\u0938 \u0930\u093E\u0938\u094D\u0924\u0947 \u0938\u0947 \u0928\u0939\u0940\u0902 \u092C\u0928\u0924\u093E\u0964",
+  voucher_id_taken: "\u092F\u0939 \u0935\u093E\u0909\u091A\u0930 id \u092A\u0939\u0932\u0947 \u0938\u0947 \u0915\u093F\u0938\u0940 \u0914\u0930 \u0915\u093E \u0939\u0948\u0964",
+  role_cannot_delete: "\u0906\u092A\u0915\u0940 \u092D\u0942\u092E\u093F\u0915\u093E \u0915\u094B \u0935\u093E\u0909\u091A\u0930 \u0930\u0926\u094D\u0926 \u0915\u0930\u0928\u0947 \u0915\u0940 \u0905\u0928\u0941\u092E\u0924\u093F \u0928\u0939\u0940\u0902 \u0939\u0948\u0964",
+  voucher_not_found: "\u092F\u0939 \u0935\u093E\u0909\u091A\u0930 cloud \u092A\u0930 \u0928\u0939\u0940\u0902 \u092E\u093F\u0932\u093E \u2014 page refresh \u0915\u0930\u0947\u0902\u0964",
+  voucher_cancelled: "\u092F\u0939 \u0935\u093E\u0909\u091A\u0930 \u0930\u0926\u094D\u0926 \u0939\u094B \u091A\u0941\u0915\u093E \u0939\u0948 \u2014 \u092C\u0926\u0932\u093E \u0928\u0939\u0940\u0902 \u091C\u093E \u0938\u0915\u0924\u093E\u0964",
+  voucher_reversed: "\u092F\u0939 \u0935\u093E\u0909\u091A\u0930 reverse \u0939\u094B \u091A\u0941\u0915\u093E \u0939\u0948 \u2014 \u092C\u0926\u0932\u093E \u092F\u093E \u0930\u0926\u094D\u0926 \u0928\u0939\u0940\u0902 \u0939\u094B \u0938\u0915\u0924\u093E\u0964",
+  voucher_is_reversal: "\u092F\u0939 reversal \u0935\u093E\u0909\u091A\u0930 \u0939\u0948 \u2014 \u092E\u0942\u0932 \u0935\u093E\u0909\u091A\u0930 \u0915\u0947 \u092C\u0930\u093E\u092C\u0930 \u0930\u0939\u0928\u093E \u091A\u093E\u0939\u093F\u090F, edit \u0928\u0939\u0940\u0902 \u0939\u094B \u0938\u0915\u0924\u093E\u0964",
+  engine_voucher: "\u0938\u093F\u0938\u094D\u091F\u092E (engine) \u0935\u093E\u0909\u091A\u0930 \u2014 \u0938\u0941\u0927\u093E\u0930 \u0915\u0947\u0935\u0932 reversal \u0938\u0947 \u0939\u094B\u0924\u093E \u0939\u0948\u0964",
+  voucher_in_closed_fy: "\u092F\u0939 \u0935\u093E\u0909\u091A\u0930 \u092C\u0902\u0926 \u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937 \u0915\u093E \u0939\u0948 \u2014 \u092C\u0926\u0932\u093E \u092F\u093E \u0930\u0926\u094D\u0926 \u0928\u0939\u0940\u0902 \u0939\u094B \u0938\u0915\u0924\u093E\u0964",
+  self_approval: "\u0906\u092A \u0905\u092A\u0928\u093E \u0939\u0940 \u092C\u0928\u093E\u092F\u093E \u0935\u093E\u0909\u091A\u0930 approve \u0928\u0939\u0940\u0902 \u0915\u0930 \u0938\u0915\u0924\u0947 \u2014 \u0915\u094B\u0908 \u0926\u0942\u0938\u0930\u093E \u0905\u0927\u093F\u0915\u093E\u0930\u0940 approve \u0915\u0930\u0947\u0964",
+  not_pending: "\u092F\u0939 \u0935\u093E\u0909\u091A\u0930 \u0938\u094D\u0935\u0940\u0915\u0943\u0924\u093F \u0915\u0947 \u0932\u093F\u090F \u0930\u0941\u0915\u093E \u0939\u0941\u0906 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964"
+};
+function postVoucherMessage(code, raw) {
+  const hi = code && MESSAGES[code];
+  return hi ? `${hi} (${code})` : `Cloud \u0928\u0947 \u0935\u093E\u0909\u091A\u0930 \u092E\u0928\u093E \u0915\u093F\u092F\u093E \u2014 ${raw ?? "unknown error"}`;
+}
 export {
+  PAYROLL_ROLES,
   assembleRun,
+  buildRunAccrual,
+  buildRunPayment,
   canTransition,
   freezeViews,
+  headsFromRoles,
   makeMoney,
+  makePostVoucherPayload,
   mapCatalog,
+  payrollDocIds,
+  postVoucherErrorCode,
+  postVoucherMessage,
   stateAfterEvent
 };

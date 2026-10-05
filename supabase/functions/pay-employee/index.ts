@@ -29,6 +29,15 @@ const corsFor = (req: Request) => ({
 const json = (s: number, b: unknown, c: Record<string, string>) => new Response(JSON.stringify(b), { status: s, headers: { ...c, 'content-type': 'application/json' } });
 const L = (en: string) => JSON.stringify({ hi: en, en });
 const EFF = '2026-01-01';
+// P0 (payroll consolidation): salary rules used to start at the fixed EFF above, so pay-run refused every
+// period before 2026-01 ("PAY-CMP-510 … refusing") — Apr–Dec 2025 of FY 2025-26 could not be run at all.
+// Rules now start at the financial-year start (1 April) of the joining date, never LATER than EFF, so a
+// society that has an employee from before 2026 can run every month since that FY began.
+const fyStartOf = (isoDate: string): string => {
+  const y = Number(isoDate.slice(0, 4)), m = Number(isoDate.slice(5, 7));
+  return `${m >= 4 ? y : y - 1}-04-01`;
+};
+const rulesFloorFor = (joinDate: string): string => { const f = fyStartOf(joinDate); return f < EFF ? f : EFF; };
 const SFL: Record<string, string> = {
   DA: 'formula "DA" :: Money let b = BASIC in b * 20%',
   HRA: 'formula "HRA" :: Money let b = BASIC in b * 40%',
@@ -171,21 +180,39 @@ async function ensureEmploymentTypes(tx: postgres.TransactionSql) {
 }
 
 // Idempotent: ensure every society component + the default statutory rates exist. Returns { code: id }.
-async function ensureSocietyComponents(tx: postgres.TransactionSql, societyId: string, creator: string) {
+// `floor` (optional, YYYY-MM-DD): the earliest period the rules must cover. NEW components start at it; an
+// EXISTING component whose earliest active version starts later gets ONE extra, earlier version
+// (active versions are immutable — PAY-BUS-260 — so we add a row, never edit one). The extra version
+// copies the earliest one and ends the day before it, so the single open version (compver_one_active) is
+// untouched and every period from `floor` on resolves. Idempotent: a second call finds nothing to add.
+async function ensureSocietyComponents(tx: postgres.TransactionSql, societyId: string, creator: string, floor?: string) {
   const ids: Record<string, string> = {};
+  const from = floor ?? EFF;
   for (const [code, def] of Object.entries(COMPONENTS)) {
     const [existing] = await tx`select id from pay_config.component_catalog where society_id = ${societyId} and code = ${code} limit 1`;
-    if (existing) { ids[code] = existing.id as string; continue; }
+    if (existing) {
+      ids[code] = existing.id as string;
+      if (floor) {
+        await tx`insert into pay_config.component_version(component_id,kind,calc_method,formula_ref,taxability,pf_wage,esi_wage,pt_base,gratuity_base,bonus_base,gl_symbolic_role,sequence,version,effective_from,effective_to,status,change_reason,created_by)
+          select f.component_id,f.kind,f.calc_method,f.formula_ref,f.taxability,f.pf_wage,f.esi_wage,f.pt_base,f.gratuity_base,f.bonus_base,f.gl_symbolic_role,f.sequence,
+                 (select max(version) + 1 from pay_config.component_version where component_id = f.component_id),
+                 ${floor}::date, f.effective_from - 1, 'active', 'extended back to cover earlier periods (same rule as the earliest version)', ${creator}
+          from (select distinct on (component_id) * from pay_config.component_version
+                where component_id = ${existing.id as string} and status = 'active' order by component_id, effective_from asc) f
+          where f.effective_from - 1 > ${floor}::date`;
+      }
+      continue;
+    }
     const [c] = await tx`insert into pay_config.component_catalog(society_id,code,display_name,created_by) values(${societyId},${code},${L(def.label)},${creator}) returning id`;
     ids[code] = c.id;
     let formulaRef: string | null = null;
     if (def.method === 'formula' && def.formula) {
       const [fc] = await tx`insert into pay_formula.formula_catalog(name,created_by) values(${`${code} formula [${societyId}]`},${creator}) returning id`;
-      const [fv] = await tx`insert into pay_formula.formula_version(formula_id,expression_text,effective_from,created_by,status) values(${fc.id},${def.formula},${EFF},${creator},'active') returning id`;
+      const [fv] = await tx`insert into pay_formula.formula_version(formula_id,expression_text,effective_from,created_by,status) values(${fc.id},${def.formula},${from},${creator},'active') returning id`;
       formulaRef = fv.id;
     }
     await tx`insert into pay_config.component_version(component_id,kind,calc_method,gl_symbolic_role,formula_ref,effective_from,created_by,status)
-      values(${ids[code]},${def.kind},${def.method}::pay_core.calc_method,${code.toLowerCase()},${formulaRef},${EFF},${creator},'active')`;
+      values(${ids[code]},${def.kind},${def.method}::pay_core.calc_method,${code.toLowerCase()},${formulaRef},${from},${creator},'active')`;
   }
   const seedRates: [string, number, string][] = [
     ['pf_rate', 12, 'PF employee contribution %'],
@@ -300,7 +327,7 @@ Deno.serve(async (req: Request) => {
       if (joinDate > new Date().toISOString().slice(0, 10)) return json(400, { error: 'dateOfJoin cannot be in the future' }, CORS);
 
       const out = await sql.begin(async (tx: postgres.TransactionSql) => {
-        const compIds = await ensureSocietyComponents(tx, societyId, su.id);
+        const compIds = await ensureSocietyComponents(tx, societyId, su.id, rulesFloorFor(joinDate));
         await ensureEmploymentTypes(tx);
         const [dup] = await tx`select 1 from pay_core.employee where society_id = ${societyId} and employee_code = ${code} limit 1`;
         if (dup) throw new Error(`employee code '${code}' already exists`);

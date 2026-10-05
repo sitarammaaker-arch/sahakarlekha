@@ -1,30 +1,34 @@
 /**
- * pay-post — post a LOCKED payroll run to the general ledger (the accounting integration).
- * Built with the user's explicit authorisation (2026-07-22); STAGING-verified only.
+ * pay-post — post a LOCKED payroll run to the general ledger THROUGH THE POSTING SERVICE (P1).
  *
- * A locked run creates ONE balanced journal voucher (public.vouchers / voucher_entries), links it
- * via pay_calc.posting_link, appends the WORM 'posted' pay_event, and moves the run to 'posted'.
- * Double-entry, balanced by construction:
+ * This function no longer writes a voucher. It builds the legs (pure, tested: lib/pay/posting/runPosting.ts,
+ * bundled in _shared/pay-core.mjs), then calls public.post_voucher AS THE SIGNED-IN USER, so the database —
+ * not this function — decides the society (from the JWT), requires the role claim, and enforces FY-lock,
+ * period-lock, an OPEN financial year, ΣDr = ΣCr and the journal event. One atomic write: voucher, its lines,
+ * its entries and the `voucher.posted` journal event, or nothing.
  *
- *   Dr  Salary & Wages           = gross earnings − LOP   (actual expense for days worked)
- *   Cr  Statutory Deductions Pay = PF etc. (liabilities the society holds to remit)
- *   Cr  Salaries Payable         = net pay (owed to employees)
- *   (Dr = Cr, since gross − LOP = statutory + net.)
+ *   Dr  Salary expense                 earnings − loss of pay
+ *   Cr  Salary payable                 net pay
+ *   Cr  PF / ESI / PT / TDS payable    each deduction, to its own head
+ *   Cr  Employee advance               loan recovered from pay
  *
- * ⚠ ACCOUNTING MODEL — FOR THE SOCIETY'S REVIEW before real books:
- *   • the 3 GL accounts are auto-created with standard names (map to your chart as needed);
- *   • LOP is treated as an expense reduction (not a liability); all other deductions as statutory
- *     liabilities in one "Statutory Deductions Payable";
- *   • amounts are posted in RUPEES (paise ÷ 100).
- * FINANCIAL PATH — this uses a direct DB connection (service boundary), which BYPASSES RLS, so the
- * migration-114 aal2 RLS gate does NOT apply here. MFA is enforced in-function via the JWT `aal` claim,
- * switched on by PAY_REQUIRE_AAL2=true after MFA go-live (ADR-0012); admin-JWT + role gate it meanwhile.
+ * Heads come from the society's account_roles (never account ids chosen here). A missing head, an unknown
+ * deduction or a net that does not reconcile REFUSES the posting (409) — nothing is written.
  *
- * Auth: verified JWT → society + admin role. A caller only posts their own society's runs.
+ * IDEMPOTENT: the voucher id is derived from the run id, so a retry after a dropped connection posts the same
+ * voucher again (post_voucher answers 'exists') and then finishes linking it — never a second salary voucher.
+ *
+ * Replaces the direct-DB writer that was switched OFF on 2026-09-27 (M0 finding R23, #551): it wrote no
+ * `lines`, no journal event, no FY / period-lock check, and bypassed RLS.
+ *
+ * Gate: PAY_LEDGER_POSTING_ENABLED must be 'true' (an operational switch, off by default — turned on per
+ * project once the path is verified there).
+ * Auth: verified JWT → society + admin role.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js';
-import { canTransition } from '../_shared/pay-core.mjs';
+import { canTransition, buildRunAccrual, makePostVoucherPayload, payrollDocIds, PAYROLL_ROLES } from '../_shared/pay-core.mjs';
+import { rpc, loadHeads, runTotals } from '../_shared/pay-ledger.ts';
 
 // SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
 // token; its payload is read only to refuse more (unreadable → pending).
@@ -44,12 +48,9 @@ Deno.serve(async (req: Request) => {
   const CORS = corsFor(req);
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json(405, { error: 'POST only' }, CORS);
-  // Kill-switch (M0 finding R23, approved 2026-09-27): this path writes vouchers via a direct DB
-  // connection — no `lines`, no ledger_events journal event, no FY / period-lock check, RLS
-  // bypassed. OFF until payroll posts through the Phase-3 posting service; set
-  // PAY_LEDGER_POSTING_ENABLED=true only once it does. Checked before any auth or DB work.
+  // Operational switch (off by default). Checked before any auth or DB work.
   if ((Deno.env.get('PAY_LEDGER_POSTING_ENABLED') ?? '').toLowerCase() !== 'true') {
-    return json(503, { error: 'Payroll की बही-posting अभी बंद है — नई posting service आने तक। (Payroll ledger posting is disabled.)', code: 'PAY_LEDGER_POSTING_DISABLED' }, CORS);
+    return json(503, { error: 'Payroll की बही-posting अभी बंद है — admin इसे चालू करेगा। (Payroll ledger posting is switched off.)', code: 'PAY_LEDGER_POSTING_DISABLED' }, CORS);
   }
 
   const supaUrl = Deno.env.get('SUPABASE_URL') ?? '', anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -60,10 +61,8 @@ Deno.serve(async (req: Request) => {
   const { data: { user } } = await createClient(supaUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } }).auth.getUser();
   if (!user?.email) return json(401, { error: 'invalid session' }, CORS);
 
-  // MFA gate for this FINANCIAL action. This function writes via a direct DB connection, which bypasses
-  // RLS (so the migration-114 aal2 RLS gate does NOT reach it). We therefore enforce AAL2 here, reading
-  // the `aal` claim from the getUser-verified JWT. Off by default (PAY_REQUIRE_AAL2 unset) so it cannot
-  // fail-close before MFA go-live; the admin sets PAY_REQUIRE_AAL2=true once native MFA is live (runbook step 3).
+  // MFA gate for this FINANCIAL action: enforced from the verified JWT's `aal` claim when PAY_REQUIRE_AAL2=true
+  // (off by default so it cannot fail-close before MFA go-live — ADR-0012).
   if ((Deno.env.get('PAY_REQUIRE_AAL2') ?? '').toLowerCase() === 'true') {
     let aal = '';
     try { aal = JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).aal ?? ''; } catch { /* malformed → treat as no MFA */ }
@@ -82,46 +81,52 @@ Deno.serve(async (req: Request) => {
     const societyId = su.society_id as string;
     const societyText = String(societyId);
 
-    const [run] = await sql`select id, society_id, state, run_no, period_month from pay_calc.payroll_run where id = ${body.runId} limit 1`;
+    const [run] = await sql`select id, society_id, state, run_no, period_month::text as period_month,
+                                   (date_trunc('month', period_month) + interval '1 month - 1 day')::date::text as period_end
+                            from pay_calc.payroll_run where id = ${body.runId} limit 1`;
     if (!run) return json(404, { error: 'run not found' }, CORS);
     if (run.society_id !== societyId) return json(403, { error: 'run belongs to another society' }, CORS);
     if (!canTransition(run.state, 'posted')) return json(409, { error: `cannot post a run in state '${run.state}' (must be 'locked')` }, CORS);
 
-    const [tot] = await sql`select coalesce(sum(gross_minor),0)::bigint g, coalesce(sum(deductions_minor),0)::bigint d, coalesce(sum(net_minor),0)::bigint n from pay_calc.payslip where pay_run_id = ${body.runId}`;
-    const [lopRow] = await sql`select coalesce(sum(pl.computed_minor),0)::bigint lop from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = ${body.runId} and cc.code = 'LOP'`;
-    const gross = Number(tot.g), ded = Number(tot.d), net = Number(tot.n), lop = Number(lopRow.lop);
-    const expense = gross - lop;   // Dr Salary & Wages
-    const statutory = ded - lop;   // Cr Statutory Payable
-    if (expense !== statutory + net) return json(500, { error: `imbalance: expense ${expense} ≠ statutory ${statutory} + net ${net}` }, CORS);
-    if (expense <= 0) return json(400, { error: 'nothing to post (zero expense)' }, CORS);
+    // 1. the run's money, and the society's heads
+    const { lines, netMinor } = await runTotals(sql, body.runId, String(run.period_month));
+    const { heads, missing: missingCore } = await loadHeads(sql, societyText, [PAYROLL_ROLES.salaryExpense, PAYROLL_ROLES.salaryPayable]);
+    if (missingCore.length) {
+      return json(409, { error: `इस समिति के खातों में ये भूमिकाएँ तय नहीं हैं: ${missingCore.join(', ')} — पहले Ledger Heads में तय करें। / account roles not mapped`, code: 'PAY-POST-HEAD', missingHeads: missingCore }, CORS);
+    }
 
-    const acc = { exp: `${societyText}:PAY-SALEXP`, pay: `${societyText}:PAY-SALPAY`, stat: `${societyText}:PAY-STATPAY` };
-    const out = await sql.begin(async (tx: postgres.TransactionSql) => {
-      await tx`insert into public.accounts(id,society_id,name,"nameHi",type,"isSystem") values
-        (${acc.exp},${societyText},'Salary & Wages','वेतन एवं मज़दूरी','expense',true),
-        (${acc.pay},${societyText},'Salaries Payable','देय वेतन','liability',true),
-        (${acc.stat},${societyText},'Statutory Deductions Payable','देय सांविधिक कटौती','liability',true)
-        on conflict (id) do nothing`;
-      const vId = crypto.randomUUID();
-      await tx`insert into public.vouchers(id,society_id,"voucherNo",date,type,amount,narration,"createdBy")
-        values(${vId},${societyText},${'PAY-' + run.run_no},${String(run.period_month)},'journal',${rup(expense)},${`Payroll ${run.run_no}`},${String(su.id)})`;
-      const line = (accId: string, dr: number, cr: number, n: string) =>
-        tx`insert into public.voucher_entries(id,"voucherId","accountId",dr,cr,narration,society_id) values(${crypto.randomUUID()},${vId},${accId},${dr},${cr},${n},${societyText})`;
-      await line(acc.exp, rup(expense), 0, 'Salary & wages (net of LOP)');
-      if (statutory > 0) await line(acc.stat, 0, rup(statutory), 'Statutory deductions payable');
-      await line(acc.pay, 0, rup(net), 'Net salaries payable');
+    // 2. the legs (pure) — refuses a missing head, an unknown deduction, an unreconciled net
+    const built = buildRunAccrual(lines, netMinor, heads);
+    if (!built.ok) return json(409, { error: built.message, code: built.code, missingHeads: built.missingHeads, unknown: built.unknown }, CORS);
 
-      const [pl] = await tx`insert into pay_calc.posting_link(society_id,pay_run_id,voucher_ref,basis) values(${societyId},${body.runId},${vId},'accrual') returning id`;
+    // 3. the posting service, as the user. Deterministic ids ⇒ a retry returns 'exists', never a second voucher.
+    const ids = payrollDocIds(body.runId);
+    const payload = makePostVoucherPayload({
+      id: ids.accrualVoucherId, eventId: ids.accrualEventId, voucherNo: `PAY-${run.run_no}`, type: 'journal',
+      date: String(run.period_end), narration: `Payroll ${run.run_no}`, createdBy: user.email, occurredAt: new Date().toISOString(), legs: built.legs,
+    });
+    const posted = await rpc(supaUrl, anonKey, jwt, 'post_voucher', payload);
+    if (!posted.ok) return json(409, { error: posted.message, code: posted.code ? `post_voucher:${posted.code}` : 'PAY-POST-REFUSED' }, CORS);
+    const voucherId = String(posted.data?.id ?? ids.accrualVoucherId);
+
+    // 4. link the voucher to the run and move it to 'posted' (one transaction; safe to repeat)
+    await sql.begin(async (tx: postgres.TransactionSql) => {
+      const [already] = await tx`select id from pay_calc.posting_link where pay_run_id = ${body.runId} and basis = 'accrual' limit 1`;
+      const plId = already
+        ? already.id
+        : (await tx`insert into pay_calc.posting_link(society_id,pay_run_id,voucher_ref,basis) values(${societyId},${body.runId},${voucherId},'accrual') returning id`)[0].id;
       const [{ nextseq }] = await tx`select coalesce(max(sequence),0)+1 as nextseq from pay_calc.pay_event where aggregate_id = ${body.runId}`;
       await tx`insert into pay_calc.pay_event(society_id,aggregate_type,aggregate_id,sequence,event_type,producer_kind,actor_email,payload)
-        values(${societyId},'pay_run',${body.runId},${nextseq},'posted'::pay_core.pay_event_type,'human',${user.email},${JSON.stringify({ voucher: vId, expense: rup(expense), statutory: rup(statutory), net: rup(net) })})`;
+        values(${societyId},'pay_run',${body.runId},${nextseq},'posted'::pay_core.pay_event_type,'human',${user.email},${JSON.stringify({ voucher: voucherId, expense: rup(built.expenseMinor), deductions: rup(built.deductionsMinor), net: rup(built.netMinor), via: 'post_voucher' })})`;
       await tx`update pay_calc.payslip set status = 'posted'::pay_core.payslip_status where pay_run_id = ${body.runId}`;
-      // payroll_run.posting_ref → the posting_link id (FK run_posting_fk); the voucher id lives on posting_link.voucher_ref
-      await tx`update pay_calc.payroll_run set state = 'posted'::pay_core.pay_run_state, posting_ref = ${pl.id}, updated_at = now(), updated_by = ${su.id} where id = ${body.runId}`;
-      return { voucherId: vId };
+      await tx`update pay_calc.payroll_run set state = 'posted'::pay_core.pay_run_state, posting_ref = ${plId}, updated_at = now(), updated_by = ${su.id} where id = ${body.runId}`;
     });
 
-    return json(200, { ok: true, runId: body.runId, state: 'posted', voucherId: out.voucherId, expense: rup(expense), statutory: rup(statutory), net: rup(net) }, CORS);
+    return json(200, {
+      ok: true, runId: body.runId, state: 'posted', voucherId, voucherNo: `PAY-${run.run_no}`,
+      expense: rup(built.expenseMinor), net: rup(built.netMinor), statutory: rup(built.expenseMinor - built.netMinor),   // expense = net + statutory (+ recoveries)
+      status: String(posted.data?.status ?? 'posted'),
+    }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {

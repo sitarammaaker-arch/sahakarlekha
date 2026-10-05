@@ -1,30 +1,24 @@
 /**
- * pay-rollback — reverse a POSTED or PAID payroll run (append-only correction). Built with the user's
- * explicit authorisation (2026-07-22); STAGING-verified only.
+ * pay-rollback — reverse a POSTED or PAID payroll run THROUGH THE POSTING SERVICE (P1).
  *
- * The lifecycle allows posted→rolled_back and paid→rolled_back as the ONLY post-post correction
- * (cancel is pre-post only). This function does not delete anything: for each voucher the run posted,
- * it writes a NEW mirror voucher with every leg's Dr/Cr SWAPPED, so the ledger nets to zero while the
- * original + its reversal both remain for audit. Then it appends the WORM 'reversed' event and moves
- * the run to 'rolled_back'.
+ * It cancels the run's vouchers with public.cancel_voucher AS THE USER (payment first, then the accrual): the
+ * voucher is soft-cancelled, its entries are removed, and the journal gets a `voucher.cancelled` event that
+ * flips the original legs — so every account nets to zero, with the original still on record for audit. The
+ * database enforces FY-lock, period-lock and the closed-year rule; this function writes no voucher itself.
+ * (The old direct-DB version appended mirror vouchers with no lines and no journal event — switched off, #551.)
  *
- *   posted → reverse the accrual journal (Dr↔Cr).
- *   paid   → reverse BOTH the payment voucher AND the accrual journal (money + liability unwound).
+ * If the run was PAID, the staff-advance recovery that pay-pay credited is taken back (a loan that had been
+ * closed by that recovery is re-opened, unless the employee already has another active loan).
  *
- * Reversal is idempotent by construction: a rolled_back run has no outgoing transition, so a second
- * call is refused (409). Amounts mirror the ORIGINAL entries exactly — nothing is recomputed.
+ * IDEMPOTENT: cancelling an already-cancelled voucher is a no-op, so a retry after a partial failure finishes.
  *
- * FINANCIAL PATH — direct DB connection bypasses RLS, so MFA is enforced in-function via the JWT `aal`
- * claim (PAY_REQUIRE_AAL2=true after MFA go-live, ADR-0012); admin-JWT + role gate it meanwhile.
- *
- * Auth: verified JWT → society + admin role. A caller only rolls back their own society's runs.
+ * Gate: PAY_LEDGER_POSTING_ENABLED must be 'true'. Auth: verified JWT → society + admin role.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js';
-import { canTransition } from '../_shared/pay-core.mjs';
+import { canTransition, payrollDocIds } from '../_shared/pay-core.mjs';
+import { rpc } from '../_shared/pay-ledger.ts';
 
-// SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
-// token; its payload is read only to refuse more (unreadable → pending).
 const mfaPending = (t: string): boolean => {
   try { return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).mfa_pending === true; } catch { return true; }
 };
@@ -40,12 +34,8 @@ Deno.serve(async (req: Request) => {
   const CORS = corsFor(req);
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json(405, { error: 'POST only' }, CORS);
-  // Kill-switch (M0 finding R23, approved 2026-09-27): this path writes vouchers via a direct DB
-  // connection — no `lines`, no ledger_events journal event, no FY / period-lock check, RLS
-  // bypassed. OFF until payroll posts through the Phase-3 posting service; set
-  // PAY_LEDGER_POSTING_ENABLED=true only once it does. Checked before any auth or DB work.
   if ((Deno.env.get('PAY_LEDGER_POSTING_ENABLED') ?? '').toLowerCase() !== 'true') {
-    return json(503, { error: 'Payroll की बही-posting अभी बंद है — नई posting service आने तक। (Payroll ledger posting is disabled.)', code: 'PAY_LEDGER_POSTING_DISABLED' }, CORS);
+    return json(503, { error: 'Payroll की बही-posting अभी बंद है — admin इसे चालू करेगा। (Payroll ledger posting is switched off.)', code: 'PAY_LEDGER_POSTING_DISABLED' }, CORS);
   }
 
   const supaUrl = Deno.env.get('SUPABASE_URL') ?? '', anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -56,7 +46,6 @@ Deno.serve(async (req: Request) => {
   const { data: { user } } = await createClient(supaUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } }).auth.getUser();
   if (!user?.email) return json(401, { error: 'invalid session' }, CORS);
 
-  // MFA gate (see pay-post): direct-DB writes bypass the aal2 RLS gate, so enforce AAL2 in-function.
   if ((Deno.env.get('PAY_REQUIRE_AAL2') ?? '').toLowerCase() === 'true') {
     let aal = '';
     try { aal = JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).aal ?? ''; } catch { /* malformed */ }
@@ -73,7 +62,6 @@ Deno.serve(async (req: Request) => {
     if (!su) return json(403, { error: 'not a society user' }, CORS);
     if (su.role !== 'admin') return json(403, { error: 'only admin may reverse payroll' }, CORS);
     const societyId = su.society_id as string;
-    const societyText = String(societyId);
 
     const [run] = await sql`select id, society_id, state, run_no from pay_calc.payroll_run where id = ${body.runId} limit 1`;
     if (!run) return json(404, { error: 'run not found' }, CORS);
@@ -81,44 +69,64 @@ Deno.serve(async (req: Request) => {
     if (!canTransition(run.state, 'rolled_back')) return json(409, { error: `cannot reverse a run in state '${run.state}' (must be 'posted' or 'paid')` }, CORS);
     const wasPaid = run.state === 'paid';
 
-    // collect the vouchers this run posted — mirror their ACTUAL entries (never recompute).
-    // accrual journal: linked via posting_link(basis 'accrual'); payment: by the 'PAYMT-' convention.
-    const [accrual] = await sql`
-      select v.id, v."voucherNo", v.type, v.amount, v.date
-      from pay_calc.posting_link pl join public.vouchers v on v.id = pl.voucher_ref
-      where pl.pay_run_id = ${body.runId} and pl.basis = 'accrual' limit 1`;
-    if (!accrual) return json(500, { error: 'cannot find the posted journal voucher to reverse' }, CORS);
-    const originals = [accrual];
+    // the vouchers this run created: the accrual via posting_link, the payment via the 'paid' event — with the
+    // deterministic ids as the fallback (they are what pay-post / pay-pay used).
+    const ids = payrollDocIds(body.runId);
+    const [link] = await sql`select voucher_ref from pay_calc.posting_link where pay_run_id = ${body.runId} and basis = 'accrual' limit 1`;
+    const accrualId = String(link?.voucher_ref ?? ids.accrualVoucherId);
+    let paymentId = '';
     if (wasPaid) {
-      const [payment] = await sql`select id, "voucherNo", type, amount, date from public.vouchers where society_id = ${societyText} and "voucherNo" = ${'PAYMT-' + run.run_no} limit 1`;
-      if (!payment) return json(500, { error: 'run is paid but the payment voucher is missing' }, CORS);
-      originals.push(payment);
+      const [ev] = await sql`select payload from pay_calc.pay_event where aggregate_id = ${body.runId} and event_type = 'paid'::pay_core.pay_event_type order by sequence desc limit 1`;
+      paymentId = String((ev?.payload as { voucher?: string } | undefined)?.voucher ?? ids.paymentVoucherId);
     }
 
-    const reversed: { of: string; rev: string; amount: number }[] = [];
-    await sql.begin(async (tx: postgres.TransactionSql) => {
-      for (const orig of originals) {
-        const entries = await tx`select "accountId", dr, cr, narration from public.voucher_entries where "voucherId" = ${orig.id}`;
-        const revNo = `REV-${orig.voucherNo}`;
-        const revId = crypto.randomUUID();
-        await tx`insert into public.vouchers(id,society_id,"voucherNo",date,type,amount,narration,"createdBy")
-          values(${revId},${societyText},${revNo},${String(orig.date)},${String(orig.type)},${orig.amount},${`Reversal of ${orig.voucherNo} (run ${run.run_no} rolled back)`},${String(su.id)})`;
-        for (const e of entries) {
-          // swap Dr/Cr — the defining move of a reversal
-          await tx`insert into public.voucher_entries(id,"voucherId","accountId",dr,cr,narration,society_id)
-            values(${crypto.randomUUID()},${revId},${e.accountId},${e.cr},${e.dr},${`Reversal: ${e.narration ?? ''}`},${societyText})`;
-        }
-        reversed.push({ of: orig.voucherNo as string, rev: revNo, amount: Number(orig.amount) });
-      }
+    // cancel payment first, then the accrual — through the posting service, as the user
+    const cancelled: { voucherId: string; status: string }[] = [];
+    for (const vid of [paymentId, accrualId].filter(Boolean)) {
+      const r = await rpc(supaUrl, anonKey, jwt, 'cancel_voucher', { p_id: vid, p_reason: `Payroll run ${run.run_no} rolled back`, p_deleted_by: user.email });
+      if (!r.ok) return json(409, { error: r.message, code: r.code ? `post_voucher:${r.code}` : 'PAY-ROLLBACK-REFUSED', cancelledSoFar: cancelled }, CORS);
+      cancelled.push({ voucherId: vid, status: String(r.data?.status ?? 'cancelled') });
+    }
 
+    await sql.begin(async (tx: postgres.TransactionSql) => {
+      if (wasPaid) {
+        // take back the recovery pay-pay credited. Target: the employee's loan that holds at least that much recovered
+        // (the active one first). A loan closed by that recovery is re-opened — unless another loan is already active.
+        await tx`
+          with rec as (
+            select p.employee_id, sum(pl.computed_minor)::bigint as amt
+            from pay_calc.payslip p
+            join pay_calc.payslip_line pl on pl.payslip_id = p.id
+            join pay_config.component_catalog cc on cc.id = pl.component_id and cc.code = 'LOAN_RECOVERY'
+            where p.pay_run_id = ${body.runId}
+            group by p.employee_id
+          ), target as (
+            select r.employee_id, r.amt,
+                   (select x.id from pay_calc.employee_loan x
+                     where x.employee_id = r.employee_id and x.society_id = ${societyId}
+                       and x.recovered_minor >= r.amt and x.status in ('active','closed')
+                     order by (x.status = 'active') desc, x.updated_at desc nulls last limit 1) as loan_id
+            from rec r where r.amt > 0
+          )
+          update pay_calc.employee_loan l set
+            status = case when l.status = 'closed' and l.recovered_minor >= l.principal_minor
+                               and not exists (select 1 from pay_calc.employee_loan o where o.employee_id = l.employee_id and o.status = 'active' and o.id <> l.id)
+                          then 'active' else l.status end,
+            closed_on = case when l.status = 'closed' and l.recovered_minor >= l.principal_minor
+                                  and not exists (select 1 from pay_calc.employee_loan o where o.employee_id = l.employee_id and o.status = 'active' and o.id <> l.id)
+                             then null else l.closed_on end,
+            recovered_minor = greatest(0, l.recovered_minor - t.amt),
+            updated_at = now(), updated_by = ${su.id}
+          from target t where l.id = t.loan_id`;
+      }
       const [{ nextseq }] = await tx`select coalesce(max(sequence),0)+1 as nextseq from pay_calc.pay_event where aggregate_id = ${body.runId}`;
       await tx`insert into pay_calc.pay_event(society_id,aggregate_type,aggregate_id,sequence,event_type,producer_kind,actor_email,payload)
-        values(${societyId},'pay_run',${body.runId},${nextseq},'reversed'::pay_core.pay_event_type,'human',${user.email},${JSON.stringify({ from: run.state, reversed })})`;
+        values(${societyId},'pay_run',${body.runId},${nextseq},'reversed'::pay_core.pay_event_type,'human',${user.email},${JSON.stringify({ from: run.state, cancelled, via: 'cancel_voucher' })})`;
       await tx`update pay_calc.payslip set status = 'reversed'::pay_core.payslip_status where pay_run_id = ${body.runId}`;
       await tx`update pay_calc.payroll_run set state = 'rolled_back'::pay_core.pay_run_state, updated_at = now(), updated_by = ${su.id} where id = ${body.runId}`;
     });
 
-    return json(200, { ok: true, runId: body.runId, state: 'rolled_back', from: run.state, reversed }, CORS);
+    return json(200, { ok: true, runId: body.runId, state: 'rolled_back', from: run.state, cancelled }, CORS);
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) }, CORS);
   } finally {

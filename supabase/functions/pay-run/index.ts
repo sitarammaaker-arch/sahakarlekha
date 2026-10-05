@@ -88,14 +88,27 @@ Deno.serve(async (req: Request) => {
     if (!employees.length) return json(400, { error: 'no employees have a salary structure assigned' }, CORS);
 
     // 4. rules → freeze (BASIC etc. resolve by component-code convention)
-    const rules = await sql`select rc.key, rv.scope_level, rv.value_json from pay_rule.rule_value rv join pay_rule.rule_catalog rc on rc.id = rv.rule_id where rv.status = 'active'`;
+    // P0: only THIS society's rules (or shared ones, society_id null) — this used to read every society's
+    // rules, so one society's rule would have become a "required" rule for all of them — and the rule's own
+    // effective dates are read instead of a fixed 2026-01-01 (which refused every earlier period).
+    const rules = await sql`select rc.key, rv.scope_level, rv.value_json, rv.effective_from::text as effective_from, rv.version
+      from pay_rule.rule_value rv join pay_rule.rule_catalog rc on rc.id = rv.rule_id
+      where rv.status = 'active' and (rv.society_id is null or rv.society_id = ${societyId})
+        and (rv.effective_to is null or rv.effective_to >= ${periodMonth})`;
     // editable statutory rates (admin-owned, sourced) → injected as scalar vars the formulas use
     const stat = await sql`select key, value_num from pay_config.statutory_setting where society_id = ${societyId}`;
     const scalars: Record<string, number> = { pf_rate: 12, ...Object.fromEntries(stat.map((r: Record<string, unknown>) => [r.key, Number(r.value_num)])) };
-    const catalogs = {
-      rules: Object.fromEntries(rules.map((r: Record<string, unknown>) => [r.key, { candidates: [{ value: Number(r.value_json), scope: { level: r.scope_level }, effectiveFrom: '2026-01-01', jurisdiction: '' }], required: true }])),
-      policies: {}, config: {},
-    };
+    // several values of one rule key (different effective dates / versions) must all reach the resolver,
+    // which picks the one in force on `asOf` — Object.fromEntries would have kept only the last.
+    const ruleCatalog: Record<string, { candidates: Record<string, unknown>[]; required: boolean }> = {};
+    for (const r of rules as Record<string, unknown>[]) {
+      const k = String(r.key);
+      (ruleCatalog[k] ??= { candidates: [], required: true }).candidates.push({
+        value: Number(r.value_json), scope: { level: r.scope_level }, effectiveFrom: String(r.effective_from).slice(0, 10),
+        version: Number(r.version) || 1, jurisdiction: '',
+      });
+    }
+    const catalogs = { rules: ruleCatalog, policies: {}, config: {} };
     const chain = { orgType: 'pacs', orgId: societyId, branchId: 'b1', departmentId: 'd1', cadreId: 'c1', designationId: 'g1', employeeId: '' };
     const freezeCtx = { chain, jurisdiction: 'IN', asOf: periodMonth };
     const ruleView = freezeViews(catalogs, freezeCtx).ruleView;
