@@ -171,6 +171,13 @@ try {
     const lst = await fn('pay-employee', { action: 'list' });
     const me = (lst.body.employees || []).find((e) => e.id === tdsEmpId);
     ok(!!me && me.tds_code === 'TDS', 'the employee list shows tds_code = TDS');
+    // Professional Tax is MANUAL (no verified state slab): a fixed ₹200 a month, entered by the admin
+    const ptAdd = await fn('pay-employee', { action: 'structure-add', employeeId: tdsEmpId, code: 'PT', basicMinor: 20000 });
+    ok(ptAdd.status === 200 && ptAdd.body.code === 'PT', `PT ₹200 added to the structure by hand (status ${ptAdd.status}${ptAdd.body.error ? ' ' + ptAdd.body.error : ''})`);
+    const stru = await fn('pay-employee', { action: 'structure-get', employeeId: tdsEmpId });
+    const ptRow = (stru.body.components || []).find((c) => c.code === 'PT');
+    ok(!!ptRow && ptRow.calc_method === 'fixed' && Number(ptRow.fixed_minor) === 20000, 'the structure shows PT as a FIXED ₹200 (no slab formula)');
+    ok((stru.body.components || []).some((c) => c.code === 'TDS'), 'and the TDS component is still there (adding PT did not drop it)');
     // ₹80,000 basic → gross ₹1,28,000/month = ₹15.36 lakh/yr → ₹1,03,116 tax for FY 2026-27 (derived by hand: slabs 0/5/10/15% on ₹14.61 lakh + 4% cess)
     tdsExpectedMinor = BigInt(Math.round(103116 / monthsLeft)) * 100n;
     // a month no slab set covers (2031): the run must be REFUSED, name the employee, and create nothing
@@ -200,6 +207,12 @@ try {
     const others = (await db.query(`select count(*)::int n from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id
       join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and p.employee_id <> $2 and (cc.code = 'TDS' or cc.code like 'TDS\\_%') and pl.computed_minor > 0`, [runId, tdsEmpId])).rows[0].n;
     ok(others === 0, 'no other employee in the run got a TDS deduction');
+    const ptl = (await db.query(`select pl.computed_minor::bigint amt from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id
+      join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and p.employee_id = $2 and cc.code = 'PT'`, [runId, tdsEmpId])).rows;
+    ok(ptl.length === 1 && BigInt(ptl[0].amt) === 20000n, `the PT payslip line is exactly the ₹200 entered${ptl.length ? ' — got ₹' + Number(ptl[0].amt) / 100 : ' — NO PT line'}`);
+    const ptOthers = (await db.query(`select count(*)::int n from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id
+      join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and p.employee_id <> $2 and cc.code = 'PT' and pl.computed_minor > 0`, [runId, tdsEmpId])).rows[0].n;
+    ok(ptOthers === 0, 'no other employee got a PT deduction (it is per employee, by hand)');
   }
 
   step('3. verify -> approve -> lock (and an invalid jump is refused)');
@@ -232,6 +245,8 @@ try {
   ok(v1 && Math.round(Number(v1.amt) * 100) === Number(t1.dr), 'voucher amount = ΣDr');
   if (WITH_TDS) {
     const leg = l1.find((r) => r.a === '2202');
+    const ptLeg = l1.find((r) => r.a === '2207');
+    ok(!!ptLeg && BigInt(ptLeg.cr) === 20000n, `the voucher credits Professional Tax payable 2207 with ₹200${ptLeg ? ' — got ₹' + Number(ptLeg.cr) / 100 : ' — NO 2207 leg'}`);
     ok(!!leg && BigInt(leg.cr) === tdsExpectedMinor, `the voucher credits TDS payable 2202 with the run's TDS (₹${Number(tdsExpectedMinor) / 100})${leg ? ' — got ₹' + Number(leg.cr) / 100 : ' — NO 2202 leg'}`);
   }
   const e1 = (await db.query(`select event_type, sequence, payload from public.ledger_events where society_id::text = $1 and aggregate_type = 'voucher' and aggregate_id = $2 order by sequence`, [SOC, accId])).rows;
