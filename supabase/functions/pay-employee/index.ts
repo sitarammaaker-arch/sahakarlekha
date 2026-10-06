@@ -197,9 +197,9 @@ const EMP_TYPE_SEED: [string, string, string][] = [
   ['consultant', 'सलाहकार', 'Consultant'], ['casual', 'आकस्मिक', 'Casual'],
 ];
 async function ensureEmploymentTypes(tx: postgres.TransactionSql) {
-  for (const [code, hi, en] of EMP_TYPE_SEED) {
-    await tx`insert into pay_core.employment_type(code,label) values(${code},${JSON.stringify({ hi, en })}) on conflict do nothing`;
-  }
+  // ONE statement. The database is far from this function, so round trips — not the SQL — are what cost time.
+  const rows = EMP_TYPE_SEED.map(([code, hi, en]) => ({ code, label: JSON.stringify({ hi, en }) }));
+  await tx`insert into pay_core.employment_type ${tx(rows, 'code', 'label')} on conflict do nothing`;
 }
 
 // Idempotent: ensure every society component + the default statutory rates exist. Returns { code: id }.
@@ -211,21 +211,22 @@ async function ensureEmploymentTypes(tx: postgres.TransactionSql) {
 async function ensureSocietyComponents(tx: postgres.TransactionSql, societyId: string, creator: string, floor?: string) {
   const ids: Record<string, string> = {};
   const from = floor ?? EFF;
+  // ONE query for every component that already exists (was one per component) and ONE statement that adds the earlier
+  // version to all of them (was one per component again): the database is far from this function, so round trips — not
+  // the SQL — are what cost time. Adding an employee used to make ~70 of them in a row.
+  const have = await tx`select id, code from pay_config.component_catalog where society_id = ${societyId} and code = any(${Object.keys(COMPONENTS)})`;
+  for (const r of have) ids[r.code as string] = r.id as string;
+  if (floor && have.length) {
+      await tx`insert into pay_config.component_version(component_id,kind,calc_method,formula_ref,taxability,pf_wage,esi_wage,pt_base,gratuity_base,bonus_base,gl_symbolic_role,sequence,version,effective_from,effective_to,status,change_reason,created_by)
+        select f.component_id,f.kind,f.calc_method,f.formula_ref,f.taxability,f.pf_wage,f.esi_wage,f.pt_base,f.gratuity_base,f.bonus_base,f.gl_symbolic_role,f.sequence,
+               (select max(version) + 1 from pay_config.component_version where component_id = f.component_id),
+               ${floor}::date, f.effective_from - 1, 'active', 'extended back to cover earlier periods (same rule as the earliest version)', ${creator}
+        from (select distinct on (component_id) * from pay_config.component_version
+              where component_id = any(${have.map((r) => r.id as string)}) and status = 'active' order by component_id, effective_from asc) f
+        where f.effective_from - 1 > ${floor}::date`;
+  }
   for (const [code, def] of Object.entries(COMPONENTS)) {
-    const [existing] = await tx`select id from pay_config.component_catalog where society_id = ${societyId} and code = ${code} limit 1`;
-    if (existing) {
-      ids[code] = existing.id as string;
-      if (floor) {
-        await tx`insert into pay_config.component_version(component_id,kind,calc_method,formula_ref,taxability,pf_wage,esi_wage,pt_base,gratuity_base,bonus_base,gl_symbolic_role,sequence,version,effective_from,effective_to,status,change_reason,created_by)
-          select f.component_id,f.kind,f.calc_method,f.formula_ref,f.taxability,f.pf_wage,f.esi_wage,f.pt_base,f.gratuity_base,f.bonus_base,f.gl_symbolic_role,f.sequence,
-                 (select max(version) + 1 from pay_config.component_version where component_id = f.component_id),
-                 ${floor}::date, f.effective_from - 1, 'active', 'extended back to cover earlier periods (same rule as the earliest version)', ${creator}
-          from (select distinct on (component_id) * from pay_config.component_version
-                where component_id = ${existing.id as string} and status = 'active' order by component_id, effective_from asc) f
-          where f.effective_from - 1 > ${floor}::date`;
-      }
-      continue;
-    }
+    if (ids[code]) continue;
     const [c] = await tx`insert into pay_config.component_catalog(society_id,code,display_name,created_by) values(${societyId},${code},${L(def.label)},${creator}) returning id`;
     ids[code] = c.id;
     let formulaRef: string | null = null;
@@ -247,11 +248,8 @@ async function ensureSocietyComponents(tx: postgres.TransactionSql, societyId: s
     ['edli_rate', resolveParam('edli.rate', today).value, 'EDLI contribution %'],
     ['eps_wage_ceiling', resolveParam('pf.wageCeiling', today).value, 'EPS / EDLI wage ceiling (₹, whole rupees)'],
   ];
-  for (const [k, v, lbl] of seedRates) {
-    await tx`insert into pay_config.statutory_setting(society_id,key,value_num,label,source,created_by)
-      values(${societyId},${k},${v},${lbl},'Statutory default — confirm for your establishment',${creator})
-      on conflict (society_id,key) do nothing`;
-  }
+  const seedRows = seedRates.map(([key, value_num, label]) => ({ society_id: societyId, key, value_num, label, source: 'Statutory default — confirm for your establishment', created_by: creator }));
+  await tx`insert into pay_config.statutory_setting ${tx(seedRows, 'society_id', 'key', 'value_num', 'label', 'source', 'created_by')} on conflict (society_id,key) do nothing`;
   await syncSocietyFormulas(tx, societyId);   // bring any drifted formula text up to the code's definition
   return ids;
 }
@@ -263,22 +261,25 @@ async function ensureSocietyComponents(tx: postgres.TransactionSql, societyId: s
 // is not a new policy with its own date; runs already locked keep the amounts they stored. Idempotent:
 // once the text matches, it is a no-op. Returns the codes that changed.
 async function syncSocietyFormulas(tx: postgres.TransactionSql, societyId: string): Promise<string[]> {
-  const changed: string[] = [];
+  // ONE statement for every formula component (was one round trip each). Same rule: only text that differs is rewritten.
+  const codes: string[] = [], wants: string[] = [];
   for (const [code, def] of Object.entries(COMPONENTS)) {
     if (def.method !== 'formula' || !def.formula) continue;
     const want = SFL[code];
     if (!want) continue;
-    const rows = await tx`
-      update pay_formula.formula_version fv
-        set expression_text = ${want}
-      from pay_config.component_catalog cc
-      join pay_config.component_version cv on cv.component_id = cc.id and cv.status = 'active'
-      where cc.society_id = ${societyId} and cc.code = ${code}
-        and fv.id = cv.formula_ref and fv.expression_text is distinct from ${want}
-      returning fv.id`;
-    if (rows.length) changed.push(code);
+    codes.push(code); wants.push(want);
   }
-  return changed;
+  if (!codes.length) return [];
+  const rows = await tx`
+    update pay_formula.formula_version fv
+      set expression_text = u.want
+    from unnest(${codes}::text[], ${wants}::text[]) as u(code, want),
+         pay_config.component_catalog cc
+    join pay_config.component_version cv on cv.component_id = cc.id and cv.status = 'active'
+    where cc.society_id = ${societyId} and cc.code = u.code
+      and fv.id = cv.formula_ref and fv.expression_text is distinct from u.want
+    returning cc.code`;
+  return [...new Set(rows.map((r) => r.code as string))];
 }
 
 // Create a per-employee salary structure for the type. Each employee gets their OWN template
@@ -287,9 +288,7 @@ async function createEmployeeStructure(tx: postgres.TransactionSql, societyId: s
   const spec = TYPE_STRUCTURE[type];
   const [st] = await tx`insert into pay_config.structure_template(society_id,code,display_name,created_by) values(${societyId},${`EMP-${empCode}`},${L(`Salary — ${empCode}`)},${creator}) returning id`;
   const [sv] = await tx`insert into pay_config.structure_version(structure_id,effective_from,created_by,status) values(${st.id},${EFF},${creator},'active') returning id`;
-  for (const code of spec.components) {
-    await tx`insert into pay_config.component_binding(structure_version_id,component_id,created_by) values(${sv.id},${compIds[code]},${creator})`;
-  }
+  await tx`insert into pay_config.component_binding ${tx(spec.components.map((code) => ({ structure_version_id: sv.id, component_id: compIds[code], created_by: creator })), 'structure_version_id', 'component_id', 'created_by')}`;
   return { versionId: sv.id as string, primaryComponentId: compIds[spec.primary], zeroComponentIds: spec.zero.map((c) => compIds[c]) };
 }
 
@@ -368,12 +367,11 @@ Deno.serve(async (req: Request) => {
         // the salary structure takes effect the day they join, not some fixed epoch
         const [asg] = await tx`insert into pay_config.structure_assignment(society_id,employee_id,structure_version_id,effective_from,created_by)
           values(${societyId},${emp.id},${versionId},${joinDate},${su.id}) returning id`;
-        await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,reason,created_by)
-          values(${asg.id},${primaryComponentId},${basicMinor},'INR','initial salary',${su.id})`;
-        for (const zid of zeroComponentIds) {
-          await tx`insert into pay_config.assignment_override(assignment_id,component_id,fixed_minor,fixed_currency,reason,created_by)
-            values(${asg.id},${zid},0,'INR','default (edit later)',${su.id})`;
-        }
+        const overrides = [
+          { assignment_id: asg.id, component_id: primaryComponentId, fixed_minor: basicMinor, fixed_currency: 'INR', reason: 'initial salary', created_by: su.id },
+          ...zeroComponentIds.map((zid) => ({ assignment_id: asg.id, component_id: zid, fixed_minor: 0, fixed_currency: 'INR', reason: 'default (edit later)', created_by: su.id })),
+        ];
+        await tx`insert into pay_config.assignment_override ${tx(overrides, 'assignment_id', 'component_id', 'fixed_minor', 'fixed_currency', 'reason', 'created_by')}`;
         return { employeeId: emp.id };
       });
       return json(200, { ok: true, employeeId: out.employeeId, code, type }, CORS);
