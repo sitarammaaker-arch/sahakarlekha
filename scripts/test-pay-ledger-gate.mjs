@@ -42,6 +42,9 @@ ok('the Reverse button is disabled while posting is off', /disabled=\{transition
 const dtFull = ui.slice(ui.indexOf('const doTransition = async'), ui.indexOf('const nameOf =', ui.indexOf('const doTransition = async')));
 ok('after a successful post / pay / reverse the page reloads, so reports show the server books (not stale memory)', /if \(isFinancial\) setTimeout\(\(\) => window\.location\.reload\(\), \d+\)/.test(dtFull));
 ok('the reload comes AFTER the error return (a failed action must not reload)', dtFull.indexOf('Action failed') > 0 && dtFull.indexOf('Action failed') < dtFull.indexOf('window.location.reload()'));
+const loanSec = ui.slice(ui.indexOf("hi ? 'अग्रिम / ऋण' : 'Advance / loan'"), ui.indexOf("hi ? 'पुराने अग्रिम' : 'Past advances'"));
+ok('the loan form warns that recording an advance posts nothing to the ledger (only the recovery does)', /posts nothing to the ledger/.test(loanSec) && /बही में कुछ नहीं चढ़ता/.test(loanSec) && /Advance to Employees/.test(loanSec));
+ok('the warning is shown whether or not a loan is already active (it sits above the active-loan branch)', loanSec.indexOf('posts nothing to the ledger') < loanSec.indexOf("l.status === 'active'"));
 
 console.log(`\nPayroll ledger gate: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
