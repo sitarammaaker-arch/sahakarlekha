@@ -1365,7 +1365,8 @@ function buildRunAccrual(lines, netMinor, heads, newId = () => crypto.randomUUID
       ok: false,
       code: "PAY-POST-HEAD",
       missingHeads: missing,
-      message: `no ledger head for ${missing.join(", ")} \u2014 refusing to book (map the head in Ledger Heads first)`
+      // Hindi first. There is NO screen that maps a role (Ledger Heads does not) — it is added to account_roles by support, so do not say otherwise.
+      message: `\u092C\u0939\u0940 \u092E\u0947\u0902 \u0928\u0939\u0940\u0902 \u0932\u093F\u0916\u093E \u0917\u092F\u093E \u2014 \u0907\u0928 \u0916\u093E\u0924\u094B\u0902 \u0915\u093E role \u0907\u0938 \u0938\u094B\u0938\u093E\u0907\u091F\u0940 \u092E\u0947\u0902 \u0924\u092F \u0928\u0939\u0940\u0902 \u0939\u0948: ${missing.join(", ")}\u0964 \u0938\u0939\u093E\u092F\u0924\u093E \u0938\u0947 \u0938\u0902\u092A\u0930\u094D\u0915 \u0915\u0930\u0947\u0902\u0964 (no ledger head for ${missing.join(", ")} \u2014 refusing to book; the role must be added by support, it cannot be set from the Ledger Heads screen)`
     };
   }
   const legs = [

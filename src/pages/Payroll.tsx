@@ -235,6 +235,8 @@ const Payroll: React.FC = () => {
   };
 
   const [employees, setEmployees] = useState<Employee[]>([]);
+  // true when the employee list could not be fetched — an empty list after a FAILED fetch must never read as "no employees"
+  const [empLoadFailed, setEmpLoadFailed] = useState(false);
   const [empOpen, setEmpOpen] = useState(false);
   const [empName, setEmpName] = useState('');
   const [empCode, setEmpCode] = useState('');
@@ -574,7 +576,9 @@ const Payroll: React.FC = () => {
 
   const loadEmployees = useCallback(async () => {
     const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'list' } });
-    if (!error && data) setEmployees((data as { employees?: Employee[] }).employees || []);
+    if (error || !data || (data as { error?: string }).error) { setEmpLoadFailed(true); return; }   // keep the list we had
+    setEmpLoadFailed(false);
+    setEmployees((data as { employees?: Employee[] }).employees || []);
   }, []);
 
   const addEmployee = async () => {
@@ -1110,7 +1114,12 @@ const Payroll: React.FC = () => {
               <UserPlus className="h-4 w-4 mr-1" /> {hi ? 'कर्मचारी जोड़ें' : 'Add employee'}
             </Button>
           </div>
-          {activeEmployees.length === 0 ? (
+          {empLoadFailed && activeEmployees.length === 0 ? (
+            <div className="flex items-center gap-2 rounded-md border border-red-300 bg-red-50 text-red-900 p-2 text-sm">
+              <span className="flex-1">{hi ? 'कर्मचारियों की सूची लोड नहीं हो सकी — इसका मतलब यह नहीं कि कोई कर्मचारी नहीं है। फिर कोशिश करें।' : 'Could not load the employee list — this does not mean there are no employees. Try again.'}</span>
+              <Button size="sm" variant="outline" onClick={() => { loadEmployees(); }}>{hi ? 'फिर कोशिश करें' : 'Retry'}</Button>
+            </div>
+          ) : activeEmployees.length === 0 ? (
             <p className="text-sm text-muted-foreground">{hi ? 'अभी कोई कर्मचारी नहीं। "कर्मचारी जोड़ें" से शुरू करें, फिर पेरोल चलाएँ।' : 'No employees yet — add one, then run payroll.'}</p>
           ) : (
             <div className="flex flex-wrap gap-2">

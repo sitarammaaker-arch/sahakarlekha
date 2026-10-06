@@ -45,6 +45,9 @@ ok('the reload comes AFTER the error return (a failed action must not reload)', 
 const loanSec = ui.slice(ui.indexOf("hi ? 'अग्रिम / ऋण' : 'Advance / loan'"), ui.indexOf("hi ? 'पुराने अग्रिम' : 'Past advances'"));
 ok('the loan form warns that recording an advance posts nothing to the ledger (only the recovery does)', /posts nothing to the ledger/.test(loanSec) && /बही में कुछ नहीं चढ़ता/.test(loanSec) && /Advance to Employees/.test(loanSec));
 ok('the warning is shown whether or not a loan is already active (it sits above the active-loan branch)', loanSec.indexOf('posts nothing to the ledger') < loanSec.indexOf("l.status === 'active'"));
+const le = ui.slice(ui.indexOf('const loadEmployees = useCallback'), ui.indexOf('const addEmployee'));
+ok('a failed employee fetch is flagged and keeps the old list (never replaced by an empty one)', /setEmpLoadFailed\(true\)/.test(le) && !/setEmployees\(\[\]\)/.test(le) && /if \(error \|\| !data/.test(le));
+ok('the "no employees yet" text is shown only when the fetch did not fail, and a failure shows a Retry', ui.indexOf('empLoadFailed && activeEmployees.length === 0') > 0 && ui.indexOf('empLoadFailed && activeEmployees.length === 0') < ui.indexOf('activeEmployees.length === 0 ? (', ui.indexOf('empLoadFailed && activeEmployees.length === 0') + 10) && /फिर कोशिश करें/.test(ui));
 
 console.log(`\nPayroll ledger gate: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

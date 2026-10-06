@@ -112,6 +112,8 @@ console.log('\n5. REFUSALS (a mis-booking is worse than an error)');
   const base = [{ code: 'BASIC', kind: 'earning', amountMinor: 1000000 }];
   let r = P.buildRunAccrual([...base, { code: 'LOAN_RECOVERY', kind: 'loan_recovery', amountMinor: 100000 }], 900000, { ...HEADS, employeeAdvance: undefined }, id);
   ok(!r.ok && r.code === 'PAY-POST-HEAD' && r.missingHeads.includes('employee.advance'), 'loan recovery with no employee.advance head is refused');
+  ok(!r.ok && /बही में नहीं लिखा गया/.test(r.message) && /employee\.advance/.test(r.message) && /सहायता से संपर्क/.test(r.message), 'the refusal is Hindi-first and names the missing role');
+  ok(!r.ok && !/map the head in Ledger Heads first/.test(r.message) && /cannot be set from the Ledger Heads screen/.test(r.message), 'the refusal no longer sends the user to a Ledger Heads screen that cannot map roles');
   r = P.buildRunAccrual([...base, { code: 'PT', kind: 'deduction', amountMinor: 20000 }], 980000, { ...HEADS, ptPayable: undefined }, id);
   ok(!r.ok && r.code === 'PAY-POST-HEAD' && r.missingHeads.includes('professional_tax.payable'), 'PT with no professional_tax.payable head is refused');
   r = P.buildRunAccrual([...base, { code: 'UNION_FEE', kind: 'deduction', amountMinor: 5000 }], 995000, HEADS, id);

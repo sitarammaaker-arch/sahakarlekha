@@ -105,7 +105,9 @@ export function buildRunAccrual(
   if (sum.loan > 0 && !heads.employeeAdvance) missing.push('employee.advance');
   if (missing.length) {
     return { ok: false, code: 'PAY-POST-HEAD', missingHeads: missing,
-      message: `no ledger head for ${missing.join(', ')} — refusing to book (map the head in Ledger Heads first)` };
+      // Hindi first. There is NO screen that maps a role (Ledger Heads does not) — it is added to account_roles by support, so do not say otherwise.
+      message: `बही में नहीं लिखा गया — इन खातों का role इस सोसाइटी में तय नहीं है: ${missing.join(', ')}। सहायता से संपर्क करें। ` +
+        `(no ledger head for ${missing.join(', ')} — refusing to book; the role must be added by support, it cannot be set from the Ledger Heads screen)` };
   }
 
   const legs: PostingLeg[] = [
