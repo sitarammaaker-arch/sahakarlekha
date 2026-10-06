@@ -153,8 +153,10 @@ try {
   const stamp = Date.now().toString().slice(-6);
   const emps = [['Cycle Test A', 2500000], ['Cycle Test B', 3000000], ['Cycle Test C', 1800000]];
   for (const [i, [name, basicMinor]] of emps.entries()) {
+    const t0 = Date.now();
     const r = await fn('pay-employee', { action: 'add', name, code: `CYC${stamp}${i + 1}`, type: 'permanent', basicMinor, dateOfJoin: '2025-01-01' });
-    ok(r.status === 200 && r.body.ok !== false, `added ${name} (status ${r.status}${r.body.error ? ' ' + r.body.error : ''})`);
+    const addMs = Date.now() - t0;   // adding an employee was ~9 s on prod (≈70 round trips to a far database) — watch this number
+    ok(r.status === 200 && r.body.ok !== false, `added ${name} (status ${r.status}${r.body.error ? ' ' + r.body.error : ''}) in ${(addMs / 1000).toFixed(1)} s`);
     if (r.body.employeeId) created.push(r.body.employeeId);
   }
 
