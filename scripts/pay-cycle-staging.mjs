@@ -98,7 +98,8 @@ const created = [];
 let createdRunId = '';        // the run this script made (for end-of-test cleanup)
 let runFinalised = false;     // true once posted/paid/rolled back — those must not be cancelled
 // declared HERE, not inside the try: the cleanup in `finally` reads them (a block-scoped `let` made that a ReferenceError)
-let tdsEmpId = '', tdsExpectedMinor = 0n;
+let tdsEmpId = '', tdsExpectedMinor = 0n, ptLeftover = 0;
+const pfExpectedMinor = 300000;   // ₹25,000 ceiling (from 2026-09-17) × 12%, for the Nov-2026 period this script uses
 
 try {
   TOKEN = await signIn(email, password);
@@ -210,9 +211,18 @@ try {
     const ptl = (await db.query(`select pl.computed_minor::bigint amt from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id
       join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and p.employee_id = $2 and cc.code = 'PT'`, [runId, tdsEmpId])).rows;
     ok(ptl.length === 1 && BigInt(ptl[0].amt) === 20000n, `the PT payslip line is exactly the ₹200 entered${ptl.length ? ' — got ₹' + Number(ptl[0].amt) / 100 : ' — NO PT line'}`);
-    const ptOthers = (await db.query(`select count(*)::int n from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id
-      join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and p.employee_id <> $2 and cc.code = 'PT' and pl.computed_minor > 0`, [runId, tdsEmpId])).rows[0].n;
-    ok(ptOthers === 0, 'no other employee got a PT deduction (it is per employee, by hand)');
+    const ptOthers = (await db.query(`select e.employee_code c, coalesce(e.full_name->>'en', e.full_name->>'hi', '') nm from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id
+      join pay_core.employee e on e.id = p.employee_id
+      join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and p.employee_id <> $2 and cc.code = 'PT' and pl.computed_minor > 0`, [runId, tdsEmpId])).rows;
+    // a leftover "Cycle TDS" employee of an EARLIER run (could not be deactivated the same day) still has its own hand-entered PT — not a bug
+    const ptReal = ptOthers.filter((r) => !/^Cycle TDS/.test(r.nm));
+    ok(ptReal.length === 0, `no other employee got a PT deduction (it is per employee, by hand)${ptReal.length ? ' — got: ' + ptReal.map((r) => r.nm + ' ' + r.c).join(', ') : ''}`);
+    if (ptOthers.length) console.log(`  ! note: ${ptOthers.length} leftover "Cycle TDS" employee(s) from earlier runs also carry PT ₹200 (${ptOthers.map((r) => r.c).join(', ')}) — run CLEANUP_ONLY=1 tomorrow`);
+    ptLeftover = ptOthers.length;
+    // PF: this employee's basic is ₹80,000 → wage ₹96,000, far above the ceiling → PF is on the ceiling only (EPFO FAQ Q21)
+    const pfl = (await db.query(`select pl.computed_minor::bigint amt from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id
+      join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and p.employee_id = $2 and cc.code = 'PF'`, [runId, tdsEmpId])).rows;
+    ok(pfl.length === 0 || BigInt(pfl[0].amt) === BigInt(pfExpectedMinor), `PF on the ceiling, not on the whole wage: ₹${pfExpectedMinor / 100}${pfl.length ? ' — got ₹' + Number(pfl[0].amt) / 100 : ' — (no PF line on this structure, check skipped)'}`);
   }
 
   step('3. verify -> approve -> lock (and an invalid jump is refused)');
@@ -246,7 +256,7 @@ try {
   if (WITH_TDS) {
     const leg = l1.find((r) => r.a === '2202');
     const ptLeg = l1.find((r) => r.a === '2207');
-    ok(!!ptLeg && BigInt(ptLeg.cr) === 20000n, `the voucher credits Professional Tax payable 2207 with ₹200${ptLeg ? ' — got ₹' + Number(ptLeg.cr) / 100 : ' — NO 2207 leg'}`);
+    ok(!!ptLeg && BigInt(ptLeg.cr) === BigInt(20000 * (1 + ptLeftover)), `the voucher credits Professional Tax payable 2207 with ₹200${ptLeg ? ' — got ₹' + Number(ptLeg.cr) / 100 : ' — NO 2207 leg'}`);
     ok(!!leg && BigInt(leg.cr) === tdsExpectedMinor, `the voucher credits TDS payable 2202 with the run's TDS (₹${Number(tdsExpectedMinor) / 100})${leg ? ' — got ₹' + Number(leg.cr) / 100 : ' — NO 2202 leg'}`);
   }
   const e1 = (await db.query(`select event_type, sequence, payload from public.ledger_events where society_id::text = $1 and aggregate_type = 'voucher' and aggregate_id = $2 order by sequence`, [SOC, accId])).rows;

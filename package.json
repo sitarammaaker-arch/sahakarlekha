@@ -78,6 +78,7 @@
     "test:pay-ecr": "node scripts/test-pay-ecr.mjs",
     "test:pay-run-posting": "node scripts/test-pay-run-posting.mjs",
     "test:pay-tds": "node scripts/test-pay-tds.mjs",
+    "test:pay-pf-wage": "node scripts/test-pay-pf-wage.mjs",
     "test:epf-esi-rules": "node scripts/test-epf-esi-rules.mjs",
     "test:pay-components-sync": "node scripts/test-pay-components-sync.mjs",
     "test:pay-engine": "node scripts/test-pay-engine.mjs",
