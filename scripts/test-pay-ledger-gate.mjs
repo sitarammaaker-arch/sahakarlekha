@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Payroll → ledger posting stays OFF until the Phase-3 posting service (M0 finding R23).
 // CI-safe static + unit checks: each of pay-post / pay-pay / pay-rollback refuses unless
-// PAY_LEDGER_POSTING_ENABLED=true, BEFORE any auth or DB work; the UI gate is off and wired.
+// PAY_LEDGER_POSTING_ENABLED=true, BEFORE any auth or DB work; the UI gate is wired (and ON since R4).
 //
 // Run: node scripts/test-pay-ledger-gate.mjs
 
@@ -28,8 +28,9 @@ for (const fn of ['pay-post', 'pay-pay', 'pay-rollback']) {
 }
 
 console.log('UI gate');
-ok('PAY_LEDGER_POSTING_ENABLED is false', gate.PAY_LEDGER_POSTING_ENABLED === false);
-ok('post / pay / rollback are ledger actions and blocked', ['post', 'pay', 'rollback'].every((a) => gate.isLedgerAction(a) && gate.ledgerPostingBlocked(a)));
+// R4 (2026-10-06): the UI constant is ON; the server secret is the real switch (checked above: 503 before any auth/DB work).
+ok('PAY_LEDGER_POSTING_ENABLED (UI) is true — R4', gate.PAY_LEDGER_POSTING_ENABLED === true);
+ok('post / pay / rollback are ledger actions and offered', ['post', 'pay', 'rollback'].every((a) => gate.isLedgerAction(a) && !gate.ledgerPostingBlocked(a)));
 ok('verify / approve / lock / cancel are not blocked', ['verify', 'approve', 'lock', 'cancel'].every((a) => !gate.ledgerPostingBlocked(a)));
 ok('Hindi-first message', /बही-posting अभी बंद है/.test(gate.LEDGER_POSTING_OFF_HI) && gate.LEDGER_POSTING_OFF_EN.length > 0);
 
