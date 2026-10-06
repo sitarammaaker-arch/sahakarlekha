@@ -56,7 +56,7 @@ export function bucketOf(code: string, kind: string): Bucket {
   if (kind === 'deduction') {
     if (c === 'LOP' || c.startsWith('LOP_')) return 'lop';
     if (c === 'PF' || c === 'EPF') return 'pf';
-    if (c === 'ESI') return 'esi';
+    if (c === 'ESI' || c.startsWith('ESI_')) return 'esi';   // ESI_NOHRA / ESI_DEP / ESI_CONSOL / ESI_STIPEND (lib/pay/statutory/esiWage.ts)
     if (c === 'PT' || c === 'PROFESSIONAL_TAX') return 'pt';
     if (c === 'TDS' || c === 'TDS_192' || c.startsWith('TDS_')) return 'tds';   // TDS_NOHRA / TDS_DEP / TDS_CONSOL / TDS_STIPEND (lib/pay/tax/salaryTds.ts)
     return 'other_deduction';

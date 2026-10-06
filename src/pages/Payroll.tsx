@@ -43,6 +43,7 @@ interface Employee {
   left_on?: string | null;            // set once they have left — basic_minor goes null with it
   last_basic_minor?: number | null;   // what they were on in their final assignment
   tds_code?: string | null;           // the salary-TDS component on their structure, or null when TDS is off
+  esi_code?: string | null;           // the ESI (employee share) component on their structure, or null when ESI is off
 }
 interface StatSetting { key: string; value_num: number; label: string | null; source: string | null; }
 interface AttRow {
@@ -501,6 +502,27 @@ const Payroll: React.FC = () => {
       toast({ title: hi ? '⚠ इस माह का क़ानून सत्यापित नहीं' : '⚠ This month\'s law is not verified', description: `${d.lawWarning}`, variant: 'destructive', duration: 15000 });
     }
     setAttEmp((prev) => (prev ? { ...prev, tds_code: enabled ? (d.code ?? 'TDS') : null } : prev));
+    loadStructure(attEmp.id); loadHistory(attEmp.id); loadEmployees();
+  };
+
+  // ESI (employee share) on / off for THIS employee. Off by default; the server adds (or removes) the ESI component that fits their structure and it
+  // applies from today. ESI is a duty of the ESTABLISHMENT (usually 10+ employees), so an admin decides it applies — nothing is guessed.
+  const [esiBusy, setEsiBusy] = useState(false);
+  const setEsi = async (enabled: boolean) => {
+    if (!attEmp) return;
+    setEsiBusy(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'esi-set', employeeId: attEmp.id, enabled } });
+    setEsiBusy(false);
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'ESI नहीं बदला' : 'ESI not changed', description: await invokeError(error, data), variant: 'destructive' }); return; }
+    const d = data as { code?: string; lawWarning?: string | null };
+    toast({
+      title: enabled ? (hi ? 'ESI चालू ✓' : 'ESI on ✓') : (hi ? 'ESI बंद ✓' : 'ESI off ✓'),
+      description: enabled ? (hi ? `अगले payroll से कमाई हुई मज़दूरी पर 0.75% कटेगा, सीमा ₹21,000 (${d.code})` : `0.75% of the earned wage from the next payroll, wage limit ₹21,000 (${d.code})`) : (hi ? 'अगले payroll से ESI नहीं कटेगा' : 'ESI will no longer be deducted from the next payroll'),
+    });
+    if (enabled && d.lawWarning) {
+      toast({ title: hi ? '⚠ ESI की दरें अभी सत्यापित नहीं' : '⚠ ESI rates not yet verified', description: `${d.lawWarning}`, variant: 'destructive', duration: 12000 });
+    }
+    setAttEmp((prev) => (prev ? { ...prev, esi_code: enabled ? (d.code ?? 'ESI') : null } : prev));
     loadStructure(attEmp.id); loadHistory(attEmp.id); loadEmployees();
   };
 
@@ -1286,6 +1308,26 @@ const Payroll: React.FC = () => {
                 {hi
                   ? 'सिर्फ़ सत्यापित क़ानून पर (वित्त-वर्ष 2026-27, नई कर-व्यवस्था) अपने-आप गणना होती है; अन्यथा payroll मना कर देता है। हाथ से तय करना हो तो ऊपर की सूची में TDS की पंक्ति पर "बदलें" दबाएँ। केवल admin बदल सकता है।'
                   : 'Computed automatically only on verified law (FY 2026-27, new regime); otherwise the payroll refuses. To set it by hand, use "Edit" on the TDS row above. Only an admin can change this.'}
+              </p>
+            </div>
+
+            <div className="border-t pt-3 space-y-2">
+              <Label className="text-sm font-medium">{hi ? 'ESI (कर्मचारी बीमा, कर्मचारी का हिस्सा)' : 'ESI (employee share)'}</Label>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {attEmp?.esi_code
+                    ? (hi ? 'चालू — कमाई हुई मज़दूरी पर 0.75% (सीमा ₹21,000)' : 'On — 0.75% of the earned wage (limit ₹21,000)')
+                    : (hi ? 'बंद — अभी ESI नहीं कटता' : 'Off — no ESI is deducted')}
+                </span>
+                <Button size="sm" variant={attEmp?.esi_code ? 'outline' : 'default'} className={`shrink-0 ${hasLeft ? 'hidden' : ''}`} disabled={esiBusy}
+                  onClick={() => setEsi(!attEmp?.esi_code)}>
+                  {esiBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : (attEmp?.esi_code ? (hi ? 'बंद करें' : 'Turn off') : (hi ? 'चालू करें' : 'Turn on'))}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {hi
+                  ? 'ESI संस्था पर लागू होता है (आम तौर पर 10 या अधिक कर्मचारी; कुछ राज्यों में 20) — इसलिए इसे आप तय करके चालू करें। कमाई हुई मज़दूरी ₹21,000 से ऊपर हो तो नहीं कटता; औसत दैनिक मज़दूरी ₹176 तक हो तो कर्मचारी का हिस्सा माफ़ है। नियोक्ता का हिस्सा अभी payslip में नहीं जुड़ता। दरें अभी सत्यापित नहीं हैं। सिर्फ़ admin बदल सकता है।'
+                  : 'ESI is a duty of the establishment (usually 10+ employees; 20 in some states), so you decide when to turn it on. Nothing is deducted when the earned wage is above ₹21,000; the employee share is waived when the average daily wage is up to ₹176. The employer share is not yet on the payslip. Rates are not yet verified. Only an admin can change this.'}
               </p>
             </div>
 

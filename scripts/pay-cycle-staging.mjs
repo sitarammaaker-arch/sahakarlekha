@@ -98,7 +98,7 @@ const created = [];
 let createdRunId = '';        // the run this script made (for end-of-test cleanup)
 let runFinalised = false;     // true once posted/paid/rolled back — those must not be cancelled
 // declared HERE, not inside the try: the cleanup in `finally` reads them (a block-scoped `let` made that a ReferenceError)
-let tdsEmpId = '', tdsExpectedMinor = 0n, ptLeftover = 0;
+let tdsEmpId = '', tdsExpectedMinor = 0n, ptLeftover = 0, esiEmpId = '', esiLines = 0;
 const pfExpectedMinor = 300000;   // ₹25,000 ceiling (from 2026-09-17) × 12%, for the Nov-2026 period this script uses
 
 try {
@@ -190,6 +190,20 @@ try {
     ok(String(refused.body.error || '').includes(`CYC${stamp}T`), 'the refusal names the employee whose TDS cannot be computed');
     const afterN = (await db.query(`select count(*)::int n from pay_calc.payroll_run where period::text = '2031-07'`)).rows[0].n;
     ok(afterN === before, 'and no run was created');
+    // ESI (employee share): OFF for everyone by default; one small-wage employee gets it switched on. Basic ₹10,000 → earned gross ₹16,000 → 0.75% = ₹120.
+    const ee = await fn('pay-employee', { action: 'add', name: 'Cycle ESI', code: `CYC${stamp}E`, type: 'permanent', basicMinor: 1000000, dateOfJoin: '2025-01-01' });
+    ok(ee.status === 200 && ee.body.employeeId, `added Cycle ESI, basic ₹10,000 (status ${ee.status}${ee.body.error ? ' ' + ee.body.error : ''})`);
+    esiEmpId = ee.body.employeeId || '';
+    if (esiEmpId) created.push(esiEmpId);
+    const eon = await fn('pay-employee', { action: 'esi-set', employeeId: esiEmpId, enabled: true });
+    ok(eon.status === 200 && eon.body.code === 'ESI' && eon.body.changed === true, `ESI switched on (component ${eon.body.code}, status ${eon.status}${eon.body.error ? ' ' + eon.body.error : ''})`);
+    ok(typeof eon.body.lawWarning === 'string' && /not yet confirmed/.test(eon.body.lawWarning), 'the switch says the ESI rates are not yet confirmed (honest about verified:false)');
+    const eon2 = await fn('pay-employee', { action: 'esi-set', employeeId: esiEmpId, enabled: true });
+    ok(eon2.status === 200 && eon2.body.changed === false, 'switching ESI on again changes nothing (idempotent)');
+    const elst = await fn('pay-employee', { action: 'list' });
+    ok(((elst.body.employees || []).find((e) => e.id === esiEmpId) || {}).esi_code === 'ESI', 'the employee list shows esi_code = ESI');
+    const nm = (e) => (e.full_name && (e.full_name.en || e.full_name.hi)) || '';
+    ok((elst.body.employees || []).filter((e) => e.esi_code && !/^Cycle ESI/.test(nm(e))).length === 0, 'ESI is on ONLY for the "Cycle ESI" test employee(s) — off for everyone else (default off)');
   }
 
   step('2. compute the run');
@@ -221,6 +235,10 @@ try {
     ok(ptReal.length === 0, `no other employee got a PT deduction (it is per employee, by hand)${ptReal.length ? ' — got: ' + ptReal.map((r) => r.nm + ' ' + r.c).join(', ') : ''}`);
     if (ptOthers.length) console.log(`  ! note: ${ptOthers.length} leftover "Cycle TDS" employee(s) from earlier runs also carry PT ₹200 (${ptOthers.map((r) => r.c).join(', ')}) — run CLEANUP_ONLY=1 tomorrow`);
     ptLeftover = ptOthers.length;
+    const esl = (await db.query(`select p.employee_id, pl.computed_minor::bigint amt from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id
+      join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and (cc.code = 'ESI' or cc.code like 'ESI\\_%') and pl.computed_minor > 0`, [runId])).rows;
+    esiLines = esl.length;   // a leftover "Cycle ESI" employee of an earlier run carries its own ₹120 too
+    ok(esl.some((r) => r.employee_id === esiEmpId && BigInt(r.amt) === 12000n) && esl.every((r) => BigInt(r.amt) === 12000n), `ESI: the ESI employee's payslip line is ₹120 (0.75% of ₹16,000) and every ESI line is that same ₹120 — ${esl.length} line(s)`);
     // PF: this employee's basic is ₹80,000 → wage ₹96,000, far above the ceiling → PF is on the ceiling only (EPFO FAQ Q21)
     const pfl = (await db.query(`select pl.computed_minor::bigint amt from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id
       join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and p.employee_id = $2 and cc.code = 'PF'`, [runId, tdsEmpId])).rows;
@@ -259,6 +277,8 @@ try {
     const leg = l1.find((r) => r.a === '2202');
     const ptLeg = l1.find((r) => r.a === '2207');
     ok(!!ptLeg && BigInt(ptLeg.cr) === BigInt(20000 * (1 + ptLeftover)), `the voucher credits Professional Tax payable 2207 with ₹200${ptLeg ? ' — got ₹' + Number(ptLeg.cr) / 100 : ' — NO 2207 leg'}`);
+    const esiLeg = l1.find((r) => r.a === '2204');
+    ok(!!esiLeg && BigInt(esiLeg.cr) === BigInt(12000 * esiLines), `the voucher credits ESI payable 2204 with ₹${120 * esiLines}${esiLeg ? ' — got ₹' + Number(esiLeg.cr) / 100 : ' — NO 2204 leg (is esi.payable mapped on staging?)'}`);
     ok(!!leg && BigInt(leg.cr) === tdsExpectedMinor, `the voucher credits TDS payable 2202 with the run's TDS (₹${Number(tdsExpectedMinor) / 100})${leg ? ' — got ₹' + Number(leg.cr) / 100 : ' — NO 2202 leg'}`);
   }
   const e1 = (await db.query(`select event_type, sequence, payload from public.ledger_events where society_id::text = $1 and aggregate_type = 'voucher' and aggregate_id = $2 order by sequence`, [SOC, accId])).rows;
