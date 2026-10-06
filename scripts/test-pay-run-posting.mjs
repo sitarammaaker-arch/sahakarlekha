@@ -107,6 +107,21 @@ console.log('\n4. every statutory head, each to its own account');
   ok(r.ok && sumSide(r.legs, 'Dr') === sumSide(r.legs, 'Cr'), 'balanced');
 }
 
+console.log('\n4b. the ESI family (ESI_NOHRA / ESI_DEP / ESI_CONSOL / ESI_STIPEND) all post to ESI payable');
+{
+  const lines = [
+    { code: 'BASIC', kind: 'earning', amountMinor: 5000000 },
+    { code: 'ESI', kind: 'deduction', amountMinor: 12000 }, { code: 'ESI_NOHRA', kind: 'deduction', amountMinor: 10800 },
+    { code: 'ESI_CONSOL', kind: 'deduction', amountMinor: 11250 }, { code: 'ESI_STIPEND', kind: 'deduction', amountMinor: 6750 },
+  ];
+  const net = 5000000 - 12000 - 10800 - 11250 - 6750;
+  const r = P.buildRunAccrual(lines, net, HEADS, id);
+  ok(r.ok, 'books');
+  eq(strip(r.legs).map((l) => l.accountId), ['5201', '2103', '2204'], 'one expense leg, one net-payable leg, ONE ESI-payable leg for the whole family');
+  ok(r.ok && r.legs.find((l) => l.accountId === '2204').amountMinor === 12000 + 10800 + 11250 + 6750, 'the ESI-payable leg is the sum of all the ESI lines');
+  ok(r.ok && sumSide(r.legs, 'Dr') === sumSide(r.legs, 'Cr'), 'balanced');
+}
+
 console.log('\n5. REFUSALS (a mis-booking is worse than an error)');
 {
   const base = [{ code: 'BASIC', kind: 'earning', amountMinor: 1000000 }];
@@ -116,6 +131,8 @@ console.log('\n5. REFUSALS (a mis-booking is worse than an error)');
   ok(!r.ok && !/map the head in Ledger Heads first/.test(r.message) && /cannot be set from the Ledger Heads screen/.test(r.message), 'the refusal no longer sends the user to a Ledger Heads screen that cannot map roles');
   r = P.buildRunAccrual([...base, { code: 'PT', kind: 'deduction', amountMinor: 20000 }], 980000, { ...HEADS, ptPayable: undefined }, id);
   ok(!r.ok && r.code === 'PAY-POST-HEAD' && r.missingHeads.includes('professional_tax.payable'), 'PT with no professional_tax.payable head is refused');
+  r = P.buildRunAccrual([...base, { code: 'ESI_NOHRA', kind: 'deduction', amountMinor: 7500 }], 992500, { ...HEADS, esiPayable: undefined }, id);
+  ok(!r.ok && r.code === 'PAY-POST-HEAD' && r.missingHeads.includes('esi.payable'), 'an ESI-family code (ESI_NOHRA) with no esi.payable head is refused, not booked to another account');
   r = P.buildRunAccrual([...base, { code: 'UNION_FEE', kind: 'deduction', amountMinor: 5000 }], 995000, HEADS, id);
   ok(!r.ok && r.code === 'PAY-POST-UNKNOWN-DEDUCTION' && r.unknown[0] === 'UNION_FEE', 'an unknown deduction is refused, not dropped');
   r = P.buildRunAccrual([...base, { code: 'PF', kind: 'deduction', amountMinor: 120000 }], 999999, HEADS, id);

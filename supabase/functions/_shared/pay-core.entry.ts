@@ -12,6 +12,7 @@ export { postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVouch
 // formulas, the verified-law gate, and the financial-year helpers the year-to-date needs.
 export { makeTds192, assertVerifiedLaw, TDS_FORMULAS, TDS_192_SIG, TDS_192_NAME, TDS_YTD_HEAD, isTdsCode } from '@/lib/pay/tax/salaryTds.ts';
 export { makePfWage, PF_WAGE_NAME, PF_WAGE_SIG } from '@/lib/pay/statutory/pfWage.ts';
+export { makeEsiEmployee, ESI_EMPLOYEE_NAME, ESI_EMPLOYEE_SIG, ESI_FORMULAS, ESI_CODE_BY_TYPE, isEsiCode } from '@/lib/pay/statutory/esiWage.ts';
 export { monthsLeftInFy, fyBounds } from '@/lib/payroll/cumulativeTds.ts';
 // PF / ESI parameters as dated, flagged-unverified data (the one place to change them): the seed defaults read it.
-export { resolveParam } from '@/lib/rules/epfEsi.ts';
+export { resolveParam, resolveStatutory } from '@/lib/rules/epfEsi.ts';

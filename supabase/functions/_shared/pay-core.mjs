@@ -219,6 +219,11 @@ function mulMinor(baseMinor, factor, mode = DEFAULT_ROUNDING) {
   assertFinite(factor, "mulMinor");
   return { minor: roundMinor(baseMinor * factor, mode), mode };
 }
+function applyPercent(baseMinor, pct, mode = DEFAULT_ROUNDING) {
+  assertMinor(baseMinor, "applyPercent");
+  assertFinite(pct, "applyPercent");
+  return { minor: roundMinor(baseMinor * pct / 100, mode), mode };
+}
 
 // src/lib/pay/formula/evaluator.ts
 var makeMoney = (minor, currency) => ({ kind: "money", minor, currency });
@@ -1317,7 +1322,7 @@ function bucketOf(code, kind) {
   if (kind === "deduction") {
     if (c === "LOP" || c.startsWith("LOP_")) return "lop";
     if (c === "PF" || c === "EPF") return "pf";
-    if (c === "ESI") return "esi";
+    if (c === "ESI" || c.startsWith("ESI_")) return "esi";
     if (c === "PT" || c === "PROFESSIONAL_TAX") return "pt";
     if (c === "TDS" || c === "TDS_192" || c.startsWith("TDS_")) return "tds";
     return "other_deduction";
@@ -1790,6 +1795,23 @@ function resolveMonthSegments(key, monthStart) {
     return { from, to: dayIso(monthStart, toDay), days: toDay - startDay + 1, value: r.value, stale: r.stale };
   });
 }
+function resolveStatutory(asOf) {
+  const keys = Object.keys(PARAMS);
+  const r = Object.fromEntries(keys.map((k) => [k, resolveParam(k, asOf)]));
+  const pfCeilingSegments = resolveMonthSegments("pf.wageCeiling", asOf);
+  return {
+    pfWageCeiling: r["pf.wageCeiling"].value,
+    pfCeilingSegments,
+    pfEmployeeRate: r["pf.employeeRate"].value,
+    pfEmployerRate: r["pf.employerRate"].value,
+    esiWageLimit: r["esi.wageLimit"].value,
+    esiEmployeeRate: r["esi.employeeRate"].value,
+    esiEmployerRate: r["esi.employerRate"].value,
+    unverified: keys.filter((k) => !r[k].row.verified),
+    // a segment can be stale even when the first day is not (it cannot today, but the two answers must agree on principle)
+    stale: [.../* @__PURE__ */ new Set([...keys.filter((k) => r[k].stale), ...pfCeilingSegments.some((g) => g.stale) ? ["pf.wageCeiling"] : []])]
+  };
+}
 
 // src/lib/pay/statutory/pfWage.ts
 var PF_WAGE_SIG = { params: ["Money"], ret: "Money" };
@@ -1810,7 +1832,55 @@ function makePfWage(ctx) {
     return makeMoney(Math.round(minor / monthDays), ctx.currency);
   };
 }
+
+// src/lib/pay/statutory/esiWage.ts
+var ESI_EMPLOYEE_SIG = { params: ["Money", "Number"], ret: "Money" };
+var ESI_EMPLOYEE_NAME = "esi_employee";
+var ESI_FORMULAS = {
+  ESI: 'formula "ESI" :: Money let w = BASIC + DA + HRA - LOP in esi_employee(w, attendance.paidDays)',
+  ESI_NOHRA: 'formula "ESI_NOHRA" :: Money let w = BASIC + DA - LOP_NOHRA in esi_employee(w, attendance.paidDays)',
+  ESI_DEP: 'formula "ESI_DEP" :: Money let w = BASIC + DA + DEP_ALLOW - LOP_DEP in esi_employee(w, attendance.paidDays)',
+  ESI_CONSOL: 'formula "ESI_CONSOL" :: Money let w = CONSOLIDATED - LOP_CONSOL in esi_employee(w, attendance.paidDays)',
+  ESI_STIPEND: 'formula "ESI_STIPEND" :: Money let w = STIPEND - LOP_STIPEND in esi_employee(w, attendance.paidDays)'
+};
+var ESI_CODE_BY_TYPE = {
+  permanent: "ESI",
+  probation: "ESI",
+  seasonal: "ESI_NOHRA",
+  fixedterm: "ESI_NOHRA",
+  deputation: "ESI_DEP",
+  contract: "ESI_CONSOL",
+  honorary: "ESI_CONSOL",
+  parttime: "ESI_CONSOL",
+  consultant: "ESI_CONSOL",
+  apprentice: "ESI_STIPEND"
+};
+var isEsiCode = (code) => {
+  const c = code.toUpperCase();
+  return c === "ESI" || c.startsWith("ESI_");
+};
+function refuse3(code, msg) {
+  throw Object.assign(new RangeError(`${code}: ${msg}`), { code });
+}
+function makeEsiEmployee(ctx) {
+  const limitMinor = Math.round(resolveParam("esi.wageLimit", ctx.asOf).value * 100);
+  const ratePct = resolveParam("esi.employeeRate", ctx.asOf).value;
+  const dailyExempt = resolveParam("esi.dailyWageExempt", ctx.asOf).value;
+  return (wage, paidDays) => {
+    const w = wage;
+    if (!w || w.kind !== "money") refuse3("PAY-DSL-TYPE-015", "esi_employee: the wage must be Money");
+    if (w.currency !== ctx.currency) refuse3("PAY-DSL-TYPE-011", `esi_employee: currency mismatch (${w.currency} vs ${ctx.currency})`);
+    if (typeof paidDays !== "number" || !Number.isFinite(paidDays)) refuse3("PAY-DSL-TYPE-015", "esi_employee: paid days must be a Number");
+    if (w.minor <= 0 || w.minor > limitMinor) return makeMoney(0, ctx.currency);
+    if (paidDays > 0 && w.minor / 100 / paidDays <= dailyExempt) return makeMoney(0, ctx.currency);
+    return makeMoney(applyPercent(w.minor, ratePct).minor, ctx.currency);
+  };
+}
 export {
+  ESI_CODE_BY_TYPE,
+  ESI_EMPLOYEE_NAME,
+  ESI_EMPLOYEE_SIG,
+  ESI_FORMULAS,
   PAYROLL_ROLES,
   PF_WAGE_NAME,
   PF_WAGE_SIG,
@@ -1826,7 +1896,9 @@ export {
   freezeViews,
   fyBounds,
   headsFromRoles,
+  isEsiCode,
   isTdsCode,
+  makeEsiEmployee,
   makeMoney,
   makePfWage,
   makePostVoucherPayload,
@@ -1837,5 +1909,6 @@ export {
   postVoucherErrorCode,
   postVoucherMessage,
   resolveParam,
+  resolveStatutory,
   stateAfterEvent
 };
