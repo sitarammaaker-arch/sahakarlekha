@@ -39,6 +39,9 @@ const dt = ui.slice(ui.indexOf('const doTransition = async'), ui.indexOf('setTra
 ok('doTransition refuses a blocked ledger action before invoking any function', /if \(ledgerPostingBlocked\(action\)\)/.test(dt) && /return;/.test(dt));
 ok('the next-action button is disabled for a blocked ledger action', /disabled=\{transitioning === r\.run_id \|\| ledgerPostingBlocked\(nextAction\(r\.state\)!\.action\)\}/.test(ui));
 ok('the Reverse button is disabled while posting is off', /disabled=\{transitioning === r\.run_id \|\| ledgerPostingBlocked\('rollback'\)\}/.test(ui));
+const dtFull = ui.slice(ui.indexOf('const doTransition = async'), ui.indexOf('const nameOf =', ui.indexOf('const doTransition = async')));
+ok('after a successful post / pay / reverse the page reloads, so reports show the server books (not stale memory)', /if \(isFinancial\) setTimeout\(\(\) => window\.location\.reload\(\), \d+\)/.test(dtFull));
+ok('the reload comes AFTER the error return (a failed action must not reload)', dtFull.indexOf('Action failed') > 0 && dtFull.indexOf('Action failed') < dtFull.indexOf('window.location.reload()'));
 
 console.log(`\nPayroll ledger gate: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
