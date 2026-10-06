@@ -709,6 +709,10 @@ const Payroll: React.FC = () => {
       toast({ title: hi ? 'हो गया ✓' : 'Done ✓', description: `${(data as { from?: string }).from} → ${(data as { state?: string }).state}` });
     }
     loadRuns();
+    // Post / pay / reverse are written by the SERVER, so the app's in-memory books (vouchers, reports, Trial Balance) do not
+    // have them until the data is loaded again — seen on prod 2026-10-06: Trial Balance right after Post showed no salary.
+    // Let the success message be read, then reload once so every report is built from what the server now holds.
+    if (isFinancial) setTimeout(() => window.location.reload(), 1800);
   };
 
   const nameOf = (n: { hi?: string; en?: string } | null) => (hi ? n?.hi : n?.en) || n?.en || n?.hi || '—';
