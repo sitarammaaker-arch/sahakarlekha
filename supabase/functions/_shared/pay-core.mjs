@@ -1692,10 +1692,16 @@ var CARRIED = (what) => `CARRIED OVER from ${what}. No start date is established
 var PARAMS = {
   "pf.wageCeiling": [
     {
+      value: 25e3,
+      effectiveFrom: "2026-09-17",
+      verified: false,
+      cite: 'EPFO "Frequently Asked Questions \u2014 Revision of EPFO Statutory Wage Ceiling, from \u20B915,000 to \u20B925,000 per month" (the document linked from https://unifiedportal-emp.epfindia.gov.in/epfo/ , whose own page says "FAQs related to recent revision of EPFO wage ceiling from Rs. 15,000 to Rs. 25,000"). Its header table: "S.O. 5109(E) dated 17 September 2026 | Effective Date 17 September 2026 | Revised Wage Ceiling \u20B925,000 per month | Earlier \u20B915,000". Read 2026-10-06 from the copy the founder supplied (EPFO_Wage_Ceiling.pdf, 13 pages, sha256 12e6074fd6f031d5412a511d6598ad24d3c8f80ee062abe6eac9994bb16fd591). Applies to EPF, EPS and EDLI (Q5). A part-month is split by days at 17.09.2026 (Q7, Q9). Above the ceiling the statutory contribution is generally restricted to the ceiling unless the employee already contributes on higher wages (Q21, Q22). PF wages = Basic + DA + Retaining Allowance, not gross (Q24-Q26). NOT yet read: the Gazette text of S.O. 5109(E) itself \u2014 a person must confirm against it before this is marked verified.'
+    },
+    {
       value: 15e3,
       effectiveFrom: "1970-01-01",
       verified: false,
-      cite: CARRIED("the Salary page constant PF_CEILING (lib/payrollStatutory.ts)") + " A rise to \u20B925,000 from 2026-09-17 is REPORTED (PIB releases PRID 2314111 / 2313829 / 2310973 / 2311548, per search results) but the primary text was not read \u2014 not entered."
+      cite: CARRIED("the Salary page constant PF_CEILING (lib/payrollStatutory.ts)") + ' The EPFO FAQ above confirms it was the ceiling until 16.09.2026 ("remained unchanged at \u20B915,000 since September 2014", Q4) \u2014 but no start date is entered.'
     }
   ],
   "pf.employeeRate": [
@@ -1718,7 +1724,7 @@ var PARAMS = {
       value: 21e3,
       effectiveFrom: "2017-01-01",
       verified: false,
-      cite: 'ESIC coverage page https://esic.gov.in/coverage \u2014 read 2026-10-06 by an automated fetch, which quotes: "The existing wage limit for coverage under the Act, effective from 01.01.2017, is Rs.21,000/- per month (Rs.25,000/- per month in the case of Persons with Disability)." The date and figure agree with the code; a PERSON must still sign it off before it is marked verified. Not entered: the \u20B925,000 limit for persons with disability (the Salary page has no such case).'
+      cite: 'ESIC coverage page https://esic.gov.in/coverage \u2014 read 2026-10-06 by an automated fetch, which quotes: "The existing wage limit for coverage under the Act, effective from 01.01.2017, is Rs.21,000/- per month (Rs.25,000/- per month in the case of Persons with Disability)." The date and figure agree with the code; a PERSON must still sign it off before it is marked verified. CONFIRMED again in ESIC "A Guide For Employers", section 1 (Coverage of Employee): "\u2026drawing wages up to Rs. 21000/- per month (Rs.25,000/- for Persons with Disability) is covered under the Act" (file and sha256 as in esi.employeeRate; the guide is undated). Not entered: the \u20B925,000 limit for persons with disability (the Salary page has no such case).'
     }
   ],
   "esi.employeeRate": [
@@ -1726,11 +1732,25 @@ var PARAMS = {
       value: 0.75,
       effectiveFrom: "1970-01-01",
       verified: false,
-      cite: CARRIED("the Salary page (employee ESI 0.75% of gross)") + " A search snippet describing a 2019 PIB release gives 01.07.2019 as the start of 0.75% / 3.25%; that page was not opened, so the date is not entered."
+      cite: CARRIED("the Salary page (employee ESI 0.75% of gross)") + ` CONFIRMED in ESIC "A Guide For Employers", section 6 (ESIC Contributions): "The rate of contribution equals to 4 percent of the wages payable to an employee, out of which 3.25 percent is the employers' share and 0.75 percent is the employees' share." Read 2026-10-06 from the copy the founder supplied (ESI.pdf, 12 pages, sha256 f63e11d822fbefd15285a8ac5b791101b40d4ff8ebba9fa8e43893a53a8f464c) \u2014 the guide carries its own disclaimer that it "may not reflect the most current developments", and it is undated, so the start date is not entered.`
     }
   ],
   "esi.employerRate": [
-    { value: 3.25, effectiveFrom: "1970-01-01", verified: false, cite: CARRIED("the Salary page (employer ESI 3.25% of gross)") }
+    {
+      value: 3.25,
+      effectiveFrom: "1970-01-01",
+      verified: false,
+      cite: CARRIED("the Salary page (employer ESI 3.25% of gross)") + " CONFIRMED in the same ESIC Employers' Guide, section 6 (see esi.employeeRate for the quotation, file and sha256)."
+    }
+  ],
+  "esi.dailyWageExempt": [
+    // not used by any calculation yet (the Salary page has no such case) — recorded now, with its source, for the ESI component
+    {
+      value: 176,
+      effectiveFrom: "1970-01-01",
+      verified: false,
+      cite: `ESIC "A Guide For Employers", section 6: "Employees in receipt of a daily average wage up to Rs.176/- are exempted from payment of contribution. (No deduction of Employees' share of contribution from employee's salary/wages). Employers will, however, pay their own share in respect of these employees." File and sha256 as in esi.employeeRate; undated guide, so no start date is entered. NOT USED by any calculation yet.`
+    }
   ]
 };
 function resolveParam(key, asOf) {

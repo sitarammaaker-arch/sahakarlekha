@@ -449,6 +449,15 @@ const SalaryManagement: React.FC = () => {
   // PF / ESI: the wage ceiling, the ESI limit and the rates are dated data (lib/rules/epfEsi.ts) and NONE of them has been signed off
   // by a person yet. Say so — but only when it matters: some employee in this month's list actually has PF or ESI applied.
   const pfEsiBasis = resolveStatutory(`${processingMonth}-01`);
+  // an ordinary month has ONE PF ceiling; the month the ceiling changed (September 2026) has two periods — say so plainly
+  const pfSegs = pfEsiBasis.pfCeilingSegments;
+  const rupee = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+  const pfEsiCeilingHi = pfSegs.length > 1
+    ? `इस माह के बीच बदली है — ${pfSegs.map((g) => `${g.from.slice(8)}–${g.to.slice(8)} तारीख़ ${rupee(g.value)} पर`).join(', ')} (दिनों के अनुपात में)`
+    : rupee(pfEsiBasis.pfWageCeiling);
+  const pfEsiCeilingEn = pfSegs.length > 1
+    ? `changes inside this month — ${pfSegs.map((g) => `days ${g.from.slice(8)}–${g.to.slice(8)} on ${rupee(g.value)}`).join(', ')} (pro rata by days)`
+    : rupee(pfEsiBasis.pfWageCeiling);
   const pfEsiNotice = rowsLoaded
     && processRows.some((r) => (r.employee.pfApplicable ?? true) || (r.employee.esiApplicable ?? true))
     && (pfEsiBasis.unverified.length > 0 || pfEsiBasis.stale.length > 0);
@@ -876,8 +885,8 @@ const SalaryManagement: React.FC = () => {
                   {pfEsiNotice && (
                     <p className="mx-6 mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
                       {hi
-                        ? `PF / ESI की वेतन-सीमा और दरें (PF सीमा ₹${pfEsiBasis.pfWageCeiling.toLocaleString('en-IN')}, ESI सीमा ₹${pfEsiBasis.esiWageLimit.toLocaleString('en-IN')}) अभी किसी ने अधिसूचना से सत्यापित नहीं कीं। EPFO की सीमा बदलने की ख़बर है — अधिसूचना देखकर मिलान करें; ज़रूरत हो तो हर कर्मचारी की PF/ESI रक़म ख़ुद बदल सकते हैं।`
-                        : `The PF / ESI wage ceiling and rates (PF ceiling ₹${pfEsiBasis.pfWageCeiling.toLocaleString('en-IN')}, ESI limit ₹${pfEsiBasis.esiWageLimit.toLocaleString('en-IN')}) have not yet been verified against the notification. A change to the EPFO ceiling has been reported — check the notification; you can override any employee's PF/ESI amount.`}
+                        ? `PF की वेतन-सीमा ${pfEsiCeilingHi} और ESI की सीमा ₹${pfEsiBasis.esiWageLimit.toLocaleString('en-IN')} कोड में दर्ज हैं (EPFO की अधिसूचना S.O. 5109(E): सीमा ₹25,000, 17-09-2026 से), पर इन्हें अभी किसी व्यक्ति ने राजपत्र/अधिनियम के पाठ से सत्यापित नहीं किया। ज़रूरत हो तो हर कर्मचारी की PF/ESI रक़म ख़ुद बदल सकते हैं।`
+                        : `The PF wage ceiling ${pfEsiCeilingEn} and the ESI limit ₹${pfEsiBasis.esiWageLimit.toLocaleString('en-IN')} are in the code (EPFO notification S.O. 5109(E): ceiling ₹25,000 from 17-09-2026), but no person has yet verified them against the Gazette / Act text. You can override any employee's PF/ESI amount.`}
                     </p>
                   )}
                   <CardContent className="p-0 overflow-x-auto">

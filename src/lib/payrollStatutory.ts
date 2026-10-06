@@ -13,7 +13,7 @@
  */
 
 import { toMinor, toRupees, addMinor, subMinor, applyPercent } from '@/lib/money';
-import { resolveStatutory, type StatutoryParamKey } from '@/lib/rules/epfEsi';
+import { resolveStatutory, daysInMonthOf, type StatutoryParamKey, type ParamSegment } from '@/lib/rules/epfEsi';
 
 // The PF wage ceiling, the ESI limit and the PF / ESI rates are EFFECTIVE-DATED DATA now (lib/rules/epfEsi.ts), not constants
 // here — so when the law moves a row is appended instead of a number overwritten, and an older month still gets its own law.
@@ -43,7 +43,7 @@ export interface StatutoryInput {
 
 export interface StatutoryResult {
   /** Which PF / ESI parameters are not yet verified by a person, and which no dated row covers — so a screen can say so. */
-  basis: { unverified: StatutoryParamKey[]; stale: StatutoryParamKey[] };
+  basis: { unverified: StatutoryParamKey[]; stale: StatutoryParamKey[]; pfCeilingSegments: ParamSegment[] };
   gross: number;
   pfEmployee: number;
   pfEmployer: number;
@@ -72,7 +72,15 @@ export function computeStatutory(input: StatutoryInput): StatutoryResult {
   const override = (auto: number, ov?: number | null) =>
     ov == null ? auto : toMinor(Math.max(0, Number(ov) || 0));
 
-  const pfWageMinor = Math.min(basicMinor, toMinor(pfCeiling));
+  // PF wage. Normally ONE ceiling for the month. When the ceiling changes INSIDE the month (EPFO, 17 Sep 2026) the law
+  // calculates the month in periods by days — each period on its own ceiling (EPFO FAQ Q7, Q9): wage × days/monthDays,
+  // summed. A single-segment month reduces to min(basic, ceiling) exactly, so ordinary months are unchanged.
+  // An explicit input.pfCeiling is the caller's own single ceiling and wins, as before.
+  const segs = law.pfCeilingSegments;
+  const monthDays = segs.reduce((n, g) => n + g.days, 0) || daysInMonthOf(input.asOf) || 30;
+  const pfWageMinor = input.pfCeiling != null || segs.length <= 1
+    ? Math.min(basicMinor, toMinor(pfCeiling))
+    : Math.round(segs.reduce((sum, g) => sum + Math.min(basicMinor, toMinor(g.value)) * g.days, 0) / monthDays);
   const pfEmployeeMinor = override(input.pfApplicable ? applyPercent(pfWageMinor, law.pfEmployeeRate).minor : 0, input.pfEmployeeOverride);
   const pfEmployerMinor = override(input.pfApplicable ? applyPercent(pfWageMinor, law.pfEmployerRate).minor : 0, input.pfEmployerOverride);
 
@@ -88,7 +96,7 @@ export function computeStatutory(input: StatutoryInput): StatutoryResult {
   const netSalaryMinor = subMinor(grossMinor, totalEmployeeDeductionsMinor);
 
   return {
-    basis: { unverified: law.unverified, stale: law.stale },
+    basis: { unverified: law.unverified, stale: law.stale, pfCeilingSegments: law.pfCeilingSegments },
     gross: toRupees(grossMinor),
     pfEmployee: toRupees(pfEmployeeMinor),
     pfEmployer: toRupees(pfEmployerMinor),
