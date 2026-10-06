@@ -9,7 +9,12 @@
  * Payroll calculation, verify / approve / lock, cancel and payslips are unaffected.
  */
 
-export const PAY_LEDGER_POSTING_ENABLED = false;
+// R4 (founder, 2026-10-06): the UI is ON. Payroll now posts THROUGH the posting service (post_voucher / cancel_voucher with
+// the user's own JWT — journal event, FY/period lock, RLS), so the reasons in the header above no longer hold. The REAL switch
+// is the server's PAY_LEDGER_POSTING_ENABLED secret: while that is not 'true', the three functions answer 503 and this
+// constant only decides whether the buttons are offered. It is one switch for every society — what limits who can post is
+// that a society needs its payroll heads in account_roles (a missing head is refused, never guessed).
+export const PAY_LEDGER_POSTING_ENABLED = true;
 
 /** The payroll actions that write to the general ledger. */
 export const LEDGER_ACTIONS = ['post', 'pay', 'rollback'] as const;
