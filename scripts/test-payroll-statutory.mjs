@@ -33,7 +33,9 @@ register(
 );
 
 const { computeStatutory } = await import(abs('../src/lib/payrollStatutory.ts'));
-const ASOF = '2026-10-01';   // asOf is REQUIRED now — the dated parameters (lib/rules/epfEsi.ts) are read by date; the figures below are unchanged
+// asOf is REQUIRED — the dated parameters (lib/rules/epfEsi.ts) are read by date. These first assertions are about the ₹15,000-ceiling
+// rules, so they are dated BEFORE the EPFO change of 2026-09-17; the new ceiling has its own section below.
+const ASOF = '2026-08-01';
 const r2 = (n) => Math.round(n * 100) / 100; // for assertion comparisons only
 
 let pass = 0, fail = 0;
@@ -112,7 +114,7 @@ ok(ovZero.pfEmployee === 0 && ovZero.netSalary === 35000, 'a 0 override waives t
 
 // ── PARITY with the constants this code used BEFORE the parameters became dated data ─────────────────────────────────
 // An independent restatement of the old logic (15000 / 12 / 13 / 21000 / 0.75 / 3.25) against the new, date-driven one,
-// over a grid of pay levels including both thresholds on either side. If moving the numbers had changed ANY slip, this fails.
+// over a grid of pay levels including both thresholds on either side — on dates BEFORE the EPFO ceiling change. If moving the numbers had changed ANY slip, this fails.
 {
   const money = await import(abs('../src/lib/money.ts'));
   const { toMinor, toRupees, applyPercent } = money;
@@ -126,7 +128,7 @@ ok(ovZero.pfEmployee === 0 && ovZero.netSalary === 35000, 'a 0 override waives t
   let n = 0, bad = 0;
   const basics = [0, 1, 4999.99, 8000, 12500, 14999.99, 15000, 15000.01, 15001, 18000, 20000, 20999.99, 21000, 21001, 24999, 25000, 25001, 40000, 90000];
   const allowances = [0, 500, 3000, 6000, 12000];
-  for (const b of basics) for (const a of allowances) for (const pf of [true, false]) for (const esi of [true, false]) for (const asOf of ['2024-04-01', '2026-10-01', '2030-01-01']) {
+  for (const b of basics) for (const a of allowances) for (const pf of [true, false]) for (const esi of [true, false]) for (const asOf of ['2024-04-01', '2025-12-01', '2026-08-01']) {
     const r = computeStatutory({ asOf, basic: b, allowances: a, pfApplicable: pf, esiApplicable: esi });
     const o = old(b, a, pf, esi);
     n++;
@@ -134,10 +136,10 @@ ok(ovZero.pfEmployee === 0 && ovZero.netSalary === 35000, 'a 0 override waives t
       bad++; if (bad < 4) console.error('  ✗ mismatch', { b, a, pf, esi, asOf, got: [r.pfEmployee, r.pfEmployer, r.esiEmployee, r.esiEmployer], want: o });
     }
   }
-  ok(bad === 0, `date-driven result = the old hard-coded result for all ${n} combinations (pay levels × PF/ESI flags × 3 dates), thresholds included`);
-  const r1 = computeStatutory({ asOf: '2026-10-01', basic: 25000, allowances: 15000, pfApplicable: true, esiApplicable: true });
-  ok(r1.pfEmployee === 1800 && r1.pfEmployer === 1950, 'basic ₹25,000: PF ₹1,800 employee / ₹1,950 employer (₹15,000 ceiling) — unchanged');
-  ok(r1.basis.unverified.length === 9 && r1.basis.stale.length === 0, 'the result says its PF/ESI parameters are unverified (9) and none stale');
+  ok(bad === 0, `date-driven result = the old hard-coded result for all ${n} combinations (pay levels × PF/ESI flags × 3 pre-change dates), thresholds included`);
+  const r1 = computeStatutory({ asOf: '2026-08-01', basic: 25000, allowances: 15000, pfApplicable: true, esiApplicable: true });
+  ok(r1.pfEmployee === 1800 && r1.pfEmployer === 1950, 'basic ₹25,000 on 2026-08-01: PF ₹1,800 employee / ₹1,950 employer (₹15,000 ceiling) — unchanged');
+  ok(r1.basis.unverified.length === 10 && r1.basis.stale.length === 0, 'the result says its PF/ESI parameters are unverified (all 10) and none stale');
   ok(computeStatutory({ asOf: '2016-06-01', basic: 10000, allowances: 0, pfApplicable: true, esiApplicable: true }).basis.stale.includes('esi.wageLimit'), 'a month before the ESI limit\'s established start is flagged stale in the result');
   let threw = false;
   try { computeStatutory({ basic: 10000, allowances: 0, pfApplicable: true, esiApplicable: true }); } catch { threw = true; }
@@ -145,6 +147,54 @@ ok(ovZero.pfEmployee === 0 && ovZero.netSalary === 35000, 'a 0 override waives t
   ok(!threw && computeStatutory({ basic: 10000, allowances: 0, pfApplicable: true, esiApplicable: true }).basis.stale.length > 0, 'a MISSING asOf is flagged stale — it is never silently replaced by today');
 }
 
+
+// ── THE EPFO WAGE CEILING: ₹25,000 from 17 September 2026 (S.O. 5109(E)) — the EPFO FAQ's OWN worked examples ──────────
+// Source: EPFO "FAQs — Revision of EPFO Statutory Wage Ceiling" (file EPFO_Wage_Ceiling.pdf, sha256 12e6074f…). Its tables are the
+// expected values below. Salary books employer PF as 13% of PF wage (12% EPF+EPS, 0.5% EDLI, 0.5% admin), which is the FAQ's own
+// total (e.g. wage ₹20,000 → 1,666 + 734 + 100 + 100 = ₹2,600 employer, plus the employee's ₹2,400).
+{
+  const { resolveMonthSegments } = await import(abs('../src/lib/rules/epfEsi.ts'));
+  const near = (a, b) => Math.abs(a - b) <= 0.011;   // the FAQ rounds each head separately, so a sum can differ by a paisa
+
+  // Q13 — from the October 2026 wage month on, one ceiling for the whole month
+  const q13 = [[10000, 1200, 1300], [15000, 1800, 1950], [20000, 2400, 2600], [25000, 3000, 3250], [35000, 3000, 3250]];
+  for (const [wage, ee, er] of q13) {
+    const r = computeStatutory({ asOf: '2026-10-01', basic: wage, allowances: 0, pfApplicable: true, esiApplicable: false });
+    ok(r.pfEmployee === ee && r.pfEmployer === er, `FAQ Q13, PF wage ₹${wage}: employee ₹${ee}, employer total ₹${er} (EPS+EPF+EDLI+admin)${wage > 25000 ? ' — above the ceiling, restricted to ₹25,000' : ''}`);
+  }
+  ok(computeStatutory({ asOf: '2026-10-01', basic: 20000, allowances: 0, pfApplicable: true, esiApplicable: false }).pfEmployee === 2400, 'FAQ Q17: ₹20,000 → employee ₹2,400 (it was ₹1,800 on the old ceiling)');
+
+  // the month the ceiling changed: 1–16 Sept on ₹15,000, 17–30 on ₹25,000 — one slip, two periods (Q7, Q9)
+  const segs = resolveMonthSegments('pf.wageCeiling', '2026-09-01');
+  ok(segs.length === 2 && segs[0].days === 16 && segs[0].value === 15000 && segs[0].to === '2026-09-16' && segs[1].days === 14 && segs[1].value === 25000 && segs[1].from === '2026-09-17', 'September 2026 splits at 17.09: 16 days on ₹15,000, then 14 days on ₹25,000');
+  ok(resolveMonthSegments('pf.wageCeiling', '2026-08-01').length === 1 && resolveMonthSegments('pf.wageCeiling', '2026-10-01').length === 1, 'August and October are each ONE segment (no change inside them)');
+  ok(resolveMonthSegments('pf.wageCeiling', '2026-10-01')[0].value === 25000 && resolveMonthSegments('pf.wageCeiling', '2026-08-01')[0].value === 15000, 'August on ₹15,000, October on ₹25,000');
+  const sep = computeStatutory({ asOf: '2026-09-01', basic: 20000, allowances: 0, pfApplicable: true, esiApplicable: false });
+  // Scenario C: an existing member contributing on the ₹15,000 cap, moving to ₹20,000 from 17.09 — PF wage 8,000 + 9,333.33 = 17,333.33
+  ok(sep.pfEmployee === 2080, 'FAQ Q7 scenario C (wage ₹20,000, September 2026): employee EPF ₹2,080.00 = 12% of ₹17,333.33');
+  ok(near(sep.pfEmployer, 636.13 + 1443.87 + 86.67 + 86.67), `…and the employer total ₹${sep.pfEmployer} matches the FAQ's ₹2,253.34 (EPF 636.13 + EPS 1,443.87 + EDLI 86.67 + admin 86.67) to a paisa`);
+  ok(sep.basis.pfCeilingSegments.length === 2, 'the result carries the two periods so a screen can explain them');
+  // a wage under the OLD ceiling is unaffected by the split
+  const low = computeStatutory({ asOf: '2026-09-01', basic: 12000, allowances: 0, pfApplicable: true, esiApplicable: false });
+  ok(low.pfEmployee === 1440, 'a wage below both ceilings (₹12,000) in September: ₹1,440 — the split changes nothing');
+  // an explicit caller ceiling is a single ceiling (as before)
+  const forced = computeStatutory({ asOf: '2026-09-01', basic: 20000, allowances: 0, pfApplicable: true, esiApplicable: false, pfCeiling: 15000 });
+  ok(forced.pfEmployee === 1800, 'an explicit pfCeiling input still wins, as a single ceiling');
+
+  // ESI is unaffected by the EPFO change
+  const esi = computeStatutory({ asOf: '2026-10-01', basic: 15000, allowances: 3000, pfApplicable: false, esiApplicable: true });
+  ok(esi.esiEligible && esi.esiEmployee === 135 && esi.esiEmployer === 585, 'ESI on gross ₹18,000 (limit ₹21,000): 0.75% = ₹135, 3.25% = ₹585 — unchanged by the EPFO change');
+
+  // the new ceiling's own parity grid (the old-constants grid above stops before 2026-09)
+  const { toMinor, toRupees, applyPercent } = await import(abs('../src/lib/money.ts'));
+  const nw = (basic, pf) => { const w = Math.min(toMinor(basic), toMinor(25000)); return pf ? { ee: toRupees(applyPercent(w, 12).minor), er: toRupees(applyPercent(w, 13).minor) } : { ee: 0, er: 0 }; };
+  let n = 0, bad = 0;
+  for (const b of [0, 5000, 14999.99, 15000, 15001, 20000, 24999.99, 25000, 25000.01, 30000, 90000]) for (const pf of [true, false]) for (const asOf of ['2026-10-01', '2027-04-01', '2030-01-01']) {
+    const r = computeStatutory({ asOf, basic: b, allowances: 0, pfApplicable: pf, esiApplicable: false }); const o = nw(b, pf); n++;
+    if (r.pfEmployee !== o.ee || r.pfEmployer !== o.er) { bad++; if (bad < 4) console.error('  ✗ mismatch', { b, pf, asOf, got: [r.pfEmployee, r.pfEmployer], want: o }); }
+  }
+  ok(bad === 0, `from October 2026 the result = 12% / 13% of min(wage, ₹25,000) for all ${n} combinations, both sides of ₹25,000 included`);
+}
 
 console.log(`\nPayroll statutory (pure): ${pass} passed, ${fail} failed`);
 process.exitCode = fail > 0 ? 1 : 0;
