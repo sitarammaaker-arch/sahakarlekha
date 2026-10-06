@@ -15,7 +15,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js';
-import { freezeViews, mapCatalog, assembleRun, makeMoney, makeTds192, assertVerifiedLaw, TDS_192_SIG, TDS_192_NAME, TDS_YTD_HEAD, isTdsCode, monthsLeftInFy, fyBounds } from '../_shared/pay-core.mjs';
+import { freezeViews, mapCatalog, assembleRun, makeMoney, makeTds192, makePfWage, PF_WAGE_NAME, PF_WAGE_SIG, assertVerifiedLaw, TDS_192_SIG, TDS_192_NAME, TDS_YTD_HEAD, isTdsCode, monthsLeftInFy, fyBounds } from '../_shared/pay-core.mjs';
 
 // SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
 // token; its payload is read only to refuse more (unreadable → pending).
@@ -193,7 +193,7 @@ Deno.serve(async (req: Request) => {
       }
       const facts = { attendance: { paidDays, lopDays, otHours: 0 }, leave: [], loan, tax: { ytdByHead: tdsComp ? { [TDS_YTD_HEAD]: tdsYtdMinor } : {}, monthsRemaining: monthsLeftInFy(period), regime: 'new' } };
       // `onResult` collects what the Money result cannot carry: an OVER-deduction (the CA ruling: never a silent ₹0).
-      const fns = { [TDS_192_NAME]: tdsComp ? makeTds192({ regime: 'new', asOf: periodMonth, currency: 'INR' }, (o: { excessMinor: number }) => { tdsOutcomes.set(String(emp.employee_code), o); }) : () => makeMoney(0, 'INR') };
+      const fns = { [PF_WAGE_NAME]: makePfWage({ asOf: periodMonth, currency: 'INR' }), [TDS_192_NAME]: tdsComp ? makeTds192({ regime: 'new', asOf: periodMonth, currency: 'INR' }, (o: { excessMinor: number }) => { tdsOutcomes.set(String(emp.employee_code), o); }) : () => makeMoney(0, 'INR') };
       emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, paidDays, paidDaysShown, lopDays, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
     }
 
@@ -229,7 +229,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // 6. assemble the run (one shared plan; typeBase declares fixed components + fact vars)
-    const typeBase = { vars: { ...Object.fromEntries([...fixedCodes].map((c) => [c, 'Money'])), ...Object.fromEntries(Object.keys(scalars).map((k) => [k, 'Number'])), attendance: 'Map', tax: 'Map', leaveBalance: 'Map', loanRecovery: 'Money', loanRecoveries: 'List' }, fns: { [TDS_192_NAME]: TDS_192_SIG } };
+    const typeBase = { vars: { ...Object.fromEntries([...fixedCodes].map((c) => [c, 'Money'])), ...Object.fromEntries(Object.keys(scalars).map((k) => [k, 'Number'])), attendance: 'Map', tax: 'Map', leaveBalance: 'Map', loanRecovery: 'Money', loanRecoveries: 'List' }, fns: { [TDS_192_NAME]: TDS_192_SIG, [PF_WAGE_NAME]: PF_WAGE_SIG } };
     const runId = crypto.randomUUID();
     const assembled = assembleRun({
       societyId, runId, sequence: 1,

@@ -48,7 +48,9 @@ const SFL: Record<string, string> = {
   // injected as 0 when absent) so it cannot pick up another structure's DA. And per EPFO practice PF
   // is on PAID days only — the non-contributory (unpaid) days reduce it proportionately, the same
   // (30 − lopDays)/30 fraction the LOP lines use. Retaining allowance: no such component here.
-  PF: 'formula "PF" :: Money let b = BASIC in b * 120% * (pf_rate / 100) * ((30 - attendance.lopDays) / 30)',
+  PF: 'formula "PF" :: Money let w = pf_wage(BASIC * 120%) in w * (pf_rate / 100) * ((30 - attendance.lopDays) / 30)',
+  // pf_wage() caps that wage at the EPFO ceiling in force in the period's month (dated data, lib/rules/epfEsi.ts),
+  // split by days when the ceiling changes inside the month (Sept 2026) — EPFO FAQ Q21: above it, restricted to the ceiling.
   // Loss of Pay must deduct ONE DAY OF WHAT THIS EMPLOYEE ACTUALLY EARNS, so it differs by structure:
   //   LOP        basic + DA 20% + HRA 40% = 160% of basic   (permanent, probation)
   //   LOP_NOHRA  basic + DA 20%           = 120% of basic   (seasonal, fixed-term — no HRA)

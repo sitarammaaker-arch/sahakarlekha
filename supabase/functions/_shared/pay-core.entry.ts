@@ -11,6 +11,7 @@ export { postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVouch
 // P2 — salary TDS: the whitelisted tds_192 function over the Salary page's CA-confirmed cumulative rule, the five TDS
 // formulas, the verified-law gate, and the financial-year helpers the year-to-date needs.
 export { makeTds192, assertVerifiedLaw, TDS_FORMULAS, TDS_192_SIG, TDS_192_NAME, TDS_YTD_HEAD, isTdsCode } from '@/lib/pay/tax/salaryTds.ts';
+export { makePfWage, PF_WAGE_NAME, PF_WAGE_SIG } from '@/lib/pay/statutory/pfWage.ts';
 export { monthsLeftInFy, fyBounds } from '@/lib/payroll/cumulativeTds.ts';
 // PF / ESI parameters as dated, flagged-unverified data (the one place to change them): the seed defaults read it.
 export { resolveParam } from '@/lib/rules/epfEsi.ts';

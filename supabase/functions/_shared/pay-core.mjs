@@ -1765,8 +1765,54 @@ function resolveRows(rows, asOf) {
   }
   return { value: rows[0].value, row: rows[0], stale: true, asOf };
 }
+var dayIso = (monthStart, d) => `${monthStart.slice(0, 8)}${String(d).padStart(2, "0")}`;
+function daysInMonthOf(monthStart) {
+  if (typeof monthStart !== "string") return NaN;
+  const y = Number(monthStart.slice(0, 4)), m = Number(monthStart.slice(5, 7));
+  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) return NaN;
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+function resolveMonthSegments(key, monthStart) {
+  const n = daysInMonthOf(monthStart);
+  if (typeof monthStart !== "string" || !Number.isFinite(n) || !/^\d{4}-\d{2}-01$/.test(monthStart)) {
+    const r = resolveRows(PARAMS[key], monthStart);
+    return [{ from: monthStart, to: monthStart, days: 1, value: r.value, stale: true }];
+  }
+  const cuts = [...new Set(
+    PARAMS[key].map((r) => r.effectiveFrom).filter((d) => d > monthStart && d <= dayIso(monthStart, n))
+  )].sort();
+  const starts = [monthStart, ...cuts];
+  return starts.map((from, i) => {
+    const toDay = i + 1 < starts.length ? Number(starts[i + 1].slice(8, 10)) - 1 : n;
+    const startDay = Number(from.slice(8, 10));
+    const r = resolveRows(PARAMS[key], from);
+    return { from, to: dayIso(monthStart, toDay), days: toDay - startDay + 1, value: r.value, stale: r.stale };
+  });
+}
+
+// src/lib/pay/statutory/pfWage.ts
+var PF_WAGE_SIG = { params: ["Money"], ret: "Money" };
+var PF_WAGE_NAME = "pf_wage";
+function refuse2(code, msg) {
+  throw Object.assign(new RangeError(`${code}: ${msg}`), { code });
+}
+function makePfWage(ctx) {
+  const segments = resolveMonthSegments("pf.wageCeiling", ctx.asOf);
+  const monthDays = segments.reduce((s, g) => s + g.days, 0);
+  return (wage) => {
+    const w = wage;
+    if (!w || w.kind !== "money") refuse2("PAY-DSL-TYPE-015", "pf_wage: the wage must be Money");
+    if (w.currency !== ctx.currency) refuse2("PAY-DSL-TYPE-011", `pf_wage: currency mismatch (${w.currency} vs ${ctx.currency})`);
+    if (!(monthDays > 0)) refuse2("PAY-PF-501", `pf_wage: no PF ceiling segments for ${ctx.asOf}`);
+    let minor = 0;
+    for (const g of segments) minor += Math.min(w.minor, Math.round(g.value * 100)) * g.days;
+    return makeMoney(Math.round(minor / monthDays), ctx.currency);
+  };
+}
 export {
   PAYROLL_ROLES,
+  PF_WAGE_NAME,
+  PF_WAGE_SIG,
   TDS_192_NAME,
   TDS_192_SIG,
   TDS_FORMULAS,
@@ -1781,6 +1827,7 @@ export {
   headsFromRoles,
   isTdsCode,
   makeMoney,
+  makePfWage,
   makePostVoucherPayload,
   makeTds192,
   mapCatalog,
