@@ -13,7 +13,11 @@ import pg from 'pg';
 
 const STAGING_REF = 'ivmrlhjrqtwftdlxajxk';
 const PROD_REF = 'rwffxupenwdtrmyabytk';
-const PERIOD = '2026-10';   // fixed: this month has 31 days (the 30-day LOP basis is part of what is checked) and TDS applies from today
+// The month is chosen below: the first 31-day month from this month on that has no finished run. 31 days, because the 30-day
+// loss-of-pay basis is part of what is checked; "from this month on", because switching TDS on applies from today.
+let PERIOD = process.env.R5_PERIOD || '';
+const daysIn = (p) => new Date(Date.UTC(Number(p.slice(0, 4)), Number(p.slice(5, 7)), 0)).getUTCDate();
+const monthsLeftOf = (p) => { const m = Number(p.slice(5, 7)); return m >= 4 ? 12 - (m - 4) : 4 - m; };   // April = 12 … March = 1 (the Salary page's own count)
 
 const env = Object.fromEntries(
   fs.readFileSync('.env.staging.local', 'utf8').split('\n').filter((l) => /^[A-Z_]+=/.test(l)).map((l) => [l.split('=')[0], l.slice(l.indexOf('=') + 1).trim()]),
@@ -69,17 +73,21 @@ async function connectDb() {
 // ── the three demo employees and what the SALARY page's own code gives for each (October 2026, rupees) ──────
 // Payroll side, permanent type: DA = 20% and HRA = 40% of basic, PF = 12% × min(basic×120%, ₹25,000) × paid/30,
 // loss of pay = 160% of basic × lopDays/30, TDS = cumulative rule on (basic+DA+HRA)×12, PT = a hand-entered fixed amount.
-const DEMOS = [
-  { key: 'A', name: 'DEMO-R5-A', basic: 80000, lop: 0, tds: true, pt: 200,
-    expect: { gross: 128000, PF: 3000, LOP: 0, TDS: 17186, PT: 200, net: 107614 },
-    salaryPage: { gross: 128000, PF: 3000, ESI: 0, TDS: 17186, PT: 200, net: 107614 } },
-  { key: 'B', name: 'DEMO-R5-B', basic: 10000, lop: 0, tds: false, pt: 0,
-    expect: { gross: 16000, PF: 1440, LOP: 0, TDS: 0, PT: 0, net: 14560 },
-    salaryPage: { gross: 16000, PF: 1200, ESI: 120, TDS: 0, PT: 0, net: 14680 } },
-  { key: 'C', name: 'DEMO-R5-C', basic: 20000, lop: 3, tds: false, pt: 0,
-    expect: { gross: 32000, PF: 2592, LOP: 3200, TDS: 0, PT: 0, net: 26208 },
-    salaryPage: { gross: 28903.23, PF: 2167.74, ESI: 0, TDS: 0, PT: 0, net: 26735.49 } },
-];
+const demosFor = (monthsLeft) => {
+  const tds = Math.round(103116 / monthsLeft);   // A: gross ₹1,28,000 × 12 → ₹1,03,116 tax for FY 2026-27 (new regime), spread over the months left
+  return [
+    { key: 'A', name: 'DEMO-R5-A', basic: 80000, lop: 0, tds: true, pt: 200,
+      expect: { gross: 128000, PF: 3000, LOP: 0, TDS: tds, PT: 200, net: 128000 - 3000 - tds - 200 },
+      salaryPage: { gross: 128000, PF: 3000, ESI: 0, TDS: tds, PT: 200, net: 128000 - 3000 - tds - 200 } },
+    { key: 'B', name: 'DEMO-R5-B', basic: 10000, lop: 0, tds: false, pt: 0,
+      expect: { gross: 16000, PF: 1440, LOP: 0, TDS: 0, PT: 0, net: 14560 },
+      salaryPage: { gross: 16000, PF: 1200, ESI: 120, TDS: 0, PT: 0, net: 14680 } },
+    { key: 'C', name: 'DEMO-R5-C', basic: 20000, lop: 3, tds: false, pt: 0,
+      expect: { gross: 32000, PF: 2592, LOP: 3200, TDS: 0, PT: 0, net: 26208 },
+      salaryPage: { gross: 28903.23, PF: 2167.74, ESI: 0, TDS: 0, PT: 0, net: 26735.49 } },   // Salary page: 28 of 31 calendar days
+  ];
+};
+let DEMOS = [];
 
 const email = (await ask('Staging admin email: ')).trim();
 const password = await ask('Password (hidden): ', true);
@@ -92,10 +100,22 @@ try {
   TOKEN = await signIn(email, password);
   console.log('signed in to STAGING');
 
-  step(`0. the month ${PERIOD} must be free of any verified / locked / posted / paid run`);
-  const taken = (await db.query(`select count(*)::int n from pay_calc.payroll_run where period::text = $1 and state in ('verified','approved','locked','posted','paid')`, [PERIOD])).rows[0].n;
-  ok(taken === 0, `no run of ${PERIOD} is past draft (found ${taken})`);
-  if (taken) throw new Error(`${PERIOD} already has a finished run on staging`);
+  step('0. pick a 31-day month with no verified / locked / posted / paid run');
+  const takenSet = new Set((await db.query(`select period::text p from pay_calc.payroll_run where state in ('verified','approved','locked','posted','paid')`)).rows.map((r) => r.p));
+  const fy = (await db.query(`select start_date::text s, end_date::text e from public.financial_years where status = 'open' order by start_date limit 1`)).rows[0];
+  ok(!!fy, `an open financial year exists (${fy ? fy.s + ' .. ' + fy.e : 'none'})`);
+  if (!fy) throw new Error('no open financial year');
+  if (!PERIOD) {
+    const n = new Date(); const cur = `${n.getUTCFullYear()}-${String(n.getUTCMonth() + 1).padStart(2, '0')}`;
+    for (let d = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1)); d <= new Date(fy.e + 'T00:00:00Z') && !PERIOD; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
+      const p = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+      if (p >= cur && daysIn(p) === 31 && !takenSet.has(p)) PERIOD = p;
+    }
+  }
+  ok(!!PERIOD && !takenSet.has(PERIOD) && daysIn(PERIOD) === 31, `month ${PERIOD} has 31 days, is inside the open year and has no finished run`);
+  if (!PERIOD || takenSet.has(PERIOD) || daysIn(PERIOD) !== 31) throw new Error('no suitable 31-day month is free');
+  DEMOS = demosFor(monthsLeftOf(PERIOD));
+  console.log(`  (TDS for A in ${PERIOD}: ₹1,03,116 ÷ ${monthsLeftOf(PERIOD)} months left = ₹${DEMOS[0].expect.TDS})`);
 
   step('1. add the three demo employees (permanent, joined 2026-04-01)');
   for (const d of DEMOS) {
