@@ -231,7 +231,7 @@ try {
       join pay_core.employee e on e.id = p.employee_id
       join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and p.employee_id <> $2 and cc.code = 'PT' and pl.computed_minor > 0`, [runId, tdsEmpId])).rows;
     // a leftover "Cycle TDS" employee of an EARLIER run (could not be deactivated the same day) still has its own hand-entered PT — not a bug
-    const ptReal = ptOthers.filter((r) => !/^Cycle TDS/.test(r.nm));
+    const ptReal = ptOthers.filter((r) => !/^(Cycle TDS|DEMO-R5)/.test(r.nm));   // test employees of earlier scripts that could not be deactivated the same day
     ok(ptReal.length === 0, `no other employee got a PT deduction (it is per employee, by hand)${ptReal.length ? ' — got: ' + ptReal.map((r) => r.nm + ' ' + r.c).join(', ') : ''}`);
     if (ptOthers.length) console.log(`  ! note: ${ptOthers.length} leftover "Cycle TDS" employee(s) from earlier runs also carry PT ₹200 (${ptOthers.map((r) => r.c).join(', ')}) — run CLEANUP_ONLY=1 tomorrow`);
     ptLeftover = ptOthers.length;
