@@ -1282,6 +1282,13 @@ const Payroll: React.FC = () => {
 
             <div className="border-t pt-3 space-y-2">
               <Label className="text-sm font-medium">{hi ? 'अग्रिम / ऋण' : 'Advance / loan'}</Label>
+              {/* Recording a loan here does NOT post anything to the ledger — only the monthly RECOVERY is posted (it credits the
+                  "Advance to Employees" head). Without the advance itself being booked, that account goes into credit. Say so. */}
+              <p className="text-[11px] rounded-md border border-amber-300 bg-amber-50 text-amber-900 p-2">
+                {hi
+                  ? 'ध्यान दें: यहाँ अग्रिम दर्ज करने से बही में कुछ नहीं चढ़ता — सिर्फ़ हर महीने की वसूली चढ़ती है। अग्रिम का भुगतान बही में अलग voucher से दर्ज करें (डेबिट: कर्मचारियों को अग्रिम / Advance to Employees), वरना वह खाता क्रेडिट में दिखेगा।'
+                  : 'Note: recording an advance here posts nothing to the ledger — only each month\'s recovery is posted. Book the advance itself with a separate voucher (Dr: Advance to Employees), otherwise that account will show a credit balance.'}
+              </p>
               {loans.filter((l) => l.status === 'active').map((l) => {
                 const outstanding = Number(l.principal_minor) - Number(l.recovered_minor);
                 return (
