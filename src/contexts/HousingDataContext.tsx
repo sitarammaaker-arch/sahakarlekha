@@ -25,7 +25,7 @@ import { fetchAllPaged } from '@/lib/supabasePaging';
 import { resolveJurisdiction } from '@/lib/jurisdiction';
 import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
-import { ACCOUNT_IDS, getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
+import { ACCOUNT_IDS, getBankAccountIds, defaultBankAccountId, defaultDebtorsAccountId } from '@/lib/storage';
 import { computeBillLines, demandLegs, billTotal, round2, gstLineForBill } from '@/lib/housing/billing';
 import { plannedBillInterest } from '@/lib/housing/arrears';
 import { buildMemberStatement } from '@/lib/housing/statement';
@@ -310,7 +310,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const recCache = new Map<string, string>();
     const flatRecUpdates = new Map<string, string>();  // flatId → receivableAccountId to backfill
     const resolveReceivable = (memberId?: string): string => {
-      if (!memberId) return '3303';
+      if (!memberId) return defaultDebtorsAccountId(accounts);
       const cached = recCache.get(memberId);
       if (cached) return cached;
       const existing = housingFlats.find(f => !f.isDeleted && f.memberId === memberId && f.receivableAccountId && accounts.some(a => a.id === f.receivableAccountId))?.receivableAccountId;
@@ -423,7 +423,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'भुगतान राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
     if (data.amount > outstanding) { toastRef.current({ title: 'राशि बकाया से अधिक', description: `भुगतान ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकता।`, variant: 'destructive', duration: 9000 }); return sentinel; }
     // Credit the exact account the demand debited (owner-member sub-ledger, or the 3303 control).
-    const creditAcc = bill.receivableAccountId || '3303';
+    const creditAcc = bill.receivableAccountId || defaultDebtorsAccountId(accounts);
     const debitAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
@@ -520,7 +520,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     for (const bill of openBills) {
       const p = plannedBillInterest(bill, vouchers, data.asOnDate, data.annualRatePct);
       if (p.amount <= 0) continue;
-      const rec = bill.receivableAccountId || '3303';
+      const rec = bill.receivableAccountId || defaultDebtorsAccountId(accounts);
       const v = addVoucher({
         type: 'journal', date: data.asOnDate,
         debitAccountId: rec, creditAccountId: '4402', amount: p.amount,

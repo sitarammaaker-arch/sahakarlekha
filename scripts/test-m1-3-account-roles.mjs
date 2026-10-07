@@ -82,7 +82,7 @@ const pacs = proposeRoleMap(SOCIETY_TEMPLATES.pacs);
 ok('PACS customer.receivable: 3303 (KCC loans) flagged, not proposed', role(pacs, 'customer.receivable').accountId === null && role(pacs, 'customer.receivable').idCollision?.id === '3303');
 ok('PACS member.loan.kcc → 3303', role(pacs, 'member.loan.kcc').accountId === '3303');
 const cms = proposeRoleMap(SOCIETY_TEMPLATES.marketing_processing);
-ok('CMS customer.receivable → 3303 (Sundry Debtors)', role(cms, 'customer.receivable').accountId === '3303');
+ok('CMS customer.receivable → 3303-01 (Sundry Debtors — General, the catch-all under the 3303 group)', role(cms, 'customer.receivable').accountId === '3303-01');
 ok('CMS loan.interest_receivable prefers 3313 (member loan interest)', role(cms, 'loan.interest_receivable').accountId === '3313');
 const housing = proposeRoleMap(SOCIETY_TEMPLATES.housing);
 ok('Housing professional_tax.payable: 2207 (Property Tax) flagged', role(housing, 'professional_tax.payable').accountId === null && role(housing, 'professional_tax.payable').idCollision?.id === '2207');
