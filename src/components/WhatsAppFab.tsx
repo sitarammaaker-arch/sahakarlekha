@@ -7,7 +7,7 @@ import React from 'react';
 import { WHATSAPP_NUMBER, WHATSAPP_ICON_PATHS, SocialIcon } from '@/lib/socials';
 import { trackEvent } from '@/lib/analytics';
 
-const PREFILL = 'नमस्ते! मुझे SahakarLekha (सहकारलेखा) के बारे में जानकारी चाहिए।';
+const PREFILL = 'नमस्ते! मुझे SahakarLekha (सहकार लेखा) के बारे में जानकारी चाहिए।';
 
 const WhatsAppFab: React.FC = () => {
   if (!WHATSAPP_NUMBER) return null;

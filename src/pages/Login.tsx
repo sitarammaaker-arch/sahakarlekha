@@ -136,7 +136,7 @@ const Login: React.FC = () => {
           <div className="h-24 w-24 rounded-2xl bg-accent text-accent-foreground flex items-center justify-center mb-8 shadow-lg">
             <span className="text-6xl font-bold leading-none">स</span>
           </div>
-          <h1 className="text-4xl font-bold text-center mb-4">समिति लेखा प्रणाली</h1>
+          <h1 className="text-4xl font-bold text-center mb-4">सहकार लेखा</h1>
           <p className="text-xl text-center text-primary-foreground/80 mb-2">
             Cooperative Society Accounting System
           </p>
@@ -181,7 +181,7 @@ const Login: React.FC = () => {
           <div className="h-16 w-16 rounded-xl bg-accent text-accent-foreground flex items-center justify-center mx-auto mb-4 shadow-md">
             <span className="text-4xl font-bold leading-none">स</span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">समिति लेखा प्रणाली</h1>
+          <h1 className="text-2xl font-bold text-foreground">सहकार लेखा</h1>
         </div>
 
         <Card className="w-full max-w-md shadow-card">
@@ -349,7 +349,7 @@ const Login: React.FC = () => {
 
         {/* Footer */}
         <p className="mt-4 text-sm text-muted-foreground text-center">
-          © 2024 समिति लेखा प्रणाली | {language === 'hi' ? 'सभी अधिकार सुरक्षित' : 'All rights reserved'}
+          © {new Date().getFullYear()} सहकार लेखा (SahakarLekha) | {language === 'hi' ? 'सभी अधिकार सुरक्षित' : 'All rights reserved'}
         </p>
       </div>
 

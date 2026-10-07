@@ -701,7 +701,7 @@ const SaleManagement: React.FC = () => {
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span>{language === 'hi' ? 'उपयोग कुल' : 'Subtotal'}</span>
+                  <span>{language === 'hi' ? 'उप-योग' : 'Subtotal'}</span>
                   <span>{fmt(totalAmount)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-4">
@@ -1048,7 +1048,7 @@ const SaleManagement: React.FC = () => {
 
               <div className="space-y-1 text-sm border-t pt-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">{language === 'hi' ? 'उपयोग कुल' : 'Subtotal'}</span>
+                  <span className="text-gray-500">{language === 'hi' ? 'उप-योग' : 'Subtotal'}</span>
                   <span>{fmt(viewSale.totalAmount)}</span>
                 </div>
                 {viewSale.discount > 0 && (

@@ -103,7 +103,7 @@ const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
 
       <div className="space-y-3">
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="आपका नाम / समिति (वैकल्पिक)" />
-        <Textarea rows={3} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="सहकारलेखा आपके लिए कैसा रहा? (वैकल्पिक)" />
+        <Textarea rows={3} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="सहकार लेखा आपके लिए कैसा रहा? (वैकल्पिक)" />
         <input
           type="text" tabIndex={-1} autoComplete="off" aria-hidden="true"
           value={company} onChange={(e) => setCompany(e.target.value)}

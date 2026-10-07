@@ -724,7 +724,7 @@ const PurchaseManagement: React.FC = () => {
               <CardContent className="space-y-2 text-sm">
                 {/* Subtotal */}
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{language === 'hi' ? 'उपयोग कुल' : 'Subtotal'}</span>
+                  <span className="text-muted-foreground">{language === 'hi' ? 'उप-योग' : 'Subtotal'}</span>
                   <span>{fmt(totalAmount)}</span>
                 </div>
                 {/* Discount */}
@@ -1177,7 +1177,7 @@ const PurchaseManagement: React.FC = () => {
 
               <div className="space-y-1 text-sm text-right border-t pt-2">
                 <div className="flex justify-between">
-                  <span>{language === 'hi' ? 'उपयोग कुल' : 'Subtotal'}</span>
+                  <span>{language === 'hi' ? 'उप-योग' : 'Subtotal'}</span>
                   <span>{fmt(viewPurchase.totalAmount)}</span>
                 </div>
                 {(viewPurchase.discount || 0) > 0 && (
