@@ -200,7 +200,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Charge head save error:', error.message); reportError('housing-save', error.message);
         setChargeHeadsState(prev => { const r = prev.filter(h => h.id !== head.id); storage.setHousingChargeHeads(r); return r; });
-        toastRef.current({ title: 'शुल्क मद सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'शुल्क मद सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return head;
@@ -216,7 +216,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Charge head update error:', error.message); reportError('housing-save', error.message);
         setChargeHeadsState(prev => { const u = prev.map(h => h.id === id ? old : h); storage.setHousingChargeHeads(u); return u; });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [chargeHeads]);
@@ -229,7 +229,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Charge head delete error:', error.message); reportError('housing-save', error.message);
         if (old) setChargeHeadsState(prev => { const u = [...prev, old]; storage.setHousingChargeHeads(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [chargeHeads]);
@@ -243,7 +243,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Housing flat save error:', error.message); reportError('housing-save', error.message);
         setHousingFlatsState(prev => { const r = prev.filter(f => f.id !== flat.id); storage.setHousingFlats(r); return r; });
-        toastRef.current({ title: 'फ्लैट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'फ्लैट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return flat;
@@ -259,7 +259,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Housing flat update error:', error.message); reportError('housing-save', error.message);
         setHousingFlatsState(prev => { const u = prev.map(f => f.id === id ? old : f); storage.setHousingFlats(u); return u; });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [housingFlats]);
@@ -280,7 +280,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Housing flat delete error:', error.message); reportError('housing-save', error.message);
         if (old) setHousingFlatsState(prev => { const u = [...prev, old]; storage.setHousingFlats(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [housingFlats, maintenanceBills]);
@@ -405,7 +405,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Maintenance bill delete error:', error.message); reportError('housing-save', error.message);
         setMaintenanceBillsState(prev => { const u = [...prev, bill]; storage.setMaintenanceBills(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
     return true;
@@ -450,7 +450,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         console.error('Maintenance collection bill-update error:', error.message); reportError('housing-save', error.message);
         setMaintenanceBillsState(prev => { const u = prev.map(b => b.id === bill.id ? bill : b); storage.setMaintenanceBills(u); return u; });
         cancelVoucher(voucher.id, 'Maintenance collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'वसूली सेव नहीं हुई', description: `Cloud save fail — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'वसूली सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
       }
     });
     toastRef.current({ title: 'वसूली दर्ज हुई', description: `${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'पूर्ण' : 'आंशिक'}`, duration: 6000 });
@@ -572,7 +572,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         console.error('Fund investment save error:', error.message); reportError('housing-save', error.message);
         setFundInvestmentsState(prev => { const r = prev.filter(x => x.id !== inv.id); storage.setHousingFundInvestments(r); return r; });
         cancelVoucher(v.id, 'Fund investment save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'निवेश सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. इसका voucher वापस ले लिया गया।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'निवेश सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. इसका voucher वापस ले लिया गया।`, variant: 'destructive', duration: 12000 });
       }
     });
     toastRef.current({ title: 'निधि निवेश दर्ज', description: `${fund.nameHi || fund.name} · ₹${data.amount}`, duration: 6000 });
@@ -612,7 +612,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         console.error('Fund investment redeem error:', error.message); reportError('housing-save', error.message);
         setFundInvestmentsState(prev => { const u = prev.map(i => i.id === inv.id ? inv : i); storage.setHousingFundInvestments(u); return u; });
         cancelVoucher(v.id, 'Redemption rolled back (row update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'भुनाना सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'भुनाना सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
     toastRef.current({ title: 'निवेश भुनाया गया', description: `₹${gross} बैंक में वापस${interest > 0 ? ` · ब्याज ₹${interest} निधि में` : ''}`, duration: 6000 });
@@ -633,7 +633,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Fund investment delete error:', error.message); reportError('housing-save', error.message);
         setFundInvestmentsState(prev => { const u = [...prev, inv]; storage.setHousingFundInvestments(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [fundInvestments, cancelVoucher, user]);
@@ -648,7 +648,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Complaint save error:', error.message); reportError('housing-save', error.message);
         setComplaintsState(prev => { const r = prev.filter(x => x.id !== c.id); storage.setHousingComplaints(r); return r; });
-        toastRef.current({ title: 'शिकायत सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'शिकायत सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return c;
@@ -664,7 +664,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Complaint update error:', error.message); reportError('housing-save', error.message);
         setComplaintsState(prev => { const u = prev.map(c => c.id === id ? old : c); storage.setHousingComplaints(u); return u; });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [complaints]);
@@ -677,7 +677,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Complaint delete error:', error.message); reportError('housing-save', error.message);
         if (old) setComplaintsState(prev => { const u = [...prev, old]; storage.setHousingComplaints(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [complaints]);
@@ -691,7 +691,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Parking save error:', error.message); reportError('housing-save', error.message);
         setParkingState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingParking(r); return r; });
-        toastRef.current({ title: 'पार्किंग सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'पार्किंग सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return p;
@@ -707,7 +707,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Parking update error:', error.message); reportError('housing-save', error.message);
         setParkingState(prev => { const u = prev.map(p => p.id === id ? old : p); storage.setHousingParking(u); return u; });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [parkingSlots]);
@@ -720,7 +720,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Parking delete error:', error.message); reportError('housing-save', error.message);
         if (old) setParkingState(prev => { const u = [...prev, old]; storage.setHousingParking(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [parkingSlots]);
@@ -775,7 +775,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         setTransfersState(prev => { const r = prev.filter(x => x.id !== t.id); storage.setHousingTransfers(r); return r; });
         updateHousingFlat(flat.id, { memberId: oldOwner, receivableAccountId: flat.receivableAccountId, associateMemberId: flat.associateMemberId, nomineeName: flat.nomineeName, nomineeRelation: flat.nomineeRelation, nomineePhone: flat.nomineePhone });
         if (voucherId) cancelVoucher(voucherId, 'Transfer save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'हस्तांतरण सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. मालिक व शुल्क वापस ले लिए गए।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'हस्तांतरण सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. मालिक व शुल्क वापस ले लिए गए।`, variant: 'destructive', duration: 12000 });
       }
     });
     toastRef.current({ title: 'फ्लैट हस्तांतरित', description: `${flat.flatNo}${fee + prem > 0 ? ` · ₹${round2(fee + prem)}` : ''}`, duration: 6000 });
@@ -793,7 +793,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Transfer delete error:', error.message); reportError('housing-save', error.message);
         setTransfersState(prev => { const u = [...prev, t]; storage.setHousingTransfers(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [transfers, cancelVoucher, user]);
@@ -807,7 +807,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Insurance save error:', error.message); reportError('housing-save', error.message);
         setInsurancesState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingInsurance(r); return r; });
-        toastRef.current({ title: 'बीमा सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'बीमा सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return p;
@@ -819,7 +819,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const updated = { ...old, ...data };
     setInsurancesState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingInsurance(u); return u; });
     supabase.from('housing_insurance').upsert(withSoc(updated)).then(({ error }) => {
-      if (error) { console.error('Insurance update error:', error.message); reportError('housing-save', error.message); setInsurancesState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingInsurance(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('Insurance update error:', error.message); reportError('housing-save', error.message); setInsurancesState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingInsurance(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
     });
   }, [insurances]);
   const deleteInsurance = useCallback((id: string) => {
@@ -827,7 +827,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const old = insurances.find(x => x.id === id);
     setInsurancesState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingInsurance(u); return u; });
     supabase.from('housing_insurance').delete().eq('id', id).then(({ error }) => {
-      if (error) { console.error('Insurance delete error:', error.message); reportError('housing-save', error.message); if (old) setInsurancesState(prev => { const u = [...prev, old]; storage.setHousingInsurance(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('Insurance delete error:', error.message); reportError('housing-save', error.message); if (old) setInsurancesState(prev => { const u = [...prev, old]; storage.setHousingInsurance(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
     });
   }, [insurances]);
 
@@ -840,7 +840,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('AMC save error:', error.message); reportError('housing-save', error.message);
         setAmcsState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingAmc(r); return r; });
-        toastRef.current({ title: 'AMC सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'AMC सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return p;
@@ -852,7 +852,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const updated = { ...old, ...data };
     setAmcsState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingAmc(u); return u; });
     supabase.from('housing_amc').upsert(withSoc(updated)).then(({ error }) => {
-      if (error) { console.error('AMC update error:', error.message); reportError('housing-save', error.message); setAmcsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingAmc(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('AMC update error:', error.message); reportError('housing-save', error.message); setAmcsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingAmc(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
     });
   }, [amcs]);
   const deleteAmc = useCallback((id: string) => {
@@ -860,7 +860,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const old = amcs.find(x => x.id === id);
     setAmcsState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingAmc(u); return u; });
     supabase.from('housing_amc').delete().eq('id', id).then(({ error }) => {
-      if (error) { console.error('AMC delete error:', error.message); reportError('housing-save', error.message); if (old) setAmcsState(prev => { const u = [...prev, old]; storage.setHousingAmc(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('AMC delete error:', error.message); reportError('housing-save', error.message); if (old) setAmcsState(prev => { const u = [...prev, old]; storage.setHousingAmc(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
     });
   }, [amcs]);
 
@@ -873,7 +873,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Document save error:', error.message); reportError('housing-save', error.message);
         setDocumentsState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingDocuments(r); return r; });
-        toastRef.current({ title: 'दस्तावेज़ सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'दस्तावेज़ सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return p;
@@ -885,7 +885,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const updated = { ...old, ...data };
     setDocumentsState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingDocuments(u); return u; });
     supabase.from('housing_documents').upsert(withSoc(updated)).then(({ error }) => {
-      if (error) { console.error('Document update error:', error.message); reportError('housing-save', error.message); setDocumentsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingDocuments(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('Document update error:', error.message); reportError('housing-save', error.message); setDocumentsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingDocuments(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
     });
   }, [documents]);
   const deleteDocument = useCallback((id: string) => {
@@ -893,7 +893,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const old = documents.find(x => x.id === id);
     setDocumentsState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingDocuments(u); return u; });
     supabase.from('housing_documents').delete().eq('id', id).then(({ error }) => {
-      if (error) { console.error('Document delete error:', error.message); reportError('housing-save', error.message); if (old) setDocumentsState(prev => { const u = [...prev, old]; storage.setHousingDocuments(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('Document delete error:', error.message); reportError('housing-save', error.message); if (old) setDocumentsState(prev => { const u = [...prev, old]; storage.setHousingDocuments(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
     });
   }, [documents]);
 
@@ -906,7 +906,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Building save error:', error.message); reportError('housing-save', error.message);
         setBuildingsState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingBuildings(r); return r; });
-        toastRef.current({ title: 'भवन सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'भवन सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return p;
@@ -918,7 +918,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const updated = { ...old, ...data };
     setBuildingsState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingBuildings(u); return u; });
     supabase.from('housing_buildings').upsert(withSoc(updated)).then(({ error }) => {
-      if (error) { console.error('Building update error:', error.message); reportError('housing-save', error.message); setBuildingsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingBuildings(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('Building update error:', error.message); reportError('housing-save', error.message); setBuildingsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingBuildings(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
     });
   }, [buildings]);
   const deleteBuilding = useCallback((id: string) => {
@@ -926,7 +926,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const old = buildings.find(x => x.id === id);
     setBuildingsState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingBuildings(u); return u; });
     supabase.from('housing_buildings').delete().eq('id', id).then(({ error }) => {
-      if (error) { console.error('Building delete error:', error.message); reportError('housing-save', error.message); if (old) setBuildingsState(prev => { const u = [...prev, old]; storage.setHousingBuildings(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('Building delete error:', error.message); reportError('housing-save', error.message); if (old) setBuildingsState(prev => { const u = [...prev, old]; storage.setHousingBuildings(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
     });
   }, [buildings]);
 

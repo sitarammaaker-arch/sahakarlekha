@@ -142,7 +142,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Worker save error:', error.message);
         setWorkersState(prev => { const r = prev.filter(x => x.id !== w.id); storage.setWorkers(r); return r; });
-        toastRef.current({ title: 'श्रमिक सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'श्रमिक सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return w;
@@ -158,7 +158,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Worker update error:', error.message);
         setWorkersState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setWorkers(u); return u; });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [workers, society, user]);
@@ -178,7 +178,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Worker delete error:', error.message);
         if (old) setWorkersState(prev => { const u = [...prev, old]; storage.setWorkers(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [workers, workerAdvances, society, user]);
@@ -206,7 +206,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('Department save error:', error.message);
         setDepartmentsState(prev => { const r = prev.filter(d => d.id !== dep.id); storage.setDepartments(r); return r; });
         deleteAccount(account.id);   // roll back the orphan sub-ledger (brand new, no refs)
-        toastRef.current({ title: 'विभाग सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'विभाग सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return dep;
@@ -224,7 +224,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('Department update error:', error.message);
         setDepartmentsState(prev => { const u = prev.map(d => d.id === id ? old : d); storage.setDepartments(u); return u; });
         if (data.name && data.name !== old.name) updateAccount(old.accountId, { name: old.name, nameHi: old.name });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [departments, society, user, updateAccount]);
@@ -256,7 +256,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Department delete error:', error.message);
         setDepartmentsState(prev => { const u = [...prev, old]; storage.setDepartments(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         return;
       }
       // Preserve audit tie-out: rename the sub-ledger if any voucher references it, else drop it.
@@ -297,7 +297,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('Department bill save error:', error.message);
         setDepartmentBillsState(prev => { const r = prev.filter(b => b.id !== bill.id); storage.setDepartmentBills(r); return r; });
         cancelVoucher(voucher.id, 'Department bill rolled back (save failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'बिल सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. बिल वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'बिल सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. बिल वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
       }
     });
     toastRef.current({ title: 'विभाग बिल दर्ज हुआ', description: `${billNo} · ${dept.name} · ₹${data.amount}`, duration: 6000 });
@@ -347,7 +347,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('Department collection bill-update error:', error.message);
         setDepartmentBillsState(prev => { const u = prev.map(b => b.id === bill.id ? bill : b); storage.setDepartmentBills(u); return u; });
         cancelVoucher(voucher.id, 'Department collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'वसूली सेव नहीं हुई', description: `Cloud save fail — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'वसूली सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
       }
     });
     toastRef.current({ title: 'वसूली दर्ज हुई', description: `${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'पूर्ण' : 'आंशिक'}`, duration: 6000 });
@@ -363,7 +363,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Department bill delete error:', error.message);
         setDepartmentBillsState(prev => { const u = [...prev, old]; storage.setDepartmentBills(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         return;
       }
       // Cascade (RULE-3): cancel the bill voucher + all its collection vouchers.
@@ -406,7 +406,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('Worker advance save error:', error.message);
         setWorkerAdvancesState(prev => { const r = prev.filter(a => a.id !== adv.id); storage.setWorkerAdvances(r); return r; });
         cancelVoucher(voucher.id, 'Worker advance rolled back (save failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'अग्रिम सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अग्रिम सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
       }
     });
     toastRef.current({ title: 'श्रमिक अग्रिम दर्ज हुआ', description: `${advanceNo} · ${worker.name} · ₹${data.amount}`, duration: 6000 });
@@ -444,7 +444,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('Advance recovery update error:', error.message);
         setWorkerAdvancesState(prev => { const u = prev.map(a => a.id === adv.id ? adv : a); storage.setWorkerAdvances(u); return u; });
         cancelVoucher(voucher.id, 'Advance recovery rolled back (update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'वसूली सेव नहीं हुई', description: `Cloud save fail — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'वसूली सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
       }
     });
     toastRef.current({ title: 'अग्रिम वसूली दर्ज हुई', description: `${adv.advanceNo} · ₹${data.amount} · ${next.status === 'cleared' ? 'पूर्ण' : 'आंशिक'}`, duration: 6000 });
@@ -460,7 +460,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Worker advance delete error:', error.message);
         setWorkerAdvancesState(prev => { const u = [...prev, old]; storage.setWorkerAdvances(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         return;
       }
       const okAdv = !old.voucherId || cancelVoucher(old.voucherId, 'Worker advance deleted', user?.name || 'System', { viaParent: true });   // H / RULE 3
@@ -533,7 +533,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('PF/ESI run save error:', error.message);
         setPfEsiRunsState(prev => { const r = prev.filter(x => x.id !== run.id); storage.setPfEsiRuns(r); return r; });
         cancelVoucher(voucher.id, 'PF/ESI run rolled back (save failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'EPF/ESI सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'EPF/ESI सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
       }
     });
     toastRef.current({ title: 'EPF/ESI देयता दर्ज हुई', description: `${period} · EPF ₹${epfTotal} · ESI ₹${esiTotal}`, duration: 6000 });
@@ -571,7 +571,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('PF/ESI deposit update error:', error.message);
         setPfEsiRunsState(prev => { const u = prev.map(r => r.id === run.id ? run : r); storage.setPfEsiRuns(u); return u; });
         cancelVoucher(voucher.id, 'PF/ESI deposit rolled back (update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'जमा सेव नहीं हुई', description: `Cloud save fail — ${error.message}. वापस ले लिया गया।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'जमा सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया।`, variant: 'destructive', duration: 12000 });
       }
     });
     toastRef.current({ title: 'EPF/ESI जमा दर्ज हुई', description: `${run.period} · ₹${total}`, duration: 6000 });
@@ -587,7 +587,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('PF/ESI run delete error:', error.message);
         setPfEsiRunsState(prev => { const u = [...prev, old]; storage.setPfEsiRuns(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
         return;
       }
       const okRun = !old.voucherId || cancelVoucher(old.voucherId, 'PF/ESI run deleted', user?.name || 'System', { viaParent: true });   // H / RULE 3

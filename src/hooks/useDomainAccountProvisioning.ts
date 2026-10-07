@@ -82,7 +82,7 @@ export function useDomainAccountProvisioning(): DomainAccountProvisioning {
       if (created.length === 0) return; // addAccount bailed on a guard and already toasted
       toast({
         title: `${created.length} डोमेन खाते जोड़े गए`,
-        description: `${created.map(a => a.nameHi || a.name).join(', ')}. Cloud save fail हुआ तो लाल चेतावनी आएगी और वह खाता हट जाएगा।`,
+        description: `${created.map(a => a.nameHi || a.name).join(', ')}. क्लाउड में सेव न हो तो लाल चेतावनी आएगी और वह खाता हट जाएगा।`,
         duration: 10000,
       });
     } finally {

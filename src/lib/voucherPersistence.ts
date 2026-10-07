@@ -62,8 +62,8 @@ export interface ExtrasToast {
 export function extrasFailureToast(hasCritical: boolean, message: string): ExtrasToast {
   if (hasCritical) {
     return {
-      title: '❌ Approval/audit data cloud par save NAHI hua',
-      description: `Voucher to save ho gaya, par approval-status / edit-history cloud tak nahi pahunchi: ${message}. Latest supabase-tables.sql migration chalayein — warna refresh par yeh data lose ho sakta hai.`,
+      title: '❌ अनुमोदन/ऑडिट जानकारी क्लाउड में सेव नहीं हुई',
+      description: `वाउचर सेव हो गया, पर अनुमोदन-स्थिति / बदलाव-इतिहास क्लाउड तक नहीं पहुँचा: ${message}। नवीनतम supabase-tables.sql migration चलाएँ — वरना refresh करने पर यह जानकारी खो सकती है।`,
       variant: 'destructive',
       duration: 14000,
     };

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { MemberPicker } from '@/components/MemberPicker';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -30,7 +31,7 @@ import { generateVoucherPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import type { VoucherType, VoucherLine } from '@/types';
+import type { Voucher, VoucherType, VoucherLine } from '@/types';
 import { Plus, Minus } from 'lucide-react';
 import { getNextVoucherNo, VOUCHER_TEMPLATES, ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { availableTemplates } from '@/lib/voucherTemplateAvailability';
@@ -131,6 +132,24 @@ const Vouchers: React.FC = () => {
   const [reverseReason, setReverseReason] = useState('');
   const [showCancelled, setShowCancelled] = useState(false);
   const [savedVoucherNo, setSavedVoucherNo] = useState<string | null>(null);
+  // Usability audit P0-7: the form is cleared (and "saved" shown) only once the cloud confirms the save.
+  // If the save fails, addVoucher rolls the row back + shows why, and everything typed stays in the form
+  // so the user can simply press Save again. `saving` also blocks a double submit meanwhile.
+  const [saving, setSaving] = useState(false);
+  const saveOpts = (mode: string, title: { hi: string; en: string }) => {
+    const safety = window.setTimeout(() => setSaving(false), 30000); // never leave the button stuck
+    return {
+      onSaved: (sv: Voucher) => {
+        window.clearTimeout(safety);
+        setSaving(false);
+        setSavedVoucherNo(sv.voucherNo);
+        toast({ title: language === 'hi' ? title.hi : title.en, description: sv.voucherNo });
+        trackEvent('voucher_created', { type: sv.type, mode });
+        handleClear();
+      },
+      onFailed: () => { window.clearTimeout(safety); setSaving(false); },
+    };
+  };
   // ── Admin-only bulk cancel ────────────────────────────────────────────────
   // Multi-select cancellation of vouchers. ADMIN role only (this is the most
   // destructive bulk op). Everything routes through the same guarded cancelVoucher
@@ -365,6 +384,7 @@ const Vouchers: React.FC = () => {
     }));
     const drAccId = lines.find(l => l.type === 'Dr')?.accountId || '';
     const crAccId = lines.find(l => l.type === 'Cr')?.accountId || '';
+    setSaving(true);
     const v = addVoucher({
       type: voucherType,
       date: voucherDate,
@@ -378,13 +398,9 @@ const Vouchers: React.FC = () => {
       voucherNo: customNo || undefined,
       approvalStatus: submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
-    });
+    }, saveOpts('expert', { hi: 'वाउचर सहेजा गया', en: 'Voucher saved' }));
     // addVoucher refuses (permission / FY lock / plan) with an empty id and has already shown why — never claim "saved".
-    if (!v?.id) return;
-    setSavedVoucherNo(v.voucherNo);
-    toast({ title: language === 'hi' ? 'वाउचर सहेजा गया' : 'Voucher saved', description: v.voucherNo });
-    if (v.id) trackEvent('voucher_created', { type: v.type, mode: 'expert' });
-    handleClear();
+    if (!v?.id) { setSaving(false); return; }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -401,6 +417,7 @@ const Vouchers: React.FC = () => {
         return;
       }
       const customNo = voucherNoInput.trim();
+      setSaving(true);
       const v = addVoucher({
         type: 'contra',
         date: voucherDate,
@@ -412,13 +429,9 @@ const Vouchers: React.FC = () => {
         voucherNo: customNo || undefined,
         approvalStatus: submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
-      });
+      }, saveOpts('contra', { hi: 'कोंट्रा वाउचर सहेजा गया', en: 'Contra Voucher saved' }));
       // addVoucher refuses (permission / FY lock / plan) with an empty id and has already shown why — never claim "saved".
-      if (!v?.id) return;
-      setSavedVoucherNo(v.voucherNo);
-      toast({ title: language === 'hi' ? 'कोंट्रा वाउचर सहेजा गया' : 'Contra Voucher saved', description: v.voucherNo });
-    if (v.id) trackEvent('voucher_created', { type: v.type, mode: 'contra' });
-      handleClear();
+      if (!v?.id) { setSaving(false); return; }
       return;
     }
     // ── Double-entry validation (6 rules) ────────────────────────────────────
@@ -435,6 +448,7 @@ const Vouchers: React.FC = () => {
       toast({ title: language === 'hi' ? 'यह वाउचर नंबर पहले से मौजूद है' : 'Voucher number already exists', variant: 'destructive' });
       return;
     }
+    setSaving(true);
     const v = addVoucher({
       type: voucherType,
       date: voucherDate,
@@ -447,13 +461,9 @@ const Vouchers: React.FC = () => {
       voucherNo: customNo || undefined,
       approvalStatus: submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
-    });
+    }, saveOpts('simple', { hi: 'वाउचर सहेजा गया', en: 'Voucher saved' }));
     // addVoucher refuses (permission / FY lock / plan) with an empty id and has already shown why — never claim "saved".
-    if (!v?.id) return;
-    setSavedVoucherNo(v.voucherNo);
-    toast({ title: language === 'hi' ? 'वाउचर सहेजा गया' : 'Voucher saved', description: `${v.voucherNo}` });
-    if (v.id) trackEvent('voucher_created', { type: v.type, mode: 'simple' });
-    handleClear();
+    if (!v?.id) { setSaving(false); return; }
   };
 
   const handleClear = () => {
@@ -808,17 +818,7 @@ const Vouchers: React.FC = () => {
                           <Label className="text-base font-semibold">
                             {language === 'hi' ? 'सदस्य से लिंक करें (वैकल्पिक)' : 'Link to Member (Optional)'}
                           </Label>
-                          <Select value={linkedMemberId || '__none__'} onValueChange={v => setLinkedMemberId(v === '__none__' ? '' : v)}>
-                            <SelectTrigger className="h-11">
-                              <SelectValue placeholder={language === 'hi' ? 'कोई सदस्य नहीं' : 'No member linked'} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">{language === 'hi' ? 'कोई नहीं' : 'None'}</SelectItem>
-                              {members.map(m => (
-                                <SelectItem key={m.id} value={m.id}>{m.memberId} — {m.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <MemberPicker value={linkedMemberId} onChange={setLinkedMemberId} />
                         </div>
                       )}
                       <div className="flex items-center gap-2 pb-2">
@@ -834,9 +834,9 @@ const Vouchers: React.FC = () => {
                         </label>
                       </div>
                       <div className="flex gap-3 pt-2 border-t">
-                        <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2">
+                        <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2" disabled={saving}>
                           <Save className="h-5 w-5" />
-                          {submitForApproval ? (language === 'hi' ? 'अनुमोदन हेतु भेजें' : 'Submit for Approval') : t('save')}
+                          {saving ? (language === 'hi' ? 'सेव हो रहा है…' : 'Saving…') : submitForApproval ? (language === 'hi' ? 'अनुमोदन हेतु भेजें' : 'Submit for Approval') : t('save')}
                         </Button>
                         <Button type="button" variant="outline" size="lg" className="gap-2" onClick={() => { setSelectedTemplate(null); handleClear(); }}>
                           <X className="h-5 w-5" />
@@ -1110,22 +1110,7 @@ const Vouchers: React.FC = () => {
                         <Label className="text-base font-semibold">
                           {language === 'hi' ? 'सदस्य से लिंक करें (वैकल्पिक)' : 'Link to Member (Optional)'}
                         </Label>
-                        <Select
-                          value={linkedMemberId || '__none__'}
-                          onValueChange={v => setLinkedMemberId(v === '__none__' ? '' : v)}
-                        >
-                          <SelectTrigger className="h-11">
-                            <SelectValue placeholder={language === 'hi' ? 'कोई सदस्य नहीं' : 'No member linked'} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">{language === 'hi' ? 'कोई नहीं' : 'None'}</SelectItem>
-                            {members.map(m => (
-                              <SelectItem key={m.id} value={m.id}>
-                                {m.memberId} — {m.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <MemberPicker value={linkedMemberId} onChange={setLinkedMemberId} />
                         <p className="text-xs text-muted-foreground">
                           {language === 'hi' ? 'यह लेनदेन सदस्य के लेजर में दिखेगा' : 'This transaction will appear in the member\'s share ledger'}
                         </p>
@@ -1145,9 +1130,9 @@ const Vouchers: React.FC = () => {
                       </label>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
-                      <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2" disabled={voucherType !== 'contra' && !linesBalanced}>
+                      <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2" disabled={saving || (voucherType !== 'contra' && !linesBalanced)}>
                         <Save className="h-5 w-5" />
-                        {submitForApproval ? (language === 'hi' ? 'अनुमोदन हेतु भेजें' : 'Submit for Approval') : t('save')}
+                        {saving ? (language === 'hi' ? 'सेव हो रहा है…' : 'Saving…') : submitForApproval ? (language === 'hi' ? 'अनुमोदन हेतु भेजें' : 'Submit for Approval') : t('save')}
                       </Button>
                       <Button type="button" variant="outline" size="lg" className="gap-2" onClick={handleClear}>
                         <X className="h-5 w-5" />

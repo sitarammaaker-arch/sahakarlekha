@@ -169,7 +169,9 @@ interface DataContextType {
   getComplianceFiledIds: () => string[];
   assets: Asset[];
 
-  addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }) => Voucher;
+  /** opts.onSaved fires once the voucher is durably saved in the cloud (any save path); opts.onFailed once a
+   *  save failed and the optimistic row was rolled back. A page should clear its input form only on onSaved. */
+  addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }, opts?: { onSaved?: (v: Voucher) => void; onFailed?: () => void }) => Voucher;
   // Returns true only when the edit passed every guard and was applied. Returns false
   // when a guard blocked it (FY-lock / period-lock / approved-under-maker-checker /
   // engine voucher / unbalanced) — the guard already showed the real reason, so callers
@@ -724,7 +726,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1: roll back so a failed cloud save can't silently diverge on F5
         console.error('Branch save:', error.message);
         setBranchesState(() => { cacheBranches(snapshot); return snapshot; });
-        toastRef.current({ title: 'Branch सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'Branch सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 12000 });
       }
     });
     return branch;
@@ -744,7 +746,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1: restore prior state on failure
         console.error('Branch update:', error.message);
         setBranchesState(() => { cacheBranches(snapshot); return snapshot; });
-        toastRef.current({ title: 'Branch अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'Branch अपडेट नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -759,7 +761,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1: restore the deleted row on failure
         console.error('Branch delete:', error.message);
         setBranchesState(() => { cacheBranches(snapshot); return snapshot; });
-        toastRef.current({ title: 'Branch delete नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par branch wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'Branch delete नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर शाखा वापस आ जाएगी।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [setActiveBranch]);
@@ -785,7 +787,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1
         console.error('Godown save:', error.message);
         setGodownsState(() => { cacheGodowns(snapshot); return snapshot; });
-        toastRef.current({ title: 'Godown सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'Godown सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 12000 });
       }
     });
     return g;
@@ -798,7 +800,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1
         console.error('Godown update:', error.message);
         setGodownsState(() => { cacheGodowns(snapshot); return snapshot; });
-        toastRef.current({ title: 'Godown अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'Godown अपडेट नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -812,7 +814,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1
         console.error('Godown delete:', error.message);
         setGodownsState(() => { cacheGodowns(snapshot); return snapshot; });
-        toastRef.current({ title: 'Godown delete नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par godown wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'Godown delete नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर godown वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [setActiveGodown]);
@@ -849,7 +851,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // flag/column didn't. Silence here is exactly what hid the rcmApplicable loss.
         if (dropped.length) toastRef.current({
           title: 'सहेजा गया — पर कुछ कॉलम इस DB में नहीं हैं',
-          description: `${label}: बाक़ी सब सेव हुआ; ये कॉलम missing hain — pending migration chalayein: ${dropped.join(', ')}.`,
+          description: `${label}: बाक़ी सब सेव हुआ; ये कॉलम database में नहीं हैं — बाकी migration चलाएँ: ${dropped.join(', ')}.`,
           duration: 12000,
         });
         return;
@@ -864,7 +866,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.warn(`${label} (extras) update:`, error.message);
       toastRef.current({
         title: 'कुछ फ़ील्ड सेव नहीं हुए',
-        description: `${label}: मुख्य रिकॉर्ड सुरक्षित है, पर extras सेव नहीं हुए — pending migration chalayein. (${error.message})`,
+        description: `${label}: मुख्य रिकॉर्ड सुरक्षित है, पर अतिरिक्त जानकारी सेव नहीं हुई — बाकी migration चलाएँ। (${error.message})`,
         variant: 'destructive',
         duration: 14000,
       });
@@ -1497,7 +1499,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       args.rollbackVoucher();
       args.undoLocal();
       reportError(`${kind}-post-service`, msg, { documentId: doc.id });
-      toastRef.current({ title: `❌ ${label} cloud par save NAHI hui`, description: `${msg}. Local se hata di gayi — refresh par data lose nahi hoga.`, variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: `❌ ${label} क्लाउड में सेव नहीं हुई`, description: `${msg}. स्क्रीन से हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 15000 });
     };
     const p = buildStockDocumentPayload(kind, doc, voucher, event, movements);
     supabase.rpc('post_stock_document', p).then(({ data, error }) => {
@@ -1562,7 +1564,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setStockMovementsState(prev => [...prev, ...movs]);
       setStockItemsState(prev => prev.map(i => stockBefore.has(i.id) ? { ...i, currentStock: stockBefore.get(i.id)! } : i));
       reportError(`${kind}-cancel-post-service`, msg, { documentId: doc.id });
-      toastRef.current({ title: `❌ ${label} delete cloud par save NAHI hua`, description: `${msg}. ${label} wapas dikha di gayi — kuch nahi badla.`, variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: `❌ ${label} हटाना क्लाउड में सेव नहीं हुआ`, description: `${msg}. ${label} वापस दिखा दी गई — कुछ नहीं बदला।`, variant: 'destructive', duration: 15000 });
     };
     supabase.rpc('cancel_stock_document', { p_kind: kind, p_id: doc.id, p_reason: reason, p_by: userRef.current?.name || 'System' }).then(({ data, error }) => {
       if (error) { undo(postVoucherMessage(postVoucherErrorCode(error.message), error.message)); return; }
@@ -1583,7 +1585,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const fail = (msg: string) => {
       args.undo();
       reportError(`${kind}-edit-post-service`, msg, { documentId: doc.id });
-      toastRef.current({ title: `❌ ${label} edit cloud par save NAHI hua`, description: `${msg}. Badlav local se hata diya — purani ${label} jaisi thi waisi hai.`, variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: `❌ ${label} का बदलाव क्लाउड में सेव नहीं हुआ`, description: `${msg}. Badlav local se hata diya — purani ${label} jaisi thi waisi hai.`, variant: 'destructive', duration: 15000 });
     };
     const p = buildStockDocumentPayload(kind, doc, voucher, event, movements);
     supabase.rpc('update_stock_document', {
@@ -1683,8 +1685,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       reportError('voucher-save', msg, { voucherId: v.id, voucherNo: (v as { voucherNo?: string }).voucherNo, isUpdate: !!opts.isUpdate });
       opts.onBaseFail();
       toastRef.current({
-        title: '❌ Voucher cloud par save NAHI hua',
-        description: `${msg}. Local state se entry hata di gayi — refresh karne par data lose nahi hoga.`,
+        title: '❌ वाउचर क्लाउड में सेव नहीं हुआ',
+        description: `${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`,
         variant: 'destructive',
         duration: 15000,
       });
@@ -1791,7 +1793,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   type VoucherPersistWith = (v: Voucher, ev: LedgerEvent, rollback: () => void) => void;
   // opts.onPersisted (S4-a): called once the posting service has made the voucher durable (with its official
   // number) — for a follow-up server call that needs the row to exist (reverseVoucher's link).
-  const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }, opts?: { persistWith?: VoucherPersistWith; onPersisted?: (v: Voucher) => void }): Voucher => {
+  const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }, opts?: { persistWith?: VoucherPersistWith; onPersisted?: (v: Voucher) => void; onSaved?: (v: Voucher) => void; onFailed?: () => void }): Voucher => {
     // ECR-06: role gate at the voucher choke point — every composite flow (sale/purchase/salary/
     // loan/reversal) and page funnels through here, so one guard covers every voucher birth.
     if (guardPermission('create', 'वाउचर बनाने')) {
@@ -1970,17 +1972,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // The append is the save — its failure IS a failed save (RULE 1). Roll back + surface loudly.
             reportError('voucher-journal-append', res.error ?? 'append failed', { voucherId: finalVoucher.id, voucherNo: finalNo });
             rollbackOptimistic();
-            toastRef.current({ title: '❌ Voucher cloud par save NAHI hua', description: `${res.error ?? 'journal append failed'}. Local state se entry hata di gayi — refresh karne par data lose nahi hoga.`, variant: 'destructive', duration: 15000 });
+            toastRef.current({ title: '❌ वाउचर क्लाउड में सेव नहीं हुआ', description: `${res.error ?? 'journal append failed'}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 15000 });
+            opts?.onFailed?.();
             return;
           }
+          opts?.onSaved?.(finalVoucher);
           // Saved (journal). Project into the vouchers table best-effort — a table failure is now
           // RECOVERABLE (rebuildable from the journal), so onBaseFail LOGS, never rolls back.
           persistVoucher(finalVoucher, {
             isUpdate: false, journalFirst: true,
             onBaseFail: () => reportError('voucher-table-projection', 'table write failed after durable journal append (recoverable)', { voucherId: finalVoucher.id, voucherNo: finalNo }),
           });
-        });
-      });
+        }, () => opts?.onFailed?.());
+      }, () => opts?.onFailed?.());
       return newVoucher;
     }
 
@@ -1995,7 +1999,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const failPending = (msg: string, raw: string) => {
         reportError('voucher-pending-post-service', raw, { voucherId: newVoucher.id });
         rollbackOptimistic();
-        toastRef.current({ title: '❌ Voucher cloud par save NAHI hua', description: `${msg}. Local state se entry hata di gayi — refresh karne par data lose nahi hoga.`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: '❌ वाउचर क्लाउड में सेव नहीं हुआ', description: `${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 15000 });
+        opts?.onFailed?.();
       };
       const pp = buildPendingVoucherPayload(newVoucher);
       supabase.rpc('save_pending_voucher', pp).then(({ data, error }) => {
@@ -2006,6 +2011,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setVouchersState(prev => prev.map(x => x.id === newVoucher.id ? { ...x, voucherNo: officialNo } : x));
         }
         opts?.onPersisted?.({ ...newVoucher, voucherNo: officialNo || newVoucher.voucherNo });
+        opts?.onSaved?.({ ...newVoucher, voucherNo: officialNo || newVoucher.voucherNo });
       }, (rejection: unknown) => { const msg = rejection instanceof Error ? rejection.message : String(rejection); failPending(`Network error — ${msg}`, msg); });
       return newVoucher;
     }
@@ -2026,7 +2032,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const fail = (msg: string, raw: string) => {
         reportError('voucher-post-service', raw, { voucherId: newVoucher.id, voucherNo: provisionalNo });
         rollbackOptimistic();
-        toastRef.current({ title: '❌ Voucher cloud par save NAHI hua', description: `${msg}. Local state se entry hata di gayi — refresh karne par data lose nahi hoga.`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: '❌ वाउचर क्लाउड में सेव नहीं हुआ', description: `${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 15000 });
+        opts?.onFailed?.();
       };
       const attempt = (v: Voucher, tries: number) => {
         const ev = eventFor(v);
@@ -2042,7 +2049,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               const nev = { ...ev, payload: { ...(ev.payload as Record<string, unknown>), voucherNo: officialNo } } as LedgerEvent;
               restamp(nv, nev);
               opts?.onPersisted?.(nv);
-            } else opts?.onPersisted?.(v);
+              opts?.onSaved?.(nv);
+            } else { opts?.onPersisted?.(v); opts?.onSaved?.(v); }
             return;
           }
           if (isUniqueViolation(error) && tries < MAX_RENUMBER_RETRIES) {
@@ -2075,8 +2083,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isUpdate: false,
       // The voucher save is authoritative; the ledger event is durably appended ONLY after the base
       // row is confirmed (WORM-safe — a rolled-back voucher never orphans an event).
-      onBaseSuccess: () => { if (shadowEvent) persistLedgerEvent(shadowEvent); },
-      onBaseFail: rollbackOptimistic,
+      onBaseSuccess: () => {
+        if (shadowEvent) persistLedgerEvent(shadowEvent);
+        opts?.onSaved?.(vouchersRef.current.find(x => x.id === newVoucher.id) ?? newVoucher);
+      },
+      onBaseFail: () => { rollbackOptimistic(); opts?.onFailed?.(); },
     });
     return newVoucher;
   }, [society.financialYear, society.fyLocked, society.fyLockedBy, society.financialYearStart]);
@@ -2363,7 +2374,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (error) {
           reportError('voucher-edit-post-service', error.message, { voucherId: id });
           revertEdit();
-          toastRef.current({ title: '❌ Voucher edit cloud par save NAHI hua', description: `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. Badlav local se hata diya — refresh par purana data safe hai.`, variant: 'destructive', duration: 15000 });
+          toastRef.current({ title: '❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', description: `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. Badlav local se hata diya — refresh par purana data safe hai.`, variant: 'destructive', duration: 15000 });
           return;
         }
         const serverEvents = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
@@ -2372,7 +2383,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const msg = rejection instanceof Error ? rejection.message : String(rejection);
         reportError('voucher-edit-post-service', msg, { voucherId: id });
         revertEdit();
-        toastRef.current({ title: '❌ Voucher edit cloud par save NAHI hua', description: `Network error — ${msg}. Badlav local se hata diya.`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: '❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', description: `Network error — ${msg}. Badlav local se hata diya.`, variant: 'destructive', duration: 15000 });
       });
       return true;
     }
@@ -2382,7 +2393,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const undo = (msg: string, raw: string) => {
         reportError('voucher-pending-edit-post-service', raw, { voucherId: id });
         revertEdit();
-        toastRef.current({ title: '❌ Voucher edit cloud par save NAHI hua', description: `${msg}. Badlav local se hata diya — refresh par purana data safe hai.`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: '❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', description: `${msg}. Badlav local se hata diya — refresh par purana data safe hai.`, variant: 'destructive', duration: 15000 });
       };
       const p = buildEditVoucherPayload(updatedVoucher);
       supabase.rpc('save_pending_voucher', { p_voucher: p.p_voucher, p_lines: p.p_lines }).then(({ error }) => {
@@ -2403,7 +2414,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // The append IS the save — its failure is a failed edit (RULE 1). Revert + surface loudly.
           reportError('voucher-edit-journal-append', res.error ?? 'append failed', { voucherId: id });
           revertEdit();
-          toastRef.current({ title: '❌ Voucher edit cloud par save NAHI hua', description: `${res.error ?? 'journal append failed'}. Badlav local se hata diya — refresh par purana data safe hai.`, variant: 'destructive', duration: 15000 });
+          toastRef.current({ title: '❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', description: `${res.error ?? 'journal append failed'}. Badlav local se hata diya — refresh par purana data safe hai.`, variant: 'destructive', duration: 15000 });
           return;
         }
         // Saved (journal). Project the edited row into the table best-effort — a table failure is now
@@ -2526,8 +2537,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const linkedSalary = salaryRecordsRef.current.find(r => r.voucherId === id);
     if (linkedSalary) {
       toastRef.current({
-        title: 'Voucher delete nahi ho sakta',
-        description: `Ye Salary slip ${linkedSalary.slipNo} ka payment voucher hai. Salary Management → Slip ko unpaid mark karo / delete karo, voucher apne aap reverse ho jayega.`,
+        title: 'वाउचर नहीं हटाया जा सकता',
+        description: `यह वेतन स्लिप ${linkedSalary.slipNo} का भुगतान वाउचर है। वेतन पेज पर स्लिप को unpaid करें या हटाएँ — वाउचर अपने-आप उलट जाएगा।`,
         variant: 'destructive',
       });
       return false;
@@ -2549,8 +2560,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (current.memberId && (current.creditAccountId === ACCOUNT_IDS.SHARE_CAP || current.creditAccountId === ACCOUNT_IDS.ADM_FEE)) {
       const kind = current.creditAccountId === ACCOUNT_IDS.SHARE_CAP ? 'Share Capital' : 'Admission Fee';
       toastRef.current({
-        title: 'Voucher delete nahi ho sakta',
-        description: `Ye Member ka auto-generated ${kind} voucher hai. Members page se member ko edit / delete karo.`,
+        title: 'वाउचर नहीं हटाया जा सकता',
+        description: `यह सदस्य का अपने-आप बना ${kind} वाउचर है। सदस्य पेज से सदस्य को बदलें या हटाएँ।`,
         variant: 'destructive',
       });
       return false;
@@ -2560,8 +2571,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const linkedAsset = assetsRef.current.find(a => current.narration.includes(a.assetNo));
       if (linkedAsset) {
         toastRef.current({
-          title: 'Voucher delete nahi ho sakta',
-          description: `Ye Asset ${linkedAsset.assetNo} ki depreciation entry hai. Assets page → Reverse Depreciation use karo.`,
+          title: 'वाउचर नहीं हटाया जा सकता',
+          description: `यह संपत्ति ${linkedAsset.assetNo} की ह्रास (depreciation) एंट्री है। संपत्ति रजिस्टर पेज पर "Reverse Depreciation" इस्तेमाल करें।`,
           variant: 'destructive',
         });
         return false;
@@ -2619,7 +2630,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (error) {
           reportError('voucher-cancel-post-service', error.message, { voucherId: id });
           undoCancel();
-          toastRef.current({ title: '❌ Voucher cancel cloud par save NAHI hua', description: `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. Cancel local se hata diya — refresh par voucher safe hai.`, variant: 'destructive', duration: 15000 });
+          toastRef.current({ title: '❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', description: `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. Cancel local se hata diya — refresh par voucher safe hai.`, variant: 'destructive', duration: 15000 });
           return;
         }
         const serverEvents = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
@@ -2628,7 +2639,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const msg = rejection instanceof Error ? rejection.message : String(rejection);
         reportError('voucher-cancel-post-service', msg, { voucherId: id });
         undoCancel();
-        toastRef.current({ title: '❌ Voucher cancel cloud par save NAHI hua', description: `Network error — ${msg}. Cancel local se hata diya.`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: '❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', description: `Network error — ${msg}. Cancel local se hata diya.`, variant: 'destructive', duration: 15000 });
       });
       return true;
     }
@@ -2646,7 +2657,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           reportError('voucher-cancel-journal-append', res.error ?? 'append failed', { voucherId: id });
           setVouchersState(prev => prev.map(v => v.id === id ? current : v));
           ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent!.eventId);
-          toastRef.current({ title: '❌ Voucher cancel cloud par save NAHI hua', description: `${res.error ?? 'journal append failed'}. Cancel local se hata diya — refresh par voucher safe hai.`, variant: 'destructive', duration: 15000 });
+          toastRef.current({ title: '❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', description: `${res.error ?? 'journal append failed'}. Cancel local se hata diya — refresh par voucher safe hai.`, variant: 'destructive', duration: 15000 });
           return;
         }
         // Saved (journal). Project the soft-delete into the table best-effort — a failure is now
@@ -2786,7 +2797,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
-        toastRef.current({ title: 'क्लियर सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'क्लियर सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
@@ -2804,7 +2815,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
-        toastRef.current({ title: 'अनक्लियर सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अनक्लियर सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
@@ -2840,7 +2851,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const undoApprove = (msg: string) => {
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));
         reportError('voucher-approve-post-service', msg, { voucherId: id });
-        toastRef.current({ title: 'अप्रूवल सेव नहीं हुआ', description: `${msg}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: 'अप्रूवल सेव नहीं हुआ', description: `${msg}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 15000 });
       };
       supabase.rpc('approve_voucher', { p_id: id, p_lines: buildEditVoucherPayload(updated).p_lines, p_approved_by: approvedBy }).then(({ data, error }) => {
         if (error) undoApprove(postVoucherMessage(postVoucherErrorCode(error.message), error.message));
@@ -2855,7 +2866,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
-        toastRef.current({ title: 'अप्रूवल सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अप्रूवल सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
       else {
         syncEntries(updated); // mirror to voucher_entries so SQL reports see the approved entries
@@ -2885,7 +2896,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const undoReject = (msg: string) => {
         reportError('voucher-reject-post-service', msg, { voucherId: id });
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
-        toastRef.current({ title: 'रिजेक्ट सेव नहीं हुआ', description: `${msg}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: 'रिजेक्ट सेव नहीं हुआ', description: `${msg}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 15000 });
       };
       supabase.rpc('reject_voucher', { p_id: id, p_reason: reason, p_rejected_by: rejectedBy }).then(({ error }) => {
         if (error) undoReject(postVoucherMessage(postVoucherErrorCode(error.message), error.message));
@@ -2896,7 +2907,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
-        toastRef.current({ title: 'रिजेक्ट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'रिजेक्ट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
       else deleteEntries(id); // rejected vouchers shouldn't impact SQL reports
     });
@@ -2929,7 +2940,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           auditObjectionsRef.current = auditObjectionsRef.current.filter(o => o.id !== newObj.id);
           setAuditObjectionsState(prev => prev.filter(o => o.id !== newObj.id));   // RULE 1: roll back
-          toastRef.current({ title: 'सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
         }
       });
     });
@@ -2947,7 +2958,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setAuditObjectionsState(prev => prev.map(o => o.id === id ? before : o));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
@@ -2974,7 +2985,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         recoverablesRef.current = recoverablesRef.current.filter(r => r.id !== newRec.id);
         setRecoverablesState(prev => prev.filter(r => r.id !== newRec.id));   // RULE 1: roll back
-        toastRef.current({ title: 'सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
     return newRec;
@@ -2990,7 +3001,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setRecoverablesState(prev => prev.map(r => r.id === id ? before : r));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
@@ -3013,7 +3024,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         kachiAaratEntriesRef.current = kachiAaratEntriesRef.current.filter(e => e.id !== newEntry.id);
         setKachiAaratEntriesState(prev => prev.filter(e => e.id !== newEntry.id));   // RULE 1: roll back
-        toastRef.current({ title: 'सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
     return newEntry;
@@ -3029,7 +3040,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setKachiAaratEntriesState(prev => prev.map(e => e.id === id ? before : e));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
@@ -3161,7 +3172,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!error) return;
       console.error('member_identity sync error:', error.message); reportError('db-sync', error.message);
       revert();
-      toastRef.current({ title: 'PAN/Aadhaar सेव नहीं हुआ', description: `सदस्य सेव हो गया, पर PAN/Aadhaar नहीं (${error.message}). Dobara try karein.`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: 'PAN/Aadhaar सेव नहीं हुआ', description: `सदस्य सेव हो गया, पर PAN/Aadhaar नहीं (${error.message})। दोबारा कोशिश करें।`, variant: 'destructive', duration: 12000 });
     });
   };
 
@@ -3187,7 +3198,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           setMembersState(prev => prev.filter(m => m.id !== newMember.id));   // RULE 1: roll back local state
-          toastRef.current({ title: 'सदस्य सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'सदस्य सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
           return;
         }
         if (newMember.aadhaar || newMember.pan) {
@@ -3225,7 +3236,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           setMembersState(prev => prev.map(m => m.id === id ? oldMember : m));   // RULE 1: roll back to prior state
-          toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
           return;
         }
         // Step 2 (PII split): only when aadhaar/pan actually changed.
@@ -3309,7 +3320,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error (member status):', error.message);
         membersRef.current = membersRef.current.map(m => m.id === id ? current : m);
         setMembersState(prev => prev.map(m => m.id === id ? current : m));
-        toastRef.current({ title: 'स्थिति सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'स्थिति सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
     // Metadata (late-added columns) — best-effort; base status above is already safe.
@@ -3365,7 +3376,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Share refund member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
-        toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       } else {
         toastRef.current({ title: '✅ शेयर पूँजी वापस', description: `₹${refund.toLocaleString('en-IN')} · ${member.name}` });
       }
@@ -3404,7 +3415,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
         cancelVoucher(v.id, 'Share refund approval not saved (cloud save failed)', userRef.current?.name ?? 'System');
-        toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. वाउचर रद्द कर दिया गया।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, variant: 'destructive', duration: 12000 });
       }
     });
     emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital }, after: { shareCapital: updated.shareCapital }, reason: `share:refund-approved — ${resolution.trim()}` });
@@ -3469,7 +3480,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Share operation member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
-        toastRef.current({ title: 'शेयर संचालन सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'शेयर संचालन सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
     emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital }, after: { shareCapital: updated.shareCapital }, reason: `share:${type}${opts?.reason ? ' — ' + opts.reason : ''}` });
@@ -3503,7 +3514,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Share purchase member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
-        toastRef.current({ title: 'अतिरिक्त शेयर सेव नहीं हुए', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अतिरिक्त शेयर सेव नहीं हुए', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       } else {
         toastRef.current({ title: '✅ अतिरिक्त शेयर पूँजी', description: `₹${buy.toLocaleString('en-IN')} · ${member.name}` });
       }
@@ -3569,7 +3580,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setMembersState(prev => prev.map(m => m.id === a.id ? a : m.id === b.id ? b : m));
     };
     applyBoth(updFrom, updTo);
-    const rollback = () => { applyBoth(beforeFrom, beforeTo); toastRef.current({ title: 'शेयर स्थानांतरण सेव नहीं हुआ', description: 'Cloud save fail — transfer rolled back.', variant: 'destructive', duration: 12000 }); };
+    const rollback = () => { applyBoth(beforeFrom, beforeTo); toastRef.current({ title: 'शेयर स्थानांतरण सेव नहीं हुआ', description: 'क्लाउड में सेव नहीं हुआ — transfer rolled back.', variant: 'destructive', duration: 12000 }); };
     supabase.from('members').upsert(memberRow(updFrom)).then(({ error }) => {
       if (error) { reportCascade('Share transfer (from) sync', error); rollback(); return; }
       supabase.from('members').upsert(memberRow(updTo)).then(({ error: e2 }) => {
@@ -3640,7 +3651,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Deposit account sync', error);
         depositAccountsRef.current = depositAccountsRef.current.filter(d => d.id !== a.id);
         setDepositAccountsState(prev => prev.filter(d => d.id !== a.id));   // RULE 1: roll back
-        toastRef.current({ title: 'जमा खाता सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'जमा खाता सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
     // Opening deposit (if any) posts a voucher + first transaction, then re-persist with the balance.
@@ -3682,7 +3693,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Deposit txn balance sync', error);
         depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
         setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
-        toastRef.current({ title: 'लेनदेन सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'लेनदेन सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
     emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { balance: before.balance }, after: { balance: newBal, txn: txnType, amount: amt } });
@@ -3719,7 +3730,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Deposit interest balance sync', error);
         depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
         setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
-        toastRef.current({ title: 'ब्याज सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'ब्याज सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
     const txn: DepositTransaction = {
@@ -3762,7 +3773,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Deposit close sync', error);
         depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
         setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
-        toastRef.current({ title: 'बंद करना सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'बंद करना सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
     emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { status: before.status, balance: before.balance }, after: { status: newStatus, balance: newBal } });
@@ -3786,7 +3797,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Compliance filing sync:', error.message);
         complianceFilingsRef.current = complianceFilingsRef.current.filter(f => f.id !== filing.id);
         setComplianceFilingsState(prev => prev.filter(f => f.id !== filing.id));   // RULE 1: roll back
-        toastRef.current({ title: 'सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 10000 });
+        toastRef.current({ title: 'सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 10000 });
       }
     });
     emitAudit({ entityType: 'compliance', entityId: itemId, action: 'update', after: { filed: true } });
@@ -3811,7 +3822,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Work order save error:', error.message);
         setWorkOrdersState(prev => { const r = prev.filter(w => w.id !== wo.id); storage.setWorkOrders(r); return r; });
-        toastRef.current({ title: 'कार्य आदेश सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'कार्य आदेश सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return wo;
@@ -3827,7 +3838,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Work order update error:', error.message);
         setWorkOrdersState(prev => { const u = prev.map(w => w.id === id ? old : w); storage.setWorkOrders(u); return u; });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [workOrders]);
@@ -3841,7 +3852,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Work order delete error:', error.message);
         if (old) setWorkOrdersState(prev => { const u = [...prev, old]; storage.setWorkOrders(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [workOrders]);
@@ -3884,7 +3895,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Muster entry save error:', error.message);
         setMusterEntriesState(prev => { const r = prev.filter(x => x.id !== m.id); storage.setMusterEntries(r); return r; });
         if (av.id) cancelVoucher(av.id, 'Muster entry rolled back (save failed)', user?.name || 'System');
-        toastRef.current({ title: 'हाज़िरी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'हाज़िरी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return m;
@@ -3912,7 +3923,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Muster entry update error:', error.message);
         setMusterEntriesState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setMusterEntries(u); return u; });
         if (newAv.id) cancelVoucher(newAv.id, 'Muster edit rolled back (save failed)', user?.name || 'System');
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       } else if (wageChanged && old.accrualVoucherId) {
         cancelVoucher(old.accrualVoucherId, 'Wage accrual superseded (muster edited)', user?.name || 'System');
       }
@@ -3929,7 +3940,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Muster entry delete error:', error.message);
         if (old) setMusterEntriesState(prev => { const u = [...prev, old]; storage.setMusterEntries(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       } else if (old?.accrualVoucherId) {
         cancelVoucher(old.accrualVoucherId, 'Wage accrual reversed (muster deleted)', user?.name || 'System');
       }
@@ -3990,7 +4001,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Wage payment muster-mark error:', error.message);
         setMusterEntriesState(prev => { const u = prev.map(m => snapshot.get(m.id) ?? m); storage.setMusterEntries(u); return u; });
         cancelVoucher(voucher.id, 'Wage payment rolled back (muster mark failed)', user?.name || 'System');
-        toastRef.current({ title: 'मज़दूरी भुगतान सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. भुगतान वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'मज़दूरी भुगतान सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. भुगतान वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
       }
     });
     toastRef.current({ title: 'मज़दूरी भुगतान दर्ज हुआ', description: `${wo?.workOrderNo || ''} · ${data.period} · ${allocs.length} श्रमिक · ₹${total}`, duration: 6000 });
@@ -4007,7 +4018,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1: revert the approval so state matches Supabase; NO auto-vouchers on a failed approve
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setMembersState(prev => prev.map(m => m.id === id ? member : m));
-        toastRef.current({ title: 'Approve सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par member wapas pending dikhega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'Approve सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर सदस्य फिर से pending दिखेगा।`, variant: 'destructive', duration: 12000 });
         return;
       }
       // Member approval is durable — ONLY now create the auto-vouchers (never before, so a
@@ -4029,7 +4040,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1: revert so state matches Supabase
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setMembersState(prev => prev.map(m => m.id === id ? member : m));
-        toastRef.current({ title: 'Reject सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par member wapas pending dikhega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'Reject सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर सदस्य फिर से pending दिखेगा।`, variant: 'destructive', duration: 12000 });
       }
     });
     console.info(`[AUDIT] Member id=${id} rejected by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
@@ -4109,7 +4120,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           reportError('db-sync', codeErr.message);
           accountsRef.current = accountsRef.current.map(a => a.id === newAccount.id ? { ...a, code: undefined } : a);
           setAccountsState(prev => prev.map(a => a.id === newAccount.id ? { ...a, code: undefined } : a));
-          toastRef.current({ title: 'खाता सेव हुआ — पर कोड नहीं', description: `Ledger code save nahi hua (${codeErr.message}). Migration 109 chalayein, phir Ledger Heads par "कोड दें" dabayein.`, duration: 10000 });
+          toastRef.current({ title: 'खाता सेव हुआ — पर कोड नहीं', description: `लेजर कोड सेव नहीं हुआ (${codeErr.message})। Migration 109 चलाएँ, फिर लेजर हेड पेज पर "कोड दें" dabayein.`, duration: 10000 });
         });
       }
       if (error) {   // RULE 1: roll back so a failed cloud save can't silently diverge on F5
@@ -4117,7 +4128,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         accountsRef.current = accountsRef.current.filter(a => a.id !== newAccount.id);
         setAccountsState(prev => prev.filter(a => a.id !== newAccount.id));
         if (openingEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== openingEvent.eventId);
-        toastRef.current({ title: 'खाता सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'खाता सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       } else if (openingEvent) persistLedgerEvent(openingEvent);
       else if (openingViaServer && (Number(newAccount.openingBalance) || 0) !== 0) syncOpeningOnServer(newAccount.id);
     });
@@ -4168,7 +4179,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.error('DB sync error:', error.message); reportError('db-sync', error.message);
             setAccountsState(p => p.map(a => a.id === id ? before : a));   // RULE 1: roll back to prior state
             if (openingEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== openingEvent.eventId);
-            toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+            toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
             opts?.onFailed?.(error.message);
             return;
           }
@@ -4211,7 +4222,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const failedIds = new Set(failed.map(f => f.id));
       setAccountsState(prev => prev.map(a => failedIds.has(a.id) ? { ...a, code: undefined } : a));   // RULE 1: revert
       reportError('db-sync', failed[0].msg || 'account code update matched 0 rows', { failed: failed.length });
-      toastRef.current({ title: 'कुछ खातों का कोड सेव नहीं हुआ', description: `${failed.length} खाते — Cloud save fail (${failed[0].msg || 'अनुमति नहीं'}). Migration 109 चला है? Refresh par ye kode nahi rahenge; dobara koshish karein.`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: 'कुछ खातों का कोड सेव नहीं हुआ', description: `${failed.length} खाते — क्लाउड में सेव नहीं हुआ (${failed[0].msg || 'अनुमति नहीं'}). Migration 109 चला है? Refresh करने पर ये कोड नहीं रहेंगे; दोबारा कोशिश करें।`, variant: 'destructive', duration: 12000 });
     }
     const assigned = results.length - failed.length;
     if (assigned) emitAudit({ entityType: 'account', entityId: 'bulk', action: 'update', reason: `Assigned readable codes to ${assigned} account(s)` });
@@ -4538,7 +4549,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setSocietyState(prev => {
       const rollback = prev;
       const updated = { ...prev, ...data };
-      const failToast = (msg: string) => toastRef.current({ title: 'सेटिंग सेव नहीं हुई', description: `Cloud save fail — refresh par badlav nahi rahega. Society settings sirf admin badal sakta hai. (${msg})`, variant: 'destructive', duration: 12000 });
+      const failToast = (msg: string) => toastRef.current({ title: 'सेटिंग सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — refresh करने पर बदलाव नहीं रहेगा। समिति की सेटिंग सिर्फ़ admin बदल सकता है। (${msg})`, variant: 'destructive', duration: 12000 });
       // RULE 1: society_settings is one flat row whose column set has grown over many
       // migrations. The whole state object rides in the upsert, so a SINGLE un-migrated
       // column (e.g. "fyLocked" before its migration runs) makes PostgREST reject the ENTIRE
@@ -4549,7 +4560,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('society_settings').upsert(payload).then(
           ({ error }) => {
             if (!error) {
-              if (dropped.length) toastRef.current({ title: 'सहेजा गया — पर कुछ कॉलम इस DB में नहीं हैं', description: `बाक़ी सब सेव हुआ; ye column is DB mein missing hain — pending migration chalayein: ${dropped.join(', ')}.`, duration: 12000 });
+              if (dropped.length) toastRef.current({ title: 'सहेजा गया — पर कुछ कॉलम इस DB में नहीं हैं', description: `बाक़ी सब सेव हुआ; ये कॉलम database में नहीं हैं — बाकी migration चलाएँ: ${dropped.join(', ')}.`, duration: 12000 });
               opts?.onSaved?.(dropped);
               return;
             }
@@ -4608,7 +4619,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const setCapabilityHidden = useCallback((capability: Capability, hidden: boolean, meta?: { reason?: string; by?: string }) => {
     const sid = societyIdRef.current;
     const stableId = `${sid}__${capability}__admin`;
-    const failToast = (msg: string) => toastRef.current({ title: 'सेव नहीं हुआ', description: 'Cloud save fail — refresh karne par badlav nahi rahega. (' + msg + ')', variant: 'destructive', duration: 10000 });
+    const failToast = (msg: string) => toastRef.current({ title: 'सेव नहीं हुआ', description: 'क्लाउड में सेव नहीं हुआ — refresh करने पर बदलाव नहीं रहेगा। (' + msg + ')', variant: 'destructive', duration: 10000 });
     setSocietyCapabilitiesState(prev => {
       const rollback = prev;
       if (hidden) {
@@ -4664,7 +4675,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Farmer sync error:', error.message);
         setProcurementFarmersState(prev => { const r = prev.filter(f => f.id !== newFarmer.id); storage.setProcurementFarmers(r); return r; });
-        toastRef.current({ title: 'किसान सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'किसान सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return newFarmer;
@@ -4711,7 +4722,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Procurement commit error:', error.message);
         setProcurementLotsState(prev => { const r = prev.filter(l => l.id !== lot.id); storage.setProcurementLots(r); return r; });
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: 'लॉट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara banayein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'लॉट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
       }
     });
     return lot;
@@ -4744,7 +4755,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementQualityTestsState(prev => { const r = prev.filter(x => x.id !== qt.id); storage.setProcurementQualityTests(r); return r; });
         setProcurementMoistureRecordsState(prev => { const r = prev.filter(x => x.id !== mr.id); storage.setProcurementMoistureRecords(r); return r; });
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== qEvent.id && e.id !== mEvent.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: 'क्वालिटी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara record karein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'क्वालिटी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा दर्ज करें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return qt;
@@ -4793,7 +4804,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('J-Form commit error:', error.message);
         setProcurementJFormsState(prev => { const r = prev.filter(x => x.id !== jf.id); storage.setProcurementJForms(r); return r; });
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: 'J-Form सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara banayein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'J-Form सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
         return;
       }
       // D1(A): patch the optimistic J-Form + its event with the DB-generated documentNo from the response.
@@ -4842,7 +4853,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Financial Intent commit error:', error.message);
         setProcurementFinancialIntentsState(prev => { const r = prev.filter(x => x.id !== fi.id); storage.setProcurementFinancialIntents(r); return r; });
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: 'Financial Intent सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara banayein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'Financial Intent सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
         return;
       }
       toastRef.current({ title: 'खरीद दर्ज (1/4)', description: `₹${fi.amount.amount}`, duration: 4000 });
@@ -4885,7 +4896,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Posting Request commit error:', error.message);
         setProcurementPostingRequestsState(prev => { const r = prev.filter(x => x.id !== pr.id); storage.setProcurementPostingRequests(r); return r; });
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: 'Posting Request सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara banayein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'Posting Request सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
         return;
       }
       toastRef.current({ title: 'पोस्टिंग अनुरोध बना (2/4)', description: `₹${pr.amount.amount}`, duration: 4000 });
@@ -4940,7 +4951,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Posting Rule resolve error:', error.message);
         setProcurementPostingRuleResultsState(prev => { const r = prev.filter(x => x.id !== result.id); storage.setProcurementPostingRuleResults(r); return r; });
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: 'Posting Rule result सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara karein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'Posting Rule result सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा करें।`, variant: 'destructive', duration: 12000 });
         return;
       }
       toastRef.current({ title: 'खाते तय हुए (3/4)', description: `${legs.length} प्रविष्टियाँ`, duration: 4000 });
@@ -4997,7 +5008,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.warn('engine.voucher.created event commit failed:', error.message);
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: '⚠️ Audit event save नहीं हुआ', description: `Engine voucher ${voucher.voucherNo} ban gaya (authoritative); par audit event cloud par save nahi hua: ${error.message}.`, variant: 'default', duration: 8000 });
+        toastRef.current({ title: '⚠️ Audit event save नहीं हुआ', description: `वाउचर ${voucher.voucherNo} बन गया (मुख्य रिकॉर्ड); पर ऑडिट event क्लाउड में सेव नहीं हुआ: ${error.message}.`, variant: 'default', duration: 8000 });
       }
     });
     toastRef.current({ title: 'बहीखाते में पोस्ट हुआ (4/4)', description: `वाउचर ${voucher.voucherNo} · ${voucher.date}`, duration: 6000 });
@@ -5032,7 +5043,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Settlement create error:', error.message);
         setProcurementSettlementsState(prev => { const r = prev.filter(x => x.id !== stl.id); storage.setProcurementSettlements(r); return r; });
-        toastRef.current({ title: 'निपटान सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara banayein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'निपटान सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
         return;
       }
       // T-05 dual-write: mirror the money objects into typed columns (step-2, RULE 1 — the base
@@ -5051,7 +5062,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Settlement update error:', error.message);
         setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === prevStl.id ? prevStl : x); storage.setProcurementSettlements(u); return u; });
-        toastRef.current({ title: 'बदलाव सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'बदलाव सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 12000 });
         return;
       }
       // T-05 dual-write (step-2, RULE 1) — mirror the money objects into typed columns.
@@ -5139,7 +5150,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? stl : x); storage.setProcurementSettlements(u); return u; });
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
         if (settlementVoucherId) cancelVoucher(settlementVoucherId, 'Settlement approval failed (auto-rollback)', user?.name || 'System');
-        toastRef.current({ title: 'निपटान स्वीकृत नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara approve karein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'निपटान स्वीकृत नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा approve करें।`, variant: 'destructive', duration: 12000 });
         return;
       }
       const gen = (res as { settlements?: Array<{ id: string; settlementNo: string }> } | null)?.settlements?.find(s => s.id === stl.id);
@@ -5492,7 +5503,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           loansRef.current = loansRef.current.filter(l => l.id !== newLoan.id);
           setLoansState(prev => prev.filter(l => l.id !== newLoan.id));   // RULE 1: roll back
-          toastRef.current({ title: 'ऋण सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'ऋण सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
         }
       });
     });
@@ -5547,7 +5558,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setLoansState(prev => prev.map(l => l.id === id ? before : l));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
@@ -5626,7 +5637,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           assetsRef.current = assetsRef.current.filter(a => a.id !== newAsset.id);
           setAssetsState(prev => prev.filter(a => a.id !== newAsset.id));   // RULE 1: roll back
-          toastRef.current({ title: 'संपत्ति सेव नहीं हुई', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'संपत्ति सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
         }
       });
     });
@@ -5643,7 +5654,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setAssetsState(prev => prev.map(a => a.id === id ? before : a));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
@@ -5683,7 +5694,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Asset dispose sync', error);
         assetsRef.current = assetsRef.current.map(a => a.id === id ? before : a);
         setAssetsState(prev => prev.map(a => a.id === id ? before : a));   // RULE 1: roll back
-        toastRef.current({ title: 'Disposal सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'Disposal सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
     emitAudit({ entityType: 'asset', entityId: id, action: 'update', before: { status: 'active' }, after: { status: 'disposed', saleProceeds: opts.saleProceeds, gainLoss: posting.gainLoss } });
@@ -6017,7 +6028,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         opts?.onBaseFail?.();   // RULE 1: roll back local state
-        toastRef.current({ title: 'स्टॉक आइटम सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara save karein.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'स्टॉक आइटम सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा सेव करें।`, variant: 'destructive', duration: 12000 });
         return;
       }
       const extras: Record<string, unknown> = {};
@@ -6155,7 +6166,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         stockMovementsRef.current = stockMovementsRef.current.filter(m => m.id !== movement.id);
         setStockMovementsState(prev => prev.filter(m => m.id !== movement.id));   // RULE 1: roll back
-        toastRef.current({ title: 'स्टॉक मूवमेंट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'स्टॉक मूवमेंट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
         return;
       }
       if (_mvGod) supabase.from('stock_movements').update({ godownId: _mvGod }).eq('id', movement.id).then(({ error: gErr }) => { if (gErr) { console.warn('Movement godown patch:', gErr.message); reportError('write-partial', gErr.message, { at: 'Movement godown patch:' }); } });
@@ -6207,7 +6218,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const rollback = (msg: string) => {
       stockMovementsRef.current = stockMovementsRef.current.filter(m => m.id !== outMv.id && m.id !== inMv.id);
       setStockMovementsState(prev => prev.filter(m => m.id !== outMv.id && m.id !== inMv.id));   // RULE 1: roll back BOTH legs
-      toastRef.current({ title: 'स्थानांतरण सेव नहीं हुआ', description: `Cloud save fail — ${msg}. Refresh par transfer nahi rahega.`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: 'स्थानांतरण सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${msg}. Refresh करने पर transfer नहीं रहेगा।`, variant: 'destructive', duration: 12000 });
     };
     const baseOf = (m: StockMovement) => { const { godownId: _g, ...base } = m; return base; };
     Promise.all([
@@ -6372,7 +6383,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Sale save failed:', error.message);
         salesRef.current = salesRef.current.filter(s => s.id !== sale.id);
         setSalesState(prev => prev.filter(s => s.id !== sale.id));
-        toastRef.current({ title: 'Sale save nahi hua', description: error.message, variant: 'destructive' });
+        toastRef.current({ title: 'बिक्री सेव नहीं हुई', description: error.message, variant: 'destructive' });
       });
     };
     // T-03 (ADR-0005): take the OFFICIAL saleNo from the server sequence (book 'SL') at persist;
@@ -6617,7 +6628,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // sale ROW failed here, and the cascade can't be cleanly undone from the client. Per
           // RULE 1 we make the failure impossible to miss and tell the user to refresh and
           // re-verify. (A fully atomic sale-edit is a separate, larger redesign.)
-          toastRef.current({ title: 'बिक्री edit cloud-save fail', description: `Sale row cloud save fail — ${error.message}. Refresh karke sale dobara check karein; zaroorat ho to phir se edit karein.`, variant: 'destructive', duration: 15000 });
+          toastRef.current({ title: 'बिक्री edit cloud-save fail', description: `बिक्री क्लाउड में सेव नहीं हुई — ${error.message}. Refresh करके बिक्री दोबारा जाँचें; ज़रूरत हो तो फिर से edit करें।`, variant: 'destructive', duration: 15000 });
         } else {
           persistExtras('sales', id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, bankAccountId: sBankId ?? null }, `Sale ${original.saleNo}`);
         }
@@ -6782,7 +6793,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Purchase save failed:', error.message);
         purchasesRef.current = purchasesRef.current.filter(p => p.id !== purchase.id);
         setPurchasesState(prev => prev.filter(p => p.id !== purchase.id));
-        toastRef.current({ title: 'Purchase save nahi hua', description: error.message, variant: 'destructive' });
+        toastRef.current({ title: 'खरीद सेव नहीं हुई', description: error.message, variant: 'destructive' });
       });
     };
     // T-03 (ADR-0005): take the OFFICIAL purchaseNo from the server sequence (book 'PUR') at
@@ -7024,7 +7035,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return;
           }
           console.error('Purchase update failed:', error.message);
-          toastRef.current({ title: 'Purchase update nahi hua', description: error.message, variant: 'destructive' });
+          toastRef.current({ title: 'खरीद का बदलाव सेव नहीं हुआ', description: error.message, variant: 'destructive' });
         } else {
           persistExtras('purchases', id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null, supplierBillNo: pBillNo ?? null, supplierBillDate: pBillDate ?? null }, `Purchase ${original.purchaseNo}`);
         }
@@ -7058,7 +7069,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           employeesRef.current = employeesRef.current.filter(e => e.id !== emp.id);
           setEmployeesState(prev => prev.filter(e => e.id !== emp.id));   // RULE 1: roll back
-          toastRef.current({ title: 'कर्मचारी सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'कर्मचारी सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
         }
       });
     });
@@ -7075,7 +7086,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setEmployeesState(prev => prev.map(e => e.id === id ? before : e));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
@@ -7145,7 +7156,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         salaryRecordsRef.current = salaryRecordsRef.current.filter(r => r.id !== record.id);
         setSalaryRecordsState(prev => prev.filter(r => r.id !== record.id));   // RULE 1: roll back
-        toastRef.current({ title: 'वेतन रिकॉर्ड सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'वेतन रिकॉर्ड सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       }
     });
     return record;
@@ -7264,7 +7275,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         salaryRecordsRef.current = salaryRecordsRef.current.map(r => r.id === id ? oldRecord : r);
         setSalaryRecordsState(prev => prev.map(r => r.id === id ? oldRecord : r));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [employees, accounts, addVoucher, updateVoucher]);
@@ -7303,8 +7314,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error(`Supplier ${opts.isUpdate ? 'update' : 'save'} failed (base):`, error.message);
         opts.onBaseFail();
         toastRef.current({
-          title: '❌ Supplier cloud par save NAHI hua',
-          description: `${error.message}. Local state se hata di gayi.`,
+          title: '❌ आपूर्तिकर्ता क्लाउड में सेव नहीं हुआ',
+          description: `${error.message}. स्क्रीन से हटा दी गई।`,
           variant: 'destructive',
           duration: 15000,
         });
@@ -7468,8 +7479,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error(`Customer ${opts.isUpdate ? 'update' : 'save'} failed (base):`, error.message);
         opts.onBaseFail();
         toastRef.current({
-          title: '❌ Customer cloud par save NAHI hua',
-          description: `${error.message}. Local state se hata di gayi.`,
+          title: '❌ ग्राहक क्लाउड में सेव नहीं हुआ',
+          description: `${error.message}. स्क्रीन से हटा दी गई।`,
           variant: 'destructive',
           duration: 15000,
         });

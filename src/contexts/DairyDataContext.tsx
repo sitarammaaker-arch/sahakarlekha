@@ -222,7 +222,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Rate chart save error:', error.message); reportError('dairy-save', error.message);
         setRateChartsState(prev => { const r = prev.filter(c => c.id !== chart.id); storage.setDairyRateCharts(r); return r; });
-        toastRef.current({ title: 'रेट चार्ट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka dairy_rate_charts block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'रेट चार्ट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का dairy_rate_charts block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
     return chart;
@@ -238,7 +238,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       if (next && before) supabase.from('dairy_rate_charts').upsert(withSoc(next)).then(({ error }) => {
         if (error) {
           setRateChartsState(p => { const r = p.map(c => c.id === id ? before : c); storage.setDairyRateCharts(r); return r; });
-          toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
         }
       });
       return u;
@@ -254,7 +254,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       if (before) supabase.from('dairy_rate_charts').upsert(withSoc({ ...before, isDeleted: true })).then(({ error }) => {
         if (error) {
           setRateChartsState(p => { const r = p.map(c => c.id === id ? before : c); storage.setDairyRateCharts(r); return r; });
-          toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
         }
       });
       return u;
@@ -269,7 +269,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Milk entry save error:', error.message); reportError('dairy-save', error.message);
         setMilkEntriesState(prev => { const r = prev.filter(e => e.id !== entry.id); storage.setMilkEntries(r); return r; });
-        toastRef.current({ title: 'एंट्री सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka milk_entries block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'एंट्री सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का milk_entries block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
     return entry;
@@ -291,7 +291,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       if (before) supabase.from('milk_entries').delete().eq('id', id).then(({ error }) => {
         if (error) {
           setMilkEntriesState(p => { const r = [...p, before]; storage.setMilkEntries(r); return r; });
-          toastRef.current({ title: 'डिलीट नहीं हुआ', description: `Cloud delete fail — ${error.message}. एंट्री वापस ले आई गई।`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'डिलीट नहीं हुआ', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. एंट्री वापस ले आई गई।`, variant: 'destructive', duration: 12000 });
         }
       });
       return u;
@@ -305,7 +305,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
         console.error('Settlement save error:', error.message); reportError('dairy-save', error.message);
         setSettlementsState(prev => { const u = revertTo ? prev.map(s => s.id === next.id ? revertTo : s) : prev.filter(s => s.id !== next.id); storage.setDairySettlements(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'सेटलमेंट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas. (Pehli baar: dairy_settlements block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'सेटलमेंट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा। (पहली बार: dairy_settlements block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [societyId]);
@@ -378,7 +378,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const payable = resolveMilkPayableAccountId(accounts);
     if (!milkCost || !payable) { toastRef.current({ title: 'दुग्ध खाते नहीं मिले', description: 'Milk procurement / payable ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
     const legs = settlementLegs(cur.gross, cur.deductionLines, milkCost, payable);
-    if (legs.length === 0) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'Legs balanced nahi (कटौती > सकल या खाता गुम).', variant: 'destructive' }); return sentinel; }
+    if (legs.length === 0) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'एंट्री के दोनों पक्ष बराबर नहीं (कटौती > सकल या खाता गुम)।', variant: 'destructive' }); return sentinel; }
     const net = netPayable(cur.gross, cur.deductionLines);
     const voucher = addVoucher({
       type: 'journal', date: cur.to,
@@ -440,7 +440,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
         console.error('Dispatch save error:', error.message); reportError('dairy-save', error.message);
         setDispatchesState(prev => { const u = revertTo ? prev.map(d => d.id === next.id ? revertTo : d) : prev.filter(d => d.id !== next.id); storage.setDairyDispatches(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'डिस्पैच सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas. (Pehli baar: dairy_dispatches block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'डिस्पैच सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा। (पहली बार: dairy_dispatches block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [societyId]);
@@ -456,7 +456,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!rcv || !sales) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Union receivable / bulk-sales ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
     const binding = { 'milk.dispatch.receivable': rcv, 'milk.bulk.sales': sales };
     const specs = buildEngineVoucherLines(resolveDairyPostingLegs('RecogniseMilkDispatch', { amount, currency: 'INR' }, binding, accounts));
-    if (specs.length !== 2) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'Legs resolve nahi hui.', variant: 'destructive' }); return sentinel; }
+    if (specs.length !== 2) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'एंट्री के खाते तय नहीं हो सके।', variant: 'destructive' }); return sentinel; }
     const dr = specs.find(s => s.type === 'Dr'); const cr = specs.find(s => s.type === 'Cr');
     const voucher = addVoucher({
       type: 'journal', date: data.date,
@@ -516,7 +516,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
         console.error('Input issue save error:', error.message); reportError('dairy-save', error.message);
         setInputIssuesState(prev => { const u = revertTo ? prev.map(i => i.id === next.id ? revertTo : i) : prev.filter(i => i.id !== next.id); storage.setDairyInputIssues(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'आदान सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas. (Pehli baar: dairy_input_issues block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'आदान सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा। (पहली बार: dairy_input_issues block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [societyId]);
@@ -571,7 +571,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
         console.error('Distribution save error:', error.message); reportError('dairy-save', error.message);
         setDistributionsState(prev => { const u = revertTo ? prev.map(d => d.id === next.id ? revertTo : d) : prev.filter(d => d.id !== next.id); storage.setDairyDistributions(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'वितरण सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas. (Pehli baar: dairy_distributions block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'वितरण सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा। (पहली बार: dairy_distributions block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [societyId]);
@@ -607,7 +607,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const payAcc = cur.kind === 'bonus' ? resolveBonusPayableAccountId(accounts) : resolveDividendPayableAccountId(accounts);
     if (!distAcc || !payAcc) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Distribution / payable ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
     const legs = distributionLegs(cur.total, distAcc, payAcc);
-    if (legs.length === 0) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'Legs balanced nahi.', variant: 'destructive' }); return sentinel; }
+    if (legs.length === 0) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'एंट्री के दोनों पक्ष बराबर नहीं।', variant: 'destructive' }); return sentinel; }
     const kindHi = cur.kind === 'bonus' ? 'बोनस' : 'लाभांश';
     const voucher = addVoucher({
       type: 'journal', date: args.resolutionDate || new Date().toISOString().slice(0, 10),

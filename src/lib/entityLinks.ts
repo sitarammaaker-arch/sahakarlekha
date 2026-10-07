@@ -35,7 +35,7 @@ export function computeEntityLinks(
     if (vCount > 0) links.push({
       module: 'Vouchers', count: vCount,
       labelHi: `${vCount} वाउचर`, labelEn: `${vCount} Voucher(s)`,
-      instructionHi: 'Vouchers page pe jao → in vouchers ko pehle cancel karo',
+      instructionHi: 'वाउचर पेज पर जाएँ → पहले इन वाउचर को रद्द करें',
       instructionEn: 'Go to Vouchers page → cancel these vouchers first',
       blocking: true,
     });
@@ -43,7 +43,7 @@ export function computeEntityLinks(
     if (lCount > 0) links.push({
       module: 'Loans', count: lCount,
       labelHi: `${lCount} ऋण`, labelEn: `${lCount} Loan(s)`,
-      instructionHi: 'Loan Register pe jao → pehle ye loans delete karo',
+      instructionHi: 'ऋण रजिस्टर पेज पर जाएँ → पहले ये ऋण हटाएँ',
       instructionEn: 'Go to Loan Register → delete these loans first',
       blocking: true,
     });
@@ -54,7 +54,7 @@ export function computeEntityLinks(
     if (sCount > 0) links.push({
       module: 'Sales', count: sCount,
       labelHi: `${sCount} बिक्री`, labelEn: `${sCount} Sale(s)`,
-      instructionHi: 'Sale Management pe jao → pehle ye sales delete karo',
+      instructionHi: 'बिक्री पेज पर जाएँ → पहले ये बिक्री हटाएँ',
       instructionEn: 'Go to Sale Management → delete these sales first',
       blocking: true,
     });
@@ -65,7 +65,7 @@ export function computeEntityLinks(
     if (pCount > 0) links.push({
       module: 'Purchases', count: pCount,
       labelHi: `${pCount} खरीद`, labelEn: `${pCount} Purchase(s)`,
-      instructionHi: 'Purchase Management pe jao → pehle ye purchases delete karo',
+      instructionHi: 'खरीद पेज पर जाएँ → पहले ये खरीद हटाएँ',
       instructionEn: 'Go to Purchase Management → delete these purchases first',
       blocking: true,
     });
@@ -83,7 +83,7 @@ export function computeEntityLinks(
     if (mvCount > 0) links.push({
       module: 'Stock Movements', count: mvCount,
       labelHi: `${mvCount} स्टॉक मूवमेंट`, labelEn: `${mvCount} Stock Movement(s)`,
-      instructionHi: 'Is item ki stock movements hain (purchases/sales). Pehle linked purchases aur sales delete karo.',
+      instructionHi: 'इस वस्तु की स्टॉक आवाजाही है (खरीद/बिक्री)। पहले जुड़ी खरीद और बिक्री हटाएँ।',
       instructionEn: 'This item has stock movements (purchases/sales). Delete linked purchases and sales first.',
       blocking: true,
     });
@@ -91,7 +91,7 @@ export function computeEntityLinks(
     if (pCount > 0) links.push({
       module: 'Purchases', count: pCount,
       labelHi: `${pCount} खरीद में शामिल`, labelEn: `${pCount} Purchase(s) contain this item`,
-      instructionHi: 'Purchase Management pe jao → ye purchases delete karo',
+      instructionHi: 'खरीद पेज पर जाएँ → ये खरीद हटाएँ',
       instructionEn: 'Go to Purchase Management → delete these purchases',
       blocking: true,
     });
@@ -99,7 +99,7 @@ export function computeEntityLinks(
     if (sCount > 0) links.push({
       module: 'Sales', count: sCount,
       labelHi: `${sCount} बिक्री में शामिल`, labelEn: `${sCount} Sale(s) contain this item`,
-      instructionHi: 'Sale Management pe jao → ye sales delete karo',
+      instructionHi: 'बिक्री पेज पर जाएँ → ये बिक्री हटाएँ',
       instructionEn: 'Go to Sale Management → delete these sales',
       blocking: true,
     });
@@ -110,7 +110,7 @@ export function computeEntityLinks(
     if (srCount > 0) links.push({
       module: 'Salary Records', count: srCount,
       labelHi: `${srCount} वेतन रिकॉर्ड`, labelEn: `${srCount} Salary Record(s)`,
-      instructionHi: 'Salary Management pe jao → is employee ke salary records pehle delete karo',
+      instructionHi: 'वेतन पेज पर जाएँ → पहले इस कर्मचारी के वेतन रिकॉर्ड हटाएँ',
       instructionEn: 'Go to Salary Management → delete this employee\'s salary records first',
       blocking: true,
     });
@@ -125,8 +125,8 @@ export function computeEntityLinks(
     ).length;
     if (vCount > 0) links.push({
       module: 'Vouchers', count: vCount,
-      labelHi: `${vCount} वाउचर में use ho raha hai`, labelEn: `Used in ${vCount} Voucher(s)`,
-      instructionHi: 'Vouchers page pe jao → pehle in vouchers ko cancel karo',
+      labelHi: `${vCount} वाउचर में इस्तेमाल हो रहा है`, labelEn: `Used in ${vCount} Voucher(s)`,
+      instructionHi: 'वाउचर पेज पर जाएँ → पहले इन वाउचर को रद्द करें',
       instructionEn: 'Go to Vouchers page → cancel these vouchers first',
       blocking: true,
     });
@@ -134,7 +134,7 @@ export function computeEntityLinks(
     if (supLinked) links.push({
       module: 'Supplier', count: 1,
       labelHi: `Supplier "${supLinked.name}" ka account hai`, labelEn: `This is Supplier "${supLinked.name}"'s account`,
-      instructionHi: 'Suppliers page pe jao → pehle supplier delete karo',
+      instructionHi: 'आपूर्तिकर्ता पेज पर जाएँ → पहले आपूर्तिकर्ता हटाएँ',
       instructionEn: 'Go to Suppliers page → delete the supplier first',
       blocking: true,
     });
@@ -142,7 +142,7 @@ export function computeEntityLinks(
     if (cusLinked) links.push({
       module: 'Customer', count: 1,
       labelHi: `Customer "${cusLinked.name}" ka account hai`, labelEn: `This is Customer "${cusLinked.name}"'s account`,
-      instructionHi: 'Customers page pe jao → pehle customer delete karo',
+      instructionHi: 'ग्राहक पेज पर जाएँ → पहले ग्राहक हटाएँ',
       instructionEn: 'Go to Customers page → delete the customer first',
       blocking: true,
     });
@@ -153,7 +153,7 @@ export function computeEntityLinks(
     if (vCount > 0) links.push({
       module: 'Vouchers', count: vCount,
       labelHi: `${vCount} वाउचर linked`, labelEn: `${vCount} linked Voucher(s)`,
-      instructionHi: 'Vouchers page pe jao → pehle in vouchers ko cancel karo',
+      instructionHi: 'वाउचर पेज पर जाएँ → पहले इन वाउचर को रद्द करें',
       instructionEn: 'Go to Vouchers → cancel linked vouchers first',
       blocking: false,
     });
@@ -174,7 +174,7 @@ export function computeEntityLinks(
       if (vCount > 0) links.push({
         module: 'Vouchers', count: vCount,
         labelHi: `${vCount} वाउचर (ह्रास आदि)`, labelEn: `${vCount} Voucher(s) (depreciation etc.)`,
-        instructionHi: 'Vouchers page pe jao → pehle in vouchers ko cancel karo',
+        instructionHi: 'वाउचर पेज पर जाएँ → पहले इन वाउचर को रद्द करें',
         instructionEn: 'Go to Vouchers → cancel depreciation vouchers first',
         blocking: true,
       });
