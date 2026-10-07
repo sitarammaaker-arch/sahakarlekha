@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FileCheck, Download, Info, FileSpreadsheet, Save } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { fmtDate } from '@/lib/dateUtils';
+import { fmtDate, todayStr } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
@@ -83,7 +83,7 @@ const AuditCertificate: React.FC = () => {
   const totalMembersCount = members.filter(m => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved')).length;
 
   // ── Editable fields ────────────────────────────────────────────────────────
-  const [auditDate, setAuditDate]         = useState(new Date().toISOString().split('T')[0]);
+  const [auditDate, setAuditDate]         = useState(todayStr());
   const [auditFrom, setAuditFrom]         = useState('');
   const [auditTo,   setAuditTo]           = useState('');
   const [auditorName,  setAuditorName]    = useState('');
@@ -93,8 +93,16 @@ const AuditCertificate: React.FC = () => {
   const [classif, setClassif]             = useState('A'); // Audit classification
 
   // Cash book balance (manual override if needed)
-  const [cashBookBal, setCashBookBal]     = useState(String(Math.max(0, Math.round(cashBalance * 100) / 100)));
-  const [bankBookBal, setBankBookBal]     = useState(String(Math.max(0, Math.round(bankBalance * 100) / 100)));
+  // Usability audit P1-11: these were filled ONCE on mount — opened before the data loaded (or after F5)
+  // they stayed blank/0 forever, and Math.max(0, …) turned a negative (overdrawn) balance into 0. Until the
+  // user types an override, they now follow the books; a negative balance is shown as negative.
+  const asField = (n: number) => (Number.isFinite(n) ? String(Math.round(n * 100) / 100) : '');
+  const [cashBookBal, setCashBookBal]     = useState(asField(cashBalance));
+  const [bankBookBal, setBankBookBal]     = useState(asField(bankBalance));
+  const [cashEdited, setCashEdited]       = useState(false);
+  const [bankEdited, setBankEdited]       = useState(false);
+  useEffect(() => { if (!cashEdited) setCashBookBal(asField(cashBalance)); }, [cashBalance, cashEdited]);
+  useEffect(() => { if (!bankEdited) setBankBookBal(asField(bankBalance)); }, [bankBalance, bankEdited]);
 
   // ── Saved details (per FY) ─────────────────────────────────────────────────
   // The editable fields used to be screen state only — lost on reload, so a certificate could not
@@ -114,8 +122,8 @@ const AuditCertificate: React.FC = () => {
     setAuditorAddress(saved.auditorAddress || '');
     setObservations(saved.observations || '');
     if (saved.classification) setClassif(saved.classification);
-    if (saved.cashBookBalance) setCashBookBal(saved.cashBookBalance);
-    if (saved.bankBookBalance) setBankBookBal(saved.bankBookBalance);
+    if (saved.cashBookBalance) { setCashBookBal(saved.cashBookBalance); setCashEdited(true); }
+    if (saved.bankBookBalance) { setBankBookBal(saved.bankBookBalance); setBankEdited(true); }
     // Re-hydrate only when the FY or the saved record itself changes (not on every keystroke).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fy, saved?.savedAt]);
@@ -398,11 +406,11 @@ const AuditCertificate: React.FC = () => {
             />
             <div className="space-y-1">
               <Label className="text-xs">{hi ? 'नकद शेष (कैश बुक)' : 'Cash Balance (Cash Book)'}</Label>
-              <Input type="number" value={cashBookBal} onChange={e => setCashBookBal(e.target.value)} className="h-8 text-sm" />
+              <Input type="number" value={cashBookBal} onChange={e => { setCashEdited(true); setCashBookBal(e.target.value); }} className="h-8 text-sm" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">{hi ? 'बैंक शेष' : 'Bank Balance'}</Label>
-              <Input type="number" value={bankBookBal} onChange={e => setBankBookBal(e.target.value)} className="h-8 text-sm" />
+              <Input type="number" value={bankBookBal} onChange={e => { setBankEdited(true); setBankBookBal(e.target.value); }} className="h-8 text-sm" />
             </div>
             <ReadonlyRow label={hi ? 'शेयर कैपिटल' : 'Share Capital'} value={`₹ ${fmt(shareCapital)}`} />
             <ReadonlyRow label={hi ? 'सक्रिय सदस्य' : 'Active Members'} value={String(totalMembersCount)} />
