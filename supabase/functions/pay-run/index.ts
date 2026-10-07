@@ -15,7 +15,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js';
-import { freezeViews, mapCatalog, assembleRun, makeMoney, makeTds192, makePfWage, PF_WAGE_NAME, PF_WAGE_SIG, makeEsiEmployee, ESI_EMPLOYEE_NAME, ESI_EMPLOYEE_SIG, makeEsiEmployer, ESI_EMPLOYER_NAME, ESI_EMPLOYER_SIG, ER_PF_RATE_VAR, resolveParam, assertVerifiedLaw, TDS_192_SIG, TDS_192_NAME, TDS_YTD_HEAD, isTdsCode, monthsLeftInFy, fyBounds } from '../_shared/pay-core.mjs';
+import { freezeViews, mapCatalog, assembleRun, makeMoney, makeTds192, makePfWage, PF_WAGE_NAME, PF_WAGE_SIG, makeEsiEmployee, ESI_EMPLOYEE_NAME, ESI_EMPLOYEE_SIG, makeEsiEmployer, ESI_EMPLOYER_NAME, ESI_EMPLOYER_SIG, ER_PF_RATE_VAR, isErCode, resolveParam, assertVerifiedLaw, TDS_192_SIG, TDS_192_NAME, TDS_YTD_HEAD, isTdsCode, monthsLeftInFy, fyBounds } from '../_shared/pay-core.mjs';
 
 // SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
 // token; its payload is read only to refuse more (unreadable → pending).
@@ -195,7 +195,9 @@ Deno.serve(async (req: Request) => {
       const facts = { attendance: { paidDays, lopDays, otHours: 0 }, leave: [], loan, tax: { ytdByHead: tdsComp ? { [TDS_YTD_HEAD]: tdsYtdMinor } : {}, monthsRemaining: monthsLeftInFy(period), regime: 'new' } };
       // `onResult` collects what the Money result cannot carry: an OVER-deduction (the CA ruling: never a silent ₹0).
       const fns = { [PF_WAGE_NAME]: makePfWage({ asOf: periodMonth, currency: 'INR' }), [ESI_EMPLOYEE_NAME]: makeEsiEmployee({ asOf: periodMonth, currency: 'INR' }), [ESI_EMPLOYER_NAME]: makeEsiEmployer({ asOf: periodMonth, currency: 'INR' }), [TDS_192_NAME]: tdsComp ? makeTds192({ regime: 'new', asOf: periodMonth, currency: 'INR' }, (o: { excessMinor: number }) => { tdsOutcomes.set(String(emp.employee_code), o); }) : () => makeMoney(0, 'INR') };
-      emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, paidDays, paidDaysShown, lopDays, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
+      emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, paidDays, paidDaysShown, lopDays, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps },
+        // which employer-share components THIS employee's own structure binds — snapshot now: the loop below classifies every plan formula as 'info' for everyone
+        boundEr: new Set(Object.keys(spec.classification).filter((c) => isErCode(c))) });
     }
 
     // 5a. Salary TDS is computed on law that must be VERIFIED. Ask now — before the engine runs — and say plainly who
@@ -253,7 +255,7 @@ Deno.serve(async (req: Request) => {
           values(${slipId},${societyId},${runId},${ps.employeeId},${periodMonth},${`PS-${runNo}-${req0.empCode}`},${ps.payslip.grossEarnings.minor},${ps.payslip.grossDeductions.minor},${ps.payslip.netPay.minor},'INR',${req0.paidDaysShown},${req0.lopDays},${su.id})`;
         let seq = 1;
         // the employer's PF/ESI share rides along as extra lines (kind employer_contrib): the ledger posting reads them; payslip screens filter them out
-        for (const line of [...ps.payslip.earnings, ...ps.payslip.deductions, ...(ps.payslip.employerContributions ?? [])]) {
+        for (const line of [...ps.payslip.earnings, ...ps.payslip.deductions, ...(ps.payslip.employerContributions ?? []).filter((l) => (req0 as { boundEr: Set<string> }).boundEr.has(l.code))]) {
           await tx`insert into pay_calc.payslip_line(society_id,payslip_id,period_month,component_id,computed_minor,currency,sequence) values(${societyId},${slipId},${periodMonth},${codeToId[line.code]},${line.amount.minor},'INR',${seq++})`;
         }
       }

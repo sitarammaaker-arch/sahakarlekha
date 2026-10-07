@@ -171,7 +171,7 @@ ok(/as er_codes/.test(src), 'list returns er_codes so the screen shows the state
   ok(/ER_ESI_CODE_BY_TYPE/.test(src.slice(i, j)), 'turning ESI off also removes the employer ESI companion');
 }
 const run2 = readFileSync(pathResolve(HERE, '..', 'supabase/functions/pay-run/index.ts'), 'utf8');
-ok(run2.includes('...(ps.payslip.employerContributions ?? [])'), 'pay-run persists the employer lines (the ledger reads payslip_line)');
+ok(run2.includes('(ps.payslip.employerContributions ?? []).filter((l) => (req0 as { boundEr: Set<string> }).boundEr.has(l.code))') && run2.includes('boundEr: new Set(Object.keys(spec.classification).filter((c) => isErCode(c)))'), 'pay-run persists the employer lines ONLY for employees whose own structure binds them (the shared plan computes ER_ for everyone — staging caught this)');
 const page = readFileSync(pathResolve(HERE, '..', 'src/pages/Payroll.tsx'), 'utf8');
 ok((page.match(/l.kind !== 'employer_contrib'/g) || []).length === 2, 'the payslip screen and the ECR export both filter the employer lines out (they must never show as an earning)');
 ok(/action: 'er-set'/.test(page), 'the Payroll page has the switch');
