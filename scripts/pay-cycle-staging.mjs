@@ -299,7 +299,7 @@ try {
     // the employee's own pay did not change: his payslip nets to gross - deductions, and the employer lines are NOT in deductions
     const sl = (await db.query(`select gross_minor::bigint g, deductions_minor::bigint d, net_minor::bigint n from pay_calc.payslip where pay_run_id = $1 and employee_id = $2`, [runId, erEmpId])).rows[0];
     ok(!!sl && BigInt(sl.g) - BigInt(sl.d) === BigInt(sl.n), 'Cycle ER payslip: gross − deductions = net');
-    ok(!!sl && BigInt(sl.d) === 120000n + 12000n, `his deductions are PF ₹1,200 + ESI ₹120 = ₹1,320 only — the employer share is NOT deducted from him${sl ? ' (got ₹' + Number(sl.d) / 100 + ')' : ''}`);
+    ok(!!sl && BigInt(sl.d) === 144000n + 12000n, `his deductions are PF ₹1,440 (12% of ₹12,000) + ESI ₹120 = ₹1,560 only — the employer share is NOT deducted from him${sl ? ' (got ₹' + Number(sl.d) / 100 + ')' : ''}`);
   }
 
   step('3. verify -> approve -> lock (and an invalid jump is refused)');
