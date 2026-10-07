@@ -66,6 +66,6 @@ The JSON **is** the editable layer. Layout changes = edit
 
 - `hook1` (required) / `hook2` — the big line(s). hook2 renders orange.
 - `support` — one sentence (square/og) or array of lines (status).
-- `badge` — short green pill, 2–4 words ("आज की टिप", "हिंदी · मुफ़्त").
+- `badge` — short green pill, 2–4 words ("आज की टिप", "हिंदी में").
 - `checks` — status only: up to 3 bullet lines with drawn green checkmarks.
-- `cta` — button text; defaults to "मुफ़्त शुरू करें". Domain line is locked.
+- `cta` — button text; defaults to "शुरू करें". Domain line is locked.

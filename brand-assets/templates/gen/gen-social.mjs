@@ -169,7 +169,7 @@ function square(c, name) {
   b += txt(c.hook1, 'hind-700', 92, WHITE, 64, 500).svg;
   if (c.hook2) b += txt(c.hook2, 'hind-700', 92, ORANGE, 64, 618).svg;
   if (c.support) b += txt(c.support, 'hind-400', 40, LIGHT, 64, 706).svg;
-  b += cta(c.cta || 'मुफ़्त शुरू करें', 36, 300, 880, 76);
+  b += cta(c.cta || 'शुरू करें', 36, 300, 880, 76);
   b += txt('sahakarlekha.com', 'inter-600', 30, LIGHT, 64, 1006).svg;
   b += strip(W, H - 18, 6);
   writeOut(name, W, H, b);
@@ -189,7 +189,7 @@ function status(c, name) {
     const y = 1260 + i * 84;
     b += check(316, y - 12, 26) + txt(line, 'hind-500', 42, WHITE, 372, y).svg;
   });
-  b += cta(c.cta || 'मुफ़्त शुरू करें', 42, W / 2, 1580, 88);
+  b += cta(c.cta || 'शुरू करें', 42, W / 2, 1580, 88);
   b += txt('sahakarlekha.com', 'inter-600', 36, LIGHT, W / 2, 1750, 'middle').svg;
   b += strip(W, H - 24, 8);
   writeOut(name, W, H, b);
