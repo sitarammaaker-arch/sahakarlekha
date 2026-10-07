@@ -13,6 +13,8 @@ import { Save, ArrowRight, FileSpreadsheet, Download } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { carryForwardOpenings, earlierYearVoucherCount, openingTotals } from '@/lib/openingBalances';
 import { fyStartFromLabel } from '@/lib/fyPeriod';
+import { accountCode } from '@/lib/accountCode';
+import { accountDisplayName } from '@/lib/accountName';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -57,7 +59,13 @@ export default function OpeningBalances() {
   const balanceAccounts = useMemo(() =>
     accounts.filter(a =>
       a.type === 'asset' || a.type === 'liability' || a.type === 'equity'
-    ).sort((a, b) => (a.id || '').localeCompare(b.id || '')),
+    // by readable code (#706); accounts without one yet go last, by name
+    ).sort((a, b) => {
+      const ca = accountCode(a), cb = accountCode(b);
+      if (ca && cb) return ca.localeCompare(cb, 'en', { numeric: true });
+      if (ca || cb) return ca ? -1 : 1;
+      return (a.name || '').localeCompare(b.name || '');
+    }),
     [accounts]);
 
   const filtered = useMemo(() => {
@@ -76,13 +84,13 @@ export default function OpeningBalances() {
   const groupsWithOpening = balanceAccounts.filter(a => a.isGroup && (balances[a.id]?.amount || 0) > 0);
 
   const handleCSV = () => {
-    const headers = ['Account Name', 'Type', 'Opening Balance', 'Balance Type'];
-    const rows = filtered.map(a => [a.name, a.type, a.openingBalance || 0, a.openingBalanceType || 'debit']);
+    const headers = ['Code', 'Account Name', 'Type', 'Opening Balance', 'Balance Type'];
+    const rows = filtered.map(a => [accountCode(a), a.name, a.type, a.openingBalance || 0, a.openingBalanceType || 'debit']);
     downloadCSV(headers, rows, 'opening_balances.csv');
   };
   const handleExcel = () => {
-    const headers = ['Account Name', 'Type', 'Opening Balance', 'Balance Type'];
-    const rows = filtered.map(a => [a.name, a.type, a.openingBalance || 0, a.openingBalanceType || 'debit']);
+    const headers = ['Code', 'Account Name', 'Type', 'Opening Balance', 'Balance Type'];
+    const rows = filtered.map(a => [accountCode(a), a.name, a.type, a.openingBalance || 0, a.openingBalanceType || 'debit']);
     downloadExcelSingle(headers, rows, 'opening_balances.xlsx', 'Opening Balances');
   };
 
@@ -252,9 +260,14 @@ export default function OpeningBalances() {
         </CardContent></Card>
         <Card><CardContent className="pt-4">
           <p className="text-xs text-muted-foreground">{hi ? 'अंतर' : 'Difference'}</p>
-          <p className={`font-bold text-lg ${isBalanced ? 'text-green-700' : 'text-red-600'}`}>
-            {isBalanced ? (hi ? 'संतुलित ✓' : 'Balanced ✓') : `₹${fmt(difference)}`}
-          </p>
+          {/* An all-zero page is "not filled yet", never "balanced" (usability audit P0-3). */}
+          {totalDebit === 0 && totalCredit === 0 ? (
+            <p className="font-bold text-sm text-amber-700">{hi ? 'अभी ओपनिंग बैलेंस नहीं भरा गया' : 'Opening balances not entered yet'}</p>
+          ) : (
+            <p className={`font-bold text-lg ${isBalanced ? 'text-green-700' : 'text-red-600'}`}>
+              {isBalanced ? (hi ? 'संतुलित ✓' : 'Balanced ✓') : `₹${fmt(difference)}`}
+            </p>
+          )}
         </CardContent></Card>
       </div>
 
@@ -313,9 +326,9 @@ export default function OpeningBalances() {
                   const type = entry?.type || (acct.type === 'asset' ? 'debit' : 'credit');
                   return (
                     <TableRow key={acct.id}>
-                      <TableCell className="font-mono text-xs">{acct.id}</TableCell>
+                      <TableCell className="font-mono text-xs">{accountCode(acct) || '—'}</TableCell>
                       <TableCell className="font-medium text-sm">
-                        {acct.name}
+                        {accountDisplayName(acct, hi)}
                         {acct.isGroup && (
                           <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/30 align-middle"
                             title={hi ? 'समूह खाता — रिपोर्ट इसकी opening नहीं गिनतीं' : 'Group account — reports ignore its opening'}>
