@@ -44,9 +44,12 @@ const normName = (s: string): string => (s || '').toLowerCase().trim();
  */
 export function mapImportedOpenings(
   rows: ImportedOpeningRow[],
-  accounts: { id: string; name: string }[]
+  accounts: { id: string; name: string; isGroup?: boolean }[]
 ): { entries: OpeningEntry[]; unmatched: string[] } {
-  const byName = new Map(accounts.map(a => [normName(a.name), a.id]));
+  // An opening can NEVER go on a GROUP account — Trial Balance / Balance Sheet count ledger (leaf) accounts only, so the money would vanish
+  // (the Opening Balances page blocks it too). A row that names a group is returned as unmatched, never silently written.
+  const byName = new Map<string, string>();
+  for (const a of accounts) if (!a.isGroup) byName.set(normName(a.name), a.id);
   const resolved = new Map<string, OpeningEntry>();
   const unmatched: string[] = [];
 
