@@ -41,7 +41,7 @@ ok('reverseVoucher: links via rpc link_voucher_reversal', reverse.includes("rpc(
 ok('reverseVoucher: …only after post_voucher made the reversal durable (onPersisted)', /onPersisted: linkOnServer/.test(reverse));
 ok('reverseVoucher: the direct link updates run only when the flag is OFF', /if \(!viaServer\) \{\s*supabase\.from\('vouchers'\)\.update\(\{ reversalOf/.test(reverse));
 const add = body('addVoucher');
-ok('addVoucher: onPersisted fires after the server confirms (official number included)', /opts\?\.onPersisted\?\.\(nv\)/.test(add) && /else opts\?\.onPersisted\?\.\(v\)/.test(add));
+ok('addVoucher: onPersisted fires after the server confirms (official number included)', /opts\?\.onPersisted\?\.\(nv\)/.test(add) && /else \{?\s*opts\?\.onPersisted\?\.\(v\)/.test(add));
 
 ok('syncOpeningOnServer calls rpc sync_account_opening_event', /rpc\('sync_account_opening_event'/.test(src));
 const addAcc = body('addAccount'), updAcc = body('updateAccount'), delAcc = body('deleteAccount');
