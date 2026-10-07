@@ -38,7 +38,16 @@ export interface Payslip {
   grossDeductions: MoneyValue;
   /** gross earnings − gross deductions (may be negative if recovery exceeds pay — surfaced, not hidden). */
   netPay: MoneyValue;
+  /**
+   * The EMPLOYER's own PF / ESI share (ER_PF, ER_ESI*). NOT part of gross, deductions or net — the employee's pay does not move — but
+   * the ledger needs it (Dr employer expense / Cr payable), and an 'info' component is otherwise dropped, so it is carried here and
+   * persisted by pay-run. Whole rupees, like every other line. Absent/empty when no employer component is bound.
+   */
+  employerContributions?: PayslipLine[];
 }
+
+/** Same set as statutory/employerShare.ts isErCode — repeated here so the calc core imports nothing statutory (a test pins them equal). */
+export const isEmployerShareCode = (code: string): boolean => { const c = code.toUpperCase(); return c === 'ER_PF' || c === 'ER_ESI' || c.startsWith('ER_ESI_'); };
 
 export interface AggregateSpec {
   currency: string;
@@ -70,6 +79,7 @@ const isMoney = (v: Value): v is MoneyValue =>
 export function aggregatePayslip(values: Record<string, Value>, spec: AggregateSpec): Payslip {
   const earnings: PayslipLine[] = [];
   const deductions: PayslipLine[] = [];
+  const employerContributions: PayslipLine[] = [];
   let grossEarningsMinor = 0;
   let grossDeductionsMinor = 0;
 
@@ -87,7 +97,14 @@ export function aggregatePayslip(values: Record<string, Value>, spec: AggregateS
   // employee's own amount is the truth (that is what a per-employee structure means).
   const pool: Record<string, Value> = { ...values, ...(spec.fixedComponents ?? {}) };
   for (const [code, side] of Object.entries(spec.classification)) {
-    if (side === 'info') continue; // intermediate — deliberately excluded from the payslip
+    if (side === 'info') {
+      // intermediate — deliberately excluded from the payslip. EXCEPT the employer's statutory share: it is a real cost and liability.
+      const v = pool[code];
+      if (isEmployerShareCode(code) && v !== undefined && isMoney(v) && v.currency === spec.currency) {
+        employerContributions.push({ code, side, amount: makeMoney(Math.round(v.minor / 100) * 100, spec.currency), clamped: 'none' });
+      }
+      continue;
+    }
 
     const raw = pool[code];
     if (raw === undefined) {
@@ -120,5 +137,6 @@ export function aggregatePayslip(values: Record<string, Value>, spec: AggregateS
     grossEarnings: makeMoney(grossEarningsMinor, spec.currency),
     grossDeductions: makeMoney(grossDeductionsMinor, spec.currency),
     netPay: makeMoney(grossEarningsMinor - grossDeductionsMinor, spec.currency),
+    ...(employerContributions.length ? { employerContributions } : {}),
   };
 }

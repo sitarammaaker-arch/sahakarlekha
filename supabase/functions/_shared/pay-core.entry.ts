@@ -16,3 +16,4 @@ export { makeEsiEmployee, ESI_EMPLOYEE_NAME, ESI_EMPLOYEE_SIG, ESI_FORMULAS, ESI
 export { monthsLeftInFy, fyBounds } from '@/lib/payroll/cumulativeTds.ts';
 // PF / ESI parameters as dated, flagged-unverified data (the one place to change them): the seed defaults read it.
 export { resolveParam, resolveStatutory } from '@/lib/rules/epfEsi.ts';
+export { makeEsiEmployer, ESI_EMPLOYER_NAME, ESI_EMPLOYER_SIG, ER_FORMULAS, ER_ESI_CODE_BY_TYPE, ER_PF_CODE, ER_PF_RATE_VAR, isErCode } from '@/lib/pay/statutory/employerShare.ts';

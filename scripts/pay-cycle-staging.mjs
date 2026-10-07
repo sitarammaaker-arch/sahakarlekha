@@ -18,6 +18,7 @@ import pg from 'pg';
 const STAGING_REF = 'ivmrlhjrqtwftdlxajxk';
 const PROD_REF = 'rwffxupenwdtrmyabytk';
 const WITH_TDS = process.env.WITH_TDS === '1';   // also exercise salary TDS (P2): $env:WITH_TDS='1'
+const WITH_ER = process.env.WITH_ER === '1';     // also exercise the EMPLOYER PF/ESI share (er-set): $env:WITH_ER='1'
 
 // ── env + staging guard ───────────────────────────────────────────────────────────────────
 const env = Object.fromEntries(
@@ -99,6 +100,7 @@ let createdRunId = '';        // the run this script made (for end-of-test clean
 let runFinalised = false;     // true once posted/paid/rolled back — those must not be cancelled
 // declared HERE, not inside the try: the cleanup in `finally` reads them (a block-scoped `let` made that a ReferenceError)
 let tdsEmpId = '', tdsExpectedMinor = 0n, ptLeftover = 0, esiEmpId = '', esiLines = 0;
+let erEmpId = '', erOn = false, erPfTotal = 0n, erEsiTotal = 0n;   // the employer-share test employee + what the run holds for it
 const pfExpectedMinor = 300000;   // ₹25,000 ceiling (from 2026-09-17) × 12%, for the Nov-2026 period this script uses
 
 try {
@@ -136,7 +138,7 @@ try {
   if (!period) {
     let start = new Date(fy.s + 'T00:00:00Z'); const end = new Date(fy.e + 'T00:00:00Z');
     // WITH_TDS: switching TDS on is history-safe — it applies from today — so the run must be THIS month or later.
-    if (WITH_TDS) { const n = new Date(); const cur = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1)); if (cur > start) start = cur; }
+    if (WITH_TDS || WITH_ER) { const n = new Date(); const cur = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1)); if (cur > start) start = cur; }
     for (let d = new Date(start); d <= end && !period; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
       const p = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
       if (!taken.has(p)) period = p;
@@ -206,6 +208,45 @@ try {
     ok((elst.body.employees || []).filter((e) => e.esi_code && !/^Cycle ESI/.test(nm(e))).length === 0, 'ESI is on ONLY for the "Cycle ESI" test employee(s) — off for everyone else (default off)');
   }
 
+  if (WITH_ER) {
+    step('1c. employer PF/ESI share — switch it on for one employee, and prove the refusals');
+    // The switch refuses unless the society has the employer-expense roles; say so plainly instead of failing blind.
+    const roles = (await db.query(`select role from public.account_roles where society_id = $1 and role in ('pf.employer_expense','esi.employer_expense')`, [SOC])).rows.map((r) => r.role);
+    const rolesOk = roles.includes('pf.employer_expense') && roles.includes('esi.employer_expense');
+    console.log(`  roles on this staging society: ${roles.join(', ') || '(none)'}`);
+    const er = await fn('pay-employee', { action: 'add', name: 'Cycle ER', code: `CYC${stamp}R`, type: 'permanent', basicMinor: 1000000, dateOfJoin: '2025-01-01' });
+    ok(er.status === 200 && er.body.employeeId, `added Cycle ER, basic ₹10,000 (status ${er.status}${er.body.error ? ' ' + er.body.error : ''})`);
+    erEmpId = er.body.employeeId || '';
+    if (erEmpId) created.push(erEmpId);
+    // ESI on first: the employer share follows the employee share, so this employee will carry both ER_PF and ER_ESI
+    const es = await fn('pay-employee', { action: 'esi-set', employeeId: erEmpId, enabled: true });
+    ok(es.status === 200 && es.body.code === 'ESI', `ESI switched on for Cycle ER (status ${es.status}${es.body.error ? ' ' + es.body.error : ''})`);
+    // the daily-wage / no-PF-no-ESI refusal
+    const ap = await fn('pay-employee', { action: 'add', name: 'Cycle ER NoStat', code: `CYC${stamp}N`, type: 'apprentice', basicMinor: 900000, dateOfJoin: '2025-01-01' });
+    if (ap.body.employeeId) created.push(ap.body.employeeId);
+    const apOn = await fn('pay-employee', { action: 'er-set', employeeId: ap.body.employeeId, enabled: true });
+    ok(apOn.status === 400, `er-set is REFUSED for an employee with neither PF nor ESI (status ${apOn.status}${apOn.body.error ? ': ' + String(apOn.body.error).slice(0, 70) : ''})`);
+    if (!rolesOk) {
+      const refused = await fn('pay-employee', { action: 'er-set', employeeId: erEmpId, enabled: true });
+      ok(refused.status === 409 && /pf\.employer_expense|esi\.employer_expense/.test(String(refused.body.error || '')), `roles are missing on staging, so er-set is REFUSED with the roles named (status ${refused.status})`);
+      console.log('  ! the rest of the employer-share checks need the two roles. Add them on STAGING (SQL Editor, staging project only):');
+      console.log("      insert into public.account_roles(society_id, role, account_id) values ('" + SOC + "','pf.employer_expense','5203'),('" + SOC + "','esi.employer_expense','5204') on conflict do nothing;");
+      console.log('    then run this script again with  $env:WITH_ER=1');
+    } else {
+      const on = await fn('pay-employee', { action: 'er-set', employeeId: erEmpId, enabled: true });
+      ok(on.status === 200 && on.body.enabled === true && (on.body.codes || []).includes('ER_PF') && (on.body.codes || []).includes('ER_ESI'), `er-set on: components ${(on.body.codes || []).join(', ')} (status ${on.status}${on.body.error ? ' ' + on.body.error : ''})`);
+      ok(typeof on.body.lawWarning === 'string' && /not yet confirmed/.test(on.body.lawWarning), 'the switch says the employer rates are not yet confirmed (honest about verified:false)');
+      const on2 = await fn('pay-employee', { action: 'er-set', employeeId: erEmpId, enabled: true });
+      ok(on2.status === 200, 'switching it on again is harmless (idempotent)');
+      const lst = await fn('pay-employee', { action: 'list' });
+      const me = (lst.body.employees || []).find((e) => e.id === erEmpId) || {};
+      ok(Array.isArray(me.er_codes) && me.er_codes.includes('ER_PF') && me.er_codes.includes('ER_ESI'), 'the employee list shows er_codes = ER_PF, ER_ESI');
+      const nm2 = (e) => (e.full_name && (e.full_name.en || e.full_name.hi)) || '';
+      ok((lst.body.employees || []).filter((e) => (e.er_codes || []).length && !/^Cycle ER/.test(nm2(e))).length === 0, 'the employer share is on ONLY for the "Cycle ER" test employee(s) — off for everyone else (default off)');
+      erOn = true;
+    }
+  }
+
   step('2. compute the run');
   const run = await fn('pay-run', { period });
   ok(run.status === 200 && run.body.runId, `pay-run created ${run.body.runNo || ''} for ${period} (${run.body.employeeCount} payslips)${run.body.error ? ' ' + run.body.error : ''}`);
@@ -245,6 +286,22 @@ try {
     ok(pfl.length === 0 || BigInt(pfl[0].amt) === BigInt(pfExpectedMinor), `PF on the ceiling, not on the whole wage: ₹${pfExpectedMinor / 100}${pfl.length ? ' — got ₹' + Number(pfl[0].amt) / 100 : ' — (no PF line on this structure, check skipped)'}`);
   }
 
+  if (WITH_ER && erOn) {
+    const erl = (await db.query(`select cc.code, pl.computed_minor::bigint amt, p.employee_id from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id
+      join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and (cc.code = 'ER_PF' or cc.code = 'ER_ESI' or cc.code like 'ER\\_ESI\\_%')`, [runId])).rows;
+    const mine = erl.filter((r) => r.employee_id === erEmpId);
+    // basic ₹10,000 -> PF wage ₹12,000 x 13% = ₹1,560 ; gross ₹16,000 x 3.25% = ₹520
+    ok(mine.some((r) => r.code === 'ER_PF' && BigInt(r.amt) === 156000n), `employer PF line is ₹1,560 (13% of ₹12,000)${mine.length ? ' — got ' + mine.map((r) => r.code + ' ₹' + Number(r.amt) / 100).join(', ') : ' — NO employer lines were saved'}`);
+    ok(mine.some((r) => r.code === 'ER_ESI' && BigInt(r.amt) === 52000n), 'employer ESI line is ₹520 (3.25% of ₹16,000)');
+    ok(erl.every((r) => r.code === 'ER_PF' ? BigInt(r.amt) === 156000n : BigInt(r.amt) === 52000n), 'every employer line in the run is one of those two figures (no other employee got one)');
+    erPfTotal = erl.filter((r) => r.code === 'ER_PF').reduce((t, r) => t + BigInt(r.amt), 0n);
+    erEsiTotal = erl.filter((r) => r.code !== 'ER_PF').reduce((t, r) => t + BigInt(r.amt), 0n);
+    // the employee's own pay did not change: his payslip nets to gross - deductions, and the employer lines are NOT in deductions
+    const sl = (await db.query(`select gross_minor::bigint g, deductions_minor::bigint d, net_minor::bigint n from pay_calc.payslip where pay_run_id = $1 and employee_id = $2`, [runId, erEmpId])).rows[0];
+    ok(!!sl && BigInt(sl.g) - BigInt(sl.d) === BigInt(sl.n), 'Cycle ER payslip: gross − deductions = net');
+    ok(!!sl && BigInt(sl.d) === 120000n + 12000n, `his deductions are PF ₹1,200 + ESI ₹120 = ₹1,320 only — the employer share is NOT deducted from him${sl ? ' (got ₹' + Number(sl.d) / 100 + ')' : ''}`);
+  }
+
   step('3. verify -> approve -> lock (and an invalid jump is refused)');
   const early = await fn('pay-post', { runId });
   ok(early.status >= 400, `post on a draft run is refused (status ${early.status})`);
@@ -278,8 +335,19 @@ try {
     const ptLeg = l1.find((r) => r.a === '2207');
     ok(!!ptLeg && BigInt(ptLeg.cr) === BigInt(20000 * (1 + ptLeftover)), `the voucher credits Professional Tax payable 2207 with ₹200${ptLeg ? ' — got ₹' + Number(ptLeg.cr) / 100 : ' — NO 2207 leg'}`);
     const esiLeg = l1.find((r) => r.a === '2204');
-    ok(!!esiLeg && BigInt(esiLeg.cr) === BigInt(12000 * esiLines), `the voucher credits ESI payable 2204 with ₹${120 * esiLines}${esiLeg ? ' — got ₹' + Number(esiLeg.cr) / 100 : ' — NO 2204 leg (is esi.payable mapped on staging?)'}`);
+    ok(!!esiLeg && BigInt(esiLeg.cr) === BigInt(12000 * esiLines) + erEsiTotal, `the voucher credits ESI payable 2204 with ₹${120 * esiLines}${esiLeg ? ' — got ₹' + Number(esiLeg.cr) / 100 : ' — NO 2204 leg (is esi.payable mapped on staging?)'}`);
     ok(!!leg && BigInt(leg.cr) === tdsExpectedMinor, `the voucher credits TDS payable 2202 with the run's TDS (₹${Number(tdsExpectedMinor) / 100})${leg ? ' — got ₹' + Number(leg.cr) / 100 : ' — NO 2202 leg'}`);
+  }
+  if (WITH_ER && erOn) {
+    const pfEmp = (await db.query(`select coalesce(sum(pl.computed_minor),0)::bigint t from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and cc.code in ('PF','EPF')`, [runId])).rows[0].t;
+    const esiEmp = (await db.query(`select coalesce(sum(pl.computed_minor),0)::bigint t from pay_calc.payslip_line pl join pay_calc.payslip p on p.id = pl.payslip_id join pay_config.component_catalog cc on cc.id = pl.component_id where p.pay_run_id = $1 and (cc.code = 'ESI' or cc.code like 'ESI\\_%')`, [runId])).rows[0].t;
+    const sumOf = (acc, side) => l1.filter((r) => r.a === acc).reduce((t, r) => t + BigInt(r[side]), 0n);
+    ok(sumOf('5203', 'dr') === erPfTotal && erPfTotal > 0n, `Dr 5203 PF (employer expense) = ₹${Number(erPfTotal) / 100}`);
+    ok(sumOf('5204', 'dr') === erEsiTotal && erEsiTotal > 0n, `Dr 5204 ESI (employer expense) = ₹${Number(erEsiTotal) / 100}`);
+    ok(sumOf('2203', 'cr') === BigInt(pfEmp) + erPfTotal, `Cr 2203 EPF payable = employee ₹${Number(pfEmp) / 100} + employer ₹${Number(erPfTotal) / 100} in ONE leg${l1.filter((r) => r.a === '2203').length === 1 ? '' : ' — but there are ' + l1.filter((r) => r.a === '2203').length + ' legs'}`);
+    ok(sumOf('2204', 'cr') === BigInt(esiEmp) + erEsiTotal, `Cr 2204 ESI payable = employee ₹${Number(esiEmp) / 100} + employer ₹${Number(erEsiTotal) / 100}`);
+    // the Dr side still balances with the employer expense on it
+    ok(t1.dr === t1.cr, 'the voucher still balances with the employer share on it');
   }
   const e1 = (await db.query(`select event_type, sequence, payload from public.ledger_events where society_id::text = $1 and aggregate_type = 'voucher' and aggregate_id = $2 order by sequence`, [SOC, accId])).rows;
   ok(e1.length === 1 && e1[0].event_type === 'voucher.posted' && Number(e1[0].sequence) === 1, 'the JOURNAL has exactly one voucher.posted event (the old direct-DB path wrote none)');
@@ -343,6 +411,11 @@ try {
   if (WITH_TDS && tdsEmpId && TOKEN) {
     const off = await fn('pay-employee', { action: 'tds-set', employeeId: tdsEmpId, enabled: false });
     console.log(`\ncleanup: TDS switched off -> ${off.status === 200 ? 'ok' : 'status ' + off.status + ' ' + (off.body.error || '')}`);
+  }
+  if (WITH_ER && erEmpId && TOKEN) {
+    const e1 = await fn('pay-employee', { action: 'er-set', employeeId: erEmpId, enabled: false });
+    const e2 = await fn('pay-employee', { action: 'esi-set', employeeId: erEmpId, enabled: false });
+    console.log(`\ncleanup: employer share off -> ${e1.status === 200 ? 'ok' : 'status ' + e1.status + ' ' + (e1.body.error || '')}; ESI off -> ${e2.status === 200 ? 'ok' : 'status ' + e2.status + ' ' + (e2.body.error || '')}`);
   }
   if (created.length && TOKEN) {
     step('cleanup: deactivate the 3 test employees');
