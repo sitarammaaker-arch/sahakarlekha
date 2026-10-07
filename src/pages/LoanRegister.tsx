@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { defaultBankAccountId } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import EmptyState from '@/components/EmptyState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -156,7 +157,7 @@ const LoanRegister: React.FC = () => {
     }
     const newRepaid = round2(loan.repaidAmount + principal);
     const loanAccId = memberLoanAccountId(accounts);   // exact 3304 first; never the KCC head
-    const debitAccId = mode === 'bank' ? (accounts.find(a => a.id === '3302')?.id || '3302') : '3301';
+    const debitAccId = mode === 'bank' ? defaultBankAccountId(accounts) : '3301';
     const lid = () => crypto.randomUUID();
     // H2-2: interest already accrued for THIS loan clears the receivable (3313) — never income twice;
     // only interest that was never accrued goes to income. Overdue first (founder decision D4).

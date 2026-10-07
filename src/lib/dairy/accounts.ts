@@ -23,7 +23,7 @@ export const DAIRY_ACCOUNT_IDS = {
   dividendPayable: '2104',       // Dividend Payable
 } as const;
 
-type Acc = Pick<LedgerAccount, 'id' | 'name' | 'nameHi' | 'subtype'> & { isDeleted?: boolean };
+type Acc = Pick<LedgerAccount, 'id' | 'name' | 'nameHi' | 'subtype'> & { isDeleted?: boolean; isGroup?: boolean };
 
 const nameHit = (a: Acc, nameHints: ReadonlyArray<string>): boolean =>
   nameHints.some((h) => (a.nameHi || '').includes(h) || (a.name || '').toLowerCase().includes(h.toLowerCase()));
@@ -34,7 +34,9 @@ const findBy = (
   id: string,
   nameHints: ReadonlyArray<string>,
 ): string | null => {
-  const live = accounts.filter((a) => !a.isDeleted);
+  // A group is a heading, never a posting target — a name/id hit on one (e.g. "Sundry Debtors" once 3303
+  // became a group) must not be returned: the voucher would be refused. Resolve to a ledger instead.
+  const live = accounts.filter((a) => !a.isDeleted && !a.isGroup);
   if (subtype) {
     const bySub = live.find((a) => a.subtype === subtype);
     if (bySub) return bySub.id;
@@ -71,8 +73,11 @@ export const resolveMilkBulkSalesAccountId = (accounts: ReadonlyArray<Acc>): str
 export const resolveMilkPayableAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
   findBy(accounts, null, DAIRY_ACCOUNT_IDS.milkPayable, ['देय दुग्ध', 'दुग्ध भुगतान', 'Milk Payment Payable', 'Milk Payable']);
 
+// 3303-01 is the catch-all child of the 3303 Sundry Debtors GROUP in a current chart; a legacy chart still
+// has 3303 itself as the ledger (findBy skips groups, so the second lookup only ever returns a ledger).
 export const resolveUnionReceivableAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
-  findBy(accounts, null, DAIRY_ACCOUNT_IDS.unionReceivable, ['विविध देनदार', 'Sundry Debtors', 'Union Receivable']);
+  findBy(accounts, null, '3303-01', [])
+  ?? findBy(accounts, null, DAIRY_ACCOUNT_IDS.unionReceivable, ['विविध देनदार', 'Sundry Debtors', 'Union Receivable']);
 
 export const resolveMemberInputReceivableAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
   findBy(accounts, null, DAIRY_ACCOUNT_IDS.memberInputReceivable, DAIRY_HINTS.memberInputReceivable);

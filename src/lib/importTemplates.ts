@@ -5,11 +5,11 @@
  * 2026-10-07 found the example rows were stale and one of them dangerous:
  *   - opening balances: "Share Capital" is a GROUP in every chart (1100). The Opening Balances page refuses an opening on a group
  *     (reports ignore it — a real ₹58 lakh went missing that way, PR #350) but the importer accepted it. Now it refuses too;
- *   - "Bank - SBI" / "Reserve Fund" exist in no chart (the real names are "Bank Accounts" / "Statutory Reserve Fund");
+ *   - "Bank - SBI" / "Reserve Fund" exist in no chart (the real names are "Bank Account (Main)" / "Statutory Reserve Fund");
  *   - accounts: "Admission Fee Income" and "Salary Expense" would have created DUPLICATES of "Admission Fee" and "Salary";
  *   - vouchers: the example dates were 2025-04-15 — the importer only accepts the CURRENT financial year, so every example failed.
  * Every example row now starts with "(उदाहरण)": a row left in by mistake is refused with a plain message instead of being imported.
- * Example account names are the real, postable ones that exist in every society chart (Cash in Hand, Bank Accounts, Individual Share
+ * Example account names are the real, postable ones that exist in every society chart (Cash in Hand, Bank Account (Main), Individual Share
  * Capital, Statutory Reserve Fund, Admission Fee, Salary).
  */
 import type { LedgerAccount } from '@/types';
@@ -71,7 +71,7 @@ export const OPENING_BALANCES_TEMPLATE = [
   'account_name,opening_balance,balance_type',
   '(Account का नाम — बिल्कुल वैसा जैसा system में है; समूह नहीं, उसके नीचे का असली खाता),(राशि रुपये में),(Debit/Credit)',
   EXAMPLE + 'Cash in Hand,45000,Debit',
-  EXAMPLE + 'Bank Accounts,115000,Debit',
+  EXAMPLE + 'Bank Account (Main),115000,Debit',
   EXAMPLE + 'Individual Share Capital,500000,Credit',
   EXAMPLE + 'Statutory Reserve Fund,80000,Credit',
 ].join('\n');

@@ -47,7 +47,7 @@ import { computeStock, computeStockValue, computeStockCostRate, reconcileMovemen
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
 import * as storage from '@/lib/storage';
-import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
+import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, defaultBankAccountId, defaultDebtorsAccountId, defaultCreditorsAccountId } from '@/lib/storage';
 import { isUniqueViolation, isMissingBranchColumn, payloadWithoutMissingColumn, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
@@ -2121,7 +2121,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }): Voucher | null => {
     if (guardFYLocked()) return null;
     const cust = customers.find(c => c.id === data.customerId);
-    const custAcc = cust?.accountId || '3303';   // Sundry Debtors fallback
+    const custAcc = cust?.accountId || defaultDebtorsAccountId(accountsRef.current);   // Sundry Debtors fallback
     const allocs = data.allocations.filter(a => a.amount > 0);
     const adv = Math.max(0, +(data.advance || 0));
     const onAcc = Math.max(0, +(data.onAccount || 0));
@@ -2179,7 +2179,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }): Voucher | null => {
     if (guardFYLocked()) return null;
     const sup = suppliers.find(s => s.id === data.supplierId);
-    const supAcc = sup?.accountId || '2101';   // Sundry Creditors fallback
+    const supAcc = sup?.accountId || defaultCreditorsAccountId(accountsRef.current);   // Sundry Creditors fallback
     const allocs = data.allocations.filter(a => a.amount > 0);
     const adv = Math.max(0, +(data.advance || 0));
     const onAcc = Math.max(0, +(data.onAccount || 0));
@@ -6246,7 +6246,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       : data.paymentMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK)
       // Credit: an explicit receivable account (e.g. Consumer member-receivable control) wins,
       // else the linked customer's sub-ledger, else Sundry Debtors.
-      : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303'));
+      : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || defaultDebtorsAccountId(accountsRef.current)) : defaultDebtorsAccountId(accountsRef.current)));
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
 
     // Cr: Sales A/c — split by each item's salesAccountId so multi-product societies
@@ -6525,7 +6525,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       : data.paymentMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK)
       // Credit: an explicit receivable account (e.g. Consumer member-receivable control) wins,
       // else the linked customer's sub-ledger, else Sundry Debtors.
-      : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303'));
+      : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || defaultDebtorsAccountId(accountsRef.current)) : defaultDebtorsAccountId(accountsRef.current)));
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
 
     // T-02 / RULE 4: exact-paise split by salesAccountId (same shared rule as addSale / repair).
@@ -6643,7 +6643,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Build multi-line purchase voucher
     const lines: VoucherLine[] = [];
-    const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || '2101') : '2101';
+    const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || defaultCreditorsAccountId(accountsRef.current)) : defaultCreditorsAccountId(accountsRef.current);
     const creditAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
       : data.paymentMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK)
       : supplierAccId;
@@ -6922,7 +6922,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 3️⃣ Build new voucher lines from updated data
     const grandTotal = data.grandTotal ?? data.netAmount;
     const lines: VoucherLine[] = [];
-    const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || '2101') : '2101';
+    const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || defaultCreditorsAccountId(accountsRef.current)) : defaultCreditorsAccountId(accountsRef.current);
     const creditAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
       : data.paymentMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK)
       : supplierAccId;

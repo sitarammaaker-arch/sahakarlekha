@@ -76,9 +76,9 @@ for (const shape of [leafBank, groupBank]) {
 
 // 6. The real seeded chart resolves — guards against a template changing 3302's shape
 //    without this function being revisited.
-ok(getBankAccountIds(CMS_SOCIETY_ACCOUNTS).join() === BANK, 'seeded CMS chart → [3302]');
+ok(getBankAccountIds(CMS_SOCIETY_ACCOUNTS).join() === '3302-01', 'seeded CMS chart → [3302-01] (3302 is the group; its default bank is the child)');
 const seededPlusBank = [...CMS_SOCIETY_ACCOUNTS, sbi];
-ok(getBankAccountIds(seededPlusBank).join() === `${BANK},u-sbi`, 'seeded CMS chart + added bank → both listed');
+ok(getBankAccountIds(seededPlusBank).join() === '3302-01,u-sbi', 'seeded CMS chart + added bank → both listed');
 
 // 7. THE BANK-PICKER CONTRACT (migration 054). The purchase/sale/salary screens now let the
 //    operator choose WHICH bank; every posting site resolves the credit/debit bank as

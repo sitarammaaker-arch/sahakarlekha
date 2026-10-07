@@ -92,7 +92,7 @@ export const CAS_BS_LIABILITIES: CasSectionDef[] = [
     { id: 'L7i', label: 'i. Interest Accrued on Deposits', labelHi: 'i. जमा पर उपार्जित ब्याज' },
     { id: 'L7ii', label: 'ii. Interest Accrued on Borrowings', labelHi: 'ii. उधार पर उपार्जित ब्याज' },
     { id: 'L7iii', label: 'iii. Unclaimed Dividend', labelHi: 'iii. अदावी लाभांश', ids: ['2104'] },
-    { id: 'L7iv', label: 'iv. Sundry Creditors', labelHi: 'iv. विविध लेनदार', ids: ['2101'] },
+    { id: 'L7iv', label: 'iv. Sundry Creditors', labelHi: 'iv. विविध लेनदार', ids: ['2101', '2101-01'] },
     { id: 'L7v', label: 'v. Others', labelHi: 'v. अन्य', catchAll: true },
   ] },
   { id: 'L8', label: 'Bills for Collection (as per contra)', labelHi: 'वसूली हेतु बिल (प्रतिपक्ष)', lines: [
@@ -111,7 +111,7 @@ export const CAS_BS_ASSETS: CasSectionDef[] = [
     { id: 'A1', label: 'Cash on Hand', labelHi: 'हाथ में नकद', ids: ['3301'] },
   ] },
   { id: 'A2', label: 'Balances with DCCB / SCB and other banks', labelHi: 'DCCB / SCB व अन्य बैंकों में शेष', lines: [
-    { id: 'A2', label: 'Bank balances (bank-wise split not held in the ledger)', labelHi: 'बैंक शेष (बैंक-वार बँटवारा ledger में नहीं)', ids: ['3302'], subtypes: ['cash_bank'] },
+    { id: 'A2', label: 'Bank balances (bank-wise split not held in the ledger)', labelHi: 'बैंक शेष (बैंक-वार बँटवारा ledger में नहीं)', ids: ['3302', '3302-01'], subtypes: ['cash_bank'] },
   ] },
   { id: 'A4', label: 'Investments', labelHi: 'निवेश', lines: [
     { id: 'A4i', label: 'i. Government and Trustee Securities', labelHi: 'i. सरकारी व ट्रस्टी प्रतिभूतियाँ' },

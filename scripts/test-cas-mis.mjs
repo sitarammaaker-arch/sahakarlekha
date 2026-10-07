@@ -41,7 +41,7 @@ const bsOf = (bal, netProfit = 0) => {
 // Share 1,00,000 + reserve 20,000; SB deposits 50,000; DCCB borrowing 30,000.
 // Cash 10,000; bank 20,000; KCC loans 1,50,000; NSC 20,000.
 {
-  const bs = bsOf({ '1102': -100000, '1201': -20000, '2107': -50000, '2301': -30000, '3301': 10000, '3302': 20000, '3303': 150000, '3207': 20000 });
+  const bs = bsOf({ '1102': -100000, '1201': -20000, '2107': -50000, '2301': -30000, '3301': 10000, '3302-01': 20000, '3303': 150000, '3207': 20000 });
   ok(near(bs.totalAssets, 200000) && near(bs.totalLiabilities, 200000), 'fixture balances');
   const p = M.misPosition(bs);
   ok(near(p.equity, 120000), `equity = share capital + reserves (${p.equity})`);
@@ -124,7 +124,7 @@ const bsOf = (bal, netProfit = 0) => {
   const dr = [{ date: '2026-04-01', balance: 100 }, { date: '2026-05-01', balance: 0 }];
   ok(M.depositBalanceAt(dr, '2026-04-30') === 100 && M.depositBalanceAt(dr, '2026-06-30') === 0 && M.depositBalanceAt(dr, '2026-03-01') === 0, 'deposit balance at a date = recorded balance after the last entry by then');
 
-  const bs = bsOf({ '1102': -100000, '1201': -20000, '2107': -50000, '2301': -30000, '3301': 10000, '3302': 20000, '3303': 150000, '3207': 20000 });
+  const bs = bsOf({ '1102': -100000, '1201': -20000, '2107': -50000, '2301': -30000, '3301': 10000, '3302-01': 20000, '3303': 150000, '3207': 20000 });
   const xb = M.xviBalances(bs);
   ok(xb.memberCapital === 100000 && xb.deposits === 50000 && xb.borrowings === 30000 && xb.dccbBorrowings === 30000 && xb.loansOutstanding === 150000 && xb.totalAssets === 200000, `balances read off the CAS Balance Sheet (${JSON.stringify(xb)})`);
 

@@ -44,7 +44,7 @@ export interface RoleDef {
 export const ROLE_CATALOG: readonly RoleDef[] = [
   // Cash / bank
   { role: 'cash', capability: 'core', types: ['asset'], match: /cash in hand|रोकड़|नकद/i, preferIds: ['3301'], label: 'Cash in hand' },
-  { role: 'bank.default', capability: 'core', types: ['asset'], match: /^bank accounts?\b|^bank\b/i, preferIds: ['3302'], label: 'Default bank' },
+  { role: 'bank.default', capability: 'core', types: ['asset'], match: /^bank accounts?\b|^bank\b/i, preferIds: ['3302-01', '3302'], label: 'Default bank' },
 
   // Member
   { role: 'member.share_capital', capability: 'member', types: ['equity'], match: /individual share capital|member share capital|व्यक्तिगत शेयर/i, preferIds: ['1102'], label: 'Member share capital' },
@@ -60,8 +60,8 @@ export const ROLE_CATALOG: readonly RoleDef[] = [
   { role: 'loan.provision.npa', capability: 'lending', types: ['liability', 'equity'], match: /provision.*(npa|bad|doubtful)|npa provision/i, label: 'NPA / bad & doubtful provision' },
 
   // Parties
-  { role: 'customer.receivable', capability: 'parties', types: ['asset'], match: /sundry debtors|trade receivables?/i, preferIds: ['3303'], label: 'Customers (sundry debtors)' },
-  { role: 'supplier.payable', capability: 'parties', types: ['liability'], match: /sundry creditors|trade payables?/i, preferIds: ['2101'], label: 'Suppliers (sundry creditors)' },
+  { role: 'customer.receivable', capability: 'parties', types: ['asset'], match: /sundry debtors|trade receivables?/i, preferIds: ['3303-01', '3303'], label: 'Customers (sundry debtors)' },
+  { role: 'supplier.payable', capability: 'parties', types: ['liability'], match: /sundry creditors|trade payables?/i, preferIds: ['2101-01', '2101'], label: 'Suppliers (sundry creditors)' },
 
   // GST — head-wise target roles (RM-17 splits today's single accounts into these)
   { role: 'gst.output.cgst', capability: 'gst', types: ['liability'], match: /output.*\bcgst\b|\bcgst\b.*(output|payable)/i, label: 'GST output — CGST' },
