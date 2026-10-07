@@ -231,6 +231,7 @@
     "test:m1-3-account-roles": "node scripts/test-m1-3-account-roles.mjs",
     "test:m1-4b-reclass": "node scripts/test-m1-4b-reclass.mjs",
     "test:m1-4a-account-delete": "node scripts/test-m1-4a-account-delete.mjs",
+    "test:group-account-guard": "node scripts/test-group-account-guard.mjs",
     "test:pay-ledger-gate": "node scripts/test-pay-ledger-gate.mjs",
     "test:rm01-phantom-cancel": "node scripts/test-rm01-phantom-cancel.mjs",
     "test:member-joining-receipts": "node scripts/test-member-joining-receipts.mjs",

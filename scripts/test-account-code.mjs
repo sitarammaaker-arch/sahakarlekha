@@ -62,5 +62,25 @@ eq(pp.size, 300, 'all 300 parentless party ledgers get a code');
 eq(new Set(pp.values()).size, 300, '…all unique');
 eq([pp.get(parties[0].id), pp.get(parties[99].id)], ['2001', '2000-01'], 'root range first, then suffix form');
 
+
+// ── Bulk add (UniversalImporter loop): codes must be unique when addAccount is called many times in
+// one synchronous tick. addAccount reads accountsRef, which an effect refreshes only after render, so
+// the ref must be appended to synchronously (Rania 2026-10: 891 accounts saved codeless).
+{
+  const grp = [acc('2000', undefined, { isGroup: true }), acc('2100', '2000', { isGroup: true })];
+  const stale = Array.from({ length: 5 }, () => nextAccountCode(grp, '2100', false));
+  eq(new Set(stale).size, 1, 'documents the bug: a stale chart gives every sibling the SAME code');
+  let live = grp; const fresh = [];
+  for (let i = 0; i < 5; i++) { const c = nextAccountCode(live, '2100', false); fresh.push(c); live = [...live, acc(U(500 + i), '2100', { code: c })]; }
+  eq(new Set(fresh).size, 5, 'appending each new account before the next call → 5 distinct codes');
+}
+{
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(resolve(HERE, '../src/contexts/DataContext.tsx'), 'utf8');
+  const fn = src.slice(src.indexOf('const addAccount = useCallback('), src.indexOf('const updateAccount = useCallback('));
+  ok(/accountsRef\.current = \[\.\.\.accountsRef\.current, newAccount\]/.test(fn), 'addAccount appends to accountsRef synchronously');
+  ok(/accountsRef\.current = accountsRef\.current\.filter\(a => a\.id !== newAccount\.id\)/.test(fn), 'addAccount removes it from accountsRef on a failed cloud save (RULE 1)');
+}
+
 console.log(`Account codes: ${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

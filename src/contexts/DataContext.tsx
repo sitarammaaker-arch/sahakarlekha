@@ -93,7 +93,7 @@ import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, ne
 import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
 import { fetchAllPaged as fetchAllPagedFor } from '@/lib/supabasePaging';
 import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib/diagnostics/phantomVouchers';
-import { accountDeleteFailure, coaResetBlockers } from '@/lib/accounting/accountDelete';
+import { accountDeleteFailure, coaResetBlockers, coaResetLiveData } from '@/lib/accounting/accountDelete';
 import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 
@@ -4075,6 +4075,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // when there is no parent). A conventional template id (opts.id) IS its own code — none stored.
     const code = opts?.id ? undefined : (data.code || nextAccountCode(accountsRef.current, data.parentId, !!data.isGroup, data.type));
     const newAccount: LedgerAccount = { ...data, id: opts?.id || crypto.randomUUID(), ...(code ? { code } : {}) };
+    // accountsRef is normally refreshed by an effect AFTER render, so a caller that adds many accounts in
+    // one synchronous loop (UniversalImporter) would have every call compute its code from the SAME stale
+    // chart → the same "next free" code for every sibling → accounts_society_code_uniq rejects the
+    // step-2 code write for all but the first (Rania, 2026-10: 891 accounts saved with no code, 1,856
+    // errors). Append to the ref now so the next call in the same tick sees this account's code as used.
+    accountsRef.current = [...accountsRef.current, newAccount];
     setAccountsState(prev => [...prev, newAccount]);
     const openingViaServer = postingServiceRef.current;
     const openingEvent = openingViaServer ? null : buildOpeningDelta(newAccount);
@@ -4093,12 +4099,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // Step 2 failure: the account is safe; only the readable code is missing. Drop it locally so
           // the screen matches the cloud, and say so mildly (no rollback).
           reportError('db-sync', codeErr.message);
+          accountsRef.current = accountsRef.current.map(a => a.id === newAccount.id ? { ...a, code: undefined } : a);
           setAccountsState(prev => prev.map(a => a.id === newAccount.id ? { ...a, code: undefined } : a));
           toastRef.current({ title: 'खाता सेव हुआ — पर कोड नहीं', description: `Ledger code save nahi hua (${codeErr.message}). Migration 109 chalayein, phir Ledger Heads par "कोड दें" dabayein.`, duration: 10000 });
         });
       }
       if (error) {   // RULE 1: roll back so a failed cloud save can't silently diverge on F5
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
+        accountsRef.current = accountsRef.current.filter(a => a.id !== newAccount.id);
         setAccountsState(prev => prev.filter(a => a.id !== newAccount.id));
         if (openingEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== openingEvent.eventId);
         toastRef.current({ title: 'खाता सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
@@ -4459,6 +4467,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'खाता संरचना रीसेट नहीं हुई', description, variant: 'destructive', duration: 15000 });
       return false;
     };
+    // A running society's chart is never reset: the reset zeroes every opening balance and drops every
+    // custom head, and the blocker check below only covers vouchers/suppliers/customers. UI-side checks
+    // can be bypassed or stale, so the refusal lives here, where the delete happens.
+    const live = coaResetLiveData({
+      vouchers: vouchersRef.current.length, members: membersRef.current.length, loans: loansRef.current.length,
+      suppliers: suppliersRef.current.length, customers: customersRef.current.length,
+      sales: salesRef.current.length, purchases: purchasesRef.current.length, employees: employeesRef.current.length,
+      accountsWithOpening: accountsRef.current.filter(a => (Number(a.openingBalance) || 0) !== 0).length,
+    });
+    if (live.length > 0) {
+      return fail(`यह समिति चालू है (${live.join(', ')}), इसलिए खाता संरचना रीसेट नहीं हो सकती — रीसेट सभी opening balance शून्य कर देता और आपके बनाए खाते मिटा देता। कुछ नहीं बदला गया। (Reset is only for a society with no records.)`);
+    }
     // An account outside the template that a voucher (incl. cancelled) or a party points at would be
     // orphaned by the reset — refuse instead (RULE 3). Template ids come back with the same id.
     const blockers = coaResetBlockers(
