@@ -51,13 +51,13 @@ export function parseCSV(text: string): string[][] {
 const EXAMPLE = "(उदाहरण) ";
 
 export const ACCOUNTS_TEMPLATE = [
-  'account_name,account_type,opening_balance,balance_type',
-  '(यहाँ Account का नाम लिखें),(Asset/Liability/Equity/Income/Expense),(शुरुआती राशि रुपये में),(Debit/Credit)',
-  EXAMPLE + 'Bank - SBI,Asset,120000,Debit',
-  EXAMPLE + 'Loan from Bank,Liability,200000,Credit',
-  EXAMPLE + 'Anniversary Fund,Equity,80000,Credit',
-  EXAMPLE + 'Interest Received,Income,0,Credit',
-  EXAMPLE + 'Office Expense,Expense,0,Debit',
+  'account_name,account_type,opening_balance,balance_type,parent_group',
+  '(यहाँ Account का नाम लिखें),(Asset/Liability/Equity/Income/Expense),(शुरुआती राशि रुपये में),(Debit/Credit),(किस समूह के नीचे — समूह का नाम या कोड; खाली छोड़ें तो प्रकार का सामान्य समूह लगेगा)',
+  EXAMPLE + 'Bank - SBI,Asset,120000,Debit,Current Assets',
+  EXAMPLE + 'Loan from Bank,Liability,200000,Credit,Current Liabilities',
+  EXAMPLE + 'Anniversary Fund,Equity,80000,Credit,Reserves & Surplus',
+  EXAMPLE + 'Interest Received,Income,0,Credit,4400',
+  EXAMPLE + 'Office Expense,Expense,0,Debit,Admin Expenses',
 ].join('\n');
 
 export const MEMBERS_TEMPLATE = [
@@ -137,7 +137,42 @@ export function validateVoucherRow(
   return errors;
 }
 
-export function validateAccountRow(row: Record<string, string>, rowNum: number): RowError[] {
+/** Group a new account lands in when parent_group is blank — a group of the same type that exists in every standard chart. */
+export const DEFAULT_PARENT_BY_TYPE: Record<string, string> = { liability: '2100', asset: '3300', expense: '5300', income: '4400', equity: '1200' };
+
+export interface ParentResolution {
+  /** The group id to file the account under; null = no group (blank and no usable default). */
+  parentId: string | null;
+  /** True when the clerk left parent_group blank and the type's default group was used. */
+  defaulted: boolean;
+  /** Set when parent_group was given but cannot be used — the row must be refused, never silently ungrouped. */
+  error?: string;
+}
+
+/** Resolve the parent_group cell (a group's name, id or code) to a group of the SAME type. Pure. */
+export function resolveParentGroup(row: Record<string, string>, accounts: LedgerAccount[]): ParentResolution {
+  const type = (row.account_type || '').toLowerCase().trim();
+  const raw = (row.parent_group || '').trim();
+  const groups = accounts.filter(a => a.isGroup);
+  if (!raw || raw.startsWith('(')) {
+    const def = groups.find(g => g.id === DEFAULT_PARENT_BY_TYPE[type] && g.type === type);
+    return def ? { parentId: def.id, defaulted: true } : { parentId: null, defaulted: true };
+  }
+  const key = raw.toLowerCase();
+  const hit = groups.filter(g => g.id.toLowerCase() === key || (g.code || '').toLowerCase() === key || g.name.toLowerCase().trim() === key || (g.nameHi || '').trim() === raw);
+  if (hit.length === 0) {
+    const leaf = accounts.find(a => !a.isGroup && a.name.toLowerCase().trim() === key);
+    return { parentId: null, defaulted: false, error: leaf
+      ? `parent_group "${raw}" एक खाता है, समूह नहीं — समूह का नाम लिखें (Ledger Heads में 'Group' वाले)`
+      : `parent_group "${raw}" इस society में किसी समूह का नाम/कोड नहीं है — Ledger Heads से समूह का exact नाम लें` };
+  }
+  const same = hit.filter(g => g.type === type);
+  if (same.length === 0) return { parentId: null, defaulted: false, error: `parent_group "${raw}" का प्रकार ${hit[0].type} है, जबकि खाता ${type} है — समूह और खाते का प्रकार एक ही होना चाहिए` };
+  if (same.length > 1) return { parentId: null, defaulted: false, error: `parent_group "${raw}" के नाम के एक से ज़्यादा समूह हैं — नाम की जगह उसका कोड लिखें` };
+  return { parentId: same[0].id, defaulted: false };
+}
+
+export function validateAccountRow(row: Record<string, string>, rowNum: number, accounts?: LedgerAccount[]): RowError[] {
   const errors: RowError[] = [];
   if (!row.account_name || row.account_name.startsWith('('))
     errors.push({ row: rowNum, field: 'account_name', message: `Row ${rowNum}: account_name खाली है या example row है` });
@@ -148,6 +183,10 @@ export function validateAccountRow(row: Record<string, string>, rowNum: number):
     errors.push({ row: rowNum, field: 'opening_balance', message: `Row ${rowNum}: opening_balance "${row.opening_balance}" एक valid number होना चाहिए` });
   if (!VALID_BALANCE_TYPES.includes((row.balance_type || '').toLowerCase()))
     errors.push({ row: rowNum, field: 'balance_type', message: `Row ${rowNum}: balance_type "${row.balance_type}" गलत है — Debit या Credit होना चाहिए` });
+  if (accounts && VALID_ACCOUNT_TYPES.includes((row.account_type || '').toLowerCase())) {
+    const r = resolveParentGroup(row, accounts);
+    if (r.error) errors.push({ row: rowNum, field: 'parent_group', message: `Row ${rowNum}: ${r.error}` });
+  }
   return errors;
 }
 

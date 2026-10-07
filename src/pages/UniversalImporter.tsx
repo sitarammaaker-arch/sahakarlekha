@@ -17,7 +17,7 @@ import { planJoiningReceipts, summariseJoiningPlans, type JoiningReceiptPlan } f
 import { getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
 import {
   ACCOUNTS_TEMPLATE, MEMBERS_TEMPLATE, OPENING_BALANCES_TEMPLATE, vouchersTemplate, parseCSV,
-  validateAccountRow, validateMemberRow, validateObRow, validateVoucherRow, type RowError,
+  validateAccountRow, resolveParentGroup, validateMemberRow, validateObRow, validateVoucherRow, type RowError,
 } from '@/lib/importTemplates';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -142,7 +142,7 @@ const UniversalImporter: React.FC = () => {
         return;
       }
       const headers = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, ''));
-      setAccountPreview(buildPreviewFromParsed(parsed, headers, validateAccountRow));
+      setAccountPreview(buildPreviewFromParsed(parsed, headers, (row, rowNum) => validateAccountRow(row, rowNum, accounts)));
     } catch { toast({ title: 'File parse error', description: 'Valid CSV या Excel file upload करें', variant: 'destructive' }); }
     e.target.value = '';
   }
@@ -177,6 +177,7 @@ const UniversalImporter: React.FC = () => {
         name,
         nameHi: name,
         type: row.data.account_type.toLowerCase() as LedgerAccount['type'],
+        parentId: resolveParentGroup(row.data, accounts).parentId ?? undefined,
         openingBalance: parseFloat(row.data.opening_balance) || 0,
         openingBalanceType: row.data.balance_type.toLowerCase() as 'debit' | 'credit',
         isSystem: false,
@@ -611,6 +612,7 @@ const UniversalImporter: React.FC = () => {
                 <p><span className="font-medium text-primary">account_type</span> — <span className="text-green-700">Asset</span> / <span className="text-orange-600">Liability</span> / <span className="text-purple-600">Equity</span> / <span className="text-blue-600">Income</span> / <span className="text-red-600">Expense</span></p>
                 <p><span className="font-medium text-primary">opening_balance</span> — शुरुआती राशि (सिर्फ numbers, जैसे: 50000)</p>
                 <p><span className="font-medium text-primary">balance_type</span> — <span className="text-green-700">Debit</span> (Asset/Expense) / <span className="text-orange-600">Credit</span> (Liability/Income)</p>
+                <p><span className="font-medium text-primary">parent_group</span> — (वैकल्पिक) किस समूह के नीचे खाता जाए — समूह का नाम या कोड (जैसे: Bank Accounts, Loans, Admin Expenses)। खाली छोड़ें तो प्रकार का सामान्य समूह लगेगा। समूह खाते के प्रकार का ही होना चाहिए।</p>
               </div>
 
               {/* Step 2 */}
@@ -649,12 +651,13 @@ const UniversalImporter: React.FC = () => {
                   <div className="ml-7 space-y-3">
                     <PreviewTable
                       preview={accountPreview}
-                      columns={['account_name', 'account_type', 'opening_balance', 'balance_type']}
+                      columns={['account_name', 'account_type', 'opening_balance', 'balance_type', 'parent_group']}
                       labels={{
                         account_name: 'Account Name',
                         account_type: 'Type',
                         opening_balance: 'Opening Bal.',
                         balance_type: 'Dr/Cr',
+                        parent_group: 'समूह (Group)',
                       }}
                     />
                     <div className="flex gap-2">
