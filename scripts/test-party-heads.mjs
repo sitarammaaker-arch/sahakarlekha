@@ -92,6 +92,7 @@ ok(/a\.name in \('Sundry Debtors', 'Maintenance Receivable'\)/.test(code), '3303
 ok(/abs\(p\.ob\) < 0\.005/.test(code), 'a head with an opening balance is never flipped');
 ok(/x\.role not in \('bank\.default', 'supplier\.payable', 'customer\.receivable'\)/.test(code), 'any OTHER role on the head blocks the flip');
 ok(/where p\.eligible and p\.add_child/.test(code), 'children only for eligible heads');
+ok(/c\.id <> '3302-01'/.test(code), "the 'bank already has banks' block ignores the migration's OWN 3302-01 (else steps 2-3 skip the societies step 1 just gave a child)");
 ok(/exists \(select 1 from public\.accounts c\s+where c\.society_id = a\.society_id and c\."parentId" = a\.id/.test(code), 'the flag needs a postable child to exist');
 ok(/revoke execute on function public\.parent_group_plan\(\) from public, anon, authenticated/.test(code), 'plan function not callable by app users');
 const down = read('supabase/migrations/113_party_heads_become_groups_down.sql');

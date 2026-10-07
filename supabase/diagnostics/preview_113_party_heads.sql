@@ -38,8 +38,8 @@ select * from (
      or exists (select 1 from public.stock_items x where x.society_id::text = h.sid and (x."purchaseAccountId" = h.head or x."salesAccountId" = h.head))
      or exists (select 1 from public.account_roles x where x.society_id::text = h.sid and x.account_id = h.head
                  and x.role not in ('bank.default', 'supplier.payable', 'customer.receivable'))
-        -- a bank head that already has banks under it and is the default bank: which bank is the default is a choice, not ours to make
-     or (h.head = '3302' and exists (select 1 from public.accounts c where c.society_id::text = h.sid and c."parentId" = '3302' and not coalesce(c."isGroup", false))
+        -- a bank head that already has banks of its own under it (not our own 3302-01) and is the default bank: which bank is the default is a choice, not ours to make
+     or (h.head = '3302' and exists (select 1 from public.accounts c where c.society_id::text = h.sid and c."parentId" = '3302' and c.id <> '3302-01' and not coalesce(c."isGroup", false))
          and exists (select 1 from public.account_roles x where x.society_id::text = h.sid and x.account_id = '3302' and x.role = 'bank.default'))
       ) as has_links
     from heads h
