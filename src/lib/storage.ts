@@ -708,6 +708,20 @@ export const SOCIETY_TEMPLATES: Record<string, LedgerAccount[]> = {
 // Fallback for societies that have no template (use CMS as default)
 export const DEFAULT_ACCOUNTS = CMS_SOCIETY_ACCOUNTS;
 
+/**
+ * The chart a NEW or RESET society is seeded with: the standard chart of its type PLUS the shared extras
+ * (ACCOUNTS_TO_ADD — purchase / sales heads, Closing Stock, Wages Payable …) that every chart needs.
+ * Seeding the bare template left those extras to migrateAccounts, which merges them into LOCAL state only
+ * (RM-01: the load path never writes) — so the screen showed a complete chart that the database did not
+ * hold, and the first voucher on e.g. 5150 / 5110 was refused by the server as account_not_found
+ * (Rania, 2026-10-07: 16 such accounts; 13 of 31 societies, 58 rows). Seed this instead and the screen and
+ * the database start identical. Same merge rule as the load path, so nothing is added twice.
+ */
+export function fullChartForType(type: string | undefined | null): LedgerAccount[] {
+  const tpl = (type && SOCIETY_TEMPLATES[type]) || SOCIETY_TEMPLATES['marketing_processing'];
+  return migrateAccounts(tpl.map(a => ({ ...a }))).accounts;
+}
+
 // ── Account Migration (v2 → v3) ───────────────────────────────────────────────
 // Applies to existing societies: renames, reclassifies, and adds missing accounts
 // Idempotent — safe to run on every app load
@@ -726,7 +740,7 @@ const ACCOUNT_PATCHES: Record<string, Partial<LedgerAccount>> = {
   '5602': { name: 'Professional Tax / Local Levies', nameHi: 'व्यावसायिक कर / स्थानीय शुल्क' },
 };
 
-const ACCOUNTS_TO_ADD: LedgerAccount[] = [
+export const ACCOUNTS_TO_ADD: LedgerAccount[] = [
   // ── G1/G2 (CAS mapping, 2026-09-27): the PACS chart lacked the trading groups/heads that sales
   // and purchases default to (4101 / 5101) and that 4104-4108, 5110-5116, 3406 hang under, and a
   // Vehicle asset for its 3110 accumulated depreciation. Every other chart already has these ids.

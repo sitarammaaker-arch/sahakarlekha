@@ -30,6 +30,7 @@ import { CORE_PARTS, setLoadFailures, refuseIfWriteBlocked } from '@/lib/connect
 import type { VoucherOwnerCheck } from '@/lib/voucherOwnership';
 import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
+import { localOnlyAccountsReport } from '@/lib/accounting/localOnlyAccounts';
 import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
 import { buildPostVoucherPayload, buildEditVoucherPayload, buildStockDocumentPayload, buildPendingVoucherPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
@@ -385,6 +386,7 @@ interface DataContextType {
  *  ghost-data risks — a linked voucher left un-cancelled, a stock movement not deleted, a stock
  *  or share or deposit balance left inconsistent — that previously died at a bare console.error
  *  with no durable trace. Keeps the dev-console line AND records it in error_log. Never throws. */
+const localOnlyReported = new Set<string>();   // per page load — see localOnlyAccountsReport
 function reportCascade(label: string, err: { message: string } | string): void {
   const msg = typeof err === 'string' ? err : err.message;
   console.error(`${label}:`, msg);
@@ -1214,7 +1216,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // accounts migrateAccounts adds are merged into LOCAL state only (every device merges the same
         // deterministic list on load); they used to be upserted into `accounts` here on every load.
         // Persisting them is an explicit, reviewed step (Phase-3 M2), never a side effect of loading.
-        void acctsMigrated; void newlyAdded;
+        void acctsMigrated;
+        // Not a write — a flag: if the chart merged on screen holds accounts the database lacks, say so in error_log
+        // (once per society per page load). After migration 114 this should never fire.
+        if (!aErr && aData && aData.length > 0) {
+          const rep = localOnlyAccountsReport(sid, newlyAdded, localOnlyReported);
+          if (rep) reportError(rep.source, rep.message, rep.context);
+        }
 
         // RM-01 (S0 emergency safety fix): loading members NEVER creates an accounting voucher.
         // This used to post a Cash receipt (Dr 3301 / Cr 1102 share capital, Cr 4407 admission fee) for
