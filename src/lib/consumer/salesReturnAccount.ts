@@ -19,8 +19,11 @@ export function salesReturnCreditAccountId(args: {
   saleVoucher?: Voucher | null;
   memberId?: string | null;
   memberReceivableAccountId?: string | null;
+  /** The postable "Sundry Debtors" head (defaultDebtorsAccountId) — 3303 is a group in a current chart. */
+  debtorsAccountId?: string;
 }): string {
   const { refundMode, bankAccountId, bankAccountIds, saleVoucher, memberId, memberReceivableAccountId } = args;
+  const debtors = args.debtorsAccountId || '3303';
   if (refundMode === 'cash') return '3301';
   if (refundMode === 'bank') return bankAccountId || bankAccountIds[0] || '3302';
   if (saleVoucher && !saleVoucher.isDeleted) {
@@ -30,5 +33,5 @@ export function salesReturnCreditAccountId(args: {
       .sort((a, b) => b.amount - a.amount)[0];
     if (receivable) return receivable.accountId;
   }
-  return memberId ? (memberReceivableAccountId || '3303') : '3303';
+  return memberId ? (memberReceivableAccountId || debtors) : debtors;
 }

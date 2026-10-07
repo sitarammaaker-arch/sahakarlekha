@@ -406,7 +406,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!(amount > 0)) { toastRef.current({ title: 'कुछ बकाया नहीं', description: 'पूरा भुगतान हो चुका है।', variant: 'destructive' }); return sentinel; }
     const payable = resolveMilkPayableAccountId(accounts);
     if (!payable) { toastRef.current({ title: 'देय खाता नहीं मिला', variant: 'destructive' }); return sentinel; }
-    const creditAcc = args.mode === 'bank' ? (args.bankAccountId || '3302') : '3301';
+    const creditAcc = args.mode === 'bank' ? (args.bankAccountId || storage.defaultBankAccountId(accounts)) : '3301';
     const voucher = addVoucher({
       type: 'payment', date: args.date,
       debitAccountId: payable, creditAccountId: creditAcc, amount,
@@ -483,7 +483,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!(amount > 0)) { toastRef.current({ title: 'कुछ बकाया नहीं', variant: 'destructive' }); return sentinel; }
     const rcv = resolveUnionReceivableAccountId(accounts);
     if (!rcv) { toastRef.current({ title: 'देनदार खाता नहीं मिला', variant: 'destructive' }); return sentinel; }
-    const debitAcc = args.mode === 'bank' ? (args.bankAccountId || '3302') : '3301';
+    const debitAcc = args.mode === 'bank' ? (args.bankAccountId || storage.defaultBankAccountId(accounts)) : '3301';
     const voucher = addVoucher({
       type: 'receipt', date: args.date,
       debitAccountId: debitAcc, creditAccountId: rcv, amount,
@@ -634,7 +634,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!(amount > 0)) { toastRef.current({ title: 'कुछ बकाया नहीं', variant: 'destructive' }); return sentinel; }
     const payAcc = cur.kind === 'bonus' ? resolveBonusPayableAccountId(accounts) : resolveDividendPayableAccountId(accounts);
     if (!payAcc) { toastRef.current({ title: 'देय खाता नहीं मिला', description: 'Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
-    const creditAcc = args.mode === 'bank' ? (args.bankAccountId || '3302') : '3301';
+    const creditAcc = args.mode === 'bank' ? (args.bankAccountId || storage.defaultBankAccountId(accounts)) : '3301';
     const kindHi = cur.kind === 'bonus' ? 'बोनस' : 'लाभांश';
     const voucher = addVoucher({
       type: 'payment', date: args.date,

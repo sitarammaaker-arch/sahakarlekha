@@ -30,6 +30,7 @@ import { CORE_PARTS, setLoadFailures, refuseIfWriteBlocked } from '@/lib/connect
 import type { VoucherOwnerCheck } from '@/lib/voucherOwnership';
 import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
+import { localOnlyAccountsReport } from '@/lib/accounting/localOnlyAccounts';
 import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
 import { buildPostVoucherPayload, buildEditVoucherPayload, buildStockDocumentPayload, buildPendingVoucherPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
@@ -47,7 +48,7 @@ import { computeStock, computeStockValue, computeStockCostRate, reconcileMovemen
 import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
 import * as storage from '@/lib/storage';
-import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
+import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, defaultBankAccountId, defaultDebtorsAccountId, defaultCreditorsAccountId } from '@/lib/storage';
 import { isUniqueViolation, isMissingBranchColumn, payloadWithoutMissingColumn, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import { voucherLinesBalance } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
@@ -93,7 +94,7 @@ import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, ne
 import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
 import { fetchAllPaged as fetchAllPagedFor } from '@/lib/supabasePaging';
 import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib/diagnostics/phantomVouchers';
-import { accountDeleteFailure, coaResetBlockers } from '@/lib/accounting/accountDelete';
+import { accountDeleteFailure, coaResetBlockers, coaResetLiveData } from '@/lib/accounting/accountDelete';
 import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 
@@ -385,6 +386,7 @@ interface DataContextType {
  *  ghost-data risks — a linked voucher left un-cancelled, a stock movement not deleted, a stock
  *  or share or deposit balance left inconsistent — that previously died at a bare console.error
  *  with no durable trace. Keeps the dev-console line AND records it in error_log. Never throws. */
+const localOnlyReported = new Set<string>();   // per page load — see localOnlyAccountsReport
 function reportCascade(label: string, err: { message: string } | string): void {
   const msg = typeof err === 'string' ? err : err.message;
   console.error(`${label}:`, msg);
@@ -1214,7 +1216,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // accounts migrateAccounts adds are merged into LOCAL state only (every device merges the same
         // deterministic list on load); they used to be upserted into `accounts` here on every load.
         // Persisting them is an explicit, reviewed step (Phase-3 M2), never a side effect of loading.
-        void acctsMigrated; void newlyAdded;
+        void acctsMigrated;
+        // Not a write — a flag: if the chart merged on screen holds accounts the database lacks, say so in error_log
+        // (once per society per page load). After migration 114 this should never fire.
+        if (!aErr && aData && aData.length > 0) {
+          const rep = localOnlyAccountsReport(sid, newlyAdded, localOnlyReported);
+          if (rep) reportError(rep.source, rep.message, rep.context);
+        }
 
         // RM-01 (S0 emergency safety fix): loading members NEVER creates an accounting voucher.
         // This used to post a Cash receipt (Dr 3301 / Cr 1102 share capital, Cr 4407 admission fee) for
@@ -2121,7 +2129,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }): Voucher | null => {
     if (guardFYLocked()) return null;
     const cust = customers.find(c => c.id === data.customerId);
-    const custAcc = cust?.accountId || '3303';   // Sundry Debtors fallback
+    const custAcc = cust?.accountId || defaultDebtorsAccountId(accountsRef.current);   // Sundry Debtors fallback
     const allocs = data.allocations.filter(a => a.amount > 0);
     const adv = Math.max(0, +(data.advance || 0));
     const onAcc = Math.max(0, +(data.onAccount || 0));
@@ -2179,7 +2187,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }): Voucher | null => {
     if (guardFYLocked()) return null;
     const sup = suppliers.find(s => s.id === data.supplierId);
-    const supAcc = sup?.accountId || '2101';   // Sundry Creditors fallback
+    const supAcc = sup?.accountId || defaultCreditorsAccountId(accountsRef.current);   // Sundry Creditors fallback
     const allocs = data.allocations.filter(a => a.amount > 0);
     const adv = Math.max(0, +(data.advance || 0));
     const onAcc = Math.max(0, +(data.onAccount || 0));
@@ -4075,6 +4083,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // when there is no parent). A conventional template id (opts.id) IS its own code — none stored.
     const code = opts?.id ? undefined : (data.code || nextAccountCode(accountsRef.current, data.parentId, !!data.isGroup, data.type));
     const newAccount: LedgerAccount = { ...data, id: opts?.id || crypto.randomUUID(), ...(code ? { code } : {}) };
+    // accountsRef is normally refreshed by an effect AFTER render, so a caller that adds many accounts in
+    // one synchronous loop (UniversalImporter) would have every call compute its code from the SAME stale
+    // chart → the same "next free" code for every sibling → accounts_society_code_uniq rejects the
+    // step-2 code write for all but the first (Rania, 2026-10: 891 accounts saved with no code, 1,856
+    // errors). Append to the ref now so the next call in the same tick sees this account's code as used.
+    accountsRef.current = [...accountsRef.current, newAccount];
     setAccountsState(prev => [...prev, newAccount]);
     const openingViaServer = postingServiceRef.current;
     const openingEvent = openingViaServer ? null : buildOpeningDelta(newAccount);
@@ -4093,12 +4107,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // Step 2 failure: the account is safe; only the readable code is missing. Drop it locally so
           // the screen matches the cloud, and say so mildly (no rollback).
           reportError('db-sync', codeErr.message);
+          accountsRef.current = accountsRef.current.map(a => a.id === newAccount.id ? { ...a, code: undefined } : a);
           setAccountsState(prev => prev.map(a => a.id === newAccount.id ? { ...a, code: undefined } : a));
           toastRef.current({ title: 'खाता सेव हुआ — पर कोड नहीं', description: `Ledger code save nahi hua (${codeErr.message}). Migration 109 chalayein, phir Ledger Heads par "कोड दें" dabayein.`, duration: 10000 });
         });
       }
       if (error) {   // RULE 1: roll back so a failed cloud save can't silently diverge on F5
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
+        accountsRef.current = accountsRef.current.filter(a => a.id !== newAccount.id);
         setAccountsState(prev => prev.filter(a => a.id !== newAccount.id));
         if (openingEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== openingEvent.eventId);
         toastRef.current({ title: 'खाता सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par data lose nahi hoga; dobara jodein.`, variant: 'destructive', duration: 12000 });
@@ -4459,6 +4475,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'खाता संरचना रीसेट नहीं हुई', description, variant: 'destructive', duration: 15000 });
       return false;
     };
+    // A running society's chart is never reset: the reset zeroes every opening balance and drops every
+    // custom head, and the blocker check below only covers vouchers/suppliers/customers. UI-side checks
+    // can be bypassed or stale, so the refusal lives here, where the delete happens.
+    const live = coaResetLiveData({
+      vouchers: vouchersRef.current.length, members: membersRef.current.length, loans: loansRef.current.length,
+      suppliers: suppliersRef.current.length, customers: customersRef.current.length,
+      sales: salesRef.current.length, purchases: purchasesRef.current.length, employees: employeesRef.current.length,
+      accountsWithOpening: accountsRef.current.filter(a => (Number(a.openingBalance) || 0) !== 0).length,
+    });
+    if (live.length > 0) {
+      return fail(`यह समिति चालू है (${live.join(', ')}), इसलिए खाता संरचना रीसेट नहीं हो सकती — रीसेट सभी opening balance शून्य कर देता और आपके बनाए खाते मिटा देता। कुछ नहीं बदला गया। (Reset is only for a society with no records.)`);
+    }
     // An account outside the template that a voucher (incl. cancelled) or a party points at would be
     // orphaned by the reset — refuse instead (RULE 3). Template ids come back with the same id.
     const blockers = coaResetBlockers(
@@ -6226,7 +6254,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       : data.paymentMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK)
       // Credit: an explicit receivable account (e.g. Consumer member-receivable control) wins,
       // else the linked customer's sub-ledger, else Sundry Debtors.
-      : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303'));
+      : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || defaultDebtorsAccountId(accountsRef.current)) : defaultDebtorsAccountId(accountsRef.current)));
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
 
     // Cr: Sales A/c — split by each item's salesAccountId so multi-product societies
@@ -6505,7 +6533,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       : data.paymentMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK)
       // Credit: an explicit receivable account (e.g. Consumer member-receivable control) wins,
       // else the linked customer's sub-ledger, else Sundry Debtors.
-      : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || '3303') : '3303'));
+      : (data.receivableAccountId || (data.customerId ? (customers.find(c => c.id === data.customerId)?.accountId || defaultDebtorsAccountId(accountsRef.current)) : defaultDebtorsAccountId(accountsRef.current)));
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
 
     // T-02 / RULE 4: exact-paise split by salesAccountId (same shared rule as addSale / repair).
@@ -6623,7 +6651,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Build multi-line purchase voucher
     const lines: VoucherLine[] = [];
-    const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || '2101') : '2101';
+    const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || defaultCreditorsAccountId(accountsRef.current)) : defaultCreditorsAccountId(accountsRef.current);
     const creditAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
       : data.paymentMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK)
       : supplierAccId;
@@ -6902,7 +6930,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 3️⃣ Build new voucher lines from updated data
     const grandTotal = data.grandTotal ?? data.netAmount;
     const lines: VoucherLine[] = [];
-    const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || '2101') : '2101';
+    const supplierAccId = data.supplierId ? (suppliers.find(s => s.id === data.supplierId)?.accountId || defaultCreditorsAccountId(accountsRef.current)) : defaultCreditorsAccountId(accountsRef.current);
     const creditAccId = data.paymentMode === 'cash' ? ACCOUNT_IDS.CASH
       : data.paymentMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK)
       : supplierAccId;

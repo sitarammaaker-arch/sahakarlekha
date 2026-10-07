@@ -44,6 +44,7 @@ const PRINT = process.argv.includes('--print');
 
 // ── Violations that exist today (baseline). Format: `<chart>|<rule>|<detail>` or `*|<rule>|<detail>` ──
 const KNOWN = [
+  "*|id-meaning|3303-01",   // housing: "Maintenance Receivable — General" (the catch-all under its 3303 head), elsewhere "Sundry Debtors — General"
   "*|id-meaning|1202",
   "*|id-meaning|1204",
   "*|id-meaning|1207",
@@ -144,6 +145,10 @@ const ENGINE_IDS = {
   '4410': 'income', '5406': 'expense',
   '3104': 'asset', '3105': 'asset', '5503': 'expense', '5504': 'expense', '5505': 'expense', '3108': 'asset', '3112': 'asset',
 };
+// The three PARTY heads are GROUPS in a current chart (every bank / supplier / customer ledger hangs under
+// them) and are postable only through their catch-all child — so an engine id that is one of them is valid when
+// it is a group WITH that child (same type, directly under it), and still a violation when it is a bare group.
+const PARTY_CATCH_ALL = { '3302': '3302-01', '2101': '2101-01', '3303': '3303-01' };
 const CORE_IDS = { CASH: 'asset', BANK: 'asset', SHARE_CAP: 'equity', ADM_FEE: 'income', TAX_CREDIT: 'asset' };
 
 const violations = new Set();
@@ -180,16 +185,20 @@ for (const [type, accounts] of Object.entries(charts)) {
       if (a.openingBalanceType !== natural && !CONTRA_SUBTYPES.has(a.subtype) && !CONTRA_IDS.has(a.id)) add(chart, 'normal-balance', `${a.id}(${a.type}/${a.openingBalanceType})`);
     }
   }
+  const hasCatchAll = (id) => {
+    const head = byId.get(id), child = byId.get(PARTY_CATCH_ALL[id]);
+    return !!(head && child && PARTY_CATCH_ALL[id] && !child.isGroup && child.parentId === id && child.type === head.type);
+  };
   for (const [key, expected] of Object.entries(CORE_IDS)) {
     const id = S.ACCOUNT_IDS[key];
     const a = byId.get(id);
     if (!a) add(chart, 'core-ids', `${key}=${id} missing`);
-    else if (a.isGroup || a.type !== expected) add(chart, 'core-ids', `${key}=${id} is ${a.isGroup ? 'group' : a.type}, expected ${expected}`);
+    else if ((a.isGroup && !hasCatchAll(id)) || a.type !== expected) add(chart, 'core-ids', `${key}=${id} is ${a.isGroup ? 'group' : a.type}, expected ${expected}`);
   }
   for (const [id, expected] of Object.entries(ENGINE_IDS)) {
     const a = byId.get(id);
     if (!a) add(chart, 'engine-ids', `${id} missing`);
-    else if (a.isGroup || a.type !== expected) add(chart, 'engine-ids', `${id} is ${a.isGroup ? 'group' : a.type}, expected ${expected}`);
+    else if ((a.isGroup && !hasCatchAll(id)) || a.type !== expected) add(chart, 'engine-ids', `${id} is ${a.isGroup ? 'group' : a.type}, expected ${expected}`);
   }
 }
 

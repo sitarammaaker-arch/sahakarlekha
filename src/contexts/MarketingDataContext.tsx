@@ -698,7 +698,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       });
       return sentinel;
     }
-    const drAcc = data.mode === 'bank' ? (data.bankAccountId || '3302') : '3301';
+    const drAcc = data.mode === 'bank' ? (data.bankAccountId || storage.defaultBankAccountId(accounts)) : '3301';
     const what = isCommission ? 'कमीशन प्राप्ति' : 'MSP प्राप्ति';
     const voucher = addVoucher({
       type: 'receipt', date: data.date,

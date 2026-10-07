@@ -203,7 +203,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return null;
     if (!(data.amount > 0)) { toastRef.current({ title: 'मान्य राशि दर्ज करें', variant: 'destructive' }); return null; }
     if (!memberReceivableAccountId) { toastRef.current({ title: 'सदस्य प्राप्य खाता नहीं मिला', description: 'Member receivable account missing — Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', variant: 'destructive' }); return null; }
-    const debit = data.mode === 'cash' ? CASH_ACCOUNT : (data.bankAccountId || defaultBankAccountId(accounts) || '3302');
+    const debit = data.mode === 'cash' ? CASH_ACCOUNT : (data.bankAccountId || defaultBankAccountId(accounts));
     return addVoucher({
       type: 'receipt',
       date: data.date,
@@ -303,7 +303,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const isDiv = cur.kind === 'dividend';
     const payAcc = isDiv ? resolveDividendPayableAccountId(accounts) : resolveRebatePayableAccountId(accounts);
     if (!payAcc) { toastRef.current({ title: 'देय खाता नहीं मिला', description: 'Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', variant: 'destructive', duration: 12000 }); return null; }
-    const creditAcc = args.mode === 'bank' ? (args.bankAccountId || defaultBankAccountId(accounts) || '3302') : CASH_ACCOUNT;
+    const creditAcc = args.mode === 'bank' ? (args.bankAccountId || defaultBankAccountId(accounts)) : CASH_ACCOUNT;
     const voucher = addVoucher({
       type: 'payment', date: args.date,
       debitAccountId: payAcc, creditAccountId: creditAcc, amount,
@@ -537,7 +537,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const creditAccId = salesReturnCreditAccountId({
       refundMode: data.refundMode, bankAccountId: data.bankAccountId, bankAccountIds: getBankAccountIds(accounts),
       saleVoucher: sale.voucherId ? vouchers.find(v => v.id === sale.voucherId) : null,
-      memberId: sale.memberId, memberReceivableAccountId: resolveMemberReceivableAccountId(accounts),
+      memberId: sale.memberId, memberReceivableAccountId: resolveMemberReceivableAccountId(accounts), debtorsAccountId: storage.defaultDebtorsAccountId(accounts),
     });
     const lid = () => crypto.randomUUID();
     const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: salesReturnAccId, type: 'Dr', amount: netAmount }];
@@ -610,7 +610,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const creditAccId = salesReturnCreditAccountId({
       refundMode: data.refundMode, bankAccountId: data.bankAccountId, bankAccountIds: getBankAccountIds(accounts),
       saleVoucher: sale.voucherId ? vouchers.find(v => v.id === sale.voucherId) : null,
-      memberId: sale.memberId, memberReceivableAccountId: resolveMemberReceivableAccountId(accounts),
+      memberId: sale.memberId, memberReceivableAccountId: resolveMemberReceivableAccountId(accounts), debtorsAccountId: storage.defaultDebtorsAccountId(accounts),
     });
     const lid = () => crypto.randomUUID();
     const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: salesReturnAccId, type: 'Dr', amount: netAmount }];
@@ -701,9 +701,9 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const seq = purchaseReturns.filter(r => r.returnNo?.includes(fy)).reduce((m, r) => { const x = r.returnNo?.match(/\/(\d+)$/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0) + 1;
     const returnNo = `PRET/${fy}/${String(seq).padStart(3, '0')}`;
     // Refund source: cash/bank received back, else adjust the supplier's payable.
-    const supplierAccId = purchase.supplierId ? (suppliers.find(s => s.id === purchase.supplierId)?.accountId || '2101') : '2101';
+    const supplierAccId = purchase.supplierId ? (suppliers.find(s => s.id === purchase.supplierId)?.accountId || storage.defaultCreditorsAccountId(accounts)) : storage.defaultCreditorsAccountId(accounts);
     const debitAccId = data.refundMode === 'cash' ? '3301'
-      : data.refundMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || '3302')
+      : data.refundMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts))
       : supplierAccId;
     const lid = () => crypto.randomUUID();
     // Cr: Purchases A/c — split by each item's purchaseAccountId (faithful inverse of the purchase Dr).
@@ -776,9 +776,9 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     cur.items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: `${cur.returnNo}/EDIT`, narration: `Purchase return edited — restore old ${cur.purchaseNo}` }));
 
     // 2) Post the NEW voucher (same return no. kept on the record).
-    const supplierAccId = purchase.supplierId ? (suppliers.find(s => s.id === purchase.supplierId)?.accountId || '2101') : '2101';
+    const supplierAccId = purchase.supplierId ? (suppliers.find(s => s.id === purchase.supplierId)?.accountId || storage.defaultCreditorsAccountId(accounts)) : storage.defaultCreditorsAccountId(accounts);
     const debitAccId = data.refundMode === 'cash' ? '3301'
-      : data.refundMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts) || '3302')
+      : data.refundMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts))
       : supplierAccId;
     const lid = () => crypto.randomUUID();
     const totalItemAmount = items.reduce((s, i) => s + i.amount, 0) || 1;

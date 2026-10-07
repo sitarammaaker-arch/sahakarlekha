@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { defaultBankAccountId } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -193,7 +194,7 @@ export default function KccLoan() {
 
     // Post the receipt: Dr Cash/Bank (total) / Cr KCC Loan (principal) / Cr Interest Income (interest).
     const loanAccId = kccLoanAccountId(accounts);   // the member's KCC loan (asset) — never 2305 DCCB borrowing
-    const debitAccId = mode === 'bank' ? (accounts.find(a => a.id === '3302')?.id || '3302') : '3301';
+    const debitAccId = mode === 'bank' ? defaultBankAccountId(accounts) : '3301';
     const lid = () => crypto.randomUUID();
     const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: debitAccId, type: 'Dr', amount: totalAmt }];
     if (principal > 0) lines.push({ id: lid(), accountId: loanAccId, type: 'Cr', amount: principal });

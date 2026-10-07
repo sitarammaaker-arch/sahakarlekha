@@ -137,10 +137,9 @@ export const ACCOUNT_IDS = {
  * If 3302 is a group → returns its children.
  * If 3302 is a leaf → returns 3302 itself PLUS any sub-accounts hanging off it.
  *
- * Every seeded template ships 3302 as a leaf, so societies post their bank
- * vouchers directly to it. Bank Book's "Add Bank" then adds children under it
- * without flipping isGroup — so 3302 must keep listing itself (that's where the
- * history lives) while also surfacing the new accounts. Same shape as
+ * A current chart ships 3302 as a GROUP with a "Bank Account (Main)" child (3302-01). A LEGACY chart
+ * still has 3302 as a leaf that carries the bank history, with Bank Book's "Add Bank" children under it
+ * — so a leaf 3302 must keep listing itself while also surfacing the new accounts. Same shape as
  * getCashBankIds in validation.ts, which already ignores isGroup here.
  */
 export function getBankAccountIds(accounts: { id: string; parentId?: string; isGroup?: boolean; subtype?: string }[]): string[] {
@@ -162,6 +161,34 @@ export function defaultBankAccountId(accounts: { id: string; parentId?: string; 
   const children = accounts.filter(a => !a.isGroup && a.parentId === ACCOUNT_IDS.BANK).map(a => a.id);
   return children[0] || getBankAccountIds(accounts)[0] || ACCOUNT_IDS.BANK;
 }
+
+/** The catch-all postable head under each "party" group (migration 113 / the standard templates). */
+export const DEFAULT_CHILD_IDS = {
+  BANK: '3302-01',       // Bank Account (Main)
+  CREDITORS: '2101-01',  // Sundry Creditors — General
+  DEBTORS: '3303-01',    // Sundry Debtors — General (Maintenance Receivable — General in housing)
+} as const;
+
+/**
+ * Where an UNSPECIFIED party posts (a sale with no customer, a purchase with no supplier, an unlinked
+ * flat). 2101 Sundry Creditors and 3303 Sundry Debtors are GROUPS in a current chart — every supplier /
+ * customer ledger hangs under them, and a group can't be posted to — so the fallback is the group's
+ * dedicated catch-all child. A society still on the legacy chart (the head is a ledger) keeps posting to
+ * the head itself, so nothing already booked moves. NEVER "the first child": the children of these
+ * groups are individual parties, and an unspecified sale must not land on some customer's account.
+ * If a current chart has no catch-all (it was deleted) the group id comes back and addVoucher refuses it
+ * with the "choose a ledger under it" message rather than guessing.
+ */
+function partyFallback(accounts: { id: string; parentId?: string; isGroup?: boolean }[], headId: string, childId: string): string {
+  const head = accounts.find(a => a.id === headId);
+  if (!head?.isGroup) return headId;
+  const child = accounts.find(a => a.id === childId && !a.isGroup && a.parentId === headId);
+  return child ? child.id : headId;
+}
+export const defaultDebtorsAccountId = (accounts: { id: string; parentId?: string; isGroup?: boolean }[]): string =>
+  partyFallback(accounts, '3303', DEFAULT_CHILD_IDS.DEBTORS);
+export const defaultCreditorsAccountId = (accounts: { id: string; parentId?: string; isGroup?: boolean }[]): string =>
+  partyFallback(accounts, '2101', DEFAULT_CHILD_IDS.CREDITORS);
 
 /** Check if an account ID is a bank account (direct or sub-account of 3302) */
 export function isBankAccount(accountId: string, accounts: { id: string; parentId?: string; isGroup?: boolean }[]): boolean {
@@ -197,7 +224,8 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   // ── Liabilities ──────────────────────────────────────────────────────────
   { id: '2000', name: 'Liabilities',                nameHi: 'दायित्व',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true  },
   { id: '2100', name: 'Current Liabilities',        nameHi: 'चालू दायित्व',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '2000' },
-  { id: '2101', name: 'Sundry Creditors',           nameHi: 'विविध लेनदार',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
+  { id: '2101', name: 'Sundry Creditors',           nameHi: 'विविध लेनदार',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true, parentId: '2100', subtype: 'current_liability' },
+  { id: '2101-01', name: 'Sundry Creditors — General', nameHi: 'विविध लेनदार — सामान्य',        type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: true, isGroup: false, parentId: '2101', subtype: 'current_liability' },
   { id: '2102', name: 'Expenses Payable',           nameHi: 'देय व्यय',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
   { id: '2103', name: 'Salary Payable',             nameHi: 'देय वेतन',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
   { id: '2104', name: 'Dividend Payable',           nameHi: 'देय लाभांश',               type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
@@ -250,8 +278,10 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '3208', name: 'Cooperative Society Shares', nameHi: 'सहकारी समिति शेयर',        type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3200', subtype: 'investment' },
   { id: '3300', name: 'Current Assets',             nameHi: 'चालू संपत्तियाँ',           type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: true,  parentId: '3000' },
   { id: '3301', name: 'Cash in Hand',               nameHi: 'हाथ में नकद',              type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: false, parentId: '3300', subtype: 'cash_bank' },
-  { id: '3302', name: 'Bank Accounts',              nameHi: 'बैंक खाते',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: false, parentId: '3300', subtype: 'cash_bank' },
-  { id: '3303', name: 'Sundry Debtors',             nameHi: 'विविध देनदार',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
+  { id: '3302', name: 'Bank Accounts',              nameHi: 'बैंक खाते',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: true, parentId: '3300', subtype: 'cash_bank' },
+  { id: '3302-01', name: 'Bank Account (Main)',      nameHi: 'बैंक खाता (मुख्य)',               type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3302', subtype: 'cash_bank' },
+  { id: '3303', name: 'Sundry Debtors',             nameHi: 'विविध देनदार',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true, parentId: '3300', subtype: 'current_asset' },
+  { id: '3303-01', name: 'Sundry Debtors — General', nameHi: 'विविध देनदार — सामान्य',          type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: true, isGroup: false, parentId: '3303', subtype: 'current_asset' },
   { id: '3304', name: 'Loans & Advances',           nameHi: 'ऋण एवं अग्रिम',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3305', name: 'Subsidy Receivable',         nameHi: 'प्राप्य अनुदान',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3306', name: 'Rent Receivable',            nameHi: 'प्राप्य किराया',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
@@ -391,7 +421,8 @@ export const PACS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   // ── Liabilities ──────────────────────────────────────────────────────────
   { id: '2000', name: 'Liabilities',                nameHi: 'दायित्व',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true  },
   { id: '2100', name: 'Current Liabilities',        nameHi: 'चालू दायित्व',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '2000' },
-  { id: '2101', name: 'Sundry Creditors',           nameHi: 'विविध लेनदार',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
+  { id: '2101', name: 'Sundry Creditors',           nameHi: 'विविध लेनदार',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true, parentId: '2100', subtype: 'current_liability' },
+  { id: '2101-01', name: 'Sundry Creditors — General', nameHi: 'विविध लेनदार — सामान्य',        type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: true, isGroup: false, parentId: '2101', subtype: 'current_liability' },
   { id: '2102', name: 'Expenses Payable',           nameHi: 'देय व्यय',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
   { id: '2103', name: 'Salary Payable',             nameHi: 'देय वेतन',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
   { id: '2104', name: 'Dividend Payable',           nameHi: 'देय लाभांश',               type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
@@ -431,7 +462,8 @@ export const PACS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   // ── Loan Portfolio (KEY for PACS) ─────────────────────────────────────────
   { id: '3300', name: 'Current Assets',             nameHi: 'चालू संपत्तियाँ',           type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: true,  parentId: '3000' },
   { id: '3301', name: 'Cash in Hand',               nameHi: 'हाथ में नकद',              type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: false, parentId: '3300', subtype: 'cash_bank' },
-  { id: '3302', name: 'Bank Accounts',              nameHi: 'बैंक खाते',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: false, parentId: '3300', subtype: 'cash_bank' },
+  { id: '3302', name: 'Bank Accounts',              nameHi: 'बैंक खाते',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: true, parentId: '3300', subtype: 'cash_bank' },
+  { id: '3302-01', name: 'Bank Account (Main)',      nameHi: 'बैंक खाता (मुख्य)',               type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3302', subtype: 'cash_bank' },
   { id: '3303', name: 'Short-term Loans (KCC)',      nameHi: 'अल्पकालीन ऋण (KCC)',       type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3304', name: 'Medium-term Loans',          nameHi: 'मध्यकालीन ऋण',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3305', name: 'Long-term Loans',            nameHi: 'दीर्घकालीन ऋण',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
@@ -529,7 +561,8 @@ export const CONSUMER_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   // ── Liabilities ──────────────────────────────────────────────────────────
   { id: '2000', name: 'Liabilities',                nameHi: 'दायित्व',                  type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: true  },
   { id: '2100', name: 'Current Liabilities',        nameHi: 'चालू दायित्व',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '2000' },
-  { id: '2101', name: 'Sundry Creditors',           nameHi: 'विविध लेनदार',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
+  { id: '2101', name: 'Sundry Creditors',           nameHi: 'विविध लेनदार',             type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true, parentId: '2100', subtype: 'current_liability' },
+  { id: '2101-01', name: 'Sundry Creditors — General', nameHi: 'विविध लेनदार — सामान्य',        type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: true, isGroup: false, parentId: '2101', subtype: 'current_liability' },
   { id: '2102', name: 'Expenses Payable',           nameHi: 'देय व्यय',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
   { id: '2103', name: 'Salary Payable',             nameHi: 'देय वेतन',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
   { id: '2104', name: 'Dividend Payable',           nameHi: 'देय लाभांश',               type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
@@ -569,8 +602,10 @@ export const CONSUMER_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '3208', name: 'Cooperative Society Shares', nameHi: 'सहकारी समिति शेयर',        type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3200', subtype: 'investment' },
   { id: '3300', name: 'Current Assets',             nameHi: 'चालू संपत्तियाँ',           type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: true,  parentId: '3000' },
   { id: '3301', name: 'Cash in Hand',               nameHi: 'हाथ में नकद',              type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: false, parentId: '3300', subtype: 'cash_bank' },
-  { id: '3302', name: 'Bank Accounts',              nameHi: 'बैंक खाते',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: false, parentId: '3300', subtype: 'cash_bank' },
-  { id: '3303', name: 'Sundry Debtors',             nameHi: 'विविध देनदार',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
+  { id: '3302', name: 'Bank Accounts',              nameHi: 'बैंक खाते',                type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: true,  isGroup: true, parentId: '3300', subtype: 'cash_bank' },
+  { id: '3302-01', name: 'Bank Account (Main)',      nameHi: 'बैंक खाता (मुख्य)',               type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3302', subtype: 'cash_bank' },
+  { id: '3303', name: 'Sundry Debtors',             nameHi: 'विविध देनदार',             type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true, parentId: '3300', subtype: 'current_asset' },
+  { id: '3303-01', name: 'Sundry Debtors — General', nameHi: 'विविध देनदार — सामान्य',          type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: true, isGroup: false, parentId: '3303', subtype: 'current_asset' },
   { id: '3304', name: 'Loans & Advances',           nameHi: 'ऋण एवं अग्रिम',            type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3307', name: 'TDS / TCS Receivable',       nameHi: 'प्राप्य TDS / TCS',         type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
   { id: '3310', name: 'GST Input Credit (ITC)',     nameHi: 'GST इनपुट क्रेडिट (ITC)',   type: 'asset',     openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
@@ -673,6 +708,20 @@ export const SOCIETY_TEMPLATES: Record<string, LedgerAccount[]> = {
 // Fallback for societies that have no template (use CMS as default)
 export const DEFAULT_ACCOUNTS = CMS_SOCIETY_ACCOUNTS;
 
+/**
+ * The chart a NEW or RESET society is seeded with: the standard chart of its type PLUS the shared extras
+ * (ACCOUNTS_TO_ADD — purchase / sales heads, Closing Stock, Wages Payable …) that every chart needs.
+ * Seeding the bare template left those extras to migrateAccounts, which merges them into LOCAL state only
+ * (RM-01: the load path never writes) — so the screen showed a complete chart that the database did not
+ * hold, and the first voucher on e.g. 5150 / 5110 was refused by the server as account_not_found
+ * (Rania, 2026-10-07: 16 such accounts; 13 of 31 societies, 58 rows). Seed this instead and the screen and
+ * the database start identical. Same merge rule as the load path, so nothing is added twice.
+ */
+export function fullChartForType(type: string | undefined | null): LedgerAccount[] {
+  const tpl = (type && SOCIETY_TEMPLATES[type]) || SOCIETY_TEMPLATES['marketing_processing'];
+  return migrateAccounts(tpl.map(a => ({ ...a }))).accounts;
+}
+
 // ── Account Migration (v2 → v3) ───────────────────────────────────────────────
 // Applies to existing societies: renames, reclassifies, and adds missing accounts
 // Idempotent — safe to run on every app load
@@ -691,7 +740,7 @@ const ACCOUNT_PATCHES: Record<string, Partial<LedgerAccount>> = {
   '5602': { name: 'Professional Tax / Local Levies', nameHi: 'व्यावसायिक कर / स्थानीय शुल्क' },
 };
 
-const ACCOUNTS_TO_ADD: LedgerAccount[] = [
+export const ACCOUNTS_TO_ADD: LedgerAccount[] = [
   // ── G1/G2 (CAS mapping, 2026-09-27): the PACS chart lacked the trading groups/heads that sales
   // and purchases default to (4101 / 5101) and that 4104-4108, 5110-5116, 3406 hang under, and a
   // Vehicle asset for its 3110 accumulated depreciation. Every other chart already has these ids.

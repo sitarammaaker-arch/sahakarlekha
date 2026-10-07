@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
+import { defaultBankAccountId } from '@/lib/storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -198,7 +199,7 @@ const ProfitDistribution: React.FC = () => {
   const settleDividend = () => {
     if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
     if (!divPosted || divPaid || settlementRows.length === 0) return;
-    const creditAcc = payMode === 'bank' ? (accounts.find(a => a.id === '3302')?.id || '3302') : '3301';
+    const creditAcc = payMode === 'bank' ? defaultBankAccountId(accounts) : '3301';
     let n = 0;
     let paidTotal = 0;
     const failed: string[] = [];
