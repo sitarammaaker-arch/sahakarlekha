@@ -134,7 +134,14 @@ const LedgerHeads: React.FC = () => {
     const addWithChildren = (parentId: string | undefined, depth: number) => {
       const children = accounts
         .filter(a => (a.parentId || undefined) === parentId)
-        .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+        // by readable code (#706) — user-created accounts have UUID ids, so sorting by id put them in
+        // random order; accounts with no code yet go last, by name (usability audit P1-6)
+        .sort((a, b) => {
+          const ca = accountCode(a), cb = accountCode(b);
+          if (ca && cb) return ca.localeCompare(cb, undefined, { numeric: true });
+          if (ca || cb) return ca ? -1 : 1;
+          return (a.name || '').localeCompare(b.name || '');
+        });
       children.forEach(child => {
         sorted.push({ acc: child, depth });
         addWithChildren(child.id, depth + 1);
