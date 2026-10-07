@@ -159,7 +159,34 @@ ok(/ESI_EMPLOYER_NAME\]: makeEsiEmployer\(/.test(run_) && /ESI_EMPLOYER_NAME\]: 
 ok(/\[ER_PF_RATE_VAR\]: resolveParam\('pf\.employerRate', periodMonth\)\.value/.test(run_), 'pay-run seeds employer_pf_total_rate from the dated pf.employerRate (a society row still wins)');
 const bundle = readFileSync(pathResolve(HERE, '..', 'supabase/functions/_shared/pay-core.mjs'), 'utf8');
 ok(/makeEsiEmployer/.test(bundle) && /ER_FORMULAS/.test(bundle) && /er_pf/.test(bundle), 'the committed pay-core.mjs bundle contains the employer-share code');
-ok(!/ER_PF|ER_ESI/.test(src), 'pay-employee does NOT bind any employer component yet — no employee gets an ER_ line until the switch step');
+ok(/ER_FORMULAS/.test(src), 'pay-employee knows the ER_ formulas (the switch is tested in section 7)');
+console.log('\n7. the switch (er-set) and the payslip line — step 3');
+ok(/ER_FORMULAS/.test(src) && /kind: 'employer_contrib', method: 'formula'/.test(src), 'pay-employee defines the ER_ components in the society catalog (kind employer_contrib)');
+ok(/body.action === 'er-set'/.test(src) && /only admin may turn the employer share/.test(src), 'er-set exists and is admin-only');
+ok(/pf.employer_expense/.test(src) && /esi.employer_expense/.test(src) && /status: 409/.test(src), 'er-set REFUSES to turn on when the employer-expense account role is missing (the post would be refused later)');
+ok(/hasPf/.test(src) && /hasEsi/.test(src), 'the employer share is bound only where the employee has PF / ESI of their own');
+ok(/as er_codes/.test(src), 'list returns er_codes so the screen shows the state');
+{
+  const i = src.indexOf("body.action === 'esi-set'"), j = src.indexOf("body.action === 'er-set'");
+  ok(/ER_ESI_CODE_BY_TYPE/.test(src.slice(i, j)), 'turning ESI off also removes the employer ESI companion');
+}
+const run2 = readFileSync(pathResolve(HERE, '..', 'supabase/functions/pay-run/index.ts'), 'utf8');
+ok(run2.includes('...(ps.payslip.employerContributions ?? [])'), 'pay-run persists the employer lines (the ledger reads payslip_line)');
+const page = readFileSync(pathResolve(HERE, '..', 'src/pages/Payroll.tsx'), 'utf8');
+ok((page.match(/l.kind !== 'employer_contrib'/g) || []).length === 2, 'the payslip screen and the ECR export both filter the employer lines out (they must never show as an earning)');
+ok(/action: 'er-set'/.test(page), 'the Payroll page has the switch');
+{
+  const PS = await import(abs('../src/lib/pay/calc/payslip.ts'));
+  ok(['ER_PF', 'ER_ESI', 'ER_ESI_NOHRA', 'ER_ESI_DEP', 'ER_ESI_CONSOL', 'ER_ESI_STIPEND', 'DAILY_RATE', 'PF', 'ESI', 'ESI_NOHRA', 'ER_X'].every((c) => PS.isEmployerShareCode(c) === ER.isErCode(c)), 'payslip.isEmployerShareCode and employerShare.isErCode agree on every code');
+  const m = (r) => EV.makeMoney(Math.round(r * 100), 'INR');
+  const vals = { BASIC: m(10000), PF: m(1200), ER_PF: m(1560.4), DAILY_RATE: m(500) };
+  const slip = PS.aggregatePayslip(vals, { currency: 'INR', classification: { BASIC: 'earning', PF: 'deduction', ER_PF: 'info', DAILY_RATE: 'info' } });
+  ok(slip.netPay.minor === 880000 && slip.grossEarnings.minor === 1000000 && slip.grossDeductions.minor === 120000, 'the employee gross / deductions / net are UNCHANGED by an employer line');
+  ok(slip.employerContributions?.length === 1 && slip.employerContributions[0].code === 'ER_PF' && slip.employerContributions[0].amount.minor === 156000, 'ER_PF is carried, rounded to whole rupees (₹1,560.40 → ₹1,560); DAILY_RATE (also info) is not');
+  const none = PS.aggregatePayslip({ BASIC: m(10000) }, { currency: 'INR', classification: { BASIC: 'earning' } });
+  ok(none.employerContributions === undefined, 'a payslip with no employer component is exactly as before (no new field)');
+}
+
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

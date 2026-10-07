@@ -1134,10 +1134,15 @@ function applyClamp(value, bounds) {
 }
 
 // src/lib/pay/calc/payslip.ts
+var isEmployerShareCode = (code) => {
+  const c = code.toUpperCase();
+  return c === "ER_PF" || c === "ER_ESI" || c.startsWith("ER_ESI_");
+};
 var isMoney2 = (v) => !!v && typeof v === "object" && v.kind === "money";
 function aggregatePayslip(values, spec) {
   const earnings = [];
   const deductions = [];
+  const employerContributions = [];
   let grossEarningsMinor = 0;
   let grossDeductionsMinor = 0;
   for (const code of Object.keys(values)) {
@@ -1147,7 +1152,13 @@ function aggregatePayslip(values, spec) {
   }
   const pool = { ...values, ...spec.fixedComponents ?? {} };
   for (const [code, side] of Object.entries(spec.classification)) {
-    if (side === "info") continue;
+    if (side === "info") {
+      const v = pool[code];
+      if (isEmployerShareCode(code) && v !== void 0 && isMoney2(v) && v.currency === spec.currency) {
+        employerContributions.push({ code, side, amount: makeMoney(Math.round(v.minor / 100) * 100, spec.currency), clamped: "none" });
+      }
+      continue;
+    }
     const raw = pool[code];
     if (raw === void 0) {
       throw new RangeError(`PAY-CAL-604: ${side} component '${code}' is classified but has no computed or fixed value`);
@@ -1176,7 +1187,8 @@ function aggregatePayslip(values, spec) {
     deductions,
     grossEarnings: makeMoney(grossEarningsMinor, spec.currency),
     grossDeductions: makeMoney(grossDeductionsMinor, spec.currency),
-    netPay: makeMoney(grossEarningsMinor - grossDeductionsMinor, spec.currency)
+    netPay: makeMoney(grossEarningsMinor - grossDeductionsMinor, spec.currency),
+    ...employerContributions.length ? { employerContributions } : {}
   };
 }
 

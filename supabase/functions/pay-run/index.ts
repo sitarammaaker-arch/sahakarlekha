@@ -252,7 +252,8 @@ Deno.serve(async (req: Request) => {
         await tx`insert into pay_calc.payslip(id,society_id,pay_run_id,employee_id,period_month,payslip_no,gross_minor,deductions_minor,net_minor,currency,paid_days,lop_days,created_by)
           values(${slipId},${societyId},${runId},${ps.employeeId},${periodMonth},${`PS-${runNo}-${req0.empCode}`},${ps.payslip.grossEarnings.minor},${ps.payslip.grossDeductions.minor},${ps.payslip.netPay.minor},'INR',${req0.paidDaysShown},${req0.lopDays},${su.id})`;
         let seq = 1;
-        for (const line of [...ps.payslip.earnings, ...ps.payslip.deductions]) {
+        // the employer's PF/ESI share rides along as extra lines (kind employer_contrib): the ledger posting reads them; payslip screens filter them out
+        for (const line of [...ps.payslip.earnings, ...ps.payslip.deductions, ...(ps.payslip.employerContributions ?? [])]) {
           await tx`insert into pay_calc.payslip_line(society_id,payslip_id,period_month,component_id,computed_minor,currency,sequence) values(${societyId},${slipId},${periodMonth},${codeToId[line.code]},${line.amount.minor},'INR',${seq++})`;
         }
       }

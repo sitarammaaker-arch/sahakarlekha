@@ -14,7 +14,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js';
-import { TDS_FORMULAS, assertVerifiedLaw, resolveParam, resolveStatutory, ESI_FORMULAS, ESI_CODE_BY_TYPE } from '../_shared/pay-core.mjs';
+import { TDS_FORMULAS, assertVerifiedLaw, resolveParam, resolveStatutory, ESI_FORMULAS, ESI_CODE_BY_TYPE, ER_FORMULAS, ER_ESI_CODE_BY_TYPE, ER_PF_CODE } from '../_shared/pay-core.mjs';
 
 // SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
 // token; its payload is read only to refuse more (unreadable → pending).
@@ -109,6 +109,12 @@ for (const [code, formula] of Object.entries(TDS_FORMULAS as Record<string, stri
 // bound to NO structure until an admin turns ESI on for an employee (`esi-set`). So nothing changes for anyone until then.
 for (const [code, formula] of Object.entries(ESI_FORMULAS as Record<string, string>)) {
   COMPONENTS[code] = { kind: 'deduction', method: 'formula', formula, label: 'ESI (employee share)' };
+}
+// Employer's PF / ESI share (lib/pay/statutory/employerShare.ts): in the society's catalog, bound to NO structure until an admin turns the
+// employer share on for an employee (er-set). Kind 'employer_contrib' → not on the payslip money; pay-run persists it as an extra line and
+// the ledger posts it (Dr 5203/5204, Cr the EPF/ESI payable). Codes start ER_ so they can never be read as the employee's ESI_*.
+for (const [code, formula] of Object.entries(ER_FORMULAS as Record<string, string>)) {
+  COMPONENTS[code] = { kind: 'employer_contrib', method: 'formula', formula, label: code === 'ER_PF' ? 'PF (employer share)' : 'ESI (employer share)' };
 }
 // Which TDS component fits an employment type (it projects the pay THAT structure earns). Daily-wage types have no
 // stable monthly pay to project, so they have none — their TDS, if ever due, is entered by hand.
@@ -334,6 +340,10 @@ Deno.serve(async (req: Request) => {
                   join pay_config.component_binding cb on cb.structure_version_id = sa.structure_version_id
                   join pay_config.component_catalog cc on cc.id = cb.component_id and (cc.code = 'ESI' or cc.code like 'ESI\_%')
                 where sa.employee_id = e.id and sa.effective_to is null limit 1) as esi_code,
+               (select coalesce(array_agg(cc.code order by cc.code), '{}') from pay_config.structure_assignment sa
+                  join pay_config.component_binding cb on cb.structure_version_id = sa.structure_version_id
+                  join pay_config.component_catalog cc on cc.id = cb.component_id and (cc.code = 'ER_PF' or cc.code = 'ER_ESI' or cc.code like 'ER\_ESI\_%')
+                where sa.employee_id = e.id and sa.effective_to is null) as er_codes,
                (select ao.fixed_minor from pay_config.structure_assignment sa
                   join pay_config.assignment_override ao on ao.assignment_id = sa.id
                   join pay_config.component_catalog cc on cc.id = ao.component_id and cc.code in ('BASIC','CONSOLIDATED','DAILY_RATE','STIPEND')
@@ -547,6 +557,16 @@ Deno.serve(async (req: Request) => {
           where sa.employee_id = ${empId} and sa.effective_to is null and cb.component_id = ${compIds[code]} limit 1`;
         if (enable && !bound) await changeStructureComponent(tx, societyId, empId, code, true, compIds, su.id, 0);
         if (!enable && bound) await changeStructureComponent(tx, societyId, empId, code, false, compIds, su.id, 0);
+        // The employer's ESI share belongs to the same coverage: when ESI goes off, its employer companion goes with it.
+        if (!enable) {
+          const erEsi = (ER_ESI_CODE_BY_TYPE as Record<string, string>)[String(emp.employment_type)];
+          if (erEsi && compIds[erEsi]) {
+            const [erBound] = await tx`select 1 from pay_config.component_binding cb
+              join pay_config.structure_assignment sa on sa.structure_version_id = cb.structure_version_id
+              where sa.employee_id = ${empId} and sa.effective_to is null and cb.component_id = ${compIds[erEsi]} limit 1`;
+            if (erBound) await changeStructureComponent(tx, societyId, empId, erEsi, false, compIds, su.id, 0);
+          }
+        }
         return { changed: enable ? !bound : !!bound };
       });
       // The ESI wage limit / rates are dated data that no person has yet confirmed against the ESIC notification — say so at the switch.
@@ -557,6 +577,55 @@ Deno.serve(async (req: Request) => {
         if (bad.length) lawWarning = `ESI rates (${bad.join(', ')}) are not yet confirmed against the ESIC notification — applied as published in the ESIC employers' guide`;
       }
       return json(200, { ok: true, employeeId: empId, code, enabled: enable, changed: out.changed, lawWarning }, CORS);
+    }
+
+    // EMPLOYER's PF / ESI share on or off for ONE employee. Off by default. Turning it on adds ER_PF where the employee has PF and the
+    // matching ER_ESI* where the employee has ESI (so it can never be on for a contribution the employee does not make); turning it off removes
+    // them. It REFUSES to turn on if the society has no pf.employer_expense / esi.employer_expense account role — otherwise the next
+    // payroll could not be posted to the ledger.
+    if (body.action === 'er-set') {
+      if (su.role !== 'admin') return json(403, { error: 'only admin may turn the employer share on or off' }, CORS);
+      const empId = body.employeeId ?? '';
+      const enable = body.enabled === true;
+      const [emp] = await sql`select employment_type from pay_core.employee where id = ${empId} and society_id = ${societyId} limit 1`;
+      if (!emp) return json(404, { error: 'employee not found in your society' }, CORS);
+      const erEsiCode = (ER_ESI_CODE_BY_TYPE as Record<string, string>)[String(emp.employment_type)];
+      const out = await sql.begin(async (tx: postgres.TransactionSql) => {
+        const compIds = await ensureSocietyComponents(tx, societyId, su.id);
+        const isBound = async (code: string) => {
+          const [b] = await tx`select 1 from pay_config.component_binding cb
+            join pay_config.structure_assignment sa on sa.structure_version_id = cb.structure_version_id
+            where sa.employee_id = ${empId} and sa.effective_to is null and cb.component_id = ${compIds[code]} limit 1`;
+          return !!b;
+        };
+        const hasPf = await isBound('PF');
+        const esiCode = (ESI_CODE_BY_TYPE as Record<string, string>)[String(emp.employment_type)];
+        const hasEsi = !!esiCode && await isBound(esiCode);
+        const want: string[] = [];
+        if (hasPf) want.push(ER_PF_CODE);
+        if (hasEsi && erEsiCode) want.push(erEsiCode);
+        if (enable) {
+          if (!want.length) throw Object.assign(new Error('इस कर्मचारी के ढाँचे में न PF है, न ESI — नियोक्ता हिस्सा तभी लगेगा जब कर्मचारी का हिस्सा कटता हो। (No PF or ESI on this employee — the employer share follows the employee share.)'), { status: 400 });
+          const need = [...(hasPf ? ['pf.employer_expense'] : []), ...(hasEsi ? ['esi.employer_expense'] : [])];
+          const have = await tx`select role from public.account_roles where society_id = ${societyId} and role = any(${need})`;
+          const miss = need.filter((r) => !have.some((h) => h.role === r));
+          if (miss.length) throw Object.assign(new Error(`इस समिति में ये खाता-भूमिकाएँ तय नहीं हैं: ${miss.join(', ')} — बिना इनके payroll बही में नहीं लिखा जा सकता, इसलिए नियोक्ता हिस्सा चालू नहीं किया। सहायता से संपर्क करें। (account roles missing: ${miss.join(', ')})`), { status: 409 });
+          for (const code of want) if (!(await isBound(code))) await changeStructureComponent(tx, societyId, empId, code, true, compIds, su.id, 0);
+        } else {
+          for (const code of [...new Set([ER_PF_CODE, ...Object.values(ER_ESI_CODE_BY_TYPE as Record<string, string>)])]) {
+            if (compIds[code] && await isBound(code)) await changeStructureComponent(tx, societyId, empId, code, false, compIds, su.id, 0);
+          }
+        }
+        return { codes: enable ? want : [] };
+      }).catch((e: Error & { status?: number }) => e);
+      if (out instanceof Error) return json((out as Error & { status?: number }).status ?? 500, { error: out.message }, CORS);
+      let lawWarning: string | null = null;
+      if (enable) {
+        const month = `${new Date().toISOString().slice(0, 7)}-01`;
+        const bad = (resolveStatutory(month).unverified as string[]).filter((k) => k === 'pf.employerRate' || k === 'esi.employerRate' || k === 'esi.wageLimit');
+        if (bad.length) lawWarning = `Employer rates (${bad.join(', ')}) are not yet confirmed against the notification text — applied as the Salary page applies them`;
+      }
+      return json(200, { ok: true, employeeId: empId, enabled: enable, codes: out.codes, lawWarning }, CORS);
     }
 
     if (body.action === 'loan-close') {

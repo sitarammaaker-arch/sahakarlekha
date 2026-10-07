@@ -44,6 +44,7 @@ interface Employee {
   last_basic_minor?: number | null;   // what they were on in their final assignment
   tds_code?: string | null;           // the salary-TDS component on their structure, or null when TDS is off
   esi_code?: string | null;           // the ESI (employee share) component on their structure, or null when ESI is off
+  er_codes?: string[] | null;         // the employer's PF / ESI share components on their structure (empty = employer share off)
 }
 interface StatSetting { key: string; value_num: number; label: string | null; source: string | null; }
 interface AttRow {
@@ -526,6 +527,27 @@ const Payroll: React.FC = () => {
     loadStructure(attEmp.id); loadHistory(attEmp.id); loadEmployees();
   };
 
+  // The EMPLOYER's PF / ESI share on / off for THIS employee. Off by default; follows the employee's own PF / ESI. The server refuses to turn it on
+  // when the society has no employer-expense account role (the payroll could not then be posted to the books) and says so.
+  const [erBusy, setErBusy] = useState(false);
+  const setEr = async (enabled: boolean) => {
+    if (!attEmp) return;
+    setErBusy(true);
+    const { data, error } = await supabase.functions.invoke('pay-employee', { body: { action: 'er-set', employeeId: attEmp.id, enabled } });
+    setErBusy(false);
+    if (error || (data as { error?: string })?.error) { toast({ title: hi ? 'नियोक्ता हिस्सा नहीं बदला' : 'Employer share not changed', description: await invokeError(error, data), variant: 'destructive', duration: 12000 }); return; }
+    const d = data as { codes?: string[]; lawWarning?: string | null };
+    toast({
+      title: enabled ? (hi ? 'नियोक्ता हिस्सा चालू ✓' : 'Employer share on ✓') : (hi ? 'नियोक्ता हिस्सा बंद ✓' : 'Employer share off ✓'),
+      description: enabled ? (hi ? 'अगले payroll से नियोक्ता का PF/ESI खर्च और देय बही में लिखा जाएगा; कर्मचारी की पगार नहीं बदलेगी' : "From the next payroll the employer's PF/ESI is booked as an expense and a payable; the employee's pay does not change") : (hi ? 'अगले payroll से नियोक्ता हिस्सा बही में नहीं लिखा जाएगा' : "From the next payroll the employer share is not booked"),
+    });
+    if (enabled && d.lawWarning) {
+      toast({ title: hi ? '⚠ नियोक्ता दरें अभी सत्यापित नहीं' : '⚠ Employer rates not yet verified', description: `${d.lawWarning}`, variant: 'destructive', duration: 12000 });
+    }
+    setAttEmp((prev) => (prev ? { ...prev, er_codes: enabled ? (d.codes ?? []) : [] } : prev));
+    loadStructure(attEmp.id); loadHistory(attEmp.id); loadEmployees();
+  };
+
   // Add / remove a component for THIS employee only. The server creates a new structure version so
   // past periods keep the structure they were paid on.
   const changeComponent = async (action: 'structure-add' | 'structure-remove', code: string) => {
@@ -684,7 +706,7 @@ const Payroll: React.FC = () => {
     if (error) {
       toast({ title: hi ? 'ब्रेकडाउन लोड नहीं हुआ' : 'Could not load breakdown', description: error.message, variant: 'destructive' });
     } else {
-      setLines((data as Payline[]) || []);
+      setLines(((data as Payline[]) || []).filter((l) => l.kind !== 'employer_contrib'));
     }
     setLinesLoading(false);
   };
@@ -917,7 +939,7 @@ const Payroll: React.FC = () => {
       members.push({
         employeeCode: s.employee_code, name: nameOf(s.employee_name), uan: uanByCode[s.employee_code] || '',
         grossMinor: Number(s.gross_minor), paidDays: Number(s.paid_days),
-        lines: ((data as Payline[]) || []).map((l) => ({ code: l.code, computedMinor: Number(l.computed_minor) })),
+        lines: ((data as Payline[]) || []).filter((l) => l.kind !== 'employer_contrib').map((l) => ({ code: l.code, computedMinor: Number(l.computed_minor) })),
       });
     }
     const { rows, missingUan, skippedNoPf, partMonth } = buildEcr(members, {
@@ -1328,6 +1350,26 @@ const Payroll: React.FC = () => {
                 {hi
                   ? 'ESI संस्था पर लागू होता है (आम तौर पर 10 या अधिक कर्मचारी; कुछ राज्यों में 20) — इसलिए इसे आप तय करके चालू करें। कमाई हुई मज़दूरी ₹21,000 से ऊपर हो तो नहीं कटता; औसत दैनिक मज़दूरी ₹176 तक हो तो कर्मचारी का हिस्सा माफ़ है। नियोक्ता का हिस्सा अभी payslip में नहीं जुड़ता। दरें अभी सत्यापित नहीं हैं। सिर्फ़ admin बदल सकता है।'
                   : 'ESI is a duty of the establishment (usually 10+ employees; 20 in some states), so you decide when to turn it on. Nothing is deducted when the earned wage is above ₹21,000; the employee share is waived when the average daily wage is up to ₹176. The employer share is not yet on the payslip. Rates are not yet verified. Only an admin can change this.'}
+              </p>
+            </div>
+
+            <div className="border-t pt-3 space-y-2">
+              <Label className="text-sm font-medium">{hi ? 'नियोक्ता का PF / ESI हिस्सा' : "Employer's PF / ESI share"}</Label>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {(attEmp?.er_codes?.length ?? 0) > 0
+                    ? (hi ? 'चालू — PF 13% (12% + 1% प्रशासन/EDLI), ESI 3.25% — बही में खर्च व देय' : 'On — PF 13% (12% + 1% admin/EDLI), ESI 3.25% — booked as expense and payable')
+                    : (hi ? 'बंद — अभी नियोक्ता का हिस्सा बही में नहीं लिखा जाता' : 'Off — the employer share is not booked')}
+                </span>
+                <Button size="sm" variant={(attEmp?.er_codes?.length ?? 0) > 0 ? 'outline' : 'default'} className={`shrink-0 ${hasLeft ? 'hidden' : ''}`} disabled={erBusy}
+                  onClick={() => setEr(!((attEmp?.er_codes?.length ?? 0) > 0))}>
+                  {erBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : ((attEmp?.er_codes?.length ?? 0) > 0 ? (hi ? 'बंद करें' : 'Turn off') : (hi ? 'चालू करें' : 'Turn on'))}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {hi
+                  ? 'यह कर्मचारी की पगार नहीं बदलता — सिर्फ़ संस्था का PF/ESI खर्च और देय बही में जाता है। यह तभी चालू होता है जब कर्मचारी का PF/ESI कटता हो और समिति में नियोक्ता-खर्च के खाते (5203/5204) तय हों।'
+                  : "This never changes the employee's pay — only the society's PF/ESI expense and payable are booked. It can be turned on only when the employee has PF/ESI and the society has its employer-expense accounts (5203/5204) mapped."}
               </p>
             </div>
 
