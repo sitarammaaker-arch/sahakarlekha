@@ -111,7 +111,7 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
         >
           <span className="truncate">
             {selected
-              ? `${hi ? selected.nameHi : selected.name}${codeOf(selected) ? ` (${codeOf(selected)})` : ''}`
+              ? `${hi ? (selected.nameHi || selected.name) : selected.name}${codeOf(selected) ? ` (${codeOf(selected)})` : ''}`
               : (placeholder || (hi ? 'खाता चुनें' : 'Select account'))}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -133,7 +133,7 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
                       onSelect={() => { onChange(a.id); setOpen(false); }}
                     >
                       <Check className={cn('mr-2 h-4 w-4 shrink-0', value === a.id ? 'opacity-100' : 'opacity-0')} />
-                      <span className="flex-1 truncate">{hi ? a.nameHi : a.name}</span>
+                      <span className="flex-1 truncate">{hi ? (a.nameHi || a.name) : a.name}</span>
                       {codeOf(a) && (
                         <span className="ml-2 text-[10px] text-muted-foreground shrink-0">{codeOf(a)}</span>
                       )}

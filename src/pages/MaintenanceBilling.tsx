@@ -226,7 +226,7 @@ export default function MaintenanceBilling() {
                 <Label>{hi ? 'बैंक खाता' : 'Bank Account'}</Label>
                 <Select value={payBankId} onValueChange={setPayBankId}>
                   <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
-                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}

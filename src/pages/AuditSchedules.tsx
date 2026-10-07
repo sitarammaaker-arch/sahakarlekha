@@ -53,7 +53,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ schedule, hi, fy, pyYear,
     <CardHeader className="pb-3 border-b">
       <CardTitle className="text-base flex items-center gap-2">
         <Scale className="h-4 w-4 text-primary" />
-        {hi ? schedule.nameHi : schedule.name}
+        {hi ? (schedule.nameHi || schedule.name) : schedule.name}
       </CardTitle>
     </CardHeader>
     <CardContent className="pt-4">
@@ -124,7 +124,7 @@ const DepreciationTable: React.FC<ScheduleTableProps> = ({ schedule, hi, fy, pyY
     <CardHeader className="pb-3 border-b">
       <CardTitle className="text-base flex items-center gap-2">
         <Scale className="h-4 w-4 text-primary" />
-        {hi ? schedule.nameHi : schedule.name}
+        {hi ? (schedule.nameHi || schedule.name) : schedule.name}
       </CardTitle>
     </CardHeader>
     <CardContent className="pt-4">
@@ -256,7 +256,7 @@ const AuditSchedules: React.FC = () => {
   const handleCSV = () => {
     const rows: (string | number)[][] = [];
     resolved.forEach(sch => {
-      rows.push([(hi ? sch.nameHi : sch.name), '', ...(hasPY ? [''] : [])]);
+      rows.push([(hi ? (sch.nameHi || sch.name) : sch.name), '', ...(hasPY ? [''] : [])]);
       rows.push(...exportRows(sch));
       rows.push(['', '', ...(hasPY ? [''] : [])]);
     });
@@ -319,7 +319,7 @@ const AuditSchedules: React.FC = () => {
       <div className="flex items-start gap-2 p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg text-sm text-indigo-800 dark:text-indigo-200">
         <Info className="h-4 w-4 mt-0.5 shrink-0" />
         <div>
-          <span className="font-medium">{hi ? society.nameHi : society.name}</span>
+          <span className="font-medium">{hi ? (society.nameHi || society.name) : society.name}</span>
           {' · '}
           {hi ? 'वित्तीय वर्ष' : 'FY'} {fy}
           {' · '}

@@ -251,7 +251,7 @@ const Ledger: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold">
-                    {language === 'hi' ? selectedAccount.nameHi : selectedAccount.name}
+                    {language === 'hi' ? (selectedAccount.nameHi || selectedAccount.name) : selectedAccount.name}
                   </h2>
                   <Badge className={accountTypeBadge(selectedAccount.type).cls}>
                     {accountTypeBadge(selectedAccount.type).label}

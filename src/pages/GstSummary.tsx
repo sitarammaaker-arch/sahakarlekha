@@ -937,19 +937,21 @@ export default function GstSummary() {
                             : (hi ? 'शुद्ध GST वापसी योग्य' : 'Net GST Refundable')}
                         </TableCell>
                         <TableCell className={`text-right font-mono font-bold ${netCgst >= 0 ? 'text-red-700' : 'text-purple-700'}`}>
-                          {fmt(Math.abs(netCgst))}<span className="text-xs ml-1">{netCgst >= 0 ? 'Dr' : 'Cr'}</span>
+                          {fmt(Math.abs(netCgst))}{Math.abs(netCgst) >= 0.005 && <span className="text-xs ml-1">{netCgst > 0 ? 'Dr' : 'Cr'}</span>}
                         </TableCell>
                         <TableCell className={`text-right font-mono font-bold ${netSgst >= 0 ? 'text-red-700' : 'text-purple-700'}`}>
-                          {fmt(Math.abs(netSgst))}<span className="text-xs ml-1">{netSgst >= 0 ? 'Dr' : 'Cr'}</span>
+                          {fmt(Math.abs(netSgst))}{Math.abs(netSgst) >= 0.005 && <span className="text-xs ml-1">{netSgst > 0 ? 'Dr' : 'Cr'}</span>}
                         </TableCell>
                         <TableCell className={`text-right font-mono font-bold ${netIgst >= 0 ? 'text-red-700' : 'text-purple-700'}`}>
-                          {fmt(Math.abs(netIgst))}<span className="text-xs ml-1">{netIgst >= 0 ? 'Dr' : 'Cr'}</span>
+                          {fmt(Math.abs(netIgst))}{Math.abs(netIgst) >= 0.005 && <span className="text-xs ml-1">{netIgst > 0 ? 'Dr' : 'Cr'}</span>}
                         </TableCell>
                         <TableCell className={`text-right font-mono font-bold text-lg ${netGst >= 0 ? 'text-red-700' : 'text-purple-700'}`}>
                           {fmt(Math.abs(netGst))}
-                          <Badge variant={netGst >= 0 ? 'destructive' : 'secondary'} className="ml-2 text-xs">
-                            {netGst >= 0 ? (hi ? 'देय' : 'Pay') : (hi ? 'वापसी' : 'Refund')}
-                          </Badge>
+                          {Math.abs(netGst) >= 0.005 && (
+                            <Badge variant={netGst > 0 ? 'destructive' : 'secondary'} className="ml-2 text-xs">
+                              {netGst > 0 ? (hi ? 'देय' : 'Pay') : (hi ? 'वापसी' : 'Refund')}
+                            </Badge>
+                          )}
                         </TableCell>
                       </TableRow>
                     </TableBody>

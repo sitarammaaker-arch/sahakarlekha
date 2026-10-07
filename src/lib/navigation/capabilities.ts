@@ -46,7 +46,7 @@ export const DOMAIN_HEADING_KEY: Record<NavDomain, string | null> = {
   housing: 'navHousing', // housing-cooperative module group
   reports: 'reports',
   registers: 'registers',
-  administration: null,  // no heading (matches current settings group — verified vs Sidebar)
+  administration: 'settings', // "सेटिंग्स" — setup items no longer read as the tail of रजिस्टर (usability audit P1-1)
 };
 
 /**

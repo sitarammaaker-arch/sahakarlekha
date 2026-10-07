@@ -75,7 +75,7 @@ const DomainAccountsCard: React.FC<{ hi: boolean }> = ({ hi }) => {
           <div key={r.key} className="rounded-md border bg-muted/30 px-3 py-2">
             <div className="flex items-center gap-2 text-xs flex-wrap">
               <Badge variant="outline" className={cn('text-[10px]', STATUS_CLS[r.status])}>{hi ? STATUS_LABEL[r.status].hi : STATUS_LABEL[r.status].en}</Badge>
-              <span className="font-medium">{hi ? r.nameHi : r.name}</span>
+              <span className="font-medium">{hi ? (r.nameHi || r.name) : r.name}</span>
               <span className="text-muted-foreground">· {hi ? CAPABILITY_LABEL[r.capability]?.hi : CAPABILITY_LABEL[r.capability]?.en}</span>
               {!r.required && <span className="text-muted-foreground">· {hi ? 'capability बंद' : 'capability off'}</span>}
               {r.postingsSplit && <span className="text-red-700">· {hi ? 'posting बँटी हुई' : 'postings split'}</span>}

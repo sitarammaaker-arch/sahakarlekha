@@ -82,7 +82,7 @@ export const translations: Translations = {
   kccLoan: { hi: 'KCC / फसल ऋण', en: 'KCC / Crop Loan' },
   electionModule: { hi: 'सहकारी चुनाव', en: 'Election Module' },
   boardOfDirectors: { hi: 'निदेशक मंडल', en: 'Board of Directors' },
-  openingBalances: { hi: 'ओपनिंग बैलेंस (पिछले वर्ष से)', en: 'Opening Balances' },
+  openingBalances: { hi: 'ओपनिंग बैलेंस', en: 'Opening Balances' },
   nabardReport: { hi: 'NABARD क्रेडिट रिपोर्ट', en: 'NABARD Credit Report' },
   federationReport: { hi: 'सहकारी सालाना रिटर्न', en: 'Federation Annual Return' },
   recoverables: { hi: 'वसूली योग्य रजिस्टर', en: 'Recoverables Register' },

@@ -158,7 +158,7 @@ export default function FundStatement() {
             return (
               <button key={f.id} onClick={() => setFundId(f.id)}
                 className={`w-full flex items-center justify-between rounded-lg border p-3 text-left text-sm ${fundId === f.id ? 'border-primary bg-primary/5' : ''}`}>
-                <span className="font-medium">{hi ? f.nameHi : f.name} <span className="text-xs text-muted-foreground">({f.id})</span></span>
+                <span className="font-medium">{hi ? (f.nameHi || f.name) : f.name} <span className="text-xs text-muted-foreground">({f.id})</span></span>
                 <span className="font-semibold">{money(bal)}</span>
               </button>
             );
@@ -184,7 +184,7 @@ export default function FundStatement() {
           </div>
 
           <Card>
-            <CardHeader><CardTitle className="text-base">{hi ? 'निधि खाता विवरण' : 'Fund Ledger'} — {hi ? fund.nameHi : fund.name}</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">{hi ? 'निधि खाता विवरण' : 'Fund Ledger'} — {hi ? (fund.nameHi || fund.name) : fund.name}</CardTitle></CardHeader>
             <CardContent>
               {statement.rows.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{hi ? 'इस निधि में अभी कोई गति नहीं।' : 'No movements in this fund yet.'}</p>
@@ -257,13 +257,13 @@ export default function FundStatement() {
       {/* Add-investment dialog */}
       <Dialog open={invOpen} onOpenChange={setInvOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{hi ? 'निधि निवेश जोड़ें' : 'Add Fund Investment'}{fund ? ` — ${hi ? fund.nameHi : fund.name}` : ''}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{hi ? 'निधि निवेश जोड़ें' : 'Add Fund Investment'}{fund ? ` — ${hi ? (fund.nameHi || fund.name) : fund.name}` : ''}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label>{hi ? 'निवेश खाता (संपत्ति)' : 'Investment account (asset)'} *</Label>
               <Select value={invAcc} onValueChange={setInvAcc}>
                 <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
-                <SelectContent>{investAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} — {hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                <SelectContent>{investAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} — {hi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -293,7 +293,7 @@ export default function FundStatement() {
                 <Label>{hi ? 'बैंक खाता' : 'Bank Account'}</Label>
                 <Select value={invBankId} onValueChange={setInvBankId}>
                   <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
-                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}
@@ -335,7 +335,7 @@ export default function FundStatement() {
                 <Label>{hi ? 'बैंक खाता' : 'Bank Account'}</Label>
                 <Select value={redeemBankId} onValueChange={setRedeemBankId}>
                   <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
-                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}
@@ -350,7 +350,7 @@ export default function FundStatement() {
       {/* Operation dialog */}
       <Dialog open={opOpen} onOpenChange={setOpOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{hi ? opMeta[opType].hi : opMeta[opType].en}{fund ? ` — ${hi ? fund.nameHi : fund.name}` : ''}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{hi ? opMeta[opType].hi : opMeta[opType].en}{fund ? ` — ${hi ? (fund.nameHi || fund.name) : fund.name}` : ''}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label>{hi ? 'राशि' : 'Amount'} *</Label>
@@ -375,7 +375,7 @@ export default function FundStatement() {
                 <Label>{hi ? 'बैंक खाता' : 'Bank Account'}</Label>
                 <Select value={bankId} onValueChange={setBankId}>
                   <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
-                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}

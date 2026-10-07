@@ -246,7 +246,7 @@ interface DataContextType {
   rejectMember: (id: string) => void;
 
   addAccount: (data: Omit<LedgerAccount, 'id'>, opts?: { id?: string }) => LedgerAccount;
-  updateAccount: (id: string, data: Partial<LedgerAccount>) => boolean;
+  updateAccount: (id: string, data: Partial<LedgerAccount>, opts?: { onSaved?: () => void; onFailed?: (message: string) => void }) => boolean;
   /** Give a readable code (accounts.code, migration 109) to every account whose id is a UUID and
    *  has none. Explicit admin action — the load path never writes (RM-01). */
   assignMissingAccountCodes: () => Promise<{ assigned: number; failed: number; refused?: boolean }>;
@@ -1827,8 +1827,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const fyStart = society.financialYearStart;
     if (data.date && fyStart && (data.date < fyStart || data.date > fyEnd)) {
       toastRef.current({
-        title: 'Date Outside Financial Year',
-        description: `Voucher date ${data.date} is outside the active FY ${society.financialYear} (${fyStart} to ${fyEnd}). Entry saved but please verify.`,
+        title: 'तारीख़ चालू वित्त वर्ष से बाहर / Date Outside Financial Year',
+        description: `वाउचर की तारीख़ ${data.date} चालू वित्त वर्ष ${society.financialYear} (${fyStart} से ${fyEnd}) से बाहर है। एंट्री सहेजी जा रही है — कृपया तारीख़ जाँच लें। / Voucher date is outside the active FY. Entry is being saved, but please verify the date.`,
         variant: 'default',
       });
     }
@@ -4125,7 +4125,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   // Returns false when a guard blocked the edit (callers must not show a success toast then).
-  const updateAccount = useCallback((id: string, data: Partial<LedgerAccount>): boolean => {
+  // opts.onSaved / onFailed fire once the cloud upsert settles, so a batch caller (Opening Balances)
+  // can announce success only after EVERY row is really saved (RULE 1).
+  const updateAccount = useCallback((id: string, data: Partial<LedgerAccount>, opts?: { onSaved?: () => void; onFailed?: (message: string) => void }): boolean => {
     if (guardFYLocked()) return false;
     const current = accountsRef.current.find(a => a.id === id);
     // A ledger that carries entries (or an opening balance) must never become a GROUP: reports skip
@@ -4167,8 +4169,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setAccountsState(p => p.map(a => a.id === id ? before : a));   // RULE 1: roll back to prior state
             if (openingEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== openingEvent.eventId);
             toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+            opts?.onFailed?.(error.message);
             return;
           }
+          opts?.onSaved?.();
           if (openingEvent) persistLedgerEvent(openingEvent);
           else if (openingViaServer && openingTouched) syncOpeningOnServer(id);
           // Chart edits were never audited, so a ledger flipped to group left no trace of who/when.
@@ -4179,7 +4183,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             after: Object.fromEntries(changed.map(k => [k, updatedAccount[k] ?? null])),
           });
         });
-      }
+      } else opts?.onFailed?.('account not found');
       return updated;
     });
     return true;

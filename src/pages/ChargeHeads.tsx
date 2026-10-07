@@ -62,7 +62,7 @@ export default function ChargeHeads() {
     if (t === 'liability') return hi ? 'पास-थ्रू' : 'Pass-through';
     return hi ? 'आय' : 'Income';
   };
-  const accLabel = (id: string) => { const a = acc(id); return a ? `${accountCode(a) || '—'} — ${hi ? a.nameHi : a.name}` : id; };
+  const accLabel = (id: string) => { const a = acc(id); return a ? `${accountCode(a) || '—'} — ${hi ? (a.nameHi || a.name) : a.name}` : id; };
 
   const reset = () => { setNameEn(''); setNameHi(''); setAccountId(''); setBasis('fixed'); setRate(''); setGstable(false); setKind('service'); };
 
@@ -130,7 +130,7 @@ export default function ChargeHeads() {
               <Label>{hi ? 'खाता (आय / निधि / पास-थ्रू)' : 'Target account (Income / Fund / Pass-through)'} *</Label>
               <Select value={accountId} onValueChange={setAccountId}>
                 <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
-                <SelectContent>{targetAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} — {hi ? a.nameHi : a.name} · {kindLabel(a.id)}</SelectItem>)}</SelectContent>
+                <SelectContent>{targetAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} — {hi ? (a.nameHi || a.name) : a.name} · {kindLabel(a.id)}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-2">

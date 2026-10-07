@@ -149,13 +149,14 @@ const amountInWords = (minor: number): string => {
 };
 
 const stateVariant = (s: string): 'default' | 'secondary' | 'outline' =>
-  s === 'posted' || s === 'paid' ? 'default' : s === 'draft' ? 'outline' : 'secondary';
+  s === 'posted' || s === 'paid' ? 'default' : s === 'draft' || s === 'rolled_back' || s === 'cancelled' ? 'outline' : 'secondary';
 
 // The pay-run lifecycle state is stored as an English enum; show it in Hindi so a
 // Hindi-first secretary can read the run's status (it was leaking raw draft/verified/…).
 const STATE_LABEL_HI: Record<string, string> = {
   draft: 'ड्राफ़्ट', verified: 'सत्यापित', approved: 'अनुमोदित',
   locked: 'लॉक', posted: 'बही में पोस्ट', paid: 'भुगतान हुआ', cancelled: 'रद्द',
+  rolled_back: 'उलटा गया',
 };
 const stateLabel = (s: string, hi: boolean): string => (hi ? (STATE_LABEL_HI[s] ?? s) : s);
 
@@ -192,7 +193,7 @@ const Payroll: React.FC = () => {
   const payChoices = [...new Set([...getBankAccountIds(accounts), ACCOUNT_IDS.CASH])]
     .map((id) => accounts.find((a) => a.id === id))
     .filter((a): a is NonNullable<typeof a> => !!a)
-    .map((a) => ({ id: a.id, label: (hi ? a.nameHi : a.name) || a.name || a.id }));
+    .map((a) => ({ id: a.id, label: (hi ? (a.nameHi || a.name) : a.name) || a.name || a.id }));
 
   const [statList, setStatList] = useState<StatSetting[]>([]);
   const [statOpen, setStatOpen] = useState(false);
@@ -1536,7 +1537,7 @@ const Payroll: React.FC = () => {
                         </Button>
                       )}
                       {(r.state === 'posted' || r.state === 'paid') && (
-                        <Button size="sm" variant="ghost" className="mr-1 text-destructive" disabled={transitioning === r.run_id || ledgerPostingBlocked('rollback')}
+                        <Button size="sm" variant="ghost" className="mr-2 text-destructive" disabled={transitioning === r.run_id || ledgerPostingBlocked('rollback')}
                           title={ledgerPostingBlocked('rollback') ? (hi ? LEDGER_POSTING_OFF_HI : LEDGER_POSTING_OFF_EN) : undefined}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1549,7 +1550,7 @@ const Payroll: React.FC = () => {
                         </Button>
                       )}
                       {(r.state === 'draft' || r.state === 'verified' || r.state === 'approved') && (
-                        <Button size="sm" variant="ghost" className="mr-1 text-destructive" disabled={transitioning === r.run_id}
+                        <Button size="sm" variant="ghost" className="mr-2 text-destructive" disabled={transitioning === r.run_id}
                           onClick={(e) => {
                             e.stopPropagation();
                             const msg = hi

@@ -136,7 +136,7 @@ const PurchaseManagement: React.FC = () => {
     // Auto-select the new item in the row
     updateItem(quickAddRowIndex, {
       itemId: newItem.id,
-      itemName: language === 'hi' ? newItem.nameHi : newItem.name,
+      itemName: language === 'hi' ? (newItem.nameHi || newItem.name) : newItem.name,
       unit: newItem.unit,
       rate: newItem.purchaseRate,
     });
@@ -177,7 +177,7 @@ const PurchaseManagement: React.FC = () => {
     if (!stock) return;
     updateItem(index, {
       itemId: stock.id,
-      itemName: language === 'hi' ? stock.nameHi : stock.name,
+      itemName: language === 'hi' ? (stock.nameHi || stock.name) : stock.name,
       unit: stock.unit,
       rate: stock.purchaseRate,
       qty: items[index].qty,
@@ -649,7 +649,7 @@ const PurchaseManagement: React.FC = () => {
                             <SelectContent>
                               {stockItems.filter(s => s.isActive).map(s => (
                                 <SelectItem key={s.id} value={s.id}>
-                                  {language === 'hi' ? s.nameHi : s.name}
+                                  {language === 'hi' ? (s.nameHi || s.name) : s.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -724,7 +724,7 @@ const PurchaseManagement: React.FC = () => {
               <CardContent className="space-y-2 text-sm">
                 {/* Subtotal */}
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{language === 'hi' ? 'उपयोग कुल' : 'Subtotal'}</span>
+                  <span className="text-muted-foreground">{language === 'hi' ? 'उप-योग' : 'Subtotal'}</span>
                   <span>{fmt(totalAmount)}</span>
                 </div>
                 {/* Discount */}
@@ -1177,7 +1177,7 @@ const PurchaseManagement: React.FC = () => {
 
               <div className="space-y-1 text-sm text-right border-t pt-2">
                 <div className="flex justify-between">
-                  <span>{language === 'hi' ? 'उपयोग कुल' : 'Subtotal'}</span>
+                  <span>{language === 'hi' ? 'उप-योग' : 'Subtotal'}</span>
                   <span>{fmt(viewPurchase.totalAmount)}</span>
                 </div>
                 {(viewPurchase.discount || 0) > 0 && (

@@ -108,22 +108,22 @@ export default function ProcurementLots() {
 
   const cropName = (id: string) => {
     const c = crops.find(x => x.id === id);
-    if (c) return hi && c.nameHi ? c.nameHi : c.name;
+    if (c) return hi && c.nameHi ? (c.nameHi || c.name) : c.name;
     const legacy = LEGACY_CROPS[id];
-    return legacy ? (hi ? legacy.nameHi : legacy.name) : id;
+    return legacy ? (hi ? (legacy.nameHi || legacy.name) : legacy.name) : id;
   };
   const varietyLabel = (id?: string) => {
     if (!id) return '';
     const v = varieties.find(x => x.id === id);
-    return v ? (hi && v.nameHi ? v.nameHi : v.name) : id; // legacy lots stored free-text in varietyId
+    return v ? (hi && v.nameHi ? (v.nameHi || v.name) : v.name) : id; // legacy lots stored free-text in varietyId
   };
   const cropVarieties = varieties.filter(v => v.cropId === cropId);
-  const seasonLabel = (id?: string) => { const s = seasons.find(x => x.id === id); return s ? (hi && s.nameHi ? s.nameHi : s.name) : ''; };
+  const seasonLabel = (id?: string) => { const s = seasons.find(x => x.id === id); return s ? (hi && s.nameHi ? (s.nameHi || s.name) : s.name) : ''; };
   const centreLabel = (id?: string) => {
     const c = centres.find(x => x.id === id);
     if (!c) return '';
     const ag = agencies.find(a => a.id === c.agencyId);
-    return `${hi && c.nameHi ? c.nameHi : c.name}${ag ? ` · ${ag.code || ag.name}` : ''}`;
+    return `${hi && c.nameHi ? (c.nameHi || c.name) : c.name}${ag ? ` · ${ag.code || ag.name}` : ''}`;
   };
   const farmerLabel = (id: string) => { const f = procurementFarmers.find(x => x.id === id); return f ? `${f.farmerName} (${f.farmerCode})` : id; };
   const lotQuality = (lotId: string) => procurementQualityTests.find(q => q.lotId === lotId);
@@ -339,7 +339,7 @@ export default function ProcurementLots() {
                 <SelectTrigger><SelectValue placeholder={hi ? 'सीज़न चुनें' : 'Select season'} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">{hi ? '— कोई नहीं —' : '— none —'}</SelectItem>
-                  {seasons.map(s => <SelectItem key={s.id} value={s.id}>{hi && s.nameHi ? s.nameHi : s.name}</SelectItem>)}
+                  {seasons.map(s => <SelectItem key={s.id} value={s.id}>{hi && s.nameHi ? (s.nameHi || s.name) : s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -361,7 +361,7 @@ export default function ProcurementLots() {
               <Select value={cropId} onValueChange={v => { setCropId(v); setVarietyId(''); }}>
                 <SelectTrigger><SelectValue placeholder={hi ? 'फसल चुनें' : 'Select crop'} /></SelectTrigger>
                 <SelectContent>
-                  {crops.map(c => <SelectItem key={c.id} value={c.id}>{hi && c.nameHi ? c.nameHi : c.name}</SelectItem>)}
+                  {crops.map(c => <SelectItem key={c.id} value={c.id}>{hi && c.nameHi ? (c.nameHi || c.name) : c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
               {crops.length === 0 && (
@@ -377,7 +377,7 @@ export default function ProcurementLots() {
                 <SelectTrigger><SelectValue placeholder={hi ? 'किस्म (वैकल्पिक)' : 'Variety (optional)'} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">{hi ? '— कोई नहीं —' : '— none —'}</SelectItem>
-                  {cropVarieties.map(v => <SelectItem key={v.id} value={v.id}>{hi && v.nameHi ? v.nameHi : v.name}</SelectItem>)}
+                  {cropVarieties.map(v => <SelectItem key={v.id} value={v.id}>{hi && v.nameHi ? (v.nameHi || v.name) : v.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -568,7 +568,7 @@ export default function ProcurementLots() {
                 <Label>{hi ? 'बैंक खाता' : 'Bank Account'}</Label>
                 <Select value={payBankId} onValueChange={setPayBankId}>
                   <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
-                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}
@@ -577,7 +577,7 @@ export default function ProcurementLots() {
                 <Label>{hi ? 'एजेंसी प्राप्य खाता (जैसे Hafed Control)' : 'Agency receivable (e.g. Hafed Control)'}</Label>
                 <Select value={payAgencyId} onValueChange={setPayAgencyId}>
                   <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
-                  <SelectContent>{agencyAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{agencyAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground">{hi ? 'नकद/बैंक नहीं घटेगा — एजेंसी का प्राप्य घटेगा (एजेंसी ने किसानों को सीधे भुगतान किया)।' : 'Cash/bank untouched — the agency’s receivable is reduced (it paid the farmers directly).'}</p>
               </div>
@@ -659,7 +659,7 @@ export default function ProcurementLots() {
                     </Select>
                     <Select value={dedAccId} onValueChange={setDedAccId}>
                       <SelectTrigger><SelectValue placeholder={hi ? 'खाता' : 'Account'} /></SelectTrigger>
-                      <SelectContent>{postableAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} · {hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                      <SelectContent>{postableAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} · {hi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   {dedWarning && <p className="text-[11px] text-amber-700">{hi ? DEDUCTION_WARNING_TEXT[dedWarning].hi : DEDUCTION_WARNING_TEXT[dedWarning].en}</p>}

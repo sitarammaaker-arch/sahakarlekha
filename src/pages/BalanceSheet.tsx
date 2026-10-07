@@ -5,6 +5,7 @@
  * Previous Year column shows per-account and per-group values
  */
 import React, { useMemo, useState } from 'react';
+import { isAbnormalBalance } from '@/lib/abnormalBalance';
 import { useNavigate } from 'react-router-dom';
 import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -187,12 +188,25 @@ const BalanceSheet: React.FC = () => {
       .filter(b => !capturedIds.has(b.account.id) && (b.netBalance !== 0 || getPY(b.account.id) !== 0))
       .map(b => ({ account: b, displayAmount: signFlip ? -b.netBalance : b.netBalance, pyAmount: signFlip ? -getPY(b.account.id) : getPY(b.account.id) }));
 
-    if (orphans.length > 0) {
+    // An account that landed here because its balance flipped sides (e.g. a bank or staff advance in
+    // Cr, shown among liabilities) is a books problem, not "other" — give it its own, always-listed,
+    // warning group (usability audit P0-4). Totals are unchanged.
+    const reversed = orphans.filter(o => isAbnormalBalance(o.account.account, o.account.netBalance));
+    const plainOrphans = orphans.filter(o => !reversed.includes(o));
+    if (reversed.length > 0) {
+      groups.push({
+        id: 'reversed', name: '⚠ Accounts with a reversed balance — check', nameHi: '⚠ उलटे शेष वाले खाते — जाँचें',
+        items: reversed,
+        grandTotal: reversed.reduce((s, i) => s + i.displayAmount, 0),
+        pyGrandTotal: reversed.reduce((s, i) => s + i.pyAmount, 0),
+      });
+    }
+    if (plainOrphans.length > 0) {
       groups.push({
         id: 'other', name: 'Other', nameHi: 'अन्य',
-        items: orphans,
-        grandTotal: orphans.reduce((s, i) => s + i.displayAmount, 0),
-        pyGrandTotal: orphans.reduce((s, i) => s + i.pyAmount, 0),
+        items: plainOrphans,
+        grandTotal: plainOrphans.reduce((s, i) => s + i.displayAmount, 0),
+        pyGrandTotal: plainOrphans.reduce((s, i) => s + i.pyAmount, 0),
       });
     }
 
@@ -287,7 +301,7 @@ const BalanceSheet: React.FC = () => {
                 {hasPY && <TableCell className="text-right text-muted-foreground">{group.pyGrandTotal !== 0 ? fmt(group.pyGrandTotal) : ''}</TableCell>}
                 {hasPY && varCell(group.grandTotal, group.pyGrandTotal)}
                 <TableCell className="font-bold uppercase text-sm">
-                  {hi ? group.nameHi : group.name}
+                  {hi ? (group.nameHi || group.name) : group.name}
                 </TableCell>
                 <TableCell></TableCell>
                 <TableCell className={`text-right font-bold ${group.grandTotal < 0 ? 'text-destructive' : ''}`}>
@@ -308,7 +322,7 @@ const BalanceSheet: React.FC = () => {
                     <TableRow key={b.account.id} className="bg-muted/30">
                       {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyAmount !== 0 ? fmt(pyAmount) : '—'}</TableCell>}
                       {hasPY && varCell(displayAmount, pyAmount)}
-                      <TableCell className="text-sm font-semibold" style={{ paddingLeft: padLeft }}>{hi ? b.account.nameHi : b.account.name}</TableCell>
+                      <TableCell className="text-sm font-semibold" style={{ paddingLeft: padLeft }}>{hi ? (b.account.nameHi || b.account.name) : b.account.name}</TableCell>
                       <TableCell className="text-right text-sm font-semibold">
                         {isNegative ? `(${fmt(Math.abs(displayAmount))})` : fmt(displayAmount)}
                       </TableCell>
@@ -331,7 +345,7 @@ const BalanceSheet: React.FC = () => {
                     {hasPY && varCell(displayAmount, pyAmount)}
                     <TableCell className="text-sm group" style={{ paddingLeft: padLeft }}>
                       <span className="group-hover:text-primary group-hover:underline">
-                        {hi ? b.account.nameHi : b.account.name}
+                        {hi ? (b.account.nameHi || b.account.name) : b.account.name}
                       </span>
                       {isNegative && <span className="ml-1 text-xs text-muted-foreground">{contraLabel}</span>}
                       <ExternalLink className="h-3 w-3 ml-1 inline opacity-0 group-hover:opacity-50 text-muted-foreground" />
@@ -455,7 +469,7 @@ const BalanceSheet: React.FC = () => {
       <Card className="shadow-card">
         <CardHeader className="border-b text-center">
           <CardTitle className="text-xl">{hi ? 'बैलेंस शीट' : 'Balance Sheet'}</CardTitle>
-          <p className="text-sm text-muted-foreground">{hi ? society.nameHi : society.name}</p>
+          <p className="text-sm text-muted-foreground">{hi ? (society.nameHi || society.name) : society.name}</p>
           <p className="text-sm text-muted-foreground">
             {hi ? `${fmtDate(asOnDate)} को` : `As at ${fmtDate(asOnDate)}`}
           </p>

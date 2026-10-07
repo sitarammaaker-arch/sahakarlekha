@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -35,7 +36,7 @@ import { getNextVoucherNo, VOUCHER_TEMPLATES, ACCOUNT_IDS, getBankAccountIds } f
 import { availableTemplates } from '@/lib/voucherTemplateAvailability';
 import type { LedgerAccount } from '@/types';
 import { validateVoucher } from '@/lib/validation';
-import { fmtDate } from '@/lib/dateUtils';
+import { fmtDate, todayStr } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { isEngineVoucher } from '@/lib/accounting/voucherImmutability';
 import { isEditLocked } from '@/lib/voucherReversal';
@@ -116,7 +117,7 @@ const Vouchers: React.FC = () => {
   const bankTplSide: 'debit' | 'credit' | null = !selectedTemplate ? null
     : selectedTemplate.debitAccountId === ACCOUNT_IDS.BANK ? 'debit'
     : selectedTemplate.creditAccountId === ACCOUNT_IDS.BANK ? 'credit' : null;
-  const [voucherDate, setVoucherDate] = useState(new Date().toISOString().split('T')[0]);
+  const [voucherDate, setVoucherDate] = useState(todayStr());
   const [debitAccount, setDebitAccount] = useState('');
   const [creditAccount, setCreditAccount] = useState('');
   const [amount, setAmount] = useState('');
@@ -714,7 +715,7 @@ const Vouchers: React.FC = () => {
                           {(() => {
                             const dr = accounts.find(a => a.id === selectedTemplate.debitAccountId);
                             const cr = accounts.find(a => a.id === selectedTemplate.creditAccountId);
-                            return `Dr: ${language === 'hi' ? dr?.nameHi : dr?.name} / Cr: ${language === 'hi' ? cr?.nameHi : cr?.name}`;
+                            return `Dr: ${language === 'hi' ? (dr?.nameHi || dr?.name) : dr?.name} / Cr: ${language === 'hi' ? (cr?.nameHi || cr?.name) : cr?.name}`;
                           })()}
                         </p>
                       </div>
@@ -739,11 +740,29 @@ const Vouchers: React.FC = () => {
                     </div>
                   </div>
                   <CardContent className="pt-6">
+                    {/* Quick tiles post a plain voucher — say what they do NOT do (usability audit P1-3 / P1-2). */}
+                    {(selectedTemplate.creditAccountId === '4101' || selectedTemplate.debitAccountId === '5101') && (
+                      <div className="mb-4 p-3 rounded-lg border border-warning/50 bg-warning/10 text-sm">
+                        {language === 'hi'
+                          ? <>⚠ इस tile से सिर्फ़ रक़म दर्ज होती है — <b>न स्टॉक बदलता है, न GST जुड़ता है</b>। माल की बिक्री या खरीद हो तो <Link to={selectedTemplate.creditAccountId === '4101' ? '/sales' : '/purchases'} className="underline font-medium">{selectedTemplate.creditAccountId === '4101' ? '"बिक्री"' : '"खरीद"'} पेज</Link> से दर्ज करें, वरना समापन माल और व्यापार खाता गलत होंगे।</>
+                          : <>⚠ This tile records the amount only — <b>no stock movement, no GST</b>. For goods, use the <Link to={selectedTemplate.creditAccountId === '4101' ? '/sales' : '/purchases'} className="underline font-medium">{selectedTemplate.creditAccountId === '4101' ? 'Sales' : 'Purchases'} page</Link>, or closing stock and the Trading Account will be wrong.</>}
+                      </div>
+                    )}
+                    {selectedTemplate.id === 'salary' && (
+                      <div className="mb-4 p-3 rounded-lg border border-warning/50 bg-warning/10 text-sm">
+                        {language === 'hi'
+                          ? <>⚠ इस महीने का वेतन <b>"वेतन"</b> या <b>"पेरोल"</b> पेज से प्रोसेस किया है तो यह tile न इस्तेमाल करें — वेतन दो बार दर्ज हो जाएगा। यह tile कटौतियाँ (PF/TDS) भी नहीं जोड़ती।</>
+                          : <>⚠ If this month's salary was processed on the Salary or Payroll page, do not use this tile — it would be booked twice. This tile also adds no deductions (PF/TDS).</>}
+                      </div>
+                    )}
                     <form onSubmit={handleSubmit} className="space-y-5">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label className="text-base font-semibold">{t('date')}</Label>
                           <Input type="date" value={voucherDate} onChange={(e) => setVoucherDate(e.target.value)} className="h-12 text-lg" required />
+                          {voucherDate > todayStr() && (
+                            <p className="text-xs text-warning">{language === 'hi' ? '⚠ यह आज के बाद की तारीख है — सही हो तभी सेव करें।' : '⚠ This date is after today — save only if that is intended.'}</p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label className="text-base font-semibold">{t('amount')} (₹)</Label>
@@ -884,6 +903,9 @@ const Vouchers: React.FC = () => {
                       <div className="space-y-2">
                         <Label className="text-base font-semibold">{t('date')}</Label>
                         <Input type="date" value={voucherDate} onChange={(e) => setVoucherDate(e.target.value)} className="h-12 text-lg" required />
+                        {voucherDate > todayStr() && (
+                          <p className="text-xs text-warning">{language === 'hi' ? '⚠ यह आज के बाद की तारीख है — सही हो तभी सेव करें।' : '⚠ This date is after today — save only if that is intended.'}</p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label className="text-base font-semibold">{language === 'hi' ? 'वाउचर प्रकार' : 'Voucher Type'}</Label>
@@ -1254,10 +1276,10 @@ const Vouchers: React.FC = () => {
                             </Badge>
                           </TableCell>
                           <TableCell className={cn('text-sm', cancelled && 'line-through')}>
-                            {language === 'hi' ? debitAcc?.nameHi : debitAcc?.name}
+                            {language === 'hi' ? (debitAcc?.nameHi || debitAcc?.name) : debitAcc?.name}
                           </TableCell>
                           <TableCell className={cn('text-sm', cancelled && 'line-through')}>
-                            {language === 'hi' ? creditAcc?.nameHi : creditAcc?.name}
+                            {language === 'hi' ? (creditAcc?.nameHi || creditAcc?.name) : creditAcc?.name}
                           </TableCell>
                           <TableCell className={cn('text-right font-semibold', cancelled && 'line-through')}>
                             {new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(v.amount)}

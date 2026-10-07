@@ -14,7 +14,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const TODAY = new Date().toISOString().slice(0, 10);
+// Local date + one day of slack: CI runs in UTC while authors date content in IST (UTC+5:30), so a
+// date that is "today" in India can still be "tomorrow" for the runner.
+const TODAY = (() => { const d = new Date(Date.now() + 24 * 3600 * 1000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const JARGON = /\bRULE \d|upsert|ऑडिट-फिक्स|grandTotal|canonical|DataContext|\.tsx\b|localStorage|society_users/;
 const words = (s) => String(s || '').split(/\s+/).filter(Boolean).length;

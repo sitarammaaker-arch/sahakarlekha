@@ -190,7 +190,7 @@ const ShareRegister: React.FC = () => {
       <Card className="shadow-card">
         <CardHeader className="border-b text-center py-4">
           <CardTitle className="text-lg">{hi ? 'शेयर रजिस्टर' : 'Share Register'}</CardTitle>
-          <p className="text-sm text-muted-foreground">{hi ? society.nameHi : society.name}</p>
+          <p className="text-sm text-muted-foreground">{hi ? (society.nameHi || society.name) : society.name}</p>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table>

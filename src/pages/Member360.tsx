@@ -152,7 +152,7 @@ export default function Member360() {
         <MemberPortalDialog
           member={portalOpen ? member : null}
           login={portalLogin ?? undefined}
-          societyName={(hi ? society.nameHi : society.name) || society.name || ''}
+          societyName={(hi ? (society.nameHi || society.name) : society.name) || society.name || ''}
           planAllowed={portalPlanAllowed(plan, subStatus)}
           hi={hi}
           onClose={() => setPortalOpen(false)}

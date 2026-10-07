@@ -165,7 +165,7 @@ const TradingAccount: React.FC = () => {
       <Card className="shadow-card">
         <CardHeader className="border-b text-center">
           <CardTitle className="text-xl">{hi ? 'व्यापार खाता' : 'Trading Account'}</CardTitle>
-          <p className="text-sm text-muted-foreground">{hi ? society.nameHi : society.name}</p>
+          <p className="text-sm text-muted-foreground">{hi ? (society.nameHi || society.name) : society.name}</p>
           <p className="text-sm text-muted-foreground">
             {hi
               ? `वित्तीय वर्ष ${society.financialYear} के लिए`
@@ -198,7 +198,7 @@ const TradingAccount: React.FC = () => {
                       </TableRow>
                       {openingStockItems.map((item, i) => (
                         <TableRow key={i}>
-                          <TableCell className="pl-6 text-sm">{hi ? item.nameHi : item.name}</TableCell>
+                          <TableCell className="pl-6 text-sm">{hi ? (item.nameHi || item.name) : item.name}</TableCell>
                           <TableCell className="text-right">{fmt(item.amount)}</TableCell>
                         </TableRow>
                       ))}
@@ -219,7 +219,7 @@ const TradingAccount: React.FC = () => {
                       </TableRow>
                       {purchaseItems.map((item, i) => (
                         <TableRow key={i}>
-                          <TableCell className="pl-6 text-sm">{hi ? item.nameHi : item.name}</TableCell>
+                          <TableCell className="pl-6 text-sm">{hi ? (item.nameHi || item.name) : item.name}</TableCell>
                           <TableCell className="text-right">{fmt(item.amount)}</TableCell>
                         </TableRow>
                       ))}
@@ -240,7 +240,7 @@ const TradingAccount: React.FC = () => {
                       </TableRow>
                       {directKept.map((item, i) => (
                         <TableRow key={i}>
-                          <TableCell className="pl-6 text-sm">{hi ? item.nameHi : item.name}</TableCell>
+                          <TableCell className="pl-6 text-sm">{hi ? (item.nameHi || item.name) : item.name}</TableCell>
                           <TableCell className="text-right">{fmt(item.amount)}</TableCell>
                         </TableRow>
                       ))}
@@ -302,7 +302,7 @@ const TradingAccount: React.FC = () => {
                       </TableRow>
                       {salesSplit.kept.map((item, i) => (
                         <TableRow key={i}>
-                          <TableCell className="pl-6 text-sm">{hi ? item.nameHi : item.name}</TableCell>
+                          <TableCell className="pl-6 text-sm">{hi ? (item.nameHi || item.name) : item.name}</TableCell>
                           <TableCell className="text-right">{fmt(item.amount)}</TableCell>
                         </TableRow>
                       ))}
@@ -342,7 +342,7 @@ const TradingAccount: React.FC = () => {
                       </TableRow>
                       {closingStockItems.map((item, i) => (
                         <TableRow key={i}>
-                          <TableCell className="pl-6 text-sm">{hi ? item.nameHi : item.name}</TableCell>
+                          <TableCell className="pl-6 text-sm">{hi ? (item.nameHi || item.name) : item.name}</TableCell>
                           <TableCell className="text-right">{fmt(item.amount)}</TableCell>
                         </TableRow>
                       ))}

@@ -54,7 +54,8 @@ const Register: React.FC = () => {
     }
     return options;
   })();
-  const [societyType, setSocietyType] = useState<SocietyType>('marketing_processing');
+  // No pre-selection: the type picks the chart of accounts and the modules, so the user must choose it (usability audit P1-10).
+  const [societyType, setSocietyType] = useState<SocietyType | ''>('');
 
   // Admin fields
   const [adminName, setAdminName] = useState('');
@@ -470,7 +471,7 @@ const Register: React.FC = () => {
         </Card>
 
         <p className="mt-6 text-xs text-muted-foreground text-center">
-          © 2024 समिति लेखा प्रणाली | All rights reserved
+          © {new Date().getFullYear()} सहकार लेखा (SahakarLekha) | {L('सभी अधिकार सुरक्षित', 'All rights reserved')}
         </p>
       </div>
     </div>

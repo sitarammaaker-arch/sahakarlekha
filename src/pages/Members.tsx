@@ -1126,7 +1126,7 @@ const Members: React.FC = () => {
       <MemberPortalDialog
         member={portalMember}
         login={portalMember ? portalLogins[portalMember.id] : undefined}
-        societyName={(hi ? society.nameHi : society.name) || society.name || ''}
+        societyName={(hi ? (society.nameHi || society.name) : society.name) || society.name || ''}
         planAllowed={portalAllowed}
         hi={hi}
         onClose={() => setPortalMember(null)}

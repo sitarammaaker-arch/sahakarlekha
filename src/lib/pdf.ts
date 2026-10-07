@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { isAbnormalBalance } from './abnormalBalance';
 import type { RowInput } from 'jspdf-autotable';
 import QRCode from 'qrcode';
 import { rpParticulars } from '@/lib/ledger/rpLabel';
@@ -985,7 +986,26 @@ export function generateBalanceSheetPDF(
     // created sundry creditor/debtor accounts). Mirror the on-screen "Other" group
     // so the printed groups reconcile to the Grand Total instead of silently
     // dropping these balances.
-    const orphans = balances.filter(b => !capturedIds.has(b.account.id) && (b.netBalance !== 0 || getPY(b.account.id) !== 0));
+    const allOrphans = balances.filter(b => !capturedIds.has(b.account.id) && (b.netBalance !== 0 || getPY(b.account.id) !== 0));
+    // Same split as the screen: a flipped-side balance (bank / advance in Cr …) is listed by name
+    // under its own warning heading, never hidden inside "OTHER" (usability audit P0-4).
+    const reversed = allOrphans.filter(b => isAbnormalBalance(b.account, b.netBalance));
+    if (reversed.length > 0) {
+      const revTotal = reversed.reduce((s, b) => s + (signFlip ? -b.netBalance : b.netBalance), 0);
+      const revPY = reversed.reduce((s, b) => s + getPY(b.account.id), 0);
+      pyTotal += revPY;
+      groupRows.push(body.length);
+      body.push(hasPY
+        ? ['REVERSED BALANCE - CHECK', revPY ? fmt(revPY) : '', '', fmt(revTotal)]
+        : ['REVERSED BALANCE - CHECK', '', fmt(revTotal)]);
+      reversed.forEach(b => {
+        const val = signFlip ? -b.netBalance : b.netBalance;
+        const display = val < 0 ? `(${fmt(Math.abs(val))})` : fmt(val);
+        const py = getPY(b.account.id);
+        body.push(hasPY ? [`   ${b.account.name}`, py ? fmt(py) : '', display, ''] : [`   ${b.account.name}`, display, '']);
+      });
+    }
+    const orphans = allOrphans.filter(b => !reversed.includes(b));
     if (orphans.length > 0) {
       const orphanTotal = orphans.reduce((s, b) => s + (signFlip ? -b.netBalance : b.netBalance), 0);
       const orphanPY = orphans.reduce((s, b) => s + getPY(b.account.id), 0);

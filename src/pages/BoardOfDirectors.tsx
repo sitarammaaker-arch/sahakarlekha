@@ -171,7 +171,7 @@ const BoardOfDirectors: React.FC = () => {
                 : (hi ? 'प्रशासन मंडल (BOA)' : 'Board of Administration (BOA)')}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {hi ? society.nameHi : society.name} · {hi ? 'वित्तीय वर्ष' : 'FY'} {society.financialYear}
+              {hi ? (society.nameHi || society.name) : society.name} · {hi ? 'वित्तीय वर्ष' : 'FY'} {society.financialYear}
             </p>
           </div>
         </div>

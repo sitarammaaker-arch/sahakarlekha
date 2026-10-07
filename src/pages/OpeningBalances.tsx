@@ -11,9 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Save, ArrowRight, FileSpreadsheet, Download } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { getVoucherLines } from '@/lib/voucherUtils';
-import { carryForwardOpenings } from '@/lib/openingBalances';
-import { Lock } from 'lucide-react';
+import { carryForwardOpenings, earlierYearVoucherCount, openingTotals } from '@/lib/openingBalances';
+import { fyStartFromLabel } from '@/lib/fyPeriod';
+import { accountCode } from '@/lib/accountCode';
+import { accountDisplayName } from '@/lib/accountName';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Lock, Info } from 'lucide-react';
 
 interface ObEntry { accountId: string; amount: number; type: 'debit' | 'credit' }
 
@@ -53,7 +59,13 @@ export default function OpeningBalances() {
   const balanceAccounts = useMemo(() =>
     accounts.filter(a =>
       a.type === 'asset' || a.type === 'liability' || a.type === 'equity'
-    ).sort((a, b) => (a.id || '').localeCompare(b.id || '')),
+    // by readable code (#706); accounts without one yet go last, by name
+    ).sort((a, b) => {
+      const ca = accountCode(a), cb = accountCode(b);
+      if (ca && cb) return ca.localeCompare(cb, 'en', { numeric: true });
+      if (ca || cb) return ca ? -1 : 1;
+      return (a.name || '').localeCompare(b.name || '');
+    }),
     [accounts]);
 
   const filtered = useMemo(() => {
@@ -62,9 +74,9 @@ export default function OpeningBalances() {
     return list;
   }, [balanceAccounts, filterType, showOnlyNonZero, balances]);
 
-  const totalDebit = Object.values(balances).filter(e => e.type === 'debit').reduce((s, e) => s + e.amount, 0);
-  const totalCredit = Object.values(balances).filter(e => e.type === 'credit').reduce((s, e) => s + e.amount, 0);
-  const isBalanced = Math.abs(totalDebit - totalCredit) < 1;
+  const { debit: totalDebit, credit: totalCredit, difference, balanced: isBalanced } = openingTotals(Object.values(balances));
+  const [confirmUnbalanced, setConfirmUnbalanced] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Group (parent) accounts that currently carry a non-zero opening (pending edits included).
   // Reports ignore these, so they are a silent source of a Trial-Balance gap — surface them
@@ -72,18 +84,18 @@ export default function OpeningBalances() {
   const groupsWithOpening = balanceAccounts.filter(a => a.isGroup && (balances[a.id]?.amount || 0) > 0);
 
   const handleCSV = () => {
-    const headers = ['Account Name', 'Type', 'Opening Balance', 'Balance Type'];
-    const rows = filtered.map(a => [a.name, a.type, a.openingBalance || 0, a.openingBalanceType || 'debit']);
+    const headers = ['Code', 'Account Name', 'Type', 'Opening Balance', 'Balance Type'];
+    const rows = filtered.map(a => [accountCode(a), a.name, a.type, a.openingBalance || 0, a.openingBalanceType || 'debit']);
     downloadCSV(headers, rows, 'opening_balances.csv');
   };
   const handleExcel = () => {
-    const headers = ['Account Name', 'Type', 'Opening Balance', 'Balance Type'];
-    const rows = filtered.map(a => [a.name, a.type, a.openingBalance || 0, a.openingBalanceType || 'debit']);
+    const headers = ['Code', 'Account Name', 'Type', 'Opening Balance', 'Balance Type'];
+    const rows = filtered.map(a => [accountCode(a), a.name, a.type, a.openingBalance || 0, a.openingBalanceType || 'debit']);
     downloadExcelSingle(headers, rows, 'opening_balances.xlsx', 'Opening Balances');
   };
 
   // Save: update each account's openingBalance in Supabase via DataContext
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback((opts?: { unbalancedConfirmed?: boolean }) => {
     // GUARD: an opening balance on a GROUP (parent) account is silently ignored by the Trial
     // Balance and Balance Sheet — both count LEDGER (leaf) accounts only. Money entered on a
     // group vanishes from every report (a real ₹58L funding was lost this way), leaving the
@@ -103,66 +115,95 @@ export default function OpeningBalances() {
       });
       return;
     }
-    // Update accounts that have balances set
-    Object.values(balances).forEach(entry => {
-      updateAccount(entry.accountId, { openingBalance: entry.amount, openingBalanceType: entry.type });
-    });
-    // Zero out accounts that were cleared
-    balanceAccounts.forEach(a => {
-      if ((a.openingBalance || 0) > 0 && !balances[a.id]) {
-        updateAccount(a.id, { openingBalance: 0 });
-      }
-    });
-    toast({ title: hi ? 'प्रारंभिक शेष सहेजा गया' : 'Opening balances saved' });
-  }, [balances, balanceAccounts, accounts, updateAccount, hi, toast]);
-
-  // Carry forward: compute closing balance from vouchers and set as opening
-  const handleCarryForward = useCallback(() => {
-    const fyParts = society.financialYear.split('-');
-    const endYear = parseInt(fyParts[0]) + 1;
-    const fyEnd = `${endYear}-03-31`;
-
-    const newBalances: Record<string, ObEntry> = {};
-    for (const acct of balanceAccounts) {
-      let bal = (acct.openingBalanceType === 'debit' ? 1 : -1) * (acct.openingBalance || 0);
-      const existing = balances[acct.id];
-      if (existing) {
-        bal += existing.type === 'debit' ? existing.amount : -existing.amount;
-      }
-      vouchers
-        .filter(v => !v.isDeleted && v.date <= fyEnd &&
-          getVoucherLines(v).some(l => l.accountId === acct.id))
-        .forEach(v => {
-          getVoucherLines(v).forEach(l => {
-            if (l.accountId === acct.id) {
-              if (l.type === 'Dr') bal += l.amount;
-              else bal -= l.amount;
-            }
-          });
-        });
-      if (Math.abs(bal) > 0.01) {
-        newBalances[acct.id] = { accountId: acct.id, amount: Math.abs(bal), type: bal >= 0 ? 'debit' : 'credit' };
-      }
+    if (!isBalanced && !opts?.unbalancedConfirmed) { setConfirmUnbalanced(true); return; }
+    if (society.fyLocked) {
+      toast({ title: hi ? 'वित्त वर्ष लॉक है' : 'FY Locked', description: hi ? 'वित्त वर्ष लेखा-लॉक है — प्रारंभिक शेष नहीं बदले जा सकते।' : 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive', duration: 10000 });
+      return;
     }
-    setBalances(newBalances);
-    toast({ title: hi ? 'पिछले वर्ष का शेष अगले वर्ष में लाया गया' : 'Previous year closing balances carried forward' });
-  }, [balanceAccounts, vouchers, society, balances, hi, toast]);
 
-  // ECR-09: opening = prior-year AUDITED closing (from the immutable rollover snapshot).
+    // Only rows that really change: entered/edited ones, and cleared ones set back to 0.
+    type Change = { id: string; next: { openingBalance: number; openingBalanceType?: 'debit' | 'credit' }; prev: { openingBalance: number; openingBalanceType?: 'debit' | 'credit' } };
+    const changes: Change[] = [];
+    for (const a of balanceAccounts) {
+      const prev = { openingBalance: Number(a.openingBalance) || 0, openingBalanceType: a.openingBalanceType };
+      const e = balances[a.id];
+      if (e) {
+        if (e.amount !== prev.openingBalance || e.type !== prev.openingBalanceType) changes.push({ id: a.id, next: { openingBalance: e.amount, openingBalanceType: e.type }, prev });
+      } else if (prev.openingBalance > 0) changes.push({ id: a.id, next: { openingBalance: 0 }, prev });
+    }
+    if (changes.length === 0) {
+      toast({ title: hi ? 'कोई बदलाव नहीं' : 'Nothing changed', description: hi ? 'सहेजने के लिए कोई नया प्रारंभिक शेष नहीं है।' : 'There are no opening-balance changes to save.' });
+      return;
+    }
+
+    // RULE 1: announce success only after EVERY row is confirmed by the cloud. If any row fails,
+    // put the rows that did save back to their previous values too, so the openings never end up
+    // half-saved (one side of the Dr/Cr pair on the server, the other not).
+    setSaving(true);
+    const saved: Change[] = [];
+    const failed: string[] = [];
+    const settled = new Set<string>();
+    const settle = (c: Change, ok: boolean, msg?: string) => {
+      if (settled.has(c.id)) return;   // idempotent: a dev double-render may fire the callback twice
+      settled.add(c.id);
+      if (ok) saved.push(c); else failed.push(`${accounts.find(a => a.id === c.id)?.name || c.id}${msg ? ` (${msg})` : ''}`);
+      if (settled.size < changes.length) return;
+      setSaving(false);
+      if (failed.length === 0) {
+        toast({ title: hi ? 'प्रारंभिक शेष सहेजा गया' : 'Opening balances saved', description: hi ? `${changes.length} खाते अपडेट हुए।` : `${changes.length} accounts updated.` });
+        return;
+      }
+      saved.forEach(r => updateAccount(r.id, r.prev));
+      setBalances(prev => {
+        const next = { ...prev };
+        changes.forEach(r => {
+          if (r.prev.openingBalance > 0) next[r.id] = { accountId: r.id, amount: r.prev.openingBalance, type: r.prev.openingBalanceType || 'debit' };
+          else delete next[r.id];
+        });
+        return next;
+      });
+      toast({
+        title: hi ? 'प्रारंभिक शेष सेव नहीं हुआ' : 'Opening balances not saved',
+        description: hi
+          ? `${failed.length} खाते cloud में सेव नहीं हुए: ${failed.slice(0, 3).join(', ')}${failed.length > 3 ? '…' : ''}। बाक़ी बदलाव भी वापस ले लिए गए ताकि शेष आधे-अधूरे न रहें — refresh करने पर पुराना शेष ही दिखेगा। दोबारा सहेजें।`
+          : `${failed.length} accounts failed to save to the cloud: ${failed.slice(0, 3).join(', ')}${failed.length > 3 ? '…' : ''}. The other changes were reverted too, so openings are not half-saved. Please save again.`,
+        variant: 'destructive', duration: 12000,
+      });
+    };
+    for (const c of changes) {
+      // false = a guard refused it synchronously (FY lock etc.) and already said why.
+      if (!updateAccount(c.id, c.next, { onSaved: () => settle(c, true), onFailed: m => settle(c, false, m) })) settle(c, false);
+    }
+  }, [balances, balanceAccounts, accounts, updateAccount, hi, toast, isBalanced, society.fyLocked]);
+
+  // One continuous ledger: the 31-Mar closing becomes the 1-Apr opening on its own (Trial Balance
+  // folds every earlier-year voucher into the opening). account.openingBalance is the GENESIS
+  // opening, so a year-end closing must never be written into it — that counted every earlier
+  // voucher twice (scripts/test-opening-carry-forward.mjs). The old "Carry Forward (Auto)" button
+  // is gone; the audited fill is offered only for first-time onboarding (no earlier vouchers).
   const fyLocked = !!society.fyLocked;
+  const priorVoucherCount = useMemo(
+    () => earlierYearVoucherCount(vouchers, fyStartFromLabel(society.financialYear)),
+    [vouchers, society.financialYear]);
+  const continuousLedger = priorVoucherCount > 0;
+  // ECR-09: opening = prior-year AUDITED closing (entered from an external audited balance sheet).
   const auditedOpenings = useMemo(() => carryForwardOpenings(society.previousYearBalances), [society.previousYearBalances]);
   const handleCarryFromAudited = useCallback(() => {
+    if (continuousLedger) return;
     const next: Record<string, ObEntry> = {};
     auditedOpenings.forEach(e => { next[e.accountId] = { accountId: e.accountId, amount: e.amount, type: e.type }; });
     setBalances(next);
-    toast({ title: hi ? `${society.previousFinancialYear || 'पिछले वर्ष'} के लेखा-परीक्षित शेष भरे गए` : `${society.previousFinancialYear || 'Prior year'} audited closing carried in` });
-  }, [auditedOpenings, society.previousFinancialYear, hi, toast]);
+    toast({
+      title: hi ? `${society.previousFinancialYear || 'पिछले वर्ष'} के लेखा-परीक्षित शेष भरे गए` : `${society.previousFinancialYear || 'Prior year'} audited closing carried in`,
+      description: hi ? 'अभी सहेजे नहीं गए — जाँचकर "सहेजें" दबाएँ।' : 'Not saved yet — review and press Save.',
+    });
+  }, [auditedOpenings, continuousLedger, society.previousFinancialYear, hi, toast]);
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold">{hi ? 'प्रारंभिक शेष / Carry Forward' : 'Opening Balances / Carry Forward'}</h1>
+          <h1 className="text-2xl font-bold">{hi ? 'प्रारंभिक शेष' : 'Opening Balances'}</h1>
           <p className="text-muted-foreground text-sm">
             {hi ? `वित्तीय वर्ष ${society.financialYear} के लिए प्रारंभिक शेष` : `Opening balances for FY ${society.financialYear}`}
           </p>
@@ -172,15 +213,12 @@ export default function OpeningBalances() {
           <Button variant="outline" size="sm" className="gap-1" onClick={handleCSV}><Download className="h-4 w-4" /> CSV</Button>
           {user?.role === 'admin' && !fyLocked && (
             <>
-              {auditedOpenings.length > 0 && (
+              {auditedOpenings.length > 0 && !continuousLedger && (
                 <Button variant="outline" onClick={handleCarryFromAudited} title={hi ? 'लेखा-परीक्षित समापन शेष से' : 'From audited closing'}>
                   <ArrowRight className="h-4 w-4 mr-2" />{hi ? 'लेखा-परीक्षित शेष भरें' : 'From audited closing'}
                 </Button>
               )}
-              <Button variant="outline" onClick={handleCarryForward}>
-                <ArrowRight className="h-4 w-4 mr-2" />{hi ? 'Carry Forward' : 'Carry Forward (Auto)'}
-              </Button>
-              <Button onClick={handleSave}>
+              <Button onClick={() => handleSave()} disabled={saving}>
                 <Save className="h-4 w-4 mr-2" />{hi ? 'सहेजें' : 'Save'}
               </Button>
             </>
@@ -197,6 +235,20 @@ export default function OpeningBalances() {
         </div>
       )}
 
+      {continuousLedger && (
+        <div className="flex items-start gap-2 p-3 bg-primary/5 border border-primary/30 rounded-lg text-sm">
+          <Info className="h-4 w-4 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-semibold">{hi ? 'नए साल का प्रारंभिक शेष अपने-आप आता है' : "The new year's opening comes automatically"}</p>
+            <p className="text-xs text-muted-foreground">
+              {hi
+                ? `खाते लगातार चलते हैं — 31 मार्च का समापन शेष अपने-आप 1 अप्रैल का प्रारंभिक शेष बन जाता है (Trial Balance / Balance Sheet में दिखता है)। इसलिए पिछला शेष यहाँ दोबारा न भरें, वरना पिछले साल की हर एंट्री दो बार गिनी जाएगी। इस पेज के आँकड़े वह शेष हैं जिनसे society ने ऐप में शुरुआत की थी — इन्हें सिर्फ़ उस शुरुआती शेष की गलती सुधारने के लिए बदलें। (पिछले वर्षों के ${priorVoucherCount} वाउचर ऐप में हैं।)`
+                : `Books run continuously — the 31-Mar closing automatically becomes the 1-Apr opening (see Trial Balance / Balance Sheet). Do not re-enter it here, or every earlier-year entry is counted twice. The figures on this page are the balances the society started the app with — change them only to correct that starting balance. (${priorVoucherCount} earlier-year vouchers are in the app.)`}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card><CardContent className="pt-4">
           <p className="text-xs text-muted-foreground">{hi ? 'कुल डेबिट' : 'Total Debit'}</p>
@@ -208,9 +260,14 @@ export default function OpeningBalances() {
         </CardContent></Card>
         <Card><CardContent className="pt-4">
           <p className="text-xs text-muted-foreground">{hi ? 'अंतर' : 'Difference'}</p>
-          <p className={`font-bold text-lg ${isBalanced ? 'text-green-700' : 'text-red-600'}`}>
-            {isBalanced ? (hi ? 'संतुलित ✓' : 'Balanced ✓') : `₹${fmt(Math.abs(totalDebit - totalCredit))}`}
-          </p>
+          {/* An all-zero page is "not filled yet", never "balanced" (usability audit P0-3). */}
+          {totalDebit === 0 && totalCredit === 0 ? (
+            <p className="font-bold text-sm text-amber-700">{hi ? 'अभी ओपनिंग बैलेंस नहीं भरा गया' : 'Opening balances not entered yet'}</p>
+          ) : (
+            <p className={`font-bold text-lg ${isBalanced ? 'text-green-700' : 'text-red-600'}`}>
+              {isBalanced ? (hi ? 'संतुलित ✓' : 'Balanced ✓') : `₹${fmt(difference)}`}
+            </p>
+          )}
         </CardContent></Card>
       </div>
 
@@ -269,9 +326,9 @@ export default function OpeningBalances() {
                   const type = entry?.type || (acct.type === 'asset' ? 'debit' : 'credit');
                   return (
                     <TableRow key={acct.id}>
-                      <TableCell className="font-mono text-xs">{acct.id}</TableCell>
+                      <TableCell className="font-mono text-xs">{accountCode(acct) || '—'}</TableCell>
                       <TableCell className="font-medium text-sm">
-                        {acct.name}
+                        {accountDisplayName(acct, hi)}
                         {acct.isGroup && (
                           <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/30 align-middle"
                             title={hi ? 'समूह खाता — रिपोर्ट इसकी opening नहीं गिनतीं' : 'Group account — reports ignore its opening'}>
@@ -361,11 +418,30 @@ export default function OpeningBalances() {
         <CardContent className="pt-4">
           <p className="text-sm text-amber-800">
             {hi
-              ? '"Carry Forward (Auto)" बटन वर्तमान वित्तीय वर्ष के अंत तक सभी खातों का शेष निकालकर अगले वर्ष के प्रारंभिक शेष के रूप में भर देता है।'
-              : '"Carry Forward (Auto)" computes closing balance of all accounts as of FY end and pre-fills them as opening balances for the next year.'}
+              ? 'यहाँ वे शेष भरें जिनसे society ने ऐप में शुरुआत की (पिछली audited balance sheet से)। उसके बाद हर साल का प्रारंभिक शेष अपने-आप आगे आता है — वर्ष के अंत में: FY लॉक → नया वर्ष (rollover) → वर्ष बंद। कुल डेबिट और कुल क्रेडिट बराबर होने चाहिए।'
+              : 'Enter the balances the society started the app with (from the last audited balance sheet). After that every year\'s opening carries forward automatically — at year end: FY lock → rollover → year close. Total debit must equal total credit.'}
           </p>
         </CardContent>
       </Card>
+
+      <AlertDialog open={confirmUnbalanced} onOpenChange={setConfirmUnbalanced}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{hi ? 'डेबिट और क्रेडिट बराबर नहीं हैं' : 'Debit and credit do not match'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {hi
+                ? `कुल डेबिट ₹${fmt(totalDebit)} और कुल क्रेडिट ₹${fmt(totalCredit)} में ₹${fmt(difference)} का अंतर है। ऐसे सहेजने पर Trial Balance और Balance Sheet मेल नहीं खाएँगे। क्या आप अधूरा शेष फिर भी सहेजना चाहते हैं (बाद में पूरा करेंगे)?`
+                : `Total debit ₹${fmt(totalDebit)} and total credit ₹${fmt(totalCredit)} differ by ₹${fmt(difference)}. Saving like this leaves the Trial Balance and Balance Sheet out of balance. Save the incomplete openings anyway (to finish later)?`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{hi ? 'रुकें, ठीक करता हूँ' : 'Go back and fix'}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmUnbalanced(false); handleSave({ unbalancedConfirmed: true }); }}>
+              {hi ? 'फिर भी सहेजें' : 'Save anyway'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

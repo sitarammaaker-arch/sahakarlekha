@@ -106,7 +106,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
                     : (society.shortName || society.shortNameHi || society.name)}
                 </span>
                 <span className="hidden md:block truncate max-w-xs lg:max-w-sm">
-                  {language === 'hi' ? society.nameHi : society.name}
+                  {language === 'hi' ? (society.nameHi || society.name) : society.name}
                 </span>
               </h1>
               <p className="text-xs text-muted-foreground hidden sm:block truncate max-w-xs">

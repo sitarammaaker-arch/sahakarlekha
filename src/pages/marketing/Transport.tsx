@@ -72,7 +72,7 @@ export default function Transport() {
             <div key={t.id} className="flex items-center justify-between rounded-lg border p-3 gap-3">
               <div className="min-w-0">
                 <div className="font-medium">
-                  {hi && t.nameHi ? t.nameHi : t.name}
+                  {hi && t.nameHi ? (t.nameHi || t.name) : t.name}
                   {t.vehicleNo ? <Badge variant="outline" className="ml-2 font-mono">{t.vehicleNo}</Badge> : null}
                   {t.ratePerQtl != null ? <Badge variant="secondary" className="ml-1">₹{t.ratePerQtl}/{hi ? 'क्विं' : 'qtl'}</Badge> : null}
                 </div>

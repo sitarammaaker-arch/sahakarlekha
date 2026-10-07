@@ -1150,13 +1150,13 @@ const SocietySetup: React.FC = () => {
                     {group.list.map(acc => (
                       <div key={acc.id} className="space-y-1">
                         <div className="flex items-center justify-between">
-                          <Label className="text-sm">{language === 'hi' ? acc.nameHi : acc.name}</Label>
+                          <Label className="text-sm">{language === 'hi' ? (acc.nameHi || acc.name) : acc.name}</Label>
                           {!acc.isSystem && (
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6 text-destructive hover:text-destructive"
-                              onClick={() => handleDeleteAccount(acc.id, language === 'hi' ? acc.nameHi : acc.name)}
+                              onClick={() => handleDeleteAccount(acc.id, language === 'hi' ? (acc.nameHi || acc.name) : acc.name)}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -1303,7 +1303,7 @@ const SocietySetup: React.FC = () => {
                           }`}>
                             {acc.openingBalanceType === 'debit' ? 'Dr' : 'Cr'}
                           </span>
-                          <span className="truncate">{language === 'hi' ? acc.nameHi : acc.name}</span>
+                          <span className="truncate">{language === 'hi' ? (acc.nameHi || acc.name) : acc.name}</span>
                           <span className="text-gray-400 text-xs ml-auto">#{accountCode(acc) || '—'}</span>
                         </Label>
                         <Input

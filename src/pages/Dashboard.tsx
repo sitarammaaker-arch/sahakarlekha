@@ -200,13 +200,13 @@ const Dashboard: React.FC = () => {
 
   // Income pie data
   const incomePieData = incomeItems.filter(i => i.amount > 0).map(i => ({
-    name: language === 'hi' ? i.nameHi : i.name,
+    name: language === 'hi' ? (i.nameHi || i.name) : i.name,
     value: i.amount,
   }));
 
   // Expense pie data
   const expensePieData = expenseItems.filter(e => e.amount > 0).map(e => ({
-    name: language === 'hi' ? e.nameHi : e.name,
+    name: language === 'hi' ? (e.nameHi || e.name) : e.name,
     value: e.amount,
   }));
 
@@ -255,7 +255,6 @@ const Dashboard: React.FC = () => {
           subtitle={language === 'hi' ? 'हाथ में नकद शेष' : 'Cash in hand'}
           icon={Wallet}
           variant="cash"
-          trend={{ value: 0, isPositive: cashBalance >= 0 }}
         />
         <StatCard
           title={t('totalBank')}
@@ -263,7 +262,6 @@ const Dashboard: React.FC = () => {
           subtitle={language === 'hi' ? 'बैंक खाता शेष' : 'Bank balance'}
           icon={Building2}
           variant="bank"
-          trend={{ value: 0, isPositive: bankBalance >= 0 }}
         />
         <StatCard
           title={t('totalMembers')}
@@ -271,7 +269,6 @@ const Dashboard: React.FC = () => {
           subtitle={`${activeMembers} ${language === 'hi' ? 'सक्रिय' : 'active'}`}
           icon={Users}
           variant="members"
-          trend={{ value: 0, isPositive: true }}
         />
         <StatCard
           title={netProfit >= 0 ? (language === 'hi' ? 'शुद्ध लाभ' : 'Net Profit') : (language === 'hi' ? 'शुद्ध हानि' : 'Net Loss')}
@@ -279,7 +276,6 @@ const Dashboard: React.FC = () => {
           subtitle={netProfit >= 0 ? (language === 'hi' ? 'कुल आय − व्यय' : 'Total Income − Expenses') : (language === 'hi' ? 'कुल व्यय − आय' : 'Total Expenses − Income')}
           icon={netProfit >= 0 ? TrendingUp : TrendingDown}
           variant={netProfit >= 0 ? 'profit' : 'loss'}
-          trend={{ value: 0, isPositive: netProfit >= 0 }}
         />
       </div>
 

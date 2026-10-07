@@ -257,7 +257,7 @@ const AgingAnalysis: React.FC = () => {
     });
     // Fallback to account name for 3303
     const acc3303 = accounts.find(a => a.id === '3303');
-    if (acc3303) map['3303'] = { name: hi ? acc3303.nameHi : acc3303.name, code: '3303', phone: '' };
+    if (acc3303) map['3303'] = { name: hi ? (acc3303.nameHi || acc3303.name) : acc3303.name, code: '3303', phone: '' };
     return map;
   }, [customers, accounts, hi]);
 
@@ -267,7 +267,7 @@ const AgingAnalysis: React.FC = () => {
       map[s.accountId] = { name: s.name, code: s.supplierCode, phone: s.phone ?? '' };
     });
     const acc2101 = accounts.find(a => a.id === '2101');
-    if (acc2101) map['2101'] = { name: hi ? acc2101.nameHi : acc2101.name, code: '2101', phone: '' };
+    if (acc2101) map['2101'] = { name: hi ? (acc2101.nameHi || acc2101.name) : acc2101.name, code: '2101', phone: '' };
     return map;
   }, [suppliers, accounts, hi]);
 

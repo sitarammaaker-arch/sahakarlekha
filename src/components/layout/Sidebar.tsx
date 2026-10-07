@@ -90,8 +90,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
               <span className="text-sidebar-primary-foreground font-bold text-sm">स</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-semibold leading-tight">समिति लेखा</span>
-              <span className="text-xs text-sidebar-foreground/70">Cooperative Accounts</span>
+              <span className="text-sm font-semibold leading-tight">सहकार लेखा</span>
+              <span className="text-xs text-sidebar-foreground/70">SahakarLekha</span>
             </div>
           </div>
         )}

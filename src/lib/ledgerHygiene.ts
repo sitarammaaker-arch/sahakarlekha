@@ -10,6 +10,7 @@
  * side-effect-free. Mirrors scripts/test-ledger-hygiene.mjs.
  */
 import type { LedgerAccount } from '@/types';
+import { isAbnormalBalance, naturalSide } from './abnormalBalance';
 
 export type HygieneSeverity = 'error' | 'warning' | 'cleanup' | 'info';
 
@@ -127,18 +128,11 @@ export function analyzeLedgerHygiene(
   //    debit-nature Dividend Distribution / Patronage reserve accounts).
   const abnormal: HygieneAccountRef[] = [];
   for (const a of accounts) {
-    if (a.isGroup || a.subtype === 'surplus') continue;
     const b = usage.balance[a.id] || 0;
-    if (Math.abs(b) < ZERO) continue;
-    const naturalDebit = a.type === 'asset' || a.type === 'expense';
-    const balIsDebit = b > 0;
-    if (naturalDebit === balIsDebit) continue;             // balance on its natural side → fine
-    const openingType = a.openingBalanceType;              // an intentional contra opens on the "abnormal" side
-    if (naturalDebit && openingType === 'credit') continue;
-    if (!naturalDebit && openingType === 'debit') continue;
+    if (!isAbnormalBalance(a, b, ZERO)) continue;
     abnormal.push({
       id: a.id, name: a.name,
-      detail: `${Math.abs(b).toLocaleString('en-IN')} ${balIsDebit ? 'Dr' : 'Cr'} · expected ${naturalDebit ? 'Dr' : 'Cr'}`,
+      detail: `${Math.abs(b).toLocaleString('en-IN')} ${b > 0 ? 'Dr' : 'Cr'} · expected ${naturalSide(a.type)}`,
     });
   }
   if (abnormal.length) findings.push({ category: 'abnormal-balance', severity: 'error', accounts: abnormal });

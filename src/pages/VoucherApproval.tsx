@@ -78,7 +78,7 @@ const VoucherApproval: React.FC = () => {
 
   const getAccName = (id: string) => {
     const a = accounts.find(a => a.id === id);
-    return a ? `${accountCode(a) || '—'} — ${hi ? a.nameHi : a.name}` : id;
+    return a ? `${accountCode(a) || '—'} — ${hi ? (a.nameHi || a.name) : a.name}` : id;
   };
 
   const handleApprove = (id: string) => {

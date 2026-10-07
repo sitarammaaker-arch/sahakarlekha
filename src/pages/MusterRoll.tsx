@@ -328,7 +328,7 @@ export default function MusterRoll() {
                 <Label>{hi ? 'बैंक खाता' : 'Bank account'}</Label>
                 <Select value={payBankId} onValueChange={setPayBankId}>
                   <SelectTrigger><SelectValue placeholder={hi ? 'चुनें' : 'Select'} /></SelectTrigger>
-                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}

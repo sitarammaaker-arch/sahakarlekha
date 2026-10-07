@@ -35,8 +35,8 @@ export default function AgencyReceipts() {
   const money = (n: number) => `₹${(n || 0).toLocaleString('en-IN')}`;
   const bankIds = getBankAccountIds(accounts);
   const bankAccounts = accounts.filter(a => bankIds.includes(a.id));
-  const accountName = (id?: string) => { const a = accounts.find(x => x.id === id); return a ? (hi ? a.nameHi : a.name) : id || ''; };
-  const agencyLabel = (id?: string) => { const a = agencies.find(x => x.id === id); return a ? `${hi && a.nameHi ? a.nameHi : a.name}${a.code ? ` (${a.code})` : ''}` : ''; };
+  const accountName = (id?: string) => { const a = accounts.find(x => x.id === id); return a ? (hi ? (a.nameHi || a.name) : a.name) : id || ''; };
+  const agencyLabel = (id?: string) => { const a = agencies.find(x => x.id === id); return a ? `${hi && a.nameHi ? (a.nameHi || a.name) : a.name}${a.code ? ` (${a.code})` : ''}` : ''; };
 
   const [against, setAgainst] = useState<'msp' | 'commission'>('msp');
   const [agencyId, setAgencyId] = useState(agencies[0]?.id || NO_AGENCY);
@@ -156,7 +156,7 @@ export default function AgencyReceipts() {
                 <Label>{hi ? 'बैंक खाता' : 'Bank Account'}</Label>
                 <Select value={bankId} onValueChange={setBankId}>
                   <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
-                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}

@@ -111,7 +111,7 @@ const ResetPassword: React.FC = () => {
         <div className="h-16 w-16 rounded-xl bg-accent text-accent-foreground flex items-center justify-center mx-auto mb-4 shadow-md">
           <span className="text-4xl font-bold leading-none">स</span>
         </div>
-        <h1 className="text-2xl font-bold text-foreground">समिति लेखा प्रणाली</h1>
+        <h1 className="text-2xl font-bold text-foreground">सहकार लेखा</h1>
       </div>
 
       <Card className="w-full max-w-md shadow-card">

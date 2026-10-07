@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { isAbnormalBalance, naturalSide } from '@/lib/abnormalBalance';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -78,6 +79,9 @@ const TrialBalance: React.FC = () => {
   const totalMovCr = balances.reduce((s, b) => s + (b.transactionCredit || 0), 0);
   // NCDC: a Trial Balance is balanced when total CLOSING Dr = total CLOSING Cr.
   const isBalanced = Math.abs(grandClosingDr - grandClosingCr) < 1;
+  // Dr = Cr only proves the entries are double-sided, not that the books are right (usability audit
+  // P0-1): list balances sitting on the wrong side for their type — same rule as Ledger Hygiene.
+  const abnormal = allBalances.filter(b => isAbnormalBalance(b.account, b.netBalance));
   // Kept for the headline cards / PDF legacy balance line.
   const totalDebit = grandClosingDr;
   const totalCredit = grandClosingCr;
@@ -152,7 +156,7 @@ const TrialBalance: React.FC = () => {
             <TableCell className="text-muted-foreground">{i}</TableCell>
             <TableCell className="font-medium" style={{ paddingLeft: `${0.5 + depth}rem` }}>
               <button className="text-left hover:text-primary hover:underline" onClick={() => navigate(`/ledger?account=${b.account.id}`)} title={language === 'hi' ? 'खाता-बही खोलें' : 'Open ledger'}>
-                {language === 'hi' ? b.account.nameHi : b.account.name}
+                {language === 'hi' ? (b.account.nameHi || b.account.name) : b.account.name}
               </button>
               {b.postedToGroup && (
                 <span className="block text-[11px] font-normal text-warning" title={language === 'hi' ? 'Ledger Heads में इस खाते से "ग्रुप" का निशान हटाएँ' : 'Untick "Group" for this account in Ledger Heads'}>
@@ -228,7 +232,7 @@ const TrialBalance: React.FC = () => {
         <Alert className="bg-success/10 border-success/30">
           <CheckCircle className="h-5 w-5 text-success" />
           <AlertTitle className="text-success">{language === 'hi' ? 'ट्रायल बैलेंस संतुलित है' : 'Trial Balance is Balanced'}</AlertTitle>
-          <AlertDescription>{language === 'hi' ? 'डेबिट और क्रेडिट बराबर हैं। खाते सही हैं।' : 'Debit and Credit totals match. Accounts are correct.'}</AlertDescription>
+          <AlertDescription>{language === 'hi' ? 'कुल डेबिट और कुल क्रेडिट बराबर हैं। इसका मतलब है कि हर एंट्री दोनों तरफ़ दर्ज है — यह नहीं कि हर खाता सही है; नीचे "असामान्य शेष" भी देखें।' : 'Total debit equals total credit — every entry is double-sided. This does not by itself mean every account is right; check "Abnormal balances" below.'}</AlertDescription>
         </Alert>
       ) : (
         <Alert variant="destructive">
@@ -236,6 +240,30 @@ const TrialBalance: React.FC = () => {
           <AlertTitle>{language === 'hi' ? 'ट्रायल बैलेंस असंतुलित है!' : 'Trial Balance is NOT Balanced!'}</AlertTitle>
           <AlertDescription>
             {language === 'hi' ? `अंतर: ${fmt(Math.abs(totalDebit - totalCredit))}` : `Difference: ${fmt(Math.abs(totalDebit - totalCredit))}`}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {abnormal.length > 0 && (
+        <Alert className="border-warning/50 bg-warning/10">
+          <AlertTriangle className="h-5 w-5 text-warning" />
+          <AlertTitle>{language === 'hi' ? `असामान्य शेष — ${abnormal.length} खाते जाँचें` : `Abnormal balances — check ${abnormal.length} account(s)`}</AlertTitle>
+          <AlertDescription>
+            <p className="text-sm mb-2">{language === 'hi'
+              ? 'इन खातों का शेष उनकी सामान्य तरफ़ के उलट है (जैसे बैंक या नकद Cr में)। अक्सर इसकी वजह ओपनिंग बैलेंस न भरना या रकम किसी और खाते में दर्ज होना है। बचत खाता असल में शून्य से नीचे नहीं जाता — असली ओवरड्राफ़्ट "बैंक अधिविकर्ष" खाते में दर्ज होता है।'
+              : 'These balances sit on the side opposite their type (e.g. a bank or cash in Cr). Usually an opening balance is missing or the amount was booked to another account. A savings account cannot really go below zero — a real overdraft belongs in a Bank OD ledger.'}</p>
+            <ul className="text-sm space-y-0.5">
+              {abnormal.slice(0, 12).map(b => (
+                <li key={b.account.id}>
+                  <button className="text-left underline hover:text-primary" onClick={() => navigate(`/ledger?account=${b.account.id}`)}>
+                    {language === 'hi' ? (b.account.nameHi || b.account.name) : b.account.name}
+                  </button>
+                  {' — '}{fmt(Math.abs(b.netBalance))} {b.netBalance > 0 ? 'Dr' : 'Cr'}
+                  <span className="text-muted-foreground">{language === 'hi' ? ` (सामान्य: ${naturalSide(b.account.type)})` : ` (normal: ${naturalSide(b.account.type)})`}</span>
+                </li>
+              ))}
+              {abnormal.length > 12 && <li className="text-muted-foreground">{language === 'hi' ? `…और ${abnormal.length - 12} — पूरी सूची "लेजर हाइजीन" पेज पर` : `…and ${abnormal.length - 12} more — full list on Ledger Hygiene`}</li>}
+            </ul>
           </AlertDescription>
         </Alert>
       )}
@@ -258,7 +286,7 @@ const TrialBalance: React.FC = () => {
         <CardHeader className="border-b">
           <div className="text-center">
             <CardTitle className="text-xl">{language === 'hi' ? 'ट्रायल बैलेंस' : 'Trial Balance'}</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">{language === 'hi' ? society.nameHi : society.name}</p>
+            <p className="text-sm text-muted-foreground mt-1">{language === 'hi' ? (society.nameHi || society.name) : society.name}</p>
             <p className="text-sm text-muted-foreground">{language === 'hi' ? 'दिनांक' : 'As on'}: {fmtDate(asOnDate)}</p>
           </div>
         </CardHeader>
