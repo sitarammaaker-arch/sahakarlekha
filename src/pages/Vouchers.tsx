@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { MemberPicker } from '@/components/MemberPicker';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -817,17 +818,7 @@ const Vouchers: React.FC = () => {
                           <Label className="text-base font-semibold">
                             {language === 'hi' ? 'सदस्य से लिंक करें (वैकल्पिक)' : 'Link to Member (Optional)'}
                           </Label>
-                          <Select value={linkedMemberId || '__none__'} onValueChange={v => setLinkedMemberId(v === '__none__' ? '' : v)}>
-                            <SelectTrigger className="h-11">
-                              <SelectValue placeholder={language === 'hi' ? 'कोई सदस्य नहीं' : 'No member linked'} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">{language === 'hi' ? 'कोई नहीं' : 'None'}</SelectItem>
-                              {members.map(m => (
-                                <SelectItem key={m.id} value={m.id}>{m.memberId} — {m.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <MemberPicker value={linkedMemberId} onChange={setLinkedMemberId} />
                         </div>
                       )}
                       <div className="flex items-center gap-2 pb-2">
@@ -1119,22 +1110,7 @@ const Vouchers: React.FC = () => {
                         <Label className="text-base font-semibold">
                           {language === 'hi' ? 'सदस्य से लिंक करें (वैकल्पिक)' : 'Link to Member (Optional)'}
                         </Label>
-                        <Select
-                          value={linkedMemberId || '__none__'}
-                          onValueChange={v => setLinkedMemberId(v === '__none__' ? '' : v)}
-                        >
-                          <SelectTrigger className="h-11">
-                            <SelectValue placeholder={language === 'hi' ? 'कोई सदस्य नहीं' : 'No member linked'} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">{language === 'hi' ? 'कोई नहीं' : 'None'}</SelectItem>
-                            {members.map(m => (
-                              <SelectItem key={m.id} value={m.id}>
-                                {m.memberId} — {m.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <MemberPicker value={linkedMemberId} onChange={setLinkedMemberId} />
                         <p className="text-xs text-muted-foreground">
                           {language === 'hi' ? 'यह लेनदेन सदस्य के लेजर में दिखेगा' : 'This transaction will appear in the member\'s share ledger'}
                         </p>
