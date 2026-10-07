@@ -67,3 +67,38 @@ export function coaResetBlockers(
   const names = new Map(accounts.map((a) => [a.id, a.name]));
   return [...reason.entries()].map(([id, why]) => ({ id, name: names.get(id) || id, reason: why }));
 }
+
+export interface LiveDataCounts {
+  /** EVERY voucher row, cancelled/soft-deleted included — an audit still reads them (RULE 3/5). */
+  vouchers: number;
+  members: number;
+  loans: number;
+  suppliers: number;
+  customers: number;
+  sales: number;
+  purchases: number;
+  employees: number;
+  /** Accounts carrying a non-zero opening balance (a reset would silently zero them). */
+  accountsWithOpening: number;
+}
+
+/**
+ * A running society must never have its chart reset: the reset deletes every account and re-inserts
+ * the template, which zeroes opening balances and drops every custom head — and the blockers above
+ * only look at vouchers/suppliers/customers. The reset is for a new/practice society that holds no
+ * records at all. Returns the Hindi-first reasons (empty = nothing live, reset allowed).
+ */
+export function coaResetLiveData(c: LiveDataCounts): string[] {
+  const rows: [number, string][] = [
+    [c.vouchers, 'वाउचर (रद्द वाले भी)'],
+    [c.members, 'सदस्य'],
+    [c.loans, 'ऋण'],
+    [c.suppliers, 'आपूर्तिकर्ता'],
+    [c.customers, 'ग्राहक'],
+    [c.sales, 'बिक्री'],
+    [c.purchases, 'खरीद'],
+    [c.employees, 'कर्मचारी'],
+    [c.accountsWithOpening, 'खाते जिनमें opening balance है'],
+  ];
+  return rows.filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}`);
+}

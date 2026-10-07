@@ -26,6 +26,7 @@ const MESSAGES: Record<string, string> = {
   pending_not_supported: 'स्वीकृति के लिए रुका वाउचर अभी इस रास्ते से नहीं बनता।',
   voucher_id_taken: 'यह वाउचर id पहले से किसी और का है।',
   role_cannot_delete: 'आपकी भूमिका को वाउचर रद्द करने की अनुमति नहीं है।',
+  group_account: 'ग्रुप खाते में एंट्री नहीं हो सकती — इसके नीचे का कोई ledger खाता चुनें।',
   voucher_not_found: 'यह वाउचर cloud पर नहीं मिला — page refresh करें।',
   voucher_cancelled: 'यह वाउचर रद्द हो चुका है — बदला नहीं जा सकता।',
   voucher_reversed: 'यह वाउचर reverse हो चुका है — बदला या रद्द नहीं हो सकता।',

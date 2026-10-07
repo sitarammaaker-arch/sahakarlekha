@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve as pathResolve } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const { accountDeleteFailure, coaResetBlockers } = await import(pathToFileURL(pathResolve(HERE, '../src/lib/accounting/accountDelete.ts')).href);
+const { accountDeleteFailure, coaResetBlockers, coaResetLiveData } = await import(pathToFileURL(pathResolve(HERE, '../src/lib/accounting/accountDelete.ts')).href);
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra = '') => {
@@ -41,6 +41,20 @@ ok('blockers carry the account name (id when unknown) and the reason', b.find((x
   && b.find((x) => x.id === 'u-sup').reason === 'supplier' && b.find((x) => x.id === 'u-cus').reason === 'customer');
 ok('an unused non-template account does not block', !ids.includes('u-free'));
 ok('template ids never block (they come back with the same id)', !ids.includes('3301') && !ids.includes('3302'));
+
+
+console.log('coaResetLiveData — a running society is never reset');
+const none = { vouchers: 0, members: 0, loans: 0, suppliers: 0, customers: 0, sales: 0, purchases: 0, employees: 0, accountsWithOpening: 0 };
+ok('an empty society may be reset', coaResetLiveData(none).length === 0);
+for (const k of Object.keys(none)) ok(`${k} > 0 blocks the reset`, coaResetLiveData({ ...none, [k]: 2 }).length === 1);
+const many = coaResetLiveData({ ...none, vouchers: 5, members: 3, accountsWithOpening: 40 });
+ok('every live kind is listed with its count', many.length === 3 && many[0].startsWith('5 ') && many[2].startsWith('40 '), many.join('|'));
+{
+  const { readFileSync } = await import('node:fs');
+  const dc = readFileSync(pathResolve(HERE, '../src/contexts/DataContext.tsx'), 'utf8');
+  const fn = dc.slice(dc.indexOf('const resetAccounts = useCallback('), dc.indexOf('const resetAccounts = useCallback(') + 3500);
+  ok('resetAccounts refuses a live society BEFORE it deletes anything', fn.indexOf('coaResetLiveData(') > 0 && fn.indexOf('coaResetLiveData(') < fn.indexOf(".from('accounts').delete()"));
+}
 
 console.log('DataContext: every accounts DELETE is rollback-aware');
 const dc = readFileSync(pathResolve(HERE, '../src/contexts/DataContext.tsx'), 'utf8');
