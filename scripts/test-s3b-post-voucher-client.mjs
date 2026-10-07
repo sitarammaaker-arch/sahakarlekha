@@ -79,7 +79,9 @@ ok('number collision renumbers and retries (bounded)', /isUniqueViolation\(error
 ok('official number comes from post_voucher and is restamped (096)', !/issueOfficialNumber\(/.test(add) && /\(data as \{ voucherNo\?: string \} \| null\)\?\.voucherNo/.test(add));
 ok('the RPC branch returns — never falls through to a second save', /return newVoucher;\s*\}\s*$/.test(add));
 ok('the RPC branch never calls persistVoucher / persistLedgerEvent (the server writes all four)', !/persistVoucher\(|persistLedgerEvent\(/.test(add));
-ok('flag-off path unchanged: persistVoucher, event appended only after base success', /persistVoucher\(newVoucher, \{\s*isUpdate: false,[\s\S]*?onBaseSuccess: \(\) => \{ if \(shadowEvent\) persistLedgerEvent\(shadowEvent\); \},\s*onBaseFail: rollbackOptimistic,/.test(dc));
+// Flag-off path: event appended only after base success; a base failure rolls back (RULE 1). Usability
+// audit P0-7 added the page callbacks (onSaved after success, onFailed after the rollback).
+ok('flag-off path unchanged: persistVoucher, event appended only after base success', /persistVoucher\(newVoucher, \{\s*isUpdate: false,[\s\S]*?onBaseSuccess: \(\) => \{\s*if \(shadowEvent\) persistLedgerEvent\(shadowEvent\);\s*opts\?\.onSaved\?\.\([\s\S]*?\},\s*onBaseFail: \(\) => \{ rollbackOptimistic\(\); opts\?\.onFailed\?\.\(\); \},/.test(dc));
 const at = dc.indexOf('const loadFromSupabase = async');
 const load = dc.slice(at, at + 900);
 ok('flag loaded by a read-only select, reset to false first, false on any error', /postingServiceRef\.current = false;/.test(load)

@@ -169,7 +169,9 @@ interface DataContextType {
   getComplianceFiledIds: () => string[];
   assets: Asset[];
 
-  addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }) => Voucher;
+  /** opts.onSaved fires once the voucher is durably saved in the cloud (any save path); opts.onFailed once a
+   *  save failed and the optimistic row was rolled back. A page should clear its input form only on onSaved. */
+  addVoucher: (data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }, opts?: { onSaved?: (v: Voucher) => void; onFailed?: () => void }) => Voucher;
   // Returns true only when the edit passed every guard and was applied. Returns false
   // when a guard blocked it (FY-lock / period-lock / approved-under-maker-checker /
   // engine voucher / unbalanced) — the guard already showed the real reason, so callers
@@ -1791,7 +1793,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   type VoucherPersistWith = (v: Voucher, ev: LedgerEvent, rollback: () => void) => void;
   // opts.onPersisted (S4-a): called once the posting service has made the voucher durable (with its official
   // number) — for a follow-up server call that needs the row to exist (reverseVoucher's link).
-  const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }, opts?: { persistWith?: VoucherPersistWith; onPersisted?: (v: Voucher) => void }): Voucher => {
+  const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }, opts?: { persistWith?: VoucherPersistWith; onPersisted?: (v: Voucher) => void; onSaved?: (v: Voucher) => void; onFailed?: () => void }): Voucher => {
     // ECR-06: role gate at the voucher choke point — every composite flow (sale/purchase/salary/
     // loan/reversal) and page funnels through here, so one guard covers every voucher birth.
     if (guardPermission('create', 'वाउचर बनाने')) {
@@ -1971,16 +1973,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             reportError('voucher-journal-append', res.error ?? 'append failed', { voucherId: finalVoucher.id, voucherNo: finalNo });
             rollbackOptimistic();
             toastRef.current({ title: '❌ Voucher cloud par save NAHI hua', description: `${res.error ?? 'journal append failed'}. Local state se entry hata di gayi — refresh karne par data lose nahi hoga.`, variant: 'destructive', duration: 15000 });
+            opts?.onFailed?.();
             return;
           }
+          opts?.onSaved?.(finalVoucher);
           // Saved (journal). Project into the vouchers table best-effort — a table failure is now
           // RECOVERABLE (rebuildable from the journal), so onBaseFail LOGS, never rolls back.
           persistVoucher(finalVoucher, {
             isUpdate: false, journalFirst: true,
             onBaseFail: () => reportError('voucher-table-projection', 'table write failed after durable journal append (recoverable)', { voucherId: finalVoucher.id, voucherNo: finalNo }),
           });
-        });
-      });
+        }, () => opts?.onFailed?.());
+      }, () => opts?.onFailed?.());
       return newVoucher;
     }
 
@@ -1996,6 +2000,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportError('voucher-pending-post-service', raw, { voucherId: newVoucher.id });
         rollbackOptimistic();
         toastRef.current({ title: '❌ Voucher cloud par save NAHI hua', description: `${msg}. Local state se entry hata di gayi — refresh karne par data lose nahi hoga.`, variant: 'destructive', duration: 15000 });
+        opts?.onFailed?.();
       };
       const pp = buildPendingVoucherPayload(newVoucher);
       supabase.rpc('save_pending_voucher', pp).then(({ data, error }) => {
@@ -2006,6 +2011,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setVouchersState(prev => prev.map(x => x.id === newVoucher.id ? { ...x, voucherNo: officialNo } : x));
         }
         opts?.onPersisted?.({ ...newVoucher, voucherNo: officialNo || newVoucher.voucherNo });
+        opts?.onSaved?.({ ...newVoucher, voucherNo: officialNo || newVoucher.voucherNo });
       }, (rejection: unknown) => { const msg = rejection instanceof Error ? rejection.message : String(rejection); failPending(`Network error — ${msg}`, msg); });
       return newVoucher;
     }
@@ -2027,6 +2033,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportError('voucher-post-service', raw, { voucherId: newVoucher.id, voucherNo: provisionalNo });
         rollbackOptimistic();
         toastRef.current({ title: '❌ Voucher cloud par save NAHI hua', description: `${msg}. Local state se entry hata di gayi — refresh karne par data lose nahi hoga.`, variant: 'destructive', duration: 15000 });
+        opts?.onFailed?.();
       };
       const attempt = (v: Voucher, tries: number) => {
         const ev = eventFor(v);
@@ -2042,7 +2049,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               const nev = { ...ev, payload: { ...(ev.payload as Record<string, unknown>), voucherNo: officialNo } } as LedgerEvent;
               restamp(nv, nev);
               opts?.onPersisted?.(nv);
-            } else opts?.onPersisted?.(v);
+              opts?.onSaved?.(nv);
+            } else { opts?.onPersisted?.(v); opts?.onSaved?.(v); }
             return;
           }
           if (isUniqueViolation(error) && tries < MAX_RENUMBER_RETRIES) {
@@ -2075,8 +2083,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isUpdate: false,
       // The voucher save is authoritative; the ledger event is durably appended ONLY after the base
       // row is confirmed (WORM-safe — a rolled-back voucher never orphans an event).
-      onBaseSuccess: () => { if (shadowEvent) persistLedgerEvent(shadowEvent); },
-      onBaseFail: rollbackOptimistic,
+      onBaseSuccess: () => {
+        if (shadowEvent) persistLedgerEvent(shadowEvent);
+        opts?.onSaved?.(vouchersRef.current.find(x => x.id === newVoucher.id) ?? newVoucher);
+      },
+      onBaseFail: () => { rollbackOptimistic(); opts?.onFailed?.(); },
     });
     return newVoucher;
   }, [society.financialYear, society.fyLocked, society.fyLockedBy, society.financialYearStart]);
