@@ -15,14 +15,12 @@ import { LedgerAccount, Member, VoucherType } from '@/types';
 import { mapImportedOpenings, type ImportedOpeningRow } from '@/lib/openingBalances';
 import { planJoiningReceipts, summariseJoiningPlans, type JoiningReceiptPlan } from '@/lib/members/joiningReceipts';
 import { getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
+import {
+  ACCOUNTS_TEMPLATE, MEMBERS_TEMPLATE, OPENING_BALANCES_TEMPLATE, vouchersTemplate, parseCSV,
+  validateAccountRow, validateMemberRow, validateObRow, validateVoucherRow, type RowError,
+} from '@/lib/importTemplates';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-interface RowError {
-  row: number;
-  field: string;
-  message: string;
-}
 
 type RowStatus = 'ok' | 'error' | 'warning';
 
@@ -31,32 +29,6 @@ interface PreviewRow {
   status: RowStatus;
   errors: RowError[];
   data: Record<string, string>;
-}
-
-// ─── CSV Parser ───────────────────────────────────────────────────────────────
-
-function parseCSV(text: string): string[][] {
-  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-  return lines
-    .filter(l => l.trim() !== '')
-    .map(line => {
-      const cells: string[] = [];
-      let current = '';
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (ch === '"') {
-          inQuotes = !inQuotes;
-        } else if (ch === ',' && !inQuotes) {
-          cells.push(current.trim());
-          current = '';
-        } else {
-          current += ch;
-        }
-      }
-      cells.push(current.trim());
-      return cells;
-    });
 }
 
 // ─── File Parser (CSV + Excel) ────────────────────────────────────────────────
@@ -103,131 +75,6 @@ function downloadExcelTemplate(filename: string, csvContent: string) {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Data');
   XLSX.writeFile(wb, filename);
-}
-
-const ACCOUNTS_TEMPLATE = `account_name,account_type,opening_balance,balance_type
-(यहाँ Account का नाम लिखें),(Asset/Liability/Income/Expense),(शुरुआती राशि रुपये में),(Debit/Credit)
-Cash in Hand,Asset,50000,Debit
-Bank - SBI,Asset,120000,Debit
-Share Capital,Liability,500000,Credit
-Loan from Bank,Liability,200000,Credit
-Admission Fee Income,Income,0,Credit
-Salary Expense,Expense,0,Debit`;
-
-const MEMBERS_TEMPLATE = `member_id,name,father_name,age,occupation,caste,address,post_office,tehsil,district,state,pin_code,phone,share_capital,admission_fee,payment_mode,member_type,join_date,status,share_count,share_face_value,nominee_name,nominee_father_name,nominee_relation,nominee_age,nominee_occupation,nominee_address,nominee_shares,nominee_phone
-(सदस्य क्रमांक),(पूरा नाम),(पिता/पति का नाम),(आयु),(व्यवसाय),(General/Backward Class/Schedule Caste/Schedule Tribe),(पता),(डाकघर),(तहसील),(जिला),(राज्य),(पिन कोड),(मोबाइल नं),(शेयर पूंजी रुपये),(प्रवेश शुल्क),(cash/cheque/online),(member/nominal),(YYYY-MM-DD),(active/inactive),(शेयर संख्या),(प्रति शेयर मूल्य),(नामिनी का नाम),(नामिनी के पिता),(संबंध),(नामिनी आयु),(नामिनी व्यवसाय),(नामिनी पता),(नामिनी शेयर),(नामिनी मोबाइल)
-M001,राम कुमार शर्मा,श्री हरि शर्मा,35,किसान,General,ग्राम - रामपुर,रामपुर,राणिया,सिरसा,Haryana,125076,9876543210,5000,100,cash,member,2020-04-01,active,10,500,सीता देवी,श्री राम कुमार,पत्नी,30,गृहिणी,ग्राम - रामपुर,10,9876543211
-M002,सुरेश यादव,श्री महेश यादव,28,व्यापारी,Backward Class,ग्राम - शिवपुर,शिवपुर,राणिया,सिरसा,Haryana,125076,9988776655,2500,100,cheque,member,2021-06-15,active,5,500,,,,,,,,,`;
-
-const OPENING_BALANCES_TEMPLATE = `account_name,opening_balance,balance_type
-(Account का नाम — बिल्कुल वैसा जैसा system में है),(राशि रुपये में),(Debit/Credit)
-Cash in Hand,45000,Debit
-Bank - SBI,115000,Debit
-Share Capital,500000,Credit
-Reserve Fund,80000,Credit`;
-
-const VOUCHERS_TEMPLATE = `date,type,debit_account,credit_account,amount,narration,reference
-(YYYY-MM-DD),(receipt/payment/journal/contra/sale/purchase),(Debit खाता — system में exact नाम),(Credit खाता — exact नाम),(राशि रुपये),(विवरण),(बाहरी ref जैसे गेट-पास नं — दोबारा import पर duplicate रोकता है)
-2025-04-15,purchase,Govt Procurement Purchase,MSP Payable to Farmers,45500,MSP गेहूँ खरीद - किसान राम कुमार,GP-1001
-2025-04-20,payment,MSP Payable to Farmers,Bank Accounts,45500,किसान भुगतान RTGS - राम कुमार,GP-1001-PAY
-2025-04-15,purchase,Govt Procurement Purchase,MSP Payable to Farmers,30000,MSP गेहूँ खरीद - किसान सुरेश,GP-1002`;
-
-// ─── Validators ───────────────────────────────────────────────────────────────
-
-const VALID_ACCOUNT_TYPES = ['asset', 'liability', 'income', 'expense', 'equity'];
-const VALID_BALANCE_TYPES = ['debit', 'credit'];
-const VALID_MEMBER_TYPES = ['member', 'nominal'];
-const VALID_STATUS = ['active', 'inactive'];
-const VALID_VOUCHER_TYPES = ['receipt', 'payment', 'journal', 'contra', 'sale', 'purchase'];
-
-// Validate one bulk-voucher row. Mirrors the double-entry guard in addVoucher so
-// bad rows are caught in PREVIEW (and skipped) rather than firing per-row toasts at
-// import time. Duplicate detection (by `reference`) is handled at import, like Members.
-function validateVoucherRow(
-  row: Record<string, string>,
-  accounts: LedgerAccount[],
-  fyStart: string,
-  fyEnd: string,
-  rowNum: number,
-): RowError[] {
-  const errors: RowError[] = [];
-  const isExample = (v?: string) => !v || v.trim() === '' || v.trim().startsWith('(');
-  const findAcc = (n: string) => accounts.find(a => !a.isGroup && a.name.toLowerCase().trim() === n.toLowerCase().trim());
-
-  const d = (row.date || '').trim();
-  if (isExample(d)) errors.push({ row: rowNum, field: 'date', message: `Row ${rowNum}: date खाली/example है (YYYY-MM-DD चाहिए)` });
-  else if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || isNaN(Date.parse(d))) errors.push({ row: rowNum, field: 'date', message: `Row ${rowNum}: date "${d}" गलत — YYYY-MM-DD format में लिखें` });
-  else if (fyStart && (d < fyStart || d > fyEnd)) errors.push({ row: rowNum, field: 'date', message: `Row ${rowNum}: date ${d} चालू वित्त वर्ष (${fyStart} से ${fyEnd}) के बाहर है` });
-
-  const t = (row.type || '').toLowerCase().trim();
-  if (isExample(row.type)) errors.push({ row: rowNum, field: 'type', message: `Row ${rowNum}: type खाली/example है` });
-  else if (!VALID_VOUCHER_TYPES.includes(t)) errors.push({ row: rowNum, field: 'type', message: `Row ${rowNum}: type "${row.type}" गलत — ${VALID_VOUCHER_TYPES.join('/')} में से एक` });
-
-  const dn = (row.debit_account || '').trim();
-  const cn = (row.credit_account || '').trim();
-  if (isExample(dn)) errors.push({ row: rowNum, field: 'debit_account', message: `Row ${rowNum}: debit_account खाली/example है` });
-  else if (!findAcc(dn)) errors.push({ row: rowNum, field: 'debit_account', message: `Row ${rowNum}: debit_account "${dn}" system में नहीं मिला (Ledger Heads से exact नाम लें)` });
-  if (isExample(cn)) errors.push({ row: rowNum, field: 'credit_account', message: `Row ${rowNum}: credit_account खाली/example है` });
-  else if (!findAcc(cn)) errors.push({ row: rowNum, field: 'credit_account', message: `Row ${rowNum}: credit_account "${cn}" system में नहीं मिला` });
-  if (!isExample(dn) && !isExample(cn) && dn.toLowerCase().trim() === cn.toLowerCase().trim())
-    errors.push({ row: rowNum, field: 'credit_account', message: `Row ${rowNum}: debit और credit खाता एक ही नहीं हो सकते` });
-
-  const amt = parseFloat(row.amount);
-  if (isExample(row.amount)) errors.push({ row: rowNum, field: 'amount', message: `Row ${rowNum}: amount खाली/example है` });
-  else if (isNaN(amt) || amt <= 0) errors.push({ row: rowNum, field: 'amount', message: `Row ${rowNum}: amount "${row.amount}" 0 से बड़ा valid number होना चाहिए` });
-
-  return errors;
-}
-
-function validateAccountRow(row: Record<string, string>, rowNum: number): RowError[] {
-  const errors: RowError[] = [];
-  if (!row.account_name || row.account_name.startsWith('('))
-    errors.push({ row: rowNum, field: 'account_name', message: `Row ${rowNum}: account_name खाली है या example row है` });
-  if (!VALID_ACCOUNT_TYPES.includes((row.account_type || '').toLowerCase()))
-    errors.push({ row: rowNum, field: 'account_type', message: `Row ${rowNum}: account_type "${row.account_type}" गलत है — Asset, Liability, Income, Expense में से एक होना चाहिए` });
-  const bal = parseFloat(row.opening_balance);
-  if (isNaN(bal) || bal < 0)
-    errors.push({ row: rowNum, field: 'opening_balance', message: `Row ${rowNum}: opening_balance "${row.opening_balance}" एक valid number होना चाहिए` });
-  if (!VALID_BALANCE_TYPES.includes((row.balance_type || '').toLowerCase()))
-    errors.push({ row: rowNum, field: 'balance_type', message: `Row ${rowNum}: balance_type "${row.balance_type}" गलत है — Debit या Credit होना चाहिए` });
-  return errors;
-}
-
-function validateMemberRow(row: Record<string, string>, rowNum: number): RowError[] {
-  const errors: RowError[] = [];
-  if (!row.member_id || row.member_id.startsWith('('))
-    errors.push({ row: rowNum, field: 'member_id', message: `Row ${rowNum}: member_id खाली है या example row है` });
-  if (!row.name || row.name.startsWith('('))
-    errors.push({ row: rowNum, field: 'name', message: `Row ${rowNum}: name (सदस्य का नाम) खाली है` });
-  if (!row.father_name || row.father_name.startsWith('('))
-    errors.push({ row: rowNum, field: 'father_name', message: `Row ${rowNum}: father_name खाली है` });
-  if (!VALID_MEMBER_TYPES.includes((row.member_type || '').toLowerCase()))
-    errors.push({ row: rowNum, field: 'member_type', message: `Row ${rowNum}: member_type "${row.member_type}" गलत है — member या nominal होना चाहिए` });
-  if (!row.join_date || !/^\d{4}-\d{2}-\d{2}$/.test(row.join_date))
-    errors.push({ row: rowNum, field: 'join_date', message: `Row ${rowNum}: join_date "${row.join_date}" format YYYY-MM-DD होना चाहिए (जैसे 2022-04-01)` });
-  if (!VALID_STATUS.includes((row.status || '').toLowerCase()))
-    errors.push({ row: rowNum, field: 'status', message: `Row ${rowNum}: status "${row.status}" गलत है — active या inactive होना चाहिए` });
-  const sc = parseFloat(row.share_capital);
-  if (isNaN(sc) || sc < 0)
-    errors.push({ row: rowNum, field: 'share_capital', message: `Row ${rowNum}: share_capital "${row.share_capital}" एक valid number होना चाहिए` });
-  return errors;
-}
-
-function validateObRow(row: Record<string, string>, accounts: LedgerAccount[], rowNum: number): RowError[] {
-  const errors: RowError[] = [];
-  if (!row.account_name || row.account_name.startsWith('('))
-    errors.push({ row: rowNum, field: 'account_name', message: `Row ${rowNum}: account_name खाली है या example row है` });
-  else {
-    const found = accounts.find(a => a.name.toLowerCase().trim() === row.account_name.toLowerCase().trim());
-    if (!found)
-      errors.push({ row: rowNum, field: 'account_name', message: `Row ${rowNum}: account "${row.account_name}" system में नहीं मिला — पहले Ledger Heads में account बनाएं या नाम check करें` });
-  }
-  const bal = parseFloat(row.opening_balance);
-  if (isNaN(bal) || bal < 0)
-    errors.push({ row: rowNum, field: 'opening_balance', message: `Row ${rowNum}: opening_balance "${row.opening_balance}" एक valid number होना चाहिए` });
-  if (!VALID_BALANCE_TYPES.includes((row.balance_type || '').toLowerCase()))
-    errors.push({ row: rowNum, field: 'balance_type', message: `Row ${rowNum}: balance_type "${row.balance_type}" गलत है — Debit या Credit होना चाहिए` });
-  return errors;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -761,7 +608,7 @@ const UniversalImporter: React.FC = () => {
               <div className="ml-7 bg-muted rounded-lg p-3 text-xs space-y-1">
                 <p className="font-medium mb-1">Template Columns:</p>
                 <p><span className="font-medium text-primary">account_name</span> — Account का नाम (जैसे: Cash in Hand, Bank - SBI)</p>
-                <p><span className="font-medium text-primary">account_type</span> — <span className="text-green-700">Asset</span> / <span className="text-orange-600">Liability</span> / <span className="text-blue-600">Income</span> / <span className="text-red-600">Expense</span></p>
+                <p><span className="font-medium text-primary">account_type</span> — <span className="text-green-700">Asset</span> / <span className="text-orange-600">Liability</span> / <span className="text-purple-600">Equity</span> / <span className="text-blue-600">Income</span> / <span className="text-red-600">Expense</span></p>
                 <p><span className="font-medium text-primary">opening_balance</span> — शुरुआती राशि (सिर्फ numbers, जैसे: 50000)</p>
                 <p><span className="font-medium text-primary">balance_type</span> — <span className="text-green-700">Debit</span> (Asset/Expense) / <span className="text-orange-600">Credit</span> (Liability/Income)</p>
               </div>
@@ -1109,11 +956,11 @@ const UniversalImporter: React.FC = () => {
                 </p>
                 <div className="ml-7 flex gap-2 flex-wrap">
                   <Button variant="outline" size="sm" className="gap-2"
-                    onClick={() => downloadExcelTemplate('vouchers_template.xlsx', VOUCHERS_TEMPLATE)}>
+                    onClick={() => downloadExcelTemplate('vouchers_template.xlsx', vouchersTemplate(society.financialYearStart))}>
                     <Download className="h-4 w-4" /> Excel (.xlsx) Download करें
                   </Button>
                   <Button variant="outline" size="sm" className="gap-2 text-muted-foreground"
-                    onClick={() => downloadTemplate('vouchers_template.csv', VOUCHERS_TEMPLATE)}>
+                    onClick={() => downloadTemplate('vouchers_template.csv', vouchersTemplate(society.financialYearStart))}>
                     <Download className="h-4 w-4" /> CSV Download करें
                   </Button>
                 </div>

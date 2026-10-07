@@ -80,6 +80,7 @@
     "test:pay-tds": "node scripts/test-pay-tds.mjs",
     "test:pay-pf-wage": "node scripts/test-pay-pf-wage.mjs",
     "test:pay-esi": "node scripts/test-pay-esi.mjs",
+    "test:import-templates": "node scripts/test-import-templates.mjs",
     "test:voucher-template-availability": "node scripts/test-voucher-template-availability.mjs",
     "test:epf-esi-rules": "node scripts/test-epf-esi-rules.mjs",
     "test:pay-components-sync": "node scripts/test-pay-components-sync.mjs",
