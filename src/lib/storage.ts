@@ -740,7 +740,7 @@ const ACCOUNT_PATCHES: Record<string, Partial<LedgerAccount>> = {
   '5602': { name: 'Professional Tax / Local Levies', nameHi: 'व्यावसायिक कर / स्थानीय शुल्क' },
 };
 
-const ACCOUNTS_TO_ADD: LedgerAccount[] = [
+export const ACCOUNTS_TO_ADD: LedgerAccount[] = [
   // ── G1/G2 (CAS mapping, 2026-09-27): the PACS chart lacked the trading groups/heads that sales
   // and purchases default to (4101 / 5101) and that 4104-4108, 5110-5116, 3406 hang under, and a
   // Vehicle asset for its 3110 accumulated depreciation. Every other chart already has these ids.

@@ -234,6 +234,7 @@
     "test:group-account-guard": "node scripts/test-group-account-guard.mjs",
     "test:party-heads": "node scripts/test-party-heads.mjs",
     "test:full-chart-seed": "node scripts/test-full-chart-seed.mjs",
+    "test:persist-extra-accounts": "node scripts/test-persist-extra-accounts.mjs",
     "test:pay-ledger-gate": "node scripts/test-pay-ledger-gate.mjs",
     "test:rm01-phantom-cancel": "node scripts/test-rm01-phantom-cancel.mjs",
     "test:member-joining-receipts": "node scripts/test-member-joining-receipts.mjs",
