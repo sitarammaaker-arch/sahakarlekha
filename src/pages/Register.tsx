@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Building2, AlertCircle, CheckCircle, Eye, EyeOff, Languages } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { SOCIETY_TEMPLATES, CMS_SOCIETY_ACCOUNTS } from '@/lib/storage';
+import { fullChartForType } from '@/lib/storage';
 import type { SocietyType } from '@/types';
 
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
@@ -98,7 +98,7 @@ const Register: React.FC = () => {
       // so no RETURNING/select-back is needed. The payloads are the SAME objects the old
       // flow inserted, so behaviour is identical.
       const newSocietyId = crypto.randomUUID();
-      const templateAccounts = SOCIETY_TEMPLATES[societyType] ?? CMS_SOCIETY_ACCOUNTS;
+      const templateAccounts = fullChartForType(societyType);
       const { data, error: rpcError } = await supabase.rpc('register_society', {
         p_society_id: newSocietyId,
         p_email: adminEmail,

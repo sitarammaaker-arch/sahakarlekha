@@ -27,7 +27,7 @@ import { NotificationChannelsCard } from '@/components/settings/NotificationChan
 import { YearCloseCard } from '@/components/fy/YearCloseCard';
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
 import { ucasReserveMinPct } from '@/lib/rules/ucas';
-import { SOCIETY_TEMPLATES } from '@/lib/storage';
+import { fullChartForType } from '@/lib/storage';
 import { resolveCapabilities } from '@/lib/navigation';
 import type { SocietyType, VoucherType } from '@/types';
 import { accountCode } from '@/lib/accountCode';
@@ -282,7 +282,7 @@ const SocietySetup: React.FC = () => {
     } catch { /* backup download failed — proceed anyway */ }
 
     const type = form.societyType || society.societyType || 'marketing_processing';
-    const template = SOCIETY_TEMPLATES[type] || SOCIETY_TEMPLATES['marketing_processing'];
+    const template = fullChartForType(type);
     // resetAccounts toasts its own refusal / failure; announce success only when the cloud has the
     // whole template (M1-4a — no false-success toast).
     const ok = await resetAccounts(template);
