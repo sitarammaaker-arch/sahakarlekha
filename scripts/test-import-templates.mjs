@@ -112,6 +112,32 @@ for (const [start, end] of [['2026-04-01', '2027-03-31'], ['2027-04-01', '2028-0
   ok(d.every((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)), 'a missing financial-year start falls back to a valid date (never "Invalid Date")');
 }
 
+console.log('\n5b. parent_group — the example groups exist in EVERY chart, and the resolver files accounts correctly');
+{
+  const ex = rowsOf(L.ACCOUNTS_TEMPLATE).map((r) => unmark(r.row, 'account_name'));
+  ok(ex.length === 5 && ex.every((r) => r.parent_group), 'every example account row names a parent_group');
+  for (const t of TYPES) {
+    const ch = chartOf(t);
+    const bad = ex.filter((r) => { const x = L.resolveParentGroup(r, ch); return x.error || !x.parentId; }).map((r) => r.parent_group);
+    ok(bad.length === 0, `[${t}] all example groups resolve to a same-type group${bad.length ? ' — fail: ' + bad.join(', ') : ''}`);
+    ok(ex.every((r) => L.validateAccountRow(r, 3, ch).length === 0), `[${t}] example rows validate with the chart supplied`);
+    const def = Object.keys(L.DEFAULT_PARENT_BY_TYPE).filter((ty) => { const x = L.resolveParentGroup({ account_type: ty, parent_group: '' }, ch); return !x.parentId || !x.defaulted; });
+    ok(def.length === 0, `[${t}] a blank parent_group gets the type's default group${def.length ? ' — missing: ' + def.join(', ') : ''}`);
+  }
+  const ch = chartOf('marketing_processing');
+  const row = (g, ty = 'Asset') => ({ account_name: 'X', account_type: ty, opening_balance: '1', balance_type: 'Debit', parent_group: g });
+  ok(L.resolveParentGroup(row('3100'), ch).parentId === '3100', 'a group id is accepted');
+  ok(L.resolveParentGroup(row('fixed assets'), ch).parentId === '3100', 'the group name is matched case-insensitively');
+  ok(/समूह नहीं/.test(L.resolveParentGroup(row('Cash in Hand'), ch).error || ''), 'a postable account named as parent is refused as "not a group"');
+  ok(/प्रकार/.test(L.resolveParentGroup(row('Fixed Assets', 'Liability'), ch).error || ''), 'a group of a different type is refused (class-parent rule)');
+  ok(/नहीं है/.test(L.resolveParentGroup(row('No Such Group'), ch).error || ''), 'an unknown group is refused, never silently ungrouped');
+  ok(L.validateAccountRow(row('No Such Group'), 3, ch).some((e) => e.field === 'parent_group'), 'the row validator reports the bad group on field parent_group');
+  ok(L.validateAccountRow(row(''), 3, ch).length === 0 && L.resolveParentGroup(row(''), ch).parentId === '3300', 'blank parent_group is valid and defaults to Current Assets 3300');
+  ok(L.validateAccountRow(row('No Such Group'), 3).length === 0, 'without a chart (legacy callers) the validator behaves as before');
+  const dupe = [...ch, { ...ch.find((a) => a.id === '3100'), id: 'g2' }];
+  ok(/कोड/.test(L.resolveParentGroup(row('Fixed Assets'), dupe).error || ''), 'two same-name groups of the type: asks for the code, does not guess');
+}
+
 console.log('\n6. the account_type message names Equity, and the page uses the library');
 {
   const e = L.validateAccountRow({ account_name: 'X', account_type: 'bogus', opening_balance: '1', balance_type: 'Debit' }, 3);
