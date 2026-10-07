@@ -32,6 +32,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { VoucherType, VoucherLine } from '@/types';
 import { Plus, Minus } from 'lucide-react';
 import { getNextVoucherNo, VOUCHER_TEMPLATES, ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
+import { availableTemplates } from '@/lib/voucherTemplateAvailability';
 import type { LedgerAccount } from '@/types';
 import { validateVoucher } from '@/lib/validation';
 import { fmtDate } from '@/lib/dateUtils';
@@ -95,6 +96,9 @@ const Vouchers: React.FC = () => {
   const [voucherType, setVoucherType] = useState<VoucherType>('receipt');
   const [contraDir, setContraDir] = useState<'cash_to_bank' | 'bank_to_cash'>('cash_to_bank');
   const bankIds = useMemo(() => getBankAccountIds(accounts), [accounts]);
+  // Only the quick-entry templates whose accounts exist in THIS society's chart (the chart depends on the society type — e.g. no commission
+  // income in PACS, no telephone in housing); showing the rest filled an empty / invalid account and said nothing.
+  const usableTemplates = useMemo(() => availableTemplates(VOUCHER_TEMPLATES, accounts, bankIds, ACCOUNT_IDS.BANK), [accounts, bankIds]);
   const [contraBankId, setContraBankId] = useState('');
   // Easy templates hardcode the bank side to the '3302' Bank Accounts GROUP. When the society
   // has real bank child accounts, substitute the first one (a postable account, never a group)
@@ -660,7 +664,7 @@ const Vouchers: React.FC = () => {
                       {language === 'hi' ? 'पैसा आया (रसीद)' : 'Money Received (Receipt)'}
                     </h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                      {VOUCHER_TEMPLATES.filter(t => t.category === 'receipt').map(tmpl => (
+                      {usableTemplates.filter(t => t.category === 'receipt').map(tmpl => (
                         <button
                           key={tmpl.id}
                           onClick={() => applyTemplate(tmpl)}
@@ -681,7 +685,7 @@ const Vouchers: React.FC = () => {
                       {language === 'hi' ? 'पैसा गया (भुगतान)' : 'Money Paid (Payment)'}
                     </h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                      {VOUCHER_TEMPLATES.filter(t => t.category === 'payment').map(tmpl => (
+                      {usableTemplates.filter(t => t.category === 'payment').map(tmpl => (
                         <button
                           key={tmpl.id}
                           onClick={() => applyTemplate(tmpl)}
