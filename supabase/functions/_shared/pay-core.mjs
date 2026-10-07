@@ -1327,6 +1327,10 @@ function bucketOf(code, kind) {
     if (c === "TDS" || c === "TDS_192" || c.startsWith("TDS_")) return "tds";
     return "other_deduction";
   }
+  if (kind === "employer_contrib") {
+    if (c === "ER_PF") return "er_pf";
+    if (c === "ER_ESI" || c.startsWith("ER_ESI_")) return "er_esi";
+  }
   return "ignore";
 }
 var isMinor = (n) => typeof n === "number" && Number.isSafeInteger(n) && n >= 0;
@@ -1334,7 +1338,7 @@ function buildRunAccrual(lines, netMinor, heads, newId = () => crypto.randomUUID
   if (!isMinor(netMinor) || lines.some((l) => !isMinor(l.amountMinor))) {
     return { ok: false, code: "PAY-POST-INPUT", message: "amounts must be whole paise \u2265 0" };
   }
-  const sum = { earning: 0, lop: 0, pf: 0, esi: 0, pt: 0, tds: 0, loan: 0, other_deduction: 0, ignore: 0 };
+  const sum = { earning: 0, lop: 0, pf: 0, esi: 0, pt: 0, tds: 0, loan: 0, other_deduction: 0, er_pf: 0, er_esi: 0, ignore: 0 };
   const unknown = /* @__PURE__ */ new Set();
   for (const l of lines) {
     const b = bucketOf(l.code, l.kind);
@@ -1360,8 +1364,10 @@ function buildRunAccrual(lines, netMinor, heads, newId = () => crypto.randomUUID
     };
   }
   const missing = [];
-  if (sum.pf > 0 && !heads.pfPayable) missing.push("pf.payable");
-  if (sum.esi > 0 && !heads.esiPayable) missing.push("esi.payable");
+  if (sum.pf + sum.er_pf > 0 && !heads.pfPayable) missing.push("pf.payable");
+  if (sum.esi + sum.er_esi > 0 && !heads.esiPayable) missing.push("esi.payable");
+  if (sum.er_pf > 0 && !heads.pfEmployerExpense) missing.push("pf.employer_expense");
+  if (sum.er_esi > 0 && !heads.esiEmployerExpense) missing.push("esi.employer_expense");
   if (sum.pt > 0 && !heads.ptPayable) missing.push("professional_tax.payable");
   if (sum.tds > 0 && !heads.tdsPayable) missing.push("tds.payable");
   if (sum.loan > 0 && !heads.employeeAdvance) missing.push("employee.advance");
@@ -1381,8 +1387,10 @@ function buildRunAccrual(lines, netMinor, heads, newId = () => crypto.randomUUID
   const credit = (acc, amt, narration) => {
     if (amt > 0 && acc) legs.push({ id: newId(), accountId: acc, drCr: "Cr", amountMinor: amt, narration });
   };
-  credit(heads.pfPayable, sum.pf, "PF withheld");
-  credit(heads.esiPayable, sum.esi, "ESI withheld");
+  if (sum.er_pf > 0 && heads.pfEmployerExpense) legs.push({ id: newId(), accountId: heads.pfEmployerExpense, drCr: "Dr", amountMinor: sum.er_pf, narration: "Employer PF contribution" });
+  if (sum.er_esi > 0 && heads.esiEmployerExpense) legs.push({ id: newId(), accountId: heads.esiEmployerExpense, drCr: "Dr", amountMinor: sum.er_esi, narration: "Employer ESI contribution" });
+  credit(heads.pfPayable, sum.pf + sum.er_pf, sum.er_pf > 0 ? "PF payable (employee + employer share)" : "PF withheld");
+  credit(heads.esiPayable, sum.esi + sum.er_esi, sum.er_esi > 0 ? "ESI payable (employee + employer share)" : "ESI withheld");
   credit(heads.ptPayable, sum.pt, "Professional tax withheld");
   credit(heads.tdsPayable, sum.tds, "TDS on salary withheld");
   credit(heads.employeeAdvance, sum.loan, "Staff advance recovered from pay");
@@ -1415,7 +1423,9 @@ var PAYROLL_ROLES = {
   esiPayable: "esi.payable",
   ptPayable: "professional_tax.payable",
   tdsPayable: "tds.payable",
-  employeeAdvance: "employee.advance"
+  employeeAdvance: "employee.advance",
+  pfEmployerExpense: "pf.employer_expense",
+  esiEmployerExpense: "esi.employer_expense"
 };
 function headsFromRoles(rows) {
   const by = new Map(rows.map((r) => [r.role, r.account_id]));
@@ -1431,6 +1441,8 @@ function headsFromRoles(rows) {
   set("ptPayable", PAYROLL_ROLES.ptPayable);
   set("tdsPayable", PAYROLL_ROLES.tdsPayable);
   set("employeeAdvance", PAYROLL_ROLES.employeeAdvance);
+  set("pfEmployerExpense", PAYROLL_ROLES.pfEmployerExpense);
+  set("esiEmployerExpense", PAYROLL_ROLES.esiEmployerExpense);
   return h;
 }
 function payrollDocIds(runId) {
@@ -1876,10 +1888,52 @@ function makeEsiEmployee(ctx) {
     return makeMoney(applyPercent(w.minor, ratePct).minor, ctx.currency);
   };
 }
+
+// src/lib/pay/statutory/employerShare.ts
+var ER_PF_CODE = "ER_PF";
+var ER_PF_RATE_VAR = "employer_pf_total_rate";
+var ESI_EMPLOYER_SIG = { params: ["Money", "Number"], ret: "Money" };
+var ESI_EMPLOYER_NAME = "esi_employer";
+var ER_FORMULAS = {
+  ER_PF: 'formula "ER_PF" :: Money let w = pf_wage(BASIC * 120%) in w * (employer_pf_total_rate / 100) * ((30 - attendance.lopDays) / 30)',
+  ER_ESI: 'formula "ER_ESI" :: Money let w = BASIC + DA + HRA - LOP in esi_employer(w, attendance.paidDays)',
+  ER_ESI_NOHRA: 'formula "ER_ESI_NOHRA" :: Money let w = BASIC + DA - LOP_NOHRA in esi_employer(w, attendance.paidDays)',
+  ER_ESI_DEP: 'formula "ER_ESI_DEP" :: Money let w = BASIC + DA + DEP_ALLOW - LOP_DEP in esi_employer(w, attendance.paidDays)',
+  ER_ESI_CONSOL: 'formula "ER_ESI_CONSOL" :: Money let w = CONSOLIDATED - LOP_CONSOL in esi_employer(w, attendance.paidDays)',
+  ER_ESI_STIPEND: 'formula "ER_ESI_STIPEND" :: Money let w = STIPEND - LOP_STIPEND in esi_employer(w, attendance.paidDays)'
+};
+var ER_ESI_CODE_BY_TYPE = Object.fromEntries(
+  Object.entries(ESI_CODE_BY_TYPE).map(([type, code]) => [type, "ER_" + code])
+);
+var isErCode = (code) => {
+  const c = code.toUpperCase();
+  return c === "ER_PF" || c === "ER_ESI" || c.startsWith("ER_ESI_");
+};
+function refuse4(code, msg) {
+  throw Object.assign(new RangeError(`${code}: ${msg}`), { code });
+}
+function makeEsiEmployer(ctx) {
+  const limitMinor = Math.round(resolveParam("esi.wageLimit", ctx.asOf).value * 100);
+  const ratePct = resolveParam("esi.employerRate", ctx.asOf).value;
+  return (wage, paidDays) => {
+    const w = wage;
+    if (!w || w.kind !== "money") refuse4("PAY-DSL-TYPE-015", "esi_employer: the wage must be Money");
+    if (w.currency !== ctx.currency) refuse4("PAY-DSL-TYPE-011", `esi_employer: currency mismatch (${w.currency} vs ${ctx.currency})`);
+    if (typeof paidDays !== "number" || !Number.isFinite(paidDays)) refuse4("PAY-DSL-TYPE-015", "esi_employer: paid days must be a Number");
+    if (w.minor <= 0 || w.minor > limitMinor) return makeMoney(0, ctx.currency);
+    return makeMoney(applyPercent(w.minor, ratePct).minor, ctx.currency);
+  };
+}
 export {
+  ER_ESI_CODE_BY_TYPE,
+  ER_FORMULAS,
+  ER_PF_CODE,
+  ER_PF_RATE_VAR,
   ESI_CODE_BY_TYPE,
   ESI_EMPLOYEE_NAME,
   ESI_EMPLOYEE_SIG,
+  ESI_EMPLOYER_NAME,
+  ESI_EMPLOYER_SIG,
   ESI_FORMULAS,
   PAYROLL_ROLES,
   PF_WAGE_NAME,
@@ -1896,9 +1950,11 @@ export {
   freezeViews,
   fyBounds,
   headsFromRoles,
+  isErCode,
   isEsiCode,
   isTdsCode,
   makeEsiEmployee,
+  makeEsiEmployer,
   makeMoney,
   makePfWage,
   makePostVoucherPayload,

@@ -9,6 +9,8 @@
  *              Cr Salary payable                 net pay
  *              Cr PF / ESI / PT / TDS payable    each deduction, to its own head
  *              Cr Employee advance               loan / advance recovered from pay
+ *   employer   Dr PF / ESI employer expense      the employer's own share (ER_PF / ER_ESI* lines, when the run has them)
+ *              Cr PF / ESI payable               the SAME payable head as the employee's share (one challan), added to its leg
  *   payment    Dr Salary payable / Cr Bank|Cash  net pay
  *
  * Heads are NEVER account ids chosen here — the caller resolves them per society from account_roles
@@ -38,6 +40,9 @@ export interface PostingHeads {
   ptPayable?: string;
   tdsPayable?: string;
   employeeAdvance?: string;
+  /** employer's PF / ESI share is an EXPENSE of the society (5203 / 5204), booked only when the run carries ER_PF / ER_ESI* lines */
+  pfEmployerExpense?: string;
+  esiEmployerExpense?: string;
 }
 
 export interface PostingLeg { id: string; accountId: string; drCr: 'Dr' | 'Cr'; amountMinor: number; narration: string }
@@ -46,7 +51,7 @@ export type PostingResult =
   | { ok: true; legs: PostingLeg[]; expenseMinor: number; netMinor: number; deductionsMinor: number }
   | { ok: false; code: 'PAY-POST-NOTHING' | 'PAY-POST-IMBALANCE' | 'PAY-POST-HEAD' | 'PAY-POST-UNKNOWN-DEDUCTION' | 'PAY-POST-INPUT'; message: string; missingHeads?: string[]; unknown?: string[] };
 
-type Bucket = 'earning' | 'lop' | 'pf' | 'esi' | 'pt' | 'tds' | 'loan' | 'other_deduction' | 'ignore';
+type Bucket = 'earning' | 'lop' | 'pf' | 'esi' | 'pt' | 'tds' | 'loan' | 'other_deduction' | 'er_pf' | 'er_esi' | 'ignore';
 
 /** PURE — which bucket a component falls in. Exported for tests. */
 export function bucketOf(code: string, kind: string): Bucket {
@@ -61,7 +66,14 @@ export function bucketOf(code: string, kind: string): Bucket {
     if (c === 'TDS' || c === 'TDS_192' || c.startsWith('TDS_')) return 'tds';   // TDS_NOHRA / TDS_DEP / TDS_CONSOL / TDS_STIPEND (lib/pay/tax/salaryTds.ts)
     return 'other_deduction';
   }
-  return 'ignore'; // info / employer_contrib / anything that is not on the payslip money
+  // The employer's share is NOT on the payslip money (the employee's net does not change) but it IS a cost and a liability.
+  // It is told apart by CODE, never by kind alone: DAILY_RATE is also kind 'employer_contrib' (a hidden input) and must stay ignored.
+  // The codes start ER_ so they can never be mistaken for the employee's ESI_* / PF (see bucketOf's 'ESI_' prefix rule above).
+  if (kind === 'employer_contrib') {
+    if (c === 'ER_PF') return 'er_pf';
+    if (c === 'ER_ESI' || c.startsWith('ER_ESI_')) return 'er_esi';
+  }
+  return 'ignore'; // info / other employer_contrib / anything that is not on the payslip money
 }
 
 const isMinor = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
@@ -77,7 +89,7 @@ export function buildRunAccrual(
   if (!isMinor(netMinor) || lines.some((l) => !isMinor(l.amountMinor))) {
     return { ok: false, code: 'PAY-POST-INPUT', message: 'amounts must be whole paise ≥ 0' };
   }
-  const sum: Record<Bucket, number> = { earning: 0, lop: 0, pf: 0, esi: 0, pt: 0, tds: 0, loan: 0, other_deduction: 0, ignore: 0 };
+  const sum: Record<Bucket, number> = { earning: 0, lop: 0, pf: 0, esi: 0, pt: 0, tds: 0, loan: 0, other_deduction: 0, er_pf: 0, er_esi: 0, ignore: 0 };
   const unknown = new Set<string>();
   for (const l of lines) {
     const b = bucketOf(l.code, l.kind);
@@ -98,8 +110,10 @@ export function buildRunAccrual(
   }
 
   const missing: string[] = [];
-  if (sum.pf > 0 && !heads.pfPayable) missing.push('pf.payable');
-  if (sum.esi > 0 && !heads.esiPayable) missing.push('esi.payable');
+  if (sum.pf + sum.er_pf > 0 && !heads.pfPayable) missing.push('pf.payable');
+  if (sum.esi + sum.er_esi > 0 && !heads.esiPayable) missing.push('esi.payable');
+  if (sum.er_pf > 0 && !heads.pfEmployerExpense) missing.push('pf.employer_expense');
+  if (sum.er_esi > 0 && !heads.esiEmployerExpense) missing.push('esi.employer_expense');
   if (sum.pt > 0 && !heads.ptPayable) missing.push('professional_tax.payable');
   if (sum.tds > 0 && !heads.tdsPayable) missing.push('tds.payable');
   if (sum.loan > 0 && !heads.employeeAdvance) missing.push('employee.advance');
@@ -117,8 +131,10 @@ export function buildRunAccrual(
   const credit = (acc: string | undefined, amt: number, narration: string) => {
     if (amt > 0 && acc) legs.push({ id: newId(), accountId: acc, drCr: 'Cr', amountMinor: amt, narration });
   };
-  credit(heads.pfPayable, sum.pf, 'PF withheld');
-  credit(heads.esiPayable, sum.esi, 'ESI withheld');
+  if (sum.er_pf > 0 && heads.pfEmployerExpense) legs.push({ id: newId(), accountId: heads.pfEmployerExpense, drCr: 'Dr', amountMinor: sum.er_pf, narration: 'Employer PF contribution' });
+  if (sum.er_esi > 0 && heads.esiEmployerExpense) legs.push({ id: newId(), accountId: heads.esiEmployerExpense, drCr: 'Dr', amountMinor: sum.er_esi, narration: 'Employer ESI contribution' });
+  credit(heads.pfPayable, sum.pf + sum.er_pf, sum.er_pf > 0 ? 'PF payable (employee + employer share)' : 'PF withheld');
+  credit(heads.esiPayable, sum.esi + sum.er_esi, sum.er_esi > 0 ? 'ESI payable (employee + employer share)' : 'ESI withheld');
   credit(heads.ptPayable, sum.pt, 'Professional tax withheld');
   credit(heads.tdsPayable, sum.tds, 'TDS on salary withheld');
   credit(heads.employeeAdvance, sum.loan, 'Staff advance recovered from pay');
@@ -156,6 +172,8 @@ export const PAYROLL_ROLES = {
   ptPayable: 'professional_tax.payable',
   tdsPayable: 'tds.payable',
   employeeAdvance: 'employee.advance',
+  pfEmployerExpense: 'pf.employer_expense',
+  esiEmployerExpense: 'esi.employer_expense',
 } as const;
 
 /** PURE — account_roles rows ({role, account_id}) → the heads buildRunAccrual wants (missing ones stay undefined). */
@@ -167,6 +185,7 @@ export function headsFromRoles(rows: readonly { role: string; account_id: string
   set('pfPayable', PAYROLL_ROLES.pfPayable); set('esiPayable', PAYROLL_ROLES.esiPayable);
   set('ptPayable', PAYROLL_ROLES.ptPayable); set('tdsPayable', PAYROLL_ROLES.tdsPayable);
   set('employeeAdvance', PAYROLL_ROLES.employeeAdvance);
+  set('pfEmployerExpense', PAYROLL_ROLES.pfEmployerExpense); set('esiEmployerExpense', PAYROLL_ROLES.esiEmployerExpense);
   return h;
 }
 

@@ -15,7 +15,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js';
-import { freezeViews, mapCatalog, assembleRun, makeMoney, makeTds192, makePfWage, PF_WAGE_NAME, PF_WAGE_SIG, makeEsiEmployee, ESI_EMPLOYEE_NAME, ESI_EMPLOYEE_SIG, assertVerifiedLaw, TDS_192_SIG, TDS_192_NAME, TDS_YTD_HEAD, isTdsCode, monthsLeftInFy, fyBounds } from '../_shared/pay-core.mjs';
+import { freezeViews, mapCatalog, assembleRun, makeMoney, makeTds192, makePfWage, PF_WAGE_NAME, PF_WAGE_SIG, makeEsiEmployee, ESI_EMPLOYEE_NAME, ESI_EMPLOYEE_SIG, makeEsiEmployer, ESI_EMPLOYER_NAME, ESI_EMPLOYER_SIG, ER_PF_RATE_VAR, resolveParam, assertVerifiedLaw, TDS_192_SIG, TDS_192_NAME, TDS_YTD_HEAD, isTdsCode, monthsLeftInFy, fyBounds } from '../_shared/pay-core.mjs';
 
 // SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
 // token; its payload is read only to refuse more (unreadable → pending).
@@ -97,7 +97,8 @@ Deno.serve(async (req: Request) => {
         and (rv.effective_to is null or rv.effective_to >= ${periodMonth})`;
     // editable statutory rates (admin-owned, sourced) → injected as scalar vars the formulas use
     const stat = await sql`select key, value_num from pay_config.statutory_setting where society_id = ${societyId}`;
-    const scalars: Record<string, number> = { pf_rate: 12, ...Object.fromEntries(stat.map((r: Record<string, unknown>) => [r.key, Number(r.value_num)])) };
+    // employer_pf_total_rate = the DATED employer PF rate for this month (13 = 12 + 1 admin/EDLI); a society's own row below wins. Unused unless an ER_PF component is bound.
+    const scalars: Record<string, number> = { pf_rate: 12, [ER_PF_RATE_VAR]: resolveParam('pf.employerRate', periodMonth).value, ...Object.fromEntries(stat.map((r: Record<string, unknown>) => [r.key, Number(r.value_num)])) };
     // several values of one rule key (different effective dates / versions) must all reach the resolver,
     // which picks the one in force on `asOf` — Object.fromEntries would have kept only the last.
     const ruleCatalog: Record<string, { candidates: Record<string, unknown>[]; required: boolean }> = {};
@@ -193,7 +194,7 @@ Deno.serve(async (req: Request) => {
       }
       const facts = { attendance: { paidDays, lopDays, otHours: 0 }, leave: [], loan, tax: { ytdByHead: tdsComp ? { [TDS_YTD_HEAD]: tdsYtdMinor } : {}, monthsRemaining: monthsLeftInFy(period), regime: 'new' } };
       // `onResult` collects what the Money result cannot carry: an OVER-deduction (the CA ruling: never a silent ₹0).
-      const fns = { [PF_WAGE_NAME]: makePfWage({ asOf: periodMonth, currency: 'INR' }), [ESI_EMPLOYEE_NAME]: makeEsiEmployee({ asOf: periodMonth, currency: 'INR' }), [TDS_192_NAME]: tdsComp ? makeTds192({ regime: 'new', asOf: periodMonth, currency: 'INR' }, (o: { excessMinor: number }) => { tdsOutcomes.set(String(emp.employee_code), o); }) : () => makeMoney(0, 'INR') };
+      const fns = { [PF_WAGE_NAME]: makePfWage({ asOf: periodMonth, currency: 'INR' }), [ESI_EMPLOYEE_NAME]: makeEsiEmployee({ asOf: periodMonth, currency: 'INR' }), [ESI_EMPLOYER_NAME]: makeEsiEmployer({ asOf: periodMonth, currency: 'INR' }), [TDS_192_NAME]: tdsComp ? makeTds192({ regime: 'new', asOf: periodMonth, currency: 'INR' }, (o: { excessMinor: number }) => { tdsOutcomes.set(String(emp.employee_code), o); }) : () => makeMoney(0, 'INR') };
       emReqs.push({ employeeId: emp.id, empCode: emp.employee_code, paidDays, paidDaysShown, lopDays, calc: { facts, currency: 'INR', fixedComponents: spec.fixedComponents, fns, scalars }, aggregate: { classification: spec.classification, clamps: spec.clamps } });
     }
 
@@ -229,7 +230,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // 6. assemble the run (one shared plan; typeBase declares fixed components + fact vars)
-    const typeBase = { vars: { ...Object.fromEntries([...fixedCodes].map((c) => [c, 'Money'])), ...Object.fromEntries(Object.keys(scalars).map((k) => [k, 'Number'])), attendance: 'Map', tax: 'Map', leaveBalance: 'Map', loanRecovery: 'Money', loanRecoveries: 'List' }, fns: { [TDS_192_NAME]: TDS_192_SIG, [PF_WAGE_NAME]: PF_WAGE_SIG, [ESI_EMPLOYEE_NAME]: ESI_EMPLOYEE_SIG } };
+    const typeBase = { vars: { ...Object.fromEntries([...fixedCodes].map((c) => [c, 'Money'])), ...Object.fromEntries(Object.keys(scalars).map((k) => [k, 'Number'])), attendance: 'Map', tax: 'Map', leaveBalance: 'Map', loanRecovery: 'Money', loanRecoveries: 'List' }, fns: { [TDS_192_NAME]: TDS_192_SIG, [PF_WAGE_NAME]: PF_WAGE_SIG, [ESI_EMPLOYEE_NAME]: ESI_EMPLOYEE_SIG, [ESI_EMPLOYER_NAME]: ESI_EMPLOYER_SIG } };
     const runId = crypto.randomUUID();
     const assembled = assembleRun({
       societyId, runId, sequence: 1,
