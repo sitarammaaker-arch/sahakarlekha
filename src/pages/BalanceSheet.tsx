@@ -5,6 +5,7 @@
  * Previous Year column shows per-account and per-group values
  */
 import React, { useMemo, useState } from 'react';
+import { isAbnormalBalance } from '@/lib/abnormalBalance';
 import { useNavigate } from 'react-router-dom';
 import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -187,12 +188,25 @@ const BalanceSheet: React.FC = () => {
       .filter(b => !capturedIds.has(b.account.id) && (b.netBalance !== 0 || getPY(b.account.id) !== 0))
       .map(b => ({ account: b, displayAmount: signFlip ? -b.netBalance : b.netBalance, pyAmount: signFlip ? -getPY(b.account.id) : getPY(b.account.id) }));
 
-    if (orphans.length > 0) {
+    // An account that landed here because its balance flipped sides (e.g. a bank or staff advance in
+    // Cr, shown among liabilities) is a books problem, not "other" — give it its own, always-listed,
+    // warning group (usability audit P0-4). Totals are unchanged.
+    const reversed = orphans.filter(o => isAbnormalBalance(o.account.account, o.account.netBalance));
+    const plainOrphans = orphans.filter(o => !reversed.includes(o));
+    if (reversed.length > 0) {
+      groups.push({
+        id: 'reversed', name: '⚠ Accounts with a reversed balance — check', nameHi: '⚠ उलटे शेष वाले खाते — जाँचें',
+        items: reversed,
+        grandTotal: reversed.reduce((s, i) => s + i.displayAmount, 0),
+        pyGrandTotal: reversed.reduce((s, i) => s + i.pyAmount, 0),
+      });
+    }
+    if (plainOrphans.length > 0) {
       groups.push({
         id: 'other', name: 'Other', nameHi: 'अन्य',
-        items: orphans,
-        grandTotal: orphans.reduce((s, i) => s + i.displayAmount, 0),
-        pyGrandTotal: orphans.reduce((s, i) => s + i.pyAmount, 0),
+        items: plainOrphans,
+        grandTotal: plainOrphans.reduce((s, i) => s + i.displayAmount, 0),
+        pyGrandTotal: plainOrphans.reduce((s, i) => s + i.pyAmount, 0),
       });
     }
 
