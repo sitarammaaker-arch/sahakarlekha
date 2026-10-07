@@ -216,7 +216,7 @@ const BankReconciliation: React.FC = () => {
       if (error) {
         console.error('BRS save error:', error.message);
         persistRecords(prev); // RULE-1 rollback
-        toast({ title: hi ? 'समाधान सेव नहीं हुआ' : 'Reconciliation not saved', description: `Cloud save fail — ${error.message}. (Pehli baar: bank_reconciliations block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toast({ title: hi ? 'समाधान सेव नहीं हुआ' : 'Reconciliation not saved', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: bank_reconciliations block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       } else {
         toast({ title: hi ? '✅ समाधान सहेजा गया' : '✅ Reconciliation saved', description: rec.isReconciled ? (hi ? 'समाधित' : 'Reconciled') : (hi ? `अंतर ${fmt(Math.abs(rec.difference))}` : `Difference ${fmt(Math.abs(rec.difference))}`) });
       }

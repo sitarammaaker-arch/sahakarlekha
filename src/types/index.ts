@@ -1753,7 +1753,7 @@ export interface EntityLink {
   count: number;
   labelHi: string;       // "18 वाउचर"
   labelEn: string;       // "18 Vouchers"
-  instructionHi: string; // "Vouchers page pe in vouchers ko pehle cancel karo"
+  instructionHi: string; // "वाउचर पेज पर पहले इन वाउचर को रद्द करें"
   instructionEn: string;
   blocking: boolean;     // true = must handle before delete
 }

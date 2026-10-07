@@ -149,7 +149,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Consumer price save error:', error.message); reportError('consumer-save', error.message);
         setPricesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setConsumerPrices(r); return r; });
-        toastRef.current({ title: 'मूल्य सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka consumer_price_lists block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'मूल्य सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का consumer_price_lists block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
     return rec;
@@ -163,7 +163,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     supabase.from('consumer_price_lists').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
       if (error) {
         setPricesState(prev => { const u = [...prev, before]; storage.setConsumerPrices(u); return u; });
-        toastRef.current({ title: 'मूल्य हटा नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'मूल्य हटा नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [consumerPrices, societyId]);
@@ -237,7 +237,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         console.error('Patronage save error:', error.message); reportError('consumer-save', error.message);
         setPatronageRunsState(prev => { const u = revertTo ? prev.map(r => r.id === next.id ? revertTo : r) : prev.filter(r => r.id !== next.id); storage.setConsumerPatronageRuns(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'रिबेट रन सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh par purana data. (Pehli baar: consumer_patronage_runs block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'रिबेट रन सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh par purana data. (पहली बार: consumer_patronage_runs block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [societyId]);
@@ -368,7 +368,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         console.error('PO save error:', error.message); reportError('consumer-save', error.message);
         setPOState(prev => { const u = revertTo ? prev.map(p => p.id === next.id ? revertTo : p) : prev.filter(p => p.id !== next.id); storage.setConsumerPurchaseOrders(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'खरीद ऑर्डर सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. (Pehli baar: consumer_purchase_orders block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'खरीद ऑर्डर सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: consumer_purchase_orders block चलाएँ।)`, variant: 'destructive', duration: 12000 });
         return;
       }
       if (varianceStatus || varianceReason || varianceApprovedBy) {
@@ -492,7 +492,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         console.error('Sales return save error:', error.message); reportError('consumer-save', error.message);
         setSalesReturnsState(prev => { const u = revertTo ? prev.map(r => r.id === row.id ? revertTo : r) : prev.filter(r => r.id !== row.id); storage.setSalesReturns(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'बिक्री वापसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. (Pehli baar: sales_returns block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'बिक्री वापसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: sales_returns block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       });
     };
     attempt(next, 0);
@@ -669,7 +669,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         console.error('Purchase return save error:', error.message); reportError('consumer-save', error.message);
         setPurchaseReturnsState(prev => { const u = revertTo ? prev.map(r => r.id === row.id ? revertTo : r) : prev.filter(r => r.id !== row.id); storage.setPurchaseReturns(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'खरीद वापसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. (Pehli baar: purchase_returns block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'खरीद वापसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: purchase_returns block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       });
     };
     attempt(next, 0);

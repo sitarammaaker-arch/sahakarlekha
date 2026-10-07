@@ -96,7 +96,7 @@ export const LinkedDeleteDialog: React.FC<LinkedDeleteDialogProps> = ({
             {!hasBlocking && (
               <p className="text-xs text-yellow-700">
                 {hi
-                  ? '⚠️ Ye sirf warnings hain — aage badh sakte hain.'
+                  ? '⚠️ ये सिर्फ़ चेतावनियाँ हैं — आगे बढ़ सकते हैं।'
                   : '⚠️ These are warnings only — you may proceed.'}
               </p>
             )}
@@ -107,11 +107,11 @@ export const LinkedDeleteDialog: React.FC<LinkedDeleteDialogProps> = ({
           <div className="py-1 space-y-2">
             <div className="p-3 bg-red-50 border border-red-300 rounded text-sm text-red-800">
               ⚠️ {hi
-                ? `"${entityName}" aur uske saare linked data permanently delete ho jayenge. Ye action UNDO nahi ho sakta.`
+                ? `"${entityName}" और उससे जुड़ा सारा data हमेशा के लिए हट जाएगा। यह काम वापस (UNDO) नहीं हो सकता।`
                 : `"${entityName}" and all its data will be permanently deleted. This action CANNOT be undone.`}
             </div>
             <p className="text-sm text-muted-foreground">
-              {hi ? 'Kya aap sure hain ki aap delete karna chahte hain?' : 'Are you absolutely sure you want to delete this?'}
+              {hi ? 'क्या आप सच में हटाना चाहते हैं?' : 'Are you absolutely sure you want to delete this?'}
             </p>
           </div>
         )}

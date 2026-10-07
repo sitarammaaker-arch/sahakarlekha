@@ -207,7 +207,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Crop save error:', error.message); reportError('marketing-save', error.message);
         setCropsState(prev => { const r = prev.filter(c => c.id !== crop.id); storage.setProcurementCrops(r); return r; });
-        toastRef.current({ title: 'फसल सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_crops block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'फसल सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का procurement_crops block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
     return crop;
@@ -223,7 +223,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (next && before) supabase.from('procurement_crops').upsert(withSoc(next)).then(({ error }) => {
         if (error) {
           setCropsState(p => { const r = p.map(c => c.id === id ? before : c); storage.setProcurementCrops(r); return r; });
-          toastRef.current({ title: 'फसल अपडेट नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'फसल अपडेट नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         }
       });
       return u;
@@ -247,7 +247,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('procurement_crops').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
       if (error) {
         setCropsState(prev => { const u = [...prev, before]; storage.setProcurementCrops(u); return u; });
-        toastRef.current({ title: 'फसल हटी नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhegi.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'फसल हटी नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगी।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [crops, varieties, procurementLots, societyId]);
@@ -262,7 +262,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Seed crops error:', error.message); reportError('marketing-save', error.message);
         setCropsState(() => { storage.setProcurementCrops([]); return []; });
-        toastRef.current({ title: 'फसलें सेव नहीं हुईं', description: `Cloud save fail — ${error.message}. (Pehli baar: supabase-tables.sql ka procurement_crops block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'फसलें सेव नहीं हुईं', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: supabase-tables.sql का procurement_crops block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       } else {
         toastRef.current({ title: '✅ मानक फसलें जोड़ी गईं', description: 'गेहूँ · धान · सरसों · चना · बाजरा' });
       }
@@ -280,7 +280,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Variety save error:', error.message); reportError('marketing-save', error.message);
         setVarietiesState(prev => { const r = prev.filter(v => v.id !== variety.id); storage.setProcurementVarieties(r); return r; });
-        toastRef.current({ title: 'किस्म सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_varieties block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'किस्म सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का procurement_varieties block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
     return variety;
@@ -296,7 +296,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (next && before) supabase.from('procurement_varieties').upsert(withSoc(next)).then(({ error }) => {
         if (error) {
           setVarietiesState(p => { const r = p.map(v => v.id === id ? before : v); storage.setProcurementVarieties(r); return r; });
-          toastRef.current({ title: 'किस्म अपडेट नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'किस्म अपडेट नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         }
       });
       return u;
@@ -315,7 +315,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('procurement_varieties').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
       if (error) {
         setVarietiesState(prev => { const u = [...prev, before]; storage.setProcurementVarieties(u); return u; });
-        toastRef.current({ title: 'किस्म हटी नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhegi.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'किस्म हटी नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगी।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [varieties, procurementLots, societyId]);
@@ -331,7 +331,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Season save error:', error.message); reportError('marketing-save', error.message);
         setSeasonsState(prev => { const r = prev.filter(s => s.id !== season.id); storage.setProcurementSeasons(r); return r; });
-        toastRef.current({ title: 'सीज़न सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_seasons block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'सीज़न सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का procurement_seasons block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
     return season;
@@ -347,7 +347,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (next && before) supabase.from('procurement_seasons').upsert(withSoc(next)).then(({ error }) => {
         if (error) {
           setSeasonsState(p => { const r = p.map(s => s.id === id ? before : s); storage.setProcurementSeasons(r); return r; });
-          toastRef.current({ title: 'सीज़न अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'सीज़न अपडेट नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         }
       });
       return u;
@@ -366,7 +366,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('procurement_seasons').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
       if (error) {
         setSeasonsState(prev => { const u = [...prev, before]; storage.setProcurementSeasons(u); return u; });
-        toastRef.current({ title: 'सीज़न हटा नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'सीज़न हटा नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [seasons, procurementLots, societyId]);
@@ -382,7 +382,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Agency save error:', error.message); reportError('marketing-save', error.message);
         setAgenciesState(prev => { const r = prev.filter(a => a.id !== agency.id); storage.setProcurementAgencies(r); return r; });
-        toastRef.current({ title: 'एजेंसी सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_agencies block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'एजेंसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का procurement_agencies block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
     return agency;
@@ -398,7 +398,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (next && before) supabase.from('procurement_agencies').upsert(withSoc(next)).then(({ error }) => {
         if (error) {
           setAgenciesState(p => { const r = p.map(a => a.id === id ? before : a); storage.setProcurementAgencies(r); return r; });
-          toastRef.current({ title: 'एजेंसी अपडेट नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'एजेंसी अपडेट नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         }
       });
       return u;
@@ -417,7 +417,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('procurement_agencies').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
       if (error) {
         setAgenciesState(prev => { const u = [...prev, before]; storage.setProcurementAgencies(u); return u; });
-        toastRef.current({ title: 'एजेंसी हटी नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhegi.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'एजेंसी हटी नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगी।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [agencies, centres, societyId]);
@@ -433,7 +433,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Centre save error:', error.message); reportError('marketing-save', error.message);
         setCentresState(prev => { const r = prev.filter(c => c.id !== centre.id); storage.setProcurementCentres(r); return r; });
-        toastRef.current({ title: 'केंद्र सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_centres block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'केंद्र सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का procurement_centres block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
     return centre;
@@ -449,7 +449,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (next && before) supabase.from('procurement_centres').upsert(withSoc(next)).then(({ error }) => {
         if (error) {
           setCentresState(p => { const r = p.map(c => c.id === id ? before : c); storage.setProcurementCentres(r); return r; });
-          toastRef.current({ title: 'केंद्र अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'केंद्र अपडेट नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         }
       });
       return u;
@@ -468,7 +468,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('procurement_centres').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
       if (error) {
         setCentresState(prev => { const u = [...prev, before]; storage.setProcurementCentres(u); return u; });
-        toastRef.current({ title: 'केंद्र हटा नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'केंद्र हटा नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [centres, procurementLots, societyId]);
@@ -483,7 +483,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('MSP rate save error:', error.message); reportError('marketing-save', error.message);
         setMspRatesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementMspRates(r); return r; });
-        toastRef.current({ title: 'MSP दर सेव नहीं हुई', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_msp_rates block chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'MSP दर सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का procurement_msp_rates block चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
     return rec;
@@ -497,7 +497,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('procurement_msp_rates').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
       if (error) {
         setMspRatesState(prev => { const u = [...prev, before]; storage.setProcurementMspRates(u); return u; });
-        toastRef.current({ title: 'MSP दर हटी नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhegi.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'MSP दर हटी नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगी।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [mspRates, societyId]);
@@ -518,7 +518,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Deduction rule save error:', error.message); reportError('marketing-save', error.message);
         setDeductionRulesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementDeductionRules(r); return r; });
-        toastRef.current({ title: 'कटौती नियम सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_deduction_rules block + RLS chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'कटौती नियम सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का procurement_deduction_rules block + RLS चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
     return rec;
@@ -534,7 +534,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (next && before) supabase.from('procurement_deduction_rules').upsert(withSoc(next)).then(({ error }) => {
         if (error) {
           setDeductionRulesState(p => { const r = p.map(x => x.id === id ? before : x); storage.setProcurementDeductionRules(r); return r; });
-          toastRef.current({ title: 'कटौती नियम अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'कटौती नियम अपडेट नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         }
       });
       return u;
@@ -549,7 +549,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('procurement_deduction_rules').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
       if (error) {
         setDeductionRulesState(prev => { const u = [...prev, before]; storage.setProcurementDeductionRules(u); return u; });
-        toastRef.current({ title: 'कटौती नियम हटा नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'कटौती नियम हटा नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [deductionRules, societyId]);
@@ -564,7 +564,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Quality spec save error:', error.message); reportError('marketing-save', error.message);
         setQualitySpecsState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementQualitySpecs(r); return r; });
-        toastRef.current({ title: 'गुणवत्ता मानक सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_quality_specs block + RLS chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'गुणवत्ता मानक सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का procurement_quality_specs block + RLS चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
     return rec;
@@ -578,7 +578,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('procurement_quality_specs').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
       if (error) {
         setQualitySpecsState(prev => { const u = [...prev, before]; storage.setProcurementQualitySpecs(u); return u; });
-        toastRef.current({ title: 'गुणवत्ता मानक हटा नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'गुणवत्ता मानक हटा नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [qualitySpecs, societyId]);
@@ -593,7 +593,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Bardana type save error:', error.message); reportError('marketing-save', error.message);
         setBardanaTypesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementBardanaTypes(r); return r; });
-        toastRef.current({ title: 'बारदाना सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka procurement_bardana_types block + RLS chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'बारदाना सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का procurement_bardana_types block + RLS चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
     return rec;
@@ -607,7 +607,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('procurement_bardana_types').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
       if (error) {
         setBardanaTypesState(prev => { const u = [...prev, before]; storage.setProcurementBardanaTypes(u); return u; });
-        toastRef.current({ title: 'बारदाना हटा नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'बारदाना हटा नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [bardanaTypes, societyId]);
@@ -622,7 +622,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Transporter save error:', error.message); reportError('marketing-save', error.message);
         setTransportersState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setMarketingTransporters(r); return r; });
-        toastRef.current({ title: 'ट्रांसपोर्टर सेव नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par data lose nahi hoga. (Pehli baar: supabase-tables.sql ka marketing_transporters block + RLS chalayein.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'ट्रांसपोर्टर सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का marketing_transporters block + RLS चलाएँ।)`, variant: 'destructive', duration: 12000 });
       }
     });
     return rec;
@@ -638,7 +638,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       if (next && before) supabase.from('marketing_transporters').upsert(withSoc(next)).then(({ error }) => {
         if (error) {
           setTransportersState(p => { const r = p.map(t => t.id === id ? before : t); storage.setMarketingTransporters(r); return r; });
-          toastRef.current({ title: 'ट्रांसपोर्टर अपडेट नहीं हुआ', description: `Cloud save fail — ${error.message}. Refresh karne par purana data wapas aa jayega.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'ट्रांसपोर्टर अपडेट नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         }
       });
       return u;
@@ -653,7 +653,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     supabase.from('marketing_transporters').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
       if (error) {
         setTransportersState(prev => { const u = [...prev, before]; storage.setMarketingTransporters(u); return u; });
-        toastRef.current({ title: 'ट्रांसपोर्टर हटा नहीं', description: `Cloud delete fail — ${error.message}. Refresh karne par wapas dikhega.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'ट्रांसपोर्टर हटा नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगा।`, variant: 'destructive', duration: 12000 });
       }
     });
   }, [transporters, societyId]);
