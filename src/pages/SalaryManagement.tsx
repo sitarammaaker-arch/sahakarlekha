@@ -339,7 +339,7 @@ const SalaryManagement: React.FC = () => {
 
   const getEmpName = (id: string) => {
     const e = employees.find(x => x.id === id);
-    return e ? (hi && e.nameHi ? e.nameHi : e.name) : id;
+    return e ? (hi && e.nameHi ? (e.nameHi || e.name) : e.name) : id;
   };
 
   // ── Tab 1 handlers ───────────────────────────────────────────────────────

@@ -257,7 +257,7 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
         >
           <option value="">{hi ? '— बिक्री खाता चुनें —' : '— Select Sales A/c —'}</option>
           {salesAccounts.map(a => (
-            <option key={a.id} value={a.id}>{a.id.length <= 6 ? `${a.id} — ` : ''}{hi ? a.nameHi : a.name}</option>
+            <option key={a.id} value={a.id}>{a.id.length <= 6 ? `${a.id} — ` : ''}{hi ? (a.nameHi || a.name) : a.name}</option>
           ))}
           <option value="__create__">{hi ? '+ नया बिक्री खाता बनाएँ…' : '+ Create new Sales A/c…'}</option>
         </select>
@@ -278,7 +278,7 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
         >
           <option value="">{hi ? '— खरीद खाता चुनें —' : '— Select Purchase A/c —'}</option>
           {purchaseAccounts.map(a => (
-            <option key={a.id} value={a.id}>{a.id.length <= 6 ? `${a.id} — ` : ''}{hi ? a.nameHi : a.name}</option>
+            <option key={a.id} value={a.id}>{a.id.length <= 6 ? `${a.id} — ` : ''}{hi ? (a.nameHi || a.name) : a.name}</option>
           ))}
           <option value="__create__">{hi ? '+ नया खरीद खाता बनाएँ…' : '+ Create new Purchase A/c…'}</option>
         </select>
@@ -421,10 +421,10 @@ const AccountCreateDialog: React.FC<{
   const groups = useMemo(() => {
     const out: { id: string; label: string }[] = [];
     const root = accounts.find(a => a.id === rootId);
-    if (root) out.push({ id: root.id, label: (hi && root.nameHi) ? root.nameHi : root.name });
+    if (root) out.push({ id: root.id, label: (hi && root.nameHi) ? (root.nameHi || root.name) : root.name });
     const walk = (pid: string, depth: number) => {
       accounts.filter(a => a.parentId === pid && a.isGroup).forEach(a => {
-        out.push({ id: a.id, label: `${'— '.repeat(depth)}${(hi && a.nameHi) ? a.nameHi : a.name}` });
+        out.push({ id: a.id, label: `${'— '.repeat(depth)}${(hi && a.nameHi) ? (a.nameHi || a.name) : a.name}` });
         walk(a.id, depth + 1);
       });
     };
@@ -721,7 +721,7 @@ const Inventory: React.FC = () => {
 
   const getItemName = (itemId: string) => {
     const item = stockItems.find(i => i.id === itemId);
-    return item ? (hi && item.nameHi ? item.nameHi : item.name) : '—';
+    return item ? (hi && item.nameHi ? (item.nameHi || item.name) : item.name) : '—';
   };
 
   // Item CRUD handlers
@@ -1268,7 +1268,7 @@ const Inventory: React.FC = () => {
                     <SelectItem value="all">{hi ? 'सभी वस्तुएं' : 'All Items'}</SelectItem>
                     {stockItems.map(item => (
                       <SelectItem key={item.id} value={item.id}>
-                        {hi && item.nameHi ? item.nameHi : item.name}
+                        {hi && item.nameHi ? (item.nameHi || item.name) : item.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1486,7 +1486,7 @@ const Inventory: React.FC = () => {
                 <SelectContent>
                   {stockItems.map(item => (
                     <SelectItem key={item.id} value={item.id}>
-                      {hi && item.nameHi ? item.nameHi : item.name} ({item.itemCode})
+                      {hi && item.nameHi ? (item.nameHi || item.name) : item.name} ({item.itemCode})
                     </SelectItem>
                   ))}
                 </SelectContent>

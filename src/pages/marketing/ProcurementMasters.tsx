@@ -39,9 +39,9 @@ export default function ProcurementMasters() {
   const { toast } = useToast();
   const hi = language === 'hi';
   const postableAccounts = accounts.filter(a => !a.isGroup);
-  const accountName = (id?: string) => { const a = accounts.find(x => x.id === id); return a ? (hi ? a.nameHi : a.name) : ''; };
+  const accountName = (id?: string) => { const a = accounts.find(x => x.id === id); return a ? (hi ? (a.nameHi || a.name) : a.name) : ''; };
 
-  const cropLabel = (c: { name: string; nameHi?: string }) => (hi && c.nameHi ? c.nameHi : c.name);
+  const cropLabel = (c: { name: string; nameHi?: string }) => (hi && c.nameHi ? (c.nameHi || c.name) : c.name);
 
   // ── Crop dialog ────────────────────────────────────────────────────────────────
   const [cropOpen, setCropOpen] = useState(false);
@@ -145,7 +145,7 @@ export default function ProcurementMasters() {
     addMspRate({ cropId: mCropId, seasonId: mSeasonId, rate: r, effectiveFrom: mFrom });
     setMspOpen(false);
   };
-  const seasonName = (id: string) => { const s = seasons.find(x => x.id === id); return s ? (hi && s.nameHi ? s.nameHi : s.name) : id; };
+  const seasonName = (id: string) => { const s = seasons.find(x => x.id === id); return s ? (hi && s.nameHi ? (s.nameHi || s.name) : s.name) : id; };
   const sortedMsp = [...mspRates].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1));
 
   // ── Deduction-rule dialog ──────────────────────────────────────────────────────
@@ -262,7 +262,7 @@ export default function ProcurementMasters() {
                       {vs.length === 0 && <span className="text-xs text-muted-foreground">{hi ? 'कोई किस्म नहीं' : 'No varieties'}</span>}
                       {vs.map(v => (
                         <Badge key={v.id} variant="secondary" className="gap-1 font-normal">
-                          <button className="hover:underline" onClick={() => openEditVariety(v.id)}>{hi && v.nameHi ? v.nameHi : v.name}</button>
+                          <button className="hover:underline" onClick={() => openEditVariety(v.id)}>{hi && v.nameHi ? (v.nameHi || v.name) : v.name}</button>
                           <button className="text-destructive/70 hover:text-destructive" onClick={() => deleteVariety(v.id)} aria-label="remove variety">×</button>
                         </Badge>
                       ))}
@@ -287,7 +287,7 @@ export default function ProcurementMasters() {
               {seasons.map(s => (
                 <div key={s.id} className="flex items-center justify-between rounded-lg border p-3 gap-3">
                   <div className="min-w-0">
-                    <div className="font-medium">{hi && s.nameHi ? s.nameHi : s.name}{s.cropYear ? <Badge variant="outline" className="ml-2 font-mono">{s.cropYear}</Badge> : null}</div>
+                    <div className="font-medium">{hi && s.nameHi ? (s.nameHi || s.name) : s.name}{s.cropYear ? <Badge variant="outline" className="ml-2 font-mono">{s.cropYear}</Badge> : null}</div>
                     {(s.startDate || s.endDate) && <div className="text-xs text-muted-foreground">{s.startDate || '…'} → {s.endDate || '…'}</div>}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -315,7 +315,7 @@ export default function ProcurementMasters() {
                   <div key={a.id} className="rounded-lg border p-3 space-y-2">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="font-medium">{hi && a.nameHi ? a.nameHi : a.name} <Badge variant="outline" className="ml-1 font-mono">{a.code}</Badge> <Badge variant="secondary" className="ml-1">{a.kind}</Badge>{a.commissionRate != null ? <Badge variant="outline" className="ml-1">{a.commissionRate}% {hi ? 'कमीशन' : 'comm.'}</Badge> : null}</div>
+                        <div className="font-medium">{hi && a.nameHi ? (a.nameHi || a.name) : a.name} <Badge variant="outline" className="ml-1 font-mono">{a.code}</Badge> <Badge variant="secondary" className="ml-1">{a.kind}</Badge>{a.commissionRate != null ? <Badge variant="outline" className="ml-1">{a.commissionRate}% {hi ? 'कमीशन' : 'comm.'}</Badge> : null}</div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEditAgency(a.id)} aria-label="edit"><Pencil className="h-4 w-4" /></Button>
@@ -326,7 +326,7 @@ export default function ProcurementMasters() {
                       {cs.length === 0 && <span className="text-xs text-muted-foreground">{hi ? 'कोई केंद्र नहीं' : 'No centres'}</span>}
                       {cs.map(c => (
                         <Badge key={c.id} variant="secondary" className="gap-1 font-normal">
-                          <button className="hover:underline" onClick={() => openEditCentre(c.id)}>{hi && c.nameHi ? c.nameHi : c.name}{c.code ? ` (${c.code})` : ''}</button>
+                          <button className="hover:underline" onClick={() => openEditCentre(c.id)}>{hi && c.nameHi ? (c.nameHi || c.name) : c.name}{c.code ? ` (${c.code})` : ''}</button>
                           <button className="text-destructive/70 hover:text-destructive" onClick={() => deleteCentre(c.id)} aria-label="remove centre">×</button>
                         </Badge>
                       ))}
@@ -422,7 +422,7 @@ export default function ProcurementMasters() {
               {bardanaTypes.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'अभी कोई बारदाना प्रकार नहीं। उदा. जूट बैग · 50 kg।' : 'No bardana types yet. e.g. Jute bag · 50 kg.'}</p>}
               {bardanaTypes.map(b => (
                 <div key={b.id} className="flex items-center justify-between rounded-lg border p-3 gap-3">
-                  <div className="min-w-0"><div className="font-medium">{hi && b.nameHi ? b.nameHi : b.name} <Badge variant="outline" className="ml-1">{b.capacityKg} kg</Badge></div></div>
+                  <div className="min-w-0"><div className="font-medium">{hi && b.nameHi ? (b.nameHi || b.name) : b.name} <Badge variant="outline" className="ml-1">{b.capacityKg} kg</Badge></div></div>
                   <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => deleteBardanaType(b.id)} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
                 </div>
               ))}
@@ -516,7 +516,7 @@ export default function ProcurementMasters() {
               <Label>{hi ? 'एजेंसी' : 'Agency'} *</Label>
               <Select value={cenAgencyId} onValueChange={setCenAgencyId} disabled={!!editCenId}>
                 <SelectTrigger><SelectValue placeholder={hi ? 'एजेंसी चुनें' : 'Select agency'} /></SelectTrigger>
-                <SelectContent>{agencies.map(a => <SelectItem key={a.id} value={a.id}>{hi && a.nameHi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                <SelectContent>{agencies.map(a => <SelectItem key={a.id} value={a.id}>{hi && a.nameHi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5"><Label>{hi ? 'नाम (English)' : 'Name (English)'} *</Label><Input value={cenName} onChange={e => setCenName(e.target.value)} placeholder="Kaithal Mandi" /></div>
@@ -543,7 +543,7 @@ export default function ProcurementMasters() {
               <Label>{hi ? 'सीज़न' : 'Season'} *</Label>
               <Select value={mSeasonId} onValueChange={setMSeasonId}>
                 <SelectTrigger><SelectValue placeholder={hi ? 'सीज़न चुनें' : 'Select season'} /></SelectTrigger>
-                <SelectContent>{seasons.map(s => <SelectItem key={s.id} value={s.id}>{hi && s.nameHi ? s.nameHi : s.name}</SelectItem>)}</SelectContent>
+                <SelectContent>{seasons.map(s => <SelectItem key={s.id} value={s.id}>{hi && s.nameHi ? (s.nameHi || s.name) : s.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -577,7 +577,7 @@ export default function ProcurementMasters() {
               <Label>{hi ? 'खाता (कटौती किसमें जाए)' : 'Account (deduction credits)'} *</Label>
               <Select value={dAccountId} onValueChange={setDAccountId}>
                 <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
-                <SelectContent>{postableAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} · {hi ? a.nameHi : a.name}</SelectItem>)}</SelectContent>
+                <SelectContent>{postableAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.id} · {hi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent>
               </Select>
               {dDialogWarning && <p className="text-[11px] text-amber-700">{hi ? DEDUCTION_WARNING_TEXT[dDialogWarning].hi : DEDUCTION_WARNING_TEXT[dDialogWarning].en}</p>}
               <p className="text-[11px] text-muted-foreground">{hi
@@ -607,7 +607,7 @@ export default function ProcurementMasters() {
                 <Label>{hi ? 'सीज़न' : 'Season'} *</Label>
                 <Select value={qSeasonId} onValueChange={setQSeasonId}>
                   <SelectTrigger><SelectValue placeholder={hi ? 'सीज़न' : 'Season'} /></SelectTrigger>
-                  <SelectContent>{seasons.map(s => <SelectItem key={s.id} value={s.id}>{hi && s.nameHi ? s.nameHi : s.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{seasons.map(s => <SelectItem key={s.id} value={s.id}>{hi && s.nameHi ? (s.nameHi || s.name) : s.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>

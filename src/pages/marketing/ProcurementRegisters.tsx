@@ -26,9 +26,9 @@ export default function ProcurementRegisters() {
 
   const money = (n: number) => `₹${(n || 0).toLocaleString('en-IN')}`;
   const farmerName = (id: string) => { const f = procurementFarmers.find(x => x.id === id); return f ? `${f.farmerName} (${f.farmerCode})` : id; };
-  const cropName = (id: string) => { const c = crops.find(x => x.id === id); if (c) return hi && c.nameHi ? c.nameHi : c.name; const l = LEGACY_CROPS[id]; return l ? (hi ? l.nameHi : l.name) : id; };
-  const seasonName = (id?: string) => { const s = seasons.find(x => x.id === id); return s ? (hi && s.nameHi ? s.nameHi : s.name) : ''; };
-  const centreName = (id?: string) => { const c = centres.find(x => x.id === id); return c ? (hi && c.nameHi ? c.nameHi : c.name) : ''; };
+  const cropName = (id: string) => { const c = crops.find(x => x.id === id); if (c) return hi && c.nameHi ? (c.nameHi || c.name) : c.name; const l = LEGACY_CROPS[id]; return l ? (hi ? (l.nameHi || l.name) : l.name) : id; };
+  const seasonName = (id?: string) => { const s = seasons.find(x => x.id === id); return s ? (hi && s.nameHi ? (s.nameHi || s.name) : s.name) : ''; };
+  const centreName = (id?: string) => { const c = centres.find(x => x.id === id); return c ? (hi && c.nameHi ? (c.nameHi || c.name) : c.name) : ''; };
 
   // Settlement → farmer (via engine voucher → posting rule result → lot).
   const farmerBySettlement = useMemo(() => {

@@ -133,7 +133,7 @@ const SaleManagement: React.FC = () => {
     });
     updateItem(quickAddRowIndex, {
       itemId: newItem.id,
-      itemName: language === 'hi' ? newItem.nameHi : newItem.name,
+      itemName: language === 'hi' ? (newItem.nameHi || newItem.name) : newItem.name,
       unit: newItem.unit,
       rate: newItem.saleRate,
     });
@@ -165,7 +165,7 @@ const SaleManagement: React.FC = () => {
     if (!stock) return;
     updateItem(index, {
       itemId: stock.id,
-      itemName: language === 'hi' ? stock.nameHi : stock.name,
+      itemName: language === 'hi' ? (stock.nameHi || stock.name) : stock.name,
       unit: stock.unit,
       rate: stock.saleRate,
       qty: items[index].qty,
@@ -607,7 +607,7 @@ const SaleManagement: React.FC = () => {
                             <SelectContent>
                               {stockItems.filter(s => s.isActive).map(s => (
                                 <SelectItem key={s.id} value={s.id}>
-                                  {language === 'hi' ? s.nameHi : s.name}
+                                  {language === 'hi' ? (s.nameHi || s.name) : s.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>

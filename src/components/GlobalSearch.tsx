@@ -151,7 +151,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
               {filteredAccounts.map(a => (
                 <CommandItem key={a.id} value={`account-${a.id}`} onSelect={() => go(`/ledger?account=${a.id}`)} className="gap-2">
                   <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span>{hi ? a.nameHi : a.name}</span>
+                  <span>{hi ? (a.nameHi || a.name) : a.name}</span>
                   <span className="text-xs ml-auto text-muted-foreground capitalize">{a.type}</span>
                 </CommandItem>
               ))}

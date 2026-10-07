@@ -567,7 +567,7 @@ const DayBook: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   {accounts.map(a => (
-                    <SelectItem key={a.id} value={a.id}>{language === 'hi' ? a.nameHi : a.name}</SelectItem>
+                    <SelectItem key={a.id} value={a.id}>{language === 'hi' ? (a.nameHi || a.name) : a.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -580,7 +580,7 @@ const DayBook: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   {accounts.map(a => (
-                    <SelectItem key={a.id} value={a.id}>{language === 'hi' ? a.nameHi : a.name}</SelectItem>
+                    <SelectItem key={a.id} value={a.id}>{language === 'hi' ? (a.nameHi || a.name) : a.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

@@ -200,13 +200,13 @@ const Dashboard: React.FC = () => {
 
   // Income pie data
   const incomePieData = incomeItems.filter(i => i.amount > 0).map(i => ({
-    name: language === 'hi' ? i.nameHi : i.name,
+    name: language === 'hi' ? (i.nameHi || i.name) : i.name,
     value: i.amount,
   }));
 
   // Expense pie data
   const expensePieData = expenseItems.filter(e => e.amount > 0).map(e => ({
-    name: language === 'hi' ? e.nameHi : e.name,
+    name: language === 'hi' ? (e.nameHi || e.name) : e.name,
     value: e.amount,
   }));
 

@@ -60,7 +60,7 @@ const ReserveFund: React.FC = () => {
     [accounts]
   );
 
-  const fundName = (a: { name: string; nameHi?: string }) => (hi && a.nameHi) ? a.nameHi : a.name;
+  const fundName = (a: { name: string; nameHi?: string }) => (hi && a.nameHi) ? (a.nameHi || a.name) : a.name;
   // The society's statutory limits (jurisdiction from its state; verified figures only are law).
   const limits = useMemo(() => statutoryLimits(society.state, new Date().toISOString().slice(0, 10)), [society.state]);
   const badDebtMinPct = limits.badDebtMin.verified ? limits.badDebtMin.pct : 0;

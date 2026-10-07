@@ -278,7 +278,7 @@ const ProfitLoss: React.FC = () => {
           <CardTitle className="text-xl">
             {hi ? 'आय-व्यय खाता' : 'Income & Expenditure Account'}
           </CardTitle>
-          <p className="text-sm text-muted-foreground">{hi ? society.nameHi : society.name}</p>
+          <p className="text-sm text-muted-foreground">{hi ? (society.nameHi || society.name) : society.name}</p>
           <p className="text-sm text-muted-foreground">
             {hi
               ? `वित्तीय वर्ष ${society.financialYear} के लिए`

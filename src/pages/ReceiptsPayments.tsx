@@ -158,7 +158,7 @@ const ReceiptsPayments: React.FC = () => {
           <CardTitle className="text-xl">
             {hi ? 'प्राप्ति एवं भुगतान खाता' : 'Receipts & Payments Account'}
           </CardTitle>
-          <p className="text-sm text-muted-foreground">{hi ? society.nameHi : society.name}</p>
+          <p className="text-sm text-muted-foreground">{hi ? (society.nameHi || society.name) : society.name}</p>
           <p className="text-sm text-muted-foreground">
             {hi
               ? `वित्तीय वर्ष ${society.financialYear} के लिए`

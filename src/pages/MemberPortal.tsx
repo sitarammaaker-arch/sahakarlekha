@@ -124,7 +124,7 @@ export default function MemberPortal() {
     () => (snapshot ? buildVerticalViews(snapshot.member.id, snapshot as PortalSnapshot & PortalVerticalPayload, new Date().toISOString().slice(0, 10)) : null),
     [snapshot],
   );
-  const societyName = snapshot?.society ? ((hi ? snapshot.society.nameHi : snapshot.society.name) || snapshot.society.name || '') : '';
+  const societyName = snapshot?.society ? ((hi ? (snapshot.society.nameHi || snapshot.society.name) : snapshot.society.name) || snapshot.society.name || '') : '';
 
   if (phase === 'checking' || phase === 'loading') {
     return <div className="min-h-[60vh] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;

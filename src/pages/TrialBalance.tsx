@@ -152,7 +152,7 @@ const TrialBalance: React.FC = () => {
             <TableCell className="text-muted-foreground">{i}</TableCell>
             <TableCell className="font-medium" style={{ paddingLeft: `${0.5 + depth}rem` }}>
               <button className="text-left hover:text-primary hover:underline" onClick={() => navigate(`/ledger?account=${b.account.id}`)} title={language === 'hi' ? 'खाता-बही खोलें' : 'Open ledger'}>
-                {language === 'hi' ? b.account.nameHi : b.account.name}
+                {language === 'hi' ? (b.account.nameHi || b.account.name) : b.account.name}
               </button>
               {b.postedToGroup && (
                 <span className="block text-[11px] font-normal text-warning" title={language === 'hi' ? 'Ledger Heads में इस खाते से "ग्रुप" का निशान हटाएँ' : 'Untick "Group" for this account in Ledger Heads'}>
@@ -258,7 +258,7 @@ const TrialBalance: React.FC = () => {
         <CardHeader className="border-b">
           <div className="text-center">
             <CardTitle className="text-xl">{language === 'hi' ? 'ट्रायल बैलेंस' : 'Trial Balance'}</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">{language === 'hi' ? society.nameHi : society.name}</p>
+            <p className="text-sm text-muted-foreground mt-1">{language === 'hi' ? (society.nameHi || society.name) : society.name}</p>
             <p className="text-sm text-muted-foreground">{language === 'hi' ? 'दिनांक' : 'As on'}: {fmtDate(asOnDate)}</p>
           </div>
         </CardHeader>

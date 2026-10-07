@@ -714,7 +714,7 @@ const Vouchers: React.FC = () => {
                           {(() => {
                             const dr = accounts.find(a => a.id === selectedTemplate.debitAccountId);
                             const cr = accounts.find(a => a.id === selectedTemplate.creditAccountId);
-                            return `Dr: ${language === 'hi' ? dr?.nameHi : dr?.name} / Cr: ${language === 'hi' ? cr?.nameHi : cr?.name}`;
+                            return `Dr: ${language === 'hi' ? (dr?.nameHi || dr?.name) : dr?.name} / Cr: ${language === 'hi' ? (cr?.nameHi || cr?.name) : cr?.name}`;
                           })()}
                         </p>
                       </div>
@@ -1254,10 +1254,10 @@ const Vouchers: React.FC = () => {
                             </Badge>
                           </TableCell>
                           <TableCell className={cn('text-sm', cancelled && 'line-through')}>
-                            {language === 'hi' ? debitAcc?.nameHi : debitAcc?.name}
+                            {language === 'hi' ? (debitAcc?.nameHi || debitAcc?.name) : debitAcc?.name}
                           </TableCell>
                           <TableCell className={cn('text-sm', cancelled && 'line-through')}>
-                            {language === 'hi' ? creditAcc?.nameHi : creditAcc?.name}
+                            {language === 'hi' ? (creditAcc?.nameHi || creditAcc?.name) : creditAcc?.name}
                           </TableCell>
                           <TableCell className={cn('text-right font-semibold', cancelled && 'line-through')}>
                             {new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(v.amount)}

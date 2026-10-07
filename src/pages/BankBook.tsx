@@ -292,7 +292,7 @@ const BankBook: React.FC = () => {
                 <CreditCard className="h-6 w-6 text-info" />
               </div>
               <div>
-                <h3 className="font-semibold">{language === 'hi' ? bankAccount?.nameHi : bankAccount?.name}</h3>
+                <h3 className="font-semibold">{language === 'hi' ? (bankAccount?.nameHi || bankAccount?.name) : bankAccount?.name}</h3>
                 <p className="text-sm text-muted-foreground">{society.name}</p>
               </div>
             </div>

@@ -66,7 +66,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <div className="p-4 md:p-6 pb-24 md:pb-24 print:p-0">
           {/* Print-only identity line — replaces the hidden header so a printout still says whose books it is. */}
           <div className="hidden print:block mb-3 pb-2 border-b text-xs">
-            <span className="font-semibold text-sm">{(hi ? society.nameHi : society.name) || society.name}</span>
+            <span className="font-semibold text-sm">{(hi ? (society.nameHi || society.name) : society.name) || society.name}</span>
             {society.registrationNo && <> · {hi ? 'पंजी. सं.' : 'Reg. No'}: {society.registrationNo}</>}
             {society.financialYear && <> · FY: {society.financialYear}</>}
             {' · '}{hi ? 'छापा गया' : 'Printed'}: {fmtDate(new Date().toISOString().slice(0, 10))}

@@ -192,7 +192,7 @@ const Payroll: React.FC = () => {
   const payChoices = [...new Set([...getBankAccountIds(accounts), ACCOUNT_IDS.CASH])]
     .map((id) => accounts.find((a) => a.id === id))
     .filter((a): a is NonNullable<typeof a> => !!a)
-    .map((a) => ({ id: a.id, label: (hi ? a.nameHi : a.name) || a.name || a.id }));
+    .map((a) => ({ id: a.id, label: (hi ? (a.nameHi || a.name) : a.name) || a.name || a.id }));
 
   const [statList, setStatList] = useState<StatSetting[]>([]);
   const [statOpen, setStatOpen] = useState(false);
