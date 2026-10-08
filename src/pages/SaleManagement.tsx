@@ -29,7 +29,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { getBankAccountIds } from '@/lib/storage';
 import { cn } from '@/lib/utils';
-import { computeInvoiceTotals } from '@/lib/invoiceTotals';
+import { computeInvoiceTotals, autoRoundOff, MAX_ROUND_OFF } from '@/lib/invoiceTotals';
 import { toMinor, toRupees, mulMinor } from '@/lib/money';
 import { useToast } from '@/hooks/use-toast';
 import type { SaleItem, PaymentMode } from '@/types';
@@ -77,6 +77,9 @@ const SaleManagement: React.FC = () => {
   const [customerPhone, setCustomerPhone] = useState('');
   const [items, setItems] = useState<SaleItem[]>([EMPTY_ITEM()]);
   const [discount, setDiscount] = useState<number>(0);
+  // Round off to the rupee (115): ON by default; '' = automatic, a typed value overrides (clamped ±0.99).
+  const [roundOffOn, setRoundOffOn] = useState(true);
+  const [roundOffManual, setRoundOffManual] = useState('');
   const [cgstPct, setCgstPct] = useState<number>(0);
   const [sgstPct, setSgstPct] = useState<number>(0);
   const [igstPct, setIgstPct] = useState<number>(0);
@@ -144,8 +147,10 @@ const SaleManagement: React.FC = () => {
   // ── Derived totals ────────────────────────────────────────────────────────
   const totalAmount  = items.reduce((s, i) => s + i.amount, 0);
   // T-02: net / GST / grand-total born exact in integer paise (shared with PurchaseManagement).
-  const { netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal } =
-    computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct });
+  const preRound = computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct });
+  const wantedRoundOff = !roundOffOn ? 0 : roundOffManual.trim() !== '' ? Number(roundOffManual) || 0 : autoRoundOff(preRound.totalBeforeRoundOff);
+  const { netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal, roundOff } =
+    computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct, roundOff: wantedRoundOff });
 
   // ── Item row helpers ──────────────────────────────────────────────────────
   const updateItem = (index: number, patch: Partial<SaleItem>) => {
@@ -187,6 +192,7 @@ const SaleManagement: React.FC = () => {
     setCustomerPhone('');
     setItems([EMPTY_ITEM()]);
     setDiscount(0);
+    setRoundOffOn(true); setRoundOffManual('');
     setCgstPct(0); setSgstPct(0); setIgstPct(0);
     setPaymentMode('cash');
     setBankAccountId('');
@@ -203,6 +209,8 @@ const SaleManagement: React.FC = () => {
     setCustomerPhone(sale.customerPhone || '');
     setItems(sale.items.length ? sale.items.map(it => ({ ...it })) : [EMPTY_ITEM()]);
     setDiscount(sale.discount || 0);
+    // An old bill (no round off) is edited as it was — never re-rounded behind the user's back.
+    setRoundOffOn((sale.roundOff ?? 0) !== 0); setRoundOffManual('');
     setCgstPct(sale.cgstPct || 0);
     setSgstPct(sale.sgstPct || 0);
     setIgstPct(sale.igstPct || 0);
@@ -294,7 +302,7 @@ const SaleManagement: React.FC = () => {
       netAmount,
       cgstPct, sgstPct, igstPct,
       cgstAmount, sgstAmount, igstAmount,
-      taxAmount, grandTotal,
+      taxAmount, grandTotal, roundOff,
       paymentMode,
       bankAccountId: paymentMode === 'bank' ? (bankAccountId || undefined) : undefined,
       narration: narration.trim(),
@@ -393,6 +401,7 @@ const SaleManagement: React.FC = () => {
         items: enrichedItems,
         totalAmount: sale.totalAmount,
         discount: sale.discount || 0,
+        roundOff: sale.roundOff || 0,
         netAmount: sale.netAmount,
         cgstPct: sale.cgstPct || 0,
         sgstPct: sale.sgstPct || 0,
@@ -705,7 +714,7 @@ const SaleManagement: React.FC = () => {
                   <span>{fmt(totalAmount)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-4">
-                  <span>{language === 'hi' ? 'छूट (₹)' : 'Discount (₹)'}</span>
+                  <span title={language === 'hi' ? 'GST से पहले घटती है — कर-योग्य राशि कम होती है' : 'Before GST — reduces the taxable value'}>{language === 'hi' ? 'व्यापार छूट (₹)' : 'Trade Discount (₹)'}</span>
                   <Input type="number" min={0} value={discount} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="w-28 h-7 text-right" />
                 </div>
                 <div className="flex justify-between font-medium border-t pt-1">
@@ -735,6 +744,19 @@ const SaleManagement: React.FC = () => {
                     <span className="text-blue-600">{fmt(taxAmount)}</span>
                   </div>
                 )}
+                <div className="flex items-center justify-between gap-2 border-t pt-1">
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                    <input type="checkbox" checked={roundOffOn} onChange={e => { setRoundOffOn(e.target.checked); setRoundOffManual(''); }} />
+                    {language === 'hi' ? 'राउंड ऑफ (पूरे रुपये तक)' : 'Round off (to the rupee)'}
+                  </label>
+                  {roundOffOn ? (
+                    <Input type="number" step={0.01} min={-MAX_ROUND_OFF} max={MAX_ROUND_OFF}
+                      value={roundOffManual.trim() !== '' ? roundOffManual : String(roundOff)}
+                      onChange={e => setRoundOffManual(e.target.value)}
+                      title={language === 'hi' ? `अपने-आप भरता है; ±${MAX_ROUND_OFF} तक बदल सकते हैं` : `Automatic; you may change it within ±${MAX_ROUND_OFF}`}
+                      className="w-24 h-7 text-right" />
+                  ) : <span className="text-xs text-muted-foreground">—</span>}
+                </div>
                 <div className="flex justify-between font-bold text-base border-t pt-2">
                   <span>{language === 'hi' ? 'कुल देय राशि' : 'Grand Total'}</span>
                   <span className="text-green-700">{fmt(grandTotal)}</span>
@@ -1053,7 +1075,7 @@ const SaleManagement: React.FC = () => {
                 </div>
                 {viewSale.discount > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-500">{language === 'hi' ? 'छूट' : 'Discount'}</span>
+                    <span className="text-gray-500">{language === 'hi' ? 'व्यापार छूट' : 'Trade Discount'}</span>
                     <span className="text-red-600">- {fmt(viewSale.discount)}</span>
                   </div>
                 )}
@@ -1083,6 +1105,12 @@ const SaleManagement: React.FC = () => {
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>{language === 'hi' ? 'कुल GST' : 'Total GST'}</span>
                     <span className="text-blue-600">{fmt(viewSale.taxAmount)}</span>
+                  </div>
+                )}
+                {(viewSale.roundOff ?? 0) !== 0 && (
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>{language === 'hi' ? 'राउंड ऑफ' : 'Round off'}</span>
+                    <span>{(viewSale.roundOff ?? 0) > 0 ? '+' : '−'} {fmt(Math.abs(viewSale.roundOff ?? 0))}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-base border-t pt-2">

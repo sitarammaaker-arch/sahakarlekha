@@ -486,6 +486,10 @@ alter table purchases add column if not exists "taxAmount" numeric default 0;
 alter table purchases add column if not exists "grandTotal" numeric default 0;
 -- ECR-22: Reverse Charge Mechanism flag (recipient self-assesses GST on this inward supply).
 alter table purchases add column if not exists "rcmApplicable" boolean default false;
+-- 115 (2026-10-08): round off on sales + purchases, cash discount (after GST) on purchases. Step-2 extras.
+alter table sales add column if not exists "roundOff" numeric default 0;
+alter table purchases add column if not exists "cashDiscount" numeric default 0;
+alter table purchases add column if not exists "roundOff" numeric default 0;
 -- Migration 052: TCS the SELLER collects from us and adds to the bill (forest-depot timber etc).
 -- Opposite of tdsPct: it RAISES grandTotal and is Dr'd to 3307 (our 26AS credit), never Cr 2202.
 alter table purchases add column if not exists "tcsPct" numeric default 0;

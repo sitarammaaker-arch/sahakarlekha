@@ -21,6 +21,7 @@ import type {
 import { matchesBranch, branchToStamp, resolveActiveBranch, unbranchedInScope, ALL_BRANCHES } from '@/lib/branchScope';
 import { buildInterBranchTransfer, INTER_BRANCH_CONTROL_ID } from '@/lib/interBranch';
 import { getVoucherLines, buildVoucherEntries, splitNetByAccount } from '@/lib/voucherUtils';
+import { goodsBase, adjustmentLines } from '@/lib/invoiceAdjustments';
 import { nextAccountCode, planMissingCodes } from '@/lib/accountCode';
 import { isFundAccount, buildFundStatement } from '@/lib/funds';
 import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode';
@@ -6279,13 +6280,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // balances by construction. Falls back to '4101' for unmapped items.
     splitNetByAccount(
       data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.salesAccountId || '4101', weight: it.amount })),
-      grandTotal, data.taxAmount || 0,
+      goodsBase('sale', grandTotal, data.roundOff), data.taxAmount || 0,
     ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Cr', amount }));
 
     // Cr: GST Output Payable (2201) for tax amount
     if ((data.taxAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: '2201', type: 'Cr', amount: data.taxAmount!, narration: `GST: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
     }
+    // Round off (5499) — outside the taxable value and GST.
+    adjustmentLines('sale', accountsRef.current, data.roundOff).forEach(l => lines.push({ id: lid(), ...l }));
 
     const vType = data.paymentMode === 'credit' ? 'sale' : 'receipt';
     const saleId = lid();
@@ -6356,7 +6359,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ECR-17 Phase 5: branchId stays IN saleBase — the branch-scoped RLS SELECT policies
     // (migration 039) must see it on the row from birth, or a branch-restricted user's own
     // sale vanishes from their next load. Stale-schema-cache fallback below (RULE 1).
-    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember, bankAccountId: sBankId, gstVoucherIds: _gv, ...saleBase } = sale;
+    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound, customerId, memberId: sMember, bankAccountId: sBankId, gstVoucherIds: _gv, ...saleBase } = sale;
     // Feature 6: a duplicate saleNo (another till) makes the base upsert fail with 23505 —
     // bump to the next number, restamp local state, and retry (only saleNo changes).
     const attemptSaleSave = (base: typeof saleBase, tries: number) => {
@@ -6364,7 +6367,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!error) {
           // Step 2: Sale GST + customer/member (no TDS on sales). Same missing-column guard as
           // purchases — one un-migrated column can't silently drop the GST anymore (RULE 1).
-          persistExtras('sales', sale.id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, memberId: sMember, bankAccountId: sBankId ?? null }, `Sale ${sale.saleNo}`);
+          persistExtras('sales', sale.id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound ?? 0, customerId, memberId: sMember, bankAccountId: sBankId ?? null }, `Sale ${sale.saleNo}`);
           return;
         }
         if (isMissingBranchColumn(error) && 'branchId' in base) {
@@ -6554,11 +6557,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // T-02 / RULE 4: exact-paise split by salesAccountId (same shared rule as addSale / repair).
     splitNetByAccount(
       data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.salesAccountId || '4101', weight: it.amount })),
-      grandTotal, data.taxAmount || 0,
+      goodsBase('sale', grandTotal, data.roundOff), data.taxAmount || 0,
     ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Cr', amount }));
     if ((data.taxAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: '2201', type: 'Cr', amount: data.taxAmount!, narration: `GST: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
     }
+    // Round off (5499) — outside the taxable value and GST.
+    adjustmentLines('sale', accountsRef.current, data.roundOff).forEach(l => lines.push({ id: lid(), ...l }));
 
     const vType = data.paymentMode === 'credit' ? 'sale' : 'receipt';
     const newVoucher = addVoucher({
@@ -6614,7 +6619,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     // ECR-17 Phase 5: branchId stays IN saleBase (see addSale); stale-schema-cache fallback (RULE 1).
-    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, bankAccountId: sBankId, gstVoucherIds: _gv, ...saleBase } = updated;
+    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound, customerId, bankAccountId: sBankId, gstVoucherIds: _gv, ...saleBase } = updated;
     const attemptSaleUpdate = (payload: typeof saleBase) => {
       supabase.from('sales').upsert(withSoc(payload)).then(({ error }) => {
         if (error) {
@@ -6630,7 +6635,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // re-verify. (A fully atomic sale-edit is a separate, larger redesign.)
           toastRef.current({ title: 'बिक्री edit cloud-save fail', description: `बिक्री क्लाउड में सेव नहीं हुई — ${error.message}. Refresh करके बिक्री दोबारा जाँचें; ज़रूरत हो तो फिर से edit करें।`, variant: 'destructive', duration: 15000 });
         } else {
-          persistExtras('sales', id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, customerId, bankAccountId: sBankId ?? null }, `Sale ${original.saleNo}`);
+          persistExtras('sales', id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound ?? 0, customerId, bankAccountId: sBankId ?? null }, `Sale ${original.saleNo}`);
         }
       });
     };
@@ -6678,7 +6683,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // balances by construction. Falls back to '5101' for unmapped items.
     splitNetByAccount(
       data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.purchaseAccountId || '5101', weight: it.amount })),
-      grandTotal, data.taxAmount || 0, data.tdsAmount || 0, data.tcsAmount || 0,
+      goodsBase('purchase', grandTotal, data.roundOff, data.cashDiscount), data.taxAmount || 0, data.tdsAmount || 0, data.tcsAmount || 0,
     ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Dr', amount }));
 
     // Dr: GST Input Credit (3310) for tax amount
@@ -6702,6 +6707,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if ((data.tdsAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: '2202', type: 'Cr', amount: data.tdsAmount!, narration: `TDS ${data.tdsPct||0}%` });
     }
+    // Cash discount (Cr 4499) + round off (5499) — after GST: taxable value, ITC and TDS unchanged.
+    adjustmentLines('purchase', accountsRef.current, data.roundOff, data.cashDiscount).forEach(l => lines.push({ id: lid(), ...l }));
 
     const vType = data.paymentMode === 'credit' ? 'purchase' : 'payment';
     const purchaseId = lid();
@@ -6768,13 +6775,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ECR-17 Phase 5: branchId stays IN purchaseBase — the branch-scoped RLS SELECT policies
     // (migration 039) must see it on the row from birth, or a branch-restricted user's own
     // purchase vanishes from their next load. Stale-schema-cache fallback below (RULE 1).
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, bankAccountId: pBankId, supplierBillNo: pBillNo, supplierBillDate: pBillDate, taxVoucherIds: _tv, ...purchaseBase } = purchase;
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc, roundOff: pRound, supplierId: pSupplierId, rcmApplicable: pRcm, bankAccountId: pBankId, supplierBillNo: pBillNo, supplierBillDate: pBillDate, taxVoucherIds: _tv, ...purchaseBase } = purchase;
     // Feature 6: duplicate purchaseNo (another till) → 23505; bump + retry (only purchaseNo changes).
     const attemptPurchaseSave = (base: typeof purchaseBase, tries: number) => {
       supabase.from('purchases').upsert(withSoc(base)).then(({ error }) => {
         if (!error) {
           // Step 2: GST/TDS/TCS columns — one un-migrated column no longer takes the rest (RULE 1).
-          persistExtras('purchases', purchase.id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null, supplierBillNo: pBillNo ?? null, supplierBillDate: pBillDate ?? null }, `Purchase ${purchase.purchaseNo}`);
+          persistExtras('purchases', purchase.id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc ?? 0, roundOff: pRound ?? 0, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null, supplierBillNo: pBillNo ?? null, supplierBillDate: pBillDate ?? null }, `Purchase ${purchase.purchaseNo}`);
           return;
         }
         if (isMissingBranchColumn(error) && 'branchId' in base) {
@@ -6953,7 +6960,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // T-02 / RULE 4: exact-paise split by purchaseAccountId (same shared rule as addPurchase / repair).
     splitNetByAccount(
       data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.purchaseAccountId || '5101', weight: it.amount })),
-      grandTotal, data.taxAmount || 0, data.tdsAmount || 0, data.tcsAmount || 0,
+      goodsBase('purchase', grandTotal, data.roundOff, data.cashDiscount), data.taxAmount || 0, data.tdsAmount || 0, data.tcsAmount || 0,
     ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Dr', amount }));
     if ((data.taxAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: data.taxAmount!, narration: `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
@@ -6968,6 +6975,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if ((data.tdsAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: '2202', type: 'Cr', amount: data.tdsAmount!, narration: `TDS ${data.tdsPct||0}%` });
     }
+    // Cash discount (Cr 4499) + round off (5499) — after GST: taxable value, ITC and TDS unchanged.
+    adjustmentLines('purchase', accountsRef.current, data.roundOff, data.cashDiscount).forEach(l => lines.push({ id: lid(), ...l }));
 
     const vType = data.paymentMode === 'credit' ? 'purchase' : 'payment';
     const newVoucher = addVoucher({
@@ -7025,7 +7034,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     // ECR-17 Phase 5: branchId stays IN purchaseBase (see addPurchase); stale-schema-cache fallback (RULE 1).
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm, bankAccountId: pBankId, supplierBillNo: pBillNo, supplierBillDate: pBillDate, taxVoucherIds: _tv, ...purchaseBase } = updated;
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc, roundOff: pRound, supplierId: pSupplierId, rcmApplicable: pRcm, bankAccountId: pBankId, supplierBillNo: pBillNo, supplierBillDate: pBillDate, taxVoucherIds: _tv, ...purchaseBase } = updated;
     const attemptPurchaseUpdate = (payload: typeof purchaseBase) => {
       supabase.from('purchases').upsert(withSoc(payload)).then(({ error }) => {
         if (error) {
@@ -7037,7 +7046,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('Purchase update failed:', error.message);
           toastRef.current({ title: 'खरीद का बदलाव सेव नहीं हुआ', description: error.message, variant: 'destructive' });
         } else {
-          persistExtras('purchases', id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null, supplierBillNo: pBillNo ?? null, supplierBillDate: pBillDate ?? null }, `Purchase ${original.purchaseNo}`);
+          persistExtras('purchases', id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc ?? 0, roundOff: pRound ?? 0, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null, supplierBillNo: pBillNo ?? null, supplierBillDate: pBillDate ?? null }, `Purchase ${original.purchaseNo}`);
         }
       });
     };

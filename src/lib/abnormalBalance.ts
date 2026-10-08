@@ -19,7 +19,8 @@ export interface AbnormalCheckAccount {
 
 /** signedBalance: Dr positive, Cr negative. */
 export function isAbnormalBalance(a: AbnormalCheckAccount, signedBalance: number, zero = 0.005): boolean {
-  if (a.isGroup || a.subtype === 'surplus') return false;
+  // 'round_off' (5499) nets small ups and downs, so its balance legitimately sits on either side.
+  if (a.isGroup || a.subtype === 'surplus' || a.subtype === 'round_off') return false;
   if (Math.abs(signedBalance) < zero) return false;
   const naturalDebit = a.type === 'asset' || a.type === 'expense';
   const balIsDebit = signedBalance > 0;

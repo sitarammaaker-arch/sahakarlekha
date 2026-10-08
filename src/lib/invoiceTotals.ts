@@ -26,6 +26,10 @@ export interface InvoiceTotalsInput {
   igstPct?: number;
   tdsPct?: number;
   tcsPct?: number;
+  /** Cash discount (purchase bill) — taken AFTER GST: GST / ITC / TDS are unchanged, the payable goes down. */
+  cashDiscount?: number;
+  /** Round off applied to the bill (+ raises, − lowers the total). Clamped to ±0.99 — see autoRoundOff. */
+  roundOff?: number;
 }
 
 export interface InvoiceTotals {
@@ -40,8 +44,24 @@ export interface InvoiceTotals {
   tdsAmount: number;
   /** net × tcsPct — the SELLER collects it, so it RAISES the grand total. */
   tcsAmount: number;
-  /** net + tax + tcs − tds. */
+  /** cash discount actually applied (capped at the pre-discount total). */
+  cashDiscount: number;
+  /** net + tax + tcs − tds − cashDiscount — the bill before rounding. */
+  totalBeforeRoundOff: number;
+  /** round off actually applied (clamped to ±0.99). */
+  roundOff: number;
+  /** totalBeforeRoundOff + roundOff. */
   grandTotal: number;
+}
+
+/** Largest round off allowed on a bill — rounding, never a hidden adjustment. */
+export const MAX_ROUND_OFF = 0.99;
+
+/** PURE — the round off that brings a total to the nearest whole rupee (half-up: ₹10.50 → ₹11). */
+export function autoRoundOff(total: number): number {
+  const m = toMinor(Number(total) || 0);
+  const rounded = Math.floor((m + 50) / 100) * 100;
+  return toRupees(rounded - m);
 }
 
 export function computeInvoiceTotals(input: InvoiceTotalsInput): InvoiceTotals {
@@ -54,7 +74,12 @@ export function computeInvoiceTotals(input: InvoiceTotalsInput): InvoiceTotals {
   const taxMinor = addMinor(cgstMinor, sgstMinor, igstMinor);
   const tdsMinor = applyPercent(netMinor, Number(input.tdsPct) || 0).minor;
   const tcsMinor = applyPercent(netMinor, Number(input.tcsPct) || 0).minor;
-  const grandTotalMinor = subMinor(addMinor(netMinor, taxMinor, tcsMinor), tdsMinor);
+  const preDiscountMinor = subMinor(addMinor(netMinor, taxMinor, tcsMinor), tdsMinor);
+  const cashDiscountMinor = Math.min(Math.max(0, toMinor(Number(input.cashDiscount) || 0)), Math.max(0, preDiscountMinor));
+  const beforeRoundMinor = subMinor(preDiscountMinor, cashDiscountMinor);
+  const capMinor = toMinor(MAX_ROUND_OFF);
+  const roundOffMinor = Math.max(-capMinor, Math.min(capMinor, toMinor(Number(input.roundOff) || 0)));
+  const grandTotalMinor = addMinor(beforeRoundMinor, roundOffMinor);
   return {
     netAmount: toRupees(netMinor),
     cgstAmount: toRupees(cgstMinor),
@@ -63,6 +88,9 @@ export function computeInvoiceTotals(input: InvoiceTotalsInput): InvoiceTotals {
     taxAmount: toRupees(taxMinor),
     tdsAmount: toRupees(tdsMinor),
     tcsAmount: toRupees(tcsMinor),
+    cashDiscount: toRupees(cashDiscountMinor),
+    totalBeforeRoundOff: toRupees(beforeRoundMinor),
+    roundOff: toRupees(roundOffMinor),
     grandTotal: toRupees(grandTotalMinor),
   };
 }

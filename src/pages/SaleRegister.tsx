@@ -80,10 +80,10 @@ const SaleRegister: React.FC = () => {
     grandTotal: filteredReturns.reduce((s, r) => s + (r.grandTotal || 0), 0),
   }), [filteredReturns]);
 
-  const headers = ['S.No', 'Invoice No', 'Date', 'Party Name', 'Taxable Amt', 'CGST', 'SGST', 'IGST', 'Tax Total', 'Grand Total', 'Payment'];
+  const headers = ['S.No', 'Invoice No', 'Date', 'Party Name', 'Taxable Amt', 'CGST', 'SGST', 'IGST', 'Tax Total', 'Round Off', 'Grand Total', 'Payment'];
   const rows = () => filtered.map((s, i) => [
     i + 1, s.saleNo, fmtDate(s.date), s.customerName,
-    s.netAmount, s.cgstAmount, s.sgstAmount, s.igstAmount, s.taxAmount, s.grandTotal,
+    s.netAmount, s.cgstAmount, s.sgstAmount, s.igstAmount, s.taxAmount, s.roundOff || 0, s.grandTotal,
     s.paymentMode,
   ]);
 

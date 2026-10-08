@@ -845,6 +845,18 @@ export const ACCOUNTS_TO_ADD: LedgerAccount[] = [
   { id: '5150', name: 'Closing Stock (Trading A/c)', nameHi: 'समापन माल (व्यापार खाता)', type: 'expense',   openingBalance: 0, openingBalanceType: 'credit', isSystem: true,  isGroup: false, parentId: '5100', subtype: 'closing_stock' },
 ];
 
+/**
+ * Accounts added AFTER migration 114 was applied (its SQL is generated from ACCOUNTS_TO_ADD and already ran,
+ * so that list must not grow). Persisted for existing societies by migration 115 (scripts/gen-migration-115.mjs);
+ * merged on screen and into fullChartForType exactly like ACCOUNTS_TO_ADD. Codes at the END of their range:
+ * user-created accounts get the next free code from the START of a range (#706), so 4499 / 5499 stay clear
+ * (prod 2026-10-08: free in all 31 societies; 4411 was taken in one, 5408 is the sugar chart's SAM head).
+ */
+export const ACCOUNTS_TO_ADD_115: LedgerAccount[] = [
+  { id: '4499', name: 'Discount Received', nameHi: 'प्राप्त छूट', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'discount_received' },
+  { id: '5499', name: 'Round Off', nameHi: 'राउंड ऑफ', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '5400', subtype: 'round_off' },
+];
+
 export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAccount[]; changed: boolean; newlyAdded: LedgerAccount[] } {
   let changed = false;
   const newlyAdded: LedgerAccount[] = [];
@@ -862,7 +874,7 @@ export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAc
   // Society Shares" at 3202) + an ACCOUNTS_TO_ADD copy at 3208 create a duplicate head.
   const existingIds = new Set(patched.map(a => a.id));
   const existingNameType = new Set(patched.map(a => `${a.name.trim().toLowerCase()}|${a.type}`));
-  for (const newAcc of ACCOUNTS_TO_ADD) {
+  for (const newAcc of [...ACCOUNTS_TO_ADD, ...ACCOUNTS_TO_ADD_115]) {
     if (existingIds.has(newAcc.id)) continue;
     if (existingNameType.has(`${newAcc.name.trim().toLowerCase()}|${newAcc.type}`)) continue;
     patched.push(newAcc);

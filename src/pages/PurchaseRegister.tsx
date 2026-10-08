@@ -81,11 +81,11 @@ const PurchaseRegister: React.FC = () => {
     grandTotal: filteredReturns.reduce((s, r) => s + (r.grandTotal || 0), 0),
   }), [filteredReturns]);
 
-  const headers = ['S.No', 'Bill No', 'Date', 'Supplier', 'Taxable Amt', 'CGST', 'SGST', 'IGST', 'Tax Total', 'TDS', 'Grand Total', 'Payment'];
+  const headers = ['S.No', 'Bill No', 'Date', 'Supplier', 'Taxable Amt', 'CGST', 'SGST', 'IGST', 'Tax Total', 'TDS', 'Cash Discount', 'Round Off', 'Grand Total', 'Payment'];
   const rows = () => filtered.map((p, i) => [
     i + 1, p.purchaseNo, fmtDate(p.date), p.supplierName,
     p.netAmount, p.cgstAmount, p.sgstAmount, p.igstAmount, p.taxAmount,
-    p.tdsAmount || 0, p.grandTotal, p.paymentMode,
+    p.tdsAmount || 0, p.cashDiscount || 0, p.roundOff || 0, p.grandTotal, p.paymentMode,
   ]);
 
   const handleCSV = () => downloadCSV(headers, rows(), `purchase-register-${fy}`);

@@ -236,6 +236,8 @@
     "test:party-heads": "node scripts/test-party-heads.mjs",
     "test:full-chart-seed": "node scripts/test-full-chart-seed.mjs",
     "test:persist-extra-accounts": "node scripts/test-persist-extra-accounts.mjs",
+    "test:migration-115": "node scripts/test-migration-115.mjs",
+    "test:round-off-cash-discount": "node scripts/test-round-off-cash-discount.mjs",
     "test:local-only-accounts": "node scripts/test-local-only-accounts.mjs",
     "test:pay-ledger-gate": "node scripts/test-pay-ledger-gate.mjs",
     "test:rm01-phantom-cancel": "node scripts/test-rm01-phantom-cancel.mjs",

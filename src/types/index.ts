@@ -842,6 +842,8 @@ export type AccountSubtype =
   | 'dividend_distribution' // consumer — dividend on share capital appropriation (equity)
   | 'dividend_payable'    // consumer — member dividend payable (liability)
   | 'sales_return'        // consumer — Sales Return / Returns Inward (contra-income, debit)
+  | 'discount_received'   // cash discount received on a purchase bill (other income, 4499)
+  | 'round_off'           // invoice round-off (indirect expense 5499; balance may sit on either side)
   | 'suspense';
 
 export interface LedgerAccount {
@@ -1290,7 +1292,8 @@ export interface Sale {
   sgstAmount: number;
   igstAmount: number;
   taxAmount: number;       // cgst + sgst + igst
-  grandTotal: number;      // netAmount + taxAmount
+  grandTotal: number;      // netAmount + taxAmount + roundOff
+  roundOff?: number;       // 115 · applied round off (±0.99), posted to 5499; outside the taxable value
   paymentMode: PaymentMode;
   bankAccountId?: string;  // when paymentMode = 'bank', which bank account to credit
   customerId?: string; // linked registered customer
@@ -1518,7 +1521,9 @@ export interface Purchase {
   tdsAmount: number;
   tcsAmount?: number;
   taxAmount: number;       // cgst + sgst + igst
-  grandTotal: number;      // netAmount + taxAmount + tcsAmount - tdsAmount
+  grandTotal: number;      // netAmount + taxAmount + tcsAmount - tdsAmount - cashDiscount + roundOff
+  cashDiscount?: number;   // 115 · cash discount AFTER GST (Cr 4499 Discount Received) — GST / ITC / TDS unchanged
+  roundOff?: number;       // 115 · applied round off (±0.99), posted to 5499
   paymentMode: PaymentMode;
   bankAccountId?: string;  // when paymentMode = 'bank', which bank account to credit
   supplierId?: string;     // linked registered supplier

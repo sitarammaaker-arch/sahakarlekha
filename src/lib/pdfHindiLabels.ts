@@ -20,6 +20,11 @@ export const PDF_HI_EXTRA: Record<string, string> = {
   'share register': 'अंश रजिस्टर',
   'loan register': 'ऋण रजिस्टर',
 
+  // ── invoice adjustments (115) ──
+  'trade discount': 'व्यापार छूट',
+  'cash discount (after gst)': 'नकद छूट (GST के बाद)',
+  'round off': 'राउंड ऑफ',
+
   // ── trial balance ──
   'liabilities & income (rs.)': 'देयताएँ एवं आय (रु.)',
   'assets & expenditure (rs.)': 'परिसंपत्तियाँ एवं व्यय (रु.)',
