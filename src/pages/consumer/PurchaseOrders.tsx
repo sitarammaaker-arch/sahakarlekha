@@ -1,6 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { QuickItemDialog } from '@/components/QuickItemDialog';
+import { QuickCreateMaster, allowedQuickKinds } from '@/components/QuickCreateMaster';
+import { roleCanCreateMaster } from '@/lib/masterCreate';
 import { useConsumerData } from '@/contexts/ConsumerDataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -80,6 +84,11 @@ const PurchaseOrders: React.FC = () => {
       return merged;
     }));
   };
+  // Inline create (2026-10-08): a new item comes WITH its Sales/Purchase A/c and is placed once saved.
+  const { user } = useAuth();
+  const canCreateItem = roleCanCreateMaster(user?.role, 'inventory');
+  const [newItemRow, setNewItemRow] = useState<number | null>(null);
+  const [partyCreateOpen, setPartyCreateOpen] = useState(false);
   const pickItem = (idx: number, id: string) => {
     const s = stockItems.find(x => x.id === id);
     if (!s) return;
@@ -148,9 +157,10 @@ const PurchaseOrders: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <Label>{hi ? 'आपूर्तिकर्ता' : 'Supplier'}</Label>
-              <Select value={supplierId} onValueChange={setSupplierId}>
+              <Select value={supplierId} onValueChange={v => { if (v === '__new_party__') { setPartyCreateOpen(true); return; } setSupplierId(v); }}>
                 <SelectTrigger><SelectValue placeholder={hi ? 'आपूर्तिकर्ता चुनें' : 'Select supplier'} /></SelectTrigger>
                 <SelectContent>
+                  {allowedQuickKinds(user?.role, ['supplier']).length > 0 && <SelectItem value="__new_party__" className="text-primary font-medium">{hi ? '+ नया आपूर्तिकर्ता जोड़ें…' : '+ Add new supplier…'}</SelectItem>}
                   {suppliers.filter(s => s.isActive).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -174,9 +184,10 @@ const PurchaseOrders: React.FC = () => {
                 {rows.map((r, i) => (
                   <TableRow key={i}>
                     <TableCell>
-                      <Select value={r.itemId} onValueChange={v => pickItem(i, v)}>
+                      <Select value={r.itemId} onValueChange={v => { if (v === '__new_item__') { setNewItemRow(i); return; } pickItem(i, v); }}>
                         <SelectTrigger><SelectValue placeholder={hi ? 'वस्तु चुनें' : 'Select item'} /></SelectTrigger>
                         <SelectContent>
+                          {canCreateItem && <SelectItem value="__new_item__" className="text-primary font-medium">{hi ? '+ नई वस्तु जोड़ें…' : '+ Add new item…'}</SelectItem>}
                           {stockItems.filter(s => s.isActive).map(s => <SelectItem key={s.id} value={s.id}>{itemName(s)}</SelectItem>)}
                         </SelectContent>
                       </Select>
@@ -336,6 +347,9 @@ const PurchaseOrders: React.FC = () => {
           </CardContent>
         </Card>
       )}
+      {canCreateItem && <QuickItemDialog open={newItemRow !== null} onOpenChange={(o) => { if (!o) setNewItemRow(null); }} mode="purchase"
+        onCreated={(it) => { if (newItemRow !== null) updateRow(newItemRow, { itemId: it.id, itemName: itemName(it), unit: it.unit, rate: it.purchaseRate || 0 }); setNewItemRow(null); }} />}
+      <QuickCreateMaster open={partyCreateOpen} onOpenChange={setPartyCreateOpen} kinds={['supplier']} onCreated={(c) => { if (c.recordId) setSupplierId(c.recordId); }} />
     </div>
   );
 };
