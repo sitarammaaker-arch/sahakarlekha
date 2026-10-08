@@ -13,6 +13,7 @@
  *
  * C2 exposes the 'member' tier in the UI; 'wholesale'/'promo' are schema-ready for later slices.
  */
+import { resolveDiscountReceivedAccountId } from '@/lib/invoiceAdjustments';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
 import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
@@ -695,7 +696,10 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const sgstAmount = round2((purchase.sgstAmount || 0) * ratio);
     const igstAmount = round2((purchase.igstAmount || 0) * ratio);
     const taxAmount = round2(cgstAmount + sgstAmount + igstAmount);
-    const grandTotal = round2(netAmount + taxAmount);
+    // Cash discount on the original bill (115, after GST): the returned share comes back out of 4499 Discount
+    // Received in proportion, so the supplier is debited only what the bill actually owed for these goods.
+    const cashDiscShare = round2(((purchase as { cashDiscount?: number }).cashDiscount || 0) * ratio);
+    const grandTotal = round2(netAmount + taxAmount - cashDiscShare);
     if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
     const fy = society.financialYear;
     const seq = purchaseReturns.filter(r => r.returnNo?.includes(fy)).reduce((m, r) => { const x = r.returnNo?.match(/\/(\d+)$/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0) + 1;
@@ -718,6 +722,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     purchaseAccBuckets.forEach((amt, accId) => { const r = round2(amt); if (r > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: r }); });
     if (taxAmount > 0) lines.push({ id: lid(), accountId: '3310', type: 'Cr', amount: taxAmount });
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
+    if (cashDiscShare > 0) lines.push({ id: lid(), accountId: resolveDiscountReceivedAccountId(accounts), type: 'Dr', amount: cashDiscShare });
     const primaryCrAcc = purchaseAccBuckets.size > 0 ? [...purchaseAccBuckets.keys()][0] : '5101';
     const voucher = addVoucher({
       type: 'debit_note', date: data.date,
@@ -768,7 +773,10 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const sgstAmount = round2((purchase.sgstAmount || 0) * ratio);
     const igstAmount = round2((purchase.igstAmount || 0) * ratio);
     const taxAmount = round2(cgstAmount + sgstAmount + igstAmount);
-    const grandTotal = round2(netAmount + taxAmount);
+    // Cash discount on the original bill (115, after GST): the returned share comes back out of 4499 Discount
+    // Received in proportion, so the supplier is debited only what the bill actually owed for these goods.
+    const cashDiscShare = round2(((purchase as { cashDiscount?: number }).cashDiscount || 0) * ratio);
+    const grandTotal = round2(netAmount + taxAmount - cashDiscShare);
     if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
 
     // 1) Reverse the OLD return: cancel its voucher + restore the stock it removed (+qty).
@@ -792,6 +800,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     purchaseAccBuckets.forEach((amt, accId) => { const r = round2(amt); if (r > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: r }); });
     if (taxAmount > 0) lines.push({ id: lid(), accountId: '3310', type: 'Cr', amount: taxAmount });
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
+    if (cashDiscShare > 0) lines.push({ id: lid(), accountId: resolveDiscountReceivedAccountId(accounts), type: 'Dr', amount: cashDiscShare });
     const primaryCrAcc = purchaseAccBuckets.size > 0 ? [...purchaseAccBuckets.keys()][0] : '5101';
     const voucher = addVoucher({
       type: 'debit_note', date: data.date,
