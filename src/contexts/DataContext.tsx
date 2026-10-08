@@ -248,7 +248,8 @@ interface DataContextType {
   approveMember: (id: string) => void;
   rejectMember: (id: string) => void;
 
-  addAccount: (data: Omit<LedgerAccount, 'id'>, opts?: { id?: string }) => LedgerAccount;
+  /** opts.onSaved fires once the account row is in the cloud; opts.onFailed after a refused/failed save (rolled back). */
+  addAccount: (data: Omit<LedgerAccount, 'id'>, opts?: { id?: string; onSaved?: (a: LedgerAccount) => void; onFailed?: () => void }) => LedgerAccount;
   updateAccount: (id: string, data: Partial<LedgerAccount>, opts?: { onSaved?: () => void; onFailed?: (message: string) => void }) => boolean;
   /** Give a readable code (accounts.code, migration 109) to every account whose id is a UUID and
    *  has none. Explicit admin action — the load path never writes (RM-01). */
@@ -281,7 +282,7 @@ interface DataContextType {
   /** RULE 2/3: movements reconciled to live purchase/sale records — use for stock QUANTITY/VALUE
    *  (Inventory, Sale availability, Valuation, Closing Stock). Raw `stockMovements` is for history display only. */
   reconciledStockMovements: StockMovement[];
-  addStockItem: (data: Omit<StockItem, 'id' | 'itemCode'>) => StockItem;
+  addStockItem: (data: Omit<StockItem, 'id' | 'itemCode'>, opts?: { onSaved?: (i: StockItem) => void; onFailed?: () => void }) => StockItem;
   updateStockItem: (id: string, data: Partial<StockItem>) => void;
   deleteStockItem: (id: string) => void;
   addStockMovement: (data: Omit<StockMovement, 'id' | 'createdAt'>) => void;
@@ -303,13 +304,15 @@ interface DataContextType {
 
   // Suppliers
   suppliers: Supplier[];
-  addSupplier: (data: Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'>) => Supplier;
+  /** The supplier and its ledger account are saved together: onSaved once BOTH are in the cloud; if either fails both are rolled back and onFailed fires. */
+  addSupplier: (data: Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'>, opts?: { onSaved?: (s: Supplier) => void; onFailed?: () => void }) => Supplier;
   updateSupplier: (id: string, data: Partial<Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'>>) => void;
   deleteSupplier: (id: string) => void;
 
   // Customers
   customers: Customer[];
-  addCustomer: (data: Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'>) => Customer;
+  /** Same contract as addSupplier (customer + its ledger account saved together). */
+  addCustomer: (data: Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'>, opts?: { onSaved?: (c: Customer) => void; onFailed?: () => void }) => Customer;
   updateCustomer: (id: string, data: Partial<Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'>>) => void;
   deleteCustomer: (id: string) => void;
 
@@ -4085,8 +4088,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // opts.id — a conventional template id (e.g. '3308') chosen by domain provisioning after it checked
   // the cloud chart does not use it. Written with INSERT, never upsert, so a row that appeared in the
   // meantime is never overwritten: the conflict fails the save and RULE 1 rolls it back.
-  const addAccount = useCallback((data: Omit<LedgerAccount, 'id'>, opts?: { id?: string }): LedgerAccount => {
-    if (guardFYLocked()) return { ...data, id: '' } as LedgerAccount;
+  const addAccount = useCallback((data: Omit<LedgerAccount, 'id'>, opts?: { id?: string; onSaved?: (a: LedgerAccount) => void; onFailed?: () => void }): LedgerAccount => {
+    if (guardFYLocked()) { opts?.onFailed?.(); return { ...data, id: '' } as LedgerAccount; }
     if (opts?.id && accountsRef.current.some(a => a.id === opts.id)) {
       toastRef.current({ title: 'खाता पहले से है', description: `खाता संख्या ${opts.id} इस चार्ट में पहले से मौजूद है — नया नहीं बनाया।`, variant: 'destructive', duration: 10000 });
       return { ...data, id: '' } as LedgerAccount;
@@ -4130,7 +4133,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAccountsState(prev => prev.filter(a => a.id !== newAccount.id));
         if (openingEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== openingEvent.eventId);
         toastRef.current({ title: 'खाता सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
-      } else if (openingEvent) persistLedgerEvent(openingEvent);
+        opts?.onFailed?.();
+        return;
+      }
+      opts?.onSaved?.(newAccount);
+      if (openingEvent) persistLedgerEvent(openingEvent);
       else if (openingViaServer && (Number(newAccount.openingBalance) || 0) !== 0) syncOpeningOnServer(newAccount.id);
     });
     return newAccount;
@@ -6023,7 +6030,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // save still works. RULE 1: hsnCode/sacCode/gstRate are NOT in the base stock_items table
   // (added by the HSN-picker migration), so they MUST stay in this extras bucket — otherwise
   // a schema-cache miss would fail the whole item save the moment an HSN is entered.
-  const persistStockItem = (item: StockItem, opts?: { onBaseFail?: () => void }) => {
+  const persistStockItem = (item: StockItem, opts?: { onBaseFail?: () => void; onBaseSuccess?: () => void }) => {
     const { salesAccountId, purchaseAccountId, stockGroup, p4Category, valuationMethod, hsnCode, sacCode, gstRate, ...baseCols } = item;
     supabase.from('stock_items').upsert(withSoc(baseCols)).then(({ error }) => {
       if (error) {
@@ -6032,6 +6039,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toastRef.current({ title: 'स्टॉक आइटम सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा सेव करें।`, variant: 'destructive', duration: 12000 });
         return;
       }
+      opts?.onBaseSuccess?.();
       const extras: Record<string, unknown> = {};
       if (salesAccountId !== undefined) extras.salesAccountId = salesAccountId || null;
       if (purchaseAccountId !== undefined) extras.purchaseAccountId = purchaseAccountId || null;
@@ -6058,8 +6066,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
-  const addStockItem = useCallback((data: Omit<StockItem, 'id' | 'itemCode'>): StockItem => {
-    if (guardFYLocked()) return { ...data, id: '' } as unknown as StockItem;
+  const addStockItem = useCallback((data: Omit<StockItem, 'id' | 'itemCode'>, opts?: { onSaved?: (i: StockItem) => void; onFailed?: () => void }): StockItem => {
+    if (guardFYLocked()) { opts?.onFailed?.(); return { ...data, id: '' } as unknown as StockItem; }
     // Derive next item code from existing items (not localStorage counter) to prevent duplicates
     let newItem: StockItem;
     setStockItemsState(prev => {
@@ -6077,7 +6085,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ? { salesAccountId: data.salesAccountId || '4101', purchaseAccountId: data.purchaseAccountId || '5101' }
         : null;
       newItem = { ...data, ...consumerDefaults, id: crypto.randomUUID(), itemCode };
-      persistStockItem(newItem, { onBaseFail: () => setStockItemsState(p => p.filter(i => i.id !== newItem.id)) });
+      persistStockItem(newItem, { onBaseFail: () => { setStockItemsState(p => p.filter(i => i.id !== newItem.id)); opts?.onFailed?.(); }, onBaseSuccess: () => opts?.onSaved?.(newItem) });
       return [...prev, newItem];
     });
     return newItem!;
@@ -7307,7 +7315,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Two-step supplier save (mirror of persistCustomer — RULE 1).
   // Base columns save first; Tally extras patched separately so missing
   // migration only shows a soft warning.
-  const persistSupplier = (s: Supplier, opts: { onBaseFail: () => void; isUpdate: boolean }) => {
+  const persistSupplier = (s: Supplier, opts: { onBaseFail: () => void; isUpdate: boolean; onBaseSuccess?: () => void }) => {
     const {
       legalName, tradeName, mailingName, supplierType,
       addressLine1, addressLine2, city, state, pincode, country,
@@ -7330,6 +7338,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
         return;
       }
+      opts.onBaseSuccess?.();
       const extras: Record<string, unknown> = {};
       const setIf = (k: string, v: unknown) => { if (v !== undefined) extras[k] = v; };
       setIf('legalName', legalName); setIf('tradeName', tradeName); setIf('mailingName', mailingName);
@@ -7362,8 +7371,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
-  const addSupplier = useCallback((data: Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'>): Supplier => {
-    if (guardFYLocked()) return { ...data, id: '' } as unknown as Supplier;
+  const addSupplier = useCallback((data: Omit<Supplier, 'id' | 'supplierCode' | 'accountId' | 'createdAt'>, opts?: { onSaved?: (x: Supplier) => void; onFailed?: () => void }): Supplier => {
+    if (guardFYLocked()) { opts?.onFailed?.(); return { ...data, id: '' } as unknown as Supplier; }
     const accountId = crypto.randomUUID();
     // Auto-create ledger account under Sundry Creditors (2101)
     const newAccount: LedgerAccount = {
@@ -7377,8 +7386,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isGroup: false,
       parentId: '2101',
     };
+    // Readable code (#706) for the party ledger, like every other user-created account.
+    const partyCode = nextAccountCode(accountsRef.current, '2101', false, 'liability');
+    if (partyCode) newAccount.code = partyCode;
+    accountsRef.current = [...accountsRef.current, newAccount];
     setAccountsState(prev => [...prev, newAccount]);
-    supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
 
     const maxSupNum = suppliersRef.current.reduce((max, s) => {
       const m = s.supplierCode?.match(/SUP\/(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
@@ -7387,12 +7399,47 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const supplier: Supplier = { ...data, id: crypto.randomUUID(), supplierCode, accountId, createdAt: new Date().toISOString() };
     suppliersRef.current = [...suppliersRef.current, supplier];
     setSuppliersState(prev => [...prev, supplier]);
-    persistSupplier(supplier, {
-      isUpdate: false,
-      onBaseFail: () => {
-        suppliersRef.current = suppliersRef.current.filter(s => s.id !== supplier.id);
-        setSuppliersState(prev => prev.filter(s => s.id !== supplier.id));
-      },
+    // RULE 1: the ledger account and the party row are ONE thing to the user. Save the account first;
+    // only once it is in the cloud save the party (a voucher line is FK-bound to the account). If either
+    // fails, roll BOTH back (screen + cloud) and say so — no party without a ledger, no orphan ledger.
+    const undoLocal = () => {
+      suppliersRef.current = suppliersRef.current.filter(x => x.id !== supplier.id);
+      setSuppliersState(prev => prev.filter(x => x.id !== supplier.id));
+      accountsRef.current = accountsRef.current.filter(a => a.id !== accountId);
+      setAccountsState(prev => prev.filter(a => a.id !== accountId));
+    };
+    const { code: accCode, ...baseAccount } = newAccount;
+    supabase.from('accounts').upsert(withSoc(baseAccount)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message); reportError('db-sync', error.message);
+        undoLocal();
+        toastRef.current({ title: '❌ आपूर्तिकर्ता सेव नहीं हुआ', description: `खाता क्लाउड में सेव नहीं हुआ — ${error.message}. स्क्रीन से हटा दिया गया; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        opts?.onFailed?.();
+        return;
+      }
+      // The opening balance must reach the journal too (same as addAccount) — a party opened here with an
+      // opening used to leave accounts and ledger_events disagreeing, which silently disables journal reads.
+      if ((Number(newAccount.openingBalance) || 0) !== 0) {
+        if (postingServiceRef.current) syncOpeningOnServer(accountId);
+        else { const ev = buildOpeningDelta(newAccount); if (ev) { ledgerEventsRef.current = [...ledgerEventsRef.current, ev]; persistLedgerEvent(ev); } }
+      }
+      if (accCode) {
+        supabase.from('accounts').update({ code: accCode }).eq('id', accountId).eq('society_id', societyIdRef.current).select('id').then(({ data: rows, error: cErr }) => {
+          if (!cErr && rows && rows.length > 0) return;
+          reportError('db-sync', cErr?.message || 'party code update matched 0 rows');   // code only — the ledger is safe
+          accountsRef.current = accountsRef.current.map(a => a.id === accountId ? { ...a, code: undefined } : a);
+          setAccountsState(prev => prev.map(a => a.id === accountId ? { ...a, code: undefined } : a));
+        });
+      }
+      persistSupplier(supplier, {
+        isUpdate: false,
+        onBaseFail: () => {
+          undoLocal();
+          supabase.from('accounts').delete().eq('id', accountId).eq('society_id', societyIdRef.current).then(() => {});   // no orphan ledger
+          opts?.onFailed?.();
+        },
+        onBaseSuccess: () => opts?.onSaved?.(supplier),
+      });
     });
     return supplier;
   }, []);
@@ -7472,7 +7519,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ifsc, branch, upiId, creditDays, creditLimit, discountPercent, openingBalance,
   // openingBalanceType, notes, mailingName) patch separately so missing migration only
   // shows a soft warning instead of nuking the row.
-  const persistCustomer = (c: Customer, opts: { onBaseFail: () => void; isUpdate: boolean }) => {
+  const persistCustomer = (c: Customer, opts: { onBaseFail: () => void; isUpdate: boolean; onBaseSuccess?: () => void }) => {
     const {
       legalName, tradeName, mailingName, customerType,
       addressLine1, addressLine2, city, state, pincode, country,
@@ -7495,6 +7542,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
         return;
       }
+      opts.onBaseSuccess?.();
       const extras: Record<string, unknown> = {};
       const setIf = (k: string, v: unknown) => { if (v !== undefined) extras[k] = v; };
       setIf('legalName', legalName); setIf('tradeName', tradeName); setIf('mailingName', mailingName);
@@ -7525,8 +7573,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
-  const addCustomer = useCallback((data: Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'>): Customer => {
-    if (guardFYLocked()) return { ...data, id: '' } as unknown as Customer;
+  const addCustomer = useCallback((data: Omit<Customer, 'id' | 'customerCode' | 'accountId' | 'createdAt'>, opts?: { onSaved?: (x: Customer) => void; onFailed?: () => void }): Customer => {
+    if (guardFYLocked()) { opts?.onFailed?.(); return { ...data, id: '' } as unknown as Customer; }
     const accountId = crypto.randomUUID();
     // Auto-create ledger account under Sundry Debtors (3303)
     const newAccount: LedgerAccount = {
@@ -7540,8 +7588,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isGroup: false,
       parentId: '3303',
     };
+    // Readable code (#706) for the party ledger, like every other user-created account.
+    const partyCode = nextAccountCode(accountsRef.current, '3303', false, 'asset');
+    if (partyCode) newAccount.code = partyCode;
+    accountsRef.current = [...accountsRef.current, newAccount];
     setAccountsState(prev => [...prev, newAccount]);
-    supabase.from('accounts').upsert(withSoc(newAccount)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
 
     const maxCusNum = customersRef.current.reduce((max, c) => {
       const m = c.customerCode?.match(/CUS\/(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
@@ -7550,12 +7601,47 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const customer: Customer = { ...data, id: crypto.randomUUID(), customerCode, accountId, createdAt: new Date().toISOString() };
     customersRef.current = [...customersRef.current, customer];
     setCustomersState(prev => [...prev, customer]);
-    persistCustomer(customer, {
-      isUpdate: false,
-      onBaseFail: () => {
-        customersRef.current = customersRef.current.filter(c => c.id !== customer.id);
-        setCustomersState(prev => prev.filter(c => c.id !== customer.id));
-      },
+    // RULE 1: the ledger account and the party row are ONE thing to the user. Save the account first;
+    // only once it is in the cloud save the party (a voucher line is FK-bound to the account). If either
+    // fails, roll BOTH back (screen + cloud) and say so — no party without a ledger, no orphan ledger.
+    const undoLocal = () => {
+      customersRef.current = customersRef.current.filter(x => x.id !== customer.id);
+      setCustomersState(prev => prev.filter(x => x.id !== customer.id));
+      accountsRef.current = accountsRef.current.filter(a => a.id !== accountId);
+      setAccountsState(prev => prev.filter(a => a.id !== accountId));
+    };
+    const { code: accCode, ...baseAccount } = newAccount;
+    supabase.from('accounts').upsert(withSoc(baseAccount)).then(({ error }) => {
+      if (error) {
+        console.error('DB sync error:', error.message); reportError('db-sync', error.message);
+        undoLocal();
+        toastRef.current({ title: '❌ ग्राहक सेव नहीं हुआ', description: `खाता क्लाउड में सेव नहीं हुआ — ${error.message}. स्क्रीन से हटा दिया गया; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        opts?.onFailed?.();
+        return;
+      }
+      // The opening balance must reach the journal too (same as addAccount) — a party opened here with an
+      // opening used to leave accounts and ledger_events disagreeing, which silently disables journal reads.
+      if ((Number(newAccount.openingBalance) || 0) !== 0) {
+        if (postingServiceRef.current) syncOpeningOnServer(accountId);
+        else { const ev = buildOpeningDelta(newAccount); if (ev) { ledgerEventsRef.current = [...ledgerEventsRef.current, ev]; persistLedgerEvent(ev); } }
+      }
+      if (accCode) {
+        supabase.from('accounts').update({ code: accCode }).eq('id', accountId).eq('society_id', societyIdRef.current).select('id').then(({ data: rows, error: cErr }) => {
+          if (!cErr && rows && rows.length > 0) return;
+          reportError('db-sync', cErr?.message || 'party code update matched 0 rows');   // code only — the ledger is safe
+          accountsRef.current = accountsRef.current.map(a => a.id === accountId ? { ...a, code: undefined } : a);
+          setAccountsState(prev => prev.map(a => a.id === accountId ? { ...a, code: undefined } : a));
+        });
+      }
+      persistCustomer(customer, {
+        isUpdate: false,
+        onBaseFail: () => {
+          undoLocal();
+          supabase.from('accounts').delete().eq('id', accountId).eq('society_id', societyIdRef.current).then(() => {});   // no orphan ledger
+          opts?.onFailed?.();
+        },
+        onBaseSuccess: () => opts?.onSaved?.(customer),
+      });
     });
     return customer;
   }, []);
