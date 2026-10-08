@@ -2862,6 +2862,8 @@ export interface SaleInvoiceInput {
   igstAmount: number;
   taxAmount: number;
   grandTotal: number;
+  /** 115 · round off to the rupee (already inside grandTotal) */
+  roundOff?: number;
   paymentMode: string;
   narration?: string;
 }
@@ -3095,7 +3097,7 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
   };
 
   addTotalsRow('Subtotal', fmt(input.totalAmount));
-  if (input.discount > 0) addTotalsRow('Discount', '- ' + fmt(input.discount));
+  if (input.discount > 0) addTotalsRow('Trade Discount', '- ' + fmt(input.discount));
   addTotalsRow('Taxable Amount', fmt(input.netAmount), { bold: true });
 
   if (isTaxInvoice) {
@@ -3111,6 +3113,7 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
     addTotalsRow('Total Tax', fmt(input.taxAmount));
   }
 
+  if (input.roundOff) addTotalsRow('Round Off', (input.roundOff > 0 ? '+ ' : '- ') + fmt(Math.abs(input.roundOff)));
   addTotalsRow('Grand Total', fmt(input.grandTotal), { bold: true, fill: [41, 82, 163] });
   ty += 2;
 
@@ -3608,8 +3611,11 @@ export interface PurchaseRecordInput {
   tdsAmount: number;
   tcsAmount?: number;
   taxAmount: number;
-  /** net + tax + TCS − TDS. Already the payable — do NOT net TDS off it again. */
+  /** net + tax + TCS − TDS − cash discount + round off. Already the payable — do NOT net TDS off it again. */
   grandTotal: number;
+  /** 115 · cash discount after GST, and round off (both already inside grandTotal) */
+  cashDiscount?: number;
+  roundOff?: number;
   paymentMode: string;
   narration?: string;
 }
@@ -3830,7 +3836,7 @@ export function generatePurchaseRecordPDF(input: PurchaseRecordInput, society: S
   };
 
   addTotalsRow('Subtotal', fmt(input.totalAmount));
-  if (input.discount > 0) addTotalsRow('Discount', '- ' + fmt(input.discount));
+  if (input.discount > 0) addTotalsRow('Trade Discount', '- ' + fmt(input.discount));
   addTotalsRow('Taxable Amount', fmt(input.netAmount), { bold: true });
   if (isTaxRecord) {
     if (intraState) {
@@ -3851,6 +3857,8 @@ export function generatePurchaseRecordPDF(input: PurchaseRecordInput, society: S
   }
   // grandTotal IS the payable — computeInvoiceTotals already took TDS out of it. Subtracting it
   // here again printed a bill one TDS short, in the figure AND in the words below.
+  if (input.cashDiscount) addTotalsRow('Cash Discount (after GST)', '- ' + fmt(input.cashDiscount));
+  if (input.roundOff) addTotalsRow('Round Off', (input.roundOff > 0 ? '+ ' : '- ') + fmt(Math.abs(input.roundOff)));
   addTotalsRow('Grand Total Payable', fmt(input.grandTotal), { bold: true, fill: [194, 65, 12] });
   ty += 2;
 

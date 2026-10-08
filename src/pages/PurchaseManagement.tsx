@@ -28,7 +28,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { getBankAccountIds } from '@/lib/storage';
 import { cn } from '@/lib/utils';
-import { computeInvoiceTotals } from '@/lib/invoiceTotals';
+import { computeInvoiceTotals, autoRoundOff, MAX_ROUND_OFF } from '@/lib/invoiceTotals';
 import { toMinor, toRupees, mulMinor } from '@/lib/money';
 import { useToast } from '@/hooks/use-toast';
 import type { PurchaseItem, PaymentMode } from '@/types';
@@ -75,6 +75,11 @@ const PurchaseManagement: React.FC = () => {
   const [supplierBillDate, setSupplierBillDate] = useState(''); // date printed on that bill
   const [items, setItems] = useState<PurchaseItem[]>([EMPTY_ITEM()]);
   const [discount, setDiscount] = useState<number>(0);
+  // 115: cash discount AFTER GST (Cr 4499 — GST / ITC / TDS unchanged) + round off to the rupee (ON by default;
+  // '' = automatic, a typed value overrides, clamped ±0.99).
+  const [cashDiscount, setCashDiscount] = useState<number>(0);
+  const [roundOffOn, setRoundOffOn] = useState(true);
+  const [roundOffManual, setRoundOffManual] = useState('');
   // GST / TDS / TCS rates (%)
   const [cgstPct, setCgstPct] = useState<number>(0);
   const [sgstPct, setSgstPct] = useState<number>(0);
@@ -147,8 +152,10 @@ const PurchaseManagement: React.FC = () => {
   // ── Derived totals ────────────────────────────────────────────────────────
   const totalAmount = items.reduce((s, i) => s + i.amount, 0);
   // T-02: net / GST / TDS / TCS / grand-total born exact in integer paise (shared with SaleManagement).
-  const { netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, tdsAmount, tcsAmount, grandTotal } =
-    computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct, tdsPct, tcsPct });
+  const preRound = computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct, tdsPct, tcsPct, cashDiscount });
+  const wantedRoundOff = !roundOffOn ? 0 : roundOffManual.trim() !== '' ? Number(roundOffManual) || 0 : autoRoundOff(preRound.totalBeforeRoundOff);
+  const { netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, tdsAmount, tcsAmount, grandTotal, roundOff, cashDiscount: cashDiscountApplied } =
+    computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct, tdsPct, tcsPct, cashDiscount, roundOff: wantedRoundOff });
 
   // Phase-2 D3: 194Q ADVICE from the sourced TDS engine — this FY's purchases from the supplier
   // (this bill included) against the threshold. Never changes the bill; the TDS % stays the user's.
@@ -201,6 +208,7 @@ const PurchaseManagement: React.FC = () => {
     setSupplierBillDate('');
     setItems([EMPTY_ITEM()]);
     setDiscount(0);
+    setCashDiscount(0); setRoundOffOn(true); setRoundOffManual('');
     setCgstPct(0); setSgstPct(0); setIgstPct(0); setTdsPct(0); setTcsPct(0); setRcmApplicable(false);
     setPaymentMode('cash');
     setBankAccountId('');
@@ -219,6 +227,9 @@ const PurchaseManagement: React.FC = () => {
     setSupplierBillDate(purchase.supplierBillDate || '');
     setItems(purchase.items.length ? purchase.items.map(it => ({ ...it })) : [EMPTY_ITEM()]);
     setDiscount(purchase.discount || 0);
+    setCashDiscount(purchase.cashDiscount || 0);
+    // An old bill (no round off) is edited as it was — never re-rounded behind the user's back.
+    setRoundOffOn((purchase.roundOff ?? 0) !== 0); setRoundOffManual('');
     setCgstPct(purchase.cgstPct || 0);
     setSgstPct(purchase.sgstPct || 0);
     setIgstPct(purchase.igstPct || 0);
@@ -297,7 +308,7 @@ const PurchaseManagement: React.FC = () => {
       netAmount,
       cgstPct, sgstPct, igstPct, tdsPct, tcsPct,
       cgstAmount, sgstAmount, igstAmount, tdsAmount, tcsAmount,
-      taxAmount, grandTotal,
+      taxAmount, grandTotal, cashDiscount: cashDiscountApplied, roundOff,
       rcmApplicable,
       paymentMode,
       bankAccountId: paymentMode === 'bank' ? (bankAccountId || undefined) : undefined,
@@ -420,6 +431,8 @@ const PurchaseManagement: React.FC = () => {
         items: enrichedItems,
         totalAmount: purchase.totalAmount,
         discount: purchase.discount || 0,
+        cashDiscount: purchase.cashDiscount || 0,
+        roundOff: purchase.roundOff || 0,
         netAmount: purchase.netAmount,
         cgstPct: purchase.cgstPct || 0,
         sgstPct: purchase.sgstPct || 0,
@@ -729,7 +742,7 @@ const PurchaseManagement: React.FC = () => {
                 </div>
                 {/* Discount */}
                 <div className="flex items-center justify-between gap-4">
-                  <span className="text-muted-foreground">{language === 'hi' ? 'छूट (₹)' : 'Discount (₹)'}</span>
+                  <span className="text-muted-foreground" title={language === 'hi' ? 'GST से पहले घटती है — कर-योग्य राशि और GST कम होते हैं' : 'Before GST — reduces the taxable value and the GST'}>{language === 'hi' ? 'व्यापार छूट (₹) — GST से पहले' : 'Trade Discount (₹) — before GST'}</span>
                   <Input type="number" min={0} value={discount} onChange={e => setDiscount(Math.max(0, Number(e.target.value)))} className="w-28 h-7 text-right text-sm" />
                 </div>
                 {/* Taxable */}
@@ -821,6 +834,25 @@ const PurchaseManagement: React.FC = () => {
                       ? 'बिल पर "I.T." लिखा हो और रकम में जुड़ा हो — तो यहाँ भरें, TDS में नहीं।'
                       : 'If the bill shows "I.T." ADDED to the total, it belongs here — not in TDS.'}
                   </p>
+                </div>
+
+                {/* Cash discount (after GST) + round off */}
+                <div className="flex items-center justify-between gap-4 border-t pt-1">
+                  <span className="text-muted-foreground" title={language === 'hi' ? 'GST के बाद घटती है — GST, ITC और TDS नहीं बदलते; "प्राप्त छूट" (आय) में जाती है' : 'After GST — GST, ITC and TDS are unchanged; booked to Discount Received (income)'}>{language === 'hi' ? 'नकद छूट (₹) — GST के बाद' : 'Cash Discount (₹) — after GST'}</span>
+                  <Input type="number" min={0} value={cashDiscount} onChange={e => setCashDiscount(Math.max(0, Number(e.target.value)))} className="w-28 h-7 text-right text-sm" />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                    <input type="checkbox" checked={roundOffOn} onChange={e => { setRoundOffOn(e.target.checked); setRoundOffManual(''); }} />
+                    {language === 'hi' ? 'राउंड ऑफ (पूरे रुपये तक)' : 'Round off (to the rupee)'}
+                  </label>
+                  {roundOffOn ? (
+                    <Input type="number" step={0.01} min={-MAX_ROUND_OFF} max={MAX_ROUND_OFF}
+                      value={roundOffManual.trim() !== '' ? roundOffManual : String(roundOff)}
+                      onChange={e => setRoundOffManual(e.target.value)}
+                      title={language === 'hi' ? `अपने-आप भरता है; ±${MAX_ROUND_OFF} तक बदल सकते हैं` : `Automatic; you may change it within ±${MAX_ROUND_OFF}`}
+                      className="w-24 h-7 text-right text-sm" />
+                  ) : <span className="text-xs text-muted-foreground">—</span>}
                 </div>
 
                 {/* Grand Total */}
@@ -1182,7 +1214,7 @@ const PurchaseManagement: React.FC = () => {
                 </div>
                 {(viewPurchase.discount || 0) > 0 && (
                   <div className="flex justify-between">
-                    <span>{language === 'hi' ? 'छूट' : 'Discount'}</span>
+                    <span>{language === 'hi' ? 'व्यापार छूट' : 'Trade Discount'}</span>
                     <span className="text-red-600">- {fmt(viewPurchase.discount)}</span>
                   </div>
                 )}
@@ -1242,6 +1274,18 @@ const PurchaseManagement: React.FC = () => {
                       <span>TCS ({viewPurchase.tcsPct || 0}%)</span>
                       <span>+ {fmt(viewPurchase.tcsAmount!)}</span>
                     </div>
+                  </div>
+                )}
+                {(viewPurchase.cashDiscount || 0) > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span>{language === 'hi' ? 'नकद छूट (GST के बाद)' : 'Cash Discount (after GST)'}</span>
+                    <span className="text-red-600">- {fmt(viewPurchase.cashDiscount!)}</span>
+                  </div>
+                )}
+                {(viewPurchase.roundOff ?? 0) !== 0 && (
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>{language === 'hi' ? 'राउंड ऑफ' : 'Round off'}</span>
+                    <span>{(viewPurchase.roundOff ?? 0) > 0 ? '+' : '−'} {fmt(Math.abs(viewPurchase.roundOff ?? 0))}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-base border-t-2 pt-2">
