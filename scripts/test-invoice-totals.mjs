@@ -44,7 +44,7 @@ register(
     `),
 );
 
-const { computeInvoiceTotals } = await import(abs('../src/lib/invoiceTotals.ts'));
+const { computeInvoiceTotals, autoRoundOff } = await import(abs('../src/lib/invoiceTotals.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -143,6 +143,30 @@ ok(paise(grn.cgstAmount) === 268 && paise(grn.sgstAmount) === 268, 'GRN CGST=SGS
 ok(paise(grn.cgstAmount) + paise(grn.sgstAmount) === paise(grn.taxAmount), 'GRN cgst + sgst === taxAmount');
 ok(paise(grn.netAmount) + paise(grn.taxAmount) === paise(grn.grandTotal), 'GRN net + tax === grandTotal exactly');
 // TdsRegister's tdsAmount now uses the same applyPercent half-up (the 2.675 → 2.68 fix, §1).
+
+
+// §9 Round off + cash discount (2026-10-08). Cash discount comes AFTER GST (taxable value, GST and TDS unchanged);
+// round off is clamped to ±0.99 so it can never hide a real adjustment.
+{
+  const sale = computeInvoiceTotals({ items: [{ amount: 1234 }], cgstPct: 2.5, sgstPct: 2.5 });
+  ok(sale.grandTotal === 1295.7 && sale.roundOff === 0, 'sale ₹1,234 + 5% GST = ₹1,295.70, no round off unless asked');
+  const r = autoRoundOff(sale.totalBeforeRoundOff);
+  ok(r === 0.3, `auto round off of 1295.70 is +0.30 (got ${r})`);
+  const sale2 = computeInvoiceTotals({ items: [{ amount: 1234 }], cgstPct: 2.5, sgstPct: 2.5, roundOff: r });
+  ok(sale2.grandTotal === 1296 && sale2.netAmount === 1234 && sale2.taxAmount === 61.7, 'rounded sale = ₹1,296; taxable and GST unchanged');
+  ok(autoRoundOff(10.5) === 0.5 && autoRoundOff(10.49) === -0.49 && autoRoundOff(10) === 0, 'half-up to the nearest rupee: 10.50→11, 10.49→10, 10→10');
+  ok(autoRoundOff(-0.3) === 0.3, 'works below zero too');
+
+  const pur = computeInvoiceTotals({ items: [{ amount: 10000 }], discount: 500, cgstPct: 9, sgstPct: 9, cashDiscount: 105.4 });
+  ok(pur.netAmount === 9500 && pur.taxAmount === 1710, 'purchase: trade discount before GST — taxable 9,500, GST 1,710');
+  ok(pur.cashDiscount === 105.4 && pur.totalBeforeRoundOff === 11104.6, 'cash discount after GST — 11,210 − 105.40 = 11,104.60');
+  const pur2 = computeInvoiceTotals({ items: [{ amount: 10000 }], discount: 500, cgstPct: 9, sgstPct: 9, cashDiscount: 105.4, roundOff: autoRoundOff(11104.6) });
+  ok(pur2.roundOff === 0.4 && pur2.grandTotal === 11105, 'purchase rounded to ₹11,105 (+0.40)');
+  const tds = computeInvoiceTotals({ items: [{ amount: 100000 }], tdsPct: 1, cashDiscount: 1000 });
+  ok(tds.tdsAmount === 1000 && tds.grandTotal === 98000, 'TDS stays on the taxable value; cash discount does not change it');
+  ok(computeInvoiceTotals({ items: [{ amount: 100 }], cashDiscount: 500 }).grandTotal === 0, 'cash discount is capped at the bill total');
+  ok(computeInvoiceTotals({ items: [{ amount: 100 }], roundOff: 5 }).roundOff === 0.99 && computeInvoiceTotals({ items: [{ amount: 100 }], roundOff: -7 }).roundOff === -0.99, 'round off clamped to ±0.99');
+}
 
 console.log(`\nInvoice totals (born-exact): ${pass} passed, ${fail} failed`);
 process.exitCode = fail > 0 ? 1 : 0;
