@@ -54,7 +54,11 @@ export const MemberPicker: React.FC<MemberPickerProps> = ({ value, onChange, cla
         <Command filter={(val, search) => (val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}>
           <CommandInput placeholder={hi ? 'सदस्य खोजें (ID, नाम, पिता का नाम, गाँव)…' : 'Search member (ID, name, father, village)…'} />
           <CommandList>
-            <CommandEmpty>{hi ? 'कोई सदस्य नहीं मिला' : 'No member found'}</CommandEmpty>
+            <CommandEmpty>
+              {hi ? 'कोई सदस्य नहीं मिला' : 'No member found'}
+              {/* A member needs a nominee, share capital and receipts — made on the Members page, not inline. */}
+              <a href="/members" className="block text-xs text-primary underline mt-1">{hi ? 'सदस्य पेज पर नया सदस्य जोड़ें →' : 'Add the member on the Members page →'}</a>
+            </CommandEmpty>
             <CommandGroup>
               <CommandItem value="__none__ कोई नहीं none" onSelect={() => { onChange(''); setOpen(false); }}>
                 <Check className={cn('mr-2 h-4 w-4 shrink-0', !value ? 'opacity-100' : 'opacity-0')} />

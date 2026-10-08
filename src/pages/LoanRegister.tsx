@@ -65,6 +65,8 @@ const LoanForm: React.FC<LoanFormProps> = ({ form, setForm, hi, members, onSubmi
             {members.map(m => <SelectItem key={m.id} value={m.id}>{m.memberId} — {m.name}</SelectItem>)}
           </SelectContent>
         </Select>
+        {/* A member needs a nominee, share capital and receipts — made on the Members page, not inline. */}
+        <a href="/members" className="text-xs text-primary underline">{hi ? 'सदस्य सूची में नहीं? सदस्य पेज पर नया सदस्य जोड़ें →' : 'Not in the list? Add the member on the Members page →'}</a>
       </div>
       <div className="space-y-1">
         <Label>{hi ? 'ऋण प्रकार' : 'Loan Type'}</Label>

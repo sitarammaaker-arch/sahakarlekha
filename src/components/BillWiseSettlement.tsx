@@ -11,6 +11,9 @@
  * page (compact mode) so the same flow is available "inside the voucher" like Tally.
  */
 import React, { useMemo, useState } from 'react';
+import { BankAccountSelect } from '@/components/BankAccountSelect';
+import { QuickCreateMaster, allowedQuickKinds } from '@/components/QuickCreateMaster';
+import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useToast } from '@/hooks/use-toast';
@@ -47,6 +50,8 @@ const BillWiseSettlement: React.FC<Props> = ({ mode, compact, onDone }) => {
   const isPay = mode === 'pay';
 
   const [partyId, setPartyId] = useState('');
+  const [partyCreateOpen, setPartyCreateOpen] = useState(false);
+  const { user } = useAuth();
   const [alloc, setAlloc] = useState<Record<string, string>>({});
   const [paymentMode, setPaymentMode] = useState<'cash' | 'bank'>('cash');
   const [bankAccountId, setBankAccountId] = useState('');
@@ -180,9 +185,12 @@ const BillWiseSettlement: React.FC<Props> = ({ mode, compact, onDone }) => {
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label>{L.party}</Label>
-            <Select value={partyId} onValueChange={(v) => { setPartyId(v); setAlloc({}); setBulk(''); setExtra(''); }}>
+            <Select value={partyId} onValueChange={(v) => { if (v === '__new_party__') { setPartyCreateOpen(true); return; } setPartyId(v); setAlloc({}); setBulk(''); setExtra(''); }}>
               <SelectTrigger><SelectValue placeholder={L.pickParty} /></SelectTrigger>
               <SelectContent>
+                {allowedQuickKinds(user?.role, [isPay ? 'supplier' : 'customer']).length > 0 && (
+                  <SelectItem value="__new_party__" className="text-primary font-medium">{isPay ? (hi ? '+ नया आपूर्तिकर्ता जोड़ें…' : '+ Add new supplier…') : (hi ? '+ नया ग्राहक जोड़ें…' : '+ Add new customer…')}</SelectItem>
+                )}
                 {parties.length === 0 && <div className="px-3 py-2 text-sm text-muted-foreground">{L.noParty}</div>}
                 {parties.map(({ id, name, count }) => (
                   <SelectItem key={id} value={id}>{name}{count > 0 ? ` (${count} ${hi ? 'बकाया' : 'open'})` : ''}</SelectItem>
@@ -294,12 +302,7 @@ const BillWiseSettlement: React.FC<Props> = ({ mode, compact, onDone }) => {
                 {paymentMode === 'bank' && (
                   <div className="space-y-1">
                     <Label className="text-xs">{hi ? 'बैंक खाता' : 'Bank account'}</Label>
-                    <Select value={bankAccountId} onValueChange={setBankAccountId}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder={hi ? 'चुनें' : 'Select'} /></SelectTrigger>
-                      <SelectContent>
-                        {bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi || a.name : a.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <BankAccountSelect value={bankAccountId} onChange={setBankAccountId} placeholder={hi ? 'चुनें' : 'Select'} bankIds={bankAccounts.map(a => a.id)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
                   </div>
                 )}
                 <div className="space-y-1 sm:col-span-2">
@@ -318,6 +321,9 @@ const BillWiseSettlement: React.FC<Props> = ({ mode, compact, onDone }) => {
           </CardContent>
         </Card>
       )}
+      {/* Inline party create (advance from a new party) — selected only once party + ledger are saved. */}
+      <QuickCreateMaster open={partyCreateOpen} onOpenChange={setPartyCreateOpen} kinds={[isPay ? 'supplier' : 'customer']}
+        onCreated={(c) => { if (c.recordId) { setPartyId(c.recordId); setAlloc({}); setBulk(''); setExtra(''); } }} />
     </div>
   );
 };

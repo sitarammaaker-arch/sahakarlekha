@@ -36,7 +36,7 @@ export const GUIDE_UPDATED: Record<string, string> = {
   'tds-and-26q': '2026-10-04',
   'trading-account': '2026-10-04',
   'trial-balance': '2026-10-08',
-  'voucher-types': '2026-10-04',
+  'voucher-types': '2026-10-08',
   'year-end-and-fy-lock': '2026-10-04',
   'standard-chart-of-accounts': '2026-10-04',
 };

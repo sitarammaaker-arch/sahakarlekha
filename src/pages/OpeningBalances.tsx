@@ -15,6 +15,7 @@ import { carryForwardOpenings, earlierYearVoucherCount, openingTotals } from '@/
 import { fyStartFromLabel } from '@/lib/fyPeriod';
 import { accountCode } from '@/lib/accountCode';
 import { accountDisplayName } from '@/lib/accountName';
+import { QuickCreateMaster, allowedQuickKinds } from '@/components/QuickCreateMaster';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -76,6 +77,7 @@ export default function OpeningBalances() {
 
   const { debit: totalDebit, credit: totalCredit, difference, balanced: isBalanced } = openingTotals(Object.values(balances));
   const [confirmUnbalanced, setConfirmUnbalanced] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Group (parent) accounts that currently carry a non-zero opening (pending edits included).
@@ -211,6 +213,10 @@ export default function OpeningBalances() {
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-1" onClick={handleExcel}><FileSpreadsheet className="h-4 w-4" /> Excel</Button>
           <Button variant="outline" size="sm" className="gap-1" onClick={handleCSV}><Download className="h-4 w-4" /> CSV</Button>
+          {/* First-time onboarding: make the party / bank / other ledgers right here, then fill their openings. */}
+          {!fyLocked && allowedQuickKinds(user?.role, ['general', 'customer', 'supplier', 'bank']).length > 0 && (
+            <Button variant="outline" size="sm" className="gap-1" onClick={() => setCreateOpen(true)}>{hi ? '+ नया खाता' : '+ New account'}</Button>
+          )}
           {user?.role === 'admin' && !fyLocked && (
             <>
               {auditedOpenings.length > 0 && !continuousLedger && (
@@ -442,6 +448,7 @@ export default function OpeningBalances() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <QuickCreateMaster open={createOpen} onOpenChange={setCreateOpen} defaultType="asset" onCreated={() => {}} />
     </div>
   );
 }

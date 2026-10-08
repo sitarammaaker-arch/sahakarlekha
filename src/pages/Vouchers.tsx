@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { MemberPicker } from '@/components/MemberPicker';
+import { BankAccountSelect } from '@/components/BankAccountSelect';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -792,16 +793,11 @@ const Vouchers: React.FC = () => {
                       {bankTplSide && bankIds.length >= 1 && (
                         <div className="space-y-2">
                           <Label className="text-base font-semibold">{language === 'hi' ? 'बैंक खाता' : 'Bank Account'}</Label>
-                          <select
+                          <BankAccountSelect
                             value={bankTplSide === 'debit' ? debitAccount : creditAccount}
-                            onChange={e => bankTplSide === 'debit' ? setDebitAccount(e.target.value) : setCreditAccount(e.target.value)}
+                            onChange={id => bankTplSide === 'debit' ? setDebitAccount(id) : setCreditAccount(id)}
                             className="h-12 w-full rounded-md border border-input bg-background px-3 text-lg"
-                          >
-                            {bankIds.map(bid => {
-                              const acc = accounts.find(a => a.id === bid);
-                              return <option key={bid} value={bid}>{acc?.name || bid}{acc?.nameHi && language === 'hi' ? ` (${acc.nameHi})` : ''}</option>;
-                            })}
-                          </select>
+                          />
                         </div>
                       )}
                       <div className="space-y-2">
@@ -958,21 +954,15 @@ const Vouchers: React.FC = () => {
                     {voucherType === 'contra' && bankIds.length >= 1 && (
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">{language === 'hi' ? 'बैंक खाता' : 'Bank Account'}</Label>
-                        <select
+                        <BankAccountSelect
                           value={contraBankId || bankIds[0] || ACCOUNT_IDS.BANK}
-                          onChange={e => setContraBankId(e.target.value)}
-                          className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-                        >
-                          {bankIds.map(bid => {
-                            const acc = accounts.find(a => a.id === bid);
-                            return <option key={bid} value={bid}>{acc?.name || bid}{acc?.nameHi && language === 'hi' ? ` (${acc.nameHi})` : ''}</option>;
-                          })}
-                        </select>
+                          onChange={setContraBankId}
+                        />
                         {bankIds.length === 1 && (
                           <p className="text-xs text-muted-foreground">
                             {language === 'hi'
-                              ? 'और बैंक खाते जोड़ने के लिए: Ledger Heads → "Bank Accounts" के नीचे नया खाता बनाएं।'
-                              : 'To add more bank accounts: Ledger Heads → create an account under "Bank Accounts".'}
+                              ? 'और बैंक खाता जोड़ने के लिए ऊपर की सूची में "+ नया बैंक खाता…" चुनें।'
+                              : 'To add another bank account, choose "+ New bank account…" in the list above.'}
                           </p>
                         )}
                       </div>
@@ -999,7 +989,7 @@ const Vouchers: React.FC = () => {
                                 <tr key={line.id} className={`border-b last:border-0 ${line.type === 'Dr' ? 'bg-blue-50/30' : 'bg-green-50/30'}`}>
                                   <td className="text-xs text-muted-foreground py-2 px-3">{idx + 1}</td>
                                   <td className="py-1 px-1 relative">
-                                    <AccountPicker
+                                    <AccountPicker allowCreate
                                       value={line.accountId}
                                       onChange={id => handleLineChange(line.id, 'accountId', id)}
                                       triggerClassName="h-11"
@@ -1344,11 +1334,11 @@ const Vouchers: React.FC = () => {
               <>
                 <div className="space-y-1.5">
                   <Label><span className="text-destructive font-bold">Dr.</span> {language === 'hi' ? 'नाम खाता' : 'Debit Account'}</Label>
-                  <AccountPicker value={editDebit} onChange={setEditDebit} triggerClassName="h-9" />
+                  <AccountPicker allowCreate value={editDebit} onChange={setEditDebit} triggerClassName="h-9" />
                 </div>
                 <div className="space-y-1.5">
                   <Label><span className="text-success font-bold">Cr.</span> {language === 'hi' ? 'जमा खाता' : 'Credit Account'}</Label>
-                  <AccountPicker value={editCredit} onChange={setEditCredit} triggerClassName="h-9" />
+                  <AccountPicker allowCreate value={editCredit} onChange={setEditCredit} triggerClassName="h-9" />
                 </div>
                 <div className="space-y-1.5">
                   <Label>{t('amount')} (₹)</Label>
@@ -1372,7 +1362,7 @@ const Vouchers: React.FC = () => {
                     <tbody>
                       {editLines.map(line => (
                         <tr key={line.id} className={`border-b last:border-0 ${line.type === 'Dr' ? 'bg-blue-50/30' : 'bg-green-50/30'}`}>
-                          <td className="py-1 px-1"><AccountPicker value={line.accountId} onChange={id => handleEditLineChange(line.id, 'accountId', id)} triggerClassName="h-9" /></td>
+                          <td className="py-1 px-1"><AccountPicker allowCreate value={line.accountId} onChange={id => handleEditLineChange(line.id, 'accountId', id)} triggerClassName="h-9" /></td>
                           <td className="py-1 px-1">
                             <Select value={line.type} onValueChange={v => handleEditLineChange(line.id, 'type', v)}>
                               <SelectTrigger className="h-9 w-16"><SelectValue /></SelectTrigger>
