@@ -60,7 +60,7 @@ ok(validateQuickParty({ name: 'A', gstin: 'BAD' }) !== null && validateQuickPart
 const dc = read('contexts/DataContext.tsx');
 ok(/opts\?\.onSaved\?\.\(newAccount\)/.test(dc) && /addAccount: \(data: Omit<LedgerAccount, 'id'>, opts\?: \{ id\?: string; onSaved\?/.test(dc), 'addAccount reports onSaved once the row is in the cloud');
 ok((dc.match(/supabase\.from\('accounts'\)\.upsert\(withSoc\(baseAccount\)\)\.then/g) || []).length >= 2, 'supplier + customer save their ledger FIRST and wait for it');
-ok((dc.match(/supabase\.from\('accounts'\)\.delete\(\)\.eq\('id', accountId\)/g) || []).length === 2, 'a party whose row fails takes its new ledger down too (no orphan ledger)');
+ok((dc.match(/deleteAccountRow\(newAccount, \{ context: 'party-create-rollback'/g) || []).length === 2, 'a party whose row fails takes its new ledger down too, via the rollback-aware delete (no orphan ledger)');
 ok((dc.match(/onBaseSuccess: \(\) => opts\?\.onSaved\?\.\((supplier|customer)\)/g) || []).length === 2, 'party onSaved only after BOTH are saved');
 ok((dc.match(/nextAccountCode\(accountsRef\.current, '(2101|3303)', false/g) || []).length === 2, 'party ledgers get a readable code');
 ok((dc.match(/if \(postingServiceRef\.current\) syncOpeningOnServer\(accountId\);/g) || []).length === 2, 'a party opening balance reaches the journal');

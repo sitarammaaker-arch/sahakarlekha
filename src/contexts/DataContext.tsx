@@ -7435,7 +7435,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isUpdate: false,
         onBaseFail: () => {
           undoLocal();
-          supabase.from('accounts').delete().eq('id', accountId).eq('society_id', societyIdRef.current).then(() => {});   // no orphan ledger
+          // no orphan ledger — the one rollback-aware account delete (puts it back on screen if the cloud refuses)
+          deleteAccountRow(newAccount, { context: 'party-create-rollback', failTitle: 'नया खाता हटाया नहीं जा सका' });
           opts?.onFailed?.();
         },
         onBaseSuccess: () => opts?.onSaved?.(supplier),
@@ -7637,7 +7638,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isUpdate: false,
         onBaseFail: () => {
           undoLocal();
-          supabase.from('accounts').delete().eq('id', accountId).eq('society_id', societyIdRef.current).then(() => {});   // no orphan ledger
+          // no orphan ledger — the one rollback-aware account delete (puts it back on screen if the cloud refuses)
+          deleteAccountRow(newAccount, { context: 'party-create-rollback', failTitle: 'नया खाता हटाया नहीं जा सका' });
           opts?.onFailed?.();
         },
         onBaseSuccess: () => opts?.onSaved?.(customer),
