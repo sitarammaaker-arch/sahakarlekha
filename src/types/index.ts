@@ -842,6 +842,8 @@ export type AccountSubtype =
   | 'dividend_distribution' // consumer — dividend on share capital appropriation (equity)
   | 'dividend_payable'    // consumer — member dividend payable (liability)
   | 'sales_return'        // consumer — Sales Return / Returns Inward (contra-income, debit)
+  | 'discount_received'   // cash discount received on a purchase bill (other income, 4499)
+  | 'round_off'           // invoice round-off (indirect expense 5499; balance may sit on either side)
   | 'suspense';
 
 export interface LedgerAccount {
