@@ -1,4 +1,8 @@
 import React, { useState, useMemo, useRef } from 'react';
+import { QuickItemDialog } from '@/components/QuickItemDialog';
+import { QuickCreateMaster, allowedQuickKinds } from '@/components/QuickCreateMaster';
+import { roleCanCreateMaster } from '@/lib/masterCreate';
+import type { StockItem } from '@/types';
 import { BankAccountSelect } from '@/components/BankAccountSelect';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -74,6 +78,7 @@ const SaleManagement: React.FC = () => {
   // ── New Sale form state ───────────────────────────────────────────────────
   const [saleDate, setSaleDate] = useState(TODAY);
   const [customerId, setCustomerId] = useState('');
+  const [partyCreateOpen, setPartyCreateOpen] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [items, setItems] = useState<SaleItem[]>([EMPTY_ITEM()]);
@@ -107,41 +112,17 @@ const SaleManagement: React.FC = () => {
   // ── Quick Add New Item dialog ─────────────────────────────────────────────
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddRowIndex, setQuickAddRowIndex] = useState<number>(0);
-  const [qaName, setQaName] = useState('');
-  const [qaNameHi, setQaNameHi] = useState('');
-  const [qaUnit, setQaUnit] = useState('');
-  const [qaSaleRate, setQaSaleRate] = useState<number>(0);
-  const qaNameRef = useRef<HTMLInputElement>(null);
-
-  const openQuickAdd = (index: number) => {
-    setQuickAddRowIndex(index);
-    setQaName(''); setQaNameHi(''); setQaUnit(''); setQaSaleRate(0);
-    setQuickAddOpen(true);
-    setTimeout(() => qaNameRef.current?.focus(), 100);
-  };
-
-  const handleQuickAddSave = () => {
-    if (!qaName.trim() || !qaUnit.trim()) {
-      toast({ title: language === 'hi' ? 'नाम और इकाई आवश्यक है' : 'Name and unit are required', variant: 'destructive' });
-      return;
-    }
-    const newItem = addStockItem({
-      name: qaName.trim(),
-      nameHi: qaNameHi.trim() || qaName.trim(),
-      unit: qaUnit.trim(),
-      openingStock: 0,
-      currentStock: 0,
-      purchaseRate: 0,
-      saleRate: qaSaleRate,
-      isActive: true,
-    });
+  // Inline item create (2026-10-08): QuickItemDialog makes the item WITH its Sales/Purchase A/c (an item
+  // without them cannot be billed) and hands it back only once it is saved in the cloud.
+  const canCreateItem = roleCanCreateMaster(user?.role, 'inventory');
+  const openQuickAdd = (index: number) => { setQuickAddRowIndex(index); setQuickAddOpen(true); };
+  const handleQuickAdded = (newItem: StockItem) => {
     updateItem(quickAddRowIndex, {
       itemId: newItem.id,
       itemName: language === 'hi' ? (newItem.nameHi || newItem.name) : newItem.name,
       unit: newItem.unit,
       rate: newItem.saleRate,
     });
-    setQuickAddOpen(false);
     toast({ title: language === 'hi' ? `"${newItem.name}" जोड़ा गया` : `"${newItem.name}" added to inventory` });
   };
 
@@ -541,6 +522,7 @@ const SaleManagement: React.FC = () => {
                 <Select
                   value={customerId || (customerName === 'Cash' ? '__cash__' : '')}
                   onValueChange={val => {
+                    if (val === '__new_party__') { setPartyCreateOpen(true); return; }
                     if (val === '__cash__') {
                       setCustomerId('');
                       setCustomerName('Cash');
@@ -557,6 +539,9 @@ const SaleManagement: React.FC = () => {
                     <SelectValue placeholder={language === 'hi' ? 'ग्राहक चुनें' : 'Select customer'} />
                   </SelectTrigger>
                   <SelectContent>
+                    {allowedQuickKinds(user?.role, ['customer']).length > 0 && (
+                      <SelectItem value="__new_party__" className="text-primary font-medium">{language === 'hi' ? '+ नया ग्राहक जोड़ें…' : '+ Add new customer…'}</SelectItem>
+                    )}
                     <SelectItem value="__cash__">
                       {language === 'hi' ? '💵 नकद ग्राहक' : '💵 Cash Customer'}
                     </SelectItem>
@@ -609,12 +594,13 @@ const SaleManagement: React.FC = () => {
                         <div className="flex gap-1 items-center">
                           <Select
                             value={item.itemId}
-                            onValueChange={val => handleItemSelect(index, val)}
+                            onValueChange={val => { if (val === '__new_item__') { openQuickAdd(index); return; } handleItemSelect(index, val); }}
                           >
                             <SelectTrigger className="w-full">
                               <SelectValue placeholder={language === 'hi' ? 'वस्तु चुनें' : 'Select item'} />
                             </SelectTrigger>
                             <SelectContent>
+                              {canCreateItem && <SelectItem value="__new_item__" className="text-primary font-medium">{language === 'hi' ? '+ नई वस्तु जोड़ें…' : '+ Add new item…'}</SelectItem>}
                               {stockItems.filter(s => s.isActive).map(s => (
                                 <SelectItem key={s.id} value={s.id}>
                                   {language === 'hi' ? (s.nameHi || s.name) : s.name}
@@ -622,7 +608,7 @@ const SaleManagement: React.FC = () => {
                               ))}
                             </SelectContent>
                           </Select>
-                          <Button
+                          {canCreateItem && <Button
                             type="button"
                             variant="outline"
                             size="icon"
@@ -631,7 +617,7 @@ const SaleManagement: React.FC = () => {
                             onClick={() => openQuickAdd(index)}
                           >
                             <Plus className="h-4 w-4" />
-                          </Button>
+                          </Button>}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -1158,42 +1144,11 @@ const SaleManagement: React.FC = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Quick Add New Item Dialog ───────────────────────────────────── */}
-      <Dialog open={quickAddOpen} onOpenChange={setQuickAddOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{language === 'hi' ? '➕ नई वस्तु जोड़ें' : '➕ Add New Item'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 pt-2">
-            <div>
-              <Label>{language === 'hi' ? 'नाम (अंग्रेज़ी)' : 'Name (English)'} *</Label>
-              <Input ref={qaNameRef} value={qaName} onChange={e => setQaName(e.target.value)} placeholder="e.g. Wheat 50kg" />
-            </div>
-            <div>
-              <Label>{language === 'hi' ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
-              <Input value={qaNameHi} onChange={e => setQaNameHi(e.target.value)} placeholder="जैसे गेहूं 50 किलो" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>{language === 'hi' ? 'इकाई' : 'Unit'} *</Label>
-                <Input value={qaUnit} onChange={e => setQaUnit(e.target.value)} placeholder="Bag / Kg / Ltr" />
-              </div>
-              <div>
-                <Label>{language === 'hi' ? 'बिक्री दर (₹)' : 'Sale Rate (₹)'}</Label>
-                <Input type="number" min={0} value={qaSaleRate} onChange={e => setQaSaleRate(Number(e.target.value))} />
-              </div>
-            </div>
-            <div className="flex gap-2 pt-1">
-              <Button className="flex-1" onClick={handleQuickAddSave}>
-                {language === 'hi' ? 'सहेजें और चुनें' : 'Save & Select'}
-              </Button>
-              <Button variant="outline" onClick={() => setQuickAddOpen(false)}>
-                {language === 'hi' ? 'रद्द करें' : 'Cancel'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Inline customer create — selected only once the customer AND its ledger are saved. */}
+      <QuickCreateMaster open={partyCreateOpen} onOpenChange={setPartyCreateOpen} kinds={['customer']}
+        onCreated={(c) => { setCustomerId(c.recordId || ''); setCustomerName(c.name); setCustomerPhone(''); }} />
+      {/* ── Quick Add New Item (with Sales/Purchase A/c) ─────────────────── */}
+      {canCreateItem && <QuickItemDialog open={quickAddOpen} onOpenChange={setQuickAddOpen} mode="sale" onCreated={handleQuickAdded} />}
     </div>
   );
 };

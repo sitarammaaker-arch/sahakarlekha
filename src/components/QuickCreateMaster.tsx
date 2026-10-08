@@ -36,6 +36,8 @@ interface Props {
   /** Kinds offered (first = default). */
   kinds?: QuickKind[];
   initialName?: string;
+  /** Pre-select the account type for a 'general' ledger (e.g. 'income' when creating a Sales A/c). */
+  defaultType?: LedgerAccount['type'];
   onCreated: (c: QuickCreated) => void;
 }
 
@@ -59,7 +61,7 @@ export function allowedQuickKinds(role: string | null | undefined, kinds: QuickK
   return kinds.filter((k) => roleCanCreateMaster(role, KIND_MODULE[k]));
 }
 
-export const QuickCreateMaster: React.FC<Props> = ({ open, onOpenChange, kinds = ['general', 'customer', 'supplier', 'bank'], initialName = '', onCreated }) => {
+export const QuickCreateMaster: React.FC<Props> = ({ open, onOpenChange, kinds = ['general', 'customer', 'supplier', 'bank'], initialName = '', defaultType = 'expense', onCreated }) => {
   const { accounts, customers, suppliers, addAccount, addCustomer, addSupplier } = useData();
   const { user } = useAuth();
   const { language } = useLanguage();
@@ -78,7 +80,7 @@ export const QuickCreateMaster: React.FC<Props> = ({ open, onOpenChange, kinds =
 
   useEffect(() => {
     if (!open) return;
-    setKind(allowed[0] ?? 'general'); setName(initialName); setNameHi(''); setType('expense'); setParentId('');
+    setKind(allowed[0] ?? 'general'); setName(initialName); setNameHi(''); setType(defaultType); setParentId('');
     setMobile(''); setGstin(''); setSaving(false); setError('');
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
