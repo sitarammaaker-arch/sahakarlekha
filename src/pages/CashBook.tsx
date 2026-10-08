@@ -170,7 +170,7 @@ const CashBook: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>{language === 'hi' ? 'दूसरा खाता' : 'Other Account'}</Label>
-                  <AccountPicker
+                  <AccountPicker allowCreate
                     value={otherAccount}
                     onChange={setOtherAccount}
                     excludeIds={[ACCOUNT_IDS.CASH, ACCOUNT_IDS.BANK]}

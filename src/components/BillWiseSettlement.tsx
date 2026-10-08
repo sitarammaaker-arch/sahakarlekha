@@ -11,6 +11,7 @@
  * page (compact mode) so the same flow is available "inside the voucher" like Tally.
  */
 import React, { useMemo, useState } from 'react';
+import { BankAccountSelect } from '@/components/BankAccountSelect';
 import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useToast } from '@/hooks/use-toast';
@@ -294,12 +295,7 @@ const BillWiseSettlement: React.FC<Props> = ({ mode, compact, onDone }) => {
                 {paymentMode === 'bank' && (
                   <div className="space-y-1">
                     <Label className="text-xs">{hi ? 'बैंक खाता' : 'Bank account'}</Label>
-                    <Select value={bankAccountId} onValueChange={setBankAccountId}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder={hi ? 'चुनें' : 'Select'} /></SelectTrigger>
-                      <SelectContent>
-                        {bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? a.nameHi || a.name : a.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <BankAccountSelect value={bankAccountId} onChange={setBankAccountId} placeholder={hi ? 'चुनें' : 'Select'} bankIds={bankAccounts.map(a => a.id)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
                   </div>
                 )}
                 <div className="space-y-1 sm:col-span-2">

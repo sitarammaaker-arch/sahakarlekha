@@ -89,7 +89,7 @@ const LineTable: React.FC<{
             <TableRow key={line.id}>
               <TableCell className="text-xs text-gray-400">{i + 1}</TableCell>
               <TableCell>
-                <AccountPicker
+                <AccountPicker allowCreate
                   value={line.accountId}
                   onChange={v => onChange(line.id, 'accountId', v)}
                   triggerClassName="h-8 text-sm"

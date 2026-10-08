@@ -7,7 +7,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import {
   Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem,
 } from '@/components/ui/command';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { QuickCreateMaster, allowedQuickKinds, type QuickKind } from '@/components/QuickCreateMaster';
 import { cn } from '@/lib/utils';
 import type { LedgerAccount } from '@/types';
 
@@ -44,16 +46,23 @@ interface AccountPickerProps {
   className?: string;
   /** Extra classes for the trigger button. */
   triggerClassName?: string;
+  /** Offer "+ नया खाता बनाएँ" (entry screens only — not on view-only pages like Ledger). true = all kinds. */
+  allowCreate?: boolean | QuickKind[];
 }
 
 export const AccountPicker: React.FC<AccountPickerProps> = ({
   value, onChange, includeGroups = false, filterByParentId, excludeIds,
-  showBalance = true, placeholder, disabled, className, triggerClassName,
+  showBalance = true, placeholder, disabled, className, triggerClassName, allowCreate,
 }) => {
   const { accounts, vouchers } = useData();
+  const { user } = useAuth();
   const { language } = useLanguage();
   const hi = language === 'hi';
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const createKinds: QuickKind[] = allowCreate === true ? ['general', 'customer', 'supplier', 'bank'] : (allowCreate || []);
+  const canCreate = createKinds.length > 0 && allowedQuickKinds(user?.role, createKinds).length > 0;
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(n));
@@ -119,9 +128,22 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
       </PopoverTrigger>
       <PopoverContent className={cn('w-[--radix-popover-trigger-width] min-w-72 p-0', className)} align="start">
         <Command filter={(val, search) => (val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}>
-          <CommandInput placeholder={hi ? 'खाता खोजें (नाम या कोड)…' : 'Search account (name or code)…'} />
+          <CommandInput value={search} onValueChange={setSearch} placeholder={hi ? 'खाता खोजें (नाम या कोड)…' : 'Search account (name or code)…'} />
           <CommandList>
-            <CommandEmpty>{hi ? 'कोई खाता नहीं मिला' : 'No account found'}</CommandEmpty>
+            <CommandEmpty>
+              {hi ? 'कोई खाता नहीं मिला' : 'No account found'}
+              {createKinds.length > 0 && !canCreate && (
+                <span className="block text-xs mt-1">{hi ? 'नया खाता admin या लेखाकार से बनवाएँ।' : 'Ask an admin or accountant to create it.'}</span>
+              )}
+            </CommandEmpty>
+            {canCreate && (
+              <CommandGroup forceMount>
+                <CommandItem forceMount value={`__create__ ${search}`} onSelect={() => { setOpen(false); setCreateOpen(true); }} className="text-primary">
+                  <Plus className="mr-2 h-4 w-4 shrink-0" />
+                  {search.trim() ? (hi ? `"${search.trim()}" नाम से नया खाता बनाएँ` : `Create "${search.trim()}"`) : (hi ? 'नया खाता बनाएँ' : 'Create new account')}
+                </CommandItem>
+              </CommandGroup>
+            )}
             {groups.map(g => (
               <CommandGroup key={g.label} heading={g.label}>
                 {g.items.map(a => {
@@ -150,6 +172,10 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
           </CommandList>
         </Command>
       </PopoverContent>
+      {canCreate && (
+        <QuickCreateMaster open={createOpen} onOpenChange={setCreateOpen} kinds={createKinds} initialName={search.trim()}
+          onCreated={(c) => { onChange(c.accountId); setSearch(''); }} />
+      )}
     </Popover>
   );
 };

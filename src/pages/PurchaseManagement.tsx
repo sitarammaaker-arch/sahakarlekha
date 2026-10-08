@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
+import { BankAccountSelect } from '@/components/BankAccountSelect';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -911,14 +912,7 @@ const PurchaseManagement: React.FC = () => {
                 {paymentMode === 'bank' && (
                   <div className="space-y-1">
                     <Label>{language === 'hi' ? 'बैंक खाता' : 'Bank Account'}</Label>
-                    <Select value={bankAccountId} onValueChange={setBankAccountId}>
-                      <SelectTrigger><SelectValue placeholder={language === 'hi' ? 'बैंक चुनें' : 'Select bank'} /></SelectTrigger>
-                      <SelectContent>
-                        {getBankAccountIds(accounts).map(id => accounts.find(a => a.id === id)).filter((a): a is NonNullable<typeof a> => !!a).map(a => (
-                          <SelectItem key={a.id} value={a.id}>{language === 'hi' ? (a.nameHi || a.name) : a.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <BankAccountSelect value={bankAccountId} onChange={setBankAccountId} placeholder={language === 'hi' ? 'बैंक चुनें' : 'Select bank'} />
                   </div>
                 )}
                 <div className="space-y-1">
