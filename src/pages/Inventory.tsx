@@ -682,11 +682,13 @@ const Inventory: React.FC = () => {
   // Derived data
   // Value at weighted-average COST from movements (RULE 2) — same as Stock Valuation /
   // Trading A/c / Balance Sheet — NOT the stale purchaseRate field (0 for some items).
-  const totalStockValue = stockItems.reduce(
+  // ACTIVE items only — the same set as Stock Valuation / Closing Stock / Trading A/c (RULE 2); an inactive item that
+  // still held stock made this card disagree with the closing stock in the books.
+  const totalStockValue = stockItems.filter(item => item.isActive).reduce(
     (sum, item) => sum + computeStockValue(item, reconciledStockMovements),
     0,
   );
-  const lowStockCount = stockItems.filter(item => (computedStockMap[item.id] ?? 0) < 5).length;
+  const lowStockCount = stockItems.filter(item => item.isActive && (computedStockMap[item.id] ?? 0) < 5).length;
 
   const filteredItems = stockItems.filter(item => {
     const matchSearch =

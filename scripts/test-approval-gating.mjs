@@ -40,7 +40,10 @@ ok(!/approvalRequired && v\.approvalStatus === 'pending'/.test(dc), 'DataContext
 ok(/const syncEntries = \(v: Voucher\) => \{[\s\S]{0,400}if \(!isCountedVoucher\(v\)\) return;/.test(dc), 'syncEntries writes no voucher_entries for a pending voucher');
 for (const page of ['Dashboard', 'DepreciationSchedule', 'FederationReport', 'FundRegister', 'NabardReport', 'ProfitDistribution', 'ReserveFund', 'AuditCertificate', 'BankReconciliation', 'DayBook', 'Ledger']) {
   const s = src(`src/pages/${page}.tsx`);
-  ok(s.includes('isCountedVoucher'), `${page} uses isCountedVoucher`);
+  // Either filters with isCountedVoucher itself, or reads the shared getAccountBalance (built from activeVouchers,
+  // which is isCountedVoucher — asserted above), or reads no vouchers at all (RULE 2 batch 1, 2026-10-09).
+  const gated = s.includes('isCountedVoucher') || s.includes('getAccountBalance(') || !/\bvouchers\.(filter|forEach|map|reduce|some)\(/.test(s);
+  ok(gated, `${page} counts only approved vouchers (isCountedVoucher / shared balance)`);
   ok(!/isCountedVoucher\(v, /.test(s), `${page} passes no approvalRequired flag`);
 }
 const dash = src('src/pages/Dashboard.tsx');

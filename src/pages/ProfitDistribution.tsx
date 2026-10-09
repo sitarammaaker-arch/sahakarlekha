@@ -29,7 +29,6 @@ import { statutoryLimits, dividendRateIssue } from '@/lib/rules/statutoryLimits'
 import { useDistributionRuns } from '@/hooks/useDistributionRuns';
 import { linesTotal } from '@/lib/distribution/engine';
 import { dividendRunLines, liveRunFor, existingRunFor, dividendBreakdown, snapshotLines, postedAppropriation, dividendPaymentsByMember } from '@/lib/distribution/dividendRuns';
-import { isCountedVoucher } from '@/lib/countedVoucher';
 
 // ── Account IDs ─────────────────────────────────────────────────────────────
 const ACC_NET_SURPLUS   = '1208';
@@ -59,7 +58,7 @@ const usePosted = (
 const ProfitDistribution: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { vouchers, accounts, members, society, getProfitLoss, addVoucher, getShareCapitalReconciliation } = useData();
+  const { vouchers, accounts, members, society, getProfitLoss, addVoucher, getShareCapitalReconciliation, getAccountBalance } = useData();
   const shareRecon = getShareCapitalReconciliation();   // ECR-05: dividend reads the member (subsidiary) base — enforce it ties to the control ledger first
   const { toast } = useToast();
 
@@ -144,19 +143,9 @@ const ProfitDistribution: React.FC = () => {
   const remaining = Math.round((distributable - (divPosted ? 0 : totalDividend) - (bonusPosted ? 0 : bonusAmount)) * 100) / 100;
 
   // ── Account balance helper ─────────────────────────────────────────────────
-  const getBalance = (id: string) => {
-    const acc = accounts.find(a => a.id === id);
-    if (!acc) return 0;
-    let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
-    vouchers.filter(isCountedVoucher).forEach(v => {
-      getVoucherLines(v).forEach(l => {
-        if (l.accountId !== id) return;
-        if (l.type === 'Dr') bal -= l.amount;
-        else bal += l.amount;
-      });
-    });
-    return bal;
-  };
+  // Credit-positive balance from the ONE shared balance (DataContext.getAccountBalance, Dr−Cr: journal-aware,
+  // same as Trial Balance / Balance Sheet). This page kept its own voucher loop — a second balance formula (RULE 2).
+  const getBalance = (id: string) => -getAccountBalance(id);
 
   // ── Dividend PAYMENT (settlement) ──────────────────────────────────────────
   // Appropriation only credits the payable (Cr 1211). Settlement pays members

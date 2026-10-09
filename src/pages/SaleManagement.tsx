@@ -70,7 +70,7 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const SaleManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { sales, stockItems, reconciledStockMovements, customers, accounts, addSale, updateSale, deleteSale, addStockItem, society, usesPostingService } = useData();
+  const { sales, stockItems, reconciledStockMovements, customers, accounts, addSale, updateSale, deleteSale, addStockItem, society, usesPostingService, matchesActiveBranch } = useData();
   // Available qty is ALWAYS movement-based (RULE 2), reconciled to live docs (RULE 3). Never read
   // stockItem.currentStock here — that cache drifts when a purchase voucher is edited/deleted and
   // caused the "sale shows 120 but stock report shows 0" bug.
@@ -416,13 +416,14 @@ const SaleManagement: React.FC = () => {
   // ── Filtered sales ────────────────────────────────────────────────────────
   const filteredSales = useMemo(() => {
     return sales.filter(s => {
+      if (!matchesActiveBranch(s.branchId)) return false;   // ECR-17: same branch scope as the Sale Register (RULE 2)
       if (filterFrom && s.date < filterFrom) return false;
       if (filterTo && s.date > filterTo) return false;
       if (filterCustomer && !s.customerName.toLowerCase().includes(filterCustomer.toLowerCase())) return false;
       if (filterMode !== 'all' && s.paymentMode !== filterMode) return false;
       return true;
     });
-  }, [sales, filterFrom, filterTo, filterCustomer, filterMode]);
+  }, [sales, filterFrom, filterTo, filterCustomer, filterMode, matchesActiveBranch]);
 
   const handleCSV = () => {
     const headers = ['Sale No', 'Date', 'Customer', 'Phone', 'Items', 'Net Amount', 'Payment Mode'];
@@ -437,9 +438,12 @@ const SaleManagement: React.FC = () => {
 
   // ── Summary stats ─────────────────────────────────────────────────────────
   const totalCount = filteredSales.length;
-  const totalNet = filteredSales.reduce((s, sale) => s + sale.netAmount, 0);
-  const cashTotal = filteredSales.filter(s => s.paymentMode === 'cash').reduce((s, sale) => s + sale.netAmount, 0);
-  const creditTotal = filteredSales.filter(s => s.paymentMode === 'credit').reduce((s, sale) => s + sale.netAmount, 0);
+  // Bill amounts (GST + round off included) — the Sale Register's total. These cards summed netAmount (the
+  // taxable value BEFORE GST), so "कुल राशि" here never matched the register (RULE 2).
+  const billAmt = (x: { grandTotal?: number; netAmount: number }) => x.grandTotal ?? x.netAmount;
+  const totalNet = filteredSales.reduce((s, sale) => s + billAmt(sale), 0);
+  const cashTotal = filteredSales.filter(s => s.paymentMode === 'cash').reduce((s, sale) => s + billAmt(sale), 0);
+  const creditTotal = filteredSales.filter(s => s.paymentMode === 'credit').reduce((s, sale) => s + billAmt(sale), 0);
 
   return (
     <div className="p-4 space-y-4">

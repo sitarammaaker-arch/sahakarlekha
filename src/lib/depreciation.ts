@@ -126,3 +126,21 @@ export function calcDepForFY(asset: Asset, fy: string, priorAccumDep = 0): numbe
     ? calcWDVDepreciation(asset, fy, priorAccumDep)
     : calcSLMDepreciation(asset, fy);
 }
+
+/**
+ * Accumulated depreciation of THIS asset up to and including `fy` — replayed year by year from its purchase FY
+ * with calcDepForFY (the posting's own function). For a per-asset book value: the per-category accumulated-
+ * depreciation ledger holds the whole group, so cost − that ledger mis-stated every asset sharing a category
+ * (Audit #6; DepreciationSchedule's asset rows still did this until 2026-10-09). Guarded against runaway loops.
+ */
+export function accumulatedDepThrough(asset: Asset, fy: string): number {
+  if (!asset.purchaseDate) return 0;
+  let accum = 0;
+  let cursor = fyOfDate(new Date(asset.purchaseDate));
+  let guard = 0;
+  while (cursor <= fy && guard++ < 200) {
+    accum += calcDepForFY(asset, cursor, accum);
+    cursor = nextFY(cursor);
+  }
+  return accum;
+}

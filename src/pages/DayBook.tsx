@@ -114,11 +114,12 @@ const DayBook: React.FC = () => {
     // ECR-17: account openings belong to the Head Office scope (matchesActiveBranch(undefined)
     // is exactly the unbranched-record rule) — same as the Cash Book / Trial Balance.
     const obInScope = matchesActiveBranch(undefined);
-    const cashAccOB = obInScope ? (accounts.find(a => a.id === ACCOUNT_IDS.CASH)?.openingBalance || 0) : 0;
-    const bankAccOB = !obInScope ? 0 : getBankAccountIds(accounts).reduce((sum, bid) => {
-      const a = accounts.find(x => x.id === bid);
-      return sum + (a?.openingBalance || 0);
-    }, 0);
+    // SIGNED opening — the same rule as the Cash / Bank Book (lib/reports/accountBook: debit +, else −). It was the
+    // raw amount, so an overdrawn bank (credit opening) started the Day Book ₹2× off the Cash/Bank Book (RULE 2).
+    const signedOB = (a?: { openingBalance?: number; openingBalanceType?: string }) =>
+      !a ? 0 : (a.openingBalanceType === 'debit' ? (a.openingBalance || 0) : -(a.openingBalance || 0));
+    const cashAccOB = obInScope ? signedOB(accounts.find(a => a.id === ACCOUNT_IDS.CASH)) : 0;
+    const bankAccOB = !obInScope ? 0 : getBankAccountIds(accounts).reduce((sum, bid) => sum + signedOB(accounts.find(x => x.id === bid)), 0);
     // Vouchers BEFORE the first visible date (i.e. outside the current filter window)
     const firstDate = entries.length > 0 ? entries[0].date : null;
     let preCash = cashAccOB;

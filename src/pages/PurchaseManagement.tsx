@@ -68,7 +68,7 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const PurchaseManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { purchases, stockItems, suppliers, accounts, addPurchase, updatePurchase, deletePurchase, addStockItem, society, usesPostingService } = useData();
+  const { purchases, stockItems, suppliers, accounts, addPurchase, updatePurchase, deletePurchase, addStockItem, society, usesPostingService, matchesActiveBranch } = useData();
   const { toast } = useToast();
 
   // ── New Purchase form state ───────────────────────────────────────────────
@@ -443,13 +443,14 @@ const PurchaseManagement: React.FC = () => {
   // ── Filtered purchases ────────────────────────────────────────────────────
   const filteredPurchases = useMemo(() => {
     return purchases.filter(p => {
+      if (!matchesActiveBranch(p.branchId)) return false;   // ECR-17: same branch scope as the Purchase Register (RULE 2)
       if (filterFrom && p.date < filterFrom) return false;
       if (filterTo && p.date > filterTo) return false;
       if (filterSupplier && !p.supplierName.toLowerCase().includes(filterSupplier.toLowerCase())) return false;
       if (filterMode !== 'all' && p.paymentMode !== filterMode) return false;
       return true;
     });
-  }, [purchases, filterFrom, filterTo, filterSupplier, filterMode]);
+  }, [purchases, filterFrom, filterTo, filterSupplier, filterMode, matchesActiveBranch]);
 
   const handleCSV = () => {
     const headers = ['Purchase No', 'Bill No', 'Bill Date', 'Date', 'Supplier', 'Phone', 'Items', 'Net Amount', 'Payment Mode'];
@@ -464,9 +465,12 @@ const PurchaseManagement: React.FC = () => {
 
   // ── Summary stats ─────────────────────────────────────────────────────────
   const totalCount = filteredPurchases.length;
-  const totalNet = filteredPurchases.reduce((s, p) => s + p.netAmount, 0);
-  const cashTotal = filteredPurchases.filter(p => p.paymentMode === 'cash').reduce((s, p) => s + p.netAmount, 0);
-  const creditTotal = filteredPurchases.filter(p => p.paymentMode === 'credit').reduce((s, p) => s + p.netAmount, 0);
+  // Bill amounts (GST, TDS/TCS, cash discount, round off applied) — the Purchase Register's total. These cards
+  // summed netAmount (the taxable value), so "कुल राशि" here never matched the register (RULE 2).
+  const billAmt = (x: { grandTotal?: number; netAmount: number }) => x.grandTotal ?? x.netAmount;
+  const totalNet = filteredPurchases.reduce((s, p) => s + billAmt(p), 0);
+  const cashTotal = filteredPurchases.filter(p => p.paymentMode === 'cash').reduce((s, p) => s + billAmt(p), 0);
+  const creditTotal = filteredPurchases.filter(p => p.paymentMode === 'credit').reduce((s, p) => s + billAmt(p), 0);
 
   return (
     <div className="p-4 space-y-4">
