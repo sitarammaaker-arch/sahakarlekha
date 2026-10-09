@@ -157,12 +157,16 @@ const LedgerHeads: React.FC = () => {
 
   // A ledger with entries or an opening balance can't be ticked "Group" (DataContext.updateAccount
   // enforces it too) — a group's balance is invisible to every report.
+  // And a group with accounts under it can't be unticked back to a ledger (its children would hang under a
+  // postable account) — DataContext.updateAccount refuses that too.
+  const editGroupChildren = useMemo(() => (editAccount?.isGroup ? accounts.filter(a => a.parentId === editAccount.id).length : 0), [editAccount, accounts]);
   const editLocksGroup = useMemo(() => {
-    if (!editAccount || editAccount.isGroup) return false;
+    if (!editAccount) return false;
+    if (editAccount.isGroup) return editGroupChildren > 0;
     if ((Number(editAccount.openingBalance) || 0) !== 0) return true;
     return vouchers.some(v => !v.isDeleted && (v.debitAccountId === editAccount.id || v.creditAccountId === editAccount.id
       || (v.lines ?? []).some(l => l.accountId === editAccount.id)));
-  }, [editAccount, vouchers]);
+  }, [editAccount, vouchers, editGroupChildren]);
 
   // Summary counts
   const leafAccounts = accounts.filter(a => !a.isGroup);
@@ -233,14 +237,21 @@ const LedgerHeads: React.FC = () => {
     }
   };
 
+  // Parent group as the importer's parent_group cell accepts it (code if the group has one, else its name),
+  // so an exported chart can be edited and imported back without losing the hierarchy.
+  const parentLabel = (acc: LedgerAccount) => {
+    const p = acc.parentId ? accounts.find(a => a.id === acc.parentId) : undefined;
+    return p ? (accountCode(p) || p.name) : '';
+  };
+
   const handleCSV = () => {
-    const headers = ['Code', 'Name', 'Name (Hindi)', 'Type', 'Opening Balance', 'Balance Type', 'Group'];
-    const rows = displayList.map(({ acc }) => [accountCode(acc), acc.name, acc.nameHi || '', acc.type, acc.openingBalance || 0, acc.openingBalanceType || '', acc.isGroup ? 'Group' : 'Ledger']);
+    const headers = ['Code', 'Name', 'Name (Hindi)', 'Type', 'Parent Group', 'Opening Balance', 'Balance Type', 'Group'];
+    const rows = displayList.map(({ acc }) => [accountCode(acc), acc.name, acc.nameHi || '', acc.type, parentLabel(acc), acc.openingBalance || 0, acc.openingBalanceType || '', acc.isGroup ? 'Group' : 'Ledger']);
     downloadCSV(headers, rows, 'ledger_heads.csv');
   };
   const handleExcel = () => {
-    const headers = ['Code', 'Name', 'Name (Hindi)', 'Type', 'Opening Balance', 'Balance Type', 'Group'];
-    const rows = displayList.map(({ acc }) => [accountCode(acc), acc.name, acc.nameHi || '', acc.type, acc.openingBalance || 0, acc.openingBalanceType || '', acc.isGroup ? 'Group' : 'Ledger']);
+    const headers = ['Code', 'Name', 'Name (Hindi)', 'Type', 'Parent Group', 'Opening Balance', 'Balance Type', 'Group'];
+    const rows = displayList.map(({ acc }) => [accountCode(acc), acc.name, acc.nameHi || '', acc.type, parentLabel(acc), acc.openingBalance || 0, acc.openingBalanceType || '', acc.isGroup ? 'Group' : 'Ledger']);
     downloadExcelSingle(headers, rows, 'ledger_heads.xlsx', 'Ledger Heads');
   };
 
@@ -753,7 +764,9 @@ const LedgerHeads: React.FC = () => {
                 {hi ? 'यह एक ग्रुप है' : 'This is a Group'}
                 {editLocksGroup && (
                   <span className="block text-xs font-normal">
-                    {hi ? 'इस खाते में एंट्री/Opening Balance है — इसे ग्रुप नहीं बनाया जा सकता। नया ग्रुप अलग से बनाएँ।' : 'This account has entries/an opening balance, so it cannot become a group. Create a separate group instead.'}
+                    {editGroupChildren > 0
+                      ? (hi ? `इस ग्रुप के नीचे ${editGroupChildren} खाते हैं — लेजर बनाने से पहले उन्हें दूसरे ग्रुप में ले जाएँ।` : `${editGroupChildren} account(s) sit under this group — move them to another group before making it a ledger.`)
+                      : (hi ? 'इस खाते में एंट्री/Opening Balance है — इसे ग्रुप नहीं बनाया जा सकता। नया ग्रुप अलग से बनाएँ।' : 'This account has entries/an opening balance, so it cannot become a group. Create a separate group instead.')}
                   </span>
                 )}
               </label>
