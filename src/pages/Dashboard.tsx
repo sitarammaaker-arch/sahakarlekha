@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { healthChecks, healthScore as scoreHealth, type HealthCheck } from '@/lib/healthScore';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
@@ -27,6 +28,14 @@ const MONTHS_HI = ['अप्रैल', 'मई', 'जून', 'जुलाई
 const MONTHS_EN = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
 
 const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#f97316', '#84cc16'];
+
+const CHECK_LABEL: Record<HealthCheck['key'], { hi: string; en: string }> = {
+  bs: { hi: 'बैलेंस शीट संतुलित', en: 'Balance Sheet tallied' },
+  share: { hi: 'अंश पूँजी: सदस्य रजिस्टर = खाता', en: 'Share capital: members = ledger' },
+  asset: { hi: 'संपत्ति रजिस्टर = खाता', en: 'Asset register = ledger' },
+  overdue: { hi: 'कोई अतिदेय ऋण नहीं', en: 'No overdue loans' },
+  objections: { hi: 'कोई लंबित ऑडिट आपत्ति नहीं', en: 'No pending audit objections' },
+};
 
 const Dashboard: React.FC = () => {
   const { t, language } = useLanguage();
@@ -104,16 +113,6 @@ const Dashboard: React.FC = () => {
     const overdueCount = loans.filter(l => effectiveLoanStatus(l, todayStr()) === 'overdue').length;   // one overdue rule (RULE 2)
     const pendingObjections = auditObjections.filter(o => o.status === 'pending').length;
 
-    // --- P4-1: Financial Health Score (0–100) ---
-    let earned = 0;
-    let maxPts = 0;
-    if (netProfit > 0)       { maxPts += 25; if (reservePosted) earned += 25; }
-    maxPts += 20;              if (bsTallied) earned += 20;
-    if (physicalClosingStock > 0) { maxPts += 10; if (stockOk) earned += 10; }
-    if (loans.length > 0)    { maxPts += 20; if (sec32Ok) earned += 20; }
-    if (loans.length > 0)    { maxPts += 15; if (overdueCount === 0) earned += 15; }
-    if (auditObjections.length > 0) { maxPts += 10; if (pendingObjections === 0) earned += 10; }
-    const healthScore = maxPts > 0 ? Math.round((earned / maxPts) * 100) : 100;
 
     // --- P4-2: Smart Advisories ---
     // Each advisory carries the route of the page where the user can act on it,
@@ -161,7 +160,18 @@ const Dashboard: React.FC = () => {
     if (advisories.length === 0)
       advisories.push({ severity: 'info', en: 'All compliance checks passed — cooperative is in good financial health', hi: 'सभी अनुपालन जांचें पास — सहकारी संस्था की वित्तीय स्थिति उत्तम है' });
 
-    return { reservePosted, bsTallied, stockOk, sec32Ok, fyLocked, netProfit, healthScore, advisories, physicalClosingStock, sec32Pct, shareRecon };
+    // P4-1: Financial Health Score — src/lib/healthScore (only provable book-keeping facts count).
+    const healthInputs = {
+      bsTallied,
+      shareReconciled: shareRecon.reconciled, shareApplies: shareRecon.subsidiaryTotal !== 0 || shareRecon.controlBalance !== 0,
+      assetReconciled: assetRecon.reconciled, assetApplies: assetRecon.registerTotal !== 0 || assetRecon.controlBalance !== 0,
+      loanCount: loans.length, overdueLoans: overdueCount,
+      objectionCount: auditObjections.length, pendingObjections,
+    };
+    const healthScore = scoreHealth(healthInputs);
+    const checks = healthChecks(healthInputs);
+
+    return { reservePosted, bsTallied, stockOk, sec32Ok, fyLocked, netProfit, healthScore, checks, advisories, physicalClosingStock, sec32Pct, shareRecon };
   }, [vouchers, getTrialBalance, getTradingAccount, loans, society, netProfit, auditObjections, getShareCapitalReconciliation, getAssetRegisterReconciliation]);
 
   const recentVouchers = [...vouchers.filter(v => !v.isDeleted)]
@@ -516,30 +526,21 @@ const Dashboard: React.FC = () => {
               <span className="text-xs text-muted-foreground">/100</span>
             </span>
           </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            {language === 'hi'
+              ? 'स्कोर में गिना जाता है: बैलेंस शीट, अंश पूँजी मिलान, संपत्ति रजिस्टर मिलान, अतिदेय ऋण, लंबित ऑडिट आपत्तियाँ। जो लागू नहीं, वह नहीं गिना जाता।'
+              : 'Counts: Balance Sheet, share-capital match, asset-register match, overdue loans, pending audit objections. A check that does not apply is not counted.'}
+          </p>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {[
-              {
-                label: language === 'hi' ? `${society.reserveFundPct ?? 25}% रिज़र्व फंड` : `${society.reserveFundPct ?? 25}% Reserve Fund`,
-                ok: complianceChecks.netProfit <= 0 || complianceChecks.reservePosted,
-                na: complianceChecks.netProfit <= 0,
-              },
-              {
-                label: language === 'hi' ? 'बैलेंस शीट संतुलित' : 'Balance Sheet Tallied',
-                ok: complianceChecks.bsTallied,
-                na: false,
-              },
-              {
-                label: language === 'hi' ? 'समापन माल (स्वतः)' : 'Closing Stock (auto-valued)',
-                ok: complianceChecks.stockOk,
-                na: false,
-              },
-              {
-                label: language === 'hi' ? 'ऋण सीमा (10× स्वामित्व निधि)' : 'Loan Limit (10× owned funds)',
-                ok: complianceChecks.sec32Ok,
-                na: false,
-              },
+              ...complianceChecks.checks.map(c => ({
+                label: language === 'hi' ? CHECK_LABEL[c.key].hi : CHECK_LABEL[c.key].en,
+                ok: c.ok,
+                na: !c.applies,
+                infoOnly: false,
+              })),
               {
                 label: language === 'hi' ? 'ऑडिट लॉक' : 'Audit FY Lock',
                 ok: complianceChecks.fyLocked,

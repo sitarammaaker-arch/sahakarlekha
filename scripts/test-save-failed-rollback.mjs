@@ -22,6 +22,9 @@ const body = (name) => {
 
 // 1. Nothing English / rollback-less is left
 ok(!/title: 'Save failed'/.test(dc), 'no English "Save failed" toast left in DataContext');
+// RULE 7: Hindi first — the English-only titles and Roman-Hindi descriptions swept on 2026-10-09
+ok(!/toastRef\.current\(\{ title: '(FY Locked|Invalid amount|Invalid transfer|Account not found|System account|Cannot delete (account|supplier|customer)|Stock (update|save) failed|Sale not found|Purchase not found)'/.test(dc), 'no English-only toast titles left (FY lock, invalid amount, cannot delete …)');
+ok(!/(Badlav|Cancel) local se hata diya/.test(dc), 'no Roman-Hindi "local se hata diya" left');
 
 // 2. The helper: restore, then a loud Hindi toast
 const h = dc.slice(dc.indexOf('const failedCloudWrite = '), dc.indexOf('// ── Voucher persistence helper'));

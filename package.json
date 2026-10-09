@@ -397,7 +397,8 @@
     "test:tax02-delete-rollback": "node scripts/test-tax02-delete-rollback.mjs",
     "test:ask-classify-end": "node scripts/test-ask-classify-end.mjs",
     "test:purchase-tds-advice": "node scripts/test-purchase-tds-advice.mjs",
-    "test:save-failed-rollback": "node scripts/test-save-failed-rollback.mjs"
+    "test:save-failed-rollback": "node scripts/test-save-failed-rollback.mjs",
+    "test:health-score": "node scripts/test-health-score.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

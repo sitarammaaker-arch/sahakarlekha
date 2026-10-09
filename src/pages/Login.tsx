@@ -141,21 +141,23 @@ const Login: React.FC = () => {
             Cooperative Society Accounting System
           </p>
           <p className="text-center text-primary-foreground/60 max-w-md">
-            भारतीय सहकारी विपणन समितियों के लिए विशेष रूप से डिज़ाइन किया गया
+            भारतीय सहकारी समितियों के लिए विशेष रूप से डिज़ाइन किया गया
             क्लाउड-आधारित लेखा सॉफ्टवेयर
           </p>
+          {/* What the product IS — no usage / uptime numbers (the old society / member / uptime figures
+              were not true; public-claims rule, founder 2026-10-09). */}
           <div className="mt-12 grid grid-cols-3 gap-8 text-center">
             <div>
-              <p className="text-3xl font-bold">500+</p>
-              <p className="text-sm text-primary-foreground/70">समितियां</p>
+              <p className="text-2xl font-bold">हिंदी</p>
+              <p className="text-sm text-primary-foreground/70">और English में</p>
             </div>
             <div>
-              <p className="text-3xl font-bold">10,000+</p>
-              <p className="text-sm text-primary-foreground/70">सदस्य</p>
+              <p className="text-2xl font-bold">डबल-एंट्री</p>
+              <p className="text-sm text-primary-foreground/70">लेखा</p>
             </div>
             <div>
-              <p className="text-3xl font-bold">99.9%</p>
-              <p className="text-sm text-primary-foreground/70">अपटाइम</p>
+              <p className="text-2xl font-bold">ऑडिट</p>
+              <p className="text-sm text-primary-foreground/70">के लिए तैयार रिपोर्ट</p>
             </div>
           </div>
         </div>
