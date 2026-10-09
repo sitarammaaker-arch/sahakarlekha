@@ -45,4 +45,4 @@ revoke all on function public.app_login(text, text) from public;
 grant execute on function public.app_login(text, text) to anon, authenticated;
 
 -- Quick test (replace with a real email/password):
--- select * from public.app_login('mgrcmsrania@gmail.com', 'cms@125076');
+-- select * from public.app_login('you@example.com', '<your-password>');
