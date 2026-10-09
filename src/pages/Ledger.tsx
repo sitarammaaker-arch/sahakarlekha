@@ -17,6 +17,7 @@ import { generateLedgerPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { PrintButton, PrintHeader } from '@/components/ReportPrint';
+import { directBillsForAccount } from '@/lib/directBills';
 
 interface LedgerEntry {
   id: string;
@@ -31,7 +32,7 @@ interface LedgerEntry {
 
 const Ledger: React.FC = () => {
   const { t, language } = useLanguage();
-  const { accounts, vouchers, society, matchesActiveBranch } = useData();
+  const { accounts, vouchers, society, matchesActiveBranch, customers, suppliers, sales, purchases } = useData();
 
   const [searchParams] = useSearchParams();
   const urlAccountId = searchParams.get('account');
@@ -137,6 +138,13 @@ const Ledger: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const entries = useMemo(() => buildEntries(language), [selectedAccount, selectedAccountId, vouchers, accounts, fromDate, toDate, language, society.financialYear]);
 
+  // A party's CASH / BANK bills never touch its ledger (Dr Cash / Cr Sales) — listed below as a memo so the
+  // statement shows everything the party bought / sold (founder 2026-10-09). Balance is unaffected.
+  const directBills = useMemo(() => directBillsForAccount(selectedAccountId, { customers, suppliers, sales, purchases },
+    { from: fromDate || undefined, to: toDate || undefined, inScope: matchesActiveBranch }),
+    [selectedAccountId, customers, suppliers, sales, purchases, fromDate, toDate, matchesActiveBranch]);
+  const directTotal = directBills.reduce((s, b) => s + b.amount, 0);
+
   const totalDebit = entries.reduce((s, e) => s + e.debit, 0);
   const totalCredit = entries.reduce((s, e) => s + e.credit, 0);
   const closing = entries[entries.length - 1];
@@ -157,7 +165,7 @@ const Ledger: React.FC = () => {
     if (!selectedAccount) return;
     // Always use English entries for PDF — jsPDF doesn't support Devanagari
     const pdfEntries = buildEntries('en');
-    generateLedgerPDF(pdfEntries, selectedAccount, society, 'en', fromDate, toDate);
+    generateLedgerPDF(pdfEntries, selectedAccount, society, 'en', fromDate, toDate, directBills);
   };
 
   const exportHeaders = ['Date', 'Voucher No.', 'Particulars', 'Debit', 'Credit', 'Balance'];
@@ -358,6 +366,45 @@ const Ledger: React.FC = () => {
               </TableBody>
             </Table>
           </div>
+          {directBills.length > 0 && (
+            <div className="border-t p-4 space-y-2">
+              <p className="text-sm font-semibold">
+                {language === 'hi' ? 'नकद / बैंक बिल (हिसाब पर असर नहीं)' : 'Cash / bank bills (do not affect the balance)'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {language === 'hi'
+                  ? 'ये बिल नकद या बैंक से उसी समय चुकता हुए, इसलिए इस खाते में नामे-जमा नहीं हुए (सीधे रोकड़ / बैंक में गए)। जानकारी के लिए यहाँ दिखाए गए हैं।'
+                  : 'These bills were settled in cash or by bank at once, so they were never posted to this account (they went straight to Cash / Bank). Shown for reference.'}
+              </p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{language === 'hi' ? 'तारीख़' : 'Date'}</TableHead>
+                    <TableHead>{language === 'hi' ? 'बिल नं.' : 'Bill No.'}</TableHead>
+                    <TableHead>{language === 'hi' ? 'प्रकार' : 'Type'}</TableHead>
+                    <TableHead className="text-right">{language === 'hi' ? 'राशि' : 'Amount'}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {directBills.map(b => (
+                    <TableRow key={b.id}>
+                      <TableCell className="text-sm whitespace-nowrap">{fmtDate(b.date)}</TableCell>
+                      <TableCell><Badge variant="outline" className="font-mono text-xs">{b.no}</Badge></TableCell>
+                      <TableCell className="text-sm">
+                        {b.kind === 'sale' ? (language === 'hi' ? 'बिक्री' : 'Sale') : (language === 'hi' ? 'खरीद' : 'Purchase')}
+                        {' · '}{b.mode === 'cash' ? (language === 'hi' ? 'नकद' : 'Cash') : (language === 'hi' ? 'बैंक' : 'Bank')}
+                      </TableCell>
+                      <TableCell className="text-right text-sm">Rs. {fmt(b.amount)}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="font-semibold">
+                    <TableCell colSpan={3} className="text-right">{t('total')}</TableCell>
+                    <TableCell className="text-right">Rs. {fmt(directTotal)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

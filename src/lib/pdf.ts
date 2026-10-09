@@ -1150,7 +1150,9 @@ export function generateLedgerPDF(
   society: SocietySettings,
   language: 'hi' | 'en',
   fromDate?: string,
-  toDate?: string
+  toDate?: string,
+  /** Cash / bank bills of this party (lib/directBills) — printed as a memo below the statement. */
+  directBills: { date: string; no: string; kind: 'sale' | 'purchase'; mode: 'cash' | 'bank'; amount: number }[] = [],
 ) {
   const doc = new jsPDF();
   const subtitle = fromDate && toDate
@@ -1183,6 +1185,24 @@ export function generateLedgerPDF(
     columnStyles: { 3: { halign: 'right', cellWidth: 28 }, 4: { halign: 'right', cellWidth: 28 }, 5: { halign: 'right', cellWidth: 28 } },
     didParseCell: rightAlignAmountColumns(3, 4, 5),
   });
+
+  if (directBills.length > 0) {
+    const y = (doc as any).lastAutoTable.finalY + 8;
+    doc.setFontSize(9);
+    doc.setFont(font, 'bold');
+    doc.text('Cash / bank bills (settled at once - not posted to this account; balance unaffected)', 14, y);
+    autoTable(doc, {
+      startY: y + 3,
+      head: [['Date', 'Bill No.', 'Type', 'Amount']],
+      body: directBills.map(b => [fmtDate(b.date), b.no, `${b.kind === 'sale' ? 'Sale' : 'Purchase'} - ${b.mode === 'cash' ? 'Cash' : 'Bank'}`, fmt(b.amount)]),
+      foot: [['', '', 'Total', fmt(directBills.reduce((s, b) => s + b.amount, 0))]],
+      styles: { fontSize: 8, cellPadding: 2, font },
+      headStyles: { fillColor: [120, 120, 120], textColor: 255, fontStyle: 'bold' },
+      footStyles: { fillColor: [235, 235, 235], textColor: 20, fontStyle: 'bold' },
+      columnStyles: { 3: { halign: 'right', cellWidth: 32 } },
+      didParseCell: rightAlignAmountColumns(3),
+    });
+  }
 
   const sigY = (doc as any).lastAutoTable.finalY + 10;
   const sig = getSignatoryNames(society);

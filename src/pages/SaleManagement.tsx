@@ -35,6 +35,8 @@ import { fmtDate } from '@/lib/dateUtils';
 import { getBankAccountIds } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import { computeInvoiceTotals, autoRoundOff, MAX_ROUND_OFF } from '@/lib/invoiceTotals';
+import { cashReceiptWarning, cashReceiptWarningText } from '@/lib/rules/cashReceiptLimit';
+import { sameDayCashFromCustomer } from '@/lib/directBills';
 import { toMinor, toRupees, mulMinor } from '@/lib/money';
 import { useToast } from '@/hooks/use-toast';
 import type { SaleItem, PaymentMode } from '@/types';
@@ -133,6 +135,11 @@ const SaleManagement: React.FC = () => {
   const wantedRoundOff = !roundOffOn ? 0 : roundOffManual.trim() !== '' ? Number(roundOffManual) || 0 : autoRoundOff(preRound.totalBeforeRoundOff);
   const { netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal, roundOff } =
     computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct, roundOff: wantedRoundOff });
+  // Income-tax Act 2025 s.186 (ex-269ST): ₹2 lakh+ in cash from one person in a day / one bill is barred.
+  // WARN only (never block) — lib/rules/cashReceiptLimit carries the dated, sourced rule.
+  const cashWarning = paymentMode === 'cash'
+    ? cashReceiptWarning(saleDate, grandTotal, sameDayCashFromCustomer(sales, customerId || undefined, saleDate, editingId ?? undefined))
+    : null;
 
   // ── Item row helpers ──────────────────────────────────────────────────────
   const updateItem = (index: number, patch: Partial<SaleItem>) => {
@@ -775,6 +782,11 @@ const SaleManagement: React.FC = () => {
                     </button>
                   ))}
                 </div>
+                {cashWarning && (
+                  <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-2">
+                    ⚠️ {cashReceiptWarningText(cashWarning, language === 'hi')}
+                  </p>
+                )}
                 {paymentMode === 'bank' && (
                   <div className="space-y-1">
                     <Label>{language === 'hi' ? 'बैंक खाता' : 'Bank Account'}</Label>

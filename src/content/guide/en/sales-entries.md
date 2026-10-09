@@ -63,6 +63,7 @@ Cash: Dr Cash 800 / Cr Seed Sales 800. Credit: Dr Shyam 3,000 / Cr Fertiliser Sa
 
 ## ❓ FAQ
 **Q. A cash (walk-in) customer?** Yes, just write the name; a registered customer is required for credit.
+**Q. Why is a cash / bank sale not in the customer's ledger?** It was paid at once, so it posts straight to Cash / Bank, not to the customer (as in Tally). The customer's ledger lists such bills below the statement as "Cash / bank bills (do not affect the balance)". Cash of ₹2,00,000 or more from one person in a day (or one bill) is barred by s.186 of the Income-tax Act, 2025 (ex-269ST); the sale form warns.
 **Q. No stock but the customer wants it?** Record the purchase first.
 
 ## ✏️ Exercises
