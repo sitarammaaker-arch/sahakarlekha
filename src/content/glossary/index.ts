@@ -300,8 +300,6 @@ export const MODULE_TERMS: Record<string, string[]> = {
   // Transaction screens (KI-000401..408) — vocabulary at the point of work.
   '/purchases': ['purchase'],
   '/sales': ['sale'],
-  '/receive-payment': ['receipt-voucher'],
-  '/make-payment': ['payment-voucher'],
   '/tds-register': ['tds'],
   '/gst-summary': ['gst'],
   '/asset-register': ['depreciation'],

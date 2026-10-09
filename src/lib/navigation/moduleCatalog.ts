@@ -63,10 +63,8 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   // Same shared sales/inventory engine as consumer returns — generic to any society that buys/sells,
   // so gated by inventory_sales (not the consumer-only pos_billing) and placed in Operations.
   { id: 'salesReturn',    titleKey: 'salesReturn',    icon: Undo2,           route: '/sales-return',    domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant'], order: 4.5 },
-  { id: 'receivePayment', titleKey: 'receivePayment', icon: HandCoins,       route: '/receive-payment', domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 5 },
   { id: 'purchases',      titleKey: 'purchases',      icon: PackagePlus,     route: '/purchases',       domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 6 },
   { id: 'purchaseReturn', titleKey: 'purchaseReturn', icon: Undo2,           route: '/purchase-return', domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant'], order: 6.5 },
-  { id: 'makePayment',    titleKey: 'makePayment',    icon: Banknote,        route: '/make-payment',    domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 7 },
   { id: 'salary',         titleKey: 'salary',         icon: BadgeDollarSign, route: '/salary',          domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 8 },
   { id: 'payroll',        titleKey: 'payroll',        icon: Wallet,          route: '/payroll',         domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 8.5 },
   { id: 'milkCollection', titleKey: 'milkCollection', icon: Milk,            route: '/milk-collection', domain: 'dairy', requiredCapabilities: ['dairy_collection'], order: 0 },  // C4: dairy-only

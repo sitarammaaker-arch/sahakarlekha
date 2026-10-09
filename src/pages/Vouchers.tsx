@@ -90,7 +90,7 @@ const Vouchers: React.FC = () => {
   // Bill-wise settlement (Tally "Against Reference") opened inline within the voucher screen.
   const [billWiseMode, setBillWiseMode] = useState<'receive' | 'pay' | null>(null);
 
-  // The old Compound Voucher page was retired into this screen (2026-10-09): /compound-voucher and F4 now land
+  // Retired pages land here (2026-10-09). Compound Voucher: /compound-voucher and F4 now land
   // here as /vouchers?mode=expert&type=journal — the Expert form does everything it did (N Dr + N Cr lines) and more.
   const [searchParams] = useSearchParams();
   useEffect(() => {
@@ -101,6 +101,10 @@ const Vouchers: React.FC = () => {
     }
     const t = searchParams.get('type');
     if (t === 'journal' || t === 'receipt' || t === 'payment' || t === 'contra') setVoucherType(t);
+    // /receive-payment and /make-payment were retired into this screen's bill-wise panel (same component):
+    // they land here as ?billwise=receive|pay and open "ग्राहक से वसूली" / "आपूर्तिकर्ता को भुगतान" directly.
+    const bw = searchParams.get('billwise');
+    if (bw === 'receive' || bw === 'pay') { setActiveTab('entry'); setBillWiseMode(bw); }
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const switchMode = (mode: EntryMode) => {

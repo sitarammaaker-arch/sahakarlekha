@@ -18,11 +18,11 @@
 Credit sale: Dr Ram (3303) 10,000 / Cr Sales 10,000 → ₹10,000 due from Ram (INV-12).
 
 ## 10.4 Collecting from a customer (Receive Payment)
-Receive Payment → customer → outstanding bills → amount against each bill (partial too) → cash/bank → record. Or "allocate to oldest bills first".
+Vouchers → "Receive from Customer" (bill-wise; formerly the Receive Payment page) → customer → outstanding bills → amount against each bill (partial too) → cash/bank → record. Or "allocate to oldest bills first".
 Ram pays ₹6,000: Dr Cash 6,000 / Cr Ram 6,000 → INV-12 partial (₹4,000 left).
 
 ## 10.5 Paying a supplier (Make Payment)
-Make Payment → supplier → purchase bills → amount → Dr Supplier (2101) / Cr cash-bank.
+Vouchers → "Pay Supplier" (bill-wise; formerly Make Payment) → supplier → purchase bills → amount → Dr Supplier (2101) / Cr cash-bank.
 
 ## 10.6 Advance & on-account
 "Extra amount (no bill)" → advance (before the bill) or On Account (uncertain).
@@ -40,7 +40,7 @@ Vouchers also has bill-wise settlement tiles.
 
 | Mistake | Avoid by |
 |---|---|
-| Not linking the collection to a bill | Receive Payment |
+| Not linking the collection to a bill | Vouchers → Receive from Customer |
 | Not choosing a customer | The correct party |
 | Advance as income | The customer’s deposit |
 

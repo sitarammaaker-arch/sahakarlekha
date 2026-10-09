@@ -33,9 +33,7 @@ export const NEXT_STEPS: Record<string, string[]> = {
 
   // ── sales / purchases / payments ──
   '/sales':             ['receivePayment', 'saleRegister'],
-  '/receive-payment':   ['billsOutstanding', 'saleRegister'],
   '/purchases':         ['makePayment', 'purchaseRegister'],
-  '/make-payment':      ['billsOutstanding', 'purchaseRegister'],
   '/inventory':         ['stockValuation', 'purchases'],
   '/suppliers':         ['purchases'],
   '/customers':         ['sales'],
