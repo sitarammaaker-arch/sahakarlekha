@@ -693,9 +693,11 @@ export function generateIncomeExpenditurePDF(
   language: 'hi' | 'en',
   reserveFund: number = 0,
   allAccounts?: LedgerAccount[],
+  /** 'Profit & Loss A/c' for a trading society (statements.profitLossStatement); default I&E. */
+  title: string = 'Income & Expenditure Account',
 ) {
   const doc = new jsPDF('landscape');
-  const { startY, font } = addHeader(doc, 'Income & Expenditure Account', society, `Financial Year: ${society.financialYear}`, { reportCode: 'IE' });
+  const { startY, font } = addHeader(doc, title, society, `Financial Year: ${society.financialYear}`, { reportCode: 'IE' });
 
   const totalIncome = incomeItems.reduce((s, i) => s + i.amount, 0);
   const totalExpenses = expenseItems.reduce((s, i) => s + i.amount, 0);

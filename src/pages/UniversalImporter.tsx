@@ -167,29 +167,47 @@ const UniversalImporter: React.FC = () => {
       return;
     }
     setAccountImporting(true);
-    let imported = 0;
-    let skipped = 0;
-    for (const row of validRows) {
+    // Count from the CLOUD result (RULE 1): the old loop said "N imported" before any save had
+    // answered, so a failed write still read as success. addAccount reports onSaved / onFailed.
+    const toSave = validRows.filter(row => {
       const name = row.data.account_name.trim();
-      const exists = accounts.find(a => a.name.toLowerCase() === name.toLowerCase());
-      if (exists) { skipped++; continue; }
-      addAccount({
-        name,
-        nameHi: name,
+      return !accounts.some(a => a.name.toLowerCase() === name.toLowerCase());
+    });
+    const skipped = validRows.length - toSave.length;
+    let saved = 0, failed = 0;
+    const settle = () => {
+      if (saved + failed < toSave.length) return;
+      setAccountImporting(false);
+      setAccountPreview(null);
+      if (failed > 0) {
+        toast({
+          title: `${saved} खाते सेव हुए, ${failed} सेव नहीं हुए`,
+          description: `जो सेव नहीं हुए, वे सूची में नहीं जोड़े गए — फ़ाइल दोबारा import करें (पहले से बने खाते अपने-आप skip होंगे)।${skipped > 0 ? ` ${skipped} पहले से मौजूद थे।` : ''}`,
+          variant: 'destructive', duration: 12000,
+        });
+      } else {
+        toast({
+          title: `${saved} खाते import हुए`,
+          description: skipped > 0 ? `${skipped} खाते पहले से मौजूद थे, skip किए गए` : 'सभी खाते क्लाउड में सेव हो गए',
+        });
+      }
+    };
+    if (toSave.length === 0) { saved = 0; settle(); return; }
+    for (const row of toSave) {
+      const id = addAccount({
+        name: row.data.account_name.trim(),
+        nameHi: row.data.account_name.trim(),
         type: row.data.account_type.toLowerCase() as LedgerAccount['type'],
         parentId: resolveParentGroup(row.data, accounts).parentId ?? undefined,
         openingBalance: parseFloat(row.data.opening_balance) || 0,
         openingBalanceType: row.data.balance_type.toLowerCase() as 'debit' | 'credit',
         isSystem: false,
+      }, {
+        onSaved: () => { saved++; settle(); },
+        onFailed: () => { failed++; settle(); },
       });
-      imported++;
+      void id;
     }
-    setAccountImporting(false);
-    setAccountPreview(null);
-    toast({
-      title: `${imported} Accounts Import हुए`,
-      description: skipped > 0 ? `${skipped} accounts पहले से exist थे, skip किए गए` : 'सभी accounts successfully import हो गए',
-    });
   }
 
   // ── Members ──

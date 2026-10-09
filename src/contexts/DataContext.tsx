@@ -4124,6 +4124,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) { opts?.onFailed?.(); return { ...data, id: '' } as LedgerAccount; }
     if (opts?.id && accountsRef.current.some(a => a.id === opts.id)) {
       toastRef.current({ title: 'खाता पहले से है', description: `खाता संख्या ${opts.id} इस चार्ट में पहले से मौजूद है — नया नहीं बनाया।`, variant: 'destructive', duration: 10000 });
+      opts?.onFailed?.();
       return { ...data, id: '' } as LedgerAccount;
     }
     // Readable code for a UUID id (next free in the parent group's range, or the type's root range
@@ -4193,6 +4194,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           description: hasEntries
             ? 'इस खाते में वाउचर एंट्री हैं — ग्रुप बनाने पर इसका बैलेंस रिपोर्ट से गायब हो जाएगा। नया ग्रुप अलग से बनाएँ और यह खाता उसके नीचे रखें। / This account has voucher entries; create a separate group and place this ledger under it.'
             : 'इस खाते का Opening Balance है — पहले उसे शून्य करें या नया ग्रुप अलग से बनाएँ। / This account has an opening balance; clear it first or create a separate group.',
+          variant: 'destructive', duration: 12000,
+        });
+        return false;
+      }
+    }
+    // The other direction: a GROUP that still has accounts under it must not become a ledger — its
+    // children would hang under a postable account (the dual state the 3302/2101/3303 fix removed).
+    if (current && current.isGroup && data.isGroup !== undefined && !data.isGroup) {
+      const childCount = accountsRef.current.filter(a => a.parentId === id).length;
+      if (childCount > 0) {
+        toastRef.current({
+          title: 'लेजर नहीं बन सकता / Cannot make this a ledger',
+          description: `इस ग्रुप के नीचे ${childCount} खाते हैं — पहले उन्हें दूसरे ग्रुप में ले जाएँ। / This group has ${childCount} account(s) under it — move them to another group first.`,
           variant: 'destructive', duration: 12000,
         });
         return false;

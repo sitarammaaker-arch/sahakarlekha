@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TrendingUp, TrendingDown, Download, ArrowUp, ArrowDown, FileSpreadsheet, Shield, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateIncomeExpenditurePDF } from '@/lib/pdf';
+import { profitLossStatement } from '@/lib/reports/statements';
+import { useCapabilities } from '@/hooks/useCapabilities';
 import { reclassifyIncomeExpenditure } from '@/lib/reports/negativeLines';
 import { groupWithSubtotals, type GroupableLine } from '@/lib/reports/groupSubtotals';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -27,6 +29,10 @@ const ProfitLoss: React.FC = () => {
   const canExport = can('export');   // ECR-19
   const navigate = useNavigate();
   const { getProfitLoss, society, vouchers, accounts } = useData();
+  // लाभ-हानि खाता (trading society) or आय-व्यय खाता (service society) — the same rule as the Reports page.
+  const { capabilities } = useCapabilities();
+  const stmt = profitLossStatement(capabilities);
+  const stmtTitle = language === 'hi' ? stmt.labelHi : (stmt.code === 'profit_loss' ? 'Profit & Loss Account' : 'Income & Expenditure Account');
 
   const fmt = (amount: number) =>
     new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -131,7 +137,7 @@ const ProfitLoss: React.FC = () => {
   };
 
   const handleCSV = () => downloadCSV(exportHeaders, exportRows(), `profit-loss-${society.financialYear}`);
-  const handleExcel = () => downloadExcelSingle(exportHeaders, exportRows(), `profit-loss-${society.financialYear}`, 'Income & Expenditure');
+  const handleExcel = () => downloadExcelSingle(exportHeaders, exportRows(), `profit-loss-${society.financialYear}`, stmt.code === 'profit_loss' ? 'Profit & Loss' : 'Income & Expenditure');
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -140,7 +146,7 @@ const ProfitLoss: React.FC = () => {
           <PrintHeader />
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <TrendingUp className="h-7 w-7 text-success" />
-            {hi ? 'आय-व्यय खाता' : 'Income & Expenditure Account'}
+            {stmtTitle}
           </h1>
           <p className="text-muted-foreground">
             {hi
@@ -154,7 +160,7 @@ const ProfitLoss: React.FC = () => {
             variant="outline"
             size="sm"
             className="gap-2"
-            onClick={() => generateIncomeExpenditurePDF(incomeItems, expenseItems, society, language, postedReserve, accounts)}
+            onClick={() => generateIncomeExpenditurePDF(incomeItems, expenseItems, society, language, postedReserve, accounts, stmt.code === 'profit_loss' ? 'Profit & Loss A/c' : 'Income & Expenditure Account')}
           >
             <Download className="h-4 w-4" />PDF
           </Button>
@@ -276,7 +282,7 @@ const ProfitLoss: React.FC = () => {
       <Card className="shadow-card">
         <CardHeader className="border-b text-center">
           <CardTitle className="text-xl">
-            {hi ? 'आय-व्यय खाता' : 'Income & Expenditure Account'}
+            {stmtTitle}
           </CardTitle>
           <p className="text-sm text-muted-foreground">{hi ? (society.nameHi || society.name) : society.name}</p>
           <p className="text-sm text-muted-foreground">
