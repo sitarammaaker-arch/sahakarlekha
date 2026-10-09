@@ -27,7 +27,7 @@ export const GUIDE_UPDATED: Record<string, string> = {
   'purchase-entries': '2026-10-08',
   'receipts-and-payments': '2026-10-04',
   'salary-management': '2026-10-04',
-  'sales-entries': '2026-10-08',
+  'sales-entries': '2026-10-09',
   'society-setup-and-roles': '2026-10-04',
   'society-type-entries': '2026-10-04',
   'special-registers': '2026-10-04',

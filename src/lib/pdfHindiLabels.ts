@@ -17,6 +17,8 @@ export const PDF_HI_EXTRA: Record<string, string> = {
   'unaudited - interim statement': 'अलेखापरीक्षित - अंतरिम विवरण',
   'trial balance': 'तलपट (ट्रायल बैलेंस)',
   'ledger account statement': 'खाता-बही विवरण',
+  'cash / bank bills (settled at once - not posted to this account; balance unaffected)': 'नकद / बैंक बिल (उसी समय चुकता - इस खाते में दर्ज नहीं; शेष पर असर नहीं)',
+  'bill no.': 'बिल सं.',
   'share register': 'अंश रजिस्टर',
   'loan register': 'ऋण रजिस्टर',
 

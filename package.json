@@ -399,7 +399,8 @@
     "test:purchase-tds-advice": "node scripts/test-purchase-tds-advice.mjs",
     "test:save-failed-rollback": "node scripts/test-save-failed-rollback.mjs",
     "test:health-score": "node scripts/test-health-score.mjs",
-    "test:chart-leftovers": "node scripts/test-chart-leftovers.mjs"
+    "test:chart-leftovers": "node scripts/test-chart-leftovers.mjs",
+    "test:cash-bills-statement": "node scripts/test-cash-bills-statement.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
