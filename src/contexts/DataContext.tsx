@@ -399,6 +399,11 @@ function reportCascade(label: string, err: { message: string } | string): void {
   reportError('cascade-sync', msg, { label });
 }
 
+/** Undo an optimistic removal: put the row back unless it is already there. */
+function putBack<T extends { id: string }>(list: T[], row: T | undefined): T[] {
+  return !row || list.some(x => x.id === row.id) ? list : [...list, row];
+}
+
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -1649,6 +1654,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  // RULE 1 · a delete / save whose cloud write FAILED: put the record back on screen and say so loudly
+  // (was an English "Save failed" with the row left gone locally — it came back on F5). Delete paths with a
+  // cascade (linked vouchers, stock, party ledger) run that cascade only AFTER the parent write succeeds,
+  // so a failed delete leaves nothing half-done.
+  const failedCloudWrite = (what: string, error: { message: string }, restore: () => void) => {
+    console.error('DB sync error:', error.message); reportError('db-sync', error.message, { what });
+    restore();
+    toastRef.current({
+      title: `❌ ${what} — क्लाउड में सेव नहीं हुआ`,
+      description: `बदलाव वापस ले लिया गया है, दोबारा कोशिश करें। (Cloud save failed — the change was undone.) ${error.message}`,
+      variant: 'destructive', duration: 10000,
+    });
+  };
+
   // ── Voucher persistence helper (two-step + rollback) ──────────────────────
   // RULE: Every Supabase write MUST either (a) succeed silently or (b) roll back
   // local state AND show a loud destructive toast. Never let local state diverge
@@ -2681,7 +2700,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // vouchers un-synced (the "Save failed" on delete).
     supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelledVoucher.deletedAt, deletedBy, deletedReason: reason }).eq('id', id).then(({ error }) => {
       if (error) {
-        console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' });
+        // RULE 1: the cancel did not reach the cloud → the voucher is live again on screen too.
+        failedCloudWrite('वाउचर रद्द करना', error, () => setVouchersState(prev => prev.map(v => v.id === id ? current : v)));
         // Keep the shadow ledger consistent with the un-cancelled voucher.
         if (cancelEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent!.eventId);
       } else {
@@ -2970,10 +2990,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deleteAuditObjection = useCallback((id: string) => {
     if (guardPermission('delete', 'ऑडिट आपत्ति मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
+    const removed = auditObjectionsRef.current.find(o => o.id === id);
     setAuditObjectionsState(prev => { const updated = prev.filter(o => o.id !== id); return updated; });
     // Soft-delete (P0 #2): retain the audit-objection row (isDeleted=true) — statutory
     // register must persist. Load filters isDeleted out on refresh.
-    supabase.from('audit_objections').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('audit_objections').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) failedCloudWrite('ऑडिट आपत्ति हटाना', error, () => setAuditObjectionsState(prev => putBack(prev, removed))); });
     emitAudit({ entityType: 'auditObjection', entityId: id, action: 'delete', reason: 'Audit objection deleted' });
     console.info(`[AUDIT-DELETE] AuditObjection id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
@@ -3013,8 +3034,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deleteRecoverable = useCallback((id: string) => {
     if (guardPermission('delete', 'वसूली मद मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
+    const removed = recoverablesRef.current.find(r => r.id === id);
     setRecoverablesState(prev => prev.filter(r => r.id !== id));
-    supabase.from('recoverables').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('recoverables').delete().eq('id', id).then(({ error }) => { if (error) failedCloudWrite('वसूली मद हटाना', error, () => setRecoverablesState(prev => putBack(prev, removed))); });
   }, []);
 
   // ── Kachi Aarat (HAFED Proforma 8) ─────────────────────────────────────────
@@ -3052,8 +3074,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deleteKachiAaratEntry = useCallback((id: string) => {
     if (guardPermission('delete', 'कच्ची आढ़त एंट्री मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
+    const removed = kachiAaratEntriesRef.current.find(e => e.id === id);
     setKachiAaratEntriesState(prev => prev.filter(e => e.id !== id));
-    supabase.from('kachi_aarat_entries').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('kachi_aarat_entries').delete().eq('id', id).then(({ error }) => { if (error) failedCloudWrite('कच्ची आढ़त एंट्री हटाना', error, () => setKachiAaratEntriesState(prev => putBack(prev, removed))); });
   }, []);
 
   // ── P7 Entries (HAFED Proforma 7) — one row per FY ─────────────────────────
@@ -3069,15 +3092,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return [...filtered, entry];
     });
     p7EntriesRef.current = [...p7EntriesRef.current.filter(e => e.id !== id), entry];
-    supabase.from('p7_entries').upsert(withSoc(entry)).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('p7_entries').upsert(withSoc(entry)).then(({ error }) => { if (error) failedCloudWrite('P7 एंट्री सेव करना', error, () => {
+      const restore = (list: P7Entry[]) => existing ? [...list.filter(e => e.id !== id), existing] : list.filter(e => e.id !== id);
+      p7EntriesRef.current = restore(p7EntriesRef.current);
+      setP7EntriesState(restore);
+    }); });
     return entry;
   }, []);
 
   const deleteP7Entry = useCallback((id: string) => {
     if (guardPermission('delete', 'P7 एंट्री मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
+    const removed = p7EntriesRef.current.find(e => e.id === id);
     setP7EntriesState(prev => prev.filter(e => e.id !== id));
-    supabase.from('p7_entries').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('p7_entries').delete().eq('id', id).then(({ error }) => { if (error) failedCloudWrite('P7 एंट्री हटाना', error, () => setP7EntriesState(prev => putBack(prev, removed))); });
   }, []);
 
   // Member joining receipts (share capital / admission fee) — ONE rule for add, import and approve
@@ -3339,18 +3367,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deleteMember = useCallback((id: string) => {
     if (guardPermission('delete', 'सदस्य मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
+    const removed = membersRef.current.find(m => m.id === id);
     setMembersState(prev => {
       const updated = prev.filter(m => m.id !== id);
       return updated;
     });
     // Soft-delete (P0 #2): retain the row (isDeleted=true) for statutory retention & audit.
     // The in-memory removal above hides it from the app; load filters isDeleted out on refresh.
-    supabase.from('members').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    // RULE 3: soft-cancel the member's auto-generated vouchers (share capital /
-    // admission fee) so no ghost Share Capital lingers in the Trial Balance.
-    cancelLinkedVouchers(vouchersRef.current.filter(v => v.memberId === id).map(v => v.id), 'Member deleted', user?.name || 'System');
-    emitAudit({ entityType: 'member', entityId: id, action: 'delete', reason: 'Member deleted' });
-    console.info(`[AUDIT-DELETE] Member id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    // The cascade runs only once the member row is soft-deleted in the cloud (RULE 1 + 3).
+    supabase.from('members').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
+      if (error) { failedCloudWrite('सदस्य हटाना', error, () => setMembersState(prev => putBack(prev, removed))); return; }
+      // RULE 3: soft-cancel the member's auto-generated vouchers (share capital /
+      // admission fee) so no ghost Share Capital lingers in the Trial Balance.
+      cancelLinkedVouchers(vouchersRef.current.filter(v => v.memberId === id).map(v => v.id), 'Member deleted', user?.name || 'System');
+      emitAudit({ entityType: 'member', entityId: id, action: 'delete', reason: 'Member deleted' });
+      console.info(`[AUDIT-DELETE] Member id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    });
   }, []);
 
   // Refund / withdraw a member's share capital (resignation, death, partial surrender).
@@ -5590,23 +5622,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setLoansState(prev => { const updated = prev.filter(l => l.id !== id); return updated; });
     // Soft-delete (ECR-02 / RULE-5): retain the loan register row (isDeleted=true) for audit; the
     // loader filters it out. The linked disbursement voucher is still soft-cancelled below (RULE-3).
-    supabase.from('loans').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    emitAudit({ entityType: 'loan', entityId: id, action: 'delete', reason: 'Loan deleted' });
-    // RULE 3: soft-cancel the auto-generated disbursement voucher (matched by the unique loanNo
-    // in its narration) so no ghost "Loans & Advances" asset lingers in Trial Balance / Balance Sheet.
-    if (loan) {
-      const now = new Date().toISOString();
-      // P0-3: prefer the stored disbursement voucherId (exact); fall back to the legacy
-      // narration match only for loans created before voucherId existed. The old substring
-      // match (`narration.includes(loanNo)`) collided "L/…/1" with "L/…/10".
-      const linkedIds = loan.voucherId
-        ? new Set(vouchersRef.current.filter(v => v.id === loan.voucherId && !v.isDeleted && !isEngineVoucher(v)).map(v => v.id))
-        : (loan.loanNo
-            ? new Set(vouchersRef.current.filter(v => !v.isDeleted && v.memberId === loan.memberId && v.narration?.includes(loan.loanNo) && !isEngineVoucher(v)).map(v => v.id))
-            : new Set<string>());
-      cancelLinkedVouchers([...linkedIds], 'Loan deleted', user?.name || 'System');
-    }
-    console.info(`[AUDIT-DELETE] Loan id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    supabase.from('loans').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
+      if (error) { failedCloudWrite('ऋण हटाना', error, () => setLoansState(prev => putBack(prev, loan))); return; }
+      emitAudit({ entityType: 'loan', entityId: id, action: 'delete', reason: 'Loan deleted' });
+      // RULE 3: soft-cancel the auto-generated disbursement voucher (matched by the unique loanNo
+      // in its narration) so no ghost "Loans & Advances" asset lingers in Trial Balance / Balance Sheet.
+      if (loan) {
+        const now = new Date().toISOString();
+        // P0-3: prefer the stored disbursement voucherId (exact); fall back to the legacy
+        // narration match only for loans created before voucherId existed. The old substring
+        // match (`narration.includes(loanNo)`) collided "L/…/1" with "L/…/10".
+        const linkedIds = loan.voucherId
+          ? new Set(vouchersRef.current.filter(v => v.id === loan.voucherId && !v.isDeleted && !isEngineVoucher(v)).map(v => v.id))
+          : (loan.loanNo
+              ? new Set(vouchersRef.current.filter(v => !v.isDeleted && v.memberId === loan.memberId && v.narration?.includes(loan.loanNo) && !isEngineVoucher(v)).map(v => v.id))
+              : new Set<string>());
+        cancelLinkedVouchers([...linkedIds], 'Loan deleted', user?.name || 'System');
+      }
+      console.info(`[AUDIT-DELETE] Loan id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    });
   }, []);
 
   const addAsset = useCallback((data: Omit<Asset, 'id' | 'assetNo'>, opts?: { capitalize?: boolean; mode?: 'cash' | 'bank' }): Asset => {
@@ -5717,24 +5751,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAssetsState(prev => { const updated = prev.filter(a => a.id !== id); return updated; });
     // Soft-delete (P0 #2): retain the asset row (isDeleted=true); dependent depreciation
     // vouchers are still soft-cancelled below. Load filters isDeleted out on refresh.
-    supabase.from('assets').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    // RULE 3: soft-cancel any depreciation journal(s) auto-posted for this asset (matched by its
-    // unique assetNo in the narration) so no orphan depreciation expense / accumulated-dep lingers.
-    if (asset) {
-      const now = new Date().toISOString();
-      // P0-3: prefer the stored voucher ids (capitalization + depreciation + disposal); fall back
-      // to the legacy narration match only for assets created before these ids were stored. The old
-      // substring match (`narration.includes(assetNo)`) collided "AST/0001" with "AST/00010".
-      const storedIds = [asset.acquisitionVoucherId, ...(asset.voucherIds ?? [])].filter(Boolean) as string[];
-      const linkedIds = storedIds.length > 0
-        ? new Set(vouchersRef.current.filter(v => storedIds.includes(v.id) && !v.isDeleted && !isEngineVoucher(v)).map(v => v.id))
-        : (asset.assetNo
-            ? new Set(vouchersRef.current.filter(v => !v.isDeleted && v.narration?.includes(asset.assetNo) && !isEngineVoucher(v)).map(v => v.id))
-            : new Set<string>());
-      cancelLinkedVouchers([...linkedIds], 'Asset deleted', user?.name || 'System');
-    }
-    emitAudit({ entityType: 'asset', entityId: id, action: 'delete', reason: 'Asset deleted' });
-    console.info(`[AUDIT-DELETE] Asset id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    supabase.from('assets').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
+      if (error) { failedCloudWrite('संपत्ति हटाना', error, () => setAssetsState(prev => putBack(prev, asset))); return; }
+      // RULE 3: soft-cancel any depreciation journal(s) auto-posted for this asset (matched by its
+      // unique assetNo in the narration) so no orphan depreciation expense / accumulated-dep lingers.
+      if (asset) {
+        const now = new Date().toISOString();
+        // P0-3: prefer the stored voucher ids (capitalization + depreciation + disposal); fall back
+        // to the legacy narration match only for assets created before these ids were stored. The old
+        // substring match (`narration.includes(assetNo)`) collided "AST/0001" with "AST/00010".
+        const storedIds = [asset.acquisitionVoucherId, ...(asset.voucherIds ?? [])].filter(Boolean) as string[];
+        const linkedIds = storedIds.length > 0
+          ? new Set(vouchersRef.current.filter(v => storedIds.includes(v.id) && !v.isDeleted && !isEngineVoucher(v)).map(v => v.id))
+          : (asset.assetNo
+              ? new Set(vouchersRef.current.filter(v => !v.isDeleted && v.narration?.includes(asset.assetNo) && !isEngineVoucher(v)).map(v => v.id))
+              : new Set<string>());
+        cancelLinkedVouchers([...linkedIds], 'Asset deleted', user?.name || 'System');
+      }
+      emitAudit({ entityType: 'asset', entityId: id, action: 'delete', reason: 'Asset deleted' });
+      console.info(`[AUDIT-DELETE] Asset id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    });
   }, []);
 
   // ── Depreciation Posting ───────────────────────────────────────────────────
@@ -6116,19 +6152,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deleteStockItem = useCallback((id: string) => {
     if (guardPermission('delete', 'स्टॉक मद मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
+    const item = stockItems.find(i => i.id === id);
+    if (!item) return;
     const today = new Date().toISOString().split('T')[0];
-    setStockItemsState(prev => {
-      const item = prev.find(i => i.id === id);
+    // Soft-delete: mark inactive, zero out stock (preserve history)
+    setStockItemsState(prev => prev.map(i => i.id === id ? { ...i, isActive: false, currentStock: 0 } : i));
+    // The write-off journal and the movement clean-up run only once the item row is saved in the cloud
+    // (RULE 1 + 3) — a failed delete used to post the write-off anyway and leave the item active after F5.
+    supabase.from('stock_items').update({ isActive: false, currentStock: 0 }).eq('id', id).then(({ error }) => {
+      if (error) { failedCloudWrite('स्टॉक मद हटाना', error, () => setStockItemsState(prev => prev.map(i => i.id === id ? item : i))); return; }
       // Write-off uses the AUTHORITATIVE movement-based qty (RULE 2), not the cached
       // currentStock field — which can be stale after a purchase edit/delete and would
       // otherwise create a phantom write-off journal for stock that no longer exists.
       const recMovs = reconcileMovements(stockMovementsRef.current, salesRef.current, purchasesRef.current);
-      const realQty = item ? computeStock(item, recMovs) : 0;
+      const realQty = computeStock(item, recMovs);
       // Value the write-off at weighted-average COST from movements (RULE 2), not the
       // stale purchaseRate field — else deleting an item whose purchaseRate is 0 would
       // post a ₹0 write-off and leave its closing-stock asset on the books forever.
-      const costRate = item ? computeStockCostRate(item, recMovs) : 0;
-      if (item && item.isActive && realQty > 0) {
+      const costRate = computeStockCostRate(item, recMovs);
+      if (item.isActive && realQty > 0) {
         const amount = toRupees(toMinor(realQty * costRate));
         if (amount > 0) {
           // Dr 5101 (Purchases/Write-off expense) / Cr 3403 (Closing Stock asset) — reverses closing stock asset
@@ -6143,25 +6185,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           });
         }
       }
-      // Soft-delete: mark inactive, zero out stock (preserve history)
-      const updated = prev.map(i => i.id === id ? { ...i, isActive: false, currentStock: 0 } : i);
-      return updated;
+      // ECR-21 (RULE-3): archive the movements to the WORM audit log before hard-deleting
+      // them (kept out of the live table so the stock formula stays correct).
+      const _delItemMovs = stockMovementsRef.current.filter(m => m.itemId === id);
+      if (_delItemMovs.length) emitAudit({ entityType: 'stockMovement', entityId: id, action: 'delete', before: { count: _delItemMovs.length, movements: snapshotDeletedMovements(_delItemMovs) }, reason: 'Stock item deleted' });
+      // Also remove orphaned stock movements for this item
+      setStockMovementsState(prev => prev.filter(m => m.itemId !== id));
+      supabase.from('stock_movements').delete().eq('itemId', id)
+        .then(({ error: movErr }) => {
+          if (!movErr) return;
+          reportCascade('Stock-item movements cascade-delete sync', movErr);
+          toastRef.current({ title: 'वस्तु हटी, पर उसकी स्टॉक एंट्रियाँ क्लाउड से नहीं हटीं', description: `वस्तु निष्क्रिय है; बची एंट्रियाँ error log में दर्ज हैं। (Item deleted, its stock movements were not.) ${movErr.message}`, variant: 'destructive', duration: 10000 });
+        });
+      console.info(`[AUDIT-DELETE] StockItem id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
     });
-    // Also remove orphaned stock movements for this item
-    setStockMovementsState(prev => {
-      const updated = prev.filter(m => m.itemId !== id);
-      return updated;
-    });
-    supabase.from('stock_items').update({ isActive: false, currentStock: 0 }).eq('id', id)
-      .then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    // ECR-21 (RULE-3): archive the movements to the WORM audit log before hard-deleting
-    // them (kept out of the live table so the stock formula stays correct).
-    const _delItemMovs = stockMovementsRef.current.filter(m => m.itemId === id);
-    if (_delItemMovs.length) emitAudit({ entityType: 'stockMovement', entityId: id, action: 'delete', before: { count: _delItemMovs.length, movements: snapshotDeletedMovements(_delItemMovs) }, reason: 'Stock item deleted' });
-    supabase.from('stock_movements').delete().eq('itemId', id)
-      .then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    console.info(`[AUDIT-DELETE] StockItem id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
-  }, [addVoucher, user?.name]);
+  }, [addVoucher, user?.name, stockItems]);
 
   const addStockMovement = useCallback((data: Omit<StockMovement, 'id' | 'createdAt'>) => {
     if (guardFYLocked()) return;
@@ -6435,36 +6473,36 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       emitAudit({ entityType: 'sale', entityId: id, action: 'delete', reason: 'Sale deleted' });
       return true;
     }
-    setSalesState(prev => {
-      const sale = prev.find(s => s.id === id);
-      if (sale) {
-        const now = new Date().toISOString();
-        // Soft-delete all linked vouchers (main + GST)
-        const linkedIds = ([sale.voucherId, ...(sale.gstVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
-        cancelLinkedVouchers(linkedIds, `Sale ${sale.saleNo} deleted`, 'System');
-        // Reverse stock deductions on stock_items.currentStock
-        sale.items.forEach(item => {
-          setStockItemsState(s => {
-            const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = i.currentStock + item.qty; supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } }); return { ...i, currentStock: newStock }; });
-            return updated;
-          });
-        });
-        // Cascade-delete stock_movements for this sale
-        // (Inventory / Stock Valuation / Closing Stock all derive qty from movements.)
-        const _delSaleMovs = stockMovementsRef.current.filter(m => m.referenceNo === sale.saleNo);   // ECR-21: archive before hard-delete
-        if (_delSaleMovs.length) emitAudit({ entityType: 'stockMovement', entityId: sale.saleNo, action: 'delete', before: { count: _delSaleMovs.length, movements: snapshotDeletedMovements(_delSaleMovs) }, reason: `Sale ${sale.saleNo} deleted` });
-        setStockMovementsState(s => s.filter(m => m.referenceNo !== sale.saleNo));
-        supabase.from('stock_movements').delete().eq('referenceNo', sale.saleNo)
-          .then(({ error }) => { if (error) reportCascade('Movements cascade-delete sync', error); });
-      }
-      const updated = prev.filter(s => s.id !== id);
-      return updated;
-    });
+    const sale = salesRef.current.find(x => x.id === id);
+    if (!sale) return false;
+    setSalesState(prev => prev.filter(x => x.id !== id));
     // Soft-delete (ECR-02 / RULE-5): retain the sale row (isDeleted=true) for audit — mirrors
-    // deletePurchase. Linked vouchers are soft-cancelled and movements audit-snapshotted above.
-    supabase.from('sales').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    emitAudit({ entityType: 'sale', entityId: id, action: 'delete', reason: 'Sale deleted' });
-    console.info(`[AUDIT-DELETE] Sale id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    // deletePurchase. Linked vouchers are soft-cancelled and movements audit-snapshotted below.
+    // The cascade (linked vouchers, stock, movements) runs only once the sale row is soft-deleted in the
+    // cloud (RULE 1 + 3) — it used to run first, so a failed delete left a live sale with its vouchers
+    // cancelled and its stock reversed after F5.
+    supabase.from('sales').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
+      if (error) { failedCloudWrite('बिक्री हटाना', error, () => setSalesState(prev => putBack(prev, sale))); return; }
+      // Soft-delete all linked vouchers (main + GST)
+      const linkedIds = ([sale.voucherId, ...(sale.gstVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
+      cancelLinkedVouchers(linkedIds, `Sale ${sale.saleNo} deleted`, 'System');
+      // Reverse stock deductions on stock_items.currentStock
+      sale.items.forEach(item => {
+        setStockItemsState(s => {
+          const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = i.currentStock + item.qty; supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } }); return { ...i, currentStock: newStock }; });
+          return updated;
+        });
+      });
+      // Cascade-delete stock_movements for this sale
+      // (Inventory / Stock Valuation / Closing Stock all derive qty from movements.)
+      const _delSaleMovs = stockMovementsRef.current.filter(m => m.referenceNo === sale.saleNo);   // ECR-21: archive before hard-delete
+      if (_delSaleMovs.length) emitAudit({ entityType: 'stockMovement', entityId: sale.saleNo, action: 'delete', before: { count: _delSaleMovs.length, movements: snapshotDeletedMovements(_delSaleMovs) }, reason: `Sale ${sale.saleNo} deleted` });
+      setStockMovementsState(s => s.filter(m => m.referenceNo !== sale.saleNo));
+      supabase.from('stock_movements').delete().eq('referenceNo', sale.saleNo)
+        .then(({ error }) => { if (error) reportCascade('Movements cascade-delete sync', error); });
+      emitAudit({ entityType: 'sale', entityId: id, action: 'delete', reason: 'Sale deleted' });
+      console.info(`[AUDIT-DELETE] Sale id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    });
     return true;
   }, []);
 
@@ -6837,37 +6875,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       emitAudit({ entityType: 'purchase', entityId: id, action: 'delete', reason: 'Purchase deleted' });
       return true;
     }
-    setPurchasesState(prev => {
-      const purchase = prev.find(p => p.id === id);
-      if (purchase) {
-        const now = new Date().toISOString();
-        // Cascade soft-delete: main voucher + all GST/TDS tax vouchers
-        const linkedIds = ([purchase.voucherId, ...(purchase.taxVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
-        cancelLinkedVouchers(linkedIds, `Purchase ${purchase.purchaseNo} deleted`, 'System');
-        // Reverse stock additions on stock_items.currentStock
-        purchase.items.forEach(item => {
-          setStockItemsState(s => {
-            const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = Math.max(0, i.currentStock - item.qty); supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } }); return { ...i, currentStock: newStock }; });
-            return updated;
-          });
-        });
-        // Cascade-delete stock_movements for this purchase
-        // (Inventory / Stock Valuation / Closing Stock all compute qty from movements,
-        //  so orphan movements would keep stock showing as if the purchase still existed.)
-        const _delPurMovs = stockMovementsRef.current.filter(m => m.referenceNo === purchase.purchaseNo);   // ECR-21: archive before hard-delete
-        if (_delPurMovs.length) emitAudit({ entityType: 'stockMovement', entityId: purchase.purchaseNo, action: 'delete', before: { count: _delPurMovs.length, movements: snapshotDeletedMovements(_delPurMovs) }, reason: `Purchase ${purchase.purchaseNo} deleted` });
-        setStockMovementsState(s => s.filter(m => m.referenceNo !== purchase.purchaseNo));
-        supabase.from('stock_movements').delete().eq('referenceNo', purchase.purchaseNo)
-          .then(({ error }) => { if (error) reportCascade('Movements cascade-delete sync', error); });
-      }
-      const updated = prev.filter(p => p.id !== id);
-      return updated;
-    });
+    const purchase = purchasesRef.current.find(x => x.id === id);
+    if (!purchase) return false;
+    setPurchasesState(prev => prev.filter(x => x.id !== id));
     // Soft-delete (P0 #2): retain the purchase row (isDeleted=true); linked vouchers, tax
-    // vouchers, stock and movements are still cascaded above. Load filters isDeleted out.
-    supabase.from('purchases').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    emitAudit({ entityType: 'purchase', entityId: id, action: 'delete', reason: 'Purchase deleted' });
-    console.info(`[AUDIT-DELETE] Purchase id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    // vouchers, stock and movements are still cascaded below. Load filters isDeleted out.
+    // The cascade (linked vouchers, stock, movements) runs only once the purchase row is soft-deleted in the
+    // cloud (RULE 1 + 3) — it used to run first, so a failed delete left a live purchase with its vouchers
+    // cancelled and its stock reversed after F5.
+    supabase.from('purchases').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
+      if (error) { failedCloudWrite('खरीद हटाना', error, () => setPurchasesState(prev => putBack(prev, purchase))); return; }
+      // Cascade soft-delete: main voucher + all GST/TDS tax vouchers
+      const linkedIds = ([purchase.voucherId, ...(purchase.taxVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
+      cancelLinkedVouchers(linkedIds, `Purchase ${purchase.purchaseNo} deleted`, 'System');
+      // Reverse stock additions on stock_items.currentStock
+      purchase.items.forEach(item => {
+        setStockItemsState(s => {
+          const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = Math.max(0, i.currentStock - item.qty); supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: 'Stock update failed', description: error.message, variant: 'destructive' }); } }); return { ...i, currentStock: newStock }; });
+          return updated;
+        });
+      });
+      // Cascade-delete stock_movements for this purchase
+      // (Inventory / Stock Valuation / Closing Stock all compute qty from movements,
+      //  so orphan movements would keep stock showing as if the purchase still existed.)
+      const _delPurMovs = stockMovementsRef.current.filter(m => m.referenceNo === purchase.purchaseNo);   // ECR-21: archive before hard-delete
+      if (_delPurMovs.length) emitAudit({ entityType: 'stockMovement', entityId: purchase.purchaseNo, action: 'delete', before: { count: _delPurMovs.length, movements: snapshotDeletedMovements(_delPurMovs) }, reason: `Purchase ${purchase.purchaseNo} deleted` });
+      setStockMovementsState(s => s.filter(m => m.referenceNo !== purchase.purchaseNo));
+      supabase.from('stock_movements').delete().eq('referenceNo', purchase.purchaseNo)
+        .then(({ error }) => { if (error) reportCascade('Movements cascade-delete sync', error); });
+      emitAudit({ entityType: 'purchase', entityId: id, action: 'delete', reason: 'Purchase deleted' });
+      console.info(`[AUDIT-DELETE] Purchase id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+    });
     return true;
   }, []);
 
@@ -7119,8 +7157,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
     // Soft-delete (ECR-02 / RULE-5): retain the employee row (isDeleted=true) for audit; the loader filters it out.
+    const removed = employeesRef.current.find(e => e.id === id);
     setEmployeesState(prev => { const updated = prev.filter(e => e.id !== id); return updated; });
-    supabase.from('employees').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    supabase.from('employees').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) failedCloudWrite('कर्मचारी हटाना', error, () => setEmployeesState(prev => putBack(prev, removed))); });
     emitAudit({ entityType: 'employee', entityId: id, action: 'delete', reason: 'Employee deleted' });
     console.info(`[AUDIT-DELETE] Employee id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
@@ -7304,10 +7343,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // liability and cash all reverse cleanly.
     const record = salaryRecordsRef.current.find(r => r.id === id);
     const cancelIds = [record?.voucherId, record?.accrualVoucherId].filter(Boolean) as string[];
-    cancelLinkedVouchers(cancelIds, `Salary slip ${record?.slipNo} deleted`, 'System');
     setSalaryRecordsState(prev => prev.filter(r => r.id !== id));
     salaryRecordsRef.current = salaryRecordsRef.current.filter(r => r.id !== id);
-    supabase.from('salary_records').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
+    // The vouchers are cancelled only once the slip row is gone from the cloud (RULE 1 + 3) — a failed
+    // delete used to leave the slip alive after F5 with its accrual + payment already cancelled.
+    supabase.from('salary_records').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        failedCloudWrite('वेतन पर्ची हटाना', error, () => {
+          salaryRecordsRef.current = putBack(salaryRecordsRef.current, record);
+          setSalaryRecordsState(prev => putBack(prev, record));
+        });
+        return;
+      }
+      cancelLinkedVouchers(cancelIds, `Salary slip ${record?.slipNo} deleted`, 'System');
+    });
     emitAudit({ entityType: 'salaryRecord', entityId: id, action: 'delete', before: record ? { slipNo: record.slipNo, netSalary: record.netSalary, isPaid: record.isPaid } : undefined, reason: 'Salary slip deleted' });   // H11
   }, []);
 
@@ -7490,25 +7539,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Tally-style: block if the linked Sundry Creditor account still carries a balance.
     if (guardAccountBalance(sup.accountId, `आपूर्तिकर्ता "${sup.name}"`)) return;
     setSuppliersState(prev => prev.filter(s => s.id !== id));
-    supabase.from('suppliers').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    // Only hard-delete the linked Sundry Creditor account if NO vouchers (even soft-deleted) reference it
-    if (sup.accountId) {
-      const accountReferenced = vouchersRef.current.some(v =>
-        v.debitAccountId === sup.accountId || v.creditAccountId === sup.accountId ||
-        (v.lines && v.lines.some(l => l.accountId === sup.accountId))
-      );
-      if (accountReferenced) {
-        // Keep the account so historical vouchers stay reconcilable; just rename it to mark orphan
-        setAccountsState(prev => prev.map(a => a.id === sup.accountId ? { ...a, name: `${a.name} [Supplier deleted]`, isSystem: false } : a));
-        supabase.from('accounts').update({ name: `${sup.name} [Supplier deleted]` }).eq('id', sup.accountId).eq('society_id', societyIdRef.current)
-          .then(({ error }) => { if (error) { console.error('Account rename sync:', error.message); reportError('write-partial', error.message, { at: 'Account rename sync:' }); } });
-      } else {
-        const supAccount = accountsRef.current.find(a => a.id === sup.accountId);
-        setAccountsState(prev => prev.filter(a => a.id !== sup.accountId));
-        if (supAccount) deleteAccountRow(supAccount, { context: 'supplier-account-delete' });
+    supabase.from('suppliers').delete().eq('id', id).then(({ error }) => {
+      if (error) { failedCloudWrite('आपूर्तिकर्ता हटाना', error, () => { suppliersRef.current = putBack(suppliersRef.current, sup); setSuppliersState(prev => putBack(prev, sup)); }); return; }
+      // Only hard-delete the linked Sundry Creditor account if NO vouchers (even soft-deleted) reference it
+      if (sup.accountId) {
+        const accountReferenced = vouchersRef.current.some(v =>
+          v.debitAccountId === sup.accountId || v.creditAccountId === sup.accountId ||
+          (v.lines && v.lines.some(l => l.accountId === sup.accountId))
+        );
+        if (accountReferenced) {
+          // Keep the account so historical vouchers stay reconcilable; just rename it to mark orphan
+          setAccountsState(prev => prev.map(a => a.id === sup.accountId ? { ...a, name: `${a.name} [Supplier deleted]`, isSystem: false } : a));
+          supabase.from('accounts').update({ name: `${sup.name} [Supplier deleted]` }).eq('id', sup.accountId).eq('society_id', societyIdRef.current)
+            .then(({ error }) => { if (error) { console.error('Account rename sync:', error.message); reportError('write-partial', error.message, { at: 'Account rename sync:' }); } });
+        } else {
+          const supAccount = accountsRef.current.find(a => a.id === sup.accountId);
+          setAccountsState(prev => prev.filter(a => a.id !== sup.accountId));
+          if (supAccount) deleteAccountRow(supAccount, { context: 'supplier-account-delete' });
+        }
       }
-    }
-    emitAudit({ entityType: 'supplier', entityId: id, action: 'delete', before: { name: sup.name, accountId: sup.accountId }, reason: 'Supplier deleted' });   // H11
+      emitAudit({ entityType: 'supplier', entityId: id, action: 'delete', before: { name: sup.name, accountId: sup.accountId }, reason: 'Supplier deleted' });   // H11
+    });
   }, [suppliers, deleteAccountRow]);
 
   // ── Customers ──────────────────────────────────────────────────────────────
@@ -7693,23 +7744,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Tally-style: block if the linked Sundry Debtor account still carries a balance.
     if (guardAccountBalance(cus.accountId, `ग्राहक "${cus.name}"`)) return;
     setCustomersState(prev => prev.filter(c => c.id !== id));
-    supabase.from('customers').delete().eq('id', id).then(({ error }) => { if (error) { console.error('DB sync error:', error.message); reportError('db-sync', error.message); toastRef.current({ title: 'Save failed', description: error.message, variant: 'destructive' }); } });
-    if (cus.accountId) {
-      const accountReferenced = vouchersRef.current.some(v =>
-        v.debitAccountId === cus.accountId || v.creditAccountId === cus.accountId ||
-        (v.lines && v.lines.some(l => l.accountId === cus.accountId))
-      );
-      if (accountReferenced) {
-        setAccountsState(prev => prev.map(a => a.id === cus.accountId ? { ...a, name: `${a.name} [Customer deleted]`, isSystem: false } : a));
-        supabase.from('accounts').update({ name: `${cus.name} [Customer deleted]` }).eq('id', cus.accountId).eq('society_id', societyIdRef.current)
-          .then(({ error }) => { if (error) { console.error('Account rename sync:', error.message); reportError('write-partial', error.message, { at: 'Account rename sync:' }); } });
-      } else {
-        const cusAccount = accountsRef.current.find(a => a.id === cus.accountId);
-        setAccountsState(prev => prev.filter(a => a.id !== cus.accountId));
-        if (cusAccount) deleteAccountRow(cusAccount, { context: 'customer-account-delete' });
+    supabase.from('customers').delete().eq('id', id).then(({ error }) => {
+      if (error) { failedCloudWrite('ग्राहक हटाना', error, () => { customersRef.current = putBack(customersRef.current, cus); setCustomersState(prev => putBack(prev, cus)); }); return; }
+      if (cus.accountId) {
+        const accountReferenced = vouchersRef.current.some(v =>
+          v.debitAccountId === cus.accountId || v.creditAccountId === cus.accountId ||
+          (v.lines && v.lines.some(l => l.accountId === cus.accountId))
+        );
+        if (accountReferenced) {
+          setAccountsState(prev => prev.map(a => a.id === cus.accountId ? { ...a, name: `${a.name} [Customer deleted]`, isSystem: false } : a));
+          supabase.from('accounts').update({ name: `${cus.name} [Customer deleted]` }).eq('id', cus.accountId).eq('society_id', societyIdRef.current)
+            .then(({ error }) => { if (error) { console.error('Account rename sync:', error.message); reportError('write-partial', error.message, { at: 'Account rename sync:' }); } });
+        } else {
+          const cusAccount = accountsRef.current.find(a => a.id === cus.accountId);
+          setAccountsState(prev => prev.filter(a => a.id !== cus.accountId));
+          if (cusAccount) deleteAccountRow(cusAccount, { context: 'customer-account-delete' });
+        }
       }
-    }
-    emitAudit({ entityType: 'customer', entityId: id, action: 'delete', before: { name: cus.name, accountId: cus.accountId }, reason: 'Customer deleted' });   // H11
+      emitAudit({ entityType: 'customer', entityId: id, action: 'delete', before: { name: cus.name, accountId: cus.accountId }, reason: 'Customer deleted' });   // H11
+    });
   }, [customers, deleteAccountRow]);
 
   const getEntityLinks = useCallback((entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan' | 'asset', id: string): EntityLink[] => {
