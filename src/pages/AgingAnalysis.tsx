@@ -6,9 +6,13 @@
  *  2. Creditors (AP) — Sundry Creditors account 2101 + supplier sub-accounts
  *
  * Aging buckets: Current (0-30) | 31-60 | 61-90 | 91-180 | >180 days
- * Based on individual transaction dates vs today.
+ * FIFO ageing of each party ledger balance (lib/reports/fifoAging), as on a chosen date.
  */
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { fifoAging } from '@/lib/reports/fifoAging';
+import { isCountedVoucher } from '@/lib/countedVoucher';
+import { todayStr, fmtDate } from '@/lib/dateUtils';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,17 +42,10 @@ interface AgingRow {
   bucket61_90: number;
   bucket91_180: number;
   bucketOver180: number;
+  advance: number;      // balance on the other side (paid in advance), shown apart — never as negative buckets
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const today = new Date();
-today.setHours(0, 0, 0, 0);
-
-const daysSince = (dateStr: string): number => {
-  const d = new Date(dateStr);
-  d.setHours(0, 0, 0, 0);
-  return Math.max(0, Math.floor((today.getTime() - d.getTime()) / 86_400_000));
-};
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -64,70 +61,45 @@ const BUCKET_LABELS = (hi: boolean) => [
   { key: 'bucketOver180', label: hi ? '>180 दिन'   : '>180 days',   cls: 'text-red-800 font-bold' },
 ] as const;
 
-// ── Core aging calc ───────────────────────────────────────────────────────────
+// ── Core aging calc ──────────────────────────────────────────────────────
 /**
- * Build aging rows for a set of accountIds.
- * For each transaction (voucher) involving the account:
- *   - If account is on DEBIT side → increases balance (money owed TO us / DR balance)
- *   - If account is on CREDIT side → decreases balance
- * We spread the net signed amount into aging buckets by voucher date.
+ * FIFO ageing of each party's LEDGER balance (lib/reports/fifoAging): receipts/payments are applied to the oldest
+ * dues first, so no bucket goes negative and the total equals the party's ledger balance, opening included.
+ * Counts only approved vouchers (isCountedVoucher), in the active branch, up to `asOf` — the same scope as the
+ * Ledger / Trial Balance (RULE 2). An advance (balance on the other side) is shown separately.
  */
 function buildAgingRows(
   accountIds: string[],
   nameMap: Record<string, { name: string; code: string; phone: string }>,
   vouchers: ReturnType<typeof useData>['vouchers'],
-  mode: 'dr' | 'cr'   // dr = debtors (DR balance expected), cr = creditors (CR balance expected)
+  accounts: ReturnType<typeof useData>['accounts'],
+  mode: 'dr' | 'cr',   // dr = debtors (DR balance expected), cr = creditors (CR balance expected)
+  opts: { asOf: string; openingDate: string; inScope: (branchId?: string) => boolean; openingsInScope: boolean },
 ): AgingRow[] {
   const rows: AgingRow[] = [];
-
+  const live = vouchers.filter(v => isCountedVoucher(v) && opts.inScope(v.branchId) && v.date <= opts.asOf);
   for (const accountId of accountIds) {
-    // Collect all non-deleted vouchers touching this account (supports multi-line Expert Mode vouchers)
-    const relevant = vouchers.filter(v =>
-      !v.isDeleted &&
-      getVoucherLines(v).some(l => l.accountId === accountId)
-    );
-
-    let totalOutstanding = 0;
-    let bucket0_30 = 0, bucket31_60 = 0, bucket61_90 = 0, bucket91_180 = 0, bucketOver180 = 0;
-
-    for (const v of relevant) {
-      const days = daysSince(v.date);
-      // Iterate each line that touches this account
+    const entries: { date: string; signed: number }[] = [];
+    const acc = accounts.find(a => a.id === accountId);
+    if (acc && opts.openingsInScope && acc.openingBalance) {
+      const drOpening = acc.openingBalanceType === 'debit' ? acc.openingBalance : -acc.openingBalance;
+      entries.push({ date: opts.openingDate, signed: mode === 'dr' ? drOpening : -drOpening });
+    }
+    for (const v of live) {
       getVoucherLines(v).forEach(l => {
         if (l.accountId !== accountId) return;
-        // Signed amount: positive = increases balance (Dr for debtors, Cr for creditors)
-        let signed = 0;
-        if (mode === 'dr') {
-          signed = l.type === 'Dr' ? l.amount : -l.amount;
-        } else {
-          signed = l.type === 'Cr' ? l.amount : -l.amount;
-        }
-
-        totalOutstanding += signed;
-
-        if (days <= 30)       bucket0_30    += signed;
-        else if (days <= 60)  bucket31_60   += signed;
-        else if (days <= 90)  bucket61_90   += signed;
-        else if (days <= 180) bucket91_180  += signed;
-        else                  bucketOver180 += signed;
+        const dr = l.type === 'Dr' ? l.amount : -l.amount;
+        entries.push({ date: v.date, signed: mode === 'dr' ? dr : -dr });
       });
     }
-
-    // Only include if there's an outstanding balance
-    if (Math.abs(totalOutstanding) < 0.01) continue;
-
-    const meta = nameMap[accountId] ?? { name: accountId, code: '—', phone: '—' };
+    const f = fifoAging(entries, opts.asOf);
+    if (Math.abs(f.total) < 0.01) continue;
+    const meta = nameMap[accountId] ?? { name: acc?.name ?? accountId, code: '—', phone: '—' };
     rows.push({
-      accountId,
-      name: meta.name,
-      code: meta.code,
-      phone: meta.phone,
-      totalOutstanding,
-      bucket0_30,
-      bucket31_60,
-      bucket61_90,
-      bucket91_180,
-      bucketOver180,
+      accountId, name: meta.name, code: meta.code, phone: meta.phone,
+      totalOutstanding: f.total,
+      bucket0_30: f.b0_30, bucket31_60: f.b31_60, bucket61_90: f.b61_90, bucket91_180: f.b91_180, bucketOver180: f.bOver180,
+      advance: f.advance,
     });
   }
 
@@ -158,7 +130,8 @@ const AgingTable: React.FC<{
     b2: acc.b2 + r.bucket61_90,
     b3: acc.b3 + r.bucket91_180,
     b4: acc.b4 + r.bucketOver180,
-  }), { total: 0, b0: 0, b1: 0, b2: 0, b3: 0, b4: 0 }), [filtered]);
+    adv: acc.adv + r.advance,
+  }), { total: 0, b0: 0, b1: 0, b2: 0, b3: 0, b4: 0, adv: 0 }), [filtered]);
 
   if (rows.length === 0) {
     return (
@@ -187,6 +160,7 @@ const AgingTable: React.FC<{
             {buckets.map(b => (
               <TableHead key={b.key} className={`text-right ${b.cls}`}>{b.label}</TableHead>
             ))}
+            <TableHead className="text-right text-muted-foreground">{hi ? 'अग्रिम' : 'Advance'}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -204,6 +178,7 @@ const AgingTable: React.FC<{
               {amtCell(r.bucket61_90,   'text-orange-600')}
               {amtCell(r.bucket91_180,  'text-red-600')}
               {amtCell(r.bucketOver180, 'text-red-800 font-semibold')}
+              {amtCell(r.advance, 'text-muted-foreground')}
             </TableRow>
           ))}
         </TableBody>
@@ -216,6 +191,7 @@ const AgingTable: React.FC<{
             <td className="px-4 py-2 text-right text-orange-600">{fmtN(totals.b2)}</td>
             <td className="px-4 py-2 text-right text-red-600">{fmtN(totals.b3)}</td>
             <td className="px-4 py-2 text-right text-red-800">{fmtN(totals.b4)}</td>
+            <td className="px-4 py-2 text-right text-muted-foreground">{fmtN(totals.adv)}</td>
           </tr>
         </tfoot>
       </Table>
@@ -226,15 +202,16 @@ const AgingTable: React.FC<{
 // ── Main page ─────────────────────────────────────────────────────────────────
 const AgingAnalysis: React.FC = () => {
   const { language } = useLanguage();
-  const { vouchers, accounts, customers, suppliers, society } = useData();
+  const { vouchers, accounts, customers, suppliers, society, matchesActiveBranch } = useData();
   const hi = language === 'hi';
   const [search, setSearch] = useState('');
+  const [asOf, setAsOf] = useState(todayStr());
 
   // ── Debtor accounts: 3303 (Sundry Debtors) + customer sub-accounts ─────────
   const debtorAccountIds = useMemo(() => {
     const ids = new Set<string>();
     ids.add('3303');
-    customers.filter(c => c.isActive && c.accountId).forEach(c => ids.add(c.accountId));
+    customers.filter(c => c.accountId).forEach(c => ids.add(c.accountId));   // a deactivated customer can still owe
     // Also include any account under 3303 group
     accounts.filter(a => !a.isGroup && a.parentId === '3303').forEach(a => ids.add(a.id));
     return [...ids];
@@ -244,7 +221,7 @@ const AgingAnalysis: React.FC = () => {
   const creditorAccountIds = useMemo(() => {
     const ids = new Set<string>();
     ids.add('2101');
-    suppliers.filter(s => s.isActive && s.accountId).forEach(s => ids.add(s.accountId));
+    suppliers.filter(s => s.accountId).forEach(s => ids.add(s.accountId));   // a deactivated supplier can still be owed
     accounts.filter(a => !a.isGroup && a.parentId === '2101').forEach(a => ids.add(a.id));
     return [...ids];
   }, [suppliers, accounts]);
@@ -272,22 +249,28 @@ const AgingAnalysis: React.FC = () => {
   }, [suppliers, accounts, hi]);
 
   // ── Aging rows ─────────────────────────────────────────────────────────────
-  const debtorRows  = useMemo(() => buildAgingRows(debtorAccountIds,  debtorNameMap,  vouchers, 'dr'), [debtorAccountIds,  debtorNameMap,  vouchers]);
-  const creditorRows = useMemo(() => buildAgingRows(creditorAccountIds, creditorNameMap, vouchers, 'cr'), [creditorAccountIds, creditorNameMap, vouchers]);
+  const agingOpts = useMemo(() => ({
+    asOf,
+    openingDate: society.financialYearStart || `${society.financialYear?.split('-')[0]}-04-01`,
+    inScope: matchesActiveBranch,
+    openingsInScope: matchesActiveBranch(undefined),   // ECR-17: openings belong to the Head Office scope (as Ledger / TB)
+  }), [asOf, society.financialYearStart, society.financialYear, matchesActiveBranch]);
+  const debtorRows  = useMemo(() => buildAgingRows(debtorAccountIds,  debtorNameMap,  vouchers, accounts, 'dr', agingOpts), [debtorAccountIds,  debtorNameMap,  vouchers, accounts, agingOpts]);
+  const creditorRows = useMemo(() => buildAgingRows(creditorAccountIds, creditorNameMap, vouchers, accounts, 'cr', agingOpts), [creditorAccountIds, creditorNameMap, vouchers, accounts, agingOpts]);
 
   const totalAR = debtorRows.reduce((s, r)  => s + r.totalOutstanding, 0);
   const totalAP = creditorRows.reduce((s, r) => s + r.totalOutstanding, 0);
   const netPosition = totalAR - totalAP;
 
   // ── CSV / Excel export ─────────────────────────────────────────────────────
-  const agingHeaders = ['#', 'Name', 'Code', 'Phone', 'Total Outstanding', '0-30d', '31-60d', '61-90d', '91-180d', '>180d'];
+  const agingHeaders = ['#', 'Name', 'Code', 'Phone', 'Total Outstanding', '0-30d', '31-60d', '61-90d', '91-180d', '>180d', 'Advance'];
 
   const agingRowsFor = (rows: AgingRow[]) =>
     rows.map((r, i) => [
       i + 1, r.name, r.code, r.phone || '—',
       Math.round(r.totalOutstanding),
       Math.round(r.bucket0_30), Math.round(r.bucket31_60), Math.round(r.bucket61_90),
-      Math.round(r.bucket91_180), Math.round(r.bucketOver180),
+      Math.round(r.bucket91_180), Math.round(r.bucketOver180), Math.round(r.advance),
     ]);
 
   const handleCSV = (mode: 'ar' | 'ap') => {
@@ -311,12 +294,12 @@ const AgingAnalysis: React.FC = () => {
 
     autoTable(doc, {
       startY,
-      head: [['#', 'Name', 'Code', 'Phone', 'Total Outstanding', '0-30d', '31-60d', '61-90d', '91-180d', '>180d']],
+      head: [['#', 'Name', 'Code', 'Phone', 'Total Outstanding', '0-30d', '31-60d', '61-90d', '91-180d', '>180d', 'Advance']],
       body: rows.map((r, i) => [
         i + 1, r.name, r.code, r.phone || '—',
         fmtN(r.totalOutstanding),
         fmtN(r.bucket0_30), fmtN(r.bucket31_60), fmtN(r.bucket61_90),
-        fmtN(r.bucket91_180), fmtN(r.bucketOver180),
+        fmtN(r.bucket91_180), fmtN(r.bucketOver180), fmtN(r.advance),
       ]),
       foot: [['', 'Total', '', '',
         fmtN(rows.reduce((s, r) => s + r.totalOutstanding, 0)),
@@ -325,6 +308,7 @@ const AgingAnalysis: React.FC = () => {
         fmtN(rows.reduce((s, r) => s + r.bucket61_90, 0)),
         fmtN(rows.reduce((s, r) => s + r.bucket91_180, 0)),
         fmtN(rows.reduce((s, r) => s + r.bucketOver180, 0)),
+        fmtN(rows.reduce((s, r) => s + r.advance, 0)),
       ]],
       styles: { fontSize: 7.5 },
       headStyles: { fillColor: mode === 'ar' ? [37, 99, 235] : [234, 88, 12] },
@@ -355,7 +339,7 @@ const AgingAnalysis: React.FC = () => {
             {hi ? 'AR/AP बकाया विश्लेषण' : 'AR / AP Aging Analysis'}
           </h1>
           <p className="text-sm text-gray-500">
-            {society.name} · {hi ? 'आज:' : 'As on:'} {today.toLocaleDateString('hi-IN')}
+            {society.name} · {hi ? 'तारीख़ तक:' : 'As on:'} {fmtDate(asOf)}
           </p>
         </div>
       </div>
@@ -416,7 +400,17 @@ const AgingAnalysis: React.FC = () => {
           placeholder={hi ? 'नाम / कोड खोजें…' : 'Search name / code…'}
           className="h-8 w-48"
         />
+        <span className="text-xs text-muted-foreground ml-2">{hi ? 'तारीख़ तक' : 'As on'}</span>
+        <Input type="date" value={asOf} onChange={e => setAsOf(e.target.value || todayStr())} className="h-8 w-40" />
+        <Link to="/bills-outstanding" className="ml-auto text-xs text-primary underline">
+          {hi ? 'बिल-वार बकाया देखें →' : 'Bill-wise outstanding →'}
+        </Link>
       </div>
+      <p className="text-xs text-muted-foreground">
+        {hi
+          ? 'FIFO तरीका: हर भुगतान/वसूली सबसे पुराने बकाये में से घटती है; कुल हमेशा पार्टी के लेजर शेष (opening सहित) के बराबर। सिर्फ़ स्वीकृत वाउचर गिने जाते हैं।'
+          : 'FIFO: each payment is applied to the oldest dues first; the total always equals the party ledger balance (opening included). Approved vouchers only.'}
+      </p>
 
       <Tabs defaultValue="ar">
         <TabsList>
