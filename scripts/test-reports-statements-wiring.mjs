@@ -16,9 +16,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = pathResolve(HERE, '..');
 const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
 
-let selectStatements;
+let selectStatements, profitLossStatement;
 try {
-  ({ selectStatements } = await import(abs('../src/lib/reports/statements.ts')));
+  ({ selectStatements, profitLossStatement } = await import(abs('../src/lib/reports/statements.ts')));
 } catch (e) {
   console.error('\nFAIL    Could not import reports/statements.');
   console.error('        ' + String(e?.message ?? e).split('\n')[0]);
@@ -61,6 +61,14 @@ ok(rep.includes('selectStatements({'), 'Reports.tsx drives the P&L-family cards 
 ok(!rep.includes("capabilities.has('inventory_sales')") && !rep.includes('capabilities.has("inventory_sales")'),
   'Reports.tsx does NOT re-implement the trading-vs-service rule inline (no duplicate logic)');
 ok(!rep.includes("key: 'profitLoss'"), 'the fixed "Income & Expenditure for everyone" card was removed');
+
+// The /profit-loss page itself (founder 2026-10-09): titled by the SAME rule — लाभ-हानि for trading, आय-व्यय otherwise.
+ok(profitLossStatement(new Set(['inventory_sales'])).labelHi === 'लाभ-हानि खाता', 'trading society: page is "लाभ-हानि खाता"');
+ok(profitLossStatement(new Set([])).labelHi === 'आय-व्यय खाता', 'service society: page is "आय-व्यय खाता"');
+const plPage = readFileSync(pathResolve(ROOT, 'src/pages/ProfitLoss.tsx'), 'utf8');
+ok(/profitLossStatement\(capabilities\)/.test(plPage) && (plPage.match(/\{stmtTitle\}/g) || []).length === 2, 'ProfitLoss.tsx: heading + statement title come from profitLossStatement');
+ok(!/\{hi \? 'आय-व्यय खाता' : 'Income & Expenditure Account'\}/.test(plPage), 'ProfitLoss.tsx: no fixed "आय-व्यय खाता for everyone" title left');
+ok(/'Profit & Loss A\/c' : 'Income & Expenditure Account'\)/.test(plPage), 'the PDF gets the same title');
 
 console.log(`\nReports statement-selection wiring: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

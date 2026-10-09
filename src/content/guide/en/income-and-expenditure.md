@@ -3,7 +3,7 @@
 > **After this chapter you will be able to:** net surplus/deficit; the transfer of gross profit; direct vs indirect expenses; capital vs revenue.
 
 ## 15.1 What it is
-A cooperative’s "profit & loss account" = Income & Expenditure. Net surplus = (gross profit + other income) − (operating expenses).
+A society that trades goods (and so has a Trading A/c) calls it the **Profit & Loss Account**; a service society calls it the **Income & Expenditure Account** — the app picks the title by this rule. Net surplus = (gross profit + other income) − (operating expenses).
 
 ## 15.2 Format
 

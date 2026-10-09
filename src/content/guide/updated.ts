@@ -18,7 +18,7 @@ export const GUIDE_UPDATED: Record<string, string> = {
   'error-rectification-entries': '2026-10-04',
   'financial-ratios-and-lifecycle': '2026-10-04',
   'gst-management': '2026-10-08',
-  'income-and-expenditure': '2026-10-04',
+  'income-and-expenditure': '2026-10-09',
   'inventory-management': '2026-10-04',
   'member-management': '2026-10-04',
   'msp-procurement-entries': '2026-10-04',

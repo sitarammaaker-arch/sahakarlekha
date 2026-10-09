@@ -78,6 +78,14 @@ export function selectStatements(ctx: StatementContext): StatementDef[] {
   });
 }
 
+/** PURE — the ONE P&L-family statement the /profit-loss page renders, by the same registry rule:
+ *  "लाभ-हानि खाता" for a trading society (inventory_sales), "आय-व्यय खाता" otherwise
+ *  (founder 2026-10-09 — the page used to say आय-व्यय for everyone while Reports said लाभ-हानि). */
+export function profitLossStatement(capabilities: ReadonlySet<Capability>): StatementDef {
+  const code = capabilities.has('inventory_sales') ? 'profit_loss' : 'income_expenditure';
+  return STATEMENT_REGISTRY.find((s) => s.code === code)!;
+}
+
 /** PURE — convenience: just the statement codes a society renders. */
 export function selectStatementCodes(ctx: StatementContext): string[] {
   return selectStatements(ctx).map((s) => s.code);
