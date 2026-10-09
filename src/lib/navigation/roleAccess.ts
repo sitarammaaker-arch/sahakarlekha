@@ -51,13 +51,13 @@ export const ROLE_MODULE_ACCESS: Partial<Record<RbacRole, RoleAccess>> = {
     ],
   },
 
-  // Cash & Bank only.
-  cashier: { add: ['dashboard', 'myDashboard', 'cashBook', 'bankBook', 'receivePayment', 'makePayment', 'vouchers', 'dayBook'] },
+  // Cash & Bank only. (Bill-wise receive / pay live inside Vouchers since 2026-10-09.)
+  cashier: { add: ['dashboard', 'myDashboard', 'cashBook', 'bankBook', 'vouchers', 'dayBook'] },
 
   // Stock receipts/issues + godown + stock reports.
   storeKeeper: { add: ['dashboard', 'myDashboard', 'inventory', 'godowns', 'stockValuation', 'closingStockReport'] },
 
-  // Indent/PO/GRN/supplier — NO payment release (makePayment absent).
+  // Indent/PO/GRN/supplier — NO payment release (no Vouchers, where bill-wise Pay Supplier lives).
   procurementOfficer: {
     domains: ['marketing'],
     add: ['dashboard', 'myDashboard', 'purchaseOrders', 'purchaseReturn', 'suppliers', 'purchases', 'procurementMatch'],

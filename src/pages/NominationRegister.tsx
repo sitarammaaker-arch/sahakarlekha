@@ -30,6 +30,11 @@ import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName } from '@/lib/pdf';
 
+// A member is nominated if the primary (flat) nominee OR any entry of nominees[] (ECR-16 multi-nominee) names
+// someone — a member with only additional nominees was listed as "Pending" here.
+const hasNominee = (m: Member) => !!m.nomineeName?.trim() || (m.nominees ?? []).some(n => n.name?.trim());
+const otherNominees = (m: Member) => (m.nominees ?? []).filter(n => n.role !== 'primary' && n.name?.trim()).length;
+
 const RELATIONS = ['Son', 'Daughter', 'Spouse', 'Father', 'Mother', 'Brother', 'Sister', 'Other'];
 
 const NominationRegister: React.FC = () => {
@@ -47,8 +52,8 @@ const NominationRegister: React.FC = () => {
 
   const filtered = useMemo(() => {
     let list = activeMembers;
-    if (filterStatus === 'with')    list = list.filter(m => m.nomineeName?.trim());
-    if (filterStatus === 'without') list = list.filter(m => !m.nomineeName?.trim());
+    if (filterStatus === 'with')    list = list.filter(hasNominee);
+    if (filterStatus === 'without') list = list.filter(m => !hasNominee(m));
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(m =>
@@ -60,7 +65,7 @@ const NominationRegister: React.FC = () => {
     return list;
   }, [activeMembers, search, filterStatus]);
 
-  const withNominee    = activeMembers.filter(m => m.nomineeName?.trim()).length;
+  const withNominee    = activeMembers.filter(hasNominee).length;
   const withoutNominee = activeMembers.length - withNominee;
 
   // ── Edit dialog ───────────────────────────────────────────────────────────
@@ -98,7 +103,7 @@ const NominationRegister: React.FC = () => {
       m.nomineeName || '—',
       m.nomineeRelation || '—',
       m.nomineePhone || '—',
-      m.nomineeName ? 'Nominated' : 'Pending',
+      hasNominee(m) ? (otherNominees(m) ? `Nominated (+${otherNominees(m)} more)` : 'Nominated') : 'Pending',
     ]);
 
   const handleCSV = () =>
@@ -126,7 +131,7 @@ const NominationRegister: React.FC = () => {
         m.nomineeName || '—',
         m.nomineeRelation || '—',
         m.nomineePhone || '—',
-        m.nomineeName ? 'Nominated' : 'Pending',
+        hasNominee(m) ? (otherNominees(m) ? `Nominated (+${otherNominees(m)} more)` : 'Nominated') : 'Pending',
       ]),
       styles: { fontSize: 7 },
       headStyles: { fillColor: [236, 72, 153] },
@@ -263,10 +268,10 @@ const NominationRegister: React.FC = () => {
                   <TableCell className="text-sm">{m.nomineeRelation || <span className="text-gray-400">—</span>}</TableCell>
                   <TableCell className="text-sm">{m.nomineePhone || <span className="text-gray-400">—</span>}</TableCell>
                   <TableCell>
-                    {m.nomineeName?.trim() ? (
+                    {hasNominee(m) ? (
                       <Badge className="bg-green-100 text-green-800 text-xs gap-1">
                         <CheckCircle2 className="h-3 w-3" />
-                        {hi ? 'नामांकित' : 'Nominated'}
+                        {hi ? 'नामांकित' : 'Nominated'}{otherNominees(m) > 0 && (hi ? ` +${otherNominees(m)} और` : ` +${otherNominees(m)} more`)}
                       </Badge>
                     ) : (
                       <Badge className="bg-red-100 text-red-800 text-xs gap-1">

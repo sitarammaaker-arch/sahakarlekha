@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useData } from '@/contexts/DataContext';
 import { useLabourData } from '@/contexts/LabourDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -144,7 +145,9 @@ export default function MusterRoll() {
         {/* T-19: this register had no export at all (audit gap EXP-10). The
             Export Registry decides whether it renders, which columns leave, and whether
             the audit row was written before any bytes did. */}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {/* The printable statutory register of this data lives on its own page (kept, 2026-10-09) — linked here. */}
+          <Link to="/wage-register" className="text-sm text-primary underline">{hi ? 'वेतन रजिस्टर (प्रिंट)' : 'Wage Register (print)'}</Link>
           <EntityExportButton entityKey="muster_entry" />
         </div>
       </div>

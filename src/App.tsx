@@ -109,10 +109,8 @@ const DayBook = lazyWithRetry(() => import("./pages/DayBook"));
 const LedgerHeads = lazyWithRetry(() => import("./pages/LedgerHeads"));
 const Inventory = lazyWithRetry(() => import("./pages/Inventory"));
 const SaleManagement = lazyWithRetry(() => import("./pages/SaleManagement"));
-const ReceivePayment = lazyWithRetry(() => import("./pages/ReceivePayment"));
 const SaleRegister = lazyWithRetry(() => import("./pages/SaleRegister"));
 const PurchaseManagement = lazyWithRetry(() => import("./pages/PurchaseManagement"));
-const MakePayment = lazyWithRetry(() => import("./pages/MakePayment"));
 const PurchaseRegister = lazyWithRetry(() => import("./pages/PurchaseRegister"));
 const SalaryManagement = lazyWithRetry(() => import("./pages/SalaryManagement"));
 const Payroll = lazyWithRetry(() => import("./pages/Payroll"));
@@ -355,10 +353,11 @@ const AppRoutes = () => {
       <Route path="/ledger-heads" element={<ProtectedRoute><LedgerHeads /></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
       <Route path="/sales" element={<ProtectedRoute><SaleManagement /></ProtectedRoute>} />
-      <Route path="/receive-payment" element={<ProtectedRoute><ReceivePayment /></ProtectedRoute>} />
+      {/* Receive / Make Payment retired into the Vouchers bill-wise panel (2026-10-09) — the same component; old links land there. */}
+      <Route path="/receive-payment" element={<Navigate to="/vouchers?billwise=receive" replace />} />
       <Route path="/sale-register" element={<ProtectedRoute><SaleRegister /></ProtectedRoute>} />
       <Route path="/purchases" element={<ProtectedRoute><PurchaseManagement /></ProtectedRoute>} />
-      <Route path="/make-payment" element={<ProtectedRoute><MakePayment /></ProtectedRoute>} />
+      <Route path="/make-payment" element={<Navigate to="/vouchers?billwise=pay" replace />} />
       <Route path="/purchase-register" element={<ProtectedRoute><PurchaseRegister /></ProtectedRoute>} />
       <Route path="/salary" element={<ProtectedRoute><SalaryManagement /></ProtectedRoute>} />
       <Route path="/payroll" element={<ProtectedRoute><Payroll /></ProtectedRoute>} />

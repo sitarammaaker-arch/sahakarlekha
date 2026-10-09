@@ -35,7 +35,7 @@ import { validateKyc } from '@/lib/kycUtils';
 import { validateCertificate } from '@/lib/shareCertUtils';
 import { useSubscription } from '@/hooks/useSubscription';
 import { MemberPortalDialog } from '@/components/members/MemberPortalDialog';
-import { MOBILE_RE } from '@/lib/partyValidation';
+import { memberPhoneError } from '@/lib/memberValidation';
 import { callMemberPortalAdmin, portalPlanAllowed, type PortalLoginRow } from '@/lib/memberPortalAdmin';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
@@ -450,14 +450,8 @@ const Members: React.FC = () => {
     return [primary, ...additional];
   };
 
-  // Phone is optional (founder 2026-10-09: forcing it produced dummy 9999999999 numbers); if given it must be a real mobile.
-  const phoneError = (phone: string | undefined): string | null => {
-    const v = (phone || '').trim();
-    if (!v) return null;
-    if (!MOBILE_RE.test(v)) return hi ? 'मोबाइल नंबर 10 अंक का हो (6-9 से शुरू), या खाली छोड़ें' : 'Mobile must be 10 digits (starting 6-9), or leave it blank';
-    if (/^(\d)\1{9}$/.test(v)) return hi ? 'यह नकली नंबर लगता है — सही नंबर भरें या खाली छोड़ें' : 'This looks like a dummy number — enter the real one or leave it blank';
-    return null;
-  };
+  // Phone is optional (founder 2026-10-09); if given it must be a real mobile — the shared rule (lib/memberValidation).
+  const phoneError = (phone: string | undefined): string | null => memberPhoneError(phone, hi);
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();

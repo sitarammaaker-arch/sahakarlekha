@@ -31,6 +31,7 @@ import { CORE_PARTS, setLoadFailures, refuseIfWriteBlocked } from '@/lib/connect
 import type { VoucherOwnerCheck } from '@/lib/voucherOwnership';
 import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
+import { syncPrimaryNominee } from '@/lib/nomineeUtils';
 import { localOnlyAccountsReport } from '@/lib/accounting/localOnlyAccounts';
 import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
@@ -3252,6 +3253,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const oldMember = membersRef.current.find(m => m.id === id);
     if (!oldMember) return;
     const updatedMember = { ...oldMember, ...data };
+    // A flat-only nominee edit (Nomination / Share Register, importer) also moves the role-'primary' entry of
+    // nominees[], so the statutory print (flat) and nominees[] never name different people.
+    if (!('nominees' in data) && ('nomineeName' in data || 'nomineeRelation' in data || 'nomineePhone' in data)) {
+      updatedMember.nominees = syncPrimaryNominee(oldMember.nominees, {
+        nomineeName: updatedMember.nomineeName, nomineeRelation: updatedMember.nomineeRelation, nomineePhone: updatedMember.nomineePhone,
+      });
+    }
     setMembersState(prev => {
       const updated = prev.map(m => m.id === id ? updatedMember : m);
       return updated;

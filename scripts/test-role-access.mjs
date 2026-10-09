@@ -85,7 +85,7 @@ for (const id of ['societySetup', 'branches', 'openingBalances', 'features', 'mu
 }
 // …but keeps the two it can operate.
 ok(new Set(visibleIds('secretary', ALL_CAPS)).has('userManagement') && new Set(visibleIds('secretary', ALL_CAPS)).has('godowns'), 'secretary keeps userManagement + godowns');
-eq('cashier', ['dashboard', 'myDashboard', 'cashBook', 'bankBook', 'receivePayment', 'makePayment', 'vouchers', 'dayBook'], 'cash & bank only');
+eq('cashier', ['dashboard', 'myDashboard', 'cashBook', 'bankBook', 'vouchers', 'dayBook'], 'cash & bank only (bill-wise receive/pay inside Vouchers)');
 eq('storeKeeper', ['dashboard', 'myDashboard', 'inventory', 'godowns', 'stockValuation', 'closingStockReport'], 'stock + godown + stock reports');
 eq('procurementOfficer', [...idsWhere((m) => m.domain === 'marketing'), 'dashboard', 'myDashboard', 'purchaseOrders', 'purchaseReturn', 'suppliers', 'purchases', 'procurementMatch'], 'procurement surfaces, no payment release');
 eq('salesOperator', ['dashboard', 'myDashboard', 'sales', 'customers', 'retailCounter', 'salesReturn', 'priceLists', 'memberCredit'], 'billing/POS surfaces');
@@ -100,11 +100,11 @@ eq('dataEntry', ['dashboard', 'myDashboard'], 'dashboards only until per-user as
 // Capability gating still applies ON TOP for mapped roles.
 {
   const noCaps = visibleIds('cashier', new Set());
-  const capFree = MODULE_CATALOG.filter((m) => ['dashboard', 'myDashboard', 'cashBook', 'bankBook', 'receivePayment', 'makePayment', 'vouchers', 'dayBook'].includes(m.id) && m.requiredCapabilities.length === 0).map((m) => m.id).sort();
+  const capFree = MODULE_CATALOG.filter((m) => ['dashboard', 'myDashboard', 'cashBook', 'bankBook', 'vouchers', 'dayBook'].includes(m.id) && m.requiredCapabilities.length === 0).map((m) => m.id).sort();
   ok(JSON.stringify(noCaps) === JSON.stringify(capFree), 'cashier with zero capabilities sees only capability-free modules');
 }
 // No payment release for procurement (explicit runbook restriction).
-ok(!visibleIds('procurementOfficer').includes('makePayment'), 'procurementOfficer never sees makePayment');
+ok(!visibleIds('procurementOfficer').includes('vouchers'), 'procurementOfficer never sees Vouchers (where bill-wise Pay Supplier lives) — no payment release');
 // Assurance roles see no entry forms.
 ok(!visibleIds('internalAuditor').includes('vouchers') && !visibleIds('externalCA').includes('retailCounter'), 'auditor-family sees no entry forms');
 // superAdminShowAll still bypasses everything.
@@ -115,7 +115,7 @@ ok(ROLE_MODULE_ACCESS.superAdmin === undefined, 'superAdmin has no society map e
 // ── operations domain = "doing" surface, hidden from read-only LEGACY roles ──
 // (ECR-06: transaction-entry + trade masters carry requiredRoles ['admin','accountant'];
 //  read-only auditor/viewer audit via the reports/registers instead.)
-const OPS_ENTRY = ['ledgerHeads', 'inventory', 'suppliers', 'customers', 'sales', 'purchases', 'salary', 'receivePayment', 'makePayment'];
+const OPS_ENTRY = ['ledgerHeads', 'inventory', 'suppliers', 'customers', 'sales', 'purchases', 'salary'];
 const ALL = new Set(MODULE_CATALOG.flatMap((m) => m.requiredCapabilities));
 for (const legacy of ['auditor', 'viewer']) {
   const seen = new Set(visibleIds(legacy, ALL));

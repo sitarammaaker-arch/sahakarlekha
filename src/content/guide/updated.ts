@@ -9,7 +9,7 @@ export const GUIDE_DEFAULT_UPDATED = '2026-06-20';
 export const GUIDE_UPDATED: Record<string, string> = {
   'audit-preparation': '2026-10-04',
   'balance-sheet': '2026-10-04',
-  'bill-wise-settlement': '2026-10-04',
+  'bill-wise-settlement': '2026-10-09',
   'chart-of-accounts': '2026-10-04',
   'comprehensive-faq': '2026-10-04',
   'data-security-and-backup': '2026-10-04',

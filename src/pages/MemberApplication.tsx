@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { memberPhoneError, memberNomineeError } from '@/lib/memberValidation';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
@@ -58,6 +59,13 @@ const MemberApplication: React.FC = () => {
       toast({ title: language === 'hi' ? 'नाम आवश्यक है' : 'Name is required', variant: 'destructive' });
       return;
     }
+    // The same rules as the Members "new member" form (lib/memberValidation) — an application used to skip them,
+    // and approving it does not re-check.
+    const hiLang = language === 'hi';
+    const phoneErr = memberPhoneError(form.phone, hiLang);
+    if (phoneErr) { toast({ title: phoneErr, variant: 'destructive' }); return; }
+    const nomErr = memberNomineeError(form.nomineeName, [], hiLang);
+    if (nomErr) { toast({ title: hiLang ? 'नामांकित ज़रूरी है' : 'Nominee required', description: nomErr, variant: 'destructive' }); return; }
 
     const newMember = addMember({
       memberId: getNextMemberId(),
