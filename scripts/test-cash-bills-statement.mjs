@@ -14,7 +14,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = resolve(HERE, '..', 'src');
 const imp = (p) => import(pathToFileURL(resolve(SRC, p)).href);
 const { directBillsForAccount, sameDayCashFromCustomer } = await imp('lib/directBills.ts');
-const { cashReceiptWarning, cashReceiptRule, CASH_RECEIPT_RULES } = await imp('lib/rules/cashReceiptLimit.ts');
+const { cashReceiptWarning, cashReceiptRule, CASH_RECEIPT_RULES, cashInByParty } = await imp('lib/rules/cashReceiptLimit.ts');
 const read = (p) => readFileSync(resolve(SRC, p), 'utf8');
 
 let pass = 0, fail = 0;
@@ -64,6 +64,18 @@ ok(!/runningBalance[^\n]*directBills|directTotal[^\n]*balance/.test(ledger), 'th
 const sale = read('pages/SaleManagement.tsx');
 ok(/paymentMode === 'cash'\s*\?\s*cashReceiptWarning\(saleDate, grandTotal, sameDayCashFromCustomer\(/.test(sale) && /cashReceiptWarningText\(cashWarning/.test(sale), 'sale form shows the s.186 warning for cash');
 ok(!/if \(cashWarning\)[^\n]*return/.test(sale), 'the warning never blocks the save');
+
+// 4. Cash RECEIPT vouchers (s.186 on the voucher screen)
+const isCash = (id) => id === '3301';
+const rcpt = cashInByParty([{ accountId: '3301', type: 'Dr', amount: 250000 }, { accountId: 'A-SUMIT', type: 'Cr', amount: 250000 }], isCash);
+ok(rcpt.get('A-SUMIT') === 250000, 'receipt Dr Cash / Cr Sumit → Sumit paid ₹2.5 L cash');
+const split = cashInByParty([{ accountId: '3301', type: 'Dr', amount: 100000 }, { accountId: 'BANK1', type: 'Dr', amount: 150000 }, { accountId: 'A-SUMIT', type: 'Cr', amount: 250000 }], isCash);
+ok(split.get('A-SUMIT') === 100000, 'part cash, part bank → only the cash part counts');
+ok(cashInByParty([{ accountId: 'BANK1', type: 'Dr', amount: 300000 }, { accountId: 'A-SUMIT', type: 'Cr', amount: 300000 }], isCash).size === 0, 'a bank receipt is never counted');
+const vch = read('pages/Vouchers.tsx');
+ok(/if \(voucherType !== 'receipt'\) return null;/.test(vch) && /cashReceiptWarning\(voucherDate, cash, earlierVouchers \+ earlierSales\)/.test(vch), 'voucher screen: cash receipts warn, counting the same-day receipts + cash sales of that payer');
+ok((vch.match(/\{cashWarningText && \(/g) || []).length === 2, 'the warning shows on both the easy and the full voucher form');
+ok(/const isPayer = \(id: string\) => !bankIds\.includes\(id\);/.test(vch), 'a bank account is never treated as the payer');
 
 console.log(`Cash bills statement + s.186: ${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;
