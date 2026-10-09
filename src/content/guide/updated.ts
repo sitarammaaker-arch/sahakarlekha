@@ -15,7 +15,7 @@ export const GUIDE_UPDATED: Record<string, string> = {
   'data-security-and-backup': '2026-10-04',
   'daybook-and-ledger': '2026-10-04',
   'depreciation': '2026-10-04',
-  'error-rectification-entries': '2026-10-04',
+  'error-rectification-entries': '2026-10-09',
   'financial-ratios-and-lifecycle': '2026-10-04',
   'gst-management': '2026-10-08',
   'income-and-expenditure': '2026-10-09',
@@ -36,7 +36,7 @@ export const GUIDE_UPDATED: Record<string, string> = {
   'tds-and-26q': '2026-10-04',
   'trading-account': '2026-10-04',
   'trial-balance': '2026-10-08',
-  'voucher-types': '2026-10-08',
+  'voucher-types': '2026-10-09',
   'year-end-and-fy-lock': '2026-10-04',
   'standard-chart-of-accounts': '2026-10-04',
 };

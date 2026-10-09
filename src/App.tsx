@@ -124,7 +124,6 @@ const BankReconciliation = lazyWithRetry(() => import("./pages/BankReconciliatio
 const ReserveFund = lazyWithRetry(() => import("./pages/ReserveFund"));
 const ProfitDistribution = lazyWithRetry(() => import("./pages/ProfitDistribution"));
 const LoanInterest = lazyWithRetry(() => import("./pages/LoanInterest"));
-const CompoundVoucher = lazyWithRetry(() => import("./pages/CompoundVoucher"));
 const VoucherApproval = lazyWithRetry(() => import("./pages/VoucherApproval"));
 const MeetingRegister = lazyWithRetry(() => import("./pages/MeetingRegister"));
 const NominationRegister = lazyWithRetry(() => import("./pages/NominationRegister"));
@@ -371,7 +370,8 @@ const AppRoutes = () => {
       <Route path="/reserve-fund" element={<ProtectedRoute><ReserveFund /></ProtectedRoute>} />
       <Route path="/profit-distribution" element={<ProtectedRoute><ProfitDistribution /></ProtectedRoute>} />
       <Route path="/loan-interest" element={<ProtectedRoute><LoanInterest /></ProtectedRoute>} />
-      <Route path="/compound-voucher" element={<ProtectedRoute><CompoundVoucher /></ProtectedRoute>} />
+      {/* Compound Voucher retired into the Vouchers Expert form (2026-10-09) — old links / bookmarks land there. */}
+      <Route path="/compound-voucher" element={<Navigate to="/vouchers?mode=expert&type=journal" replace />} />
       <Route path="/voucher-approval" element={<ProtectedRoute><VoucherApproval /></ProtectedRoute>} />
       <Route path="/meeting-register" element={<ProtectedRoute><MeetingRegister /></ProtectedRoute>} />
       <Route path="/nomination-register" element={<ProtectedRoute><NominationRegister /></ProtectedRoute>} />

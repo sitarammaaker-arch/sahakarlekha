@@ -278,7 +278,6 @@ export function filterGlossary(query: string): GlossaryEntry[] {
  */
 export const MODULE_TERMS: Record<string, string[]> = {
   '/vouchers': ['voucher', 'debit', 'credit', 'double-entry'],
-  '/compound-voucher': ['voucher', 'double-entry'],
   '/cash-book': ['cash-book', 'cash'],
   '/bank-book': ['bank-book', 'bank-account', 'cheque'],
   '/bank-reconciliation': ['bank-statement', 'bank-book'],

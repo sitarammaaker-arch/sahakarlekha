@@ -58,3 +58,22 @@ export function cashReceiptWarningText(w: CashReceiptWarning, hi: boolean): stri
     ? `${w.single ? 'इस एक बिल में' : 'इस ग्राहक से आज कुल'} नकद ${amt(w.total)} — ${amt(w.limit)} या अधिक नकद लेना मना है (${w.section})। भुगतान बैंक / चेक / UPI से लें।`
     : `${w.single ? 'This one bill takes' : 'Cash from this customer today totals'} ${amt(w.total)} — receiving ${amt(w.limit)} or more in cash is barred (${w.section}). Take it by bank / cheque / UPI.`;
 }
+
+/**
+ * Cash a voucher RECEIVES from each party: the Dr lines on a cash account are the cash in; each Cr line on a
+ * non-cash account is a payer, credited with at most the cash received. (A receipt "Dr Cash / Cr Sumit" →
+ * Sumit paid that much cash; a contra "Dr Cash / Cr Bank" names a bank — callers pass only party lines.)
+ */
+export function cashInByParty(
+  lines: { accountId: string; type: 'Dr' | 'Cr'; amount: number }[],
+  isCash: (accountId: string) => boolean,
+): Map<string, number> {
+  const cashIn = lines.filter((l) => l.type === 'Dr' && isCash(l.accountId)).reduce((t, l) => t + (Number(l.amount) || 0), 0);
+  const out = new Map<string, number>();
+  if (cashIn <= 0) return out;
+  for (const l of lines) {
+    if (l.type !== 'Cr' || !l.accountId || isCash(l.accountId)) continue;
+    out.set(l.accountId, Math.min(cashIn, (out.get(l.accountId) || 0) + (Number(l.amount) || 0)));
+  }
+  return out;
+}

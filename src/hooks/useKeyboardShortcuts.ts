@@ -12,7 +12,7 @@ export interface Shortcut {
 export const GLOBAL_SHORTCUTS: Omit<Shortcut, 'action'>[] = [
   { key: 'F2',  path: '/vouchers',         description: 'New Voucher',        descriptionHi: 'नया वाउचर' },
   { key: 'F3',  path: '/ledger',           description: 'Ledger',             descriptionHi: 'लेजर' },
-  { key: 'F4',  path: '/compound-voucher', description: 'Compound Voucher',   descriptionHi: 'संयुक्त वाउचर' },
+  { key: 'F4',  path: '/vouchers?mode=expert&type=journal', description: 'Multi-line Journal',   descriptionHi: 'कई पंक्तियों वाला जर्नल' },
   { key: 'F5',  path: '/vouchers?type=receipt', description: 'Receipt Voucher', descriptionHi: 'रसीद वाउचर' },
   { key: 'F6',  path: '/vouchers?type=payment', description: 'Payment Voucher', descriptionHi: 'भुगतान वाउचर' },
   { key: 'F7',  path: '/vouchers?type=journal', description: 'Journal Voucher', descriptionHi: 'जर्नल वाउचर' },

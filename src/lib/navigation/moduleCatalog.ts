@@ -42,7 +42,6 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'bankBook',           titleKey: 'bankBook',           icon: Building2,       route: '/bank-book',          domain: 'core', requiredCapabilities: U, order: 2 },
   { id: 'bankReconciliation', titleKey: 'bankReconciliation', icon: CheckCircle2,    route: '/bank-reconciliation', domain: 'core', requiredCapabilities: U, order: 3 },
   { id: 'vouchers',           titleKey: 'vouchers',           icon: FileText,        route: '/vouchers',           domain: 'core', requiredCapabilities: U, order: 4 },
-  { id: 'compoundVoucher',    titleKey: 'compoundVoucher',    icon: Layers,          route: '/compound-voucher',   domain: 'core', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 5 },
   { id: 'voucherApproval',    titleKey: 'voucherApproval',    icon: CheckCircle2,    route: '/voucher-approval',   domain: 'core', requiredCapabilities: U, requiredRoles: ['admin'], order: 6 },
   { id: 'dayBook',            titleKey: 'dayBook',            icon: CalendarDays,    route: '/day-book',           domain: 'core', requiredCapabilities: U, order: 7 },
   { id: 'ledger',             titleKey: 'ledger',             icon: BookOpen,        route: '/ledger',             domain: 'core', requiredCapabilities: U, order: 8 },

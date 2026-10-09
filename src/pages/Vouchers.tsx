@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { MemberPicker } from '@/components/MemberPicker';
 import { BankAccountSelect } from '@/components/BankAccountSelect';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -40,6 +40,7 @@ import type { LedgerAccount } from '@/types';
 import { validateVoucher } from '@/lib/validation';
 import { fmtDate, todayStr } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { cashInByParty, cashReceiptWarning, type CashReceiptWarning } from '@/lib/rules/cashReceiptLimit';
 import { isEngineVoucher } from '@/lib/accounting/voucherImmutability';
 import { isEditLocked } from '@/lib/voucherReversal';
 
@@ -88,6 +89,19 @@ const Vouchers: React.FC = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<typeof VOUCHER_TEMPLATES[0] | null>(null);
   // Bill-wise settlement (Tally "Against Reference") opened inline within the voucher screen.
   const [billWiseMode, setBillWiseMode] = useState<'receive' | 'pay' | null>(null);
+
+  // The old Compound Voucher page was retired into this screen (2026-10-09): /compound-voucher and F4 now land
+  // here as /vouchers?mode=expert&type=journal — the Expert form does everything it did (N Dr + N Cr lines) and more.
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('mode') === 'expert') {
+      setEntryMode('expert');
+      try { localStorage.setItem('sahayata_entry_mode', 'expert'); } catch { /* storage unavailable */ }
+      setActiveTab('entry');
+    }
+    const t = searchParams.get('type');
+    if (t === 'journal' || t === 'receipt' || t === 'payment' || t === 'contra') setVoucherType(t);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const switchMode = (mode: EntryMode) => {
     setEntryMode(mode);
@@ -169,6 +183,35 @@ const Vouchers: React.FC = () => {
   type LineEntry = { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: string; narration: string };
   const makeBlankLine = (type: 'Dr' | 'Cr'): LineEntry => ({ id: crypto.randomUUID(), accountId: '', type, amount: '', narration: '' });
   const [lines, setLines] = useState<LineEntry[]>(() => [makeBlankLine('Dr'), makeBlankLine('Cr')]);
+
+  // Income-tax Act 2025 s.186 (ex-269ST): ₹2 lakh+ in cash from one person in a day / one transaction is barred.
+  // A cash RECEIPT names its payer on the Cr side; warn (never block) — rule + sources in lib/rules/cashReceiptLimit.
+  const cashWarning = useMemo((): CashReceiptWarning | null => {
+    if (voucherType !== 'receipt') return null;
+    const isCash = (id: string) => id === ACCOUNT_IDS.CASH || accounts.find(a => a.id === id)?.parentId === ACCOUNT_IDS.CASH;
+    const isPayer = (id: string) => !bankIds.includes(id);
+    const draft = entryMode === 'aasan' && selectedTemplate
+      ? [{ accountId: debitAccount, type: 'Dr' as const, amount: Number(amount) || 0 }, { accountId: creditAccount, type: 'Cr' as const, amount: Number(amount) || 0 }]
+      : lines.map(l => ({ accountId: l.accountId, type: l.type, amount: Number(l.amount) || 0 }));
+    const mine = cashInByParty(draft.filter(l => l.type === 'Dr' || isPayer(l.accountId)), isCash);
+    let worst: CashReceiptWarning | null = null;
+    for (const [party, cash] of mine) {
+      // Same-day cash already received from this payer: other live receipts + cash sales to the customer behind the account.
+      const earlierVouchers = vouchers
+        .filter(v => !v.isDeleted && v.date === voucherDate)
+        .reduce((t, v) => t + (cashInByParty(getVoucherLines(v), isCash).get(party) || 0), 0);
+      const custIds = new Set(customers.filter(c => c.accountId === party).map(c => c.id));
+      const earlierSales = sales
+        .filter(sl => !sl.isDeleted && sl.date === voucherDate && sl.paymentMode === 'cash' && sl.customerId && custIds.has(sl.customerId))
+        .reduce((t, sl) => t + (Number(sl.grandTotal) || 0), 0);
+      const w = cashReceiptWarning(voucherDate, cash, earlierVouchers + earlierSales);
+      if (w && (!worst || w.total > worst.total)) worst = w;
+    }
+    return worst;
+  }, [voucherType, entryMode, selectedTemplate, debitAccount, creditAccount, amount, lines, voucherDate, vouchers, sales, customers, accounts, bankIds]);
+  const cashWarningText = cashWarning && (language === 'hi'
+    ? `${cashWarning.single ? 'इस एक वाउचर में' : 'इस व्यक्ति से आज कुल'} नकद ₹${cashWarning.total.toLocaleString('en-IN')} — ₹${cashWarning.limit.toLocaleString('en-IN')} या अधिक नकद लेना मना है (${cashWarning.section})। बैंक / चेक / UPI से लें।`
+    : `${cashWarning.single ? 'This one voucher takes' : 'Cash from this person today totals'} ₹${cashWarning.total.toLocaleString('en-IN')} in cash — receiving ₹${cashWarning.limit.toLocaleString('en-IN')} or more in cash is barred (${cashWarning.section}). Take it by bank / cheque / UPI.`);
 
   const drTotal = lines.filter(l => l.type === 'Dr').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
   const crTotal = lines.filter(l => l.type === 'Cr').reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
@@ -621,6 +664,7 @@ const Vouchers: React.FC = () => {
             </button>
             <button
               onClick={() => switchMode('expert')}
+              title={language === 'hi' ? 'कई नामे + कई जमा पंक्तियों वाला वाउचर (पहले "संयुक्त वाउचर")' : 'Multi-line voucher — many Dr + many Cr lines (formerly "Compound Voucher")'}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors border-l',
                 entryMode === 'expert'
@@ -629,7 +673,7 @@ const Vouchers: React.FC = () => {
               )}
             >
               <Settings2 className="h-3.5 w-3.5" />
-              {language === 'hi' ? 'विशेषज्ञ' : 'Expert'}
+              {language === 'hi' ? 'विशेषज्ञ (कई पंक्तियाँ)' : 'Expert (multi-line)'}
             </button>
           </div>
           <Button variant={activeTab === 'entry' ? 'default' : 'outline'} onClick={() => setActiveTab('entry')}>
@@ -829,6 +873,9 @@ const Vouchers: React.FC = () => {
                           {language === 'hi' ? 'अनुमोदन हेतु भेजें (Maker-Checker)' : 'Submit for Approval (Maker-Checker)'}
                         </label>
                       </div>
+                      {cashWarningText && (
+                        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-2">⚠️ {cashWarningText}</p>
+                      )}
                       <div className="flex gap-3 pt-2 border-t">
                         <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2" disabled={saving}>
                           <Save className="h-5 w-5" />
@@ -1119,6 +1166,9 @@ const Vouchers: React.FC = () => {
                         {language === 'hi' ? 'अनुमोदन हेतु भेजें (Maker-Checker)' : 'Submit for Approval (Maker-Checker)'}
                       </label>
                     </div>
+                    {cashWarningText && (
+                      <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-2">⚠️ {cashWarningText}</p>
+                    )}
                     <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
                       <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2" disabled={saving || (voucherType !== 'contra' && !linesBalanced)}>
                         <Save className="h-5 w-5" />
