@@ -35,6 +35,7 @@ import { validateKyc } from '@/lib/kycUtils';
 import { validateCertificate } from '@/lib/shareCertUtils';
 import { useSubscription } from '@/hooks/useSubscription';
 import { MemberPortalDialog } from '@/components/members/MemberPortalDialog';
+import { MOBILE_RE } from '@/lib/partyValidation';
 import { callMemberPortalAdmin, portalPlanAllowed, type PortalLoginRow } from '@/lib/memberPortalAdmin';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
@@ -170,8 +171,8 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
         <Input value={form.pinCode} onChange={e => f('pinCode', e.target.value)} maxLength={6} />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs">{t('phone')} *</Label>
-        <Input type="tel" value={form.phone} onChange={e => f('phone', e.target.value)} placeholder="9876543210" required />
+        <Label className="text-xs">{t('phone')} {hi ? '(वैकल्पिक)' : '(optional)'}</Label>
+        <Input type="tel" value={form.phone} onChange={e => f('phone', e.target.value)} placeholder="9876543210" />
       </div>
     </div>
     {/* Member type & Finance */}
@@ -404,7 +405,7 @@ const Members: React.FC = () => {
   const filterBySearch = (list: Member[]) => list.filter(m =>
     m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     m.memberId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    m.phone.includes(searchQuery)
+    (m.phone || '').includes(searchQuery)
   );
 
   const totalShareCapital = approvedMembers.reduce((s, m) => s + m.shareCapital, 0);
@@ -449,12 +450,22 @@ const Members: React.FC = () => {
     return [primary, ...additional];
   };
 
+  // Phone is optional (founder 2026-10-09: forcing it produced dummy 9999999999 numbers); if given it must be a real mobile.
+  const phoneError = (phone: string | undefined): string | null => {
+    const v = (phone || '').trim();
+    if (!v) return null;
+    if (!MOBILE_RE.test(v)) return hi ? 'मोबाइल नंबर 10 अंक का हो (6-9 से शुरू), या खाली छोड़ें' : 'Mobile must be 10 digits (starting 6-9), or leave it blank';
+    if (/^(\d)\1{9}$/.test(v)) return hi ? 'यह नकली नंबर लगता है — सही नंबर भरें या खाली छोड़ें' : 'This looks like a dummy number — enter the real one or leave it blank';
+    return null;
+  };
+
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.phone) {
+    if (!form.name) {
       toast({ title: hi ? 'कृपया आवश्यक फ़ील्ड भरें' : 'Please fill required fields', variant: 'destructive' });
       return;
     }
+    if (phoneError(form.phone)) { toast({ title: phoneError(form.phone)!, variant: 'destructive' }); return; }
     const memberId = form.memberId.trim() || getNextMemberId();
     if (members.some(m => m.memberId === memberId)) {
       toast({ title: hi ? 'यह सदस्य ID पहले से मौजूद है' : 'Member ID already exists', variant: 'destructive' });
@@ -504,6 +515,8 @@ const Members: React.FC = () => {
     if (!nv.ok) { toast({ title: hi ? 'नामांकित त्रुटि' : 'Nominee error', description: nv.error, variant: 'destructive' }); return; }
     const kv = validateKyc(form.aadhaar, form.pan);
     if (!kv.ok) { toast({ title: 'KYC', description: kv.error, variant: 'destructive' }); return; }
+    // Only a CHANGED phone is checked — an old member's legacy number must not block an unrelated edit.
+    if ((form.phone || '').trim() !== (editMember.phone || '').trim() && phoneError(form.phone)) { toast({ title: phoneError(form.phone)!, variant: 'destructive' }); return; }
     updateMember(editMember.id, {
       ...form,
       shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
