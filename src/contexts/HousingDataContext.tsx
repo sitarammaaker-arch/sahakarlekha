@@ -29,6 +29,8 @@ import { ACCOUNT_IDS, getBankAccountIds, defaultBankAccountId, defaultDebtorsAcc
 import { computeBillLines, demandLegs, billTotal, round2, gstLineForBill } from '@/lib/housing/billing';
 import { plannedBillInterest } from '@/lib/housing/arrears';
 import { buildMemberStatement } from '@/lib/housing/statement';
+import { buildFundStatement } from '@/lib/funds';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, Voucher, LedgerAccount } from '@/types';
 
 interface HousingDataContextValue {
@@ -469,6 +471,16 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const fund = accounts.find(a => a.id === data.fundAccountId);
     if (!fund) { toastRef.current({ title: 'निधि खाता नहीं मिला', description: 'Fund account not found', variant: 'destructive', duration: 8000 }); return sentinel; }
     if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    // Balance guard on a SPEND — the same rule (and message) as DataContext.recordFundUtilisation used by the Fund
+    // Register: never take more out of a fund than it holds. This housing path had none, so a sinking/repair fund
+    // could be spent below zero from the Fund Statement page (RULE 2: one fund rule, both pages).
+    if (!data.toFund) {
+      const corpus = buildFundStatement(fund, vouchers.filter(isCountedVoucher)).closing;
+      if (data.amount > corpus + 0.005) {
+        toastRef.current({ title: 'निधि में पर्याप्त शेष नहीं', description: `${fund.nameHi || fund.name} में केवल ₹${corpus.toLocaleString('en-IN')} उपलब्ध है — इससे अधिक उपयोग नहीं हो सकता।`, variant: 'destructive', duration: 12000 });
+        return sentinel;
+      }
+    }
     const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const note = data.note?.trim() ? ` · ${data.note.trim()}` : '';
@@ -487,7 +499,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     });
     if (v.id) toastRef.current({ title: 'निधि प्रविष्टि दर्ज', description: `${fund.nameHi || fund.name} · ₹${data.amount}`, duration: 6000 });
     return v;
-  }, [accounts, addVoucher, user]);
+  }, [accounts, vouchers, addVoucher, user]);
 
   const recordFundContribution = useCallback((data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; remarks?: string }): Voucher =>
     postFundMovement({ ...data, note: data.remarks, refType: 'fund.contribution', toFund: true }), [postFundMovement]);

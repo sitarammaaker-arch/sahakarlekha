@@ -12,10 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TrendingDown, Download, FileSpreadsheet, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { generateDepreciationSchedulePDF } from '@/lib/pdf';
-import { calcDepForFY, parseFY, DEP_ACCOUNTS, wdvAccumulatedBefore } from '@/lib/depreciation';
+import { calcDepForFY, parseFY, DEP_ACCOUNTS, wdvAccumulatedBefore, accumulatedDepThrough } from '@/lib/depreciation';
 import { fmtDate } from '@/lib/dateUtils';
 import type { Asset, AssetCategory } from '@/types';
-import { isCountedVoucher } from '@/lib/countedVoucher';
 
 const fmtAmt = (n: number) =>
   'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -62,21 +61,6 @@ const DepreciationSchedule: React.FC = () => {
   const getAccumDepPrior = (asset: Asset): number =>
     (asset.depreciationMethod ?? 'SLM') === 'WDV' ? wdvAccumulatedBefore(asset, fy) : 0;
 
-  // Full accumulated dep including current FY
-  const getAccumDepTotal = (asset: Asset): number => {
-    const depAcc = DEP_ACCOUNTS[asset.category];
-    if (!depAcc) return 0;
-    const accumId = depAcc.accumId;
-    const acc = accounts.find(a => a.id === accumId);
-    if (!acc) return 0;
-
-    let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
-    vouchers.filter(isCountedVoucher).forEach(v => {
-      if (v.debitAccountId === accumId) bal -= v.amount;
-      if (v.creditAccountId === accumId) bal += v.amount;
-    });
-    return Math.max(0, bal);
-  };
 
   const data = useMemo((): CategoryRow[] => {
     if (!fyDates) return [];
@@ -99,9 +83,10 @@ const DepreciationSchedule: React.FC = () => {
         .filter(a => a.purchaseDate >= fyDates.start && a.purchaseDate <= fyDates.end)
         .reduce((s, a) => s + a.cost, 0);
 
-      // Deductions = disposed assets (simplified — cost of disposed)
+      // Deductions = assets disposed DURING this FY (it counted every disposal ever, in every year's schedule).
+      // A legacy disposal with no date is still counted (it cannot be placed in a year) — as before.
       const deductions = catAssets
-        .filter(a => a.status === 'disposed')
+        .filter(a => a.status === 'disposed' && (!a.disposalDate || (a.disposalDate >= fyDates.start && a.disposalDate <= fyDates.end)))
         .reduce((s, a) => s + a.cost, 0);
 
       const totalCost = catAssets.reduce((s, a) => s + a.cost, 0);
@@ -292,7 +277,8 @@ const DepreciationSchedule: React.FC = () => {
                             {fmtAmt(calcDepForFY(a, fy, getAccumDepPrior(a)))}
                           </TableCell>
                           <TableCell className="text-right text-sm text-muted-foreground">
-                            {fmtAmt(Math.max(0, a.cost - getAccumDepTotal(a)))}
+                            {/* This asset's OWN accumulated depreciation (not the whole category's ledger — Audit #6). */}
+                            {fmtAmt(Math.max(0, a.cost - accumulatedDepThrough(a, fy)))}
                           </TableCell>
                         </TableRow>
                       ))}

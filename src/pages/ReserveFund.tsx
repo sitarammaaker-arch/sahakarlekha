@@ -20,7 +20,6 @@ import { appropriationWaterfall } from '@/lib/appropriation';
 import { ucasReserveMinPct } from '@/lib/rules/ucas';
 import { statutoryLimits, appropriationIssues, hasVerifiedLimits, ACC_BAD_DEBT } from '@/lib/rules/statutoryLimits';
 import { useToast } from '@/hooks/use-toast';
-import { isCountedVoucher } from '@/lib/countedVoucher';
 
 const fmt = (amount: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -41,7 +40,7 @@ type Mode = 'pct' | 'amt';
 const ReserveFund: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { vouchers, accounts, society, getProfitLoss, addVoucher } = useData();
+  const { vouchers, accounts, society, getProfitLoss, addVoucher, getAccountBalance } = useData();
   const { toast } = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -122,19 +121,9 @@ const ReserveFund: React.FC = () => {
   const postedVouchers = fundAccounts.map(f => postedMap[f.id]).filter(Boolean) as (typeof vouchers)[number][];
 
   // ── Current ledger balance of any account ────────────────────────────────────
-  const getBalance = (id: string) => {
-    const acc = accounts.find(a => a.id === id);
-    if (!acc) return 0;
-    let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
-    vouchers.filter(isCountedVoucher).forEach(v => {
-      getVoucherLines(v).forEach(l => {
-        if (l.accountId !== id) return;
-        if (l.type === 'Dr') bal -= l.amount;
-        else bal += l.amount;
-      });
-    });
-    return bal;
-  };
+  // Credit-positive balance from the ONE shared balance (DataContext.getAccountBalance, Dr−Cr: journal-aware,
+  // same as Trial Balance / Balance Sheet). This page kept its own voucher loop — a second balance formula (RULE 2).
+  const getBalance = (id: string) => -getAccountBalance(id);
 
   const handlePost = () => {
     setConfirmOpen(false);

@@ -62,8 +62,10 @@ const RoleDashboard: React.FC = () => {
     // RULE 2/3: qty/value from the reconciled movement formula (matches Inventory/reports),
     // never the drift-prone currentStock cache.
     const stockQtyMap = computeStockMap(stockItems || [], reconciledStockMovements);
-    const stockValue = (stockItems || []).reduce((s, it) => s + computeStockValue(it, reconciledStockMovements), 0);
-    const outOfStock = (stockItems || []).filter(it => (stockQtyMap[it.id] ?? 0) <= 0).length;
+    // ACTIVE items only — the Trading A/c / Stock Valuation set (RULE 2).
+    const liveItems = (stockItems || []).filter(it => it.isActive);
+    const stockValue = liveItems.reduce((s, it) => s + computeStockValue(it, reconciledStockMovements), 0);
+    const outOfStock = liveItems.filter(it => (stockQtyMap[it.id] ?? 0) <= 0).length;
     const purchasesCount = (purchases || []).filter(p => !p.isDeleted).length;
     return { netProfit, tbBalanced, activeMembers, loanOutstanding, overdueLoans, pendingVouchers, rejectedVouchers, pendingObjections, rec, cash, bank, complianceDue, stockValue, outOfStock, purchasesCount };
   }, [getProfitLoss, getTrialBalance, getAccountBalance, getShareCapitalReconciliation, members, loans, vouchers, auditObjections, employees, society, accounts, stockItems, purchases, reconciledStockMovements]);

@@ -25,6 +25,9 @@ import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFil
 import type { KccLoan, CropSeasonType } from '@/types';
 import { kccLoanSelect, kccLoanInsert, kccLoanUpdate } from '@/lib/supabaseService';
 import { interestIncomeAccountId, kccLoanAccountId } from '@/lib/loans/accounts';
+import { effectiveLoanStatus, kccAsAccruable } from '@/lib/loans/interestAccrual';
+import { kccOutstanding } from '@/lib/memberSnapshot';
+import { todayStr } from '@/lib/dateUtils';
 import {
   loanInterestDue, repaymentInterestSplit, REF_LOAN_REPAYMENT, REF_LOAN_INTEREST_RELEASE,
   ACC_INTEREST_RECEIVABLE, ACC_OVERDUE_INTEREST_RESERVE, type LoanInterestDue,
@@ -88,10 +91,14 @@ export default function KccLoan() {
 
   const nextLoanNo = () => `KCC-${new Date().getFullYear()}-${String(loans.length + 1).padStart(4, '0')}`;
 
+  // ONE overdue rule (RULE 2): the interest run (LoanInterest → accrualRows / isOverdueAt) decides overdue as
+  // "due date before today, something outstanding, or hand-marked overdue". This page compared Date objects
+  // (overdue ON the due day) and ignored a hand-set status, so a loan could read "active" here while its interest
+  // went to the Overdue Interest Reserve.
   const computeStatus = (loan: KccLoan): 'active' | 'repaid' | 'overdue' => {
-    if (loan.outstandingAmount <= 0) return 'repaid';
-    if (new Date(loan.dueDate) < new Date()) return 'overdue';
-    return 'active';
+    if (kccOutstanding(loan) <= 0.005) return 'repaid';
+    const eff = effectiveLoanStatus(kccAsAccruable(loan), todayStr());
+    return eff === 'cleared' ? 'repaid' : eff;
   };
 
   const enrichedLoans = useMemo(() =>

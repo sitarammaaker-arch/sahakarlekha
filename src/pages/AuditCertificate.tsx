@@ -18,8 +18,6 @@ import { FileCheck, Download, Info, FileSpreadsheet, Save } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate, todayStr } from '@/lib/dateUtils';
-import { getVoucherLines } from '@/lib/voucherUtils';
-import { isCountedVoucher } from '@/lib/countedVoucher';
 import { addHeader, addPageNumbers, pdfFileName } from '@/lib/pdf';
 import { getBankAccountIds } from '@/lib/storage';
 import { INDIAN_STATES } from '@/lib/constants';
@@ -32,7 +30,7 @@ const fmt = (n: number) =>
 
 const AuditCertificate: React.FC = () => {
   const { language } = useLanguage();
-  const { society, accounts, vouchers, members, getProfitLoss, auditObjections, updateSociety } = useData();
+  const { society, accounts, vouchers, members, getProfitLoss, auditObjections, updateSociety, getAccountBalance } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -52,19 +50,9 @@ const AuditCertificate: React.FC = () => {
   const { totalIncome, totalExpenses, netProfit } = useMemo(() => getProfitLoss(), [getProfitLoss]);
   const stateName = INDIAN_STATES.find(s => s.value === society.state)?.label || society.state || '—';
 
-  const getBalance = (id: string) => {
-    const acc = accounts.find(a => a.id === id);
-    if (!acc) return 0;
-    let bal = acc.openingBalanceType === 'credit' ? acc.openingBalance : -acc.openingBalance;
-    vouchers.filter(v => isCountedVoucher(v)).forEach(v => {
-      getVoucherLines(v).forEach(l => {
-        if (l.accountId !== id) return;
-        if (l.type === 'Dr') bal -= l.amount;
-        else bal += l.amount;
-      });
-    });
-    return bal;
-  };
+  // Credit-positive balance from the ONE shared balance (DataContext.getAccountBalance, Dr−Cr: journal-aware,
+  // same as Trial Balance / Balance Sheet). This page kept its own voucher loop — a second balance formula (RULE 2).
+  const getBalance = (id: string) => -getAccountBalance(id);
 
   // getBalance is credit-positive; cash/bank are debit-nature assets, so negate to show the
   // real Dr balance (audit A-04: the raw value was negative and Math.max(0, …) printed Rs 0).

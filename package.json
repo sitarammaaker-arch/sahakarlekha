@@ -400,7 +400,8 @@
     "test:save-failed-rollback": "node scripts/test-save-failed-rollback.mjs",
     "test:health-score": "node scripts/test-health-score.mjs",
     "test:chart-leftovers": "node scripts/test-chart-leftovers.mjs",
-    "test:cash-bills-statement": "node scripts/test-cash-bills-statement.mjs"
+    "test:cash-bills-statement": "node scripts/test-cash-bills-statement.mjs",
+    "test:rule2-batch1": "node scripts/test-rule2-batch1.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
