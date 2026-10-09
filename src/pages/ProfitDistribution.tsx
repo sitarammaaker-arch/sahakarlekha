@@ -28,7 +28,7 @@ import { StatutoryAppropriationPanel } from '@/components/StatutoryAppropriation
 import { statutoryLimits, dividendRateIssue } from '@/lib/rules/statutoryLimits';
 import { useDistributionRuns } from '@/hooks/useDistributionRuns';
 import { linesTotal } from '@/lib/distribution/engine';
-import { dividendRunLines, liveRunFor, existingRunFor, dividendBreakdown, snapshotLines, postedAppropriation, dividendPaymentsByMember } from '@/lib/distribution/dividendRuns';
+import { dividendRunLines, liveRunFor, existingRunFor, dividendBreakdown, snapshotLines, postedAppropriation, dividendPaymentsByMember, appropriationFunds, appropriatedToFunds } from '@/lib/distribution/dividendRuns';
 
 // ── Account IDs ─────────────────────────────────────────────────────────────
 const ACC_NET_SURPLUS   = '1208';
@@ -70,20 +70,10 @@ const ProfitDistribution: React.FC = () => {
 
   // Appropriations are OPTIONAL — subtract the TOTAL actually posted to ANY fund
   // (Dr 1208 / Cr <fund under group 1200>), whichever funds the society chose.
-  const fundAccountIds = useMemo(() =>
-    accounts.filter(a => a.parentId === '1200' && !a.isGroup
-      && a.id !== ACC_NET_SURPLUS && a.openingBalanceType === 'credit').map(a => a.id),
-    [accounts]
-  );
-  const appropriatedAmt = useMemo(() =>
-    vouchers.filter(v => !v.isDeleted && v.narration.includes(fy)).reduce((sum, v) => {
-      const lines = getVoucherLines(v);
-      if (!lines.some(l => l.accountId === ACC_NET_SURPLUS && l.type === 'Dr')) return sum;
-      return sum + lines.filter(l => l.type === 'Cr' && fundAccountIds.includes(l.accountId))
-        .reduce((s, l) => s + l.amount, 0);
-    }, 0),
-    [vouchers, fy, fundAccountIds]
-  );
+  // THE shared rules (lib/distribution/dividendRuns) — the same fund set and "already appropriated" test as the
+  // Reserve Fund page; a rejected voucher no longer counts.
+  const fundAccountIds = useMemo(() => appropriationFunds(accounts).map(a => a.id), [accounts]);
+  const appropriatedAmt = useMemo(() => appropriatedToFunds(vouchers, fundAccountIds, fy), [vouchers, fy, fundAccountIds]);
   // Already-posted dividend & bonus are appropriations of surplus too — subtract them so
   // Distributable stays correct after a refresh (input fields reset; posted vouchers persist). #13
   const existingDivVoucher   = usePosted(vouchers, ACC_NET_SURPLUS, ACC_DIVIDEND, fy);
