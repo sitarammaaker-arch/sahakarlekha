@@ -80,7 +80,12 @@ ok(/if \(!salesAccountId\)/.test(qid) && /if \(!purchaseAccountId\)/.test(qid) &
 // 6. Every planned screen has it; view-only Ledger does not
 const has = (f, re, n = 1) => (read(f).match(re) || []).length >= n;
 ok(has('pages/Vouchers.tsx', /<AccountPicker allowCreate/g, 4), 'vouchers: entry lines + edit dialog');
-ok(has('pages/CashBook.tsx', /<AccountPicker allowCreate/g) && has('pages/BankBook.tsx', /<AccountPicker allowCreate/g) && has('pages/CompoundVoucher.tsx', /<AccountPicker allowCreate/g), 'cash book, bank book, compound voucher');
+ok(has('pages/CashBook.tsx', /<AccountPicker allowCreate/g) && has('pages/BankBook.tsx', /<AccountPicker allowCreate/g), 'cash book, bank book');
+// Compound Voucher retired into the Vouchers Expert form (2026-10-09): old route + F4 land there; no menu entry.
+const app = readFileSync(pathResolve(SRC, 'App.tsx'), 'utf8');
+ok(/path="\/compound-voucher" element=\{<ProtectedRoute><Navigate to="\/vouchers\?mode=expert&type=journal" replace \/><\/ProtectedRoute>\}/.test(app), '/compound-voucher redirects to the Vouchers Expert journal');
+ok(!/compoundVoucher/.test(read('lib/navigation/moduleCatalog.ts')) && /path: '\/vouchers\?mode=expert&type=journal'/.test(read('hooks/useKeyboardShortcuts.ts')), 'no Compound Voucher menu entry; F4 opens the multi-line journal');
+ok(/searchParams\.get\('mode'\) === 'expert'/.test(read('pages/Vouchers.tsx')), 'Vouchers honours ?mode=expert&type=journal');
 ok(!/allowCreate/.test(read('pages/Ledger.tsx')), 'Ledger (view-only) has no create');
 ok(has('pages/Vouchers.tsx', /<BankAccountSelect/g, 2) && has('pages/SaleManagement.tsx', /<BankAccountSelect/g) && has('pages/PurchaseManagement.tsx', /<BankAccountSelect/g) && has('components/BillWiseSettlement.tsx', /<BankAccountSelect/g), 'bank selects (vouchers ×2, sale, purchase, receive/make payment)');
 ok(has('pages/SaleManagement.tsx', /<QuickItemDialog/g) && has('pages/PurchaseManagement.tsx', /<QuickItemDialog/g) && has('pages/consumer/PurchaseOrders.tsx', /<QuickItemDialog/g), 'new item on sale, purchase, purchase order');

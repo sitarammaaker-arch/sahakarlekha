@@ -20,7 +20,6 @@ export const NEXT_STEPS: Record<string, string[]> = {
 
   // ── daily entry → review ──
   '/vouchers':          ['dayBook', 'trialBalance'],
-  '/compound-voucher':  ['dayBook', 'trialBalance'],
   '/cash-book':         ['dayBook', 'vouchers'],
   '/bank-book':         ['bankReconciliation', 'dayBook'],
   '/bank-reconciliation': ['bankBook'],

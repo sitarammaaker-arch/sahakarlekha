@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { MemberPicker } from '@/components/MemberPicker';
 import { BankAccountSelect } from '@/components/BankAccountSelect';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -89,6 +89,19 @@ const Vouchers: React.FC = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<typeof VOUCHER_TEMPLATES[0] | null>(null);
   // Bill-wise settlement (Tally "Against Reference") opened inline within the voucher screen.
   const [billWiseMode, setBillWiseMode] = useState<'receive' | 'pay' | null>(null);
+
+  // The old Compound Voucher page was retired into this screen (2026-10-09): /compound-voucher and F4 now land
+  // here as /vouchers?mode=expert&type=journal — the Expert form does everything it did (N Dr + N Cr lines) and more.
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('mode') === 'expert') {
+      setEntryMode('expert');
+      try { localStorage.setItem('sahayata_entry_mode', 'expert'); } catch { /* storage unavailable */ }
+      setActiveTab('entry');
+    }
+    const t = searchParams.get('type');
+    if (t === 'journal' || t === 'receipt' || t === 'payment' || t === 'contra') setVoucherType(t);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const switchMode = (mode: EntryMode) => {
     setEntryMode(mode);
@@ -651,6 +664,7 @@ const Vouchers: React.FC = () => {
             </button>
             <button
               onClick={() => switchMode('expert')}
+              title={language === 'hi' ? 'कई नामे + कई जमा पंक्तियों वाला वाउचर (पहले "संयुक्त वाउचर")' : 'Multi-line voucher — many Dr + many Cr lines (formerly "Compound Voucher")'}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors border-l',
                 entryMode === 'expert'
@@ -659,7 +673,7 @@ const Vouchers: React.FC = () => {
               )}
             >
               <Settings2 className="h-3.5 w-3.5" />
-              {language === 'hi' ? 'विशेषज्ञ' : 'Expert'}
+              {language === 'hi' ? 'विशेषज्ञ (कई पंक्तियाँ)' : 'Expert (multi-line)'}
             </button>
           </div>
           <Button variant={activeTab === 'entry' ? 'default' : 'outline'} onClick={() => setActiveTab('entry')}>
