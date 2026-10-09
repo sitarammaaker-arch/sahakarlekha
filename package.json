@@ -396,7 +396,8 @@
     "test:fy-close-client": "node scripts/test-fy-close-client.mjs",
     "test:tax02-delete-rollback": "node scripts/test-tax02-delete-rollback.mjs",
     "test:ask-classify-end": "node scripts/test-ask-classify-end.mjs",
-    "test:purchase-tds-advice": "node scripts/test-purchase-tds-advice.mjs"
+    "test:purchase-tds-advice": "node scripts/test-purchase-tds-advice.mjs",
+    "test:save-failed-rollback": "node scripts/test-save-failed-rollback.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
