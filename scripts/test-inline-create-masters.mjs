@@ -83,7 +83,7 @@ ok(has('pages/Vouchers.tsx', /<AccountPicker allowCreate/g, 4), 'vouchers: entry
 ok(has('pages/CashBook.tsx', /<AccountPicker allowCreate/g) && has('pages/BankBook.tsx', /<AccountPicker allowCreate/g), 'cash book, bank book');
 // Compound Voucher retired into the Vouchers Expert form (2026-10-09): old route + F4 land there; no menu entry.
 const app = readFileSync(pathResolve(SRC, 'App.tsx'), 'utf8');
-ok(/path="\/compound-voucher" element=\{<ProtectedRoute><Navigate to="\/vouchers\?mode=expert&type=journal" replace \/><\/ProtectedRoute>\}/.test(app), '/compound-voucher redirects to the Vouchers Expert journal');
+ok(/path="\/compound-voucher" element=\{<Navigate to="\/vouchers\?mode=expert&type=journal" replace \/>\}/.test(app), '/compound-voucher redirects to the Vouchers Expert journal (plain redirect; /vouchers itself is protected)');
 ok(!/compoundVoucher/.test(read('lib/navigation/moduleCatalog.ts')) && /path: '\/vouchers\?mode=expert&type=journal'/.test(read('hooks/useKeyboardShortcuts.ts')), 'no Compound Voucher menu entry; F4 opens the multi-line journal');
 ok(/searchParams\.get\('mode'\) === 'expert'/.test(read('pages/Vouchers.tsx')), 'Vouchers honours ?mode=expert&type=journal');
 ok(!/allowCreate/.test(read('pages/Ledger.tsx')), 'Ledger (view-only) has no create');

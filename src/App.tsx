@@ -371,7 +371,7 @@ const AppRoutes = () => {
       <Route path="/profit-distribution" element={<ProtectedRoute><ProfitDistribution /></ProtectedRoute>} />
       <Route path="/loan-interest" element={<ProtectedRoute><LoanInterest /></ProtectedRoute>} />
       {/* Compound Voucher retired into the Vouchers Expert form (2026-10-09) — old links / bookmarks land there. */}
-      <Route path="/compound-voucher" element={<ProtectedRoute><Navigate to="/vouchers?mode=expert&type=journal" replace /></ProtectedRoute>} />
+      <Route path="/compound-voucher" element={<Navigate to="/vouchers?mode=expert&type=journal" replace />} />
       <Route path="/voucher-approval" element={<ProtectedRoute><VoucherApproval /></ProtectedRoute>} />
       <Route path="/meeting-register" element={<ProtectedRoute><MeetingRegister /></ProtectedRoute>} />
       <Route path="/nomination-register" element={<ProtectedRoute><NominationRegister /></ProtectedRoute>} />
