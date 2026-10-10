@@ -119,8 +119,6 @@ const Customers = lazyWithRetry(() => import("./pages/Customers"));
 const DeletedVouchers = lazyWithRetry(() => import("./pages/DeletedVouchers"));
 const AuditTrail = lazyWithRetry(() => import("./pages/AuditTrail"));
 const BankReconciliation = lazyWithRetry(() => import("./pages/BankReconciliation"));
-const ReserveFund = lazyWithRetry(() => import("./pages/ReserveFund"));
-const ProfitDistribution = lazyWithRetry(() => import("./pages/ProfitDistribution"));
 const SurplusAppropriation = lazyWithRetry(() => import("./pages/SurplusAppropriation"));
 const LoanInterest = lazyWithRetry(() => import("./pages/LoanInterest"));
 const VoucherApproval = lazyWithRetry(() => import("./pages/VoucherApproval"));
@@ -367,8 +365,9 @@ const AppRoutes = () => {
       <Route path="/deleted-vouchers" element={<ProtectedRoute><DeletedVouchers /></ProtectedRoute>} />
       <Route path="/audit-trail" element={<ProtectedRoute><AuditTrail /></ProtectedRoute>} />
       <Route path="/bank-reconciliation" element={<ProtectedRoute><BankReconciliation /></ProtectedRoute>} />
-      <Route path="/reserve-fund" element={<ProtectedRoute><ReserveFund /></ProtectedRoute>} />
-      <Route path="/profit-distribution" element={<ProtectedRoute><ProfitDistribution /></ProtectedRoute>} />
+      {/* Reserve Fund + Profit Distribution retired into the लाभ विनियोजन wizard (2026-10-10) — old links land on their step. */}
+      <Route path="/reserve-fund" element={<Navigate to="/surplus-appropriation?step=3" replace />} />
+      <Route path="/profit-distribution" element={<Navigate to="/surplus-appropriation?step=4" replace />} />
       <Route path="/surplus-appropriation" element={<ProtectedRoute><SurplusAppropriation /></ProtectedRoute>} />
       <Route path="/loan-interest" element={<ProtectedRoute><LoanInterest /></ProtectedRoute>} />
       {/* Compound Voucher retired into the Vouchers Expert form (2026-10-09) — old links / bookmarks land there. */}

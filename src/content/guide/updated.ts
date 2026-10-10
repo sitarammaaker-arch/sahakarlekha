@@ -7,7 +7,7 @@
 export const GUIDE_DEFAULT_UPDATED = '2026-06-20';
 
 export const GUIDE_UPDATED: Record<string, string> = {
-  'audit-preparation': '2026-10-04',
+  'audit-preparation': '2026-10-10',
   'balance-sheet': '2026-10-04',
   'bill-wise-settlement': '2026-10-09',
   'chart-of-accounts': '2026-10-04',
@@ -18,12 +18,12 @@ export const GUIDE_UPDATED: Record<string, string> = {
   'error-rectification-entries': '2026-10-09',
   'financial-ratios-and-lifecycle': '2026-10-04',
   'gst-management': '2026-10-08',
-  'income-and-expenditure': '2026-10-09',
+  'income-and-expenditure': '2026-10-10',
   'inventory-management': '2026-10-04',
   'member-management': '2026-10-04',
   'msp-procurement-entries': '2026-10-04',
   'opening-balances': '2026-10-08',
-  'profit-distribution': '2026-10-04',
+  'profit-distribution': '2026-10-10',
   'purchase-entries': '2026-10-08',
   'receipts-and-payments': '2026-10-04',
   'salary-management': '2026-10-04',

@@ -119,7 +119,7 @@ const Dashboard: React.FC = () => {
     const advisories: Advisory[] = [];
 
     if (netProfit > 0 && !reservePosted)
-      advisories.push({ severity: 'info', route: '/reserve-fund', en: `Optional: post a Reserve Fund / Education Fund appropriation on the Reserve Fund page (choose any % or amount)`, hi: `वैकल्पिक: "रिज़र्व फंड" पृष्ठ पर रिज़र्व/शिक्षा फंड आवंटन पोस्ट कर सकते हैं (कोई भी % या राशि)` });
+      advisories.push({ severity: 'info', route: '/surplus-appropriation?step=3', en: `Optional: post a Reserve Fund / Education Fund appropriation on the Reserve Fund page (choose any % or amount)`, hi: `वैकल्पिक: "रिज़र्व फंड" पृष्ठ पर रिज़र्व/शिक्षा फंड आवंटन पोस्ट कर सकते हैं (कोई भी % या राशि)` });
     if (!bsTallied)
       advisories.push({ severity: 'critical', route: '/trial-balance', en: 'Balance Sheet is not balanced — check for missing or duplicate journal entries', hi: 'बैलेंस शीट असंतुलित है — अपूर्ण या दोहरी जर्नल एंट्रियां जांचें' });
     if (!sec32Ok)
@@ -142,7 +142,7 @@ const Dashboard: React.FC = () => {
         v.narration.includes(fy)
       );
       if (!divPosted)
-        advisories.push({ severity: 'info', route: '/profit-distribution', en: `Net profit of ₹${netProfit.toLocaleString('en-IN')} is available — consider distributing dividend to members`, hi: `₹${netProfit.toLocaleString('en-IN')} शुद्ध लाभ उपलब्ध — सदस्यों को डिविडेंड वितरण पर विचार करें` });
+        advisories.push({ severity: 'info', route: '/surplus-appropriation?step=4', en: `Net profit of ₹${netProfit.toLocaleString('en-IN')} is available — consider distributing dividend to members`, hi: `₹${netProfit.toLocaleString('en-IN')} शुद्ध लाभ उपलब्ध — सदस्यों को डिविडेंड वितरण पर विचार करें` });
     }
     // P0 #4 / ECR-05 (MS-03): share capital control (ledger) must equal Σ member scalars (subsidiary).
     // Drift means dividend (member-scalar based) no longer matches the audited Balance Sheet.

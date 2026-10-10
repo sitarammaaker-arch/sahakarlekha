@@ -743,7 +743,7 @@ const BASE_TASKS: HelpTask[] = [
       { q: 'कितना हिस्सा रिज़र्व में जाए?', a: 'यह आपकी उपविधि व राज्य सहकारी अधिनियम तय करता है — app जगह देता है, पर दर आप अपने नियमों अनुसार भरें।' },
       { q: 'क्या वितरण का voucher अलग बनाना होगा?', a: 'नहीं — सेव करते ही appropriation voucher अपने-आप बन जाता है।' },
     ],
-    deepLink: { route: '/profit-distribution', label: 'SahakarLekha में लाभ वितरण करें' },
+    deepLink: { route: '/surplus-appropriation', label: 'SahakarLekha में लाभ विनियोजन करें' },
     guideSlug: 'profit-distribution',
     related: ['view-profit-loss', 'view-balance-sheet'],
   },

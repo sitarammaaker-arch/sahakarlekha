@@ -14,7 +14,7 @@ const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  âœ
 
 const pd = strip('src/pages/ProfitDistribution.tsx');
 ok(/const ACC_BONUS_EXPENSE = '5207';/.test(pd), 'bonus expense head 5207');
-const post = pd.slice(pd.indexOf('if (!bonusPosted && bonusAmount > 0) {'), pd.indexOf('setConfirmOpen(false);', pd.indexOf('if (!bonusPosted && bonusAmount > 0) {')));
+const post = pd.slice(pd.indexOf('if (!bonusPosted && effBonus > 0) {'), pd.indexOf('setConfirmOpen(false);', pd.indexOf('if (!bonusPosted && effBonus > 0) {')));
 ok(/debitAccountId: ACC_BONUS_EXPENSE,\s*creditAccountId: ACC_BONUS_PAYABLE/.test(post), 'posts Dr 5207 Employee Bonus / Cr 2103');
 ok(!/debitAccountId: ACC_NET_SURPLUS/.test(post), 'no longer an appropriation of net surplus (Dr 1208)');
 ok(/s\.87 Explanation \(i\)/.test(post), 'narration cites s.87 Explanation (i)');

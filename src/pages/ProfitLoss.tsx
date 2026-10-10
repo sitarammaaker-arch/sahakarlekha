@@ -240,7 +240,7 @@ const ProfitLoss: React.FC = () => {
                   {hi ? 'अनुमानित शिक्षा फंड (1%)' : 'Indicative Education (1%)'}:{' '}
                   <strong className="text-amber-700 dark:text-amber-300">{fmt(indicativeEducation)}</strong>
                 </span>
-                <Button size="sm" className="ml-auto gap-2 bg-amber-600 hover:bg-amber-700" onClick={() => navigate('/reserve-fund')}>
+                <Button size="sm" className="ml-auto gap-2 bg-amber-600 hover:bg-amber-700" onClick={() => navigate('/surplus-appropriation?step=3')}>
                   <Shield className="h-4 w-4" />
                   {hi ? 'आवंटन पोस्ट करें' : 'Post Appropriation'}
                 </Button>

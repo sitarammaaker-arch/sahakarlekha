@@ -29,7 +29,7 @@ export const NEXT_STEPS: Record<string, string[]> = {
   // ── members & shares ──
   '/members':           ['shareRegister', 'memberApplication'],
   '/member-application': ['members'],
-  '/share-register':    ['members', 'profitDistribution'],
+  '/share-register':    ['members', 'surplusAppropriation'],
 
   // ── sales / purchases / payments ──
   '/sales':             ['receivePayment', 'saleRegister'],
@@ -51,7 +51,7 @@ export const NEXT_STEPS: Record<string, string[]> = {
   '/tds-register':      ['tdsForm16A'],
 
   // ── registers / year-end ──
-  '/profit-distribution': ['reserveFund', 'balanceSheet'],
+  '/surplus-appropriation': ['balanceSheet', 'shareRegister'],
   '/loan-register':     ['loanInterest'],
   '/asset-register':    ['depreciationSchedule'],
   '/depreciation-schedule': ['balanceSheet'],
