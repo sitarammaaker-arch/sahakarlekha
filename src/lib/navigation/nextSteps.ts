@@ -45,7 +45,7 @@ export const NEXT_STEPS: Record<string, string[]> = {
   // ── reports chain ──
   '/trial-balance':     ['profitLoss', 'balanceSheet'],
   '/trading-account':   ['profitLoss'],
-  '/profit-loss':       ['balanceSheet', 'profitDistribution'],
+  '/profit-loss':       ['balanceSheet', 'surplusAppropriation'],
   '/balance-sheet':     ['reports'],
   '/gst-summary':       ['gstr9', 'eWayBill'],
   '/tds-register':      ['tdsForm16A'],

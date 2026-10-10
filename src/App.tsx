@@ -121,6 +121,7 @@ const AuditTrail = lazyWithRetry(() => import("./pages/AuditTrail"));
 const BankReconciliation = lazyWithRetry(() => import("./pages/BankReconciliation"));
 const ReserveFund = lazyWithRetry(() => import("./pages/ReserveFund"));
 const ProfitDistribution = lazyWithRetry(() => import("./pages/ProfitDistribution"));
+const SurplusAppropriation = lazyWithRetry(() => import("./pages/SurplusAppropriation"));
 const LoanInterest = lazyWithRetry(() => import("./pages/LoanInterest"));
 const VoucherApproval = lazyWithRetry(() => import("./pages/VoucherApproval"));
 const MeetingRegister = lazyWithRetry(() => import("./pages/MeetingRegister"));
@@ -368,6 +369,7 @@ const AppRoutes = () => {
       <Route path="/bank-reconciliation" element={<ProtectedRoute><BankReconciliation /></ProtectedRoute>} />
       <Route path="/reserve-fund" element={<ProtectedRoute><ReserveFund /></ProtectedRoute>} />
       <Route path="/profit-distribution" element={<ProtectedRoute><ProfitDistribution /></ProtectedRoute>} />
+      <Route path="/surplus-appropriation" element={<ProtectedRoute><SurplusAppropriation /></ProtectedRoute>} />
       <Route path="/loan-interest" element={<ProtectedRoute><LoanInterest /></ProtectedRoute>} />
       {/* Compound Voucher retired into the Vouchers Expert form (2026-10-09) — old links / bookmarks land there. */}
       <Route path="/compound-voucher" element={<Navigate to="/vouchers?mode=expert&type=journal" replace />} />

@@ -43,6 +43,7 @@ export const translations: Translations = {
   deletedVouchers: { hi: 'रद्द वाउचर', en: 'Deleted Vouchers' },
   auditTrail: { hi: 'ऑडिट ट्रेल', en: 'Audit Trail' },
   bankReconciliation: { hi: 'बैंक मिलान (BRS)', en: 'Bank Reconciliation' },
+  surplusAppropriation: { hi: 'लाभ विनियोजन', en: 'Surplus Appropriation' },
   reserveFund: { hi: 'रिज़र्व फंड आवंटन', en: 'Reserve Fund' },
   profitDistribution: { hi: 'लाभ का बँटवारा', en: 'Profit Distribution' },
   loanInterest: { hi: 'ऋण ब्याज गणना', en: 'Loan Interest' },

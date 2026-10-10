@@ -97,8 +97,13 @@ const ClosingStockReport: React.FC = () => {
         const saleQty = sumQ(saleMoves), saleValue = sumV(saleMoves);
         const purchaseReturnQty = sumQ(purchaseReturnMoves), purchaseReturnValue = sumV(purchaseReturnMoves);
 
-        const openingQty = item.openingStock || 0;
-        const openingRate = item.purchaseRate || 0;
+        // Opening = the stock at FY START: the item's genesis opening + every movement BEFORE the FY, through the SAME
+        // stock formula as closing (RULE 2). It was the all-time item.openingStock × the master purchaseRate, so from the
+        // second FY on the opening was the day-one stock and "Closing = Opening + Purchase + …" did not hold. With no
+        // earlier movement this is exactly openingStock × purchaseRate, as before.
+        const priorMovements = reconciledStockMovements.filter(m => m.itemId === item.id && m.date < fyDates.start);
+        const openingQty = computeStock(item, priorMovements);
+        const openingRate = computeStockCostRate(item, priorMovements);
         const openingValue = openingQty * openingRate;
 
         // Closing must equal the Trading A/c / Balance Sheet figure for this item — both

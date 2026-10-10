@@ -77,5 +77,17 @@ for (const f of ['pages/WageSlip.tsx', 'pages/StatutoryReconciliation.tsx', 'pag
   ok(/pfEsiDefaultsFor\(/.test(read(f)) && !/computePfEsi\(period, PF_ESI_DEFAULTS\)/.test(read(f)), `${f}: dated basis, not the hard-coded defaults`);
 }
 
+// 5. Closing Stock report opening = stock at FY start (2026-10-10)
+const { computeStock, computeStockCostRate } = await imp('lib/stockUtils.ts');
+const item = { id: 'i1', openingStock: 100, purchaseRate: 10 };
+const prior = [
+  { itemId: 'i1', type: 'purchase', qty: 50, rate: 16, amount: 800, date: '2025-06-01' },
+  { itemId: 'i1', type: 'sale', qty: 30, rate: 20, amount: 600, date: '2025-09-01' },
+];
+ok(computeStock(item, prior) === 120 && near(computeStockCostRate(item, prior), 12), 'FY 2026-27 opening = 100 + 50 − 30 = 120 @ weighted cost 12 (not the day-one 100 @ 10)');
+ok(computeStock(item, []) === 100 && computeStockCostRate(item, []) === 10, 'first FY (no earlier movement) = openingStock × purchaseRate, as before');
+const csr = read('pages/ClosingStockReport.tsx');
+ok(/const priorMovements = reconciledStockMovements\.filter\(m => m\.itemId === item\.id && m\.date < fyDates\.start\);\s*const openingQty = computeStock\(item, priorMovements\);/.test(csr) && !/const openingQty = item\.openingStock \|\| 0;/.test(csr), 'Closing Stock report opening uses movements before the FY');
+
 console.log(`RULE 2 batch 3: ${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;
