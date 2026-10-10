@@ -311,7 +311,7 @@ const BASE_ENTRIES: CookbookEntry[] = [
       'कर्मचारी बोनस यहाँ नहीं — वह शुद्ध लाभ से पहले कर्मचारी बोनस (5207) व्यय में जाता है।',
       'डिविडेंड दर व बँटवारा आम सभा/बायलॉज़ व राज्य नियमों से तय होता है — अपने RCS/ऑडिटर से पुष्टि करें।',
     ],
-    deepLink: { route: '/profit-distribution', label: 'App में लाभ बँटवारा करें' },
+    deepLink: { route: '/surplus-appropriation', label: 'App में लाभ विनियोजन करें' },
     guideSlug: 'profit-distribution',
     related: ['member-share-capital', 'closing-stock'],
   },

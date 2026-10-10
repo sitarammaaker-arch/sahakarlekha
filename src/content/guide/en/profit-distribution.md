@@ -32,7 +32,7 @@ Distributable = surplus − already-posted dividend/bonus. The app blocks when t
 > ⚠️ Audit fix #13: distributable earlier didn’t subtract the posted amounts and didn’t block over-appropriation — now both.
 
 ## 22.7 In the app
-Profit Distribution → surplus → enter reserve %/dividend/patronage → Post only when "remaining ≥ 0".
+Menu "Surplus Appropriation" (लाभ विनियोजन), in order: 1 checks (Balance Sheet, share capital, surplus) → 2 employee bonus (an expense — first) → 3 transfers to the funds (% or ₹) → 4 dividend and paying members. Posting stops when "remaining" would go below zero. (The old Reserve Fund and Profit Distribution pages were merged into it; their addresses open the right step.)
 
 ## ⚠️ Common mistakes
 

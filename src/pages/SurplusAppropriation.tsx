@@ -3,11 +3,13 @@
  *
  * It was split across the Reserve Fund page (fund transfers), the Profit Distribution page (dividend / bonus /
  * payment register) and a flag-gated statutory panel. This wizard puts the steps in order WITHOUT a new calculation
- * or posting path: step 2 IS the Reserve Fund page's panel, step 3 IS the Profit Distribution page's panel (both
+ * or posting path: step 3 IS the Reserve Fund page's panel; steps 2 (bonus) and 4 (dividend) ARE the Profit Distribution
+ * page's panel by section (both
  * exported from their pages and sharing the one appropriation rule in lib/distribution/dividendRuns — #748). The
  * statutory (T-20) panel stays out (off for every society). The summary at the top reads the same shared helpers.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,13 +21,16 @@ import { ProfitDistributionPanel } from '@/pages/ProfitDistribution';
 import { appropriationFunds, appropriatedToFunds, postedAppropriation, ACC_NET_SURPLUS, ACC_DIVIDEND } from '@/lib/distribution/dividendRuns';
 import { balanceSheetTallied, fyEndDate } from '@/lib/balanceSheetLeaves';
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 
 const SurplusAppropriation: React.FC = () => {
   const { language } = useLanguage();
   const hi = language === 'hi';
   const { society, accounts, vouchers, getProfitLoss, getTrialBalance, getTradingAccount, getShareCapitalReconciliation } = useData();
+  // ?step=1..4 — the retired /reserve-fund and /profit-distribution land on their step.
+  const [params] = useSearchParams();
   const [step, setStep] = useState<Step>(1);
+  useEffect(() => { const n = Number(params.get('step')); if (n >= 1 && n <= 4) setStep(n as Step); }, [params]);
   const fy = society.financialYear;
 
   const s = useMemo(() => {
@@ -41,9 +46,12 @@ const SurplusAppropriation: React.FC = () => {
 
   const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n);
   const steps: { n: Step; hi: string; en: string }[] = [
+    // ORDER MATTERS: the employee bonus is an EXPENSE (5207) that lowers the net profit, and the funds are a % of the
+    // net profit AFTER it (guide ch.22, Haryana s.87 Expl. (i)); the dividend comes out of what is left after the funds.
     { n: 1, hi: '1. शुद्ध लाभ व जाँच', en: '1. Surplus & checks' },
-    { n: 2, hi: '2. फंडों में आवंटन', en: '2. Transfer to funds' },
-    { n: 3, hi: '3. लाभांश, बोनस व भुगतान', en: '3. Dividend, bonus & payment' },
+    { n: 2, hi: '2. कर्मचारी बोनस', en: '2. Employee bonus' },
+    { n: 3, hi: '3. फंडों में आवंटन', en: '3. Transfer to funds' },
+    { n: 4, hi: '4. लाभांश व भुगतान', en: '4. Dividend & payment' },
   ];
 
   return (
@@ -62,7 +70,11 @@ const SurplusAppropriation: React.FC = () => {
           <div><p className="text-xs text-muted-foreground">{hi ? 'शुद्ध लाभ' : 'Net surplus'}</p><p className="font-bold">{fmt(s.netProfit)}</p></div>
           <div><p className="text-xs text-muted-foreground">{hi ? 'फंडों में गया' : 'To funds'}</p><p className="font-bold">{fmt(s.toFunds)}</p></div>
           <div><p className="text-xs text-muted-foreground">{hi ? 'लाभांश' : 'Dividend'}</p><p className="font-bold">{fmt(s.dividend)}</p></div>
-          <div><p className="text-xs text-muted-foreground">{hi ? 'बाकी' : 'Remaining'}</p><p className={cn('font-bold', s.remaining < 0 && 'text-destructive')}>{fmt(s.remaining)}</p></div>
+          <div><p className="text-xs text-muted-foreground">{hi ? 'बाकी' : 'Remaining'}</p>
+            {s.netProfit <= 0
+              ? <p className="font-bold text-muted-foreground">{hi ? 'घाटा — विनियोजन नहीं' : 'Deficit — nothing to appropriate'}</p>
+              : <p className={cn('font-bold', s.remaining < 0 && 'text-destructive')}>{fmt(s.remaining)}</p>}
+          </div>
         </CardContent>
       </Card>
 
@@ -88,19 +100,26 @@ const SurplusAppropriation: React.FC = () => {
               </p>
             ))}
             {!s.shareOk && (
-              <p className="text-xs text-muted-foreground">{hi ? 'अंश पूँजी का मिलान न होने पर लाभांश (कदम 3) रुका रहेगा — पहले "अंश रजिस्टर" में मिलान करें।' : 'Dividend (step 3) stays blocked until share capital reconciles — fix it in the Share Register first.'}</p>
+              <p className="text-xs text-muted-foreground">{hi ? 'अंश पूँजी का मिलान न होने पर लाभांश (कदम 4) रुका रहेगा — पहले "अंश रजिस्टर" में मिलान करें।' : 'Dividend (step 4) stays blocked until share capital reconciles — fix it in the Share Register first.'}</p>
             )}
-            <Button size="sm" onClick={() => setStep(2)}>{hi ? 'आगे: फंडों में आवंटन →' : 'Next: transfer to funds →'}</Button>
+            <Button size="sm" onClick={() => setStep(2)}>{hi ? 'आगे: कर्मचारी बोनस →' : 'Next: employee bonus →'}</Button>
           </CardContent>
         </Card>
       )}
       {step === 2 && (
         <div className="space-y-3">
-          <FundAppropriationPanel embedded />
-          <Button size="sm" onClick={() => setStep(3)}>{hi ? 'आगे: लाभांश, बोनस व भुगतान →' : 'Next: dividend, bonus & payment →'}</Button>
+          <p className="text-xs text-muted-foreground">{hi ? 'बोनस न हो तो सीधे आगे बढ़ें। बोनस खर्च है — पहले पोस्ट करें, ताकि फंडों का % घटे हुए शुद्ध लाभ पर लगे।' : 'No bonus? Go straight on. A bonus is an expense — post it first so the fund % applies to the reduced net profit.'}</p>
+          <ProfitDistributionPanel embedded section="bonus" />
+          <Button size="sm" onClick={() => setStep(3)}>{hi ? 'आगे: फंडों में आवंटन →' : 'Next: transfer to funds →'}</Button>
         </div>
       )}
-      {step === 3 && <ProfitDistributionPanel embedded />}
+      {step === 3 && (
+        <div className="space-y-3">
+          <FundAppropriationPanel embedded />
+          <Button size="sm" onClick={() => setStep(4)}>{hi ? 'आगे: लाभांश व भुगतान →' : 'Next: dividend & payment →'}</Button>
+        </div>
+      )}
+      {step === 4 && <ProfitDistributionPanel embedded section="dividend" />}
     </div>
   );
 };

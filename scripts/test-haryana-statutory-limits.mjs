@@ -78,8 +78,8 @@ ok(/!hasBadDebtFund/.test(rf), 'missing Bad Debt Fund account is called out');
 const pd = strip('src/pages/ProfitDistribution.tsx');
 ok(/dividendRateIssue\(limits, dividendRatePct\)/.test(pd), 'ProfitDistribution checks the dividend cap');
 const post = pd.slice(pd.indexOf('const handlePost'), pd.indexOf('const handlePost') + 2500);
-ok(/if \(dividendCapIssue\)[\s\S]*?return;/.test(post) && post.indexOf('dividendCapIssue') < post.indexOf('saveRun('), 'post refuses an over-cap dividend BEFORE anything is saved');
-ok(/\|\| !!dividendCapIssue\}/.test(pd), 'post button disabled while over the cap');
+ok(/if \(dividendCapIssue && effDividend > 0\)[\s\S]*?return;/.test(post) && post.indexOf('dividendCapIssue') < post.indexOf('saveRun('), 'post refuses an over-cap dividend BEFORE anything is saved');
+ok(/\|\| !!dividendCapIssue\)\)\}/.test(pd), 'post button disabled while over the cap (for a dividend)');
 for (const f of ['src/contexts/DataContext.tsx', 'src/components/StatutoryAppropriationPanel.tsx']) {
   ok(/bye_law_reserves: '1205'/.test(strip(f)), `${f}: T-20 bad-debt step posts to 1205 when the account exists`);
 }

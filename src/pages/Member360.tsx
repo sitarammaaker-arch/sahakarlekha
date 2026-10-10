@@ -70,7 +70,7 @@ export default function Member360() {
     dairy: { to: '/dairy-registers', label: open('डेयरी रजिस्टर', 'Dairy Registers') },
     housing: { to: '/member-statement', label: open('सदस्य विवरण', 'Member Statement') },
     consumer: { to: '/member-credit', label: open('सदस्य उधार', 'Member Credit') },
-    dividend: { to: '/profit-distribution', label: open('लाभ का बँटवारा', 'Profit Distribution') },
+    dividend: { to: '/surplus-appropriation?step=4', label: open('लाभ विनियोजन', 'Surplus Appropriation') },
   };
 
   const m360 = useMemo(() => {

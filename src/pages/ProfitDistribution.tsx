@@ -57,7 +57,11 @@ const usePosted = (
 // ────────────────────────────────────────────────────────────────────────────
 /** The dividend / bonus / payment steps — the whole page body, also rendered as steps 3–4 of the लाभ विनियोजन
  *  wizard (`embedded` hides the page title and the flag-gated statutory panel). One component, one posting path. */
-export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
+export const ProfitDistributionPanel: React.FC<{ embedded?: boolean; section?: 'all' | 'bonus' | 'dividend' }> = ({ embedded = false, section = 'all' }) => {
+  // The wizard posts the employee bonus FIRST (an expense — it lowers the net profit the funds are a % of), then the
+  // funds, then the dividend: `section` shows / posts only that part. The standalone page keeps 'all'.
+  const showBonus = section !== 'dividend';
+  const showDividend = section !== 'bonus';
   const { language } = useLanguage();
   const { user } = useAuth();
   const { vouchers, accounts, members, society, getProfitLoss, addVoucher, getShareCapitalReconciliation, getAccountBalance } = useData();
@@ -222,7 +226,9 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
 
   // ── Post journals ──────────────────────────────────────────────────────────
   // Appropriations (reserve/education) are OPTIONAL — never block dividend/bonus.
-  const canPost = ((!divPosted && totalDividend > 0) || (!bonusPosted && bonusAmount > 0)) && remaining >= 0;
+  const effDividend = showDividend ? totalDividend : 0;
+  const effBonus = showBonus ? bonusAmount : 0;
+  const canPost = ((!divPosted && effDividend > 0) || (!bonusPosted && effBonus > 0)) && remaining >= 0;
 
   const handlePost = async () => {
     // RULE 6: nothing is written while the FY is audit-locked (the run is saved before the voucher).
@@ -231,7 +237,7 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
       return;
     }
     // Guard: the statutory dividend cap (never post a dividend the law forbids).
-    if (dividendCapIssue) {
+    if (dividendCapIssue && effDividend > 0) {
       toast({ title: hi ? 'लाभांश दर क़ानूनी सीमा से अधिक' : 'Dividend rate above the legal cap', description: `${hi ? dividendCapIssue.hi : dividendCapIssue.en} (${dividendCapIssue.cite})`, variant: 'destructive', duration: 10000 });
       return;
     }
@@ -247,7 +253,7 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
     const today = new Date().toISOString().split('T')[0];
     let posted = 0;
 
-    if (!divPosted && totalDividend > 0) {
+    if (!divPosted && effDividend > 0) {
       // Freeze each member's share FIRST (RULE 1: nothing is posted unless the cloud has the split).
       const lines = dividendRunLines(members, dividendRatePct);
       const total = linesTotal(lines);
@@ -292,7 +298,7 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
       }
     }
 
-    if (!bonusPosted && bonusAmount > 0) {
+    if (!bonusPosted && effBonus > 0) {
       // An expense OF this FY: dated inside it (the FY end once the year is over), so it reduces THIS
       // year's net profit — never next year's.
       const fyEnd = fyRange(fy).end;
@@ -500,12 +506,12 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
         <Card>
           <CardHeader className="py-3">
             <CardTitle className="text-base">
-              {hi ? 'वितरण निर्धारण' : 'Distribution Settings'}
+              {section === 'bonus' ? (hi ? 'कर्मचारी बोनस' : 'Employee Bonus') : section === 'dividend' ? (hi ? 'लाभांश' : 'Dividend') : (hi ? 'वितरण निर्धारण' : 'Distribution Settings')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Dividend rate */}
-            <div className="space-y-1">
+            {showDividend && (<div className="space-y-1">
               <Label className="text-sm">
                 {hi ? 'डिविडेंड दर (% शेयर कैपिटल पर)' : 'Dividend Rate (% on Share Capital)'}
               </Label>
@@ -532,10 +538,10 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
                   ? `कुल शेयर कैपिटल: ${fmt(totalShareCapital)} | ${activeMembers.length} सक्रिय सदस्य`
                   : `Total share capital: ${fmt(totalShareCapital)} | ${activeMembers.length} active members`}
               </p>
-            </div>
+            </div>)}
 
             {/* Bonus */}
-            <div className="space-y-1">
+            {showBonus && (<div className="space-y-1">
               <Label className="text-sm">
                 {hi ? 'कर्मचारी बोनस (राशि ₹)' : 'Employee Bonus (Amount ₹)'}
               </Label>
@@ -556,14 +562,14 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
               {bonusPosted && legacyBonusVoucher && !expenseBonusVoucher && (
                 <p className="text-xs text-amber-700">{hi ? 'इस वर्ष का बोनस पुराने तरीके (लाभ का बँटवारा, Dr 1208) से पोस्ट है।' : "This year's bonus was posted the old way (appropriation, Dr 1208)."}</p>
               )}
-            </div>
+            </div>)}
 
             {/* Fund balances */}
-            <div className="text-xs text-gray-500 space-y-0.5 border-t pt-3">
+            {showDividend && <div className="text-xs text-gray-500 space-y-0.5 border-t pt-3">
               <p>{hi ? 'डिविडेंड खाता शेष' : 'Dividend Account (1211)'}:{' '}
                 <span className="font-medium text-gray-700">{fmt(getBalance(ACC_DIVIDEND))}</span>
               </p>
-            </div>
+            </div>}
 
             {/* Post button */}
             <div className="pt-2">
@@ -575,7 +581,8 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
                 <Button
                   onClick={() => setConfirmOpen(true)}
                   className="w-full bg-yellow-700 hover:bg-yellow-800"
-                  disabled={(totalDividend === 0 && bonusAmount === 0) || !shareRecon.reconciled || !!dividendCapIssue}
+                  // Share-capital reconciliation and the dividend cap block the DIVIDEND only — a bonus can post alone.
+                  disabled={(effDividend === 0 && effBonus === 0) || (effDividend > 0 && (!shareRecon.reconciled || !!dividendCapIssue))}
                 >
                   <Coins className="h-4 w-4 mr-2" />
                   {hi ? 'वितरण जर्नल पोस्ट करें' : 'Post Distribution Journals'}
@@ -592,7 +599,7 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
       </div>
 
       {/* ── Member-wise dividend table ── */}
-      {dividendRatePct > 0 && activeMembers.length > 0 && (
+      {showDividend && dividendRatePct > 0 && activeMembers.length > 0 && (
         <Card>
           <CardHeader className="py-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -641,7 +648,7 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
       )}
 
       {/* ── Posted vouchers ── */}
-      {(divPosted || bonusPosted) && (
+      {((showDividend && divPosted) || (showBonus && bonusPosted)) && (
         <Card>
           <CardHeader className="py-3">
             <CardTitle className="text-base text-green-700 flex items-center gap-2">
@@ -660,7 +667,7 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {[existingDivVoucher, existingBonusVoucher].filter(Boolean).map(v => v && (
+                {[showDividend ? existingDivVoucher : undefined, showBonus ? existingBonusVoucher : undefined].filter(Boolean).map(v => v && (
                   <TableRow key={v.id}>
                     <TableCell className="font-mono text-sm">{v.voucherNo}</TableCell>
                     <TableCell className="text-sm">{fmtDate(v.date)}</TableCell>
@@ -675,7 +682,7 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
       )}
 
       {/* ── Dividend settlement (pay members) ── */}
-      {divPosted && (
+      {showDividend && divPosted && (
         <Card>
           <CardHeader className="py-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -738,7 +745,7 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
       )}
 
       {/* ── Dividend payment register (who's paid / pending) ── */}
-      {divPosted && paymentRegister.length > 0 && (
+      {showDividend && divPosted && paymentRegister.length > 0 && (
         <Card>
           <CardHeader className="py-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -807,14 +814,14 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embe
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <p>{hi ? 'निम्नलिखित जर्नल एंट्रियाँ बनाई जाएंगी:' : 'The following journal entries will be created:'}</p>
-                {!divPosted && totalDividend > 0 && (
+                {!divPosted && effDividend > 0 && (
                   <div className="bg-gray-50 rounded p-2 font-mono text-xs">
                     Dr 1208 Net Surplus &nbsp;{fmt(totalDividend)}<br />
                     &nbsp;&nbsp;Cr 1211 Dividend Distribution &nbsp;{fmt(totalDividend)}<br />
                     <span className="text-gray-500">@ {dividendRatePct}% of Share Capital</span>
                   </div>
                 )}
-                {!bonusPosted && bonusAmount > 0 && (
+                {!bonusPosted && effBonus > 0 && (
                   <div className="bg-gray-50 rounded p-2 font-mono text-xs">
                     Dr 5207 Employee Bonus (expense) &nbsp;{fmt(bonusAmount)}<br />
                     &nbsp;&nbsp;Cr 2103 Salary / Staff Payable &nbsp;{fmt(bonusAmount)}<br />
