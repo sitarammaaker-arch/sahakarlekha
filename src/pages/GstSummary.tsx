@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { toUqc } from '@/lib/units';
 import { useData } from '@/contexts/DataContext';
 import { useConsumerData } from '@/contexts/ConsumerDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -272,7 +273,7 @@ export default function GstSummary() {
       for (const item of s.items) {
         // SaleItem carries no hsnCode — resolve from the item master (audit C-12; returns side already does).
         const hsn = (item as any).hsnCode || stockItems.find(st => st.id === item.itemId)?.hsnCode || 'N/A';
-        const existing = map.get(hsn) ?? { hsn, description: item.itemName, uqc: item.unit || 'NOS', totalQty: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
+        const existing = map.get(hsn) ?? { hsn, description: item.itemName, uqc: toUqc(item.unit) /* GST UQC (lib/units) — a stored 'kg' was sent as-is */, totalQty: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
         existing.totalQty += item.qty;
         const itemNet = item.qty * item.rate * scale;
         const ratio = s.netAmount > 0 ? itemNet / s.netAmount : 0;

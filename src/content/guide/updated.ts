@@ -19,7 +19,7 @@ export const GUIDE_UPDATED: Record<string, string> = {
   'financial-ratios-and-lifecycle': '2026-10-04',
   'gst-management': '2026-10-08',
   'income-and-expenditure': '2026-10-10',
-  'inventory-management': '2026-10-04',
+  'inventory-management': '2026-10-10',
   'member-management': '2026-10-04',
   'msp-procurement-entries': '2026-10-04',
   'opening-balances': '2026-10-08',

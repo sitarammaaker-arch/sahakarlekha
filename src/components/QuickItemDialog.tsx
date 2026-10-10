@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { unitOptions } from '@/lib/units';
 import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -29,12 +30,8 @@ interface Props {
   onCreated: (item: StockItem) => void;
 }
 
-// The SAME unit keys as the Inventory page's form (Inventory.tsx UNITS), so an item made here reads the same everywhere.
-const UNITS: { value: string; en: string; hi: string }[] = [
-  { value: 'kg', en: 'Kilogram (kg)', hi: 'किलोग्राम (kg)' }, { value: 'quintal', en: 'Quintal', hi: 'क्विंटल' },
-  { value: 'liter', en: 'Liter', hi: 'लीटर' }, { value: 'piece', en: 'Piece', hi: 'नग' },
-  { value: 'bag', en: 'Bag', hi: 'बोरी' }, { value: 'other', en: 'Other', hi: 'अन्य' },
-];
+// The SAME units as the Inventory page: the GST UQC codes (lib/units).
+const UNIT_GROUPS = unitOptions();
 
 function mostUsed(ids: (string | undefined)[]): string | undefined {
   const n = new Map<string, number>();
@@ -118,7 +115,12 @@ export const QuickItemDialog: React.FC<Props> = ({ open, onOpenChange, initialNa
               <Label>{hi ? 'इकाई *' : 'Unit *'}</Label>
               <select className="w-full h-10 rounded-md border bg-background px-2 text-sm" value={unit} onChange={(e) => setUnit(e.target.value)}>
                 <option value="">{hi ? '— चुनें —' : '— choose —'}</option>
-                {UNITS.map((u) => <option key={u.value} value={u.value}>{hi ? u.hi : u.en}</option>)}
+                <optgroup label={hi ? 'आम इकाइयाँ' : 'Common units'}>
+                  {UNIT_GROUPS.common.map((u) => <option key={u.code} value={u.code}>{hi ? u.hi : u.en} ({u.code})</option>)}
+                </optgroup>
+                <optgroup label={hi ? 'सभी GST इकाइयाँ' : 'All GST units'}>
+                  {UNIT_GROUPS.rest.map((u) => <option key={u.code} value={u.code}>{hi ? u.hi : u.en} ({u.code})</option>)}
+                </optgroup>
               </select>
             </div>
             <div className="space-y-1"><Label>HSN / SAC</Label><Input value={hsn} onChange={(e) => setHsn(e.target.value.replace(/\s/g, '').slice(0, 8))} placeholder={hi ? 'वैकल्पिक' : 'optional'} /></div>

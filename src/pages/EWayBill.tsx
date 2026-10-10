@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { toUqc } from '@/lib/units';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -140,7 +141,7 @@ export default function EWayBill() {
         name: item.itemName,
         hsn: stockItem?.hsnCode || stockItem?.sacCode || '9999',
         qty: item.qty,
-        unit: item.unit,
+        unit: toUqc(item.unit),   // GST UQC ('KGS', 'QTL', …) — the portal refuses free text (lib/units)
         taxable: item.amount,
         gstRate: s.cgstPct * 2 || s.igstPct || 0,
       };
