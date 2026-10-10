@@ -408,7 +408,8 @@
     "test:gst-uqc-units": "node scripts/test-gst-uqc-units.mjs",
     "test:sidebar-trim": "node scripts/test-sidebar-trim.mjs",
     "test:nav-hubs": "node scripts/test-nav-hubs.mjs",
-    "test:nav-favourites": "node scripts/test-nav-favourites.mjs"
+    "test:nav-favourites": "node scripts/test-nav-favourites.mjs",
+    "test:nav-create-menu": "node scripts/test-nav-create-menu.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

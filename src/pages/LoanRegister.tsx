@@ -31,6 +31,7 @@ import { useLoanAccruals } from '@/hooks/useLoanAccruals';
 import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
 import { todayStr } from '@/lib/dateUtils';
 import type { Loan, LoanType, LoanStatus } from '@/types';
+import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 
 const EMPTY_FORM = {
   memberId: '',
@@ -216,6 +217,7 @@ const LoanRegister: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isAddOpen, setIsAddOpen] = useState(false);
+  useOpenOnNew(() => { setForm(EMPTY_FORM); setIsAddOpen(true); });   // ＋ नई entry → ऋण
   const [editLoan, setEditLoan] = useState<Loan | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);

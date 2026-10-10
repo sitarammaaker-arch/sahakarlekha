@@ -2,13 +2,14 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { ChevronLeft, ChevronRight, ChevronDown, LogOut, List, LayoutGrid } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, LogOut, List, LayoutGrid, Plus, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useNavigation, useAllNavigation } from '@/hooks/useNavigation';
 import { useNavPrefs } from '@/hooks/useNavPrefs';
+import { CreateMenu } from './CreateMenu';
 import { compactSidebar, entryIsActive, type ModuleDefinition, type SidebarEntry } from '@/lib/navigation';
 
 interface SidebarProps {
@@ -140,6 +141,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
       {/* Navigation — rendered from the capability engine (groups in domain order,
           a separator before every group except the first, heading when present). */}
       <nav className="flex flex-col h-[calc(100vh-4rem)] p-3 overflow-y-auto">
+        {/* ＋ नई entry — the one create button, every screen size (QuickBooks "+ New" sits in the left nav too) — and,
+            on a phone, खोजें (the header has no room for a search button there). */}
+        <div className={cn('mb-3 flex gap-2', collapsed && 'flex-col')}>
+          <CreateMenu
+            side={collapsed ? 'right' : 'bottom'}
+            onPicked={onMobileClose}
+            trigger={
+              <Button
+                className={cn('flex-1 gap-2 bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90', collapsed ? 'h-10 px-0' : 'justify-start')}
+                aria-label={hi ? 'नई entry बनाएँ' : 'Create a new entry'}
+                title={hi ? 'नई entry बनाएँ' : 'Create a new entry'}
+              >
+                <Plus className="h-5 w-5 shrink-0" />
+                {!collapsed && <span className="text-sm font-medium">{hi ? 'नई entry' : 'New entry'}</span>}
+              </Button>
+            }
+          />
+          {!collapsed && (
+            <Button
+              variant="ghost"
+              className="md:hidden gap-2 text-sidebar-foreground hover:bg-sidebar-accent"
+              onClick={() => { onMobileClose(); window.dispatchEvent(new Event('sl:open-search')); }}
+              aria-label={hi ? 'खोजें' : 'Search'}
+            >
+              <Search className="h-5 w-5" />
+              <span className="text-sm">{hi ? 'खोजें' : 'Search'}</span>
+            </Button>
+          )}
+        </div>
+
         {/* ⭐ favourites — the pages this person starred (breadcrumb star / group-page star), both menu modes. */}
         {favourites.length > 0 && (
           <>

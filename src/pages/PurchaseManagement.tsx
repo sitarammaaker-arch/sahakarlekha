@@ -38,6 +38,7 @@ import { toMinor, toRupees, mulMinor } from '@/lib/money';
 import { useToast } from '@/hooks/use-toast';
 import type { PurchaseItem, PaymentMode } from '@/types';
 import { purchaseTdsAdvice } from '@/lib/tax/purchaseTdsAdvice';
+import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -102,6 +103,7 @@ const PurchaseManagement: React.FC = () => {
   const shownPurchaseNo = (savedPurchaseId && purchases.find(p => p.id === savedPurchaseId)?.purchaseNo) || savedPurchaseNo;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'new-purchase' | 'purchase-list'>('new-purchase');
+  useOpenOnNew(() => setActiveTab('new-purchase'));   // ＋ नई entry → खरीद बिल
 
   // ── Purchase List filter state ────────────────────────────────────────────
   const [filterFrom, setFilterFrom] = useState('');

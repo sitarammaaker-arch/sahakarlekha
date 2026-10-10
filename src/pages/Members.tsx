@@ -37,6 +37,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { MemberPortalDialog } from '@/components/members/MemberPortalDialog';
 import { memberPhoneError } from '@/lib/memberValidation';
 import { callMemberPortalAdmin, portalPlanAllowed, type PortalLoginRow } from '@/lib/memberPortalAdmin';
+import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
 const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }> = {
@@ -367,6 +368,7 @@ const Members: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   useDeepLinkQuery(setSearchQuery);   // ECR-25 P2: focus a member deep-linked from global search (?q=)
   const [isAddOpen, setIsAddOpen] = useState(false);
+  useOpenOnNew(() => { setForm({ ...EMPTY_FORM, memberId: getNextMemberId() }); setIsAddOpen(true); });   // ＋ नई entry → सदस्य
   const [editMember, setEditMember] = useState<Member | null>(null);
   const [viewMember, setViewMember] = useState<Member | null>(null);
   const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });

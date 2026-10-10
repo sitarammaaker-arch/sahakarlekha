@@ -27,6 +27,7 @@ import EmptyState from '@/components/EmptyState';
 import { useToast } from '@/hooks/use-toast';
 import { useDeepLinkQuery } from '@/hooks/useDeepLinkQuery';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 
 const fmt = (amount: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -115,6 +116,7 @@ const Suppliers: React.FC = () => {
   const [search, setSearch] = useState('');
   useDeepLinkQuery(setSearch);   // ECR-25 P2: focus a supplier deep-linked from global search (?q=)
   const [showForm, setShowForm] = useState(false);
+  useOpenOnNew(() => openAdd());   // ＋ नई entry → सप्लायर
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<FormShape>(EMPTY_FORM());
   const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });

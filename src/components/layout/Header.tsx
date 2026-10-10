@@ -72,6 +72,12 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  // The phone menu drawer has a "खोजें" button (the header has no room for one) — it asks for this dialog.
+  useEffect(() => {
+    const open = () => setSearchOpen(true);
+    window.addEventListener('sl:open-search', open);
+    return () => window.removeEventListener('sl:open-search', open);
+  }, []);
 
   const getInitials = (name: string) =>
     name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
