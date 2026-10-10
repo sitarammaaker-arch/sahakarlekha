@@ -1206,6 +1206,10 @@ const Vouchers: React.FC = () => {
                 {showCancelled ? <><Eye className="h-4 w-4" />{language === 'hi' ? 'सक्रिय दिखाएं' : 'Show Active'}</> : <><EyeOff className="h-4 w-4" />{language === 'hi' ? `रद्द (${cancelledCount})` : `Cancelled (${cancelledCount})`}</>}
               </Button>
             )}
+            {showCancelled && (
+              // The cancelled-voucher audit register (who / when / why, date filter, PDF) — no longer a separate menu entry.
+              <Link to="/deleted-vouchers" className="text-xs text-primary underline">{language === 'hi' ? 'रद्द वाउचर रजिस्टर (किसने, कब, क्यों) →' : 'Cancelled-voucher register (who, when, why) →'}</Link>
+            )}
           </CardHeader>
           <CardContent>
             {/* Admin-only bulk-cancel action bar — appears once rows are selected */}

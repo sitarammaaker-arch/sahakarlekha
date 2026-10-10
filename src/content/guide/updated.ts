@@ -32,7 +32,7 @@ export const GUIDE_UPDATED: Record<string, string> = {
   'society-type-entries': '2026-10-04',
   'special-registers': '2026-10-04',
   'statutory-returns': '2026-10-04',
-  'stock-valuation': '2026-10-04',
+  'stock-valuation': '2026-10-10',
   'tds-and-26q': '2026-10-04',
   'trading-account': '2026-10-04',
   'trial-balance': '2026-10-08',

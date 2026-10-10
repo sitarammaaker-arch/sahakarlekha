@@ -10,10 +10,10 @@
 import { useMemo } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { navigationService, declaredActivities, getVisibleGroups, type NavContext, type NavGroup } from '@/lib/navigation';
+import { navigationService, declaredActivities, getVisibleGroups, trimSidebar, type NavContext, type NavGroup } from '@/lib/navigation';
 
 export function useNavigation(): NavGroup[] {
-  const { society, societyCapabilities, societyActivities } = useData();
+  const { society, societyCapabilities, societyActivities, vouchers } = useData();
   const { hasPermission, isSuperAdmin, user } = useAuth();
   const societyType = society.societyType ?? 'other';
 
@@ -28,6 +28,12 @@ export function useNavigation(): NavGroup[] {
       userRole: user?.role,              // ECR-06 S2: mapped 17-role names use ROLE_MODULE_ACCESS
       superAdminShowAll: isSuperAdmin,   // C7: platform super-admin bypasses role + capability gates
     };
-    return getVisibleGroups(ctx);
-  }, [societyType, society.state, society.activitiesCutoverEnabled, societyCapabilities, societyActivities, hasPermission, isSuperAdmin, user?.role]);
+    // Sidebar-only trim (2026-10-10): pages listed twice / reachable from a parent page are not repeated in the menu.
+    const pendingApprovals = vouchers.filter(v => !v.isDeleted && v.approvalStatus === 'pending').length;
+    return trimSidebar(getVisibleGroups(ctx), {
+      fullDashboardRole: isSuperAdmin || hasPermission(['admin', 'accountant']),
+      approvalRequired: !!society.approvalRequired,
+      pendingApprovals,
+    });
+  }, [societyType, society.state, society.activitiesCutoverEnabled, society.approvalRequired, societyCapabilities, societyActivities, hasPermission, isSuperAdmin, user?.role, vouchers]);
 }

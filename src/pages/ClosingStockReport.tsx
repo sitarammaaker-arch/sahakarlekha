@@ -5,6 +5,7 @@
  * statement is transparent: Closing = Opening + Purchase + Sales Return − Sale − Purchase Return.
  */
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -227,7 +228,8 @@ const ClosingStockReport: React.FC = () => {
             <p className="text-sm text-muted-foreground">{fyLabel}</p>
           </div>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          <Link to="/stock-valuation" className="text-xs text-primary underline">{hi ? 'आज का स्टॉक मूल्यांकन →' : "Today's stock valuation →"}</Link>
           <Button variant="outline" size="sm" onClick={expandAll}>{hi ? 'सब खोलें' : 'Expand All'}</Button>
           <Button variant="outline" size="sm" onClick={collapseAll}>{hi ? 'सब बंद' : 'Collapse All'}</Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={handlePDF}>

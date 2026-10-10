@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { toUqc, unitLabel, unitOptions } from '@/lib/units';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
@@ -1061,6 +1062,7 @@ const Inventory: React.FC = () => {
                   </Button>
                   {stockItems.length > 0 && (
                     <>
+                      <Link to="/stock-valuation" className="text-xs text-primary underline self-center">{hi ? 'स्टॉक मूल्यांकन →' : 'Stock valuation →'}</Link>
                       <Button size="sm" variant="outline" className="gap-1" onClick={() => ledgerPdf(society, allItemsSummary(), 'STR', 'Stock_Register')}><BookOpen className="h-4 w-4" />{hi ? 'स्टॉक रजिस्टर PDF' : 'Stock Register PDF'}</Button>
                       <Button size="sm" variant="outline" className="gap-1" onClick={() => ledgerExcel(allItemsSummary(), 'Stock_Register', 'Stock Register')}><FileSpreadsheet className="h-4 w-4" />{hi ? 'स्टॉक रजिस्टर Excel' : 'Stock Register Excel'}</Button>
                     </>
