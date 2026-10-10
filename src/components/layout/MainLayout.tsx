@@ -13,6 +13,9 @@ import OfflineBanner from '@/components/OfflineBanner';
 import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { fmtDate } from '@/lib/dateUtils';
+import { useLocation } from 'react-router-dom';
+import { useNavPrefs } from '@/hooks/useNavPrefs';
+import { recordableModule } from '@/lib/navigation';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -26,6 +29,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { society } = useData();
   const { language } = useLanguage();
   const hi = language === 'hi';
+
+  // "हाल में खोले गए" — remember the pages this person opens (per browser; see lib/navigation/navPrefs).
+  const { pathname } = useLocation();
+  const { recordVisit } = useNavPrefs();
+  React.useEffect(() => {
+    const id = recordableModule(pathname);
+    if (id) recordVisit(id);
+  }, [pathname, recordVisit]);
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">

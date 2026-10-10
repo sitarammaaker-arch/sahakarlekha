@@ -1,8 +1,9 @@
 import React from 'react';
 import { Link, Navigate, NavLink, useParams } from 'react-router-dom';
-import { Search, ChevronRight } from 'lucide-react';
+import { Search, Star } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAllNavigation } from '@/hooks/useNavigation';
+import { useNavPrefs } from '@/hooks/useNavPrefs';
 import { HUBS, hubById, hubRoute, hubSections } from '@/lib/navigation';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -17,6 +18,7 @@ const NavHub: React.FC = () => {
   const { t, language } = useLanguage();
   const hi = language === 'hi';
   const visible = useAllNavigation().flatMap((g) => g.items);
+  const { isFavourite, toggleFavourite } = useNavPrefs();
   const [q, setQ] = React.useState('');
   const stripRef = React.useRef<HTMLElement>(null);
   React.useEffect(() => {
@@ -47,7 +49,7 @@ const NavHub: React.FC = () => {
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold truncate">{hi ? hub.hi : hub.en}</h1>
             <p className="text-sm text-muted-foreground">
-              {hi ? `${sections.reduce((n, s) => n + s.items.length, 0)} पेज — जिस काम को करना है उस पर टैप करें` : `${sections.reduce((n, s) => n + s.items.length, 0)} pages — tap the one you need`}
+              {hi ? `${sections.reduce((n, s) => n + s.items.length, 0)} पेज — काम पर टैप करें, ⭐ दबाकर menu में ऊपर रखें` : `${sections.reduce((n, s) => n + s.items.length, 0)} pages — tap one, ⭐ to pin it to the menu`}
             </p>
           </div>
         </div>
@@ -84,15 +86,26 @@ const NavHub: React.FC = () => {
             {items.map((m) => {
               const Icon = m.icon;
               return (
-                <Link
-                  key={m.id}
-                  to={m.route}
-                  className="group flex items-center gap-3 rounded-lg border bg-card p-3 min-h-[56px] hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
-                >
-                  <Icon className="h-5 w-5 shrink-0 text-primary" />
-                  <span className="flex-1 min-w-0 text-sm font-medium break-words">{t(m.titleKey)}</span>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary" />
-                </Link>
+                <div key={m.id} className="group flex items-stretch rounded-lg border bg-card hover:border-primary hover:bg-primary/5 transition-colors">
+                  <Link
+                    to={m.route}
+                    className="flex flex-1 min-w-0 items-center gap-3 p-3 min-h-[56px] rounded-l-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Icon className="h-5 w-5 shrink-0 text-primary" />
+                    <span className="flex-1 min-w-0 text-sm font-medium break-words">{t(m.titleKey)}</span>
+                  </Link>
+                  {/* ⭐ — pin this page to the top of the menu (and to Ctrl+K) */}
+                  <button
+                    type="button"
+                    onClick={() => toggleFavourite(m.id)}
+                    aria-pressed={isFavourite(m.id)}
+                    aria-label={isFavourite(m.id) ? (hi ? 'पसंदीदा से हटाएँ' : 'Remove from favourites') : (hi ? 'पसंदीदा में जोड़ें' : 'Add to favourites')}
+                    title={isFavourite(m.id) ? (hi ? 'पसंदीदा से हटाएँ' : 'Remove from favourites') : (hi ? 'पसंदीदा में जोड़ें' : 'Add to favourites')}
+                    className="shrink-0 w-12 flex items-center justify-center rounded-r-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Star className={cn('h-4 w-4', isFavourite(m.id) ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground')} />
+                  </button>
+                </div>
               );
             })}
           </div>

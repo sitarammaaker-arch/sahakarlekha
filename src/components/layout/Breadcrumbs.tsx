@@ -9,16 +9,20 @@
  */
 import React from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { ChevronRight, Home } from 'lucide-react';
+import { ChevronRight, Home, Star } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { MODULE_CATALOG } from '@/lib/navigation/moduleCatalog';
-import { DOMAIN_HEADING_KEY } from '@/lib/navigation/capabilities';
+import { hubForModule, hubRoute } from '@/lib/navigation/hubs';
+import { useNavPrefs } from '@/hooks/useNavPrefs';
+import { cn } from '@/lib/utils';
 
 const HIDE_ON = new Set(['/dashboard', '/my-dashboard', '/']);
 
 const Breadcrumbs: React.FC = () => {
   const { pathname } = useLocation();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const hi = language === 'hi';
+  const { isFavourite, toggleFavourite } = useNavPrefs();
 
   if (HIDE_ON.has(pathname)) return null;
 
@@ -29,21 +33,34 @@ const Breadcrumbs: React.FC = () => {
 
   if (!mod) return null;
 
-  const domainKey = DOMAIN_HEADING_KEY[mod.domain];
+  // The middle crumb is the menu group the page lives in, and it links back to that group page (2026-10-10).
+  const hub = hubForModule(mod);
+  const fav = isFavourite(mod.id);
+  const favLabel = fav ? (hi ? 'पसंदीदा से हटाएँ' : 'Remove from favourites') : (hi ? '⭐ पसंदीदा में जोड़ें' : 'Add to favourites');
 
   return (
     <nav aria-label="breadcrumb" className="mb-3 flex items-center gap-1.5 text-sm text-muted-foreground flex-wrap">
       <Link to="/dashboard" className="flex items-center gap-1 hover:text-foreground transition-colors" title={t('dashboard')}>
         <Home className="h-3.5 w-3.5" />
       </Link>
-      {domainKey && (
+      {hub && (
         <>
           <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-          <span>{t(domainKey)}</span>
+          <Link to={hubRoute(hub.id)} className="hover:text-foreground hover:underline transition-colors">{hi ? hub.hi : hub.en}</Link>
         </>
       )}
       <ChevronRight className="h-3.5 w-3.5 shrink-0" />
       <span className="text-foreground font-medium" aria-current="page">{t(mod.titleKey)}</span>
+      <button
+        type="button"
+        onClick={() => toggleFavourite(mod.id)}
+        aria-pressed={fav}
+        aria-label={favLabel}
+        title={favLabel}
+        className="ml-1 inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted transition-colors"
+      >
+        <Star className={cn('h-4 w-4', fav ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground')} />
+      </button>
     </nav>
   );
 };

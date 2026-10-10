@@ -6,6 +6,7 @@ import { useData } from '@/contexts/DataContext';
 import { useHousingData } from '@/contexts/HousingDataContext';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { useAllNavigation } from '@/hooks/useNavigation';
+import { useNavPrefs } from '@/hooks/useNavPrefs';
 import { rankItems } from '@/lib/globalSearch';
 import {
   CommandDialog,
@@ -16,7 +17,7 @@ import {
   CommandList,
   CommandSeparator,
 } from '@/components/ui/command';
-import { Users, FileText, BookOpen, Landmark, Package, Building2, Receipt, MessageSquareWarning, Truck, UserCheck, ShoppingCart, PackagePlus, Boxes, HardHat, CornerDownRight } from 'lucide-react';
+import { Star, History, Users, FileText, BookOpen, Landmark, Package, Building2, Receipt, MessageSquareWarning, Truck, UserCheck, ShoppingCart, PackagePlus, Boxes, HardHat, CornerDownRight } from 'lucide-react';
 
 interface GlobalSearchProps {
   open: boolean;
@@ -29,6 +30,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
   const { housingFlats, maintenanceBills, complaints } = useHousingData();
   const { has } = useCapabilities();
   const navGroups = useAllNavigation();   // every page the user may open — incl. ones not listed in the menu
+  const { favourites, recents } = useNavPrefs();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const hi = language === 'hi';
@@ -98,6 +100,25 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
       />
       <CommandList>
         {short && <CommandEmpty>{hi ? 'खोजने के लिए कम से कम 2 अक्षर टाइप करें' : 'Type at least 2 characters to search'}</CommandEmpty>}
+
+        {/* Nothing typed yet → the person's own shortcuts: ⭐ favourites, then recently opened pages (Tally "Go To"). */}
+        {short && [
+          { key: 'fav', heading: hi ? '⭐ पसंदीदा' : '⭐ Favourites', Icon: Star, list: favourites },
+          { key: 'recent', heading: hi ? 'हाल में खोले गए' : 'Recently opened', Icon: History, list: recents.filter(m => !favourites.includes(m)).slice(0, 6) },
+        ].filter(g => g.list.length > 0).map(g => (
+          <CommandGroup key={g.key} heading={g.heading}>
+            {g.list.map(m => {
+              const Icon = m.icon;
+              return (
+                <CommandItem key={`${g.key}-${m.id}`} value={`${g.key}-${m.id}`} onSelect={() => go(m.route)} className="gap-2">
+                  <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span>{t(m.titleKey)}</span>
+                  <g.Icon className="h-3 w-3 ml-auto text-muted-foreground" />
+                </CommandItem>
+              );
+            })}
+          </CommandGroup>
+        ))}
         {!short && !hasResults && <CommandEmpty>{hi ? 'कोई परिणाम नहीं मिला' : 'No results found'}</CommandEmpty>}
 
         {filteredPages.length > 0 && (
