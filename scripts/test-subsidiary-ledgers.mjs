@@ -23,7 +23,7 @@ register('data:text/javascript,' + encodeURIComponent(`
 const imp = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
 const L = await imp('src/lib/registers/subsidiaryLedgers.ts');
 const T = await imp('src/lib/registers/ledgerTables.ts');
-const { computeStock } = await imp('src/lib/stockUtils.ts');
+const { computeStock, computeStockValue, computeStockCostRate } = await imp('src/lib/stockUtils.ts');
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -97,11 +97,28 @@ const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  �
   ok(bad === 0, `300 random items: register closing = computeStock (${bad} bad)`);
   const t = T.stockRegisterTable(s, { itemCode: 'U1', name: 'Urea', unit: 'bag' });
   ok(t.totals.length === t.columns.length && t.rowsEn.every((r) => r.length === t.columns.length), 'stock table: one cell per column');
+  // 2026-10-10: rate + value on opening and closing (the register printed only quantities)
+  let badV = 0; seed = 11;
+  for (let n = 0; n < 300; n++) {
+    const it = { id: 'i1', openingStock: Math.floor(rnd() * 20), purchaseRate: Math.round(rnd() * 500) };
+    const ms = Array.from({ length: Math.floor(rnd() * 12) }, (_, j) => ({ ...m(String(j), `2026-04-${String(1 + Math.floor(rnd() * 28)).padStart(2, '0')}`, ['purchase', 'sale', 'adjustment'][Math.floor(rnd() * 3)], Math.round((rnd() * 20 - 5) * 10) / 10), rate: Math.round(rnd() * 600) }));
+    const r = L.stockRegister(it, ms);
+    if (Math.abs(r.closingValue - computeStockValue(it, ms)) > 0.02 * Math.max(1, r.closing) || Math.abs(r.closingRate - Math.round(computeStockCostRate(it, ms) * 100) / 100) > 0.001) badV++;
+  }
+  ok(badV === 0, `300 random items: register closing value / rate = Inventory computeStockValue / cost rate (${badV} bad)`);
+  const o = L.stockRegister({ id: 'i9', openingStock: 10, purchaseRate: 25 }, []);
+  ok(o.openingRate === 25 && o.openingValue === 250 && o.closingRate === 25 && o.closingValue === 250, 'no movement: opening and closing both 10 × ₹25 = ₹250 (was blank)');
+  const ot = T.stockRegisterTable(o, { itemCode: 'X', name: 'X', unit: 'bag' });
+  ok(ot.rowsEn[0][6] === 25 && ot.rowsEn[0][7] === 250 && ot.totals[6] === 25 && ot.totals[7] === 250, 'opening + closing rows print rate and amount');
+  const sum = T.stockSummaryTable([{ itemCode: 'A', name: 'A', unit: 'kg', register: o }, { itemCode: 'B', name: 'B', unit: 'bag', register: L.stockRegister({ id: 'b', openingStock: 4, purchaseRate: 100 }, []) }], (u) => u.toUpperCase());
+  ok(sum.rowsEn.length === 2 && sum.totals[9] === 650 && sum.totals[4] === 650 && sum.rowsEn[0][2] === 'KG', 'all-items summary: one row per item, value total ₹250 + ₹400 = ₹650');
+  ok(sum.totals.length === sum.columns.length && sum.rowsEn.every((r) => r.length === sum.columns.length), 'summary table: one cell per column');
 }
 
 // ── 4. Wiring ──
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 ok(/stockRegister\(it, reconciledStockMovements\)/.test(read('src/pages/Inventory.tsx')), 'Inventory register reads the SAME reconciled movements as its quantity column');
+ok(/ledgerPdf\(society, allItemsSummary\(\), 'STR', 'Stock_Register'\)/.test(read('src/pages/Inventory.tsx')) && /ledgerExcel\(allItemsSummary\(\)/.test(read('src/pages/Inventory.tsx')), 'all-items Stock Register PDF / Excel = the one-page summary (not one page per item)');
 ok(/loanLedger\(memberLoanLedgerInput\(l\), vouchers, accruals, isIncome\)/.test(read('src/pages/LoanRegister.tsx')), 'member loan ledger from live vouchers + accruals');
 ok(/loanLedger\(kccLedgerInput\(k\), vouchers, accruals, isIncome\)/.test(read('src/pages/KccLoan.tsx')), 'KCC ledger from live vouchers + accruals');
 ok(/depositLedger\(getDepositTransactions\(d\.id\), voucherNoOf\)/.test(read('src/pages/Deposits.tsx')), 'deposit ledger from the recorded deposit transactions');

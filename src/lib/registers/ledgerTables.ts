@@ -55,8 +55,8 @@ export function loanLedgerTable(l: LoanLedger, head: { loanNo: string; memberNam
 }
 
 export function stockRegisterTable(s: StockRegister, head: { itemCode: string; name: string; unit: string }): LedgerTable {
-  const open: Cell[] = ['', 'Opening stock', '', null, null, s.opening, null, null];
-  const openHi: Cell[] = ['', 'प्रारंभिक स्टॉक', '', null, null, s.opening, null, null];
+  const open: Cell[] = ['', 'Opening stock', '', null, null, s.opening, s.openingRate || null, s.openingValue || null];
+  const openHi: Cell[] = ['', 'प्रारंभिक स्टॉक', '', null, null, s.opening, s.openingRate || null, s.openingValue || null];
   const base = (p: string) => (r: StockRegister['rows'][number]): Cell[] => [r.date, p === 'hi' ? r.particularsHi : r.particulars, r.reference,
     r.inward || null, r.outward || null, r.balance, r.rate || null, r.amount || null];
   return {
@@ -66,8 +66,36 @@ export function stockRegisterTable(s: StockRegister, head: { itemCode: string; n
       { en: 'Inward qty', hi: 'आवक', num: true }, { en: 'Outward qty', hi: 'जावक', num: true }, { en: 'Balance qty', hi: 'शेष मात्रा', num: true },
       { en: 'Rate', hi: 'दर', num: true }, { en: 'Amount', hi: 'राशि', num: true }],
     rowsEn: [open, ...s.rows.map(base('en'))], rowsHi: [openHi, ...s.rows.map(base('hi'))],
-    totals: ['', 'Total / Closing', '', q(s.totalIn), q(s.totalOut), s.closing, null, null],
+    // Closing rate = weighted-average cost, value = closing × that rate — the Inventory / Trading A/c figure.
+    totals: ['', 'Total / Closing', '', q(s.totalIn), q(s.totalOut), s.closing, s.closingRate || null, s.closingValue || null],
     notes: s.wentNegative ? [{ en: 'The balance went below zero at some point (more issued than on hand) — closing is shown as 0, as in Inventory.', hi: 'किसी समय शेष शून्य से नीचे गया (हाथ में से ज़्यादा जावक) — अंतिम शेष Inventory की तरह 0 दिखाया गया है।' }] : [],
+  };
+}
+
+/**
+ * ALL items on one page (2026-10-10): the "Stock Register PDF / Excel" for every item printed one page per item —
+ * 22 near-empty pages with no rate or value. This is the one-row-per-item summary (opening, in, out, closing, rate,
+ * value) with a value total; each item's detailed register is still its own export. Rows come from stockRegister,
+ * so every figure equals that item's register and the Inventory / Trading closing value (RULE 2).
+ */
+export function stockSummaryTable(items: readonly { itemCode: string; name: string; unit: string; register: StockRegister }[], unitText: (u: string) => string = (u) => u): LedgerTable {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const row = (it: (typeof items)[number]): Cell[] => [it.itemCode || '', it.name, unitText(it.unit),
+    it.register.opening, it.register.openingValue || null, q(it.register.totalIn) || null, q(it.register.totalOut) || null,
+    it.register.closing, it.register.closingRate || null, it.register.closingValue || null];
+  const rows = items.map(row);
+  const sum = (f: (r: StockRegister) => number) => r2(items.reduce((t, it) => t + f(it.register), 0));
+  return {
+    title: 'Stock Register (Summary)', titleHi: 'स्टॉक रजिस्टर (सार)',
+    subtitle: `${items.length} items`,
+    columns: [{ en: 'Code', hi: 'कोड' }, { en: 'Item', hi: 'वस्तु' }, { en: 'Unit', hi: 'इकाई' },
+      { en: 'Opening qty', hi: 'प्रारंभिक मात्रा', num: true }, { en: 'Opening value', hi: 'प्रारंभिक मूल्य', num: true },
+      { en: 'Inward qty', hi: 'आवक', num: true }, { en: 'Outward qty', hi: 'जावक', num: true },
+      { en: 'Closing qty', hi: 'अंतिम मात्रा', num: true }, { en: 'Rate (avg cost)', hi: 'दर (औसत लागत)', num: true },
+      { en: 'Closing value', hi: 'अंतिम मूल्य', num: true }],
+    rowsEn: rows, rowsHi: rows,
+    totals: ['', 'Total', '', null, sum((r) => r.openingValue), null, null, null, null, sum((r) => r.closingValue)],
+    notes: [],
   };
 }
 
