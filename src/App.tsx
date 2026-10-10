@@ -94,6 +94,7 @@ const TradingAccount = lazyWithRetry(() => import("./pages/TradingAccount"));
 const ReceiptsPayments = lazyWithRetry(() => import("./pages/ReceiptsPayments"));
 const BalanceSheet = lazyWithRetry(() => import("./pages/BalanceSheet"));
 const Reports = lazyWithRetry(() => import("./pages/Reports"));
+const NavHub = lazyWithRetry(() => import("./pages/NavHub"));
 const SocietySetup = lazyWithRetry(() => import("./pages/SocietySetup"));
 const ShareRegister = lazyWithRetry(() => import("./pages/ShareRegister"));
 const LoanRegister = lazyWithRetry(() => import("./pages/LoanRegister"));
@@ -337,6 +338,7 @@ const AppRoutes = () => {
       <Route path="/receipts-payments" element={<ProtectedRoute><ReceiptsPayments /></ProtectedRoute>} />
       <Route path="/balance-sheet" element={<ProtectedRoute><BalanceSheet /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+      <Route path="/hub/:hubId" element={<ProtectedRoute><NavHub /></ProtectedRoute>} />
       <Route path="/society-setup" element={<ProtectedRoute><SocietySetup /></ProtectedRoute>} />
       <Route path="/share-register" element={<ProtectedRoute><ShareRegister /></ProtectedRoute>} />
       <Route path="/loan-register" element={<ProtectedRoute><LoanRegister /></ProtectedRoute>} />

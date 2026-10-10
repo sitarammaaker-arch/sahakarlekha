@@ -12,28 +12,33 @@ import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { navigationService, declaredActivities, getVisibleGroups, trimSidebar, type NavContext, type NavGroup } from '@/lib/navigation';
 
-export function useNavigation(): NavGroup[] {
-  const { society, societyCapabilities, societyActivities, vouchers } = useData();
+/**
+ * EVERY page this user may open, grouped (role + capability gates applied; NOT the sidebar trim). For search,
+ * next-steps and the hub pages — a page hidden from the menu must still be findable (2026-10-10: #753's trim had
+ * also removed those pages from Ctrl+K search and from next-steps).
+ */
+export function useAllNavigation(): NavGroup[] {
+  const { society, societyCapabilities, societyActivities } = useData();
   const { hasPermission, isSuperAdmin, user } = useAuth();
   const societyType = society.societyType ?? 'other';
-
   return useMemo(() => {
-    // Declared activities (T-11) gate capabilities within entitlement, but only once the cutover
-    // flag is on (T-12); until then the port ignores them and this stays identical to today.
     const capabilities = navigationService.resolveCapabilities(societyType, societyCapabilities, society.state, declaredActivities(societyActivities), society.activitiesCutoverEnabled);
-    const ctx: NavContext = {
-      societyType,
-      capabilities,
-      hasRole: hasPermission,
-      userRole: user?.role,              // ECR-06 S2: mapped 17-role names use ROLE_MODULE_ACCESS
-      superAdminShowAll: isSuperAdmin,   // C7: platform super-admin bypasses role + capability gates
-    };
-    // Sidebar-only trim (2026-10-10): pages listed twice / reachable from a parent page are not repeated in the menu.
+    const ctx: NavContext = { societyType, capabilities, hasRole: hasPermission, userRole: user?.role, superAdminShowAll: isSuperAdmin };
+    return getVisibleGroups(ctx);
+  }, [societyType, society.state, society.activitiesCutoverEnabled, societyCapabilities, societyActivities, hasPermission, isSuperAdmin, user?.role]);
+}
+
+/** The classic (full) sidebar: every visible page minus the ones listed elsewhere (trimSidebar). */
+export function useNavigation(): NavGroup[] {
+  const all = useAllNavigation();
+  const { society, vouchers } = useData();
+  const { hasPermission, isSuperAdmin } = useAuth();
+  return useMemo(() => {
     const pendingApprovals = vouchers.filter(v => !v.isDeleted && v.approvalStatus === 'pending').length;
-    return trimSidebar(getVisibleGroups(ctx), {
+    return trimSidebar(all, {
       fullDashboardRole: isSuperAdmin || hasPermission(['admin', 'accountant']),
       approvalRequired: !!society.approvalRequired,
       pendingApprovals,
     });
-  }, [societyType, society.state, society.activitiesCutoverEnabled, society.approvalRequired, societyCapabilities, societyActivities, hasPermission, isSuperAdmin, user?.role, vouchers]);
+  }, [all, society.approvalRequired, vouchers, hasPermission, isSuperAdmin]);
 }

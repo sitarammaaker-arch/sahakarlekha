@@ -406,7 +406,8 @@
     "test:rule2-batch3": "node scripts/test-rule2-batch3.mjs",
     "test:appropriation-wizard": "node scripts/test-appropriation-wizard.mjs",
     "test:gst-uqc-units": "node scripts/test-gst-uqc-units.mjs",
-    "test:sidebar-trim": "node scripts/test-sidebar-trim.mjs"
+    "test:sidebar-trim": "node scripts/test-sidebar-trim.mjs",
+    "test:nav-hubs": "node scripts/test-nav-hubs.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

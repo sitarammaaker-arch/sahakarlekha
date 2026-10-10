@@ -10,14 +10,14 @@ import React, { useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useNavigation } from '@/hooks/useNavigation';
+import { useAllNavigation } from '@/hooks/useNavigation';
 import { MODULE_CATALOG } from '@/lib/navigation/moduleCatalog';
 import { NEXT_STEPS } from '@/lib/navigation/nextSteps';
 
 const NextSteps: React.FC = () => {
   const { pathname } = useLocation();
   const { t } = useLanguage();
-  const groups = useNavigation();
+  const groups = useAllNavigation();
 
   const items = useMemo(() => {
     const nextIds = NEXT_STEPS[pathname];

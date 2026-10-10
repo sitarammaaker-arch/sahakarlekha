@@ -31,7 +31,9 @@ const CONFIG = {
   // Routes intentionally NOT in MODULE_CATALOG but legitimately reachable for all
   // societies (ungated by design). A ProtectedRoute absent from the catalog is only
   // allowed if it appears here. Keep this list as small as possible.
-  UNIVERSAL_ROUTES: [],
+  // /hub/:hubId — the compact menu's group pages (2026-10-10). Not a module: it renders only modules the engine already
+  // made visible for this user (hubSections over useAllNavigation), so it opens nothing new.
+  UNIVERSAL_ROUTES: ['/hub/:hubId'],
 
   // Anti-false-positive sentinels: a known route that MUST appear in each dataset,
   // proving the import/parse actually produced data (not an empty/malformed result).
