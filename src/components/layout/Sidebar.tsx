@@ -2,13 +2,13 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { ChevronLeft, ChevronRight, ChevronDown, LogOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, LogOut, List, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useNavigation } from '@/hooks/useNavigation';
-import type { ModuleDefinition } from '@/lib/navigation';
+import { useNavigation, useAllNavigation } from '@/hooks/useNavigation';
+import { compactSidebar, entryIsActive, type ModuleDefinition, type SidebarEntry } from '@/lib/navigation';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -18,12 +18,27 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpen, onMobileClose }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const hi = language === 'hi';
   const { user, logout } = useAuth();
   const location = useLocation();
   // Capability-Based Navigation: groups + items come from the registry/engine, NOT
   // hardcoded arrays. Role filtering is applied inside the engine (isModuleVisible).
   const groups = useNavigation();
+  const allGroups = useAllNavigation();
+
+  // Compact menu (default, 2026-10-10): Dashboard, Vouchers + one entry per group page (/hub/:id). The old full list
+  // stays one click away ("पूरा menu") and the choice persists per browser.
+  const MODE_KEY = 'sl.nav.mode';
+  const [mode, setMode] = React.useState<'compact' | 'full'>(() => {
+    try { return localStorage.getItem(MODE_KEY) === 'full' ? 'full' : 'compact'; } catch { return 'compact'; }
+  });
+  const switchMode = () => setMode(prev => {
+    const next = prev === 'full' ? 'compact' : 'full';
+    try { localStorage.setItem(MODE_KEY, next); } catch { /* ignore */ }
+    return next;
+  });
+  const entries = React.useMemo(() => compactSidebar(allGroups.flatMap(g => g.items)), [allGroups]);
 
   // Collapsible groups: reduce the ~100-item wall of the full sidebar. Default is
   // EXPANDED (first-load behaviour is unchanged); a user can collapse the groups they
@@ -39,13 +54,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
     return next;
   });
 
-  const renderNavItem = (item: ModuleDefinition) => {
-    const isActive = location.pathname === item.route;
-    const Icon = item.icon;
+  const renderNavItem = (item: ModuleDefinition) =>
+    renderLink(item.id, item.route, t(item.titleKey), item.icon, location.pathname === item.route);
+
+  const renderEntry = (e: SidebarEntry) => e.kind === 'module'
+    ? renderLink(e.id, e.module.route, t(e.module.titleKey), e.icon, entryIsActive(e, location.pathname))
+    : renderLink(e.id, e.route, hi ? e.hub.hi : e.hub.en, e.hub.icon, entryIsActive(e, location.pathname));
+
+  const renderLink = (key: string, route: string, label: string, Icon: React.ElementType, isActive: boolean) => {
 
     const linkContent = (
       <NavLink
-        to={item.route}
+        to={route}
         onClick={onMobileClose} // Close mobile sidebar on navigation
         className={cn(
           'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
@@ -55,20 +75,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
         )}
       >
         <Icon className={cn('h-5 w-5 flex-shrink-0', isActive && 'text-sidebar-primary')} />
-        {!collapsed && <span className="text-sm font-medium truncate">{t(item.titleKey)}</span>}
+        {!collapsed && <span className="text-sm font-medium truncate">{label}</span>}
       </NavLink>
     );
 
     if (collapsed) {
       return (
-        <Tooltip key={item.id} delayDuration={0}>
+        <Tooltip key={key} delayDuration={0}>
           <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
-          <TooltipContent side="right" className="font-medium">{t(item.titleKey)}</TooltipContent>
+          <TooltipContent side="right" className="font-medium">{label}</TooltipContent>
         </Tooltip>
       );
     }
 
-    return <div key={item.id}>{linkContent}</div>;
+    return <div key={key}>{linkContent}</div>;
   };
 
   return (
@@ -118,7 +138,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
       {/* Navigation — rendered from the capability engine (groups in domain order,
           a separator before every group except the first, heading when present). */}
       <nav className="flex flex-col h-[calc(100vh-4rem)] p-3 overflow-y-auto">
-        {groups.map((group, gi) => {
+        {mode === 'compact' && (
+          <div className="space-y-1">{entries.map(renderEntry)}</div>
+        )}
+        {mode === 'full' && groups.map((group, gi) => {
           // A headed group (not core/admin) can be collapsed, but only in the full
           // sidebar. Headless groups and icon-mode always show their items.
           const isCollapsible = !!group.headingKey && !collapsed;
@@ -155,6 +178,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
         })}
 
         <div className="flex-1" />
+
+        {/* Compact ⇄ full menu */}
+        {collapsed ? (
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={switchMode} aria-label={mode === 'compact' ? (hi ? 'पूरा menu दिखाएँ' : 'Show full menu') : (hi ? 'छोटा menu' : 'Compact menu')} className="w-full h-10 mt-4 text-sidebar-foreground/70 hover:bg-sidebar-accent">
+                {mode === 'compact' ? <List className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{mode === 'compact' ? (hi ? 'पूरा menu दिखाएँ' : 'Show full menu') : (hi ? 'छोटा menu' : 'Compact menu')}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button variant="ghost" onClick={switchMode} className="w-full justify-start gap-3 mt-4 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent">
+            {mode === 'compact' ? <List className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
+            <span>{mode === 'compact' ? (hi ? 'पूरा menu दिखाएँ' : 'Show full menu') : (hi ? 'छोटा menu दिखाएँ' : 'Show compact menu')}</span>
+          </Button>
+        )}
 
         <div className="border-t border-sidebar-border pt-4 mt-4">
           {!collapsed && user && (

@@ -5,7 +5,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useHousingData } from '@/contexts/HousingDataContext';
 import { useCapabilities } from '@/hooks/useCapabilities';
-import { useNavigation } from '@/hooks/useNavigation';
+import { useAllNavigation } from '@/hooks/useNavigation';
 import { rankItems } from '@/lib/globalSearch';
 import {
   CommandDialog,
@@ -28,7 +28,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
   const { members, vouchers, accounts, loans, assets, suppliers, customers, sales, purchases, stockItems, employees } = useData();
   const { housingFlats, maintenanceBills, complaints } = useHousingData();
   const { has } = useCapabilities();
-  const navGroups = useNavigation();
+  const navGroups = useAllNavigation();   // every page the user may open — incl. ones not listed in the menu
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const hi = language === 'hi';

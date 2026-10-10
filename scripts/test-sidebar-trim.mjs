@@ -39,7 +39,7 @@ ok(t.length === 1 && t[0].items.map(i => i.id).join() === 'dashboard', 'trim dro
 // Pages stay reachable
 const cat = read('lib/navigation/moduleCatalog.ts');
 ok(['memberApplication', 'deletedVouchers', 'stockValuation', 'myDashboard', 'voucherApproval'].every(id => cat.includes(`id: '${id}'`)), 'all five stay in the catalog (routes + gates unchanged)');
-ok(/trimSidebar\(getVisibleGroups\(ctx\)/.test(read('hooks/useNavigation.ts')), 'only the sidebar is trimmed (the engine / route guard are untouched)');
+ok(/return trimSidebar\(all,/.test(read('hooks/useNavigation.ts')) && /return getVisibleGroups\(ctx\);/.test(read('hooks/useNavigation.ts')),'only the sidebar is trimmed (the engine / route guard are untouched)');
 ok(/navigate\('\/member-application'\)/.test(read('pages/Members.tsx')), 'Members has the "आवेदन पत्र" button');
 ok(/to="\/deleted-vouchers"/.test(read('pages/Vouchers.tsx')), 'Vouchers "रद्द" view links the cancelled-voucher register');
 ok(/to="\/stock-valuation"/.test(read('pages/Inventory.tsx')) && /to="\/stock-valuation"/.test(read('pages/ClosingStockReport.tsx')), 'Inventory + Closing Stock link Stock Valuation');
