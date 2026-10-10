@@ -31,6 +31,7 @@ import { LedgerDialog } from '@/components/registers/LedgerDialog';
 import { depositLedger } from '@/lib/registers/subsidiaryLedgers';
 import { depositLedgerTable } from '@/lib/registers/ledgerTables';
 import { ledgerExcel, ledgerPdf } from '@/lib/registers/ledgerExport';
+import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 
 const TYPE_LABELS: Record<DepositType, { hi: string; en: string }> = {
   SB: { hi: 'बचत (SB)', en: 'Savings (SB)' },
@@ -67,6 +68,7 @@ const Deposits: React.FC = () => {
 
   // ── Open account dialog ────────────────────────────────────────────────────
   const [openNew, setOpenNew] = useState(false);
+  useOpenOnNew(() => setOpenNew(true), canEdit);   // ＋ नई entry → जमा खाता (same gate as the button)
   const emptyForm = { memberId: '', depositType: 'SB' as DepositType, openDate: today(), interestRate: '', openingAmount: '', installmentAmount: '', maturityDate: '', agent: '', mode: 'cash' as 'cash' | 'bank' };
   const [form, setForm] = useState(emptyForm);
   const submitNew = () => {

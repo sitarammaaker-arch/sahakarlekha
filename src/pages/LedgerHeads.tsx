@@ -26,6 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { LedgerAccount } from '@/types';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { accountCode, isUuidId } from '@/lib/accountCode';
+import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 
 type AccountType = LedgerAccount['type'];
 
@@ -81,6 +82,7 @@ const LedgerHeads: React.FC = () => {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | AccountType>('all');
   const [isAddOpen, setIsAddOpen] = useState(false);
+  useOpenOnNew(() => openAdd());   // ＋ नई entry → लेजर खाता
   const [editAccount, setEditAccount] = useState<LedgerAccount | null>(null);
   const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
   const [form, setForm] = useState(EMPTY_FORM);

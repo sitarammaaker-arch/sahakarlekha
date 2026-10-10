@@ -33,6 +33,7 @@ import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { StockItem, StockMovement, LedgerAccount } from '@/types';
+import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 
 // ─── Unit definitions ──────────────────────────────────────────────────────────
 
@@ -553,6 +554,7 @@ const Inventory: React.FC = () => {
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [isItemAddOpen, setIsItemAddOpen] = useState(false);
+  useOpenOnNew(() => openAddItem());   // ＋ नई entry → माल
   const [editItem, setEditItem] = useState<StockItem | null>(null);
   const editItemRef = useRef<StockItem | null>(null);
   const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });

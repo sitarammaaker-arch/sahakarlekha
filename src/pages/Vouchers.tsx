@@ -100,7 +100,10 @@ const Vouchers: React.FC = () => {
       setActiveTab('entry');
     }
     const t = searchParams.get('type');
-    if (t === 'journal' || t === 'receipt' || t === 'payment' || t === 'contra') setVoucherType(t);
+    if (t === 'journal' || t === 'receipt' || t === 'payment' || t === 'contra') { setVoucherType(t); setActiveTab('entry'); }
+    // Easy mode lists templates, not a type picker — bring the asked-for section (पैसा आया / पैसा गया) into view
+    // ("＋ नई entry" → रसीद / भुगतान). In expert mode the element is absent and this is a no-op.
+    if (t === 'receipt' || t === 'payment') setTimeout(() => document.getElementById(`tpl-${t}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
     // /receive-payment and /make-payment were retired into this screen's bill-wise panel (same component):
     // they land here as ?billwise=receive|pay and open "ग्राहक से वसूली" / "आपूर्तिकर्ता को भुगतान" directly.
     const bw = searchParams.get('billwise');
@@ -718,7 +721,7 @@ const Vouchers: React.FC = () => {
                 /* Template selection grid */
                 <div className="space-y-4">
                   {/* Receipt templates */}
-                  <div>
+                  <div id="tpl-receipt" className="scroll-mt-20">
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
                       <ArrowDownLeft className="h-4 w-4 text-success" />
                       {language === 'hi' ? 'पैसा आया (रसीद)' : 'Money Received (Receipt)'}
@@ -739,7 +742,7 @@ const Vouchers: React.FC = () => {
                     </div>
                   </div>
                   {/* Payment templates */}
-                  <div>
+                  <div id="tpl-payment" className="scroll-mt-20">
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
                       <ArrowUpRight className="h-4 w-4 text-destructive" />
                       {language === 'hi' ? 'पैसा गया (भुगतान)' : 'Money Paid (Payment)'}

@@ -40,6 +40,7 @@ import { sameDayCashFromCustomer } from '@/lib/directBills';
 import { toMinor, toRupees, mulMinor } from '@/lib/money';
 import { useToast } from '@/hooks/use-toast';
 import type { SaleItem, PaymentMode } from '@/types';
+import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -100,6 +101,7 @@ const SaleManagement: React.FC = () => {
   const shownSaleNo = (savedSaleId && sales.find(s => s.id === savedSaleId)?.saleNo) || savedSaleNo;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'new-sale' | 'sale-list'>('new-sale');
+  useOpenOnNew(() => setActiveTab('new-sale'));   // ＋ नई entry → बिक्री बिल
 
   // ── Sale List filter state ────────────────────────────────────────────────
   const [filterFrom, setFilterFrom] = useState('');

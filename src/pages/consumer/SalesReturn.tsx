@@ -20,6 +20,7 @@ import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { SalesReturnRefund, SalesReturn } from '@/types';
+import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 
 const TODAY = () => new Date().toISOString().split('T')[0];
 const fmt = (amount: number) =>
@@ -33,6 +34,7 @@ const SalesReturn: React.FC = () => {
   const { toast } = useToast();
 
   const [tab, setTab] = useState('new');
+  useOpenOnNew(() => setTab('new'));   // ＋ नई entry → बिक्री वापसी
   const [editingId, setEditingId] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [selectedSaleId, setSelectedSaleId] = useState('');
