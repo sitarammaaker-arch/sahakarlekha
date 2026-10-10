@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { toUqc, unitLabel, unitOptions } from '@/lib/units';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { computeStockMap, computeStockValue, computeStockCostRate } from '@/lib/stockUtils';
@@ -16,7 +17,7 @@ import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import { HsnPicker } from '@/components/HsnPicker';
 import type { EntityLink } from '@/types';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
@@ -34,16 +35,10 @@ import type { StockItem, StockMovement, LedgerAccount } from '@/types';
 
 // ─── Unit definitions ──────────────────────────────────────────────────────────
 
-type UnitKey = 'kg' | 'quintal' | 'liter' | 'piece' | 'bag' | 'other';
-
-const UNITS: { value: UnitKey; label: string; labelHi: string }[] = [
-  { value: 'kg', label: 'Kilogram (kg)', labelHi: 'किलोग्राम (kg)' },
-  { value: 'quintal', label: 'Quintal', labelHi: 'क्विंटल' },
-  { value: 'liter', label: 'Liter', labelHi: 'लीटर' },
-  { value: 'piece', label: 'Piece', labelHi: 'नग' },
-  { value: 'bag', label: 'Bag', labelHi: 'बोरी' },
-  { value: 'other', label: 'Other', labelHi: 'अन्य' },
-];
+// Units = the GST UQC codes (lib/units, sourced from the IRP master). A unit is stored as its code ('KGS'); an old
+// item's 'kg' / an import's 'M.T' is read through toUqc, so nothing stored has to change.
+type UnitKey = string;
+const UNIT_GROUPS = unitOptions();
 
 // ─── Movement type badge class ──────────────────────────────────────────────────
 
@@ -58,7 +53,7 @@ const MOVEMENT_BADGE: Record<StockMovement['type'], string> = {
 const EMPTY_ITEM_FORM = {
   name: '',
   nameHi: '',
-  unit: 'kg' as UnitKey,
+  unit: 'KGS' as UnitKey,
   openingStock: '',
   purchaseRate: '',
   saleRate: '',
@@ -188,12 +183,15 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
         <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
-          {UNITS.map(u => (
-            <SelectItem key={u.value} value={u.value}>
-              {hi ? u.labelHi : u.label}
-            </SelectItem>
-          ))}
+        <SelectContent className="max-h-80">
+          <SelectGroup>
+            <SelectLabel>{hi ? 'आम इकाइयाँ' : 'Common units'}</SelectLabel>
+            {UNIT_GROUPS.common.map(u => <SelectItem key={u.code} value={u.code}>{hi ? `${u.hi} (${u.code})` : `${u.en} (${u.code})`}</SelectItem>)}
+          </SelectGroup>
+          <SelectGroup>
+            <SelectLabel>{hi ? 'सभी GST इकाइयाँ (UQC)' : 'All GST units (UQC)'}</SelectLabel>
+            {UNIT_GROUPS.rest.map(u => <SelectItem key={u.code} value={u.code}>{hi ? `${u.hi} (${u.code})` : `${u.en} (${u.code})`}</SelectItem>)}
+          </SelectGroup>
         </SelectContent>
       </Select>
     </div>
@@ -696,7 +694,7 @@ const Inventory: React.FC = () => {
       (item.nameHi && item.nameHi.includes(itemSearch)) ||
       item.itemCode.toLowerCase().includes(itemSearch.toLowerCase()) ||
       (item.barcodeValue && item.barcodeValue.includes(itemSearch));
-    const matchUnit = unitFilter === 'all' || item.unit === unitFilter;
+    const matchUnit = unitFilter === 'all' || toUqc(item.unit) === unitFilter;
     const matchActive = !showActiveOnly || item.isActive;
     return matchSearch && matchUnit && matchActive;
   });
@@ -710,10 +708,7 @@ const Inventory: React.FC = () => {
   });
 
   // Helpers
-  const getUnitLabel = (unit: string) => {
-    const u = UNITS.find(x => x.value === unit);
-    return u ? (hi ? u.labelHi : u.label) : unit;
-  };
+  const getUnitLabel = (unit: string) => unitLabel(unit, hi);
 
   const getMovTypeLabel = (type: StockMovement['type']) => {
     if (type === 'purchase') return hi ? 'खरीद' : 'Purchase';
@@ -740,7 +735,7 @@ const Inventory: React.FC = () => {
     setItemFormWithRef({
       name: item.name,
       nameHi: item.nameHi || '',
-      unit: (item.unit as UnitKey) || 'kg',
+      unit: item.unit ? toUqc(item.unit) : 'KGS',   // an old 'kg' opens as KGS and is saved as the code
       openingStock: String(item.openingStock ?? ''),
       purchaseRate: String(item.purchaseRate ?? ''),
       saleRate: String(item.saleRate ?? ''),
@@ -1015,10 +1010,8 @@ const Inventory: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{hi ? 'सभी इकाइयां' : 'All Units'}</SelectItem>
-                    {UNITS.map(u => (
-                      <SelectItem key={u.value} value={u.value}>
-                        {hi ? u.labelHi : u.label}
-                      </SelectItem>
+                    {[...UNIT_GROUPS.common, ...UNIT_GROUPS.rest].map(u => (
+                      <SelectItem key={u.code} value={u.code}>{hi ? `${u.hi} (${u.code})` : `${u.en} (${u.code})`}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

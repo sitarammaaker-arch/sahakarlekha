@@ -404,7 +404,8 @@
     "test:rule2-batch1": "node scripts/test-rule2-batch1.mjs",
     "test:duplicate-pages-batch2": "node scripts/test-duplicate-pages-batch2.mjs",
     "test:rule2-batch3": "node scripts/test-rule2-batch3.mjs",
-    "test:appropriation-wizard": "node scripts/test-appropriation-wizard.mjs"
+    "test:appropriation-wizard": "node scripts/test-appropriation-wizard.mjs",
+    "test:gst-uqc-units": "node scripts/test-gst-uqc-units.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
