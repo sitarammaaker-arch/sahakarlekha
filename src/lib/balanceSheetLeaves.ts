@@ -51,3 +51,17 @@ export function balanceSheetLeaves(
   const totalLiabilities = capLiabLeaves.reduce((s, b) => s + (-b.netBalance), 0) + opts.netProfit;
   return { assetLeaves, capLiabLeaves, unpostedStock, totalAssets, totalLiabilities };
 }
+
+/** THE "Balance Sheet tallied" test — same sides + closing-stock rule as the Balance Sheet page, 1-paisa
+ *  tolerance. Shared by the Dashboard and the role dashboard (2026-10-09: the role dashboard's card read a
+ *  trial-balance Dr = Cr over all dates with a ₹1 tolerance, so the two could disagree — RULE 2). */
+export function balanceSheetTallied(
+  trialBalance: readonly AccountBalance[],
+  opts: { closingStockPosted: boolean; physicalClosingStock: number; netProfit: number },
+): boolean {
+  const { totalAssets, totalLiabilities } = balanceSheetLeaves(trialBalance, opts);
+  return Math.abs(totalAssets - totalLiabilities) < 0.01;
+}
+
+/** The FY-end date the dashboards tally at ("2026-27" → "2027-03-31") — keeps a voucher mis-dated into the next FY out. */
+export const fyEndDate = (financialYear: string): string => `20${financialYear.split('-')[1]}-03-31`;

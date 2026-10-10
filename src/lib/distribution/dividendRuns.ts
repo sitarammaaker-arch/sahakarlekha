@@ -111,10 +111,15 @@ export const ACC_DIVIDEND = '1211';
 
 type VoucherLike = Parameters<typeof getVoucherLines>[0];
 
+/** A voucher that still stands for "already appropriated": not cancelled and not REJECTED. A pending one counts
+ *  (it is on its way — counting it stops a second posting while it waits for approval). */
+const standsForPosting = (v: VoucherLike): boolean =>
+  !(v as { isDeleted?: boolean }).isDeleted && (v as { approvalStatus?: string }).approvalStatus !== 'rejected';
+
 /** The live appropriation voucher of an FY: Dr `debitId` / Cr `creditId`, narration names the FY. */
 export function postedAppropriation<V extends VoucherLike>(vouchers: ReadonlyArray<V>, debitId: string, creditId: string, fy: string): V | undefined {
   return vouchers.find((v) =>
-    !v.isDeleted
+    standsForPosting(v)
     && getVoucherLines(v).some((l) => l.accountId === debitId && l.type === 'Dr')
     && getVoucherLines(v).some((l) => l.accountId === creditId && l.type === 'Cr')
     && (v.narration || '').includes(fy));
@@ -179,4 +184,29 @@ export function memberDividendHistory(
     }
   }
   return rows.sort((a, b) => b.fyLabel.localeCompare(a.fyLabel));
+}
+
+// ── Surplus appropriation to the FUNDS (Reserve Fund page + Profit Distribution page — ONE rule, RULE 2) ──
+// 2026-10-09: both pages carried their own copy of "which accounts are appropriable funds" and "how much this
+// FY already went to them"; the Reserve Fund page also missed rejected vouchers.
+
+/** Appropriable funds: credit-nature ledgers under Reserves & Surplus (1200), except the Net Surplus source 1208.
+ *  NOT the Fund Register's `subtype: 'reserve'` set — that is "funds with a fund statement" (incl. housing
+ *  sinking/repair funds), a different question (prod 2026-10-09: 50 accounts differ). */
+export function appropriationFunds<A extends { id: string; parentId?: string; isGroup?: boolean; openingBalanceType?: string }>(accounts: ReadonlyArray<A>): A[] {
+  return accounts
+    .filter((a) => a.parentId === '1200' && !a.isGroup && a.id !== ACC_NET_SURPLUS && a.openingBalanceType === 'credit')
+    .sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/** Total of this FY's surplus already appropriated to the given funds (Dr 1208 / Cr fund, narration names the FY). */
+export function appropriatedToFunds(vouchers: ReadonlyArray<VoucherLike>, fundIds: ReadonlyArray<string>, fy: string): number {
+  let minor = 0;
+  for (const v of vouchers) {
+    if (!standsForPosting(v) || !((v as { narration?: string }).narration || '').includes(fy)) continue;
+    const lines = getVoucherLines(v);
+    if (!lines.some((l) => l.accountId === ACC_NET_SURPLUS && l.type === 'Dr')) continue;
+    for (const l of lines) if (l.type === 'Cr' && fundIds.includes(l.accountId)) minor += Math.round(l.amount * 100);
+  }
+  return minor / 100;
 }

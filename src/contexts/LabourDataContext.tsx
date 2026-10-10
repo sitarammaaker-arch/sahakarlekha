@@ -21,6 +21,7 @@ import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabasePaging';
 import { resolveJurisdiction } from '@/lib/jurisdiction';
 import * as storage from '@/lib/storage';
+import { resolveStatutory, type ParamSegment, type StatutoryParamKey } from '@/lib/rules/epfEsi';
 import type { Worker, Department, DepartmentBill, DeptBillType, WorkerAdvance, PfEsiRun, LedgerAccount, Voucher } from '@/types';
 
 // EPF/ESI rates & ceilings (statutory defaults; editable per run on the PF/ESI page).
@@ -29,17 +30,37 @@ import type { Worker, Department, DepartmentBill, DeptBillType, WorkerAdvance, P
 export interface PfEsiConfig {
   epfRate: number; epfCeiling: number; epsRate: number; edliRate: number; adminRate: number;
   esiEmpRate: number; esiErRate: number; esiCeiling: number;
+  /** The month's periods, each on one PF ceiling (from the dated rules). When the ceiling changes INSIDE the month
+   *  (EPFO, 17 Sep 2026) the PF wage is day-weighted per period — the Salary page's rule. Absent / 1 segment ⇒ epfCeiling. */
+  epfCeilingSegments?: ParamSegment[];
+  /** Rule keys whose dated row is not yet verified against the notification — the page says so. */
+  unverified?: StatutoryParamKey[];
 }
+/** Fallbacks ONLY for what the dated table (lib/rules/epfEsi) does not hold: EPS / EDLI / admin. */
 export const PF_ESI_DEFAULTS: PfEsiConfig = {
   epfRate: 12, epfCeiling: 15000, epsRate: 8.33, edliRate: 0.5, adminRate: 0.5,
   esiEmpRate: 0.75, esiErRate: 3.25, esiCeiling: 21000,
 };
+/**
+ * The labour PF/ESI basis for a wage month ('YYYY-MM') from the SAME dated rules as the Salary page and Payroll
+ * (lib/rules/epfEsi — RULE 2, 2026-10-09). The ceiling, rates and ESI limit were hard-coded here (₹15,000), so labour
+ * ignored a dated change the Salary page applied. EPS / EDLI / admin are not in the table and stay as before.
+ */
+export function pfEsiDefaultsFor(period: string): PfEsiConfig {
+  const law = resolveStatutory(`${period}-01`);
+  return {
+    ...PF_ESI_DEFAULTS,
+    epfRate: law.pfEmployeeRate, epfCeiling: law.pfWageCeiling,
+    esiEmpRate: law.esiEmployeeRate, esiErRate: law.esiEmployerRate, esiCeiling: law.esiWageLimit,
+    epfCeilingSegments: law.pfCeilingSegments, unverified: law.unverified,
+  };
+}
 export interface PfEsiComputation {
   grossWages: number;
   epfEmployee: number; epfEmployer: number;       // employer EPF = 12% (incl. EPS)
   epfEps: number; epfAdminEdli: number;           // EPS portion (of the 12%) + EDLI+admin (the extra 1%)
   esiEmployee: number; esiEmployer: number;
-  perWorker: { workerId: string; wage: number; epfEmp: number; epfEr: number; eps: number; edli: number; admin: number; esiEmp: number; esiEr: number }[];
+  perWorker: { workerId: string; wage: number; epfWage: number; epfEmp: number; epfEr: number; eps: number; edli: number; admin: number; esiEmp: number; esiEr: number }[];
 }
 
 interface LabourDataContextValue {
@@ -477,7 +498,14 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const byWorker = new Map<string, number>();
     rows.forEach(m => { byWorker.set(m.memberId, (byWorker.get(m.memberId) || 0) + (m.daysWorked || 0) * (m.dailyWage || 0)); });
     const perWorker = Array.from(byWorker.entries()).map(([workerId, wage]) => {
-      const epfBase = Math.min(wage, cfg.epfCeiling);
+      // PF wage: one ceiling, or — when the ceiling changes inside the month and the user did not override it —
+      // day-weighted per period, exactly like computeStatutory (Salary).
+      const segs = cfg.epfCeilingSegments ?? [];
+      const segDays = segs.reduce((n, g) => n + g.days, 0);
+      const useSegs = segs.length > 1 && segDays > 0 && cfg.epfCeiling === segs[0].value;
+      const epfBase = useSegs
+        ? +(segs.reduce((s, g) => s + Math.min(wage, g.value) * g.days, 0) / segDays).toFixed(2)
+        : Math.min(wage, cfg.epfCeiling);
       const epfEmp = +(epfBase * cfg.epfRate / 100).toFixed(2);    // employee 12%
       const epfEr = epfEmp;                                        // employer EPF 12% = EPF 3.67% (A/c1) + EPS 8.33% (A/c10)
       const eps = +(epfBase * cfg.epsRate / 100).toFixed(2);       // EPS portion of the 12% (A/c10)
@@ -486,7 +514,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       const esiOn = wage <= cfg.esiCeiling ? wage : 0;             // ESI not applicable above the ceiling
       const esiEmp = Math.ceil(esiOn * cfg.esiEmpRate / 100);      // ESIC rule: round up to next rupee per employee
       const esiEr = Math.ceil(esiOn * cfg.esiErRate / 100);
-      return { workerId, wage, epfEmp, epfEr, eps, edli, admin, esiEmp, esiEr };
+      return { workerId, wage, epfWage: epfBase, epfEmp, epfEr, eps, edli, admin, esiEmp, esiEr };
     });
     const sum = (f: (w: PfEsiComputation['perWorker'][number]) => number) => +perWorker.reduce((s, w) => s + f(w), 0).toFixed(2);
     return {

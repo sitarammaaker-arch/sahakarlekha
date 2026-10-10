@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { appropriationFunds, postedAppropriation } from '@/lib/distribution/dividendRuns';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -15,7 +16,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Shield, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
-import { getVoucherLines } from '@/lib/voucherUtils';
 import { appropriationWaterfall } from '@/lib/appropriation';
 import { ucasReserveMinPct } from '@/lib/rules/ucas';
 import { statutoryLimits, appropriationIssues, hasVerifiedLimits, ACC_BAD_DEBT } from '@/lib/rules/statutoryLimits';
@@ -26,7 +26,6 @@ const fmt = (amount: number) =>
 
 // Net Surplus / (Deficit) — Dr when appropriating to any fund (Cr).
 const ACC_NET_SURPLUS = '1208';
-const RESERVES_GROUP  = '1200'; // parent group "Reserves & Surplus"
 
 // Suggested default rates (editable — appropriation is OPTIONAL). A society may
 // set any percentage or a flat amount per fund, or skip a fund entirely.
@@ -51,13 +50,7 @@ const ReserveFund: React.FC = () => {
 
   // ── All appropriable funds = credit accounts under "Reserves & Surplus" ──────
   // (excludes the Net Surplus source 1208 and the debit-side Dividend/Patronage).
-  const fundAccounts = useMemo(() =>
-    accounts
-      .filter(a => a.parentId === RESERVES_GROUP && !a.isGroup
-        && a.id !== ACC_NET_SURPLUS && a.openingBalanceType === 'credit')
-      .sort((a, b) => a.id.localeCompare(b.id)),
-    [accounts]
-  );
+  const fundAccounts = useMemo(() => appropriationFunds(accounts), [accounts]);   // shared with Profit Distribution
 
   const fundName = (a: { name: string; nameHi?: string }) => (hi && a.nameHi) ? (a.nameHi || a.name) : a.name;
   // The society's statutory limits (jurisdiction from its state; verified figures only are law).
@@ -86,12 +79,8 @@ const ReserveFund: React.FC = () => {
   const postedMap = useMemo(() => {
     const m: Record<string, (typeof vouchers)[number] | undefined> = {};
     fundAccounts.forEach(f => {
-      m[f.id] = vouchers.find(v =>
-        !v.isDeleted &&
-        getVoucherLines(v).some(l => l.accountId === ACC_NET_SURPLUS && l.type === 'Dr') &&
-        getVoucherLines(v).some(l => l.accountId === f.id && l.type === 'Cr') &&
-        v.narration.includes(fy)
-      );
+      // THE shared rule (lib/distribution/dividendRuns): not cancelled, not rejected (pending counts — no double post).
+      m[f.id] = postedAppropriation(vouchers, ACC_NET_SURPLUS, f.id, fy);
     });
     return m;
   }, [vouchers, fundAccounts, fy]);

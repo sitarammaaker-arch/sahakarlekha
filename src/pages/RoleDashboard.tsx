@@ -5,6 +5,7 @@
  * computed from existing getters. Additive — the general Dashboard is untouched.
  */
 import React, { useMemo } from 'react';
+import { balanceSheetTallied, fyEndDate } from '@/lib/balanceSheetLeaves';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
@@ -28,7 +29,7 @@ const RoleDashboard: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
   const {
-    getProfitLoss, getTrialBalance, getAccountBalance, getShareCapitalReconciliation,
+    getProfitLoss, getTrialBalance, getTradingAccount, getAccountBalance, getShareCapitalReconciliation,
     members, loans, vouchers, auditObjections, employees, society, accounts,
     stockItems, purchases, reconciledStockMovements,
   } = useData();
@@ -40,10 +41,11 @@ const RoleDashboard: React.FC = () => {
 
   const data = useMemo(() => {
     const netProfit = getProfitLoss().netProfit;
-    const tb = getTrialBalance();
-    const tbDr = tb.reduce((s, r) => s + (r.totalDebit || 0), 0);
-    const tbCr = tb.reduce((s, r) => s + (r.totalCredit || 0), 0);
-    const tbBalanced = Math.abs(tbDr - tbCr) < 1;
+    // The card is labelled "Balance Sheet": the SAME tally as the Dashboard / Balance Sheet page (at FY end,
+    // 1 paisa) — it was a trial-balance Dr = Cr over all dates with a ₹1 tolerance (RULE 2).
+    const fyEnd = fyEndDate(society.financialYear);
+    const { physicalClosingStock, closingStockPosted } = getTradingAccount(fyEnd);
+    const tbBalanced = balanceSheetTallied(getTrialBalance(fyEnd), { closingStockPosted, physicalClosingStock, netProfit });
     const activeMembers = members.filter(m => (!m.approvalStatus || m.approvalStatus === 'approved') && m.status === 'active').length;
     // Same scope + formula as the Loan Register / Dashboard (RULE 2): non-cleared loans, shared loanOutstanding.
     const loanOutstanding = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + loanOutstandingOf(l), 0);
@@ -68,7 +70,7 @@ const RoleDashboard: React.FC = () => {
     const outOfStock = liveItems.filter(it => (stockQtyMap[it.id] ?? 0) <= 0).length;
     const purchasesCount = (purchases || []).filter(p => !p.isDeleted).length;
     return { netProfit, tbBalanced, activeMembers, loanOutstanding, overdueLoans, pendingVouchers, rejectedVouchers, pendingObjections, rec, cash, bank, complianceDue, stockValue, outOfStock, purchasesCount };
-  }, [getProfitLoss, getTrialBalance, getAccountBalance, getShareCapitalReconciliation, members, loans, vouchers, auditObjections, employees, society, accounts, stockItems, purchases, reconciledStockMovements]);
+  }, [getProfitLoss, getTrialBalance, getTradingAccount, getAccountBalance, getShareCapitalReconciliation, members, loans, vouchers, auditObjections, employees, society, accounts, stockItems, purchases, reconciledStockMovements]);
 
   const widget = (id: WidgetId): { label: string; value: string; sub?: string; tone: Tone; route: string } => {
     switch (id) {

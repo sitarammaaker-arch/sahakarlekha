@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useLabourData, PF_ESI_DEFAULTS, type PfEsiConfig } from '@/contexts/LabourDataContext';
+import { useEffect, useMemo, useState } from 'react';
+import { useLabourData, pfEsiDefaultsFor, type PfEsiConfig } from '@/contexts/LabourDataContext';
 import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,7 +25,9 @@ export default function PfEsi() {
   const bankAccounts = accounts.filter(a => bankIds.includes(a.id));
 
   const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
-  const [cfg, setCfg] = useState<PfEsiConfig>(PF_ESI_DEFAULTS);
+  // Rates for the chosen wage month from the dated rules (same as Salary / Payroll); still editable for a run.
+  const [cfg, setCfg] = useState<PfEsiConfig>(() => pfEsiDefaultsFor(new Date().toISOString().slice(0, 7)));
+  useEffect(() => { setCfg(pfEsiDefaultsFor(period)); }, [period]);
   const setRate = (k: keyof PfEsiConfig, v: string) => setCfg(c => ({ ...c, [k]: Number(v) || 0 }));
 
   const comp = useMemo(() => computePfEsi(period, cfg), [computePfEsi, period, cfg]);
@@ -83,7 +85,7 @@ export default function PfEsi() {
     const rows = comp.perWorker.map(w => ({ w, wk: workers.find(x => x.id === w.workerId) })).filter(r => r.wk?.uan);
     if (rows.length === 0) { toast({ title: hi ? 'कोई UAN नहीं' : 'No UAN found', description: hi ? 'श्रमिक मास्टर में UAN भरें, तभी ECR बनेगी।' : 'Add UAN in Worker Master to generate the ECR.', variant: 'destructive', duration: 9000 }); return; }
     const lines = rows.map(({ w, wk }) => {
-      const epfBase = Math.round(Math.min(w.wage, cfg.epfCeiling));
+      const epfBase = Math.round(w.epfWage);   // the SAME PF wage the run posts (day-weighted when the ceiling changed in-month)
       return [wk!.uan, wk!.name, Math.round(w.wage), epfBase, epfBase, epfBase, Math.round(w.epfEmp), Math.round(w.eps), Math.round(w.epfEr - w.eps), 0, 0].join('#~#');
     });
     triggerDownload(`ECR_${period}.txt`, lines.join('\n'), 'text/plain;charset=utf-8');
@@ -119,6 +121,19 @@ export default function PfEsi() {
       <Card>
         <CardHeader><CardTitle className="text-base">{hi ? 'मासिक गणना' : 'Monthly Computation'}</CardTitle></CardHeader>
         <CardContent className="space-y-4">
+          {/* Rates come from the dated rule table shared with Salary / Payroll (lib/rules/epfEsi). */}
+          <p className="text-xs text-muted-foreground">
+            {hi ? 'दरें व सीमाएँ चुने गए महीने की तारीख़ वाली नियम-तालिका से (वेतन पेज जैसी)। ' : 'Rates and ceilings come from the dated rule table for the chosen month (as on the Salary page). '}
+            {(cfg.epfCeilingSegments?.length ?? 0) > 1 && (hi
+              ? `इस महीने PF सीमा बीच में बदली — PF वेतन दिनों के हिसाब से गिना गया (${cfg.epfCeilingSegments!.map(g => `₹${g.value.toLocaleString('en-IN')} × ${g.days} दिन`).join(', ')})।`
+              : `The PF ceiling changed inside this month — PF wage is day-weighted (${cfg.epfCeilingSegments!.map(g => `₹${g.value.toLocaleString('en-IN')} × ${g.days} days`).join(', ')}).`)}
+          </p>
+          {(cfg.unverified?.length ?? 0) > 0 && (
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-2">
+              {hi ? '⚠️ कुछ दरें अभी अधिसूचना के मूल पाठ से पुष्ट नहीं हैं — CA से जाँच लें: ' : '⚠️ Some rates are not yet verified against the notification text — check with your CA: '}
+              {cfg.unverified!.join(', ')}
+            </p>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5"><Label>{hi ? 'महीना' : 'Month'}</Label><Input type="month" value={period} onChange={e => setPeriod(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>{hi ? 'EPF दर %' : 'EPF rate %'}</Label><Input type="number" value={cfg.epfRate} onChange={e => setRate('epfRate', e.target.value)} /></div>

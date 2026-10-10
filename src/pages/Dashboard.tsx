@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fmtDate } from '@/lib/dateUtils';
 import { Badge } from '@/components/ui/badge';
 import { getVoucherLines } from '@/lib/voucherUtils';
-import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
+import { balanceSheetTallied, fyEndDate } from '@/lib/balanceSheetLeaves';
 import { loanOutstanding } from '@/lib/memberSnapshot';
 import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
 import { todayStr } from '@/lib/dateUtils';
@@ -74,7 +74,7 @@ const Dashboard: React.FC = () => {
     // Bound the tally to the FY end so it matches netProfit / getTradingAccount
     // (which default to the FY end) — otherwise a voucher mis-dated into the next
     // FY would make the Balance Sheet tally falsely fail.
-    const fyEnd = `20${fy.split('-')[1]}-03-31`;
+    const fyEnd = fyEndDate(fy);
     const tb = getTrialBalance(fyEnd);
     const { physicalClosingStock, closingStockPosted } = getTradingAccount(fyEnd);
 
@@ -88,10 +88,8 @@ const Dashboard: React.FC = () => {
     // 2. Balance Sheet tally
     // RULE 2: the SAME sides + closing-stock rule as the Balance Sheet page (balanceSheetLeaves) —
     // a raw-ledger tally here disagreed with the page whenever stock was valued from inventory.
-    const { totalAssets, totalLiabilities: totalLiab } = balanceSheetLeaves(tb, { closingStockPosted, physicalClosingStock, netProfit });
-    // Audit (High): tighten the tolerance from Rs.1 to 1 paisa — a sub-rupee gap is
-    // a real imbalance now that Dr=Cr is enforced at save and the figures are exact.
-    const bsTallied = Math.abs(totalAssets - totalLiab) < 0.01;
+    // Audit (High): 1-paisa tolerance — shared with the role dashboard (balanceSheetTallied).
+    const bsTallied = balanceSheetTallied(tb, { closingStockPosted, physicalClosingStock, netProfit });
 
     // 3. Closing stock — auto-valued from inventory at report time (no journal needed)
     const stockOk = true;
@@ -224,7 +222,8 @@ const Dashboard: React.FC = () => {
   const activeLoans = loans.filter(l => effectiveLoanStatus(l, todayStr()) === 'active');
   const overdueLoans = loans.filter(l => effectiveLoanStatus(l, todayStr()) === 'overdue');
   const clearedLoans = loans.filter(l => l.status === 'cleared');
-  const totalOutstanding = loans.reduce((s, l) => s + loanOutstanding(l), 0);
+  // Non-cleared loans only — the Loan Register / role dashboard / ceiling-check scope (RULE 2).
+  const totalOutstanding = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + loanOutstanding(l), 0);
 
   const typeBadgeClass = (type: string) => {
     if (type === 'receipt') return 'bg-success/20 text-success border-success/30';
