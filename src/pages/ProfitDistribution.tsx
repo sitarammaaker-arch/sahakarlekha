@@ -55,7 +55,9 @@ const usePosted = (
 ) => postedAppropriation(vouchers, debitId, creditId, fy);
 
 // ────────────────────────────────────────────────────────────────────────────
-const ProfitDistribution: React.FC = () => {
+/** The dividend / bonus / payment steps — the whole page body, also rendered as steps 3–4 of the लाभ विनियोजन
+ *  wizard (`embedded` hides the page title and the flag-gated statutory panel). One component, one posting path. */
+export const ProfitDistributionPanel: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { language } = useLanguage();
   const { user } = useAuth();
   const { vouchers, accounts, members, society, getProfitLoss, addVoucher, getShareCapitalReconciliation, getAccountBalance } = useData();
@@ -396,9 +398,10 @@ const ProfitDistribution: React.FC = () => {
 
   // ────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="p-4 space-y-4">
+    <div className={embedded ? 'space-y-4' : 'p-4 space-y-4'}>
       {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
+        {!embedded && (<>
         <div className="p-2 bg-yellow-100 rounded-lg">
           <Coins className="h-6 w-6 text-yellow-700" />
         </div>
@@ -408,6 +411,7 @@ const ProfitDistribution: React.FC = () => {
           </h1>
           <p className="text-sm text-gray-500">{society.name} · {hi ? 'वित्तीय वर्ष' : 'FY'} {fy}</p>
         </div>
+        </>)}
         <div className="ml-auto flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadPDF}>
             <Download className="h-4 w-4" />
@@ -425,7 +429,7 @@ const ProfitDistribution: React.FC = () => {
       </div>
 
       {/* T-20: statutory appropriation (UCAS) — renders only when the per-tenant flag is on (additive) */}
-      <StatutoryAppropriationPanel />
+      {!embedded && <StatutoryAppropriationPanel />}
 
       {/* ECR-05: block dividend distribution until share capital ties to the control ledger */}
       {!shareRecon.reconciled && (
@@ -839,5 +843,7 @@ const Row: React.FC<{ label: string; value: string; valueClass?: string }> = ({ 
     <span className={valueClass || 'font-medium'}>{value}</span>
   </div>
 );
+
+const ProfitDistribution: React.FC = () => <ProfitDistributionPanel />;
 
 export default ProfitDistribution;

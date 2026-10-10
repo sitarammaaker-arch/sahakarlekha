@@ -168,6 +168,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   // internalAuditor/externalCA already reach them through the registers domain.
   { id: 'auditCertificate',     titleKey: 'auditCertificate',     icon: FileCheck,    route: '/audit-certificate',     domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant', 'auditor'], order: 9 },
   { id: 'auditSchedules',       titleKey: 'auditSchedules',       icon: ClipboardList, route: '/audit-schedules',      domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant', 'auditor'], order: 10 },
+  { id: 'surplusAppropriation', titleKey: 'surplusAppropriation', icon: Coins,        route: '/surplus-appropriation', domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 10.9 },
   { id: 'reserveFund',          titleKey: 'reserveFund',          icon: Shield,       route: '/reserve-fund',          domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 11 },
   { id: 'fundRegister',         titleKey: 'fundRegister',         icon: PiggyBank,    route: '/fund-register',         domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant', 'auditor'], order: 11.5 },
   { id: 'profitDistribution',   titleKey: 'profitDistribution',   icon: Coins,        route: '/profit-distribution',   domain: 'registers', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 12 },

@@ -36,7 +36,9 @@ const DEFAULT_EDUCATION_PCT = 1;  // Education Fund 1203
 
 type Mode = 'pct' | 'amt';
 
-const ReserveFund: React.FC = () => {
+/** The Fund Appropriation step — the whole page body, also rendered as step 2 of the लाभ विनियोजन wizard
+ *  (`embedded` hides the page's own title). One component, one posting path (2026-10-10). */
+export const FundAppropriationPanel: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { language } = useLanguage();
   const { user } = useAuth();
   const { vouchers, accounts, society, getProfitLoss, addVoucher, getAccountBalance } = useData();
@@ -155,9 +157,10 @@ const ReserveFund: React.FC = () => {
   };
 
   return (
-    <div className="p-4 space-y-4">
+    <div className={embedded ? 'space-y-4' : 'p-4 space-y-4'}>
       {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
+        {!embedded && (<>
         <div className="p-2 bg-green-100 rounded-lg">
           <Shield className="h-6 w-6 text-green-700" />
         </div>
@@ -167,6 +170,7 @@ const ReserveFund: React.FC = () => {
           </h1>
           <p className="text-sm text-gray-500">{society.name} · {hi ? 'वित्तीय वर्ष' : 'FY'} {fy}</p>
         </div>
+        </>)}
         {postedVouchers.length > 0 && pendingFunds.length === 0 && (
           <Badge className="ml-auto bg-green-100 text-green-800 border-green-300">
             <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -417,5 +421,7 @@ const ReserveFund: React.FC = () => {
     </div>
   );
 };
+
+const ReserveFund: React.FC = () => <FundAppropriationPanel />;
 
 export default ReserveFund;
