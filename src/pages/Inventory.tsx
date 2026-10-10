@@ -24,7 +24,7 @@ import { Switch } from '@/components/ui/switch';
 import { Boxes, Plus, Pencil, Trash2, Search, PackageMinus, PackagePlus, ScanLine, X, FileSpreadsheet, Download, RotateCcw, BookOpen } from 'lucide-react';
 import { LedgerDialog } from '@/components/registers/LedgerDialog';
 import { stockRegister } from '@/lib/registers/subsidiaryLedgers';
-import { stockRegisterTable } from '@/lib/registers/ledgerTables';
+import { stockRegisterTable, stockSummaryTable } from '@/lib/registers/ledgerTables';
 import { ledgerExcel, ledgerPdf } from '@/lib/registers/ledgerExport';
 import EmptyState from '@/components/EmptyState';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
@@ -511,7 +511,10 @@ const Inventory: React.FC = () => {
   const registerTableOf = (it: StockItem) => stockRegisterTable(stockRegister(it, reconciledStockMovements), { itemCode: it.itemCode, name: it.name, unit: it.unit });
   const [registerItem, setRegisterItem] = useState<StockItem | null>(null);
   const registerTable = registerItem ? registerTableOf(registerItem) : null;
-  const allRegisters = () => stockItems.filter(i => i.isActive).map(registerTableOf);
+  // "All items" export = ONE summary table (one row per item, rate + value) — not one page per item.
+  const allItemsSummary = () => [stockSummaryTable(
+    stockItems.filter(i => i.isActive).map(it => ({ itemCode: it.itemCode, name: it.name, unit: it.unit, register: stockRegister(it, reconciledStockMovements) })),
+    u => toUqc(u))];
 
   // Sales income accounts (parent 4100) and Purchases/Direct-expense accounts (parent 5100).
   // Shown in the per-item A/c dropdowns so user can route each stock item to its own ledger
@@ -1058,8 +1061,8 @@ const Inventory: React.FC = () => {
                   </Button>
                   {stockItems.length > 0 && (
                     <>
-                      <Button size="sm" variant="outline" className="gap-1" onClick={() => ledgerPdf(society, allRegisters(), 'STR', 'Stock_Register')}><BookOpen className="h-4 w-4" />{hi ? 'स्टॉक रजिस्टर PDF' : 'Stock Register PDF'}</Button>
-                      <Button size="sm" variant="outline" className="gap-1" onClick={() => ledgerExcel(allRegisters(), 'Stock_Register', 'Stock Register')}><FileSpreadsheet className="h-4 w-4" />{hi ? 'स्टॉक रजिस्टर Excel' : 'Stock Register Excel'}</Button>
+                      <Button size="sm" variant="outline" className="gap-1" onClick={() => ledgerPdf(society, allItemsSummary(), 'STR', 'Stock_Register')}><BookOpen className="h-4 w-4" />{hi ? 'स्टॉक रजिस्टर PDF' : 'Stock Register PDF'}</Button>
+                      <Button size="sm" variant="outline" className="gap-1" onClick={() => ledgerExcel(allItemsSummary(), 'Stock_Register', 'Stock Register')}><FileSpreadsheet className="h-4 w-4" />{hi ? 'स्टॉक रजिस्टर Excel' : 'Stock Register Excel'}</Button>
                     </>
                   )}
                 </div>

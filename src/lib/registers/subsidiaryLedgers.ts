@@ -12,6 +12,7 @@
  * running balance), it says so via `mismatch` — never papered over.
  */
 import type { DepositTransaction, StockMovement, Voucher, VoucherLine } from '@/types';
+import { computeStockCostRate } from '@/lib/stockUtils';
 import type { LoanInterestAccrual } from '@/lib/loans/interestAccrual';
 import { ACC_INTEREST_RECEIVABLE, REF_LOAN_REPAYMENT } from '@/lib/loans/interestAccrual';
 
@@ -134,7 +135,13 @@ export interface StockRegisterRow {
   date: string; particulars: string; particularsHi: string; reference: string;
   inward: number; outward: number; balance: number; rate: number; amount: number;
 }
-export interface StockRegister { opening: number; rows: StockRegisterRow[]; totalIn: number; totalOut: number; closing: number; wentNegative: boolean }
+export interface StockRegister {
+  opening: number; rows: StockRegisterRow[]; totalIn: number; totalOut: number; closing: number; wentNegative: boolean;
+  /** Opening valued at the item's genesis rate (purchaseRate) — the same basis computeStockCostRate starts from. */
+  openingRate: number; openingValue: number;
+  /** Closing at weighted-average COST (computeStockCostRate) — the Inventory / Stock Valuation / Trading A/c figure (RULE 2). */
+  closingRate: number; closingValue: number;
+}
 
 const MOVE_LABEL = (m: StockMovement, inward: boolean): [string, string] =>
   m.type === 'purchase' ? ['Purchase', 'खरीद']
@@ -145,7 +152,7 @@ const MOVE_LABEL = (m: StockMovement, inward: boolean): [string, string] =>
  * One item's register. Feed it reconcileMovements(...) — the same list computeStock reads — so the
  * closing quantity equals the Inventory / Stock Valuation / Trading figure (RULE 2).
  */
-export function stockRegister(item: { id: string; openingStock: number }, movements: readonly StockMovement[]): StockRegister {
+export function stockRegister(item: { id: string; openingStock: number; purchaseRate?: number }, movements: readonly StockMovement[]): StockRegister {
   const mine = movements.filter((m) => m.itemId === item.id)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.createdAt || '').localeCompare(b.createdAt || ''));
   const opening = q3(Number(item.openingStock) || 0);
@@ -163,5 +170,11 @@ export function stockRegister(item: { id: string; openingStock: number }, moveme
       inward: inward ? q : 0, outward: inward ? 0 : q, balance: bal, rate: r2(Number(m.rate) || 0), amount: r2(Math.abs(Number(m.amount) || q * (Number(m.rate) || 0))) };
   });
   // computeStock clamps the closing at 0 — the register shows the same closing and flags the dip.
-  return { opening, rows, totalIn: tin, totalOut: tout, closing: Math.max(0, bal), wentNegative: neg };
+  const closing = Math.max(0, bal);
+  // Rates / values (2026-10-10 — the register printed no rate or amount for opening / closing, so an item with no
+  // movement showed only quantities). Closing rate = THE weighted-average cost (computeStockCostRate).
+  const openingRate = r2(Number(item.purchaseRate) || 0);
+  const closingRate = r2(computeStockCostRate({ id: item.id, openingStock: item.openingStock, purchaseRate: item.purchaseRate || 0 }, mine as StockMovement[]));
+  return { opening, rows, totalIn: tin, totalOut: tout, closing, wentNegative: neg,
+    openingRate, openingValue: r2(opening * openingRate), closingRate, closingValue: r2(closing * closingRate) };
 }
