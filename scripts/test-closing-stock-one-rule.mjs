@@ -147,7 +147,9 @@ ok(/const closing = closingStock\(stockLeaves, physicalClosingStock, closingStoc
 ok(!/ledgerClosingItems\.length > 0\s*\?\s*ledgerClosingItems/.test(dc), 'the old ledger-else-physical rule is gone');
 const bsl = read('src/lib/balanceSheetLeaves.ts');
 ok(/closingStock\(stockLeaves\.map/.test(bsl) && /const unpostedStock = cs\.replacesLedger \? cs\.total : 0;/.test(bsl), 'Balance Sheet closing stock = the same closingStock()');
-ok(/balanceSheetLeaves\(tb, \{ closingStockPosted, physicalClosingStock, netProfit \}\)/.test(read('src/pages/Dashboard.tsx')), 'Dashboard tally uses the Balance Sheet rule (no raw-ledger tally)');
+// 2026-10-09: the tally moved into the shared balanceSheetTallied (lib/balanceSheetLeaves), which wraps balanceSheetLeaves.
+ok(/(balanceSheetLeaves|balanceSheetTallied)\(tb, \{ closingStockPosted, physicalClosingStock, netProfit \}\)/.test(read('src/pages/Dashboard.tsx'))
+  && /export function balanceSheetTallied[\s\S]*?balanceSheetLeaves\(trialBalance, opts\)/.test(bsl), 'Dashboard tally uses the Balance Sheet rule (no raw-ledger tally)');
 ok(/Math\.abs\(unpostedStock\) > 0\.005/.test(read('src/pages/BalanceSheet.tsx')), 'Balance Sheet shows a non-zero closing stock of either sign (never silently hidden)');
 
 // I&E: a deficit balances the INCOME side only.

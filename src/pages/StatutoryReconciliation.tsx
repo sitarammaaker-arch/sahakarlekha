@@ -6,7 +6,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { useData } from '@/contexts/DataContext';
-import { useLabourData, PF_ESI_DEFAULTS } from '@/contexts/LabourDataContext';
+import { useLabourData, pfEsiDefaultsFor } from '@/contexts/LabourDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -27,7 +27,7 @@ const StatutoryReconciliation: React.FC = () => {
 
   const rec = useMemo(() => {
     const sal = salariedRow(salaryRecords.filter(r => r.month === period));
-    const comp = computePfEsi(period, PF_ESI_DEFAULTS);
+    const comp = computePfEsi(period, pfEsiDefaultsFor(period));
     const lab = labourRow(comp, comp.perWorker.length);
     return reconcileStatutory([sal, lab]);
   }, [salaryRecords, computePfEsi, period]);

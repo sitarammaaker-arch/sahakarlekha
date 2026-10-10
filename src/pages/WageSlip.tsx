@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useData } from '@/contexts/DataContext';
-import { useLabourData, PF_ESI_DEFAULTS } from '@/contexts/LabourDataContext';
+import { useLabourData, pfEsiDefaultsFor } from '@/contexts/LabourDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,7 @@ export default function WageSlip() {
     const rows = musterEntries.filter(m => !m.isDeleted && m.period === period && m.memberId === workerId);
     const gross = rows.reduce((s, r) => s + (r.daysWorked || 0) * (r.dailyWage || 0), 0);
     const days = rows.reduce((s, r) => s + (r.daysWorked || 0), 0);
-    const pf = computePfEsi(period, PF_ESI_DEFAULTS).perWorker.find(p => p.workerId === workerId);
+    const pf = computePfEsi(period, pfEsiDefaultsFor(period)).perWorker.find(p => p.workerId === workerId);
     const epfEmp = pf?.epfEmp || 0;
     const esiEmp = pf?.esiEmp || 0;
     const net = +(gross - epfEmp - esiEmp).toFixed(2);
