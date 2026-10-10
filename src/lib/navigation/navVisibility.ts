@@ -48,3 +48,26 @@ export function getVisibleGroups(ctx: NavContext, catalog: ModuleDefinition[] = 
     }))
     .filter((g) => g.items.length > 0);
 }
+
+/**
+ * Sidebar-only trimming (founder 2026-10-10: "what in this list is not needed / repeated?"). These pages stay in the
+ * catalog — the route, its role/capability gate and every link keep working — they are just not listed twice:
+ *   • memberApplication — opened from the Members page's "आवेदन पत्र" button
+ *   • myDashboard — the same cards as Dashboard for admin / accountant; it stays the home for the narrower roles
+ *   • deletedVouchers — the cancelled-voucher audit register, opened from the Vouchers page's "रद्द" view
+ *   • stockValuation — today's stock value, opened from Inventory / Closing Stock report
+ *   • voucherApproval — only when maker-checker is on or something is waiting for approval
+ * PURE.
+ */
+export interface SidebarTrimContext { fullDashboardRole: boolean; approvalRequired: boolean; pendingApprovals: number }
+export function hiddenInSidebar(id: string, c: SidebarTrimContext): boolean {
+  switch (id) {
+    case 'memberApplication': case 'deletedVouchers': case 'stockValuation': return true;
+    case 'myDashboard': return c.fullDashboardRole;
+    case 'voucherApproval': return !c.approvalRequired && c.pendingApprovals === 0;
+    default: return false;
+  }
+}
+export function trimSidebar(groups: NavGroup[], c: SidebarTrimContext): NavGroup[] {
+  return groups.map((g) => ({ ...g, items: g.items.filter((m) => !hiddenInSidebar(m.id, c)) })).filter((g) => g.items.length > 0);
+}

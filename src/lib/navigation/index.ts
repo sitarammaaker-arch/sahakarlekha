@@ -5,5 +5,5 @@ export { SOCIETY_TYPE_CAPABILITIES } from './societyTypeCapabilities';
 export { resolveCapabilities, resolveEntitlements } from './capabilityResolver';
 export { ACTIVITY_CATALOG, ACTIVITY_CODES, declaredActivities, type Activity, type ActivityDef, type ActivityGroup, type SocietyActivityRow } from './activities';
 export { CAPABILITY_META, CAPABILITY_CATEGORIES, modulesForCapability, type CapabilityMeta, type CapabilityCategory } from './capabilityCatalog';
-export { isModuleVisible, getVisibleGroups, type NavContext, type NavGroup } from './navVisibility';
+export { isModuleVisible, getVisibleGroups, trimSidebar, hiddenInSidebar, type NavContext, type NavGroup, type SidebarTrimContext } from './navVisibility';
 export { navigationService, type NavigationService } from './navigationService';
