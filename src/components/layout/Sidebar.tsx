@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useNavigation, useAllNavigation } from '@/hooks/useNavigation';
+import { useNavPrefs } from '@/hooks/useNavPrefs';
 import { compactSidebar, entryIsActive, type ModuleDefinition, type SidebarEntry } from '@/lib/navigation';
 
 interface SidebarProps {
@@ -38,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
     try { localStorage.setItem(MODE_KEY, next); } catch { /* ignore */ }
     return next;
   });
+  const { favourites } = useNavPrefs();
   const entries = React.useMemo(() => compactSidebar(allGroups.flatMap(g => g.items)), [allGroups]);
 
   // Collapsible groups: reduce the ~100-item wall of the full sidebar. Default is
@@ -138,6 +140,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, mobileOpe
       {/* Navigation — rendered from the capability engine (groups in domain order,
           a separator before every group except the first, heading when present). */}
       <nav className="flex flex-col h-[calc(100vh-4rem)] p-3 overflow-y-auto">
+        {/* ⭐ favourites — the pages this person starred (breadcrumb star / group-page star), both menu modes. */}
+        {favourites.length > 0 && (
+          <>
+            {!collapsed && (
+              <p className="px-3 mb-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">{hi ? '⭐ पसंदीदा' : '⭐ Favourites'}</p>
+            )}
+            <div className="space-y-1">{favourites.map(m => renderLink(`fav-${m.id}`, m.route, t(m.titleKey), m.icon, location.pathname === m.route))}</div>
+            <Separator className="my-3 bg-sidebar-border" />
+          </>
+        )}
         {mode === 'compact' && (
           <div className="space-y-1">{entries.map(renderEntry)}</div>
         )}

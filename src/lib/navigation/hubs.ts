@@ -76,6 +76,11 @@ export const HUBS: HubDef[] = [
 ];
 
 export const hubRoute = (id: string) => `/hub/${id}`;
+
+/** The group a module lives in (its "parent" for breadcrumbs) — null for the direct entries. */
+export function hubForModule(m: Pick<ModuleDefinition, 'id' | 'domain'>): HubDef | null {
+  return HUBS.find((h) => h.sections.some((s) => (s.domain ? s.domain === m.domain : (s.moduleIds ?? []).includes(m.id)))) ?? null;
+}
 export const hubById = (id: string | undefined) => HUBS.find((h) => h.id === id);
 
 /** A hub's sections filled with the VISIBLE modules (catalog order inside a domain section); empty sections dropped. */
