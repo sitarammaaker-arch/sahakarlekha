@@ -32,6 +32,8 @@ export const PDF_HI_EXTRA: Record<string, string> = {
   'profit & loss a/c (balance)': 'लाभ-हानि खाता (शेष)',
   'less: profit & loss a/c (deficit)': 'घटाएँ: लाभ-हानि खाता (घाटा)',
   'balance brought forward': 'पिछला शेष',
+  'difference in opening balances': 'ओपनिंग बैलेंस का अंतर',
+  'opening dr and cr do not match - correct in opening balances': 'ओपनिंग Dr और Cr बराबर नहीं - Opening Balances में ठीक करें',
   'add: net profit for the year': 'जोड़ें: इस वर्ष का शुद्ध लाभ',
   'less: net loss for the year': 'घटाएँ: इस वर्ष का शुद्ध घाटा',
   'closing stock (inventory + goods put into stock this year)': 'समापन माल (इन्वेंट्री + इस वर्ष स्टॉक खाते में आया माल)',

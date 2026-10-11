@@ -52,7 +52,7 @@ import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, defaultBankAccountId, defaultDebtorsAccountId, defaultCreditorsAccountId } from '@/lib/storage';
 import { isUniqueViolation, isMissingBranchColumn, payloadWithoutMissingColumn, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
-import { voucherLinesBalance } from '@/lib/validation';
+import { voucherLinesBalance, snapSubRupeeResidual } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability, SocietyActivityRow } from '@/lib/navigation';
 import { navigationService, declaredActivities } from '@/lib/navigation';
@@ -1882,17 +1882,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     //  • Material imbalance (≥ ₹1) = a real error → BLOCK the save with a loud
     //    toast and return a dummy voucher (caller handles id==='' gracefully).
     if (lines && lines.length > 0) {
-      let bal = voucherLinesBalance(lines);
-      if (!bal.balanced && bal.diff < 1) {
-        const residual = toRupees(subMinor(toMinor(bal.drTotal), toMinor(bal.crTotal))); // >0 ⇒ Dr-heavy
-        const side: 'Dr' | 'Cr' = residual > 0 ? 'Cr' : 'Dr';     // add to deficient side
-        let idx = -1, max = -Infinity;
-        lines.forEach((l, i) => { if (l.type === side && l.amount > max) { max = l.amount; idx = i; } });
-        if (idx >= 0) {
-          lines = lines.map((l, i) => i === idx ? { ...l, amount: toRupees(addMinor(toMinor(l.amount), toMinor(Math.abs(residual)))) } : l);
-          bal = voucherLinesBalance(lines);
-        }
-      }
+      lines = snapSubRupeeResidual(lines);
+      const bal = voucherLinesBalance(lines);
       if (!bal.balanced) {
         toastRef.current({
           title: '❌ वाउचर असंतुलित / Voucher not balanced',
@@ -2329,8 +2320,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ── Double-entry balance guard on edit (Audit C-1/C-2) ───────────────────
     // Block an edit that would leave a multi-line voucher materially unbalanced.
     if (updatedVoucher.lines && updatedVoucher.lines.length > 0) {
+      // The SAME sub-rupee rule as a new voucher: snap a < ₹1 rounding gap, refuse anything bigger.
+      updatedVoucher.lines = snapSubRupeeResidual(updatedVoucher.lines);
       const bal = voucherLinesBalance(updatedVoucher.lines);
-      if (!bal.balanced && bal.diff >= 1) {
+      if (!bal.balanced) {
         toastRef.current({
           title: '❌ वाउचर असंतुलित / Voucher not balanced',
           description: `डेबिट ₹${bal.drTotal.toFixed(2)} ≠ क्रेडिट ₹${bal.crTotal.toFixed(2)} (अंतर ₹${bal.diff.toFixed(2)})। बदलाव save नहीं हुआ — Dr=Cr करें।`,

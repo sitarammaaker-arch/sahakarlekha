@@ -1,4 +1,5 @@
 import type { LedgerAccount, SocietySettings, VoucherType, VoucherLine } from '@/types';
+import { toMinor, toRupees, addMinor, subMinor } from '@/lib/money';
 
 // Cash and Bank account IDs — same as ACCOUNT_IDS in storage.ts
 const CASH_ID = '3301';
@@ -173,6 +174,23 @@ export function voucherLinesBalance(lines: VoucherLine[]): {
   const crTotal = lines.filter(l => l.type === 'Cr').reduce((s, l) => s + (l.amount || 0), 0);
   const diff = Math.abs(drTotal - crTotal);
   return { drTotal, crTotal, diff, balanced: diff < 0.01 };
+}
+
+/**
+ * Sub-rupee residual (< ₹1, rounding from pro-rated GST/TDS splits) → added to the LARGEST line on the deficient
+ * side, so the voucher tallies EXACTLY (standard rounding adjustment). A difference of ₹1 or more is left alone —
+ * that is a real error the caller must refuse. ONE rule for a new voucher and an edit (2026-10-11: the edit path
+ * let a sub-rupee gap through on the legacy client path, which the server's paise-exact check then refused).
+ */
+export function snapSubRupeeResidual(lines: VoucherLine[]): VoucherLine[] {
+  const bal = voucherLinesBalance(lines);
+  if (bal.balanced || bal.diff >= 1) return lines;
+  const residual = toRupees(subMinor(toMinor(bal.drTotal), toMinor(bal.crTotal))); // >0 ⇒ Dr-heavy
+  const side: 'Dr' | 'Cr' = residual > 0 ? 'Cr' : 'Dr';   // add to the deficient side
+  let idx = -1, max = -Infinity;
+  lines.forEach((l, i) => { if (l.type === side && l.amount > max) { max = l.amount; idx = i; } });
+  if (idx < 0) return lines;
+  return lines.map((l, i) => i === idx ? { ...l, amount: toRupees(addMinor(toMinor(l.amount), toMinor(Math.abs(residual)))) } : l);
 }
 
 /**

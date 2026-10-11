@@ -35,7 +35,7 @@ export interface BsRow {
 }
 export interface BsSection { id: string; title: string; titleHi: string; rows: BsRow[]; total: number; pyTotal: number; warn?: boolean }
 export interface BsSide { sections: BsSection[]; total: number; pyTotal: number }
-export interface BsLayout { liabilities: BsSide; assets: BsSide; profitAndLoss: number }
+export interface BsLayout { liabilities: BsSide; assets: BsSide; profitAndLoss: number; /** the bridged opening gap (Dr − Cr), 0 when none */ openingDifference: number }
 
 export interface BsLayoutInput {
   accounts: readonly LedgerAccount[];
@@ -47,6 +47,10 @@ export interface BsLayoutInput {
   py?: Record<string, number>;
   /** Prior year's result (Cr positive) — so the prior-year P&L line, and the comparative totals, tie. */
   pyNetProfit?: number;
+  /** Σ opening Dr − Σ opening Cr of all ledgers. Non-zero ⇒ a Tally-style "Difference in opening balances" line on
+   *  the short side, so the gap is SHOWN as such instead of an unexplained mismatch (2026-10-11). The dashboards'
+   *  tally (balanceSheetTallied) does not use it — a sheet with an opening gap still reads "not balanced" there. */
+  openingDifference?: number;
 }
 
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -179,7 +183,16 @@ export function buildBalanceSheetLayout(input: BsLayoutInput): BsLayout {
     else asset.sections.push({ id: '3400', title: 'Closing Stock', titleHi: 'समापन माल', rows: [csRow], total: 0, pyTotal: 0 });
   }
 
-  return { liabilities: finish(liab.sections), assets: finish(asset.sections), profitAndLoss };
+  // Difference in opening balances (Tally) — on the side the gap leaves short: Dr excess ⇒ liability side.
+  const od = r2(input.openingDifference ?? 0);
+  if (Math.abs(od) >= 0.01) {
+    const odSec: BsSection = { id: 'opening-diff', title: 'Difference in opening balances', titleHi: 'ओपनिंग बैलेंस का अंतर', warn: true, total: 0, pyTotal: 0,
+      // Openings are the genesis balance, so the prior-year column carries the same gap.
+      rows: [{ key: 'od', kind: 'line', label: 'Opening Dr and Cr do not match - correct in Opening Balances', labelHi: 'ओपनिंग Dr और Cr बराबर नहीं - Opening Balances में ठीक करें', amount: Math.abs(od), py: input.py ? Math.abs(od) : 0, depth: 0 }] };
+    (od > 0 ? liab : asset).sections.push(odSec);
+  }
+
+  return { liabilities: finish(liab.sections), assets: finish(asset.sections), profitAndLoss, openingDifference: Math.abs(od) >= 0.01 ? od : 0 };
 }
 
 /** A period's result (Cr positive) from a set of balances — income/expense ledgers, so a prior-year column can

@@ -83,28 +83,36 @@ const BalanceSheet: React.FC = () => {
 
   // Auto-reclassify by balance SIGN + the closing-stock rule — the ONE shared rule
   // (src/lib/balanceSheetLeaves.ts), also used by the NABARD CAS Balance Sheet (RULE 2).
-  const { assetLeaves, capLiabLeaves: allCapLiabLeaf, unpostedStock } =
+  const { assetLeaves, capLiabLeaves: allCapLiabLeaf, unpostedStock, totalAssets: leafAssets, totalLiabilities: leafLiabilities } =
     balanceSheetLeaves(trialBalance, { closingStockPosted, physicalClosingStock, netProfit });
-  const pyNetProfit = hasPY ? pyResult(pyBalances, accounts) : 0;
-  const layout = buildBalanceSheetLayout({
-    accounts, assetLeaves, capLiabLeaves: allCapLiabLeaf, unpostedStock, netProfit,
-    py: hasPY ? pyBalances : undefined, pyNetProfit: hasPY ? pyNetProfit : undefined,
-  });
-  const totalAssets = layout.assets.total;
-  const totalLiabilities = layout.liabilities.total;
 
   // ── Balance health diagnostic ──────────────────────────────────────────────
   // When the sheet doesn't tie, the root cause is almost always a ledger that
   // itself doesn't balance: opening balances entered with Dr ≠ Cr, or a legacy
   // voucher posted before Dr=Cr enforcement. Surface the exact gap so the user
   // can fix the SOURCE (Society Setup → Opening Balances) instead of guessing.
-  const isBalanced = Math.abs(totalLiabilities - totalAssets) < 1;
+  // `isBalanced` is the RAW truth (before the opening-difference line) — the same test as the dashboards.
+  const rawDiff = leafLiabilities - leafAssets;
+  const isBalanced = Math.abs(rawDiff) < 1;
   const sumOpenDr = trialBalance.reduce((s, b) => s + (b.openingDebit || 0), 0);
   const sumOpenCr = trialBalance.reduce((s, b) => s + (b.openingCredit || 0), 0);
   const sumTxnDr = trialBalance.reduce((s, b) => s + (b.transactionDebit || 0), 0);
   const sumTxnCr = trialBalance.reduce((s, b) => s + (b.transactionCredit || 0), 0);
-  const openingGap = sumOpenDr - sumOpenCr;   // ≠ 0 ⇒ opening balances don't tie
+  const openingGap = Math.round((sumOpenDr - sumOpenCr) * 100) / 100;   // ≠ 0 ⇒ opening balances don't tie
   const txnGap = sumTxnDr - sumTxnCr;          // ≠ 0 ⇒ a legacy unbalanced voucher
+
+  const pyNetProfit = hasPY ? pyResult(pyBalances, accounts) : 0;
+  // Tally-style: an opening Dr ≠ Cr is printed as its own "ओपनिंग बैलेंस का अंतर" line (2026-10-11), never hidden.
+  const layout = buildBalanceSheetLayout({
+    accounts, assetLeaves, capLiabLeaves: allCapLiabLeaf, unpostedStock, netProfit,
+    py: hasPY ? pyBalances : undefined, pyNetProfit: hasPY ? pyNetProfit : undefined,
+    openingDifference: openingGap,
+  });
+  const totalAssets = layout.assets.total;
+  const totalLiabilities = layout.liabilities.total;
+  // What is left after the opening-difference line — anything here is unexplained (a voucher / stock problem).
+  const residualDiff = Math.abs(totalLiabilities - totalAssets);
+  const onlyOpeningGap = !isBalanced && residualDiff < 1;
 
   // Export — the SAME rows as the screen, in the chosen detail level (Summary / Full detail), with the prior year.
   const exportHeaders = BS_EXPORT_HEADERS(hi, hasPY ? pyYear : '');
@@ -114,7 +122,8 @@ const BalanceSheet: React.FC = () => {
   const handleExcel = () => downloadExcelSingle(exportHeaders, exportRows(), `balance-sheet-${society.financialYear}`, 'Balance Sheet');
 
   const handlePDF = () => {
-    const diff = Math.abs(totalLiabilities - totalAssets);
+    // The opening difference prints as its own line (Tally); any OTHER gap still blocks the PDF.
+    const diff = residualDiff;
     if (diff >= 1) {
       toast({
         title: hi ? 'बैलेंस शीट असंतुलित है' : 'Balance Sheet is not balanced',
@@ -128,6 +137,7 @@ const BalanceSheet: React.FC = () => {
       allCapLiabLeaf,   // reclassified-by-sign, same as the on-screen sheet (ARTHIYA etc. on the liability side)
       netProfit, society, language, 0, accounts, stockItems, showLedgers, unpostedStock,
       hasPY ? { balances: pyBalances, label: pyYear, netProfit: pyNetProfit } : undefined,
+      openingGap,
     );
   };
 
@@ -319,11 +329,13 @@ const BalanceSheet: React.FC = () => {
                 <span className="text-muted-foreground">{hi ? 'कुल संपत्तियां' : 'Total Assets'}:</span>{' '}
                 <span className="font-bold">{fmt(totalAssets)}</span>
               </div>
-              <div className={isBalanced ? 'text-success' : 'text-destructive'}>
+              <div className={isBalanced ? 'text-success' : onlyOpeningGap ? 'text-amber-600' : 'text-destructive'}>
                 <span className="font-bold">
                   {isBalanced
                     ? (hi ? '✓ संतुलित' : '✓ Balanced')
-                    : (hi ? '✗ असंतुलित' : '✗ Not Balanced')}
+                    : onlyOpeningGap
+                      ? (hi ? '⚠ ओपनिंग बैलेंस के अंतर के साथ बराबर' : '⚠ Equal only with the opening difference')
+                      : (hi ? '✗ असंतुलित' : '✗ Not Balanced')}
                 </span>
               </div>
             </div>
@@ -332,7 +344,7 @@ const BalanceSheet: React.FC = () => {
             {!isBalanced && (
               <div className="mt-4 pt-4 border-t text-left max-w-2xl mx-auto text-sm space-y-1">
                 <p className="font-semibold text-destructive">
-                  {hi ? `अंतर: ${fmt(Math.abs(totalLiabilities - totalAssets))} — संभावित कारण:` : `Difference: ${fmt(Math.abs(totalLiabilities - totalAssets))} — likely cause:`}
+                  {hi ? `अंतर: ${fmt(Math.abs(rawDiff))} — संभावित कारण:` : `Difference: ${fmt(Math.abs(rawDiff))} — likely cause:`}
                 </p>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{hi ? 'ओपनिंग बैलेंस (Opening) — कुल डेबिट' : 'Opening balances — total Debit'}</span>
@@ -346,6 +358,16 @@ const BalanceSheet: React.FC = () => {
                   <div className="flex justify-between font-semibold text-destructive">
                     <span>{hi ? '→ Opening Dr ≠ Cr, अंतर' : '→ Opening Dr ≠ Cr, gap'}</span>
                     <span>{openingGap > 0 ? '' : '−'}{fmt(Math.abs(openingGap))} {openingGap > 0 ? 'Dr' : 'Cr'}</span>
+                  </div>
+                )}
+                {Math.abs(openingGap) >= 1 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-muted-foreground">
+                      {hi ? 'यह अंतर शीट में "ओपनिंग बैलेंस का अंतर" पंक्ति बनकर दिखता है (Tally जैसा)।' : 'This gap shows in the sheet as a "Difference in opening balances" line (as in Tally).'}
+                    </span>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => navigate('/opening-balances')}>
+                      {hi ? 'Opening Balances खोलें' : 'Open Opening Balances'}
+                    </Button>
                   </div>
                 )}
                 {Math.abs(txnGap) >= 1 && (

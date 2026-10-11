@@ -6,10 +6,15 @@
  * receivable parked in a liability ledger. Used by Ledger Hygiene and the Trial Balance. PURE.
  *
  * Skips: group accounts; the P&L result (subtype 'surplus', which legitimately swings to a deficit);
- * and accounts whose openingBalanceType is set to the "abnormal" side — that marks an intentional
- * contra account (e.g. 1211 Dividend Distribution opens 'debit'), even with a ₹0 opening.
+ * the known contras (accumulated depreciation, 1208, 1211, round-off — lib/accountRoles); and an account whose
+ * openingBalanceType is set to the "abnormal" side WITH A ₹0 OPENING — a user-made contra ledger.
+ * 2026-10-11: an account with a NON-ZERO opening on the wrong side is exactly the error to catch (prod: 117
+ * creditor ledgers opened in Dr from an import file), so it is no longer treated as an intentional contra.
  */
+import { isLegitContraSide } from './accountRoles';
+
 export interface AbnormalCheckAccount {
+  id?: string;
   type: string;
   isGroup?: boolean;
   subtype?: string;
@@ -25,7 +30,9 @@ export function isAbnormalBalance(a: AbnormalCheckAccount, signedBalance: number
   const naturalDebit = a.type === 'asset' || a.type === 'expense';
   const balIsDebit = signedBalance > 0;
   if (naturalDebit === balIsDebit) return false;
-  const intentionalContra = (naturalDebit && a.openingBalanceType === 'credit') || (!naturalDebit && a.openingBalanceType === 'debit');
+  if (isLegitContraSide({ id: a.id ?? '', type: a.type, subtype: a.subtype, isGroup: a.isGroup })) return false;
+  const contraSideSet = (naturalDebit && a.openingBalanceType === 'credit') || (!naturalDebit && a.openingBalanceType === 'debit');
+  const intentionalContra = contraSideSet && !(Math.abs(Number(a.openingBalance) || 0) >= zero);
   return !intentionalContra;
 }
 

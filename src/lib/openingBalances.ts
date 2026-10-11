@@ -5,6 +5,8 @@
  * amount, positive = debit, negative = credit) into opening-balance entries. Pure &
  * deterministic → unit-tested by scripts/test-opening-balances.mjs.
  */
+import { isLegitContraSide, naturalOpeningSide } from './accountRoles';
+
 export interface OpeningEntry {
   accountId: string;
   amount: number;
@@ -98,4 +100,56 @@ export function mapImportedOpenings(
     entries: [...resolved.values()].sort((a, b) => a.accountId.localeCompare(b.accountId)),
     unmatched,
   };
+}
+
+// ─── Openings on the wrong side / on P&L heads (2026-10-11) ───────────────────────────
+export interface OpeningWarningRow { accountId: string; name: string; type: string; side: 'debit' | 'credit'; amount: number }
+export interface OpeningWarnings {
+  /** A balance-sheet ledger whose opening sits on the side opposite its type (a liability in Dr, an asset in Cr) —
+   *  prod: one society had 117 creditor ledgers opened in Dr (₹1.66 cr) from an import file. Legit contras are skipped. */
+  wrongSide: OpeningWarningRow[];
+  /** Income / expense ledgers carrying an opening — the Opening Balances list does not even show them, yet they
+   *  count in its Dr/Cr totals. Right only when the society starts the app mid-year. */
+  plHeads: OpeningWarningRow[];
+}
+
+/** PURE — which openings look wrong. `accounts` may be pseudo-accounts (an import row: id = name). */
+export function openingWarnings(
+  entries: readonly { accountId: string; amount: number; type: 'debit' | 'credit' }[],
+  accounts: readonly { id: string; name: string; type: string; subtype?: string; isGroup?: boolean }[],
+): OpeningWarnings {
+  const byId = new Map(accounts.map((a) => [a.id, a]));
+  const wrongSide: OpeningWarningRow[] = [];
+  const plHeads: OpeningWarningRow[] = [];
+  for (const e of entries) {
+    const a = byId.get(e.accountId);
+    const amount = Math.round((Number(e.amount) || 0) * 100) / 100;
+    if (!a || a.isGroup || amount <= 0) continue;
+    const row = { accountId: a.id, name: a.name, type: a.type, side: e.type, amount };
+    if (a.type === 'income' || a.type === 'expense') { plHeads.push(row); continue; }
+    if (e.type !== naturalOpeningSide(a.type) && !isLegitContraSide(a)) wrongSide.push(row);
+  }
+  const byAmt = (x: OpeningWarningRow, y: OpeningWarningRow) => y.amount - x.amount;
+  return { wrongSide: wrongSide.sort(byAmt), plHeads: plHeads.sort(byAmt) };
+}
+
+/** PURE — the opening checks for an ACCOUNTS import file: wrong-side / P&L-head openings among the new accounts,
+ *  and the rows whose account already exists (the importer skips them, so their opening would be lost). */
+export function accountImportOpeningCheck(
+  rows: readonly Record<string, string>[],
+  existing: readonly { name: string }[],
+): { warnings: OpeningWarnings; dropped: string[] } {
+  const have = new Set(existing.map((a) => a.name.trim().toLowerCase()));
+  const dropped: string[] = [];
+  const pseudo: { id: string; name: string; type: string }[] = [];
+  const entries: { accountId: string; amount: number; type: 'debit' | 'credit' }[] = [];
+  rows.forEach((r, i) => {
+    const name = (r.account_name || '').trim();
+    const amount = parseFloat(r.opening_balance) || 0;
+    if (have.has(name.toLowerCase())) { if (amount > 0) dropped.push(name); return; }
+    const id = `row-${i}`;
+    pseudo.push({ id, name, type: (r.account_type || '').toLowerCase() });
+    entries.push({ accountId: id, amount, type: (r.balance_type || '').toLowerCase() === 'credit' ? 'credit' : 'debit' });
+  });
+  return { warnings: openingWarnings(entries, pseudo), dropped };
 }

@@ -12,7 +12,7 @@ import {
   FileSpreadsheet, Users, BookOpen, ArrowRight, Info, FileText
 } from 'lucide-react';
 import { LedgerAccount, Member, VoucherType } from '@/types';
-import { mapImportedOpenings, type ImportedOpeningRow } from '@/lib/openingBalances';
+import { mapImportedOpenings, openingWarnings, accountImportOpeningCheck, type ImportedOpeningRow, type OpeningWarnings } from '@/lib/openingBalances';
 import { planJoiningReceipts, summariseJoiningPlans, type JoiningReceiptPlan } from '@/lib/members/joiningReceipts';
 import { getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
 import {
@@ -174,6 +174,13 @@ const UniversalImporter: React.FC = () => {
       return !accounts.some(a => a.name.toLowerCase() === name.toLowerCase());
     });
     const skipped = validRows.length - toSave.length;
+    // A skipped (already existing) account's opening is NOT applied — say so, with names (2026-10-11).
+    const droppedOpenings = validRows
+      .filter(row => !toSave.includes(row) && (parseFloat(row.data.opening_balance) || 0) > 0)
+      .map(row => row.data.account_name.trim());
+    const droppedNote = droppedOpenings.length > 0
+      ? ` इनमें ${droppedOpenings.length} की opening नहीं लगी (खाता पहले से था): ${droppedOpenings.slice(0, 5).join(', ')}${droppedOpenings.length > 5 ? ' …' : ''} — इन्हें "Opening Balances" import या पेज से भरें।`
+      : '';
     let saved = 0, failed = 0;
     const settle = () => {
       if (saved + failed < toSave.length) return;
@@ -182,13 +189,14 @@ const UniversalImporter: React.FC = () => {
       if (failed > 0) {
         toast({
           title: `${saved} खाते सेव हुए, ${failed} सेव नहीं हुए`,
-          description: `जो सेव नहीं हुए, वे सूची में नहीं जोड़े गए — फ़ाइल दोबारा import करें (पहले से बने खाते अपने-आप skip होंगे)।${skipped > 0 ? ` ${skipped} पहले से मौजूद थे।` : ''}`,
+          description: `जो सेव नहीं हुए, वे सूची में नहीं जोड़े गए — फ़ाइल दोबारा import करें (पहले से बने खाते अपने-आप skip होंगे)।${skipped > 0 ? ` ${skipped} पहले से मौजूद थे।` : ''}${droppedNote}`,
           variant: 'destructive', duration: 12000,
         });
       } else {
         toast({
           title: `${saved} खाते import हुए`,
-          description: skipped > 0 ? `${skipped} खाते पहले से मौजूद थे, skip किए गए` : 'सभी खाते क्लाउड में सेव हो गए',
+          description: skipped > 0 ? `${skipped} खाते पहले से मौजूद थे, skip किए गए।${droppedNote}` : 'सभी खाते क्लाउड में सेव हो गए',
+          ...(droppedOpenings.length > 0 ? { variant: 'destructive' as const, duration: 15000 } : {}),
         });
       }
     };
@@ -449,6 +457,30 @@ const UniversalImporter: React.FC = () => {
     });
   }
 
+  // ── Opening checks shown under a preview, BEFORE import (2026-10-11) ──
+  const OpeningWarnCard: React.FC<{ w: OpeningWarnings; dropped?: string[] }> = ({ w, dropped = [] }) => {
+    if (!w.wrongSide.length && !w.plHeads.length && !dropped.length) return null;
+    const list = (xs: string[]) => xs.slice(0, 6).join(', ') + (xs.length > 6 ? ` … (+${xs.length - 6})` : '');
+    return (
+      <div className="p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-xs space-y-1.5">
+        {w.wrongSide.length > 0 && (
+          <p><b>⚠️ {w.wrongSide.length} rows की opening उलटी तरफ़ है</b> (देनदारी/पूँजी Dr में या संपत्ति Cr में, कुल ₹{w.wrongSide.reduce((t, r) => t + r.amount, 0).toLocaleString('hi-IN')}) — ज़्यादातर यह file में Dr/Cr की गलती होती है: {list(w.wrongSide.map(r => r.name))}</p>
+        )}
+        {w.plHeads.length > 0 && (
+          <p><b>ℹ️ {w.plHeads.length} आय/व्यय खातों पर opening है</b> — यह तभी सही है जब समिति बीच साल से शुरू कर रही हो: {list(w.plHeads.map(r => r.name))}</p>
+        )}
+        {dropped.length > 0 && (
+          <p><b>⚠️ {dropped.length} खाते पहले से मौजूद हैं — इनकी opening नहीं लगेगी</b> (खाता skip होगा): {list(dropped)}। इन्हें "Opening Balances" import से भरें।</p>
+        )}
+      </div>
+    );
+  };
+  const accountOpeningCheck = accountPreview ? accountImportOpeningCheck(accountPreview.filter(r => r.status === 'ok').map(r => r.data), accounts) : null;
+  const obOpeningCheck = obPreview ? (() => {
+    const { entries } = mapImportedOpenings(obPreview.filter(r => r.status === 'ok').map(r => r.data as unknown as ImportedOpeningRow), accounts);
+    return openingWarnings(entries, accounts);
+  })() : null;
+
   // ── Preview Table Component ──
 
   const PreviewTable: React.FC<{
@@ -678,6 +710,7 @@ const UniversalImporter: React.FC = () => {
                         parent_group: 'समूह (Group)',
                       }}
                     />
+                    {accountOpeningCheck && <OpeningWarnCard w={accountOpeningCheck.warnings} dropped={accountOpeningCheck.dropped} />}
                     <div className="flex gap-2">
                       <Button
                         size="sm"
@@ -933,6 +966,7 @@ const UniversalImporter: React.FC = () => {
                         balance_type: 'Dr/Cr',
                       }}
                     />
+                    {obOpeningCheck && <OpeningWarnCard w={obOpeningCheck} />}
                     <div className="flex gap-2">
                       <Button
                         size="sm"
