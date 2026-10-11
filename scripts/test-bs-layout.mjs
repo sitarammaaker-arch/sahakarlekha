@@ -129,6 +129,55 @@ const allRows = (lay) => [...lay.liabilities.sections, ...lay.assets.sections].f
   ok(sec(lay.liabilities, '1200').rows.find((r) => r.key === 'pl').py === 75000, 'prior-year P&L line = prior 1208 + prior result');
 }
 
+// ── flipped-side balances under their IMMEDIATE sub-group (2026-10-11, founder) ──
+// A creditor gone Dr shows on the asset side as "<its sub-group> (Dr शेष)" with that sub-group's total there, its
+// ledgers as details; an error-looking one stays inside the ⚠ head (still grouped), an intentional one is a line of
+// Current Assets. The mirror (an asset gone Cr) works the same way on the liability side.
+{
+  const extra = [
+    G('2101-08', 'Market Supplier Kharia', 'liability', '2101'), G('3303-K', 'Arthiya Kharia', 'asset', '3303'),
+    A('2101-08-A', 'A Trading Co', 'liability', '2101-08', { openingBalance: 1000, openingBalanceType: 'debit' }),   // opened Dr by mistake → reversed
+    A('2101-08-B', 'B Trading Co', 'liability', '2101-08', { openingBalance: 5000, openingBalanceType: 'credit' }),  // normal Cr
+    A('2101-08-C', 'C Trading Co', 'liability', '2101-08', { openingBalance: 0, openingBalanceType: 'debit' }),      // user-made contra → intentional
+    A('2101-08-D', 'D Trading Co', 'liability', '2101-08', { openingBalance: 300, openingBalanceType: 'debit' }),    // second reversed in the same group
+    A('3303-K1', 'Arthiya One', 'asset', '3303-K', { openingBalance: 700, openingBalanceType: 'debit' }),            // asset gone Cr → reversed
+    A('3303-K2', 'Arthiya Two', 'asset', '3303-K', { openingBalance: 0, openingBalanceType: 'credit' }),             // asset contra → intentional
+    A('9999', 'Loose ledger', 'asset'),                                                                               // no parent at all
+  ];
+  const acc = [...accounts, ...extra];
+  const bal = { ...BASE, '2101-08-A': 1000, '2101-08-B': -5000, '2101-08-C': 2000, '2101-08-D': 300, '3303-K1': -3000, '3303-K2': -4000, '9999': 600 };
+  const tb2 = acc.filter((a) => !a.isGroup).map((a) => ({ account: a, netBalance: bal[a.id] ?? 0, openingDebit: 0, openingCredit: 0, transactionDebit: 0, transactionCredit: 0 }));
+  const lv = L.balanceSheetLeaves(tb2, { closingStockPosted: false, physicalClosingStock: 0, netProfit: 0 });
+  const lay = Y.buildBalanceSheetLayout({ accounts: acc, assetLeaves: lv.assetLeaves, capLiabLeaves: lv.capLiabLeaves, unpostedStock: lv.unpostedStock, netProfit: 0 });
+  const revA = sec(lay.assets, 'reversed');
+  const lineA = revA && revA.rows.find((r) => r.key === 'f-rev-2101-08');
+  ok(lineA && lineA.kind === 'line' && lineA.labelHi === 'Market Supplier Kharia (Dr शेष)' && near(lineA.amount, 1300), 'reversed creditors: ONE line named after their immediate sub-group, with its Dr total there (1,000 + 300)');
+  ok(revA.rows.filter((r) => r.kind === 'detail').map((r) => r.accountId).join() === '2101-08-A,2101-08-D' && revA.rows.filter((r) => r.kind === 'detail').every((r) => r.depth === 1), 'its ledgers are details under it (full detail only)');
+  ok(revA.warn === true && near(revA.total, 1300), 'the ⚠ head is kept for error-looking balances; its total = the sub-group lines');
+  const ca = sec(lay.assets, '3300');
+  const lineC = ca.rows.find((r) => r.key === 'f-cur-2101-08');
+  ok(lineC && lineC.kind === 'line' && lineC.label === 'Market Supplier Kharia (Dr balances)' && near(lineC.amount, 2000) && ca.rows.some((r) => r.key === 'd-2101-08-C' && r.kind === 'detail'), 'an intentional Dr creditor is a line of Current Assets under its sub-group name');
+  ok(!lay.assets.sections.some((s) => s.rows.some((r) => r.accountId === '2101-08-B')), 'the normal Cr creditor stays on the liability side only');
+  const revL = sec(lay.liabilities, 'reversed');
+  ok(revL && revL.rows.some((r) => r.key === 'f-rev-3303-K' && r.labelHi === 'Arthiya Kharia (Cr शेष)' && near(r.amount, 3000)), 'mirror: an asset gone Cr (error-looking) → liability-side ⚠ head, under its sub-group (Cr शेष)');
+  const cl = sec(lay.liabilities, '2100');
+  ok(cl.rows.some((r) => r.key === 'f-cur-3303-K' && near(r.amount, 4000)), 'mirror: an intentional asset contra → a line of Current Liabilities under its sub-group');
+  const oth = sec(lay.assets, 'other');
+  ok(oth && oth.rows.length === 1 && oth.rows[0].accountId === '9999', 'a ledger with no parent group still falls back to "Other" (never dropped)');
+  ok(near(lay.assets.total, lv.totalAssets) && near(lay.liabilities.total, lv.totalLiabilities), 'side totals unchanged = the leaves totals (presentation only)');
+  const seen = [...lay.liabilities.sections, ...lay.assets.sections].flatMap((s) => s.rows).filter((r) => r.accountId && r.tone !== 'subhead' && r.key !== 'pl').map((r) => r.accountId);
+  const nonZero = Object.keys(bal).filter((id) => id !== '1208');
+  ok(seen.length === nonZero.length && nonZero.every((id) => seen.includes(id)), 'every non-zero ledger still appears exactly once');
+  for (const s of [...lay.liabilities.sections, ...lay.assets.sections]) {
+    if (!near(s.rows.filter((r) => r.kind === 'line').reduce((t, r) => t + r.amount, 0), s.total)) ok(false, `head ${s.id} total = its lines`);
+  }
+  // no Current Assets head in the chart → its own head, not dropped
+  const noCA = acc.filter((a) => a.id !== '3300' && a.parentId !== '3300');
+  const lv3 = L.balanceSheetLeaves(tb2.filter((b) => noCA.includes(b.account)), { closingStockPosted: false, physicalClosingStock: 0, netProfit: 0 });
+  const lay3 = Y.buildBalanceSheetLayout({ accounts: noCA, assetLeaves: lv3.assetLeaves, capLiabLeaves: lv3.capLiabLeaves, unpostedStock: 0, netProfit: 0 });
+  ok(sec(lay3.assets, 'cur-asset')?.rows.some((r) => r.key === 'f-cur-2101-08'), 'chart without Current Assets: the line gets its own "चालू संपत्ति" head');
+}
+
 // ── wiring (RULE 2: one layout, three outputs) ──
 const page = read('pages/BalanceSheet.tsx');
 ok(/buildBalanceSheetLayout\(\{/.test(page) && /renderSide\(layout\.liabilities/.test(page) && /renderSide\(layout\.assets/.test(page), 'screen renders the shared layout');

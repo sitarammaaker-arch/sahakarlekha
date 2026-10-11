@@ -39,7 +39,7 @@ const near = (a, b) => Math.abs(a - b) < 0.005;
 const rd = read('pages/RoleDashboard.tsx'), db = read('pages/Dashboard.tsx');
 ok(/balanceSheetTallied\(getTrialBalance\(fyEnd\)/.test(rd) && !/Math\.abs\(tbDr - tbCr\) < 1/.test(rd), 'role dashboard: the Balance Sheet card uses the shared tally, not TB Dr = Cr ±₹1');
 ok(/balanceSheetTallied\(tb, \{/.test(db), 'Dashboard uses the same balanceSheetTallied');
-ok(/loans\.filter\(l => l\.status !== 'cleared'\)\.reduce\(\(s, l\) => s \+ loanOutstanding\(l\), 0\);\n/.test(db) && !/const totalOutstanding = loans\.reduce/.test(db), 'Dashboard "Total Outstanding" = non-cleared loans, like the ceiling check / role dashboard');
+ok(/loans\.filter\(l => l\.status !== 'cleared'\)\.reduce\(\(s, l\) => s \+ loanOutstanding\(l\), 0\);\r?\n/.test(db) && !/const totalOutstanding = loans\.reduce/.test(db), 'Dashboard "Total Outstanding" = non-cleared loans, like the ceiling check / role dashboard');
 
 // 2. FIFO ageing
 const asOf = '2026-10-09';
