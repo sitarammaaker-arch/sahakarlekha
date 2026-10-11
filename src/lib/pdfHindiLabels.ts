@@ -27,6 +27,15 @@ export const PDF_HI_EXTRA: Record<string, string> = {
   'cash discount (after gst)': 'नकद छूट (GST के बाद)',
   'round off': 'राउंड ऑफ',
 
+  // ── balance sheet (CA format, 2026-10-11) ──
+  'detail': 'ब्योरा',
+  'profit & loss a/c (balance)': 'लाभ-हानि खाता (शेष)',
+  'less: profit & loss a/c (deficit)': 'घटाएँ: लाभ-हानि खाता (घाटा)',
+  'balance brought forward': 'पिछला शेष',
+  'add: net profit for the year': 'जोड़ें: इस वर्ष का शुद्ध लाभ',
+  'less: net loss for the year': 'घटाएँ: इस वर्ष का शुद्ध घाटा',
+  'closing stock (inventory + goods put into stock this year)': 'समापन माल (इन्वेंट्री + इस वर्ष स्टॉक खाते में आया माल)',
+
   // ── trial balance ──
   'liabilities & income (rs.)': 'देयताएँ एवं आय (रु.)',
   'assets & expenditure (rs.)': 'परिसंपत्तियाँ एवं व्यय (रु.)',

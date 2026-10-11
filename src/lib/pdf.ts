@@ -1,6 +1,5 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { isAbnormalBalance } from './abnormalBalance';
 import type { RowInput } from 'jspdf-autotable';
 import QRCode from 'qrcode';
 import { rpParticulars } from '@/lib/ledger/rpLabel';
@@ -24,6 +23,7 @@ import { fitLine } from '@/lib/pdfFit';
 import { reportStatus, STATUS_REPORT_CODES } from '@/lib/reports/reportStatus';
 import { reclassifyIncomeExpenditure, splitNegativeLines } from '@/lib/reports/negativeLines';
 import { groupWithSubtotals, type GroupableLine } from '@/lib/reports/groupSubtotals';
+import { buildBalanceSheetLayout, visibleRows, pyResult, type BsSide } from '@/lib/reports/balanceSheetLayout';
 import type { BlankPdfSpec } from '@/content/downloads';
 
 // Hindi DATA (names, narrations) in any PDF table is drawn by the browser — labels stay English.
@@ -892,182 +892,55 @@ export function generateBalanceSheetPDF(
   stockItemsData?: { name: string; currentStock: number; purchaseRate: number; isActive: boolean; stockGroup?: string }[],
   detailed: boolean = true,   // false = Summary (groups/sub-groups + totals only)
   unpostedClosingStock: number = 0,  // closing stock auto-valued from inventory (no journal)
+  /** The prior-year column the SCREEN shows (computed from data at the prior FY end); falls back to the saved snapshot. */
+  priorYear?: { balances: Record<string, number>; label: string; netProfit: number },
 ) {
   const doc = new jsPDF('landscape');
   const bsFinal = reportStatus(society).final;
   const bsYearEnd = `31st March 20${society.financialYear.split('-')[1]}`;
   const { startY, font } = addHeader(doc, 'Balance Sheet', society, bsFinal ? `As at ${bsYearEnd}` : `Provisional position - as on ${preparedOn()} (FY ends ${bsYearEnd})`, { reportCode: 'BS' });
 
-  const totalAssets = assetBalances.reduce((s, b) => s + b.netBalance, 0) + unpostedClosingStock;
-  const totalLiabilities = liabilityBalances.reduce((s, b) => s + (-b.netBalance), 0) + netProfit;
-  const pyBalances = society.previousYearBalances || {};
-  const pyYear = society.previousFinancialYear || '';
+  void reserveFund; void stockItemsData;   // kept for call compatibility; closing stock comes only from unpostedClosingStock / the 3400 ledgers
+  // RULE 2: the SAME rows as the on-screen sheet and its Excel export (lib/reports/balanceSheetLayout) —
+  // net fixed assets, one P&L line, the head total on the head's last line, sub-group ledgers as details.
+  const pyBalances = priorYear?.balances ?? society.previousYearBalances ?? {};
+  const pyYear = priorYear?.label ?? society.previousFinancialYear ?? '';
   const hasPY = !!(pyYear && Object.keys(pyBalances).length > 0);
-  const getPY = (id: string) => pyBalances[id] ?? 0;
-
-  // ── Grouped format (if accounts hierarchy available) ──────────────────
-  const buildGroupedBody = (
-    balances: AccountBalance[], parentIds: string[], signFlip: boolean
-  ): { body: string[][]; groupRows: number[]; pyTotal: number } => {
-    // Prior-year balances are stored signed (credit negative). The liability side flips sign, exactly like the
-    // on-screen Balance Sheet; otherwise the comparative column prints every fund/liability as a negative.
-    const getPY = (id: string) => ((signFlip ? -1 : 1) * (pyBalances[id] ?? 0)) || 0;
+  const layout = buildBalanceSheetLayout({
+    accounts: allAccounts ?? [], assetLeaves: assetBalances, capLiabLeaves: liabilityBalances,
+    unpostedStock: unpostedClosingStock, netProfit, py: hasPY ? pyBalances : undefined,
+    pyNetProfit: hasPY ? (priorYear?.netProfit ?? pyResult(pyBalances, allAccounts ?? [])) : undefined,
+  });
+  const totalLiabilities = layout.liabilities.total;
+  const totalAssets = layout.assets.total;
+  const money = (v: number) => (v < 0 ? `(${fmt(Math.abs(v))})` : fmt(v));
+  // One side → body rows of [label, (PY), (Detail), Amount, Grand]; a head's total sits on its last row.
+  const sideBody = (side: BsSide): { body: string[][]; groupRows: number[]; pyTotal: number } => {
     const body: string[][] = [];
     const groupRows: number[] = [];
-    let pyTotal = 0;
-    const accts = allAccounts || [];
-    const capturedIds = new Set<string>();
-
-    const subGroups = accts.filter(a => a.isGroup && parentIds.includes(a.parentId || ''));
-
-    const nz = (b: AccountBalance) => b.netBalance !== 0 || getPY(b.account.id) !== 0;
-    // Recursive roll-up of every leaf balance under a parent (any nesting depth).
-    const leafTotal = (parentId: string): { amt: number; py: number; has: boolean } => {
-      let amt = 0, py = 0, has = false;
-      balances.filter(b => b.account.parentId === parentId && !b.account.isGroup && nz(b)).forEach(b => {
-        amt += signFlip ? -b.netBalance : b.netBalance; py += getPY(b.account.id); has = true;
-      });
-      accts.filter(a => a.isGroup && a.parentId === parentId).forEach(g => {
-        const sub = leafTotal(g.id); amt += sub.amt; py += sub.py; if (sub.has) has = true;
-      });
-      return { amt, py, has };
-    };
-    const captureLeaves = (parentId: string) => {
-      balances.filter(b => b.account.parentId === parentId && !b.account.isGroup).forEach(b => capturedIds.add(b.account.id));
-      accts.filter(a => a.isGroup && a.parentId === parentId).forEach(g => captureLeaves(g.id));
-    };
-    // Recursively emit rows to ANY depth: direct leaves first, then each nested
-    // sub-group as an indented heading (with its rolled-up subtotal) + its sub-tree.
-    const renderTree = (parentId: string, depth: number) => {
-      const pad = '  '.repeat(depth + 1);
-      balances.filter(b => b.account.parentId === parentId && !b.account.isGroup && nz(b)).forEach(b => {
-        capturedIds.add(b.account.id);
-        // Summary: hide individual ledgers nested inside a sub-group (depth >= 1).
-        if (!detailed && depth >= 1) return;
-        const val = signFlip ? -b.netBalance : b.netBalance;
-        const display = val < 0 ? `(${fmt(Math.abs(val))})` : fmt(val);
-        body.push(hasPY
-          ? [`${pad}${b.account.name}`, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', display, '']
-          : [`${pad}${b.account.name}`, display, '']);
-      });
-      accts.filter(a => a.isGroup && a.parentId === parentId).forEach(g => {
-        const sub = leafTotal(g.id);
-        if (!sub.has) return;
-        const subDisp = sub.amt < 0 ? `(${fmt(Math.abs(sub.amt))})` : fmt(sub.amt);
-        body.push(hasPY
-          ? [`${pad}${g.name}`, sub.py ? fmt(sub.py) : '', subDisp, '']
-          : [`${pad}${g.name}`, subDisp, '']);
-        renderTree(g.id, depth + 1);
-      });
-    };
-
-    subGroups.forEach(group => {
-      const gTot = leafTotal(group.id);
-      if (!gTot.has) return;
-      pyTotal += gTot.py;
-
-      const auditGroupNames: Record<string, string> = { '3400': 'CLOSING STOCK', '3300': 'CURRENT ASSETS & CASH/BANK' };
-      const groupLabel = auditGroupNames[group.id] || group.name.toUpperCase();
-
-      // Closing Stock (3400) is intentionally NOT rendered from stockItemsData.currentStock
-      // here — that cache can be stale after a purchase edit/delete (RULE 2) and double
-      // with the unpostedClosingStock row below. Closing stock is shown ONCE, exactly like
-      // the on-screen Balance Sheet: via the journalled 3403 leaf when a closing-stock
-      // journal is posted, else via the movement-based unpostedClosingStock row below.
-      void stockItemsData;
-
-      // Group header + recursive children
+    for (const sec of side.sections) {
       groupRows.push(body.length);
-      body.push(hasPY
-        ? [groupLabel, gTot.py ? fmt(gTot.py) : '', '', fmt(gTot.amt)]
-        : [groupLabel, '', fmt(gTot.amt)]);
-      renderTree(group.id, 0);
-    });
-
-    // Orphan accounts — leaf balances not captured by any sub-group (e.g. auto-
-    // created sundry creditor/debtor accounts). Mirror the on-screen "Other" group
-    // so the printed groups reconcile to the Grand Total instead of silently
-    // dropping these balances.
-    const allOrphans = balances.filter(b => !capturedIds.has(b.account.id) && (b.netBalance !== 0 || getPY(b.account.id) !== 0));
-    // Same split as the screen: a flipped-side balance (bank / advance in Cr …) is listed by name
-    // under its own warning heading, never hidden inside "OTHER" (usability audit P0-4).
-    const reversed = allOrphans.filter(b => isAbnormalBalance(b.account, b.netBalance));
-    if (reversed.length > 0) {
-      const revTotal = reversed.reduce((s, b) => s + (signFlip ? -b.netBalance : b.netBalance), 0);
-      const revPY = reversed.reduce((s, b) => s + getPY(b.account.id), 0);
-      pyTotal += revPY;
-      groupRows.push(body.length);
-      body.push(hasPY
-        ? ['REVERSED BALANCE - CHECK', revPY ? fmt(revPY) : '', '', fmt(revTotal)]
-        : ['REVERSED BALANCE - CHECK', '', fmt(revTotal)]);
-      reversed.forEach(b => {
-        const val = signFlip ? -b.netBalance : b.netBalance;
-        const display = val < 0 ? `(${fmt(Math.abs(val))})` : fmt(val);
-        const py = getPY(b.account.id);
-        body.push(hasPY ? [`   ${b.account.name}`, py ? fmt(py) : '', display, ''] : [`   ${b.account.name}`, display, '']);
+      body.push([sec.warn ? 'REVERSED BALANCE - CHECK' : sec.title.toUpperCase(), ...(hasPY ? [sec.pyTotal ? fmt(sec.pyTotal) : ''] : []), ...(detailed ? [''] : []), '', '']);
+      const rows = visibleRows(sec, detailed);
+      rows.forEach((r, i) => {
+        const pad = '  '.repeat(r.kind === 'detail' ? r.depth + 1 : 1);
+        const label = r.tone === 'subhead' ? `${pad}${r.label} (total ${money(r.amount)})` : `${pad}${r.label}`;
+        const detail = r.kind === 'detail' && r.tone !== 'subhead' ? money(r.amount) : '';
+        const amount = r.kind === 'line' ? money(r.amount) : '';
+        const grand = i === rows.length - 1 ? money(sec.total) : '';
+        body.push([label, ...(hasPY ? [r.py ? money(r.py) : ''] : []), ...(detailed ? [detail] : []), amount, grand]);
       });
     }
-    const orphans = allOrphans.filter(b => !reversed.includes(b));
-    if (orphans.length > 0) {
-      const orphanTotal = orphans.reduce((s, b) => s + (signFlip ? -b.netBalance : b.netBalance), 0);
-      const orphanPY = orphans.reduce((s, b) => s + getPY(b.account.id), 0);
-      pyTotal += orphanPY;
-      groupRows.push(body.length);
-      body.push(hasPY
-        ? ['OTHER', orphanPY ? fmt(orphanPY) : '', '', fmt(orphanTotal)]
-        : ['OTHER', '', fmt(orphanTotal)]);
-      // Summary: collapse the long catch-all "Other" list to its total only.
-      if (detailed) orphans.forEach(b => {
-        const val = signFlip ? -b.netBalance : b.netBalance;
-        const display = val < 0 ? `(${fmt(Math.abs(val))})` : fmt(val);
-        body.push(hasPY
-          ? [`  ${b.account.name}`, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', display, '']
-          : [`  ${b.account.name}`, display, '']);
-      });
-    }
-
-    return { body, groupRows, pyTotal };
+    return { body, groupRows, pyTotal: side.pyTotal };
   };
-
-  // Build bodies
-  const liab = allAccounts
-    ? buildGroupedBody(liabilityBalances, ['1000', '2000'], true)
-    : { body: liabilityBalances.filter(b => b.netBalance !== 0 || getPY(b.account.id) !== 0).map(b => {
-        const isContra = b.netBalance > 0;
-        const val = isContra ? `(${fmt(b.netBalance)})` : fmt(Math.abs(b.netBalance));
-        return hasPY ? [b.account.name, getPY(b.account.id) ? fmt(-getPY(b.account.id)) : '—', val] : [b.account.name, val];
-      }), groupRows: [] as number[], pyTotal: liabilityBalances.reduce((s, b) => s - getPY(b.account.id), 0) };
-
-  // Add P&L row
-  if (netProfit !== 0) {
-    liab.groupRows.push(liab.body.length);
-    const plLabel = netProfit > 0 ? 'PROFIT & LOSS A/C' : 'PROFIT & LOSS A/C (DEFICIT)';
-    const plVal = netProfit < 0 ? `(${fmt(Math.abs(netProfit))})` : fmt(netProfit);
-    liab.body.push(hasPY ? [plLabel, '', '', plVal] : [plLabel, '', plVal]);
-  }
-
-  const asset = allAccounts
-    ? buildGroupedBody(assetBalances, ['3000'], false)
-    : { body: assetBalances.filter(b => b.netBalance !== 0 || getPY(b.account.id) !== 0).map(b => {
-        const display = b.netBalance < 0 ? `(${fmt(Math.abs(b.netBalance))})` : fmt(b.netBalance);
-        return hasPY ? [b.account.name, getPY(b.account.id) ? fmt(getPY(b.account.id)) : '—', display] : [b.account.name, display];
-      }), groupRows: [] as number[], pyTotal: assetBalances.reduce((s, b) => s + getPY(b.account.id), 0) };
-
-  // Closing Stock — auto-valued from inventory (matches the on-screen Balance Sheet).
-  if (Math.abs(unpostedClosingStock) > 0.005) {
-    asset.groupRows.push(asset.body.length);
-    // PDFs are English-only (helvetica has no Devanagari — a Hindi label prints as garbage).
-    const csLabel = 'CLOSING STOCK';
-    asset.body.push(hasPY
-      ? [csLabel, '', '', fmt(unpostedClosingStock)]
-      : [csLabel, '', fmt(unpostedClosingStock)]);
-  }
+  const liab = sideBody(layout.liabilities);
+  const asset = sideBody(layout.assets);
 
   // HORIZONTAL (T-format) — Capital & Liabilities on the LEFT, Assets on the RIGHT, one table.
   // Both sides are zipped row-by-row into ONE autoTable so they paginate together: the header repeats on
   // every page and the single GRAND TOTAL row prints once (showFoot:'lastPage'). (The earlier two
   // separate half-width tables broke on long sheets — double totals, assets offset into the right half.)
-  const nSide = hasPY ? 4 : 3;                       // label [, prev-year], amount, grand
+  const nSide = 3 + (hasPY ? 1 : 0) + (detailed ? 1 : 0);   // label [, prev-year] [, detail], amount, grand
   const blankSide = Array.from({ length: nSide }, () => '');
   const rowsN = Math.max(liab.body.length, asset.body.length);
   const zipped: string[][] = [];
@@ -1078,14 +951,14 @@ export function generateBalanceSheetPDF(
     const padSide = (r: string[]) => (r.length >= nSide ? r.slice(0, nSide) : [...r, ...Array.from({ length: nSide - r.length }, () => '')]);
     zipped.push([...padSide(L), ...padSide(R)]);
   }
-  const sideHead = (label: string) => hasPY ? [label, pyYear, 'Amount', 'Grand'] : [label, 'Amount', 'Grand'];
+  const sideHead = (label: string) => [label, ...(hasPY ? [pyYear] : []), ...(detailed ? ['Detail'] : []), 'Amount', 'Total'];
   const pyTies = Math.abs(liab.pyTotal - asset.pyTotal) < 1;   // the comparative column only totals when both sides agree
   const totalFoot = (total: number, py: number) => hasPY ? ['GRAND TOTAL', pyTies ? fmt(py) : '\u2014', fmt(total), fmt(total)] : ['GRAND TOTAL', fmt(total), fmt(total)];
 
   const pageW = doc.internal.pageSize.width;
   const tblW = pageW - 30;                          // 15 mm margins both sides, aligned with the header/footer text
   const sideW = tblW / 2;
-  const amtW = hasPY ? 26 : 32;
+  const amtW = nSide >= 5 ? 22 : nSide === 4 ? 26 : 32;
   const labW = sideW - amtW * (nSide - 1);
   const columnStyles: Record<number, { cellWidth: number; halign?: 'right' }> = {};
   for (let side = 0; side < 2; side++) {

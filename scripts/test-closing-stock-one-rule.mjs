@@ -150,7 +150,8 @@ ok(/closingStock\(stockLeaves\.map/.test(bsl) && /const unpostedStock = cs\.repl
 // 2026-10-09: the tally moved into the shared balanceSheetTallied (lib/balanceSheetLeaves), which wraps balanceSheetLeaves.
 ok(/(balanceSheetLeaves|balanceSheetTallied)\(tb, \{ closingStockPosted, physicalClosingStock, netProfit \}\)/.test(read('src/pages/Dashboard.tsx'))
   && /export function balanceSheetTallied[\s\S]*?balanceSheetLeaves\(trialBalance, opts\)/.test(bsl), 'Dashboard tally uses the Balance Sheet rule (no raw-ledger tally)');
-ok(/Math\.abs\(unpostedStock\) > 0\.005/.test(read('src/pages/BalanceSheet.tsx')), 'Balance Sheet shows a non-zero closing stock of either sign (never silently hidden)');
+// 2026-10-11: the closing-stock row moved into the shared Balance Sheet layout (screen + PDF + export print it).
+ok(/Math\.abs\(input\.unpostedStock\) > 0\.005/.test(read('src/lib/reports/balanceSheetLayout.ts')) && /buildBalanceSheetLayout\(/.test(read('src/pages/BalanceSheet.tsx')), 'Balance Sheet shows a non-zero closing stock of either sign (never silently hidden)');
 
 // I&E: a deficit balances the INCOME side only.
 const pdf = read('src/lib/pdf.ts');

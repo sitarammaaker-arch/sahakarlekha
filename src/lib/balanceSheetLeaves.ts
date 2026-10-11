@@ -9,6 +9,12 @@
  *    the closing-stock journal is NOT posted and stock items carry a physical stock, the stock ledger
  *    (3400 group) leaves are replaced by physical stock + the ledger's in-year movement (goods put
  *    straight into stock this year) — `unpostedStock`. Otherwise the 3400 balance IS the closing stock.
+ *  - Accumulated depreciation (3108–3112, a Cr contra of the fixed assets) STAYS on the asset side as a
+ *    negative leaf, so fixed assets show net of depreciation (2026-10-11: the society's CA balance sheet —
+ *    "Tangible assets are stated at acquisition cost, net of accumulated depreciation" — and NABARD CAS
+ *    Annexure IV asset item 7 "Fixed Assets (net of depreciation)"). It used to flip to the liability side
+ *    as "Other", inflating BOTH totals by the depreciation. Both totals move by the same amount: the tally
+ *    is unchanged.
  */
 import type { AccountBalance } from '@/types';
 import { closingStock, isStockLedgerAccount } from '@/lib/tradingAccount';
@@ -25,6 +31,12 @@ export interface BalanceSheetLeaves {
   totalLiabilities: number;
 }
 
+/** A fixed asset's accumulated-depreciation contra ledger. Prod (2026-10-11): subtype 'accumulated_dep' on 145
+ *  ledgers; 15 older ones carry no subtype but the standard ids 3108–3112. */
+const ACCUM_DEP_IDS = new Set(['3108', '3109', '3110', '3111', '3112']);
+export const isAccumulatedDepreciation = (a: { id: string; type: string; subtype?: string; isGroup?: boolean }): boolean =>
+  !a.isGroup && a.type === 'asset' && (a.subtype === 'accumulated_dep' || a.subtype === 'accumulated_depreciation' || ACCUM_DEP_IDS.has(a.id));
+
 export function balanceSheetLeaves(
   trialBalance: readonly AccountBalance[],
   opts: { closingStockPosted: boolean; physicalClosingStock: number; netProfit: number },
@@ -38,13 +50,13 @@ export function balanceSheetLeaves(
   const typeAssetLeaf = trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup);
   const typeCapLiabLeaf = trialBalance.filter(b => (b.account.type === 'liability' || b.account.type === 'equity') && !b.account.isGroup);
   const allAssetLeaf = [
-    ...typeAssetLeaf.filter(b => b.netBalance >= 0),   // assets with a normal Dr balance
+    ...typeAssetLeaf.filter(b => b.netBalance >= 0 || isAccumulatedDepreciation(b.account)),   // Dr assets + depreciation contra (net block)
     ...typeCapLiabLeaf.filter(b => b.netBalance > 0),  // a liability/equity gone Dr → shown as an asset
   ];
   // A replaced stock leaf leaves BOTH sides (a Cr-gone stock ledger is inside `unpostedStock` too).
   const capLiabLeaves = [
     ...typeCapLiabLeaf.filter(b => b.netBalance <= 0), // liabilities/equity with a normal Cr balance
-    ...typeAssetLeaf.filter(b => b.netBalance < 0 && !isStock(b)),    // an asset gone Cr (e.g. ARTHIYA) → shown as a liability
+    ...typeAssetLeaf.filter(b => b.netBalance < 0 && !isStock(b) && !isAccumulatedDepreciation(b.account)),    // an asset gone Cr (e.g. ARTHIYA) → shown as a liability
   ];
   const assetLeaves = allAssetLeaf.filter(b => !isStock(b));
   const totalAssets = assetLeaves.reduce((s, b) => s + b.netBalance, 0) + unpostedStock;
