@@ -55,10 +55,10 @@ for (const [cash, share, sideName] of [[12000, -10000, 'liabilities'], [10000, -
 ok(!Y.buildBalanceSheetLayout({ accounts, assetLeaves: [], capLiabLeaves: [], unpostedStock: 0, netProfit: 0, openingDifference: 0.004 }).liabilities.sections.some((s) => s.id === 'opening-diff'), 'P1: no line for a zero gap');
 const page = read('pages/BalanceSheet.tsx');
 ok(/openingDifference: openingGap,/.test(page) && /const isBalanced = Math\.abs\(rawDiff\) < 1;/.test(page) && /const rawDiff = leafLiabilities - leafAssets;/.test(page), 'P1: the page bridges the opening gap; "balanced" stays the RAW test');
-ok(/const diff = residualDiff;/.test(page) && /openingGap,\n    \);/.test(page), 'P1: PDF allowed when only the opening gap remains, and prints the same line');
+ok(/const diff = residualDiff;/.test(page) && /openingGap,\r?\n    \);/.test(page), 'P1: PDF allowed when only the opening gap remains, and prints the same line');
 ok(/ओपनिंग बैलेंस के अंतर के साथ बराबर/.test(page) && /navigate\('\/opening-balances'\)/.test(page), 'P1: status says "equal only with the opening difference" and links to Opening Balances');
 const pdf = read('lib/pdf.ts');
-ok(/openingDifference: number = 0,/.test(pdf) && /    openingDifference,\n  \}\);/.test(pdf), 'P1: the PDF builds the same layout with the gap');
+ok(/openingDifference: number = 0,/.test(pdf) && /    openingDifference,\r?\n  \}\);/.test(pdf), 'P1: the PDF builds the same layout with the gap');
 ok(/'difference in opening balances': 'ओपनिंग बैलेंस का अंतर'/.test(read('lib/pdfHindiLabels.ts')), 'P1: Hindi PDF label');
 
 // ── P2: wrong-side / P&L-head openings ──
