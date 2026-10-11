@@ -18,6 +18,8 @@
  */
 import type { AccountBalance } from '@/types';
 import { closingStock, isStockLedgerAccount } from '@/lib/tradingAccount';
+import { isAccumulatedDepreciation } from '@/lib/accountRoles';
+export { isAccumulatedDepreciation };
 
 export interface BalanceSheetLeaves {
   /** Dr-side leaves (netBalance ≥ 0 means Dr), after sign reclassification and the stock rule. */
@@ -31,11 +33,6 @@ export interface BalanceSheetLeaves {
   totalLiabilities: number;
 }
 
-/** A fixed asset's accumulated-depreciation contra ledger. Prod (2026-10-11): subtype 'accumulated_dep' on 145
- *  ledgers; 15 older ones carry no subtype but the standard ids 3108–3112. */
-const ACCUM_DEP_IDS = new Set(['3108', '3109', '3110', '3111', '3112']);
-export const isAccumulatedDepreciation = (a: { id: string; type: string; subtype?: string; isGroup?: boolean }): boolean =>
-  !a.isGroup && a.type === 'asset' && (a.subtype === 'accumulated_dep' || a.subtype === 'accumulated_depreciation' || ACCUM_DEP_IDS.has(a.id));
 
 export function balanceSheetLeaves(
   trialBalance: readonly AccountBalance[],

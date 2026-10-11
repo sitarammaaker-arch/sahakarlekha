@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Save, ArrowRight, FileSpreadsheet, Download } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { carryForwardOpenings, earlierYearVoucherCount, openingTotals } from '@/lib/openingBalances';
+import { carryForwardOpenings, earlierYearVoucherCount, openingTotals, openingWarnings } from '@/lib/openingBalances';
 import { fyStartFromLabel } from '@/lib/fyPeriod';
 import { accountCode } from '@/lib/accountCode';
 import { accountDisplayName } from '@/lib/accountName';
@@ -84,6 +84,10 @@ export default function OpeningBalances() {
   // Reports ignore these, so they are a silent source of a Trial-Balance gap — surface them
   // loudly so the user moves the amount onto a ledger (leaf) account.
   const groupsWithOpening = balanceAccounts.filter(a => a.isGroup && (balances[a.id]?.amount || 0) > 0);
+  // Openings on the wrong side (a liability in Dr …) and on income/expense heads (not listed on this page, yet
+  // counted in its totals) — shown BEFORE save so a sign mistake from a file is caught (2026-10-11).
+  const warn = useMemo(() => openingWarnings(Object.values(balances), accounts), [balances, accounts]);
+  const sideHi = (s: 'debit' | 'credit') => (s === 'debit' ? 'Dr' : 'Cr');
 
   const handleCSV = () => {
     const headers = ['Code', 'Account Name', 'Type', 'Opening Balance', 'Balance Type'];
@@ -292,6 +296,47 @@ export default function OpeningBalances() {
               <li key={a.id}>{hi ? (a.nameHi || a.name) : a.name} — ₹{fmt(balances[a.id]?.amount || 0)}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {(warn.wrongSide.length > 0 || warn.plHeads.length > 0) && (
+        <div className="p-3 bg-amber-500/10 border border-amber-500/40 rounded-lg text-amber-800 dark:text-amber-200 text-sm space-y-2">
+          {warn.wrongSide.length > 0 && (
+            <div className="space-y-1">
+              <p className="font-semibold">
+                {hi
+                  ? `⚠️ ${warn.wrongSide.length} खातों की opening उलटी तरफ़ है (कुल ₹${fmt(warn.wrongSide.reduce((t, r) => t + r.amount, 0))})`
+                  : `⚠️ ${warn.wrongSide.length} account(s) have the opening on the wrong side (₹${fmt(warn.wrongSide.reduce((t, r) => t + r.amount, 0))})`}
+              </p>
+              <p className="text-xs">
+                {hi
+                  ? 'देनदारी / पूँजी की opening सामान्यतः Cr में और संपत्ति की Dr में होती है। ज़्यादातर यह file या entry में Dr/Cr की उलटी गलती होती है — Dr/Cr बदलें, या सही हो तो रहने दें (जैसे लेनदार को दिया अग्रिम):'
+                  : 'A liability / capital opening is normally Cr and an asset Dr. Usually this is a Dr/Cr slip in the file or entry — switch it, or keep it if it is genuine (e.g. an advance paid to a creditor):'}
+              </p>
+              <ul className="text-xs list-disc pl-5">
+                {warn.wrongSide.slice(0, 8).map(r => (
+                  <li key={r.accountId}>{r.name} — ₹{fmt(r.amount)} {sideHi(r.side)}</li>
+                ))}
+                {warn.wrongSide.length > 8 && <li>{hi ? `… और ${warn.wrongSide.length - 8}` : `… and ${warn.wrongSide.length - 8} more`}</li>}
+              </ul>
+            </div>
+          )}
+          {warn.plHeads.length > 0 && (
+            <div className="space-y-1">
+              <p className="font-semibold">
+                {hi ? `ℹ️ ${warn.plHeads.length} आय/व्यय खातों पर opening है — ये इस सूची में नहीं दिखते, पर ऊपर के कुल योग में गिने जाते हैं` : `ℹ️ ${warn.plHeads.length} income/expense account(s) carry an opening — not listed here, but counted in the totals above`}
+              </p>
+              <p className="text-xs">
+                {hi ? 'यह तभी सही है जब समिति बीच साल से ऐप शुरू कर रही हो। नहीं तो इन्हें Ledger Heads में खोलकर 0 करें:' : 'Right only when the society starts mid-year. Otherwise open them in Ledger Heads and set them to 0:'}
+              </p>
+              <ul className="text-xs list-disc pl-5">
+                {warn.plHeads.slice(0, 8).map(r => (
+                  <li key={r.accountId}>{r.name} — ₹{fmt(r.amount)} {sideHi(r.side)}</li>
+                ))}
+                {warn.plHeads.length > 8 && <li>{hi ? `… और ${warn.plHeads.length - 8}` : `… and ${warn.plHeads.length - 8} more`}</li>}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 

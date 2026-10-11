@@ -410,7 +410,8 @@
     "test:nav-hubs": "node scripts/test-nav-hubs.mjs",
     "test:nav-favourites": "node scripts/test-nav-favourites.mjs",
     "test:nav-create-menu": "node scripts/test-nav-create-menu.mjs",
-    "test:bs-layout": "node scripts/test-bs-layout.mjs"
+    "test:bs-layout": "node scripts/test-bs-layout.mjs",
+    "test:opening-difference": "node scripts/test-opening-difference.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

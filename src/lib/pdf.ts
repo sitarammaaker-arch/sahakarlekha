@@ -894,6 +894,8 @@ export function generateBalanceSheetPDF(
   unpostedClosingStock: number = 0,  // closing stock auto-valued from inventory (no journal)
   /** The prior-year column the SCREEN shows (computed from data at the prior FY end); falls back to the saved snapshot. */
   priorYear?: { balances: Record<string, number>; label: string; netProfit: number },
+  /** Σ opening Dr − Σ opening Cr — printed as "Difference in opening balances" (Tally), like the screen. */
+  openingDifference: number = 0,
 ) {
   const doc = new jsPDF('landscape');
   const bsFinal = reportStatus(society).final;
@@ -910,6 +912,7 @@ export function generateBalanceSheetPDF(
     accounts: allAccounts ?? [], assetLeaves: assetBalances, capLiabLeaves: liabilityBalances,
     unpostedStock: unpostedClosingStock, netProfit, py: hasPY ? pyBalances : undefined,
     pyNetProfit: hasPY ? (priorYear?.netProfit ?? pyResult(pyBalances, allAccounts ?? [])) : undefined,
+    openingDifference,
   });
   const totalLiabilities = layout.liabilities.total;
   const totalAssets = layout.assets.total;
@@ -920,7 +923,7 @@ export function generateBalanceSheetPDF(
     const groupRows: number[] = [];
     for (const sec of side.sections) {
       groupRows.push(body.length);
-      body.push([sec.warn ? 'REVERSED BALANCE - CHECK' : sec.title.toUpperCase(), ...(hasPY ? [sec.pyTotal ? fmt(sec.pyTotal) : ''] : []), ...(detailed ? [''] : []), '', '']);
+      body.push([sec.id === 'reversed' ? 'REVERSED BALANCE - CHECK' : sec.title.toUpperCase(), ...(hasPY ? [sec.pyTotal ? fmt(sec.pyTotal) : ''] : []), ...(detailed ? [''] : []), '', '']);
       const rows = visibleRows(sec, detailed);
       rows.forEach((r, i) => {
         const pad = '  '.repeat(r.kind === 'detail' ? r.depth + 1 : 1);
