@@ -1,13 +1,13 @@
 /**
- * Balance Sheet — Grouped Audit Format
- * Groups: Share Capital, Reserves, Current Liabilities, Loans | Fixed Assets, Investments, Current Assets, Inventory
- * Each group shows sub-total in "Grand" column, child accounts indented with individual amounts
- * Previous Year column shows per-account and per-group values
+ * Balance Sheet — the society's CA format (2026-10-11): two money columns, the head total on the head's
+ * last line, fixed assets net of depreciation, one profit & loss line. Rows come from the shared layout
+ * (lib/reports/balanceSheetLayout) that the PDF and the Excel/CSV export print too (RULE 2).
+ * Previous Year column shows per-line and per-head values
  */
-import React, { useMemo, useState } from 'react';
-import { isAbnormalBalance } from '@/lib/abnormalBalance';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
+import { buildBalanceSheetLayout, visibleRows, pyResult, balanceSheetExportRows, BS_EXPORT_HEADERS, type BsSide } from '@/lib/reports/balanceSheetLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -25,23 +25,6 @@ import { useToast } from '@/hooks/use-toast';
 import type { AccountBalance } from '@/types';
 import { PrintButton, PrintHeader } from '@/components/ReportPrint';
 import YearEndChecklist from '@/components/YearEndChecklist';
-
-interface BSItem {
-  account: AccountBalance;
-  displayAmount: number;
-  pyAmount: number;
-  indent?: number;        // 0 = direct child, 1 = under a nested sub-group
-  isSubHeader?: boolean;  // a nested sub-group heading row (displayAmount = its sub-total)
-}
-
-interface BSGroup {
-  id: string;
-  name: string;
-  nameHi: string;
-  items: BSItem[];
-  grandTotal: number;
-  pyGrandTotal: number;
-}
 
 const BalanceSheet: React.FC = () => {
   const { t, language } = useLanguage();
@@ -97,12 +80,18 @@ const BalanceSheet: React.FC = () => {
   const computedPyLabel = fyA && fyB ? `${Number(fyA) - 1}-${String(Number(fyB) - 1).padStart(2, '0')}` : '';
   const pyYear = usingComputedPY ? computedPyLabel : (society.previousFinancialYear || '');
   const hasPY = !!pyYear && Object.keys(pyBalances).length > 0;
-  const getPY = (id: string) => pyBalances[id] ?? 0;
 
   // Auto-reclassify by balance SIGN + the closing-stock rule — the ONE shared rule
   // (src/lib/balanceSheetLeaves.ts), also used by the NABARD CAS Balance Sheet (RULE 2).
-  const { assetLeaves, capLiabLeaves: allCapLiabLeaf, unpostedStock, totalAssets, totalLiabilities } =
+  const { assetLeaves, capLiabLeaves: allCapLiabLeaf, unpostedStock } =
     balanceSheetLeaves(trialBalance, { closingStockPosted, physicalClosingStock, netProfit });
+  const pyNetProfit = hasPY ? pyResult(pyBalances, accounts) : 0;
+  const layout = buildBalanceSheetLayout({
+    accounts, assetLeaves, capLiabLeaves: allCapLiabLeaf, unpostedStock, netProfit,
+    py: hasPY ? pyBalances : undefined, pyNetProfit: hasPY ? pyNetProfit : undefined,
+  });
+  const totalAssets = layout.assets.total;
+  const totalLiabilities = layout.liabilities.total;
 
   // ── Balance health diagnostic ──────────────────────────────────────────────
   // When the sheet doesn't tie, the root cause is almost always a ledger that
@@ -117,125 +106,9 @@ const BalanceSheet: React.FC = () => {
   const openingGap = sumOpenDr - sumOpenCr;   // ≠ 0 ⇒ opening balances don't tie
   const txnGap = sumTxnDr - sumTxnCr;          // ≠ 0 ⇒ a legacy unbalanced voucher
 
-  // Build grouped structure for display
-  const buildGroups = (
-    balances: AccountBalance[],
-    topParentIds: string[],
-    signFlip: boolean,
-  ): BSGroup[] => {
-    const subGroups = accounts.filter(a => a.isGroup && topParentIds.includes(a.parentId || ''));
-    const capturedIds = new Set<string>();
-
-    const nonZero = (b: AccountBalance) => b.netBalance !== 0 || getPY(b.account.id) !== 0;
-    const mkLeaf = (b: AccountBalance, indent: number): BSItem => {
-      capturedIds.add(b.account.id);
-      return { account: b, displayAmount: signFlip ? -b.netBalance : b.netBalance, pyAmount: signFlip ? -getPY(b.account.id) : getPY(b.account.id), indent };
-    };
-
-    // Recursively build rows for a group to ANY depth: direct leaves at `depth`,
-    // then each nested sub-group as a heading (with its rolled-up subtotal)
-    // followed by its own sub-tree at depth+1. Preserves the full hierarchy
-    // (group → sub-group → sub-sub-group → … → ledger) instead of flattening it.
-    const buildRows = (parentId: string, depth: number): BSItem[] => {
-      const out: BSItem[] = [];
-      balances
-        .filter(b => b.account.parentId === parentId && !b.account.isGroup && nonZero(b))
-        .forEach(b => out.push(mkLeaf(b, depth)));
-      accounts.filter(a => a.isGroup && a.parentId === parentId).forEach(ssg => {
-        const subRows = buildRows(ssg.id, depth + 1);
-        const leaves = subRows.filter(r => !r.isSubHeader);
-        if (leaves.length === 0) return;
-        out.push({
-          account: { account: { id: `subgrp-${ssg.id}`, name: ssg.name, nameHi: ssg.nameHi, type: ssg.type } } as any,
-          displayAmount: leaves.reduce((s, r) => s + r.displayAmount, 0),
-          pyAmount: leaves.reduce((s, r) => s + r.pyAmount, 0),
-          isSubHeader: true, indent: depth,
-        });
-        out.push(...subRows);
-      });
-      return out;
-    };
-
-    const groups = subGroups.map(group => {
-      const items: BSItem[] = buildRows(group.id, 0);
-
-      // Audit-friendly group names
-      const auditNames: Record<string, { en: string; hi: string }> = {
-        '3400': { en: 'Closing Stock', hi: 'समापन माल' },
-        '3300': { en: 'Current Assets & Cash/Bank', hi: 'चालू संपत्ति एवं नकद/बैंक' },
-      };
-      const displayName = auditNames[group.id]?.en || group.name;
-      const displayNameHi = auditNames[group.id]?.hi || group.nameHi || group.name;
-
-      // NOTE: Closing stock is NOT rendered here from currentStock. It is shown
-      // once, movement-based (RULE 2), via the injected "Closing Stock (from
-      // Inventory)" row (unpostedStock) when no journal is posted, or via the
-      // 3400 ledger leaves when a journal IS posted. Rendering it from
-      // currentStock here caused a double-count and a second (wrong) formula.
-
-      // Grand total sums LEAVES only — sub-header rows already carry their leaves'
-      // subtotal, so counting both would double the nested sub-group's amount.
-      const leafItems = items.filter(i => !i.isSubHeader);
-      return {
-        id: group.id, name: displayName, nameHi: displayNameHi,
-        items, grandTotal: leafItems.reduce((s, i) => s + i.displayAmount, 0),
-        pyGrandTotal: leafItems.reduce((s, i) => s + i.pyAmount, 0),
-      };
-    }).filter(g => g.items.length > 0);
-
-    // Catch orphaned accounts not captured by any group
-    const orphans = balances
-      .filter(b => !capturedIds.has(b.account.id) && (b.netBalance !== 0 || getPY(b.account.id) !== 0))
-      .map(b => ({ account: b, displayAmount: signFlip ? -b.netBalance : b.netBalance, pyAmount: signFlip ? -getPY(b.account.id) : getPY(b.account.id) }));
-
-    // An account that landed here because its balance flipped sides (e.g. a bank or staff advance in
-    // Cr, shown among liabilities) is a books problem, not "other" — give it its own, always-listed,
-    // warning group (usability audit P0-4). Totals are unchanged.
-    const reversed = orphans.filter(o => isAbnormalBalance(o.account.account, o.account.netBalance));
-    const plainOrphans = orphans.filter(o => !reversed.includes(o));
-    if (reversed.length > 0) {
-      groups.push({
-        id: 'reversed', name: '⚠ Accounts with a reversed balance — check', nameHi: '⚠ उलटे शेष वाले खाते — जाँचें',
-        items: reversed,
-        grandTotal: reversed.reduce((s, i) => s + i.displayAmount, 0),
-        pyGrandTotal: reversed.reduce((s, i) => s + i.pyAmount, 0),
-      });
-    }
-    if (plainOrphans.length > 0) {
-      groups.push({
-        id: 'other', name: 'Other', nameHi: 'अन्य',
-        items: plainOrphans,
-        grandTotal: plainOrphans.reduce((s, i) => s + i.displayAmount, 0),
-        pyGrandTotal: plainOrphans.reduce((s, i) => s + i.pyAmount, 0),
-      });
-    }
-
-    return groups;
-  };
-
-  const liabilityGroups = useMemo(() => buildGroups(allCapLiabLeaf, ['1000', '2000'], true), [trialBalance, accounts, pyBalances]);
-  const assetGroups = useMemo(() => buildGroups(assetLeaves, ['3000'], false), [trialBalance, accounts, pyBalances, closingStockPosted]);
-
-  const pyTotalLiab = liabilityGroups.reduce((s, g) => s + g.pyGrandTotal, 0);
-  const pyTotalAsset = assetGroups.reduce((s, g) => s + g.pyGrandTotal, 0);
-
-  // Export
-  const exportHeaders = ['Section', 'Group', 'Particulars', 'Amount (Rs.)', 'Grand'];
-  const exportRows = (): (string | number)[][] => {
-    const rows: (string | number)[][] = [];
-    liabilityGroups.forEach(g => {
-      rows.push(['Capital & Liabilities', g.name, '', '', g.grandTotal]);
-      g.items.forEach(i => rows.push(['', '', i.account.account.name, i.displayAmount, '']));
-    });
-    if (netProfit !== 0) rows.push(['Capital & Liabilities', 'Profit & Loss A/c', netProfit >= 0 ? 'Net Profit' : 'Net Loss', Math.abs(netProfit), '']);
-    rows.push(['Capital & Liabilities', '', 'GRAND TOTAL', totalLiabilities, totalLiabilities]);
-    assetGroups.forEach(g => {
-      rows.push(['Assets', g.name, '', '', g.grandTotal]);
-      g.items.forEach(i => rows.push(['', '', i.account.account.name, i.displayAmount, '']));
-    });
-    rows.push(['Assets', '', 'GRAND TOTAL', totalAssets, totalAssets]);
-    return rows;
-  };
+  // Export — the SAME rows as the screen, in the chosen detail level (Summary / Full detail), with the prior year.
+  const exportHeaders = BS_EXPORT_HEADERS(hi, hasPY ? pyYear : '');
+  const exportRows = () => balanceSheetExportRows(layout, showLedgers, hi);
 
   const handleCSV = () => downloadCSV(exportHeaders, exportRows(), `balance-sheet-${society.financialYear}`);
   const handleExcel = () => downloadExcelSingle(exportHeaders, exportRows(), `balance-sheet-${society.financialYear}`, 'Balance Sheet');
@@ -253,7 +126,8 @@ const BalanceSheet: React.FC = () => {
     generateBalanceSheetPDF(
       assetLeaves,
       allCapLiabLeaf,   // reclassified-by-sign, same as the on-screen sheet (ARTHIYA etc. on the liability side)
-      netProfit, society, language, 0, accounts, stockItems, showLedgers, unpostedStock
+      netProfit, society, language, 0, accounts, stockItems, showLedgers, unpostedStock,
+      hasPY ? { balances: pyBalances, label: pyYear, netProfit: pyNetProfit } : undefined,
     );
   };
 
@@ -275,8 +149,11 @@ const BalanceSheet: React.FC = () => {
     );
   };
 
-  const renderSide = (groups: BSGroup[], sideLabel: string, sideLabelHi: string, total: number, pyTotal: number, isLiabSide: boolean) => (
-    <div className="space-y-2">
+  const money = (v: number) => (v < 0 ? `(${fmt(Math.abs(v))})` : fmt(v));
+  // One side, CA style: head heading row → its lines (AMOUNT column) → the head total on the LAST row (TOTAL column).
+  // Full detail adds each sub-group's ledgers in a separate DETAIL column, so no column holds a subtotal and its parts.
+  const renderSide = (side: BsSide, sideLabel: string, sideLabelHi: string) => (
+    <div className="space-y-2 min-w-0">
       <h3 className="text-lg font-semibold text-primary pb-2 border-b">
         {hi ? sideLabelHi : sideLabel}
       </h3>
@@ -288,113 +165,60 @@ const BalanceSheet: React.FC = () => {
           <TableRow>
             {hasPY && <TableHead className="text-right text-muted-foreground text-xs w-24" title={usingComputedPY ? (hi ? 'डेटा से गणना (पिछले FY अंत)' : 'Computed from data (prior FY end)') : (hi ? 'सहेजा गया स्नैपशॉट' : 'Saved snapshot')}>{pyYear}{usingComputedPY ? ' *' : ''}</TableHead>}
             {hasPY && <TableHead className="text-right text-muted-foreground text-xs w-24">{hi ? 'बदलाव' : 'Change'}</TableHead>}
-            <TableHead>{t('particulars')}</TableHead>
+            <TableHead className="min-w-[11rem]">{t('particulars')}</TableHead>
+            {showLedgers && <TableHead className="text-right w-28 text-muted-foreground">{hi ? 'ब्योरा' : 'Detail'}</TableHead>}
             <TableHead className="text-right w-28">{hi ? 'राशि' : 'Amount'}</TableHead>
-            <TableHead className="text-right w-28">{hi ? 'कुल योग' : 'Grand'}</TableHead>
+            <TableHead className="text-right w-28">{hi ? 'योग' : 'Total'}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {groups.map(group => (
-            <React.Fragment key={group.id}>
-              {/* Group Header */}
-              <TableRow className="bg-primary/5 font-bold">
-                {hasPY && <TableCell className="text-right text-muted-foreground">{group.pyGrandTotal !== 0 ? fmt(group.pyGrandTotal) : ''}</TableCell>}
-                {hasPY && varCell(group.grandTotal, group.pyGrandTotal)}
-                <TableCell className="font-bold uppercase text-sm">
-                  {hi ? (group.nameHi || group.name) : group.name}
-                </TableCell>
-                <TableCell></TableCell>
-                <TableCell className={`text-right font-bold ${group.grandTotal < 0 ? 'text-destructive' : ''}`}>
-                  {group.grandTotal < 0 ? `(${fmt(Math.abs(group.grandTotal))})` : fmt(group.grandTotal)}
-                </TableCell>
-              </TableRow>
-              {/* Child accounts (with nested sub-group headings) */}
-              {group.items.map(({ account: b, displayAmount, pyAmount, indent, isSubHeader }) => {
-                const isNegative = displayAmount < 0;
-                const contraLabel = isLiabSide ? '(Dr)' : '(Cr)';
-
-                // Indent grows with nesting depth (works for any number of levels).
-                const padLeft = `${1.5 + (indent || 0) * 1.25}rem`;
-
-                // Nested sub-group heading row (e.g. "Market Supplier Chakan") with its subtotal.
-                if (isSubHeader) {
+          {side.sections.map(sec => {
+            const rows = visibleRows(sec, showLedgers);
+            return (
+              <React.Fragment key={sec.id}>
+                {/* Head heading — the prior-year head total sits here (the current one on the head's last line) */}
+                <TableRow className={sec.warn ? 'bg-amber-500/10' : 'bg-primary/5'}>
+                  {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{sec.pyTotal !== 0 ? money(sec.pyTotal) : ''}</TableCell>}
+                  {hasPY && varCell(sec.total, sec.pyTotal)}
+                  <TableCell className="font-bold uppercase text-sm" colSpan={showLedgers ? 4 : 3}>{hi ? sec.titleHi : sec.title}</TableCell>
+                </TableRow>
+                {rows.map((r, i) => {
+                  const last = i === rows.length - 1;
+                  const isDetail = r.kind === 'detail';
+                  const padLeft = `${isDetail ? 1.5 + r.depth * 1.25 : 1.5}rem`;
+                  const link = r.accountId ? () => navigate(`/ledger?account=${r.accountId}`) : undefined;
                   return (
-                    <TableRow key={b.account.id} className="bg-muted/30">
-                      {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyAmount !== 0 ? fmt(pyAmount) : '—'}</TableCell>}
-                      {hasPY && varCell(displayAmount, pyAmount)}
-                      <TableCell className="text-sm font-semibold" style={{ paddingLeft: padLeft }}>{hi ? (b.account.nameHi || b.account.name) : b.account.name}</TableCell>
-                      <TableCell className="text-right text-sm font-semibold">
-                        {isNegative ? `(${fmt(Math.abs(displayAmount))})` : fmt(displayAmount)}
+                    <TableRow key={r.key}
+                      className={`${link ? 'hover:bg-muted/30 cursor-pointer' : ''} ${isDetail ? 'text-muted-foreground' : ''}`}
+                      onClick={link} title={link ? (hi ? 'लेजर देखें' : 'View Ledger') : undefined}
+                    >
+                      {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{r.py !== 0 ? money(r.py) : '—'}</TableCell>}
+                      {hasPY && (isDetail ? <TableCell /> : varCell(r.amount, r.py))}
+                      <TableCell className={`text-sm group ${r.tone === 'subhead' ? 'italic font-medium' : ''} ${r.tone === 'less' ? 'italic' : ''}`} style={{ paddingLeft: padLeft }}>
+                        <span className={link ? 'group-hover:text-primary group-hover:underline' : ''}>
+                          {hi ? r.labelHi : r.label}
+                        </span>
+                        {r.tone === 'subhead' && <span className="ml-1 text-xs">({hi ? 'योग' : 'total'} {money(r.amount)})</span>}
+                        {link && <ExternalLink className="h-3 w-3 ml-1 inline opacity-0 group-hover:opacity-50 text-muted-foreground" />}
                       </TableCell>
-                      <TableCell></TableCell>
+                      {showLedgers && <TableCell className="text-right text-sm">{isDetail && r.tone !== 'subhead' ? money(r.amount) : ''}</TableCell>}
+                      <TableCell className={`text-right text-sm ${r.amount < 0 && !isDetail ? 'text-muted-foreground' : ''}`}>{isDetail ? '' : money(r.amount)}</TableCell>
+                      <TableCell className={`text-right font-bold ${last && sec.total < 0 ? 'text-destructive' : ''}`}>
+                        {last ? <span className="inline-block border-t border-foreground/40 pt-0.5">{money(sec.total)}</span> : ''}
+                      </TableCell>
                     </TableRow>
                   );
-                }
-
-                // Summary mode: hide individual ledgers — those nested inside a
-                // sub-group, and the long catch-all "Other" list — keeping only
-                // group/sub-group totals and the few direct group lines.
-                if (!showLedgers && ((indent || 0) >= 1 || group.id === 'other')) return null;
-
-                return (
-                  <TableRow key={b.account.id} className="hover:bg-muted/30 cursor-pointer"
-                    onClick={() => navigate(`/ledger?account=${b.account.id}`)}
-                    title={hi ? 'लेजर देखें' : 'View Ledger'}
-                  >
-                    {hasPY && <TableCell className="text-right text-muted-foreground text-sm">{pyAmount !== 0 ? fmt(pyAmount) : '—'}</TableCell>}
-                    {hasPY && varCell(displayAmount, pyAmount)}
-                    <TableCell className="text-sm group" style={{ paddingLeft: padLeft }}>
-                      <span className="group-hover:text-primary group-hover:underline">
-                        {hi ? (b.account.nameHi || b.account.name) : b.account.name}
-                      </span>
-                      {isNegative && <span className="ml-1 text-xs text-muted-foreground">{contraLabel}</span>}
-                      <ExternalLink className="h-3 w-3 ml-1 inline opacity-0 group-hover:opacity-50 text-muted-foreground" />
-                    </TableCell>
-                    <TableCell className={`text-right text-sm ${isNegative ? 'text-muted-foreground' : ''}`}>
-                      {isNegative ? `(${fmt(Math.abs(displayAmount))})` : fmt(displayAmount)}
-                    </TableCell>
-                    <TableCell></TableCell>
-                  </TableRow>
-                );
-              })}
-            </React.Fragment>
-          ))}
-
-          {/* Profit & Loss (Liabilities side only) */}
-          {isLiabSide && netProfit !== 0 && (
-            <TableRow className={netProfit > 0 ? 'bg-success/10 font-bold' : 'bg-destructive/10 font-bold'}>
-              {hasPY && <TableCell></TableCell>}
-              {hasPY && <TableCell></TableCell>}
-              <TableCell className={`font-bold uppercase text-sm ${netProfit > 0 ? 'text-success' : 'text-destructive'}`}>
-                {hi ? 'प्रॉफ़िट एंड लॉस खाता' : 'Profit & Loss A/c'}
-              </TableCell>
-              <TableCell></TableCell>
-              <TableCell className={`text-right font-bold ${netProfit > 0 ? 'text-success' : 'text-destructive'}`}>
-                {netProfit < 0 ? `(${fmt(Math.abs(netProfit))})` : fmt(netProfit)}
-              </TableCell>
-            </TableRow>
-          )}
-
-          {/* Closing Stock — auto-valued from inventory at the as-on date (Tally-style) */}
-          {!isLiabSide && Math.abs(unpostedStock) > 0.005 && (
-            <TableRow className="font-semibold">
-              {hasPY && <TableCell></TableCell>}
-              {hasPY && <TableCell></TableCell>}
-              <TableCell className="text-sm">
-                {hi ? 'समापन माल (इन्वेंट्री + इस वर्ष स्टॉक खाते में आया माल)' : 'Closing Stock (inventory + goods put into stock this year)'}
-              </TableCell>
-              <TableCell></TableCell>
-              <TableCell className="text-right">{fmt(unpostedStock)}</TableCell>
-            </TableRow>
-          )}
+                })}
+              </React.Fragment>
+            );
+          })}
 
           {/* GRAND TOTAL */}
           <TableRow className="bg-primary/15 font-bold text-base border-t-2 border-primary">
-            {hasPY && <TableCell className="text-right text-muted-foreground">{fmt(pyTotal)}</TableCell>}
-            {hasPY && varCell(total, pyTotal)}
-            <TableCell className="font-bold">{hi ? 'कुल योग' : 'GRAND TOTAL'}</TableCell>
-            <TableCell className="text-right font-bold text-primary">{fmt(total)}</TableCell>
-            <TableCell className="text-right font-bold text-primary">{fmt(total)}</TableCell>
+            {hasPY && <TableCell className="text-right text-muted-foreground">{fmt(side.pyTotal)}</TableCell>}
+            {hasPY && varCell(side.total, side.pyTotal)}
+            <TableCell className="font-bold" colSpan={showLedgers ? 3 : 2}>{hi ? 'कुल योग' : 'GRAND TOTAL'}</TableCell>
+            <TableCell className="text-right font-bold text-primary">{fmt(side.total)}</TableCell>
           </TableRow>
         </TableBody>
       </Table>
@@ -458,8 +282,8 @@ const BalanceSheet: React.FC = () => {
           </div>
           <p className="text-xs text-muted-foreground mt-2">
             {hi
-              ? 'सारांश: समूह/उप-समूह केवल कुल योग के साथ (व्यक्तिगत खाते छिपे)। पूर्ण विवरण: हर खाता दिखे।'
-              : 'Summary: groups/sub-groups with totals only (individual ledgers hidden). Full detail: every account.'}
+              ? 'सारांश: हर उप-समूह (जैसे बैंक खाते, विविध देनदार) एक पंक्ति में। पूर्ण विवरण: उनके खाते "ब्योरा" column में अलग से।'
+              : 'Summary: each sub-group (e.g. bank accounts, sundry debtors) on one line. Full detail: their ledgers in a separate "Detail" column.'}
           </p>
         </CardContent>
       </Card>
@@ -477,10 +301,11 @@ const BalanceSheet: React.FC = () => {
         <CardContent className="pt-6">
           {/* Stack the two sides until xl: on a laptop, side-by-side + the prior-year/Change
               comparative columns overflowed the width and forced horizontal scrollbars.
-              Each side stacks full-width below xl; side-by-side only on wide monitors. */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {renderSide(liabilityGroups, 'Capital & Liabilities', 'कैपिटल एवं लायबिलिटीज़', totalLiabilities, pyTotalLiab, true)}
-            {renderSide(assetGroups, 'Assets', 'संपत्तियां', totalAssets, pyTotalAsset, false)}
+              Each side stacks full-width below xl; side-by-side only on wide monitors — and with the
+              prior-year or detail columns only from 2xl, so "Particulars" never wraps word by word. */}
+          <div className={`grid grid-cols-1 gap-6 ${hasPY || showLedgers ? '2xl:grid-cols-2' : 'xl:grid-cols-2'}`}>
+            {renderSide(layout.liabilities, 'Capital & Liabilities', 'कैपिटल एवं लायबिलिटीज़')}
+            {renderSide(layout.assets, 'Assets', 'संपत्तियां')}
           </div>
 
           <div className="mt-8 p-4 rounded-lg bg-muted/50 text-center">
