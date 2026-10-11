@@ -13,6 +13,9 @@
  *    reserves head ("Add: Net Profit" in the CA's sheet). A loss shows as a "Less:" line there — the totals
  *    are exactly the app's (where a loss sits, CA vs CAS style, is a pending CA question; phase B).
  *  • the unposted closing stock (inventory-valued) is a line of the Inventory head, never a loose row.
+ *  • a balance shown on the side opposite its type (a creditor gone Dr, an asset gone Cr) is a line named
+ *    after its immediate sub-group ("Market Supplier Kharia (Dr शेष)") with its ledgers as details — in the
+ *    ⚠ reversed-balance head when it looks like an error, else in Current Assets / Current Liabilities.
  * Every leaf lands in exactly one section; side totals == balanceSheetLeaves totals (pinned by tests).
  * PURE.
  */
@@ -126,12 +129,52 @@ function buildSide(
     sections.push(sec);
   }
 
-  // Leaves no head captured: a flipped-side balance gets its own warning head, the rest "Other" (never dropped).
+  // Leaves no head captured — mostly balances shown on the side opposite their type (balanceSheetLeaves'
+  // sign rule: a creditor gone Dr on the asset side, an asset gone Cr on the liability side). Never dropped.
+  // 2026-10-11 (founder): such a ledger is shown under its IMMEDIATE sub-group's name with that sub-group's
+  // total on this side ("Market Supplier Kharia (Dr शेष)"), its ledgers as details — not a loose row:
+  //  • a reversed (error-looking) balance → inside the "⚠ reversed balance" head, still grouped;
+  //  • an intentional one (a ₹0-opening contra, an advance built up by vouchers) → a line of the current
+  //    head (Current Assets 3300 / Current Liabilities 2100; its own head when the chart has none).
+  // Anything else unclaimed (a ledger with no parent group on this side's tree) stays under "Other".
   const orphans = live.filter((b) => !captured.has(b.account.id));
   const orphanLine = (b: AccountBalance): BsRow => ({ key: `l-${b.account.id}`, kind: 'line', ...nameOf(b.account), amount: amt(b), py: pyOf(b.account.id), depth: 0, accountId: b.account.id });
+  const flipped = (b: AccountBalance) => (liab ? b.account.type === 'asset' : b.account.type === 'liability' || b.account.type === 'equity');
+  const parentGroup = (b: AccountBalance) => input.accounts.find((a) => a.isGroup && a.id === b.account.parentId);
+  const suffix = liab ? { en: 'Cr balances', hi: 'Cr शेष' } : { en: 'Dr balances', hi: 'Dr शेष' };
+  // One line per immediate parent sub-group (its total on this side) + its ledgers as details; no parent → own line.
+  const bySubGroup = (list: AccountBalance[], tag: string): BsRow[] => {
+    const out: BsRow[] = [];
+    const order: string[] = [];
+    const groups = new Map<string, AccountBalance[]>();
+    for (const b of list) {
+      const g = parentGroup(b);
+      if (!g) { captured.add(b.account.id); out.push(orphanLine(b)); continue; }
+      if (!groups.has(g.id)) { groups.set(g.id, []); order.push(g.id); }
+      groups.get(g.id)!.push(b);
+    }
+    for (const gid of order) {
+      const g = input.accounts.find((a) => a.id === gid)!;
+      const members = groups.get(gid)!;
+      out.push({ key: `f-${tag}-${gid}`, kind: 'line', label: `${g.name} (${suffix.en})`, labelHi: `${g.nameHi || g.name} (${suffix.hi})`,
+        amount: r2(members.reduce((t, b) => t + amt(b), 0)), py: r2(members.reduce((t, b) => t + pyOf(b.account.id), 0)), depth: 0 });
+      for (const b of members) {
+        captured.add(b.account.id);
+        out.push({ key: `d-${b.account.id}`, kind: 'detail', ...nameOf(b.account), amount: amt(b), py: pyOf(b.account.id), depth: 1, accountId: b.account.id });
+      }
+    }
+    return out;
+  };
   const reversed = orphans.filter((b) => isAbnormalBalance(b.account, b.netBalance));
-  if (reversed.length) sections.push({ id: 'reversed', title: '⚠ Accounts with a reversed balance — check', titleHi: '⚠ उलटे शेष वाले खाते — जाँचें', rows: reversed.map(orphanLine), total: 0, pyTotal: 0, warn: true });
-  const other = orphans.filter((b) => !reversed.includes(b));
+  if (reversed.length) sections.push({ id: 'reversed', title: '⚠ Accounts with a reversed balance — check', titleHi: '⚠ उलटे शेष वाले खाते — जाँचें', rows: bySubGroup(reversed, 'rev'), total: 0, pyTotal: 0, warn: true });
+  const intentional = orphans.filter((b) => !reversed.includes(b) && flipped(b));
+  if (intentional.length) {
+    const rows = bySubGroup(intentional, 'cur');
+    const home = byGroup.get(liab ? '2100' : '3300');
+    if (home) home.rows.push(...rows);
+    else sections.push({ id: liab ? 'cur-liab' : 'cur-asset', title: liab ? 'Current Liabilities' : 'Current Assets', titleHi: liab ? 'चालू देनदारियाँ' : 'चालू संपत्ति', rows, total: 0, pyTotal: 0 });
+  }
+  const other = orphans.filter((b) => !reversed.includes(b) && !intentional.includes(b));
   if (other.length) sections.push({ id: 'other', title: 'Other', titleHi: 'अन्य', rows: other.map(orphanLine), total: 0, pyTotal: 0 });
   return { sections, byGroup };
 }
