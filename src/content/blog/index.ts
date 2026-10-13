@@ -971,6 +971,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'कब क्या फ़ाइल/जमा करना है — एक कैलेंडर व मासिक आदत से समिति जुर्माना-मुक्त रहती है।',
     accent: 'amber',
     tags: ['अनुपालन', 'GST', 'TDS'],
+    image: '/blog/quarterly-compliance-calendar.webp',
+    imageAlt: 'सहकारी समिति का तिमाही अनुपालन कैलेंडर: लेखाकार लैपटॉप पर GST, TDS और रिटर्न की due-dates देखते हुए, पास में दीवार का कैलेंडर',
   },
   {
     slug: 'cooperative-week-going-digital',
