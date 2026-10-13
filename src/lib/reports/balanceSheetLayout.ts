@@ -22,6 +22,7 @@
 import type { AccountBalance, LedgerAccount } from '@/types';
 import { isAbnormalBalance } from '@/lib/abnormalBalance';
 import { isAccumulatedDepreciation } from '@/lib/balanceSheetLeaves';
+import { isStockLedgerAccount } from '@/lib/tradingAccount';
 
 export interface BsRow {
   key: string;
@@ -220,7 +221,13 @@ export function buildBalanceSheetLayout(input: BsLayoutInput): BsLayout {
 
   // Closing stock valued from inventory — a line of the Inventory head (its own head when the chart has none).
   if (Math.abs(input.unpostedStock) > 0.005) {
-    const csRow: BsRow = { key: 'cs', kind: 'line', label: 'Closing stock (inventory + goods put into stock this year)', labelHi: 'समापन माल (इन्वेंट्री + इस वर्ष स्टॉक खाते में आया माल)', amount: r2(input.unpostedStock), py: 0, depth: 0 };
+    // Prior year: the stock ledgers this row REPLACES (they are in neither leaf list) carry last year's stock —
+    // without them the comparative column was short by the opening stock and never tied (2026-10-13, Rania PDF).
+    const shown = new Set([...input.assetLeaves, ...input.capLiabLeaves].map((b) => b.account.id));
+    const pyStock = input.py
+      ? r2(input.accounts.filter((a) => isStockLedgerAccount(a) && !shown.has(a.id)).reduce((t, a) => t + (py[a.id] ?? 0), 0))
+      : 0;
+    const csRow: BsRow = { key: 'cs', kind: 'line', label: 'Closing stock (inventory + goods put into stock this year)', labelHi: 'समापन माल (इन्वेंट्री + इस वर्ष स्टॉक खाते में आया माल)', amount: r2(input.unpostedStock), py: pyStock, depth: 0 };
     const inv = asset.byGroup.get('3400');
     if (inv) inv.rows.unshift(csRow);
     else asset.sections.push({ id: '3400', title: 'Closing Stock', titleHi: 'समापन माल', rows: [csRow], total: 0, pyTotal: 0 });

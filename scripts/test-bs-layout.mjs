@@ -178,6 +178,24 @@ const allRows = (lay) => [...lay.liabilities.sections, ...lay.assets.sections].f
   ok(sec(lay3.assets, 'cur-asset')?.rows.some((r) => r.key === 'f-cur-2101-08'), 'chart without Current Assets: the line gets its own "चालू संपत्ति" head');
 }
 
+// ── prior-year column with an OPENING STOCK in the stock ledger and no closing-stock journal (2026-10-13, Rania PDF) ──
+// The current closing stock comes from inventory (it REPLACES the 3403 ledger); the prior-year column used to drop the
+// replaced ledger's prior balance, so it was short by the opening stock and the PDF printed "indicative".
+{
+  const acc = [...accounts, A('3403', 'Trading Goods', 'asset', '3400')];
+  const bal = { '1102': -1000, '3403': 1000 };
+  const tb3 = acc.filter((a) => !a.isGroup).map((a) => ({ account: a, netBalance: bal[a.id] ?? 0, openingDebit: a.id === '3403' ? 1000 : 0, openingCredit: a.id === '1102' ? 1000 : 0, transactionDebit: 0, transactionCredit: 0 }));
+  const lv = L.balanceSheetLeaves(tb3, { closingStockPosted: false, physicalClosingStock: 1000, netProfit: 0 });
+  ok(lv.unpostedStock === 1000 && !lv.assetLeaves.some((b) => b.account.id === '3403'), 'setup: inventory replaces the stock ledger');
+  const lay = Y.buildBalanceSheetLayout({ accounts: acc, assetLeaves: lv.assetLeaves, capLiabLeaves: lv.capLiabLeaves, unpostedStock: lv.unpostedStock, netProfit: 0, py: bal, pyNetProfit: 0 });
+  const cs = sec(lay.assets, '3400').rows.find((r) => r.key === 'cs');
+  ok(cs.py === 1000, 'prior-year closing stock = the replaced stock ledger\'s prior balance (was 0)');
+  ok(near(lay.assets.pyTotal, 1000) && near(lay.liabilities.pyTotal, 1000), 'the prior-year column ties (no "indicative" note in the PDF)');
+  const posted = L.balanceSheetLeaves(tb3, { closingStockPosted: true, physicalClosingStock: 1000, netProfit: 0 });
+  const layP = Y.buildBalanceSheetLayout({ accounts: acc, assetLeaves: posted.assetLeaves, capLiabLeaves: posted.capLiabLeaves, unpostedStock: posted.unpostedStock, netProfit: 0, py: bal, pyNetProfit: 0 });
+  ok(near(layP.assets.pyTotal, 1000) && !sec(layP.assets, '3400').rows.some((r) => r.key === 'cs'), 'journal posted: the ledger line carries its own prior figure, nothing counted twice');
+}
+
 // ── wiring (RULE 2: one layout, three outputs) ──
 const page = read('pages/BalanceSheet.tsx');
 ok(/buildBalanceSheetLayout\(\{/.test(page) && /renderSide\(layout\.liabilities/.test(page) && /renderSide\(layout\.assets/.test(page), 'screen renders the shared layout');
