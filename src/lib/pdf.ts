@@ -25,6 +25,7 @@ import { reclassifyIncomeExpenditure, splitNegativeLines } from '@/lib/reports/n
 import { groupWithSubtotals, type GroupableLine } from '@/lib/reports/groupSubtotals';
 import { buildBalanceSheetLayout, visibleRows, pyResult, type BsSide } from '@/lib/reports/balanceSheetLayout';
 import type { GroupSchedule } from '@/lib/reports/groupSchedule';
+import { memberStatusLabel } from '@/lib/memberLifecycle';
 import type { BlankPdfSpec } from '@/content/downloads';
 
 // Hindi DATA (names, narrations) in any PDF table is drawn by the browser — labels stay English.
@@ -1160,7 +1161,7 @@ export function generateShareRegisterPDF(members: Member[], society: SocietySett
     fmt(m.shareCapital),
     m.nomineeName || '',
     m.nomineeRelation || '',
-    m.status === 'active' ? 'Active' : 'Inactive',
+    memberStatusLabel(m.status),
   ]);
 
   autoTable(doc, {

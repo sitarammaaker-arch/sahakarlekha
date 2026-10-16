@@ -13,10 +13,14 @@ interface LinkedDeleteDialogProps {
   links: EntityLink[];
   onConfirmDelete: () => void;
   language?: 'hi' | 'en';
+  /** Member-audit M1 (D3): red (blocking) links really block — no "Proceed anyway". */
+  blockOnLinks?: boolean;
+  /** The delete hides the record and keeps it for audit (isDeleted) — say so instead of "permanently". */
+  softDelete?: boolean;
 }
 
 export const LinkedDeleteDialog: React.FC<LinkedDeleteDialogProps> = ({
-  open, onOpenChange, entityName, links, onConfirmDelete, language = 'en',
+  open, onOpenChange, entityName, links, onConfirmDelete, language = 'en', blockOnLinks = false, softDelete = false,
 }) => {
   const [step, setStep] = useState<'links' | 'confirm'>('links');
   const hi = language === 'hi';
@@ -38,7 +42,9 @@ export const LinkedDeleteDialog: React.FC<LinkedDeleteDialogProps> = ({
           </AlertDialogHeader>
           <p className="px-1 text-sm text-muted-foreground">
             <strong>{entityName}</strong>{' '}
-            {hi ? 'को permanently delete किया जाएगा।' : 'will be permanently deleted.'}
+            {softDelete
+              ? (hi ? 'सूची से हटा दिया जाएगा (रिकॉर्ड audit के लिए सुरक्षित रहेगा)।' : 'will be removed from the list (the record is kept for audit).')
+              : (hi ? 'को permanently delete किया जाएगा।' : 'will be permanently deleted.')}
           </p>
           <AlertDialogFooter>
             <AlertDialogCancel>{hi ? 'रद्द करें' : 'Cancel'}</AlertDialogCancel>
@@ -106,7 +112,9 @@ export const LinkedDeleteDialog: React.FC<LinkedDeleteDialogProps> = ({
         {step === 'confirm' && (
           <div className="py-1 space-y-2">
             <div className="p-3 bg-red-50 border border-red-300 rounded text-sm text-red-800">
-              ⚠️ {hi
+              ⚠️ {softDelete
+                ? (hi ? `"${entityName}" सूची से हट जाएगा। रिकॉर्ड audit के लिए सुरक्षित रहेगा।` : `"${entityName}" will be removed from the list. The record is kept for audit.`)
+                : hi
                 ? `"${entityName}" और उससे जुड़ा सारा data हमेशा के लिए हट जाएगा। यह काम वापस (UNDO) नहीं हो सकता।`
                 : `"${entityName}" and all its data will be permanently deleted. This action CANNOT be undone.`}
             </div>
@@ -120,7 +128,7 @@ export const LinkedDeleteDialog: React.FC<LinkedDeleteDialogProps> = ({
           <AlertDialogCancel onClick={() => { setStep('links'); handleOpenChange(false); }}>
             {hi ? 'वापस जाएं' : 'Go Back'}
           </AlertDialogCancel>
-          {step === 'links' && (
+          {step === 'links' && !(blockOnLinks && hasBlocking) && (
             <AlertDialogAction
               className={hasBlocking ? 'bg-orange-500 hover:bg-orange-600' : 'bg-red-600 hover:bg-red-700'}
               onClick={() => setStep('confirm')}

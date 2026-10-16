@@ -21,12 +21,15 @@ export interface EntityLinkSources {
   suppliers: Supplier[];
   customers: Customer[];
   assets: Asset[];
+  /** Member-audit M1 (D3): a member's deposit accounts and KCC loans also block a member delete. */
+  depositAccounts?: { memberId: string }[];
+  kccLoans?: { memberId: string }[];
 }
 
 export function computeEntityLinks(
   entityType: EntityLinkType,
   id: string,
-  { vouchers, loans, sales, purchases, stockMovements, salaryRecords, suppliers, customers, assets }: EntityLinkSources,
+  { vouchers, loans, sales, purchases, stockMovements, salaryRecords, suppliers, customers, assets, depositAccounts = [], kccLoans = [] }: EntityLinkSources,
 ): EntityLink[] {
   const links: EntityLink[] = [];
 
@@ -35,16 +38,33 @@ export function computeEntityLinks(
     if (vCount > 0) links.push({
       module: 'Vouchers', count: vCount,
       labelHi: `${vCount} वाउचर`, labelEn: `${vCount} Voucher(s)`,
-      instructionHi: 'वाउचर पेज पर जाएँ → पहले इन वाउचर को रद्द करें',
-      instructionEn: 'Go to Vouchers page → cancel these vouchers first',
+      instructionHi: 'सदस्य के लेन-देन हैं — हटाने के बजाय स्थिति "इस्तीफ़ा / निष्कासित / मृत" करें। ग़लत entry हो तो पहले ये वाउचर रद्द करें।',
+      instructionEn: 'The member has transactions — change the status instead. If this was a wrong entry, cancel these vouchers first.',
       blocking: true,
     });
-    const lCount = loans.filter(l => l.memberId === id).length;
+    // RULE 5: a soft-deleted loan never blocks.
+    const lCount = loans.filter(l => l.memberId === id && !l.isDeleted).length;
     if (lCount > 0) links.push({
       module: 'Loans', count: lCount,
       labelHi: `${lCount} ऋण`, labelEn: `${lCount} Loan(s)`,
       instructionHi: 'ऋण रजिस्टर पेज पर जाएँ → पहले ये ऋण हटाएँ',
       instructionEn: 'Go to Loan Register → delete these loans first',
+      blocking: true,
+    });
+    const dCount = depositAccounts.filter(d => d.memberId === id).length;
+    if (dCount > 0) links.push({
+      module: 'Deposits', count: dCount,
+      labelHi: `${dCount} जमा खाते`, labelEn: `${dCount} Deposit account(s)`,
+      instructionHi: 'जमा खाते सदस्य के नाम हैं — सदस्य को हटाया नहीं जा सकता',
+      instructionEn: "Deposit accounts are in this member's name — the member cannot be deleted",
+      blocking: true,
+    });
+    const kCount = kccLoans.filter(k => k.memberId === id).length;
+    if (kCount > 0) links.push({
+      module: 'KCC', count: kCount,
+      labelHi: `${kCount} KCC ऋण`, labelEn: `${kCount} KCC loan(s)`,
+      instructionHi: 'KCC ऋण सदस्य के नाम है — सदस्य को हटाया नहीं जा सकता',
+      instructionEn: "A KCC loan is in this member's name — the member cannot be deleted",
       blocking: true,
     });
   }

@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
     if (!portalPlanAllowed(sub)) return fail('plan_unavailable', 403);
 
     const { data: member } = await svc
-      .from('members').select('id, memberId, name, status, isDeleted')
+      .from('members').select('id, memberId, name, status, isDeleted, approvalStatus')
       .eq('society_id', societyId).eq('id', memberId).maybeSingle();
     const elig = memberEligible(member);
     if (!elig.ok) return fail(elig.reason as keyof typeof MESSAGES, elig.reason === 'member_not_found' ? 404 : 409);

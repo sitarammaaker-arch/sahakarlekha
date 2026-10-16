@@ -83,12 +83,12 @@ const NominationRegister: React.FC = () => {
 
   const handleSave = () => {
     if (!editMember) return;
-    updateMember(editMember.id, {
+    const applied = updateMember(editMember.id, {
       nomineeName: nomName.trim(),
       nomineeRelation: nomRelation.trim(),
       nomineePhone: nomPhone.trim(),
-    });
-    toast({ title: hi ? 'नामांकन अपडेट किया गया' : 'Nomination updated' });
+    }, { onSaved: () => toast({ title: hi ? 'नामांकन अपडेट किया गया' : 'Nomination updated' }) });
+    if (!applied) return;
     setEditMember(null);
   };
 

@@ -19,3 +19,20 @@ export function canTransitionMember(from: MemberStatus, to: MemberStatus): boole
 export function isMemberActive(status: MemberStatus): boolean {
   return status === 'active';
 }
+
+/**
+ * Member-audit M1 (U4, 2026-10-16): the one label per status. Registers, PDFs and the view dialog used to print
+ * every non-active member as "Inactive", hiding resigned / expelled / deceased members behind one word.
+ */
+export const MEMBER_STATUS_LABEL: Record<MemberStatus, { hi: string; en: string }> = {
+  active: { hi: 'सक्रिय', en: 'Active' },
+  inactive: { hi: 'निष्क्रिय', en: 'Inactive' },
+  resigned: { hi: 'त्यागपत्र', en: 'Resigned' },
+  expelled: { hi: 'निष्कासित', en: 'Expelled' },
+  deceased: { hi: 'मृत', en: 'Deceased' },
+};
+
+export function memberStatusLabel(status: MemberStatus | undefined, hi = false): string {
+  const l = MEMBER_STATUS_LABEL[status ?? 'active'] ?? MEMBER_STATUS_LABEL.active;
+  return hi ? l.hi : l.en;
+}
