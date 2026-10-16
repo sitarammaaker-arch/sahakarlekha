@@ -83,7 +83,7 @@ import { premiumCap as sharePremiumCap, premiumAllowed as isSharePremiumAllowed 
 import { sumActiveAssetCost, reconcileAssetRegister, type AssetReconciliation } from '@/lib/assetReconciliation';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { splitVoucherExtras, extrasFailureToast } from '@/lib/voucherPersistence';
-import { shareOpPosting, validateShareOp, applyShareOp, type ShareOpType } from '@/lib/shareOps';
+import { shareOpPosting, validateShareOp, applyShareOp, withShareCapital, type ShareOpType } from '@/lib/shareOps';
 import { resolveDepositLiabilityAccount, depositPosting, applyDepositTxn, validateDepositTxn } from '@/lib/depositEngine';
 import { professionalTaxAccountId, shareRefundPayableAccountId, MISSING_HEAD_TOAST, missingDepositHeadToast } from '@/lib/accounting/headResolve';
 import { buildShareRefundApproval, buildShareRefundPayment, shareRefundOutstanding, SHARE_REFUND_APPROVE_REF, SHARE_REFUND_PAY_REF, SHARE_REFUND_MESSAGE } from '@/lib/shares/refundPayable';
@@ -98,6 +98,7 @@ import { fetchAllPaged as fetchAllPagedFor } from '@/lib/supabasePaging';
 import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib/diagnostics/phantomVouchers';
 import { accountDeleteFailure, coaResetBlockers, coaResetLiveData } from '@/lib/accounting/accountDelete';
 import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
+import { memberAuditDiff } from '@/lib/members/memberAudit';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 
 /* T-09 — the `ledger_events` row → LedgerEvent mapper now lives in lib/ledger/rows.ts.
@@ -221,8 +222,8 @@ interface DataContextType {
   upsertP7Entry: (data: Omit<P7Entry, 'id' | 'createdAt'> & { id?: string }) => P7Entry;
   deleteP7Entry: (id: string) => void;
 
-  addMember: (data: Omit<Member, 'id'>, opts?: { quiet?: boolean }) => Member;
-  updateMember: (id: string, data: Partial<Member>) => void;
+  addMember: (data: Omit<Member, 'id'>, opts?: { quiet?: boolean; onSaved?: (m: Member) => void }) => Member;
+  updateMember: (id: string, data: Partial<Member>, opts?: { onSaved?: () => void }) => boolean;
   changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string) => boolean;
   deleteMember: (id: string) => void;
   refundShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
@@ -1090,6 +1091,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const customersRef = useRef<Customer[]>(customers);
   useEffect(() => { customersRef.current = customers; }, [customers]);
   const [kccLoans, setKccLoansState] = useState<KccLoan[]>([]);
+  const kccLoansRef = useRef<KccLoan[]>(kccLoans);
+  useEffect(() => { kccLoansRef.current = kccLoans; }, [kccLoans]);
 
   const [isLoading, setIsLoading] = useState(true);
   const loadedSocietyRef = useRef<string | null>(null);   // J6: the society whose books this page loaded
@@ -1817,6 +1820,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   type VoucherPersistWith = (v: Voucher, ev: LedgerEvent, rollback: () => void) => void;
   // opts.onPersisted (S4-a): called once the posting service has made the voucher durable (with its official
   // number) — for a follow-up server call that needs the row to exist (reverseVoucher's link).
+  // Member-audit M1 (D1, 2026-10-16): the same refusals addVoucher applies, asked BEFORE a flow that posts a voucher
+  // and then moves a scalar (member share capital). Those flows used to ignore addVoucher's empty return, so a
+  // period-locked / role-refused / expired-plan voucher was refused while the member's share capital still changed.
+  const voucherBirthBlocked = (date: string): boolean => {
+    if (guardPermission('create', 'वाउचर बनाने')) return true;
+    if (guardFYLocked()) return true;   // offline / core-load write block + the audit-locked year (Hindi toast)
+    if (guardSubscriptionExpired()) return true;
+    return guardPeriodLock(date);
+  };
+
   const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }, opts?: { persistWith?: VoucherPersistWith; onPersisted?: (v: Voucher) => void; onSaved?: (v: Voucher) => void; onFailed?: () => void }): Voucher => {
     // ECR-06: role gate at the voucher choke point — every composite flow (sale/purchase/salary/
     // loan/reversal) and page funnels through here, so one guard covers every voucher birth.
@@ -3202,7 +3215,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
-  const addMember = useCallback((data: Omit<Member, 'id'>, opts: { quiet?: boolean } = {}): Member => {
+  const addMember = useCallback((data: Omit<Member, 'id'>, opts: { quiet?: boolean; onSaved?: (m: Member) => void } = {}): Member => {
     if (guardFYLocked()) return { ...data, id: '' } as Member;
     const newMember: Member = { ...data, id: crypto.randomUUID(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) };
     setMembersState(prev => {
@@ -3231,6 +3244,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           persistMemberIdentity(newMember.id, { aadhaar: newMember.aadhaar, pan: newMember.pan },
             () => setMembersState(prev => prev.map(m => m.id === newMember.id ? { ...m, aadhaar: undefined, pan: undefined } : m)));
         }
+        // Member-audit M1 (D4/D5): the page's success message waits for the cloud; one audit row per member
+        // (a bulk import passes quiet and is summarised by the importer instead of one row per member).
+        if (!opts.quiet) emitAudit({ entityType: 'member', entityId: newMember.id, action: 'create', after: { memberId: newMember.memberId, name: newMember.name, shareCapital: newMember.shareCapital || 0, admissionFee: newMember.admissionFee || 0, approvalStatus: newMember.approvalStatus ?? 'approved' } });
+        opts.onSaved?.(newMember);
       });
     };
     attemptMemberSave(newMember);
@@ -3241,10 +3258,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return newMember;
   }, [postJoiningReceipts]);
 
-  const updateMember = useCallback((id: string, data: Partial<Member>) => {
-    if (guardFYLocked()) return;
+  const updateMember = useCallback((id: string, data: Partial<Member>, opts?: { onSaved?: () => void }): boolean => {
+    if (guardFYLocked()) return false;
     const oldMember = membersRef.current.find(m => m.id === id);
-    if (!oldMember) return;
+    if (!oldMember) return false;
     const updatedMember = { ...oldMember, ...data };
     // A flat-only nominee edit (Nomination / Share Register, importer) also moves the role-'primary' entry of
     // nominees[], so the statutory print (flat) and nominees[] never name different people.
@@ -3278,6 +3295,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           persistMemberIdentity(id, { aadhaar: updatedMember.aadhaar, pan: updatedMember.pan },
             () => setMembersState(prev => prev.map(m => m.id === id ? { ...m, aadhaar: oldMember.aadhaar, pan: oldMember.pan } : m)));
         }
+        // Member-audit M1 (D4): who changed what — Aadhaar / PAN are named, never their values.
+        const changed = memberAuditDiff(oldMember as unknown as Record<string, unknown>, updatedMember as unknown as Record<string, unknown>);
+        if (changed) emitAudit({ entityType: 'member', entityId: id, action: 'update', before: changed.before, after: changed.after });
+        opts?.onSaved?.();
       });
     };
     attemptMemberUpdate(updatedMember);
@@ -3324,6 +3345,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (data.admissionFee !== undefined && data.admissionFee !== oldMember.admissionFee) {
       resyncMemberVoucher(ACCOUNT_IDS.ADM_FEE, data.admissionFee, 'Admission Fee');
     }
+    return true;
   }, [updateVoucher]);
 
   // ECR-16 (member lifecycle): record a lifecycle transition (resign/expel/death/reactivate)
@@ -3368,6 +3390,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deleteMember = useCallback((id: string) => {
     if (guardPermission('delete', 'सदस्य मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
+    // Member-audit M1 (D3): a member with live vouchers, loans, deposit accounts or KCC loans is never deleted —
+    // the dialog used to offer "Proceed anyway" and this then cancelled ALL their vouchers (share capital, loans).
+    // Such a member leaves through a status change (resigned / expelled / deceased); delete is for a wrong entry.
+    const live = computeEntityLinks('member', id, {
+      vouchers: vouchersRef.current.filter(v => !v.isDeleted), loans: loansRef.current,
+      sales: [], purchases: [], stockMovements: [], salaryRecords: [], suppliers: [], customers: [], assets: [],
+      depositAccounts: depositAccountsRef.current, kccLoans: kccLoansRef.current,
+    }).filter(l => l.blocking);
+    if (live.length) {
+      toastRef.current({
+        title: 'सदस्य नहीं हटाया जा सकता',
+        description: `इस सदस्य के ${live.map(l => l.labelHi).join(', ')} हैं। सदस्य को हटाने के बजाय "इस्तीफ़ा / निष्कासित / मृत" स्थिति दें। (Member has live records — change the status instead.)`,
+        variant: 'destructive', duration: 12000,
+      });
+      return;
+    }
     const removed = membersRef.current.find(m => m.id === id);
     setMembersState(prev => {
       const updated = prev.filter(m => m.id !== id);
@@ -3381,8 +3419,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // RULE 3: soft-cancel the member's auto-generated vouchers (share capital /
       // admission fee) so no ghost Share Capital lingers in the Trial Balance.
       cancelLinkedVouchers(vouchersRef.current.filter(v => v.memberId === id).map(v => v.id), 'Member deleted', user?.name || 'System');
-      emitAudit({ entityType: 'member', entityId: id, action: 'delete', reason: 'Member deleted' });
-      console.info(`[AUDIT-DELETE] Member id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
+      emitAudit({ entityType: 'member', entityId: id, action: 'delete', before: removed ? { memberId: removed.memberId, name: removed.name } : undefined, reason: 'Member deleted' });
+      toastRef.current({ title: 'सदस्य हटाया गया', description: removed ? `${removed.name} (${removed.memberId})` : undefined });
     });
   }, []);
 
@@ -3398,14 +3436,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const refund = toRupees(toMinor(Math.max(0, Math.min(amount, member.shareCapital || 0))));
     if (!(refund > 0)) { toastRef.current({ title: 'राशि सही नहीं है', description: 'वापसी राशि 0 से अधिक और सदस्य की वर्तमान अंश पूँजी से कम या बराबर हो। (Refund must be > 0 and ≤ current share capital.)', variant: 'destructive' }); return; }
     const creditAcc = mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
-    addVoucher({
+    if (voucherBirthBlocked(date)) return;
+    const voucher = addVoucher({
       type: 'payment', date,
       debitAccountId: ACCOUNT_IDS.SHARE_CAP, creditAccountId: creditAcc, amount: refund,
       narration: `Share Capital refunded to ${member.name} — ${date}`,
       createdBy: user?.name ?? 'System', memberId,
     });
+    if (!voucher?.id) return;   // D1: no voucher → the member's share capital must not move either
     const before = member;
-    const updated = { ...member, shareCapital: toRupees(subMinor(toMinor(member.shareCapital || 0), toMinor(refund))) };
+    const updated = withShareCapital(member, toRupees(subMinor(toMinor(member.shareCapital || 0), toMinor(refund))));
     membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
     supabase.from('members').upsert(memberRow(updated)).then(({ error }) => {
@@ -3415,6 +3455,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
         toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       } else {
+        emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital || 0, shareCount: before.shareCount ?? null }, after: { shareCapital: updated.shareCapital, shareCount: updated.shareCount ?? null, voucherNo: voucher.voucherNo || voucher.id }, reason: `Share capital refunded ₹${refund}` });
         toastRef.current({ title: '✅ शेयर पूँजी वापस', description: `₹${refund.toLocaleString('en-IN')} · ${member.name}` });
       }
     });
@@ -3443,7 +3484,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     if (!v?.id) return false;   // addVoucher already told the user why
     const before = member;
-    const updated = { ...member, shareCapital: toRupees(subMinor(toMinor(member.shareCapital || 0), toMinor(built.amount))) };
+    const updated = withShareCapital(member, toRupees(subMinor(toMinor(member.shareCapital || 0), toMinor(built.amount))));
     membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
     supabase.from('members').upsert(memberRow(updated)).then(({ error }) => {
@@ -3509,7 +3550,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     if (!voucher?.id) return false; // addVoucher blocked (FY-lock / period-lock / unbalanced)
     const before = member;
-    const updated = { ...member, shareCapital: applyShareOp(type, member.shareCapital || 0, amt) };
+    const updated = withShareCapital(member, applyShareOp(type, member.shareCapital || 0, amt));
     membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
     supabase.from('members').upsert(memberRow(updated)).then(({ error }) => {
@@ -3536,14 +3577,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const buy = toRupees(toMinor(Math.max(0, amount)));
     if (!(buy > 0)) { toastRef.current({ title: 'राशि सही नहीं है', description: 'राशि 0 से अधिक होनी चाहिए। (Amount must be > 0.)', variant: 'destructive' }); return; }
     const debitAcc = mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
-    addVoucher({
+    if (voucherBirthBlocked(date)) return;
+    const voucher = addVoucher({
       type: 'receipt', date,
       debitAccountId: debitAcc, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: buy,
       narration: `Additional share capital from ${member.name} — ${date}`,
       createdBy: user?.name ?? 'System', memberId,
     });
+    if (!voucher?.id) return;   // D1: no voucher → the member's share capital must not move either
     const before = member;
-    const updated = { ...member, shareCapital: toRupees(addMinor(toMinor(member.shareCapital || 0), toMinor(buy))) };
+    const updated = withShareCapital(member, toRupees(addMinor(toMinor(member.shareCapital || 0), toMinor(buy))));
     membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
     supabase.from('members').upsert(memberRow(updated)).then(({ error }) => {
@@ -3553,6 +3596,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
         toastRef.current({ title: 'अतिरिक्त शेयर सेव नहीं हुए', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
       } else {
+        emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital || 0, shareCount: before.shareCount ?? null }, after: { shareCapital: updated.shareCapital, shareCount: updated.shareCount ?? null, voucherNo: voucher.voucherNo || voucher.id }, reason: `Additional share capital ₹${buy}` });
         toastRef.current({ title: '✅ अतिरिक्त शेयर पूँजी', description: `₹${buy.toLocaleString('en-IN')} · ${member.name}` });
       }
     });
@@ -3590,16 +3634,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // a lone half (prod: a cancelled transferor half left Cr 1102 / Dr 9999 standing, inflating
     // share capital and suspense by the transfer amount).
     const transferId = crypto.randomUUID();
-    addVoucher({
+    // D1: ask every refusal first — the two halves (and the premium) must all post or none, and the scalars
+    // below move only when they did.
+    if (voucherBirthBlocked(date)) return;
+    const outHalf = addVoucher({
       type: 'journal', date, debitAccountId: ACCOUNT_IDS.SHARE_CAP, creditAccountId: SUSPENSE, amount: amt,
       narration: `Shares transferred from ${from.name} to ${to.name} — ${date}`,
       createdBy: user?.name ?? 'System', memberId: fromMemberId, refType: 'share.transfer', refId: transferId,
     });
-    addVoucher({
+    if (!outHalf?.id) return;
+    const inHalf = addVoucher({
       type: 'journal', date, debitAccountId: SUSPENSE, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: amt,
       narration: `Shares transferred from ${from.name} to ${to.name} — ${date}`,
       createdBy: user?.name ?? 'System', memberId: toMemberId, refType: 'share.transfer', refId: transferId,
     });
+    if (!inHalf?.id) {
+      toastRef.current({ title: 'शेयर स्थानांतरण अधूरा', description: `दूसरा वाउचर नहीं बना — पहला वाउचर (${outHalf.voucherNo || outHalf.id}) रद्द करें और दोबारा करें। सदस्यों की शेयर राशि नहीं बदली।`, variant: 'destructive', duration: 15000 });
+      return;
+    }
     // ECR-16 (MS-11): premium paid to the society → Dr Cash/Bank / Cr Reserve (capped above).
     if (prem > 0) {
       const payout = opts?.mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
@@ -3610,8 +3662,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
     }
     const beforeFrom = from, beforeTo = to;
-    const updFrom = { ...from, shareCapital: toRupees(subMinor(toMinor(from.shareCapital || 0), toMinor(amt))) };
-    const updTo = { ...to, shareCapital: toRupees(addMinor(toMinor(to.shareCapital || 0), toMinor(amt))) };
+    const updFrom = withShareCapital(from, toRupees(subMinor(toMinor(from.shareCapital || 0), toMinor(amt))));
+    const updTo = withShareCapital(to, toRupees(addMinor(toMinor(to.shareCapital || 0), toMinor(amt))));
     const applyBoth = (a: Member, b: Member) => {
       membersRef.current = membersRef.current.map(m => m.id === a.id ? a : m.id === b.id ? b : m);
       setMembersState(prev => prev.map(m => m.id === a.id ? a : m.id === b.id ? b : m));
@@ -3622,7 +3674,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) { reportCascade('Share transfer (from) sync', error); rollback(); return; }
       supabase.from('members').upsert(memberRow(updTo)).then(({ error: e2 }) => {
         if (e2) { reportCascade('Share transfer (to) sync', e2); rollback(); }
-        else toastRef.current({ title: '✅ शेयर स्थानांतरित', description: `₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}${prem > 0 ? ` (+ प्रीमियम ₹${prem.toLocaleString('en-IN')})` : ''}` });
+        else {
+          emitAudit({ entityType: 'member', entityId: fromMemberId, action: 'update', before: { shareCapital: beforeFrom.shareCapital || 0 }, after: { shareCapital: updFrom.shareCapital, transferredTo: to.memberId, transferId }, reason: `Shares transferred ₹${amt} to ${to.name}` });
+          emitAudit({ entityType: 'member', entityId: toMemberId, action: 'update', before: { shareCapital: beforeTo.shareCapital || 0 }, after: { shareCapital: updTo.shareCapital, transferredFrom: from.memberId, transferId }, reason: `Shares received ₹${amt} from ${from.name}` });
+          toastRef.current({ title: '✅ शेयर स्थानांतरित', description: `₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}${prem > 0 ? ` (+ प्रीमियम ₹${prem.toLocaleString('en-IN')})` : ''}` });
+        }
       });
     });
   }, [accounts, addVoucher, user]);
@@ -4063,8 +4119,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // One rule for add / import / approve (postJoiningReceipts): a member who joined before this FY
       // gets no receipt; cheque / online go to the bank. Falls back to the approver's active branch.
       postJoiningReceipts(approved, { fallbackBranch: branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) });
+      emitAudit({ entityType: 'member', entityId: id, action: 'approve', before: { approvalStatus: member.approvalStatus ?? 'pending' }, after: { approvalStatus: 'approved' } });
+      toastRef.current({ title: 'सदस्य स्वीकृत', description: `${member.name} (${member.memberId}) अब सत्यापित सदस्य है` });
     });
-    console.info(`[AUDIT] Member id=${id} approved by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, [postJoiningReceipts]);
 
   const rejectMember = useCallback((id: string) => {
@@ -4078,9 +4135,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setMembersState(prev => prev.map(m => m.id === id ? member : m));
         toastRef.current({ title: 'Reject सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर सदस्य फिर से pending दिखेगा।`, variant: 'destructive', duration: 12000 });
+        return;
       }
+      emitAudit({ entityType: 'member', entityId: id, action: 'reject', before: { approvalStatus: member.approvalStatus ?? 'pending' }, after: { approvalStatus: 'rejected' } });
+      toastRef.current({ title: 'आवेदन अस्वीकृत', description: `${member.name} (${member.memberId})` });
     });
-    console.info(`[AUDIT] Member id=${id} rejected by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
 
   // T-09 auto-cutover · keep the JOURNAL's opening in step with an account mutation. ledger_events
@@ -7786,7 +7845,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       vouchers: vouchersRef.current.filter(v => !v.isDeleted),
       loans: loansRef.current, sales: salesRef.current, purchases: purchasesRef.current, stockMovements,
       salaryRecords: salaryRecordsRef.current, suppliers: suppliersRef.current, customers: customersRef.current,
-      assets: assetsRef.current,
+      assets: assetsRef.current, depositAccounts: depositAccountsRef.current, kccLoans: kccLoansRef.current,
     });
   }, [stockMovements]); // eslint-disable-line
 

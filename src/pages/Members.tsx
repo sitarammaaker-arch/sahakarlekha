@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award, KeyRound, ContactRound } from 'lucide-react';
@@ -33,6 +34,7 @@ import type { Member, MemberStatus, Nominee, KycStatus, ShareCertStatus } from '
 import { validateNominees, nomineeShareTotal } from '@/lib/nomineeUtils';
 import { validateKyc } from '@/lib/kycUtils';
 import { validateCertificate } from '@/lib/shareCertUtils';
+import { memberStatusLabel } from '@/lib/memberLifecycle';
 import { useSubscription } from '@/hooks/useSubscription';
 import { MemberPortalDialog } from '@/components/members/MemberPortalDialog';
 import { memberPhoneError } from '@/lib/memberValidation';
@@ -372,6 +374,7 @@ const Members: React.FC = () => {
   const [editMember, setEditMember] = useState<Member | null>(null);
   const [viewMember, setViewMember] = useState<Member | null>(null);
   const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
+  const [decision, setDecision] = useState<{ member: Member; action: 'approve' | 'reject' } | null>(null);
   const [ledgerMember, setLedgerMember] = useState<Member | null>(null);
   // Member Portal S2b: admin-only portal-login management (the Edge Function re-checks admin + plan).
   const isAdmin = user?.role === 'admin';
@@ -463,7 +466,7 @@ const Members: React.FC = () => {
     }
     if (phoneError(form.phone)) { toast({ title: phoneError(form.phone)!, variant: 'destructive' }); return; }
     const memberId = form.memberId.trim() || getNextMemberId();
-    if (members.some(m => m.memberId === memberId)) {
+    if (allMembers.some(m => m.memberId.trim().toLowerCase() === memberId.toLowerCase())) {   // D6: every branch, not just the one on screen
       toast({ title: hi ? 'यह सदस्य ID पहले से मौजूद है' : 'Member ID already exists', variant: 'destructive' });
       return;
     }
@@ -478,7 +481,7 @@ const Members: React.FC = () => {
     const kv = validateKyc(form.aadhaar, form.pan);
     if (!kv.ok) { toast({ title: 'KYC', description: kv.error, variant: 'destructive' }); return; }
     Object.assign(form, { memberId });
-    addMember({
+    const created = addMember({
       ...form, memberId,
       shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
       age: form.age ? Number(form.age) : undefined, caste: form.caste || undefined,
@@ -496,8 +499,11 @@ const Members: React.FC = () => {
       kycStatus: form.kycStatus || undefined,
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
+    }, {
+      // D5: "added" only once the cloud has the row (a failure rolls back and says so itself).
+      onSaved: m => toast({ title: hi ? 'सदस्य जोड़ा गया' : 'Member added', description: `${m.name} (${m.memberId})` }),
     });
-    toast({ title: hi ? 'सदस्य जोड़ा गया' : 'Member added' });
+    if (!created.id) return;   // refused (FY lock) — keep the form so nothing typed is lost
     trackEvent('member_added');
     setForm(EMPTY_FORM);
     setIsAddOpen(false);
@@ -513,7 +519,7 @@ const Members: React.FC = () => {
     if (!kv.ok) { toast({ title: 'KYC', description: kv.error, variant: 'destructive' }); return; }
     // Only a CHANGED phone is checked — an old member's legacy number must not block an unrelated edit.
     if ((form.phone || '').trim() !== (editMember.phone || '').trim() && phoneError(form.phone)) { toast({ title: phoneError(form.phone)!, variant: 'destructive' }); return; }
-    updateMember(editMember.id, {
+    const applied = updateMember(editMember.id, {
       ...form,
       shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
       age: form.age ? Number(form.age) : undefined, caste: form.caste || undefined,
@@ -531,8 +537,8 @@ const Members: React.FC = () => {
       kycStatus: form.kycStatus || undefined,
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
-    });
-    toast({ title: hi ? 'सदस्य अपडेट किया गया' : 'Member updated' });
+    }, { onSaved: () => toast({ title: hi ? 'सदस्य अपडेट किया गया' : 'Member updated' }) });
+    if (!applied) return;
     setEditMember(null);
   };
 
@@ -570,26 +576,27 @@ const Members: React.FC = () => {
     if (!certMember) return;
     const v = validateCertificate({ status: certForm.status, certNo: certForm.certNo, count: Number(certForm.count), reason: certForm.reason });
     if (!v.ok) { toast({ title: hi ? 'प्रमाणपत्र त्रुटि' : 'Certificate error', description: v.error, variant: 'destructive' }); return; }
-    updateMember(certMember.id, {
+    const name = certMember.name;
+    const applied = updateMember(certMember.id, {
       shareCertNo: certForm.certNo.trim() || undefined,
       shareCount: certForm.count ? Number(certForm.count) : undefined,
       shareFaceValue: certForm.faceValue ? Number(certForm.faceValue) : undefined,
       shareCertStatus: certForm.status,
       shareCertIssuedAt: new Date().toISOString().split('T')[0],
       shareCertReason: certForm.reason.trim() || undefined,
-    });
-    toast({ title: hi ? 'शेयर प्रमाणपत्र अपडेट' : 'Share certificate updated', description: certMember.name });
+    }, { onSaved: () => toast({ title: hi ? 'शेयर प्रमाणपत्र अपडेट' : 'Share certificate updated', description: name }) });
+    if (!applied) return;
     setCertMember(null);
   };
 
-  const handleApprove = (member: Member) => {
-    approveMember(member.id);
-    toast({ title: hi ? 'सदस्य स्वीकृत' : 'Member Approved', description: hi ? `${member.name} अब सत्यापित सदस्य है` : `${member.name} is now a verified member` });
-  };
-
-  const handleReject = (member: Member) => {
-    rejectMember(member.id);
-    toast({ title: hi ? 'आवेदन अस्वीकृत' : 'Application Rejected', description: member.name });
+  // U9: approve / reject go through a confirmation; the success message comes from DataContext once saved (D5).
+  const handleApprove = (member: Member) => setDecision({ member, action: 'approve' });
+  const handleReject = (member: Member) => setDecision({ member, action: 'reject' });
+  const confirmDecision = () => {
+    if (!decision) return;
+    if (decision.action === 'approve') approveMember(decision.member.id);
+    else rejectMember(decision.member.id);
+    setDecision(null);
   };
 
   const handleDownloadPDF = (member: Member) => {
@@ -1002,7 +1009,7 @@ const Members: React.FC = () => {
                 [t('shareCapital'), fmt(viewMember.shareCapital)],
                 [hi ? 'प्रवेश शुल्क' : 'Admission Fee', fmt(viewMember.admissionFee || 0)],
                 [hi ? 'शामिल तिथि' : 'Join Date', fmtDate(viewMember.joinDate)],
-                [hi ? 'स्थिति' : 'Status', viewMember.status === 'active' ? (hi ? 'सक्रिय' : 'Active') : (hi ? 'निष्क्रिय' : 'Inactive')],
+                [hi ? 'स्थिति' : 'Status', memberStatusLabel(viewMember.status, hi)],
                 ...(viewMember.approvalStatus ? [[hi ? 'अनुमोदन' : 'Approval', viewMember.approvalStatus === 'pending' ? (hi ? 'पेंडिंग' : 'Pending') : viewMember.approvalStatus === 'approved' ? (hi ? 'स्वीकृत' : 'Approved') : (hi ? 'अस्वीकृत' : 'Rejected')]] : []),
                 ...(viewMember.age ? [[hi ? 'आयु' : 'Age', `${viewMember.age} ${hi ? 'वर्ष' : 'years'}`]] : []),
                 ...(viewMember.occupation ? [[hi ? 'व्यवसाय' : 'Occupation', viewMember.occupation]] : []),
@@ -1142,6 +1149,34 @@ const Members: React.FC = () => {
         onChanged={loadPortalLogins}
       />
 
+      {/* U9: approve / reject confirmation */}
+      <AlertDialog open={!!decision} onOpenChange={o => { if (!o) setDecision(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {decision?.action === 'approve'
+                ? (hi ? 'आवेदन स्वीकृत करें?' : 'Approve this application?')
+                : (hi ? 'आवेदन अस्वीकृत करें?' : 'Reject this application?')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {decision && (decision.action === 'approve'
+                ? (hi
+                  ? `${decision.member.name} (${decision.member.memberId}) सत्यापित सदस्य बनेंगे। शेयर पूँजी ₹${(decision.member.shareCapital || 0).toLocaleString('en-IN')} व प्रवेश शुल्क ₹${(decision.member.admissionFee || 0).toLocaleString('en-IN')} की रसीद वाउचर अपने-आप बनेगा।`
+                  : `${decision.member.name} (${decision.member.memberId}) becomes a verified member. A receipt voucher for share capital ₹${(decision.member.shareCapital || 0).toLocaleString('en-IN')} and admission fee ₹${(decision.member.admissionFee || 0).toLocaleString('en-IN')} is posted.`)
+                : (hi
+                  ? `${decision.member.name} (${decision.member.memberId}) का आवेदन अस्वीकृत होगा। कोई वाउचर नहीं बनेगा।`
+                  : `${decision.member.name} (${decision.member.memberId})'s application is rejected. No voucher is posted.`))}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{hi ? 'वापस' : 'Back'}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDecision} className={decision?.action === 'reject' ? 'bg-red-600 hover:bg-red-700' : undefined}>
+              {decision?.action === 'approve' ? (hi ? 'हाँ, स्वीकृत करें' : 'Yes, approve') : (hi ? 'हाँ, अस्वीकृत करें' : 'Yes, reject')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Delete Guard */}
       <LinkedDeleteDialog
         open={deleteGuard.open}
@@ -1149,11 +1184,11 @@ const Members: React.FC = () => {
         entityName={deleteGuard.name}
         links={deleteGuard.links}
         language={language as 'hi' | 'en'}
+        blockOnLinks
+        softDelete
         onConfirmDelete={() => {
-          if (deleteGuard.id) {
-            deleteMember(deleteGuard.id);
-            toast({ title: hi ? 'सदस्य हटाया गया' : 'Member deleted' });
-          }
+          // The success toast comes from DataContext once the cloud delete has landed (D5).
+          if (deleteGuard.id) deleteMember(deleteGuard.id);
         }}
       />
     </div>

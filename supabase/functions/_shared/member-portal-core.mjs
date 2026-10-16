@@ -88,6 +88,8 @@ export function memberEligible(member) {
   if (!member) return { ok: false, reason: 'member_not_found' };
   if (member.isDeleted) return { ok: false, reason: 'member_not_found' };
   if (EXITED.has(member.status)) return { ok: false, reason: 'member_inactive' };
+  // Member-audit M1 (D9): a pending or rejected application is not a member yet — no login.
+  if (member.approvalStatus === 'pending' || member.approvalStatus === 'rejected') return { ok: false, reason: 'member_not_approved' };
   if (!normalizeMemberNo(member.memberId)) return { ok: false, reason: 'member_no_missing' };
   return { ok: true };
 }
@@ -121,6 +123,7 @@ export const MESSAGES = {
   member_not_found: 'यह सदस्य आपकी समिति में नहीं मिला। / Member not found in your society.',
   member_inactive: 'इस्तीफ़ा/निष्कासित/मृत सदस्य को login नहीं दिया जा सकता। / Exited members cannot get a login.',
   member_no_missing: 'पहले सदस्य संख्या भरें। / Set the member number first.',
+  member_not_approved: 'आवेदन अभी स्वीकृत नहीं है — पहले सदस्यता स्वीकृत करें। / The application is not approved yet.',
   already_issued: 'इस सदस्य का login पहले से चालू है — "PIN बदलें" इस्तेमाल करें। / Login already active — use Reset PIN.',
   not_issued: 'इस सदस्य का चालू login नहीं है। / This member has no active login.',
   login_exists: 'इस सदस्य संख्या का login पहले से मौजूद है; support से संपर्क करें। / A login for this member number already exists; contact support.',

@@ -98,17 +98,18 @@ const MemberApplication: React.FC = () => {
       nomineeAddress: form.nomineeAddress.trim() || undefined,
       nomineeShares: form.nomineeShares ? parseInt(form.nomineeShares) : undefined,
       nomineePhone: form.nomineePhone.trim() || undefined,
+    }, {
+      // D5: "submitted" only once the cloud has the application.
+      onSaved: m => toast({
+        title: language === 'hi' ? 'आवेदन जमा हुआ' : 'Application Submitted',
+        description: language === 'hi' ? `${m.name} (${m.memberId}) का आवेदन पेंडिंग है।` : `${m.name} (${m.memberId})'s application is pending approval.`,
+      }),
     });
+
+    if (!newMember.id) return;   // refused (FY lock) — no PDF, no "submitted", the form stays filled
 
     // Generate PDF
     generateMemberApplicationPDF(newMember, society);
-
-    toast({
-      title: language === 'hi' ? 'आवेदन जमा हुआ' : 'Application Submitted',
-      description: language === 'hi'
-        ? `${newMember.name} का आवेदन पेंडिंग है। PDF डाउनलोड हो रही है।`
-        : `${newMember.name}'s application is pending approval. PDF downloading.`,
-    });
 
     setForm(EMPTY_FORM);
     navigate('/members?tab=pending');

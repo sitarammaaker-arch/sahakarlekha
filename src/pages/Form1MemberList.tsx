@@ -24,6 +24,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
+import { memberStatusLabel } from '@/lib/memberLifecycle';
 import { addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, registerReportIdentity } from '@/lib/pdf';
 
 const Form1MemberList: React.FC = () => {
@@ -39,7 +40,8 @@ const Form1MemberList: React.FC = () => {
 
   const filtered = useMemo(() => {
     let list = members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved');
-    if (statusFilter !== 'all') list = list.filter(m => m.status === statusFilter);
+    if (statusFilter === 'active') list = list.filter(m => m.status === 'active');
+    else if (statusFilter === 'inactive') list = list.filter(m => m.status !== 'active');   // U4: every non-active state
     if (typeFilter   !== 'all') list = list.filter(m => m.memberType === typeFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -71,7 +73,7 @@ const Form1MemberList: React.FC = () => {
       m.shareCapital || 0,
       m.nomineeName || '—',
       m.nomineeRelation || '—',
-      m.status === 'active' ? 'Active' : 'Inactive',
+      memberStatusLabel(m.status),
     ]);
 
   const handleCSV = () =>
@@ -124,7 +126,7 @@ const Form1MemberList: React.FC = () => {
         (m.shareCapital || 0).toLocaleString('en-IN'),
         m.nomineeName     || '—',
         m.nomineeRelation || '—',
-        m.status === 'active' ? 'Active' : 'Inactive',
+        memberStatusLabel(m.status),
       ]),
       foot: [[
         '', '', '', '', '', '', '', `Total: ${filtered.length}`,
@@ -210,7 +212,7 @@ const Form1MemberList: React.FC = () => {
           <SelectContent>
             <SelectItem value="all">{hi ? 'सभी' : 'All'}</SelectItem>
             <SelectItem value="active">{hi ? 'सक्रिय' : 'Active'}</SelectItem>
-            <SelectItem value="inactive">{hi ? 'निष्क्रिय' : 'Inactive'}</SelectItem>
+            <SelectItem value="inactive">{hi ? 'सक्रिय नहीं' : 'Not active'}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={typeFilter} onValueChange={v => setTypeFilter(v as typeof typeFilter)}>
@@ -286,7 +288,7 @@ const Form1MemberList: React.FC = () => {
                   </TableCell>
                   <TableCell>
                     <Badge className={m.status === 'active' ? 'bg-green-100 text-green-800 text-xs' : 'bg-red-100 text-red-800 text-xs'}>
-                      {m.status === 'active' ? (hi ? 'सक्रिय' : 'Active') : (hi ? 'निष्क्रिय' : 'Inactive')}
+                      {memberStatusLabel(m.status, hi)}
                     </Badge>
                   </TableCell>
                 </TableRow>

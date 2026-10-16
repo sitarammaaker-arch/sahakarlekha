@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { logAudit } from '@/lib/auditLog';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -261,10 +262,18 @@ const UniversalImporter: React.FC = () => {
     // Same rule addMember applies per member (joiningReceipts) — collected for ONE summary instead of a toast per row.
     const plans: JoiningReceiptPlan[] = [];
     const planOpts = { financialYear: society.financialYear, today: new Date().toISOString().split('T')[0], bankAccountId: defaultBankAccountId(accounts) || null };
+    // Member-audit M1 (D6): a member number already in the society OR earlier in this same file is skipped —
+    // `members` is a snapshot from before the loop, so in-file repeats used to slip through as two members.
+    const seen = new Set(members.map(m => m.memberId.trim().toLowerCase()));
+    let repeatedInFile = 0;
     for (const row of validRows) {
       const mid = row.data.member_id.trim();
-      const exists = members.find(m => m.memberId === mid);
-      if (exists) { skipped++; continue; }
+      const key = mid.toLowerCase();
+      if (seen.has(key)) {
+        if (members.some(m => m.memberId.trim().toLowerCase() === key)) skipped++; else repeatedInFile++;
+        continue;
+      }
+      seen.add(key);
       const memberData: Omit<Member, 'id'> = {
         memberId: mid,
         name: row.data.name.trim(),
@@ -303,9 +312,18 @@ const UniversalImporter: React.FC = () => {
     setMemberImporting(false);
     setMemberPreview(null);
     const sum = summariseJoiningPlans(plans);
+    // D4: one audit row for the whole import (addMember is quiet here, so no row per member).
+    if (imported > 0 && user?.societyId) {
+      logAudit({ entityType: 'member', entityId: 'bulk', action: 'create', reason: `Member import: ${imported} added, ${skipped} already existed, ${repeatedInFile} repeated in the file` },
+        { societyId: user.societyId, actor: { name: user.name, email: user.email, role: user.role } });
+    }
+    const notes = [
+      skipped > 0 ? `${skipped} सदस्य पहले से थे (वही सदस्य संख्या) — छोड़े गए` : '',
+      repeatedInFile > 0 ? `${repeatedInFile} पंक्तियों में सदस्य संख्या फ़ाइल में दोबारा आई — पहली ही ली गई` : '',
+    ].filter(Boolean);
     toast({
       title: `${imported} Members Import हुए`,
-      description: skipped > 0 ? `${skipped} members पहले से exist थे (same Member ID), skip किए गए` : 'सभी members successfully import हो गए',
+      description: notes.length ? notes.join(' · ') : 'सभी members successfully import हो गए',
     });
     if (sum.historicalMembers > 0) {
       // Old members get no cash receipt — their share belongs in the opening balances (joiningReceipts).

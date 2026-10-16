@@ -19,11 +19,18 @@ import { generateShareRegisterPDF } from '@/lib/pdf';
 import type { Member } from '@/types';
 import type { ShareOpType } from '@/lib/shareOps';
 import { premiumCap as sharePremiumCap, premiumAllowed as isSharePremiumAllowed } from '@/lib/sharePremium';
+import { memberStatusLabel } from '@/lib/memberLifecycle';
+import { useAuth } from '@/contexts/AuthContext';
 
 const ShareRegister: React.FC = () => {
   const { language } = useLanguage();
   const { members, updateMember, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, society, updateSociety, vouchers } = useData();
   const { toast } = useToast();
+  // Member-audit M1 (D7): share actions post vouchers → `create`; register edits → `update`. The page used to show
+  // every button to every role that could open it.
+  const { can } = useAuth();
+  const canPost = can('create');
+  const canEdit = can('update');
 
   const [search, setSearch] = useState('');
   const [premiumCapInput, setPremiumCapInput] = useState(String(society.maxSharePremiumPercent ?? ''));   // ECR-16 MS-11
@@ -106,13 +113,13 @@ const ShareRegister: React.FC = () => {
     // deliberately NOT written: changing the member's share scalar without a voucher
     // makes it drift from the ledger control (the "बेमेल" badge). Share quantity/value
     // changes must go through Add Shares / Transfer / Refund / Ops, which post vouchers.
-    updateMember(editMember.id, {
+    const applied = updateMember(editMember.id, {
       shareCertNo: form.shareCertNo,
       nomineeName: form.nomineeName,
       nomineeRelation: form.nomineeRelation,
       nomineePhone: form.nomineePhone,
-    });
-    toast({ title: hi ? 'अपडेट किया गया' : 'Updated successfully' });
+    }, { onSaved: () => toast({ title: hi ? 'अपडेट किया गया' : 'Updated successfully' }) });
+    if (!applied) return;
     setEditMember(null);
   };
 
@@ -130,7 +137,7 @@ const ShareRegister: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateShareRegisterPDF(members, society)}>
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => generateShareRegisterPDF(approvedMembers, society)}>
             <Download className="h-4 w-4" />PDF
           </Button>
         </div>
@@ -179,7 +186,7 @@ const ShareRegister: React.FC = () => {
       <div className="flex items-center gap-2 flex-wrap rounded-md border bg-muted/30 px-3 py-2">
         <Label className="text-xs whitespace-nowrap">{hi ? 'अधिकतम ट्रांसफर प्रीमियम %' : 'Max transfer premium %'}</Label>
         <Input type="number" min="0" max="100" value={premiumCapInput} onChange={e => setPremiumCapInput(e.target.value)} className="h-8 w-24" placeholder="0" />
-        <Button size="sm" variant="outline" className="h-8"
+        <Button size="sm" variant="outline" className="h-8" disabled={!canEdit}
           onClick={() => { updateSociety({ maxSharePremiumPercent: premiumCapInput === '' ? undefined : Number(premiumCapInput) }); toast({ title: hi ? 'प्रीमियम सीमा सहेजी' : 'Premium cap saved' }); }}>
           {hi ? 'सहेजें' : 'Save'}
         </Button>
@@ -241,19 +248,21 @@ const ShareRegister: React.FC = () => {
                     <TableCell className="text-muted-foreground">{m.nomineeRelation || <span className="text-muted-foreground/50">—</span>}</TableCell>
                     <TableCell>
                       <Badge variant={m.status === 'active' ? 'default' : 'secondary'}>
-                        {m.status === 'active' ? (hi ? 'सक्रिय' : 'Active') : (hi ? 'निष्क्रिय' : 'Inactive')}
+                        {memberStatusLabel(m.status, hi)}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1 items-center">
-                        <ShareTxnButton member={m} hi={hi} kind="purchase" onSubmit={purchaseShareCapital} />
-                        {m.shareCapital > 0 && <ShareTxnButton member={m} hi={hi} kind="refund" onSubmit={refundShareCapital} />}
-                        <ShareRefundPayableButtons member={m} hi={hi} outstanding={shareRefundOutstanding(vouchers, m.id)} onApprove={approveShareRefund} onPay={payShareRefund} />
-                        {m.shareCapital > 0 && <TransferShareButton member={m} members={approvedMembers} hi={hi} maxPremiumPct={society.maxSharePremiumPercent ?? 0} onTransfer={transferShareCapital} />}
-                        <ShareOpButton member={m} hi={hi} onSubmit={shareOperation} />
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(m)}>
+                        {canPost && <>
+                          <ShareTxnButton member={m} hi={hi} kind="purchase" onSubmit={purchaseShareCapital} />
+                          {m.shareCapital > 0 && <ShareTxnButton member={m} hi={hi} kind="refund" onSubmit={refundShareCapital} />}
+                          <ShareRefundPayableButtons member={m} hi={hi} outstanding={shareRefundOutstanding(vouchers, m.id)} onApprove={approveShareRefund} onPay={payShareRefund} />
+                          {m.shareCapital > 0 && <TransferShareButton member={m} members={approvedMembers} hi={hi} maxPremiumPct={society.maxSharePremiumPercent ?? 0} onTransfer={transferShareCapital} />}
+                          <ShareOpButton member={m} hi={hi} onSubmit={shareOperation} />
+                        </>}
+                        {canEdit && <Button variant="ghost" size="icon" onClick={() => openEdit(m)} aria-label={hi ? 'संपादित करें' : 'Edit'}>
                           <Edit className="h-4 w-4" />
-                        </Button>
+                        </Button>}
                       </div>
                     </TableCell>
                   </TableRow>

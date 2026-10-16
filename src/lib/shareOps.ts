@@ -54,3 +54,20 @@ export function applyShareOp(type: ShareOpType, currentShareCapital: number, amo
   const sign = type === 'bonus' ? 1 : -1;
   return Math.round((currentShareCapital + sign * amount) * 100) / 100;
 }
+
+/**
+ * Member-audit M1 (D2, 2026-10-16): every share-capital move (purchase, refund, transfer, bonus/forfeit/redeem/
+ * surrender) changed `shareCapital` but never `shareCount`, so the register and the certificate kept the old count.
+ * The count follows the capital at the member's face value: whole shares only (floor), unchanged when no face value
+ * is recorded.
+ */
+export function shareCountFor(shareFaceValue: number | undefined, shareCapital: number, previous?: number): number | undefined {
+  const face = Number(shareFaceValue) || 0;
+  if (!(face > 0)) return previous;
+  return Math.max(0, Math.floor(Math.round((shareCapital / face) * 1e6) / 1e6));
+}
+
+/** The member with a new share-capital amount and its share count kept in step (see `shareCountFor`). */
+export function withShareCapital<M extends { shareCapital?: number; shareCount?: number; shareFaceValue?: number }>(member: M, shareCapital: number): M {
+  return { ...member, shareCapital, shareCount: shareCountFor(member.shareFaceValue, shareCapital, member.shareCount) };
+}
