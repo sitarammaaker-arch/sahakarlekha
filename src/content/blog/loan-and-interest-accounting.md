@@ -143,7 +143,7 @@ KCC व फसल-ऋण में एक बात और ध्यान र�
 
 ब्याज पर TDS या आय-वर्गीकरण जैसी बारीकियाँ हमारी [संपूर्ण गाइड](/guide) में हैं। ऋण के साथ सदस्य-रिकॉर्ड भी ज़रूरी है — देखें [सदस्य व शेयर रजिस्टर](/blog/member-and-share-accounting)।
 
-> ✅ अपनी समिति के हर ऋण, ब्याज और किस्त का साफ़ हिसाब रखें — [SahakarLekha पर मुफ्त शुरू करें](/register), या [PACS के लिए सॉफ्टवेयर](/software/pacs) देखें।
+> ✅ अपनी समिति के हर ऋण, ब्याज और किस्त का साफ़ हिसाब रखें — [SahakarLekha पर रजिस्टर करें](/register), या [PACS के लिए सॉफ्टवेयर](/software/pacs) देखें।
 
 अधिक जानें: [KCC फसल-ऋण लेखांकन](/blog/kcc-crop-loan-accounting) · [10 आम गलतियाँ](/blog/common-accounting-mistakes) · [सहकारी लेखांकन की मूल बातें](/blog/cooperative-accounting-basics)।
 

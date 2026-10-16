@@ -92,7 +92,7 @@ Voting/Decision Record में Result (Unanimous/Majority), For, Against, Abst
 
 एक अच्छा Board Resolution समिति के फ़ैसले को कागज़ पर मज़बूत, प्रमाण-योग्य व विवाद-रहित बनाता है। इसका ढाँचा सरल है — बैठक-विवरण (quorum-सहित), फिर Background व दोनों RESOLVED clauses, financial मामलों में राशि-सीमा-अधिकारी, और conflict हो तो recusal का record। जब तीसरे पक्ष को चाहिए, तो मूल Minutes Book के अधीन एक Certified True Copy जारी करें। इन बुनियादी बातों का पालन करने वाली समिति के फ़ैसले हर ऑडिट व हर बैंक-विभाग जाँच में सहज पास होते हैं — क्योंकि तब हर निर्णय का साफ़, अधिकृत व प्रमाणित रिकॉर्ड मौजूद रहता है।
 
-> ✅ प्रस्ताव, कार्यवृत्त व वित्तीय-मंज़ूरी का रिकॉर्ड पारदर्शी व खोज-योग्य रखें — [SahakarLekha पर मुफ्त शुरू करें](/register)।
+> ✅ प्रस्ताव, कार्यवृत्त व वित्तीय-मंज़ूरी का रिकॉर्ड पारदर्शी व खोज-योग्य रखें — [SahakarLekha पर रजिस्टर करें](/register)।
 
 **जुड़ी पढ़ाई:** [हरियाणा सहकारी समिति अधिनियम 1984 व नियम 1989 गाइड](/blog/haryana-cooperative-act-1984-rules-1989-guide) · [सदस्यता आवेदन गाइड](/blog/haryana-cooperative-society-membership-application-guide) · [AGM की तैयारी](/blog/agm-preparation-checklist) · [समिति में आंतरिक नियंत्रण](/blog/internal-control-in-cooperatives)
 

@@ -218,6 +218,6 @@
 
 **जुड़े शब्द:** [वाउचर](/glossary/voucher) · [डेबिट](/glossary/debit) · [क्रेडिट](/glossary/credit) · [narration](/glossary/narration) · [कोंट्रा एंट्री](/glossary/contra-entry)
 
-> ✅ अभ्यास के साथ सीखिए — [SahakarLekha पर मुफ्त वाउचर बनाएँ](/register), या गहराई से जानने के लिए [संपूर्ण गाइड](/guide) देखें।
+> ✅ अभ्यास के साथ सीखिए — [SahakarLekha पर वाउचर बनाएँ](/register), या गहराई से जानने के लिए [संपूर्ण गाइड](/guide) देखें।
 
 > 📘 यह लेख सक्रिय Knowledge Items से बना — Evidence Level A (शैक्षिक)।

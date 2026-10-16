@@ -143,7 +143,7 @@
 
 दुग्ध समिति की बुनियाद समझ लेने पर उसका डिजिटल हिसाब आसान हो जाता है — सदस्य, संग्रह और भुगतान सब एक जगह। असली कुंजी अनुशासन में है: रोज़ का दूध रोज़ दर्ज हो, गुणवत्ता (फैट/SNF) के साथ; हर सदस्य का खाता साफ़ रहे; और संघ के साथ मिलान समय पर हो। यही तीन आदतें एक छोटी VDCS को भी उसी पारदर्शिता तक पहुँचाती हैं, जिस पर पूरा अमूल-मॉडल टिका है।
 
-> ✅ दुग्ध समिति के लिए डिजिटल हिसाब — [मुफ्त शुरू करें](/register), या [समिति के प्रकार गाइड](/blog/cooperative-society-types-guide) पढ़ें।
+> ✅ दुग्ध समिति के लिए डिजिटल हिसाब — [SahakarLekha पर रजिस्टर करें](/register), या [समिति के प्रकार गाइड](/blog/cooperative-society-types-guide) पढ़ें।
 
 **जुड़ी पढ़ाई:** [Amul व आणंद पैटर्न](/blog/amul-anand-pattern-dairy-cooperative) · [सहकारी लेखांकन की मूल बातें](/blog/cooperative-accounting-basics) · [समिति के प्रकार](/blog/cooperative-society-types-guide) · [NDDB व श्वेत क्रांति](/blog/nddb-white-revolution-dairy-cooperative)
 

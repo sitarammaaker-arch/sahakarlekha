@@ -155,7 +155,7 @@
 
 एक आख़िरी सुझाव — अनुपातों को अकेले न देखें, बल्कि उन्हें [वित्तीय रिपोर्ट्स](/blog/how-to-read-financial-reports) व [MIS](/blog/mis-reports-for-management) के साथ मिलाकर पढ़ें। तब अनुपात सिर्फ़ संख्याएँ नहीं, बल्कि समिति की पूरी कहानी का सार बन जाते हैं — और प्रबंध समिति के हर फ़ैसले को आँकड़ों की मज़बूत नींव मिलती है।
 
-> ✅ वसूली, NPA, तरलता व अन्य अनुपात — रिपोर्ट से अपने-आप। [SahakarLekha पर मुफ्त शुरू करें](/register)।
+> ✅ वसूली, NPA, तरलता व अन्य अनुपात — रिपोर्ट से अपने-आप। [SahakarLekha पर रजिस्टर करें](/register)।
 
 **जुड़ी पढ़ाई:** [वित्तीय रिपोर्ट्स कैसे पढ़ें](/blog/how-to-read-financial-reports) · [प्रबंधन के लिए MIS रिपोर्ट](/blog/mis-reports-for-management) · [ऋण वसूली](/blog/loan-recovery-before-year-end) · [लाभ का बँटवारा व रिज़र्व](/blog/profit-distribution-and-reserves)
 
