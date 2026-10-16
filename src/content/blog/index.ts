@@ -1331,6 +1331,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'अनुदान शर्तों वाला पैसा है: मंज़ूरी-पत्र, प्रकार के अनुसार एंट्री, अलग रिकॉर्ड, बचा पैसा-ब्याज और उपयोगिता प्रमाण-पत्र।',
     accent: 'emerald',
     tags: ['सरकारी अनुदान', 'उपयोगिता प्रमाण-पत्र', 'UC', 'सब्सिडी'],
+    image: '/blog/government-grant-accounting-utilization-certificate.webp',
+    imageAlt: 'समिति के कार्यालय में सचिव मंज़ूरी-पत्र पर ध्यान दिला रहे हैं और लेखाकार बही में अनुदान का हिसाब लिख रही हैं, खिड़की के बाहर अनुदान से बना गोदाम और काम करते लोग दिख रहे हैं',
   },
   {
     slug: 'member-deposit-interest-accounting',
