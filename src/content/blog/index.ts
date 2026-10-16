@@ -1359,6 +1359,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'काग़ज़ी नमूना, हर ख़ाने में क्या लिखें, भुगतान-वार दस्तावेज़ और सात तरह की एंट्री।',
     accent: 'amber',
     tags: ['भुगतान वाउचर', 'वाउचर नमूना', 'दस्तावेज़', 'लेखा एंट्री'],
+    image: '/blog/payment-voucher-sample-documents-entry.webp',
+    imageAlt: 'समिति के लेखाकार मेज़ पर बिल और चेक-बुक के बीच छपे भुगतान वाउचर को पेन से भर रहे हैं, पीछे कोषाध्यक्ष लैपटॉप पर जाँच कर रही हैं',
   },
   {
     slug: 'payment-approval-voucher-entry-secretary-chairman-treasurer',
