@@ -24,6 +24,7 @@ import { reportStatus, STATUS_REPORT_CODES } from '@/lib/reports/reportStatus';
 import { reclassifyIncomeExpenditure, splitNegativeLines } from '@/lib/reports/negativeLines';
 import { groupWithSubtotals, type GroupableLine } from '@/lib/reports/groupSubtotals';
 import { buildBalanceSheetLayout, visibleRows, pyResult, type BsSide } from '@/lib/reports/balanceSheetLayout';
+import type { GroupSchedule } from '@/lib/reports/groupSchedule';
 import type { BlankPdfSpec } from '@/content/downloads';
 
 // Hindi DATA (names, narrations) in any PDF table is drawn by the browser — labels stay English.
@@ -3877,4 +3878,56 @@ export function generateBlankFormatPDF(spec: BlankPdfSpec): void {
   addSignatureBlock(doc, font, spec.signatures, endY + 8);
   addPageNumbers(doc, font);
   doc.save(`${spec.file}.pdf`);
+}
+
+// ── Group Schedule / समूह अनुसूची (2026-10-16) ─────────────────────────────────────────────────────────────────────
+// "LIST OF <GROUP> AS ON <DATE>" — the party-wise list the cooperative audit attaches to the Balance Sheet. One schedule
+// per page (the "all schedules" export starts every head on a new page). Rows come from lib/reports/groupSchedule
+// (the Trial Balance's own figures); Hindi names print through the Devanagari cell renderer.
+export function generateGroupSchedulePDF(schedules: GroupSchedule[], society: SocietySettings, asOnDate: string, fyStart: string, fileStem = 'GroupSchedule') {
+  const doc = new jsPDF({ orientation: 'landscape' });
+  let font = '';
+  const money = (n: number) => (Math.abs(n) >= 0.005 ? `${fmt(Math.abs(n))} ${n > 0 ? 'Dr' : 'Cr'}` : '-');
+  const plain = (n: number) => (Math.abs(n) >= 0.005 ? fmt(n) : '-');
+  const nameCell = (en: string, hi: string) => (hi && hi.trim() && hi.trim() !== en.trim() ? `${en}\n${hi}` : en);
+  schedules.forEach((s, i) => {
+    if (i > 0) doc.addPage();
+    const head = addHeader(doc, `LIST OF ${s.titleEn.toUpperCase()} AS ON ${fmtDate(asOnDate)}`, society,
+      `Period: ${fmtDate(fyStart)} to ${fmtDate(asOnDate)} | ${s.ledgerCount} ledger(s)`, { reportCode: 'GS' });
+    font = head.font;
+    const body: RowInput[] = [];
+    for (const sec of s.sections) {
+      body.push([{ content: nameCell(sec.titleEn.toUpperCase(), sec.titleHi), colSpan: 6, styles: { fontStyle: 'bold', fillColor: [232, 240, 254] } }]);
+      for (const r of sec.rows) {
+        const pad = '   '.repeat(r.depth);
+        if (r.kind === 'subhead') {
+          body.push([{ content: '', styles: { fillColor: [245, 245, 245] } },
+            { content: `${pad}${nameCell(r.nameEn, r.nameHi)} (sub-total)`, styles: { fontStyle: 'bolditalic', fillColor: [245, 245, 245] } },
+            ...[money(r.opening), plain(r.debit), plain(r.credit), money(r.closing)].map((c) => ({ content: c, styles: { fontStyle: 'bolditalic' as const, fillColor: [245, 245, 245] as [number, number, number] } }))]);
+        } else {
+          body.push([String(r.serial ?? ''), `${pad}${nameCell(r.nameEn, r.nameHi)}`, money(r.opening), plain(r.debit), plain(r.credit), money(r.closing)]);
+        }
+      }
+      body.push([{ content: '', styles: { fontStyle: 'bold' } }, { content: `Total - ${sec.titleEn}`, styles: { fontStyle: 'bold' } },
+        ...[money(sec.total.opening), plain(sec.total.debit), plain(sec.total.credit), money(sec.total.closing)].map((c) => ({ content: c, styles: { fontStyle: 'bold' as const } }))]);
+    }
+    const g = s.grand;
+    autoTable(doc, {
+      startY: head.startY,
+      margin: { left: 15, right: 15 },
+      head: [['Sr', 'Name (English / Hindi)', 'Opening', 'Debit', 'Credit', 'Closing']],
+      body,
+      foot: [
+        ['', `GRAND TOTAL - ${s.titleEn}`, money(g.opening), plain(g.debit), plain(g.credit), money(g.closing)],
+        ['', 'Gross Dr / Gross Cr', `${fmt(g.openingDr)} Dr / ${fmt(g.openingCr)} Cr`, '', '', `${fmt(g.closingDr)} Dr / ${fmt(g.closingCr)} Cr`],
+      ],
+      showFoot: 'lastPage',
+      styles: { fontSize: 8, cellPadding: 1.6, font, overflow: 'linebreak' },
+      headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+      footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+      columnStyles: { 0: { cellWidth: 12 }, 2: { halign: 'right', cellWidth: 38 }, 3: { halign: 'right', cellWidth: 30 }, 4: { halign: 'right', cellWidth: 30 }, 5: { halign: 'right', cellWidth: 38 } },
+    });
+  });
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName(fileStem, society));
 }

@@ -54,6 +54,7 @@ export const translations: Translations = {
   form1MemberList: { hi: 'प्रपत्र 1 — सदस्य सूची', en: 'Form 1 — Member List' },
   auditCertificate: { hi: 'ऑडिट प्रमाणपत्र', en: 'Audit Certificate' },
   auditSchedules: { hi: 'ऑडिट अनुसूचियां', en: 'Audit Schedules' },
+  groupSchedule: { hi: 'समूह अनुसूची', en: 'Group Schedule' },
   backupRestore: { hi: 'डेटा एक्सपोर्ट', en: 'Data Export' },
   exportCenter: { hi: 'एक्सपोर्ट सेंटर', en: 'Export Center' },
   restoreCenter: { hi: 'रिस्टोर सेंटर', en: 'Restore Center' },

@@ -27,6 +27,7 @@ import type { LedgerAccount } from '@/types';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { accountCode, isUuidId } from '@/lib/accountCode';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
+import { naturalOpeningSide } from '@/lib/accountRoles';
 
 type AccountType = LedgerAccount['type'];
 
@@ -268,7 +269,7 @@ const LedgerHeads: React.FC = () => {
       nameHi: acc.nameHi || '',
       type: acc.type,
       openingBalance: String(acc.openingBalance ?? ''),
-      openingBalanceType: acc.openingBalanceType ?? 'debit',
+      openingBalanceType: acc.openingBalanceType ?? naturalOpeningSide(acc.type),
       isGroup: !!acc.isGroup,
       parentId: acc.parentId || '',
     });
@@ -659,7 +660,7 @@ const LedgerHeads: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{hi ? 'खाता प्रकार' : 'Account Type'} <span className="text-destructive">*</span></Label>
-                <Select value={form.type} onValueChange={val => setForm(f => ({ ...f, type: val as AccountType, parentId: '' }))}>
+                <Select value={form.type} onValueChange={val => { if (!val) return; setForm(f => (f.type === val ? f : { ...f, type: val as AccountType, parentId: '', openingBalanceType: naturalOpeningSide(val) })); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {TYPE_OPTIONS.map(opt => (
@@ -670,7 +671,7 @@ const LedgerHeads: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <Label>{hi ? 'पैरेंट ग्रुप' : 'Parent Group'}</Label>
-                <Select value={form.parentId || '__none__'} onValueChange={val => setForm(f => ({ ...f, parentId: val === '__none__' ? '' : val }))}>
+                <Select value={form.parentId || '__none__'} onValueChange={val => { if (!val) return; setForm(f => ({ ...f, parentId: val === '__none__' ? '' : val })); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">{hi ? 'कोई नहीं (Top Level)' : 'None (Top Level)'}</SelectItem>
@@ -702,7 +703,7 @@ const LedgerHeads: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>{hi ? 'शेष प्रकार' : 'Balance Type'}</Label>
-                  <Select value={form.openingBalanceType} onValueChange={val => setForm(f => ({ ...f, openingBalanceType: val as 'debit' | 'credit' }))}>
+                  <Select value={form.openingBalanceType} onValueChange={val => { if (val !== 'debit' && val !== 'credit') return; setForm(f => ({ ...f, openingBalanceType: val })); }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="debit">{hi ? 'नाम (Dr)' : 'Debit (Dr)'}</SelectItem>
@@ -742,7 +743,8 @@ const LedgerHeads: React.FC = () => {
             </div>
             <div className="space-y-2">
               <Label>{hi ? 'पैरेंट ग्रुप' : 'Parent Group'}</Label>
-              <Select value={form.parentId || '__none__'} onValueChange={val => setForm(f => ({ ...f, parentId: val === '__none__' ? '' : val }))}>
+              {/* keyed by the ledger: a fresh Select per edit, so a previous ledger's options never leak in */}
+              <Select key={editAccount?.id ?? 'none'} value={form.parentId || '__none__'} onValueChange={val => { if (!val) return; setForm(f => ({ ...f, parentId: val === '__none__' ? '' : val })); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">{hi ? 'कोई नहीं (Top Level)' : 'None (Top Level)'}</SelectItem>
@@ -782,7 +784,7 @@ const LedgerHeads: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>{hi ? 'शेष प्रकार' : 'Balance Type'}</Label>
-                  <Select value={form.openingBalanceType} onValueChange={val => setForm(f => ({ ...f, openingBalanceType: val as 'debit' | 'credit' }))}>
+                  <Select value={form.openingBalanceType} onValueChange={val => { if (val !== 'debit' && val !== 'credit') return; setForm(f => ({ ...f, openingBalanceType: val })); }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="debit">{hi ? 'नाम (Dr)' : 'Debit (Dr)'}</SelectItem>
