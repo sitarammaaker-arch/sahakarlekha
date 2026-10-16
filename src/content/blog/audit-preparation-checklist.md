@@ -137,7 +137,7 @@ FY-लॉक इसलिए ज़रूरी है कि ऑडिट क�
 
 विस्तार के लिए देखें [ऑडिट तैयारी अध्याय](/guide/audit-preparation)।
 
-> ✅ ऑडिट-रेडी रिपोर्ट एक क्लिक पर पाएँ — [SahakarLekha पर मुफ्त शुरू करें](/register), या [हमसे संपर्क करें](/contact)।
+> ✅ ऑडिट-रेडी रिपोर्ट एक क्लिक पर पाएँ — [SahakarLekha पर रजिस्टर करें](/register), या [हमसे संपर्क करें](/contact)।
 
 **जुड़ी पढ़ाई:** [सहकारी ऑडिट कैसे होता है](/blog/how-cooperative-society-audit-works) · [AGM की तैयारी](/blog/agm-preparation-checklist) · [वर्षांत व FY-लॉक](/blog/year-end-closing-and-fy-lock) · [10 आम गलतियाँ](/blog/common-accounting-mistakes)
 

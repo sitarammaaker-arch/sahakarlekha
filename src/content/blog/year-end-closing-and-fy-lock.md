@@ -124,7 +124,7 @@ FY-लॉक को एक "ताला" समझिए जो साल-अ�
 ## आख़िर में
 साल बंद करना डरने की बात नहीं — एक तय चेकलिस्ट (एंट्री → मिलान → समायोजन → ट्रायल बैलेंस → अंतिम खाते → वितरण) और सोच-समझकर किया गया FY-लॉक इसे साफ़, स्थिर और ऑडिट-रेडी रखता है। सबसे ज़रूरी — closing सही रखें, क्योंकि वही अगले साल की नींव है।
 
-> ✅ वर्षांत व FY-लॉक — स्टेप-बाय-स्टेप। [SahakarLekha पर मुफ्त शुरू करें](/register), या [ऑडिट की तैयारी](/blog/audit-preparation-checklist) पढ़ें।
+> ✅ वर्षांत व FY-लॉक — स्टेप-बाय-स्टेप। [SahakarLekha पर रजिस्टर करें](/register), या [ऑडिट की तैयारी](/blog/audit-preparation-checklist) पढ़ें।
 
 **जुड़ी पढ़ाई:** [वर्षांत से पहले 10 ज़रूरी काम](/blog/year-end-readiness-checklist) · [नया वित्तीय वर्ष व बजट](/blog/new-financial-year-and-budget) · [ओपनिंग बैलेंस गाइड](/blog/opening-balances-new-society) · [10 आम गलतियाँ](/blog/common-accounting-mistakes)
 

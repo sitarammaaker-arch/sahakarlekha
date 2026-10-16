@@ -84,7 +84,7 @@ HARCO Bank की अपनी आधिकारिक जानकारी �
 
 हरियाणा का सहकारी ऋण-ढाँचा एक सुंदर उदाहरण है कि कैसे गाँव का छोटा किसान एक बड़े, संगठित वित्त-तंत्र से जुड़ता है — PACS से DCCB, DCCB से HARCO Bank, और आगे नाबार्ड तक। पर इस पूरी श्रृंखला की मज़बूती सबसे नीचे की कड़ी — PACS — पर टिकी है। जितनी साफ़, पारदर्शी व ऑडिट-रेडी हर PACS का हिसाब, उतना ही भरोसेमंद पूरा तंत्र। और आँकड़े पढ़ते समय हमेशा स्रोत व परिभाषा का ध्यान रखें (जैसे 773 बनाम 752) — यही सहकारी-डेटा को सही समझने की कुंजी है।
 
-> ✅ PACS-स्तर पर साफ़, ऑडिट-रेडी हिसाब रखें — [SahakarLekha पर मुफ्त शुरू करें](/register)।
+> ✅ PACS-स्तर पर साफ़, ऑडिट-रेडी हिसाब रखें — [SahakarLekha पर रजिस्टर करें](/register)।
 
 **जुड़े शब्द:** [HARCO Bank](/glossary/harco-bank) · [DCCB](/glossary/dccb) · [PACS](/glossary/pacs) · [नाबार्ड](/glossary/nabard) · [तीन-स्तरीय ढाँचा](/glossary/three-tier) · [DICGC](/glossary/dicgc) · [PCCS](/glossary/pccs) · [FSS](/glossary/fss) · [KCC](/glossary/kcc) · [पुनर्वित्त](/glossary/refinance)
 

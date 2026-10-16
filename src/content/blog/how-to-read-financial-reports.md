@@ -152,7 +152,7 @@
 
 डिजिटल सिस्टम में ये सब एक क्लिक पर बनती हैं — विस्तार से देखें [बैलेंस शीट अध्याय](/guide/balance-sheet) और [ट्रायल बैलेंस अध्याय](/guide/trial-balance)।
 
-> ✅ अपनी समिति की हर रिपोर्ट एक क्लिक पर पाइए — [SahakarLekha पर मुफ्त शुरू करें](/register)।
+> ✅ अपनी समिति की हर रिपोर्ट एक क्लिक पर पाइए — [SahakarLekha पर रजिस्टर करें](/register)।
 
 अधिक जानें: [ट्रायल बैलेंस समझें](/blog/trial-balance-explained) · [अकाउंटिंग इक्वेशन](/blog/accounting-equation-explained) · [सहकारी लेखांकन की मूल बातें](/blog/cooperative-accounting-basics)।
 

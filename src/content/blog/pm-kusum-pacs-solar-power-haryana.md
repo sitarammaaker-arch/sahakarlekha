@@ -103,7 +103,7 @@ PM-KUSUM में eligibility मिल जाना अपने-आप PACS �
 
 PM-KUSUM एक PACS के लिए परंपरागत भूमिका से आगे बढ़ने का एक असली अवसर है — बिजली-उत्पादक बनकर, ज़मीन-लीज़ से, या सदस्यों की सिंचाई-लागत घटाकर। पर इस अवसर के साथ सावधानी भी उतनी ही ज़रूरी है: यह पैनल ख़रीदकर लगाने भर का काम नहीं, बल्कि ज़मीन, ग्रिड, वित्त, PPA व approvals की पेशेवर योजना का मामला है। इसलिए सही रास्ता है — पहले प्रबंध समिति का प्रस्ताव, फिर DISCOM/HAREDA से लिखित पुष्टि, फिर DPR व techno-financial appraisal — और उसके बाद ही निवेश। सबसे बड़ी सीख यही है: eligibility एक शुरुआत है, सफलता तैयारी में है, और हर आँकड़ा/window ख़र्च से पहले verify करना अनिवार्य है।
 
-> ✅ नई आय-धारा (solar/lease) का अलग, पारदर्शी हिसाब रखें — [SahakarLekha पर मुफ्त शुरू करें](/register)।
+> ✅ नई आय-धारा (solar/lease) का अलग, पारदर्शी हिसाब रखें — [SahakarLekha पर रजिस्टर करें](/register)।
 
 **जुड़ी पढ़ाई:** [CM-PACS क्या है](/blog/cm-pacs-kya-hai) · [CM-PACS हिसाब-किताब, ऑडिट व टैक्स गाइड](/blog/cm-pacs-accounting-tax-audit-guide) · [PACS गोदाम व अन्न-भंडारण योजना](/blog/pacs-godown-grain-storage-scheme-ami-aif-nabard) · [सहकारी कानून का ढाँचा](/blog/cooperative-law-framework)
 

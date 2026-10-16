@@ -116,7 +116,7 @@ CM-PACS का "बहुउद्देश्यीय" होना ही इ
 
 CM-PACS हरियाणा की सहकारिता में एक बड़ा, आत्मनिर्भरता की ओर बढ़ता कदम है — परंपरागत PACS को बहुउद्देश्यीय, आय के कई स्रोतों वाली संस्था में बदलने की कोशिश। इस लेख का सबसे ज़रूरी संदेश दो हैं: पहला, नाम को सही समझें — CM-PACS यानी Comprehensive Multi-Purpose Activity Cooperative Society, न कि "मुख्यमंत्री-पैक्स"; और दूसरा, संख्याओं को हमेशा आधिकारिक, ताज़ा स्रोत (RCS हरियाणा पोर्टल/ARCS) से ही पक्का करें, क्योंकि ये लगातार बदलती रहती हैं।
 
-> ✅ सहकारी समिति का पूरा हिसाब — सदस्य, शेयर, ऋण, ऑडिट — एक जगह, हिन्दी में। [SahakarLekha पर मुफ्त शुरू करें](/register)।
+> ✅ सहकारी समिति का पूरा हिसाब — सदस्य, शेयर, ऋण, ऑडिट — एक जगह, हिन्दी में। [SahakarLekha पर रजिस्टर करें](/register)।
 
 **जुड़ी पढ़ाई:** [CM-PACS क्या है](/blog/cm-pacs-kya-hai) · [CM-PACS Model Bye-laws](/blog/cm-pacs-model-bye-laws-haryana-guide) · [CM-PACS पंजीकरण प्रक्रिया](/blog/cm-pacs-registration-process-haryana) · [PACS Model Bye-laws हरियाणा](/blog/pacs-model-bye-laws-haryana-explained) · [DCCB–PACS–HARCO साख ढाँचा](/blog/dccb-haryana-pacs-harco-bank-credit-structure)
 

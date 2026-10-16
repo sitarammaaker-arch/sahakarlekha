@@ -142,6 +142,6 @@ EPF, ESI, PT व TDS — हर एक की **अलग देनदारी*
 
 **जुड़े शब्द:** [EPF](/glossary/epf) · [ESI](/glossary/esi) · [प्रोफेशनल टैक्स](/glossary/professional-tax) · [TDS](/glossary/tds) · [सकल बनाम शुद्ध वेतन](/glossary/gross-net-salary)
 
-> ✅ वेतन, EPF/ESI व TDS — एक जगह। [SahakarLekha पर मुफ्त शुरू करें](/register)।
+> ✅ वेतन, EPF/ESI व TDS — एक जगह। [SahakarLekha पर रजिस्टर करें](/register)।
 
 > 📘 स्रोत: सामान्य पेरोल-लेखांकन सिद्धांत। EPF/ESI/PT/TDS की दरें, सीमाएँ व तारीख़ें नियमानुसार/राज्यानुसार बदलती हैं — EPFO/ESIC पोर्टल, राज्य-नियम व CA से पुष्टि करें। उदाहरण-अंक केवल प्रक्रिया-समझ के लिए। यह कर/कानूनी सलाह नहीं है। Evidence Level A (शैक्षिक)।

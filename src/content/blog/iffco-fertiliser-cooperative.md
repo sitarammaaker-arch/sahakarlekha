@@ -111,7 +111,7 @@ IFFCO सहकारिता की सबसे बड़ी सफलता 
 
 संक्षेप में, IFFCO सहकारिता की ताक़त का एक जीता-जागता उदाहरण है — और हर छोटी समिति के लिए यह भरोसा कि सही सिद्धांतों पर चलकर सहकारी संस्था किसी भी ऊँचाई तक पहुँच सकती है।
 
-> ✅ खाद खरीद-बिक्री व स्टॉक का सही हिसाब आसानी से रखें — [SahakarLekha पर मुफ्त शुरू करें](/register)।
+> ✅ खाद खरीद-बिक्री व स्टॉक का सही हिसाब आसानी से रखें — [SahakarLekha पर रजिस्टर करें](/register)।
 
 **जुड़ी पढ़ाई:** [KRIBHCO क्या है](/blog/kribhco-fertiliser-cooperative) · [सहकारी बनाम कंपनी](/blog/cooperative-vs-company-difference) · [इन्वेंटरी व स्टॉक प्रबंधन](/blog/inventory-and-stock-management) · [हरित व श्वेत क्रांति में सहकारिता](/blog/cooperatives-in-green-and-white-revolution)
 

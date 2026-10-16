@@ -93,7 +93,7 @@ Rule 17 के अनुसार, producer society को छोड़कर �
 
 सदस्यता-आवेदन समिति व सदस्य के रिश्ते की पहली, बुनियादी व सबसे अहम कड़ी है — इसलिए इसे सही, पूरा व नियमानुसार भरना ज़रूरी है। मुख्य बातें याद रखें: कोई एक "official form" नहीं (अपनी bye-laws का प्रारूप); पात्रता (Section 16) व disqualification (Rule 14/15) जाँचें; समय-सीमा (Rule 17 का एक महीना, Rule 16 का AGM-14-दिन नियम) का पालन करें; nomination (Rule 21) ज़रूर भरवाएँ; और स्वीकृति पर Member Register में तुरंत entry (Rule 22) करें। इन सबका पालन करने वाली समिति की सदस्यता-प्रक्रिया पारदर्शी, विवाद-रहित व ऑडिट-रेडी रहती है — और सदस्य को उसके सारे अधिकार बिना उलझन मिलते हैं।
 
-> ✅ सदस्य, शेयर, nominee व शुल्क का रिकॉर्ड व्यवस्थित व ऑडिट-रेडी रखें — [SahakarLekha पर मुफ्त शुरू करें](/register)।
+> ✅ सदस्य, शेयर, nominee व शुल्क का रिकॉर्ड व्यवस्थित व ऑडिट-रेडी रखें — [SahakarLekha पर रजिस्टर करें](/register)।
 
 **जुड़ी पढ़ाई:** [हरियाणा अधिनियम 1984 व नियम 1989 गाइड](/blog/haryana-cooperative-act-1984-rules-1989-guide) · [सदस्य व शेयर लेखांकन](/blog/member-and-share-accounting) · [सहकारी कानून का ढाँचा](/blog/cooperative-law-framework) · [Board Resolution गाइड](/blog/haryana-cooperative-society-board-resolution-guide)
 
