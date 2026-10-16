@@ -64,7 +64,7 @@ export const HUBS: HubDef[] = [
     { hi: 'वैधानिक व एजेंसी', en: 'Statutory & agency', moduleIds: ['nabardReport', 'federationReport', 'kachiAarat', 'complianceCalendar'] },
   ] },
   { id: 'registers', hi: 'रजिस्टर व ऑडिट', en: 'Registers & audit', icon: ShieldCheck, sections: [
-    { hi: 'ऑडिट', en: 'Audit', moduleIds: ['auditRegister', 'auditCertificate', 'auditSchedules', 'auditTrail', 'ledgerHygiene'] },
+    { hi: 'ऑडिट', en: 'Audit', moduleIds: ['auditRegister', 'auditCertificate', 'auditSchedules', 'groupSchedule', 'auditTrail', 'ledgerHygiene'] },
     { hi: 'बैठक व चुनाव', en: 'Meetings & elections', moduleIds: ['meetingRegister', 'electionModule', 'boardOfDirectors'] },
     { hi: 'संपत्ति व कोष', en: 'Assets & funds', moduleIds: ['assetRegister', 'depreciationSchedule', 'fundRegister', 'surplusAppropriation'] },
   ] },

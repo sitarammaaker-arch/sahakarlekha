@@ -411,6 +411,7 @@
     "test:nav-favourites": "node scripts/test-nav-favourites.mjs",
     "test:nav-create-menu": "node scripts/test-nav-create-menu.mjs",
     "test:bs-layout": "node scripts/test-bs-layout.mjs",
+    "test:group-schedule": "node scripts/test-group-schedule.mjs",
     "test:opening-difference": "node scripts/test-opening-difference.mjs"
   },
   "dependencies": {

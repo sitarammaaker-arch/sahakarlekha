@@ -9,6 +9,8 @@
  * This is the ONE place to correct a term.
  */
 export const PDF_HI_EXTRA: Record<string, string> = {
+  'sr': 'क्रम',
+  'name (english / hindi)': 'नाम (अंग्रेज़ी / हिंदी)',
   // ── statement titles ──
   'receipts & payments account': 'प्राप्ति एवं भुगतान खाता',
   'income & expenditure account': 'आय एवं व्यय खाता',

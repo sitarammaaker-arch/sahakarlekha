@@ -205,6 +205,7 @@ const FederationReport = lazyWithRetry(() => import("./pages/FederationReport"))
 const RecoverablesRegister = lazyWithRetry(() => import("./pages/RecoverablesRegister"));
 const KachiAaratRegister = lazyWithRetry(() => import("./pages/KachiAaratRegister"));
 const AuditSchedules = lazyWithRetry(() => import("./pages/AuditSchedules"));
+const GroupSchedule = lazyWithRetry(() => import("./pages/GroupSchedule"));
 const UniversalImporter = lazyWithRetry(() => import("./pages/UniversalImporter"));
 const ExportCenter = lazyWithRetry(() => import("./pages/ExportCenter"));
 const VerifyBackup = lazyWithRetry(() => import("./pages/VerifyBackup"));
@@ -380,6 +381,7 @@ const AppRoutes = () => {
       <Route path="/form1-member-list" element={<ProtectedRoute><Form1MemberList /></ProtectedRoute>} />
       <Route path="/audit-certificate" element={<ProtectedRoute><AuditCertificate /></ProtectedRoute>} />
       <Route path="/audit-schedules" element={<ProtectedRoute><AuditSchedules /></ProtectedRoute>} />
+      <Route path="/group-schedule" element={<ProtectedRoute><GroupSchedule /></ProtectedRoute>} />
       <Route path="/backup-restore" element={<ProtectedRoute><BackupRestore /></ProtectedRoute>} />
       <Route path="/gst-summary" element={<ProtectedRoute><GstSummary /></ProtectedRoute>} />
       <Route path="/gstr-9" element={<ProtectedRoute><GSTR9 /></ProtectedRoute>} />
