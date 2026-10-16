@@ -99,6 +99,7 @@ import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib
 import { accountDeleteFailure, coaResetBlockers, coaResetLiveData } from '@/lib/accounting/accountDelete';
 import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
 import { memberAuditDiff } from '@/lib/members/memberAudit';
+import { splitAdmissionFields, applicationReceivedOn, type AdmissionDecision } from '@/lib/members/admission';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 
 /* T-09 — the `ledger_events` row → LedgerEvent mapper now lives in lib/ledger/rows.ts.
@@ -247,8 +248,8 @@ interface DataContextType {
   updateMusterEntry: (id: string, data: Partial<MusterEntry>) => void;
   deleteMusterEntry: (id: string) => void;
   payWages: (data: { workOrderId: string; period: string; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string; remarks?: string; allocations: { entryId: string; amount: number }[] }) => Voucher;
-  approveMember: (id: string) => void;
-  rejectMember: (id: string) => void;
+  approveMember: (id: string, decision?: AdmissionDecision) => void;
+  rejectMember: (id: string, reason: string) => void;
 
   /** opts.onSaved fires once the account row is in the cloud; opts.onFailed after a refused/failed save (rolled back). */
   addAccount: (data: Omit<LedgerAccount, 'id'>, opts?: { id?: string; onSaved?: (a: LedgerAccount) => void; onFailed?: () => void }) => LedgerAccount;
@@ -434,7 +435,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // (they would re-expose PII to every role) and PII is saved to member_identity instead. false =
   // LEGACY (table not migrated yet): behaviour is exactly as before, nothing is lost.
   const identitySplitRef = useRef(false);
-  const memberRow = (m: Record<string, any>) => withSoc(identitySplitRef.current ? stripMemberPII(m) : m);
+  // M2: the admission columns (migration 116) never ride the base upsert — persistMemberAdmission writes them after.
+  const memberRow = (m: Record<string, any>) => withSoc(splitAdmissionFields(identitySplitRef.current ? stripMemberPII(m) : m).base);
+  // RULE 1 step 2 for the admission columns: the member row is already safe; a failure here (migration 116 not run)
+  // keeps the member and says so mildly — no rollback.
+  const persistMemberAdmission = (id: string, member: Record<string, any>) => {
+    const { extras } = splitAdmissionFields(member);
+    if (!Object.keys(extras).length) return;
+    supabase.from('members').update(extras).eq('id', id).then(({ error }) => {
+      if (!error) return;
+      reportError('write-partial', error.message, { at: 'member admission fields' });
+      toastRef.current({
+        title: 'सदस्य सेव हुआ — पर दाख़िले की जानकारी नहीं',
+        description: `आवेदन/दाख़िला तिथि, प्रस्ताव संख्या या अस्वीकृति का कारण सेव नहीं हुआ (${error.message})। Migration 116 चलाएँ, फिर सदस्य को दोबारा सेव करें।`,
+        duration: 10000,
+      });
+    });
+  };
 
   // T-06 · best-effort append of a shadow ledger event to the WORM ledger_events table. Fire-and-
   // forget: the voucher save is authoritative and this never blocks or affects it; a failed insert
@@ -3217,7 +3234,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addMember = useCallback((data: Omit<Member, 'id'>, opts: { quiet?: boolean; onSaved?: (m: Member) => void } = {}): Member => {
     if (guardFYLocked()) return { ...data, id: '' } as Member;
-    const newMember: Member = { ...data, id: crypto.randomUUID(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) };
+    const today = new Date().toISOString().split('T')[0];
+    const newMember: Member = {
+      ...data, id: crypto.randomUUID(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current),
+      // M2: a new application starts the r.17 / s.16 clock on the day it is received.
+      ...(data.approvalStatus === 'pending' && !data.applicationDate ? { applicationDate: today } : {}),
+    };
     setMembersState(prev => {
       const updated = [...prev, newMember];
       return updated;
@@ -3244,6 +3266,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           persistMemberIdentity(newMember.id, { aadhaar: newMember.aadhaar, pan: newMember.pan },
             () => setMembersState(prev => prev.map(m => m.id === newMember.id ? { ...m, aadhaar: undefined, pan: undefined } : m)));
         }
+        persistMemberAdmission(newMember.id, newMember);
         // Member-audit M1 (D4/D5): the page's success message waits for the cloud; one audit row per member
         // (a bulk import passes quiet and is summarised by the importer instead of one row per member).
         if (!opts.quiet) emitAudit({ entityType: 'member', entityId: newMember.id, action: 'create', after: { memberId: newMember.memberId, name: newMember.name, shareCapital: newMember.shareCapital || 0, admissionFee: newMember.admissionFee || 0, approvalStatus: newMember.approvalStatus ?? 'approved' } });
@@ -3295,6 +3318,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           persistMemberIdentity(id, { aadhaar: updatedMember.aadhaar, pan: updatedMember.pan },
             () => setMembersState(prev => prev.map(m => m.id === id ? { ...m, aadhaar: oldMember.aadhaar, pan: oldMember.pan } : m)));
         }
+        if (Object.keys(splitAdmissionFields(data as Record<string, unknown>).extras).length) persistMemberAdmission(id, updatedMember);
         // Member-audit M1 (D4): who changed what — Aadhaar / PAN are named, never their values.
         const changed = memberAuditDiff(oldMember as unknown as Record<string, unknown>, updatedMember as unknown as Record<string, unknown>);
         if (changed) emitAudit({ entityType: 'member', entityId: id, action: 'update', before: changed.before, after: changed.after });
@@ -4101,11 +4125,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return voucher;
   }, [musterEntries, workOrders, accounts, addVoucher, cancelVoucher, user]);
 
-  const approveMember = useCallback((id: string) => {
+  const approveMember = useCallback((id: string, decision?: AdmissionDecision) => {
     if (guardFYLocked()) return;   // RULE 6
     const member = membersRef.current.find(m => m.id === id);
     if (!member) return;
-    const approved = { ...member, approvalStatus: 'approved' as const };
+    const today = new Date().toISOString().split('T')[0];
+    const admissionDate = decision?.admissionDate || today;
+    // M2: r.22(b) — the register's date of entry is the admission date, so joinDate follows it (and the joining
+    // receipt is dated then); the application date is kept separately.
+    const approved: Member = {
+      ...member, approvalStatus: 'approved' as const, joinDate: admissionDate,
+      applicationDate: applicationReceivedOn(member), admissionDate, decidedAt: today,
+      admissionResolutionNo: decision?.resolutionNo?.trim() || undefined, admissionResolutionDate: decision?.resolutionDate || undefined,
+    };
     setMembersState(prev => prev.map(m => m.id === id ? approved : m));
     supabase.from('members').upsert(memberRow(approved)).then(({ error }) => {
       if (error) {   // RULE 1: revert the approval so state matches Supabase; NO auto-vouchers on a failed approve
@@ -4118,17 +4150,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // failed approve can never leave orphan share-capital / admission-fee vouchers).
       // One rule for add / import / approve (postJoiningReceipts): a member who joined before this FY
       // gets no receipt; cheque / online go to the bank. Falls back to the approver's active branch.
+      persistMemberAdmission(id, approved);
       postJoiningReceipts(approved, { fallbackBranch: branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) });
-      emitAudit({ entityType: 'member', entityId: id, action: 'approve', before: { approvalStatus: member.approvalStatus ?? 'pending' }, after: { approvalStatus: 'approved' } });
+      emitAudit({ entityType: 'member', entityId: id, action: 'approve', before: { approvalStatus: member.approvalStatus ?? 'pending', joinDate: member.joinDate }, after: { approvalStatus: 'approved', admissionDate, resolutionNo: approved.admissionResolutionNo ?? null, resolutionDate: approved.admissionResolutionDate ?? null } });
       toastRef.current({ title: 'सदस्य स्वीकृत', description: `${member.name} (${member.memberId}) अब सत्यापित सदस्य है` });
     });
   }, [postJoiningReceipts]);
 
-  const rejectMember = useCallback((id: string) => {
+  const rejectMember = useCallback((id: string, reason: string) => {
     if (guardFYLocked()) return;   // RULE 6
     const member = membersRef.current.find(m => m.id === id);
     if (!member) return;
-    const rejected = { ...member, approvalStatus: 'rejected' as const };
+    const why = (reason || '').trim();
+    if (why.length < 5) {   // M2: r.17 — the refusal goes to the applicant with its reasons
+      toastRef.current({ title: 'कारण ज़रूरी है', description: 'अस्वीकृति का कारण लिखें (नियम 17)। (A reason is required.)', variant: 'destructive' });
+      return;
+    }
+    const rejected: Member = { ...member, approvalStatus: 'rejected' as const, rejectionReason: why, decidedAt: new Date().toISOString().split('T')[0], applicationDate: applicationReceivedOn(member) };
     setMembersState(prev => prev.map(m => m.id === id ? rejected : m));
     supabase.from('members').upsert(memberRow(rejected)).then(({ error }) => {
       if (error) {   // RULE 1: revert so state matches Supabase
@@ -4137,7 +4175,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toastRef.current({ title: 'Reject सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर सदस्य फिर से pending दिखेगा।`, variant: 'destructive', duration: 12000 });
         return;
       }
-      emitAudit({ entityType: 'member', entityId: id, action: 'reject', before: { approvalStatus: member.approvalStatus ?? 'pending' }, after: { approvalStatus: 'rejected' } });
+      persistMemberAdmission(id, rejected);
+      emitAudit({ entityType: 'member', entityId: id, action: 'reject', before: { approvalStatus: member.approvalStatus ?? 'pending' }, after: { approvalStatus: 'rejected' }, reason: why });
       toastRef.current({ title: 'आवेदन अस्वीकृत', description: `${member.name} (${member.memberId})` });
     });
   }, []);

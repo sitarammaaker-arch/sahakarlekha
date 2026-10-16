@@ -209,6 +209,14 @@ export interface Member {
   nomineePhone?: string;
   // Application form fields
   approvalStatus?: ApprovalStatus;
+  // Member-audit M2 (admission, 2026-10-16; migration 116 — step-2 columns). Haryana Rules r.17: decide within one
+  // month and give reasons for a refusal; r.22(b): the register's date of entry = admissionDate (joinDate follows it).
+  applicationDate?: string;          // date the application reached the society (the r.17 / s.16 clock starts here)
+  admissionDate?: string;            // date the committee admitted the member
+  admissionResolutionNo?: string;    // committee resolution no. that admitted the member
+  admissionResolutionDate?: string;  // date of that resolution
+  rejectionReason?: string;          // r.17: reason communicated to a refused applicant
+  decidedAt?: string;                // date the application was approved / rejected
   age?: number;
   occupation?: string;
   caste?: CasteCategory;

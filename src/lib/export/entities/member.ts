@@ -107,6 +107,13 @@ const member: EntityDescriptor = {
     internal('branchId', 'Branch', 'शाखा'),
     internal('statusReason', 'Status Reason', 'स्थिति कारण'),
     internal('statusChangedAt', 'Status Changed At', 'स्थिति परिवर्तन समय', { type: 'date' }),
+    // M2 admission record (migration 116).
+    internal('applicationDate', 'Application Date', 'आवेदन तिथि', { type: 'date' }),
+    internal('admissionDate', 'Admission Date', 'दाख़िला तिथि', { type: 'date' }),
+    internal('admissionResolutionNo', 'Admission Resolution No.', 'दाख़िला प्रस्ताव संख्या'),
+    internal('admissionResolutionDate', 'Admission Resolution Date', 'दाख़िला प्रस्ताव तिथि', { type: 'date' }),
+    internal('rejectionReason', 'Rejection Reason', 'अस्वीकृति का कारण'),
+    internal('decidedAt', 'Decided On', 'निर्णय तिथि', { type: 'date' }),
     c('isDeleted', 'Deleted', 'हटाया गया', { type: 'boolean', defaultVisible: false }),
     internal('createdAt', 'Created At', 'निर्माण समय', { type: 'date' }),
   ],

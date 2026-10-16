@@ -40,6 +40,8 @@ import { MemberPortalDialog } from '@/components/members/MemberPortalDialog';
 import { memberPhoneError } from '@/lib/memberValidation';
 import { callMemberPortalAdmin, portalPlanAllowed, type PortalLoginRow } from '@/lib/memberPortalAdmin';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
+import { admissionClock, applicationReceivedOn, validateAdmission, validateRejection, isHaryana } from '@/lib/members/admission';
+import { generateMemberRefusalLetterPDF } from '@/lib/pdf';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
 const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }> = {
@@ -69,6 +71,7 @@ const EMPTY_FORM = {
   shareCount: '', shareFaceValue: '',
   nominees: [] as Nominee[],   // ECR-16: multiple nominees
   aadhaar: '', pan: '', kycStatus: '' as KycStatus | '',   // ECR-16: KYC
+  admissionResolutionNo: '', admissionResolutionDate: '',   // M2: the committee resolution that admitted the member
 };
 
 interface MemberFormProps {
@@ -109,8 +112,18 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
         <Input value={form.memberId} onChange={e => f('memberId', e.target.value)} placeholder="M001" />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs">{hi ? 'शामिल होने की तिथि' : 'Join Date'}</Label>
+        <Label className="text-xs">{hi ? 'दाख़िला तिथि (सदस्य बनने की तिथि)' : 'Admission date'}</Label>
         <Input type="date" value={form.joinDate} onChange={e => f('joinDate', e.target.value)} />
+      </div>
+    </div>
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'समिति प्रस्ताव संख्या' : 'Committee resolution no.'}</Label>
+        <Input value={form.admissionResolutionNo} onChange={e => f('admissionResolutionNo', e.target.value)} placeholder={hi ? 'जैसे 12/2025' : 'e.g. 12/2025'} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'प्रस्ताव तिथि' : 'Resolution date'}</Label>
+        <Input type="date" value={form.admissionResolutionDate} onChange={e => f('admissionResolutionDate', e.target.value)} />
       </div>
     </div>
     <div className="grid grid-cols-2 gap-3">
@@ -370,11 +383,14 @@ const Members: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   useDeepLinkQuery(setSearchQuery);   // ECR-25 P2: focus a member deep-linked from global search (?q=)
   const [isAddOpen, setIsAddOpen] = useState(false);
-  useOpenOnNew(() => { setForm({ ...EMPTY_FORM, memberId: getNextMemberId() }); setIsAddOpen(true); });   // ＋ नई entry → सदस्य
+  useOpenOnNew(() => setAddChooserOpen(true));   // ＋ नई entry → सदस्य (U1: the same chooser as the button)
   const [editMember, setEditMember] = useState<Member | null>(null);
   const [viewMember, setViewMember] = useState<Member | null>(null);
   const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
   const [decision, setDecision] = useState<{ member: Member; action: 'approve' | 'reject' } | null>(null);
+  const today = new Date().toISOString().split('T')[0];
+  const [decisionForm, setDecisionForm] = useState({ admissionDate: today, resolutionNo: '', resolutionDate: '', reason: '' });
+  const [addChooserOpen, setAddChooserOpen] = useState(false);
   const [ledgerMember, setLedgerMember] = useState<Member | null>(null);
   // Member Portal S2b: admin-only portal-login management (the Edge Function re-checks admin + plan).
   const isAdmin = user?.role === 'admin';
@@ -499,9 +515,16 @@ const Members: React.FC = () => {
       kycStatus: form.kycStatus || undefined,
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
+      // M2: recorded as an already-admitted member — the admission date and the committee resolution.
+      admissionDate: form.joinDate || undefined,
+      admissionResolutionNo: form.admissionResolutionNo.trim() || undefined,
+      admissionResolutionDate: form.admissionResolutionDate || undefined,
     }, {
       // D5: "added" only once the cloud has the row (a failure rolls back and says so itself).
-      onSaved: m => toast({ title: hi ? 'सदस्य जोड़ा गया' : 'Member added', description: `${m.name} (${m.memberId})` }),
+      onSaved: m => toast({
+        title: hi ? 'सदस्य जोड़ा गया' : 'Member added',
+        description: `${m.name} (${m.memberId})${m.admissionResolutionNo ? '' : (hi ? ' — समिति प्रस्ताव संख्या नहीं भरी; edit करके भर सकते हैं।' : ' — no committee resolution number; you can add it by editing.')}`,
+      }),
     });
     if (!created.id) return;   // refused (FY lock) — keep the form so nothing typed is lost
     trackEvent('member_added');
@@ -537,6 +560,9 @@ const Members: React.FC = () => {
       kycStatus: form.kycStatus || undefined,
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
+      admissionDate: editMember.approvalStatus === 'pending' ? editMember.admissionDate : (form.joinDate || undefined),
+      admissionResolutionNo: form.admissionResolutionNo.trim() || undefined,
+      admissionResolutionDate: form.admissionResolutionDate || undefined,
     }, { onSaved: () => toast({ title: hi ? 'सदस्य अपडेट किया गया' : 'Member updated' }) });
     if (!applied) return;
     setEditMember(null);
@@ -558,6 +584,7 @@ const Members: React.FC = () => {
       shareCount: m.shareCount ? String(m.shareCount) : '', shareFaceValue: m.shareFaceValue ? String(m.shareFaceValue) : '',
       nominees: (m.nominees || []).filter(n => n.role !== 'primary'),   // additional-only in the editor; primary lives in the block above
       aadhaar: m.aadhaar || '', pan: m.pan || '', kycStatus: m.kycStatus || '',
+      admissionResolutionNo: m.admissionResolutionNo || '', admissionResolutionDate: m.admissionResolutionDate || '',
     });
   };
 
@@ -590,20 +617,44 @@ const Members: React.FC = () => {
   };
 
   // U9: approve / reject go through a confirmation; the success message comes from DataContext once saved (D5).
-  const handleApprove = (member: Member) => setDecision({ member, action: 'approve' });
-  const handleReject = (member: Member) => setDecision({ member, action: 'reject' });
+  const openDecision = (member: Member, action: 'approve' | 'reject') => {
+    setDecisionForm({ admissionDate: today, resolutionNo: '', resolutionDate: '', reason: '' });
+    setDecision({ member, action });
+  };
+  const handleApprove = (member: Member) => openDecision(member, 'approve');
+  const handleReject = (member: Member) => openDecision(member, 'reject');
+  // M2: approve records the admission date + committee resolution (r.22(b)); reject needs the reason (r.17).
   const confirmDecision = () => {
     if (!decision) return;
-    if (decision.action === 'approve') approveMember(decision.member.id);
-    else rejectMember(decision.member.id);
+    if (decision.action === 'approve') {
+      const v = validateAdmission({ admissionDate: decisionForm.admissionDate, resolutionNo: decisionForm.resolutionNo, resolutionDate: decisionForm.resolutionDate || undefined },
+        { receivedOn: applicationReceivedOn(decision.member), today });
+      if (!v.ok) { toast({ title: hi ? 'जाँचें' : 'Check', description: v.error, variant: 'destructive' }); return; }
+      approveMember(decision.member.id, { admissionDate: decisionForm.admissionDate, resolutionNo: decisionForm.resolutionNo, resolutionDate: decisionForm.resolutionDate || undefined });
+    } else {
+      const v = validateRejection(decisionForm.reason);
+      if (!v.ok) { toast({ title: hi ? 'कारण ज़रूरी है' : 'Reason required', description: v.error, variant: 'destructive' }); return; }
+      rejectMember(decision.member.id, decisionForm.reason);
+    }
     setDecision(null);
   };
+  const missingResolution = decision?.action === 'approve' && !decisionForm.resolutionNo.trim();
 
   const handleDownloadPDF = (member: Member) => {
     generateMemberApplicationPDF(member, society);
   };
 
-  const renderMemberTable = (memberList: Member[], showApprovalActions: boolean) => {
+  // M2: the r.17 (one month) / s.16 (PACS, 60 days) clock on a pending application — law references only for Haryana.
+  const haryana = isHaryana(society.state);
+  const clockBadge = (m: Member) => {
+    const c = admissionClock(applicationReceivedOn(m), today, { societyType: society.societyType });
+    if (!c) return null;
+    if (c.deemed) return <Badge variant="destructive" className="text-[10px]">{hi ? `${c.days} दिन — ${haryana ? 'धारा 16: स्वतः सदस्य माना जाएगा' : '60 दिन पूरे'}` : `${c.days} days — ${haryana ? 's.16: deemed admitted' : '60 days passed'}`}</Badge>;
+    if (c.overdue) return <Badge className="bg-orange-100 text-orange-800 border-orange-300 text-[10px]" variant="outline">{hi ? `${c.days} दिन — 1 माह पार${haryana ? ' (नियम 17)' : ''}` : `${c.days} days — over one month${haryana ? ' (r.17)' : ''}`}</Badge>;
+    return <span className="text-[11px] text-muted-foreground">{hi ? `${c.days} दिन · फ़ैसला ${fmtDate(c.decideBy)} तक` : `${c.days} days · decide by ${fmtDate(c.decideBy)}`}</span>;
+  };
+
+  const renderMemberTable = (memberList: Member[], showApprovalActions: boolean, rejectedList = false) => {
     const filtered = filterBySearch(memberList);
     if (filtered.length === 0) {
       if (allMembers.length === 0) {
@@ -631,6 +682,7 @@ const Members: React.FC = () => {
               <TableHead className="font-semibold text-right">{t('shareCapital')}</TableHead>
               <TableHead className="font-semibold text-right">{hi ? 'प्रवेश शुल्क' : 'Admission Fee'}</TableHead>
               {!showApprovalActions && <TableHead className="font-semibold text-center">{hi ? 'स्थिति' : 'Status'}</TableHead>}
+              {showApprovalActions && <TableHead className="font-semibold">{rejectedList ? (hi ? 'अस्वीकृति का कारण' : 'Reason') : (hi ? 'आवेदन तिथि' : 'Applied on')}</TableHead>}
               <TableHead className="font-semibold text-center">{hi ? 'क्रियाएं' : 'Actions'}</TableHead>
             </TableRow>
           </TableHeader>
@@ -662,6 +714,21 @@ const Members: React.FC = () => {
                 </TableCell>
                 <TableCell className="text-right font-semibold">{fmt(member.shareCapital)}</TableCell>
                 <TableCell className="text-right">{fmt(member.admissionFee || 0)}</TableCell>
+                {showApprovalActions && (
+                  <TableCell>
+                    {rejectedList ? (
+                      <div className="max-w-[16rem]">
+                        <p className="text-xs">{member.rejectionReason || <span className="text-muted-foreground">{hi ? '— (पुराना रिकॉर्ड)' : '— (older record)'}</span>}</p>
+                        {member.decidedAt && <p className="text-[11px] text-muted-foreground">{fmtDate(member.decidedAt)}</p>}
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-xs">{applicationReceivedOn(member) ? fmtDate(applicationReceivedOn(member)) : '—'}</p>
+                        {clockBadge(member)}
+                      </div>
+                    )}
+                  </TableCell>
+                )}
                 {!showApprovalActions && (
                   <TableCell className="text-center">
                     <Badge variant="outline" className={STATUS_META[member.status]?.cls}>
@@ -676,9 +743,16 @@ const Members: React.FC = () => {
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50" onClick={() => handleApprove(member)} title={hi ? 'स्वीकृत' : 'Approve'}>
                           <CheckCircle className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleReject(member)} title={hi ? 'अस्वीकृत' : 'Reject'}>
-                          <XCircle className="h-4 w-4" />
-                        </Button>
+                        {!rejectedList && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleReject(member)} title={hi ? 'अस्वीकृत' : 'Reject'}>
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {rejectedList && member.rejectionReason && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-700 hover:bg-red-50" onClick={() => generateMemberRefusalLetterPDF(member, society)} title={hi ? 'अस्वीकृति पत्र (PDF)' : 'Refusal letter (PDF)'}>
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => handleDownloadPDF(member)} title="PDF">
                           <FileText className="h-4 w-4" />
                         </Button>
@@ -751,20 +825,33 @@ const Members: React.FC = () => {
           <p className="text-muted-foreground">{hi ? 'समिति सदस्यों का प्रबंधन' : 'Manage society members'}</p>
         </div>
         <div className="flex gap-2">
+          {/* U1 (M2): ONE entry — a new person applies (committee decides); an already-admitted member is recorded. */}
           {canEdit && (
-            <Button variant="outline" className="gap-2" onClick={() => navigate('/member-application')}>
-              <ClipboardList className="h-4 w-4" />
-              {hi ? 'आवेदन पत्र' : 'Application Form'}
-            </Button>
+            <Button className="gap-2" onClick={() => setAddChooserOpen(true)}><Plus className="h-4 w-4" />{hi ? 'नया सदस्य' : 'New Member'}</Button>
           )}
-          <Dialog open={isAddOpen} onOpenChange={(o) => { if (o) setForm({ ...EMPTY_FORM, memberId: getNextMemberId() }); else { setIsAddOpen(false); setForm(EMPTY_FORM); } setIsAddOpen(o); }}>
-            <DialogTrigger asChild>
-              <Button className="gap-2"><Plus className="h-4 w-4" />{hi ? 'नया सदस्य' : 'New Member'}</Button>
-            </DialogTrigger>
+          <Dialog open={addChooserOpen} onOpenChange={setAddChooserOpen}>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>{hi ? 'नया सदस्य — क्या करना है?' : 'New member — what would you like to do?'}</DialogTitle>
+                <DialogDescription>{hi ? 'नए व्यक्ति का आवेदन समिति की मंज़ूरी के लिए जाता है। जिसे समिति पहले ही स्वीकृत कर चुकी है, उसे सीधे दर्ज करें।' : 'A new person applies and the committee decides. A member the committee already admitted is recorded directly.'}</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-3">
+                <Button variant="outline" className="h-auto justify-start gap-3 py-3 text-left whitespace-normal" onClick={() => { setAddChooserOpen(false); navigate('/member-application'); }}>
+                  <ClipboardList className="h-5 w-5 shrink-0 text-amber-600" />
+                  <span><span className="block font-semibold">{hi ? 'नया आवेदन' : 'New application'}</span><span className="block text-xs text-muted-foreground">{hi ? 'आवेदन "पेंडिंग" में जाएगा; समिति के फ़ैसले के बाद स्वीकृत/अस्वीकृत करें।' : 'Goes to Pending; approve or reject after the committee decides.'}</span></span>
+                </Button>
+                <Button variant="outline" className="h-auto justify-start gap-3 py-3 text-left whitespace-normal" onClick={() => { setAddChooserOpen(false); setForm({ ...EMPTY_FORM, memberId: getNextMemberId() }); setIsAddOpen(true); }}>
+                  <CheckCircle className="h-5 w-5 shrink-0 text-green-600" />
+                  <span><span className="block font-semibold">{hi ? 'स्वीकृत / पुराना सदस्य दर्ज करें' : 'Record an admitted / existing member'}</span><span className="block text-xs text-muted-foreground">{hi ? 'जिसे समिति स्वीकृत कर चुकी है — दाख़िला तिथि और प्रस्ताव संख्या भरें।' : 'Already admitted by the committee — enter the admission date and resolution.'}</span></span>
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={isAddOpen} onOpenChange={(o) => { if (!o) { setIsAddOpen(false); setForm(EMPTY_FORM); } else setIsAddOpen(true); }}>
             <DialogContent className="sm:max-w-2xl">
               <DialogHeader>
-                <DialogTitle>{hi ? 'नया सदस्य जोड़ें (सीधा)' : 'Add New Member (Direct)'}</DialogTitle>
-                <DialogDescription>{hi ? 'सदस्य सीधे सत्यापित सूची में जोड़ें' : 'Add member directly to verified list'}</DialogDescription>
+                <DialogTitle>{hi ? 'स्वीकृत / पुराना सदस्य दर्ज करें' : 'Record an admitted member'}</DialogTitle>
+                <DialogDescription>{hi ? 'जिस सदस्य को समिति स्वीकृत कर चुकी है। नए व्यक्ति के लिए "नया आवेदन" चुनें।' : 'A member the committee has already admitted. For a new person, choose "New application".'}</DialogDescription>
               </DialogHeader>
               <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleAdd} submitLabel={t('save')} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
             </DialogContent>
@@ -874,7 +961,7 @@ const Members: React.FC = () => {
                 <CardTitle className="text-lg">{hi ? 'अस्वीकृत आवेदन' : 'Rejected Applications'}</CardTitle>
               </CardHeader>
               <CardContent>
-                {renderMemberTable(rejectedMembers, true)}
+                {renderMemberTable(rejectedMembers, true, true)}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1008,7 +1095,10 @@ const Members: React.FC = () => {
                 [hi ? 'सदस्यता प्रकार' : 'Member Type', viewMember.memberType === 'nominal' ? (hi ? 'नॉमिनल सदस्य' : 'Nominal Member') : (hi ? 'सदस्य' : 'Member')],
                 [t('shareCapital'), fmt(viewMember.shareCapital)],
                 [hi ? 'प्रवेश शुल्क' : 'Admission Fee', fmt(viewMember.admissionFee || 0)],
-                [hi ? 'शामिल तिथि' : 'Join Date', fmtDate(viewMember.joinDate)],
+                [hi ? 'दाख़िला तिथि' : 'Admission Date', fmtDate(viewMember.admissionDate || viewMember.joinDate)],
+                ...(viewMember.applicationDate ? [[hi ? 'आवेदन तिथि' : 'Applied On', fmtDate(viewMember.applicationDate)]] : []),
+                ...(viewMember.admissionResolutionNo ? [[hi ? 'समिति प्रस्ताव' : 'Committee Resolution', `${viewMember.admissionResolutionNo}${viewMember.admissionResolutionDate ? ` · ${fmtDate(viewMember.admissionResolutionDate)}` : ''}`]] : []),
+                ...(viewMember.rejectionReason ? [[hi ? 'अस्वीकृति का कारण' : 'Reason for Refusal', viewMember.rejectionReason]] : []),
                 [hi ? 'स्थिति' : 'Status', memberStatusLabel(viewMember.status, hi)],
                 ...(viewMember.approvalStatus ? [[hi ? 'अनुमोदन' : 'Approval', viewMember.approvalStatus === 'pending' ? (hi ? 'पेंडिंग' : 'Pending') : viewMember.approvalStatus === 'approved' ? (hi ? 'स्वीकृत' : 'Approved') : (hi ? 'अस्वीकृत' : 'Rejected')]] : []),
                 ...(viewMember.age ? [[hi ? 'आयु' : 'Age', `${viewMember.age} ${hi ? 'वर्ष' : 'years'}`]] : []),
@@ -1168,6 +1258,33 @@ const Members: React.FC = () => {
                   : `${decision.member.name} (${decision.member.memberId})'s application is rejected. No voucher is posted.`))}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {decision?.action === 'approve' && (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-1">
+                <Label className="text-xs">{hi ? 'दाख़िला तिथि *' : 'Admission date *'}</Label>
+                <Input type="date" value={decisionForm.admissionDate} max={today} onChange={e => setDecisionForm(d => ({ ...d, admissionDate: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{hi ? 'समिति प्रस्ताव संख्या' : 'Resolution no.'}</Label>
+                <Input value={decisionForm.resolutionNo} onChange={e => setDecisionForm(d => ({ ...d, resolutionNo: e.target.value }))} placeholder={hi ? 'जैसे 12/2025' : 'e.g. 12/2025'} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{hi ? 'प्रस्ताव तिथि' : 'Resolution date'}</Label>
+                <Input type="date" value={decisionForm.resolutionDate} max={today} onChange={e => setDecisionForm(d => ({ ...d, resolutionDate: e.target.value }))} />
+              </div>
+              {missingResolution && (
+                <p className="sm:col-span-3 text-xs text-amber-700">{hi ? 'प्रस्ताव संख्या खाली है — फिर भी स्वीकृत कर सकते हैं, पर रजिस्टर व ऑडिट के लिए भरना अच्छा रहेगा।' : 'No resolution number — you can still approve, but the register and the audit need it.'}</p>
+              )}
+            </div>
+          )}
+          {decision?.action === 'reject' && (
+            <div className="space-y-1">
+              <Label className="text-xs">{hi ? 'अस्वीकृति का कारण * (आवेदक को पत्र में जाएगा)' : 'Reason for refusal * (goes to the applicant)'}</Label>
+              <Textarea rows={3} value={decisionForm.reason} onChange={e => setDecisionForm(d => ({ ...d, reason: e.target.value }))}
+                placeholder={hi ? 'जैसे: समिति के कार्य-क्षेत्र से बाहर निवास' : 'e.g. resides outside the area of operation'} />
+              <p className="text-[11px] text-muted-foreground">{hi ? 'नियम 17: अस्वीकृति कारण सहित आवेदक को बतानी होती है। "अस्वीकृत" टैब से पत्र (PDF) निकालें।' : 'Rule 17: the refusal goes to the applicant with reasons. Print the letter from the Rejected tab.'}</p>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>{hi ? 'वापस' : 'Back'}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDecision} className={decision?.action === 'reject' ? 'bg-red-600 hover:bg-red-700' : undefined}>

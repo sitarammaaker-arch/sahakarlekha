@@ -3555,3 +3555,13 @@ create table if not exists member_identity (
   primary key (society_id, member_id)
 );
 alter table member_identity enable row level security;
+
+-- ── Member admission record (migration 116, member-area audit M2) ────────────────────────────────────────────
+-- Haryana Rules r.17 (decide within one month, refusal with reasons), Act s.16 (PACS: deemed admission after 60 days),
+-- r.22(b) (date of entry). Written by a step-2 update after the member row, so the base save never depends on them.
+alter table members add column if not exists "applicationDate" text;
+alter table members add column if not exists "admissionDate" text;
+alter table members add column if not exists "admissionResolutionNo" text;
+alter table members add column if not exists "admissionResolutionDate" text;
+alter table members add column if not exists "rejectionReason" text;
+alter table members add column if not exists "decidedAt" text;

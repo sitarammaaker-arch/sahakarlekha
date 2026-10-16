@@ -9,6 +9,8 @@
  * This is the ONE place to correct a term.
  */
 export const PDF_HI_EXTRA: Record<string, string> = {
+  'to,': 'सेवा में,',
+  'reason(s):': 'कारण:',
   'sr': 'क्रम',
   'name (english / hindi)': 'नाम (अंग्रेज़ी / हिंदी)',
   // ── statement titles ──
