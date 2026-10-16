@@ -1331,6 +1331,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'बिल की जाँच, मंज़ूरी की सीढ़ी, वाउचर और भुगतान, तीन उदाहरण और मंज़ूरी-पर्ची का नमूना।',
     accent: 'violet',
     tags: ['भुगतान मंज़ूरी', 'वाउचर', 'Maker-Checker', 'सचिव'],
+    image: '/blog/payment-approval-voucher-entry-secretary-chairman-treasurer.webp',
+    imageAlt: 'समिति के कार्यालय में सचिव, कोषाध्यक्ष और अध्यक्ष एक साथ बिल, बही और मंज़ूरी-पर्ची देखते हुए, अध्यक्ष मंज़ूरी-पर्ची पर हस्ताक्षर कर रहे हैं',
   },
   {
     slug: 'what-is-voucher-types-uses-accounting-entry',
