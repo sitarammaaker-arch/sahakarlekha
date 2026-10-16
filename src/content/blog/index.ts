@@ -1331,6 +1331,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'जमा देनदारी है, ब्याज खर्च: SB/FD/RD/पिग्मी की एंट्री, ब्याज के सूत्र, जमा की सीमा और साल-अंत का उपचित ब्याज।',
     accent: 'sky',
     tags: ['सदस्य जमा', 'FD', 'RD', 'ब्याज', 'जमा की सीमा'],
+    image: '/blog/member-deposit-interest-accounting.webp',
+    imageAlt: 'समिति के काउंटर पर सचिव सदस्य की पासबुक में जमा की प्रविष्टि लिख रहे हैं, सामने बुज़ुर्ग किसान-सदस्य जमा की राशि दे रहे हैं और पीछे दूसरी सदस्य अपनी पासबुक के साथ प्रतीक्षा कर रही हैं',
   },
   {
     slug: 'payment-approval-voucher-entry-secretary-chairman-treasurer',
