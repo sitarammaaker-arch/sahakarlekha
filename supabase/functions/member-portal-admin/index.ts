@@ -14,12 +14,14 @@
  * The member's login email is on a members-only domain, so it can never be in society_users: every
  * tenant RLS policy gives it zero rows, and member_portal_snapshot() (064) is its only data path.
  *
- * Auto-injected: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY. No new secret.
+ * Auto-injected: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY. Secret: MEMBER_LOGIN_PEPPER (re-audit
+ * 2026-10-17, H-6) — the same value member-portal-login uses; issue / reset / re-activate put the login on the keyed
+ * (HMAC) email, and reset / revoke end the member's existing sessions (migration 123).
  * Deno runtime — not the app's TypeScript. Deploy: npx supabase functions deploy member-portal-admin
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import {
-  memberLoginEmail, normalizeMemberNo, generatePin, canManagePortal, portalPlanAllowed,
+  memberLoginEmailV2, loginAttemptKey, normalizeMemberNo, generatePin, canManagePortal, portalPlanAllowed,
   memberEligible, parseRequest, orphanReclaimable, MESSAGES,
 } from '../_shared/member-portal-core.mjs';
 
@@ -65,6 +67,7 @@ Deno.serve(async (req) => {
   const url = Deno.env.get('SUPABASE_URL') ?? '';
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  const pepper = Deno.env.get('MEMBER_LOGIN_PEPPER') ?? '';
   if (!url || !anonKey || !svcKey) return fail('server_error', 500);
 
   // ── 1. WHO is calling — verified by value, never from the body ──
@@ -102,6 +105,11 @@ Deno.serve(async (req) => {
       .from('member_portal_users').select('auth_user_id, is_active')
       .eq('society_id', societyId).eq('member_id', memberId).maybeSingle();
 
+    // H-6: an old device must not keep refreshing after a reset / revoke (refresh tokens cascade from auth.sessions).
+    const endSessions = (authUserId: string) =>
+      svc.rpc('member_portal_end_sessions', { p_user: authUserId })
+        .then(({ error }) => { if (error) console.error('end sessions failed', error.message); });
+
     const audit = (action: string, after: Record<string, unknown>) =>
       svc.from('audit_log').insert({
         society_id: societyId, actor_name: staff!.name ?? callerEmail, actor_email: callerEmail,
@@ -118,6 +126,7 @@ Deno.serve(async (req) => {
       if (upErr) return fail('server_error', 500);
       const { error: banErr } = await svc.auth.admin.updateUserById(link.auth_user_id, { ban_duration: BAN_FOREVER });
       if (banErr) console.error('ban failed (link already inactive, RPC denies access)', banErr.message);
+      await endSessions(link.auth_user_id);
       await audit('revoke', {});
       return json({ ok: true });
     }
@@ -132,13 +141,20 @@ Deno.serve(async (req) => {
     const elig = memberEligible(member);
     if (!elig.ok) return fail(elig.reason as keyof typeof MESSAGES, elig.reason === 'member_not_found' ? 404 : 409);
     const memberNo = normalizeMemberNo(member!.memberId);
+    if (pepper.length < 32) return fail('server_error', 500);   // never issue an unkeyed (guessable) login
+    const email = await memberLoginEmailV2(societyId, memberNo, pepper);
+    // A new PIN also lifts any attempt lock on this login.
+    const clearLock = async () => { await svc.rpc('member_portal_login_success', { p_key: await loginAttemptKey(email) }); };
     const pin = generatePin();
     const handout = { ok: true, pin, memberNo, societyId, portalPath: `/member/${encodeURIComponent(societyId)}` };
 
     if (parsed.action === 'reset_pin') {
       if (!link || !link.is_active) return fail('not_issued', 404);
-      const { error } = await svc.auth.admin.updateUserById(link.auth_user_id, { password: pin });
+      // Also moves a legacy (unkeyed) login onto the keyed email.
+      const { error } = await svc.auth.admin.updateUserById(link.auth_user_id, { password: pin, email, email_confirm: true });
       if (error) return fail('server_error', 500);
+      await endSessions(link.auth_user_id);
+      await clearLock();
       await audit('reset_pin', { memberNo });
       return json(handout);
     }
@@ -147,17 +163,17 @@ Deno.serve(async (req) => {
     if (link?.is_active) return fail('already_issued', 409);
     if (link) {
       // Re-activate a revoked login: new PIN, lift the ban, mark active.
-      const { error } = await svc.auth.admin.updateUserById(link.auth_user_id, { password: pin, ban_duration: 'none' });
+      const { error } = await svc.auth.admin.updateUserById(link.auth_user_id, { password: pin, email, email_confirm: true, ban_duration: 'none' });
       if (error) return fail('server_error', 500);
       const { error: upErr } = await svc.from('member_portal_users')
         .update({ is_active: true, revoked_at: null, revoked_by: null })
         .eq('auth_user_id', link.auth_user_id);
       if (upErr) return fail('server_error', 500);
+      await clearLock();
       await audit('reactivate', { memberNo });
       return json(handout);
     }
 
-    const email = await memberLoginEmail(societyId, memberNo);
     const create = () => svc.auth.admin.createUser({
       email, password: pin, email_confirm: true, user_metadata: { member_portal: true },
     });

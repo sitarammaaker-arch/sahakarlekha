@@ -1,9 +1,9 @@
 /**
  * Member Portal S3 — browser side of the member login identity.
  *
- * MUST derive byte-for-byte the same email as memberLoginEmail() in
- * supabase/functions/_shared/member-portal-core.mjs (the Edge Function that creates the login).
- * scripts/test-member-portal-view.mjs imports both and asserts they agree.
+ * memberLoginEmail is the LEGACY (unkeyed) scheme — kept byte-for-byte equal to member-portal-core.mjs
+ * (scripts/test-member-portal-view.mjs asserts they agree) for the tests and support tooling only. Since the
+ * re-audit 2026-10-17 (H-6) the browser never derives a login email: member-portal-login does, with a secret.
  */
 
 export const MEMBER_EMAIL_DOMAIN = 'm.sahakarlekha.com';

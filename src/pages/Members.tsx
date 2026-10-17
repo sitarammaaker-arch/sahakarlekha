@@ -643,6 +643,14 @@ const Members: React.FC = () => {
     if (nomWarn) toast({ title: hi ? 'नामांकन जाँचें' : 'Check nomination', description: nomWarn, duration: 10000 });
     // Only a CHANGED phone is checked — an old member's legacy number must not block an unrelated edit.
     if ((form.phone || '').trim() !== (editMember.phone || '').trim() && phoneError(form.phone)) { toast({ title: phoneError(form.phone)!, variant: 'destructive' }); return; }
+    // Re-audit M-5: a changed member number must not duplicate another member's (the add form already checks this).
+    const editedNo = (form.memberId || '').trim();
+    if (!editedNo) { toast({ title: hi ? 'सदस्य संख्या ज़रूरी है' : 'Member number is required', variant: 'destructive' }); return; }
+    if (editedNo.toLowerCase() !== (editMember.memberId || '').trim().toLowerCase()
+        && allMembers.some(m => m.id !== editMember.id && (m.memberId || '').trim().toLowerCase() === editedNo.toLowerCase())) {
+      toast({ title: hi ? 'यह सदस्य संख्या पहले से मौजूद है' : 'Member number already exists', description: hi ? 'दूसरे सदस्य की संख्या नहीं दी जा सकती।' : 'Another member already has it.', variant: 'destructive' });
+      return;
+    }
     const applied = updateMember(editMember.id, {
       ...form,
       shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
