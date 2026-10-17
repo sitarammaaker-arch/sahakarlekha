@@ -2651,9 +2651,13 @@ export function generateMemberApplicationPDF(member: Member, society: SocietySet
   // Date fields
   doc.setFontSize(9);
   doc.setFont(font, 'normal');
-  const appDate = member.joinDate ? fmtDate(member.joinDate) : '___________________';
+  // Member-audit follow-up (2026-10-17): print what the record already holds; a blank line only where nothing is known.
+  const blank = (v: string | undefined, w = '_______________') => v || w;
+  const received = applicationReceivedOn(member);
+  const appDate = received ? fmtDate(received) : '___________________';
+  const admitted = member.approvalStatus === 'approved' ? (member.admissionDate || (member.applicationDate ? member.joinDate : undefined)) : undefined;
   doc.text(`Date of Application: ${appDate}`, mL, y);
-  doc.text('Date of Admission: ___________________', mR - 80, y);
+  doc.text(`Date of Admission: ${admitted ? fmtDate(admitted) : '___________________'}`, mR - 80, y);
   y += 15;
 
   // Signature
@@ -2680,9 +2684,11 @@ export function generateMemberApplicationPDF(member: Member, society: SocietySet
   doc.text('For Office Use Only', cx, y, { align: 'center' }); y += 6;
   doc.setFont(font, 'normal');
   doc.setFontSize(8);
-  doc.text('Application Received on: _______________    Approved / Rejected: _______________', mL, y); y += 5;
-  doc.text('Resolution No.: _______________    Date: _______________', mL, y); y += 5;
-  doc.text('Share Certificate No.: _______________    Shares Allotted: _______________', mL, y); y += 12;
+  const decision = member.approvalStatus === 'approved' ? `Approved${member.decidedAt ? ` on ${fmtDate(member.decidedAt)}` : ''}`
+    : member.approvalStatus === 'rejected' ? `Rejected${member.decidedAt ? ` on ${fmtDate(member.decidedAt)}` : ''}` : undefined;
+  doc.text(`Application Received on: ${blank(received ? fmtDate(received) : undefined)}    Approved / Rejected: ${blank(decision)}`, mL, y); y += 5;
+  doc.text(`Resolution No.: ${blank(member.admissionResolutionNo)}    Date: ${blank(member.admissionResolutionDate ? fmtDate(member.admissionResolutionDate) : undefined)}`, mL, y); y += 5;
+  doc.text(`Share Certificate No.: ${blank(member.shareCertNo)}    Shares Allotted: ${blank(member.approvalStatus === 'approved' && member.shareCount ? String(member.shareCount) : undefined)}`, mL, y); y += 12;
 
   // Signature block for office
   const sigNames = getSignatoryNames(society);

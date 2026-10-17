@@ -15,6 +15,32 @@ const OfflineBanner: React.FC = () => {
   const hi = language === 'hi';
   const names = (parts: string[]) => parts.map(p => (hi ? PART_LABEL_HI[p] ?? p : p)).join(', ');
 
+  if (d.blocked && d.reason === 'account') {
+    return (
+      <div role="alert" className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div className="min-w-[14rem] flex-1 text-destructive">
+            <p className="font-semibold">{hi ? 'दूसरे tab में किसी और account से login हुआ — entry बंद है' : 'Another account signed in in another tab — entry is paused'}</p>
+            <p className="mt-0.5">
+              {hi
+                ? 'यह page पुराने account का data दिखा रहा है। Page दोबारा खोलें — तब वही account दिखेगा जिससे अभी login है। अलग-अलग account एक साथ चलाने हों तो दूसरा browser या InPrivate window इस्तेमाल करें।'
+                : 'This page still shows the previous account. Reload to continue with the account that is signed in now. To use two accounts at once, use another browser or a private window.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="ml-auto inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-destructive/40 bg-background px-3 py-1.5 font-medium text-destructive hover:bg-destructive/10 sm:w-auto"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            {hi ? 'Page दोबारा खोलें' : 'Reload page'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (d.blocked) {
     const offline = d.reason === 'offline';
     return (
