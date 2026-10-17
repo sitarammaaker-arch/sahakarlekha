@@ -134,15 +134,14 @@ export default function FlatsRegister() {
     for (const [headId, val] of Object.entries(eOverrides)) {
       if (val !== undefined && val.trim() !== '' && Number(val) >= 0) overrides[headId] = Number(val);
     }
-    updateHousingFlat(editId, {
+    const accepted = updateHousingFlat(editId, {
       flatNo: eFlatNo.trim(), buildingId: eBuildingId || undefined, blockNo: eBlockNo.trim() || undefined, floor: eFloor.trim() || undefined,
       unitType: eUnitType || undefined, memberId: eMemberId || undefined, associateMemberId: eAssociateMemberId || undefined,
       occupancy: eOccupancy, ownerType: ownerTypeFrom(eOccupancy),
       area: eArea ? Number(eArea) : undefined, monthlyMaintenance: m,
       chargeOverrides: Object.keys(overrides).length ? overrides : undefined,
-    });
-    toast({ title: hi ? 'अपडेट हुआ' : 'Updated' });
-    setEditOpen(false);
+    }, { onSaved: () => toast({ title: hi ? 'अपडेट हुआ' : 'Updated' }) });
+    if (accepted) setEditOpen(false);
   };
 
   const removeFlat = (f: HousingFlat) => {

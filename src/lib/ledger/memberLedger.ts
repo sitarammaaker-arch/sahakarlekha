@@ -8,12 +8,13 @@
  * and folds credit (Cr to share capital) − debit (Dr) into the running balance. amount = the voucher
  * amount (payload.amount), matching getMemberLedger; particulars = narration || deposit/withdrawal.
  *
- * The opening-balance row (a member with a `shareCapital` scalar but no share-capital voucher) is
- * MEMBER data, not in the journal, so `opts.openingMinor` + `opts.joinDate` are passed in. NOT wired.
+ * The opening-balance row is derived from MEMBER data (the `shareCapital` scalar + joinDate), not the
+ * journal, so `opts.openingMinor` (the scalar) + `opts.joinDate` are passed in. NOT wired.
  */
 import type { LedgerEvent } from './event';
 import { toMinor } from '../money';
 import { resolveCurrentVouchers } from './aggregateState';
+import { memberShareOpeningMinor } from '../members/shareOpening';
 
 export interface LedgerMemberRow {
   id: string;
@@ -26,8 +27,8 @@ export interface LedgerMemberRow {
 }
 
 /**
- * PURE — a member's share-capital ledger. `opts.openingMinor` is the member's opening share capital
- * (shown as an OB row only when the member has no share-capital voucher, matching getMemberLedger);
+ * PURE — a member's share-capital ledger. `opts.openingMinor` is the member's share-capital scalar; the
+ * OB row is memberShareOpeningMinor of it (the same rule as getMemberLedger);
  * `opts.joinDate` dates that row. amountMinor comes from the voucher amount (payload.amount).
  */
 export function projectMemberLedger(
@@ -43,13 +44,15 @@ export function projectMemberLedger(
     // identically here and in getMemberLedger, else the running balance diverges and parity fails.
     .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || '').localeCompare(b.voucherNo || '') || a.id.localeCompare(b.id));
 
-  // OB row only when there is no Cr-to-share-capital voucher (a "proper" share-capital voucher).
+  // OB row — the SAME rule as buildMemberShareLedger (memberShareOpeningMinor): opts.openingMinor is the
+  // member's share-capital scalar, from which the opening they joined with is derived.
   const scLegOf = (c: (typeof current)[number]) => c.legs.find((l) => l.accountId === shareCapAccountId)!;
-  const hasShareCapVoucher = current.some((c) => scLegOf(c).drCr === 'Cr');
-  let balanceMinor = hasShareCapVoucher ? 0 : opts.openingMinor;
+  const obMinor = memberShareOpeningMinor(opts.openingMinor, opts.joinDate,
+    current.map((c) => ({ date: c.date, isCredit: scLegOf(c).drCr === 'Cr', amountMinor: toMinor(c.amount) })));
+  let balanceMinor = obMinor;
   const rows: LedgerMemberRow[] = [];
-  if (!hasShareCapVoucher && opts.openingMinor > 0) {
-    rows.push({ id: 'ob', date: opts.joinDate, voucherNo: 'OB', particulars: 'Opening Share Capital', creditMinor: opts.openingMinor, debitMinor: 0, balanceMinor });
+  if (obMinor > 0) {
+    rows.push({ id: 'ob', date: opts.joinDate, voucherNo: 'OB', particulars: 'Opening Share Capital', creditMinor: obMinor, debitMinor: 0, balanceMinor });
   }
 
   // Fold each voucher into the running balance.

@@ -54,6 +54,7 @@ const MemberApplication: React.FC = () => {
   const canEdit = can('update');
 
   const [form, setForm] = useState(EMPTY_FORM);
+  const [submitting, setSubmitting] = useState(false);   // between submit and the cloud's answer
 
   const getNextMemberId = () => {
     const nums = members
@@ -65,6 +66,7 @@ const MemberApplication: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;   // one application per click — the first is still saving
     if (!form.name.trim()) {
       toast({ title: language === 'hi' ? 'नाम आवश्यक है' : 'Name is required', variant: 'destructive' });
       return;
@@ -85,7 +87,8 @@ const MemberApplication: React.FC = () => {
     const nomErr = memberNomineeError(form.nomineeName, [], hiLang);
     if (nomErr) { toast({ title: hiLang ? 'नामांकित ज़रूरी है' : 'Nominee required', description: nomErr, variant: 'destructive' }); return; }
 
-    const chosenPhoto = photo;   // captured now — the form resets right after
+    const chosenPhoto = photo;   // captured now — the form resets once the cloud has it
+    setSubmitting(true);
     const newMember = addMember({
       memberId: getNextMemberId(),
       name: form.name.trim(),
@@ -122,26 +125,28 @@ const MemberApplication: React.FC = () => {
       nomineeShares: form.nomineeShares ? parseInt(form.nomineeShares) : undefined,
       nomineePhone: form.nomineePhone.trim() || undefined,
     }, {
-      // D5: "submitted" only once the cloud has the application.
-      onSaved: m => {
+      // D5: "submitted" — and the printed application with its member no. — only once the cloud has
+      // the application. Printing before that handed the applicant a number a failed save would free
+      // up for someone else (member-area stage A, M-2); on a failure the form stays filled to retry.
+      onSaved: async m => {
         toast({
           title: language === 'hi' ? 'आवेदन जमा हुआ' : 'Application Submitted',
           description: language === 'hi' ? `${m.name} (${m.memberId}) का आवेदन पेंडिंग है।` : `${m.name} (${m.memberId})'s application is pending approval.`,
         });
         if (chosenPhoto) void uploadMemberPhoto(m.id, chosenPhoto);
+        // Generate PDF — with the photograph printed in its box when one was chosen
+        let photoUrl: string | undefined;
+        if (chosenPhoto) { try { photoUrl = await photoDataUrl(chosenPhoto); } catch { photoUrl = undefined; } }
+        generateMemberApplicationPDF(m, society, photoUrl);
+        setPhoto(null);
+        setForm(EMPTY_FORM);
+        setSubmitting(false);
+        navigate('/members?tab=pending');
       },
+      onFailed: () => setSubmitting(false),
     });
 
-    if (!newMember.id) return;   // refused (FY lock) — no PDF, no "submitted", the form stays filled
-
-    // Generate PDF — with the photograph printed in its box when one was chosen
-    let photoUrl: string | undefined;
-    if (chosenPhoto) { try { photoUrl = await photoDataUrl(chosenPhoto); } catch { photoUrl = undefined; } }
-    generateMemberApplicationPDF(newMember, society, photoUrl);
-    setPhoto(null);
-
-    setForm(EMPTY_FORM);
-    navigate('/members?tab=pending');
+    if (!newMember.id) { setSubmitting(false); return; }   // refused (FY lock) — no PDF, no "submitted", the form stays filled
   };
 
   const f = (key: keyof typeof form, value: string) => setForm(prev => ({ ...prev, [key]: value }));
@@ -398,9 +403,9 @@ const MemberApplication: React.FC = () => {
           <Button variant="outline" type="button" onClick={() => navigate('/members')}>
             {hi ? 'रद्द करें' : 'Cancel'}
           </Button>
-          <Button type="submit" className="gap-2">
+          <Button type="submit" className="gap-2" disabled={submitting}>
             <FileText className="h-4 w-4" />
-            {hi ? 'आवेदन जमा करें और PDF डाउनलोड करें' : 'Submit Application & Download PDF'}
+            {submitting ? (hi ? 'सेव हो रहा है…' : 'Saving…') : (hi ? 'आवेदन जमा करें और PDF डाउनलोड करें' : 'Submit Application & Download PDF')}
           </Button>
         </div>
       </form>

@@ -32,6 +32,7 @@ import { depositLedger } from '@/lib/registers/subsidiaryLedgers';
 import { depositLedgerTable } from '@/lib/registers/ledgerTables';
 import { ledgerExcel, ledgerPdf } from '@/lib/registers/ledgerExport';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
+import { canHoldShares } from '@/lib/members/shareRules';
 
 const TYPE_LABELS: Record<DepositType, { hi: string; en: string }> = {
   SB: { hi: 'बचत (SB)', en: 'Savings (SB)' },
@@ -289,7 +290,7 @@ const Deposits: React.FC = () => {
               <Select value={form.memberId} onValueChange={v => setForm(f => ({ ...f, memberId: v }))}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder={hi ? 'सदस्य चुनें' : 'Select member'} /></SelectTrigger>
                 <SelectContent>
-                  {approvedMembers.map(m => <SelectItem key={m.id} value={m.id}>{m.memberId} · {m.name}</SelectItem>)}
+                  {approvedMembers.filter(canHoldShares).map(m => <SelectItem key={m.id} value={m.id}>{m.memberId} · {m.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

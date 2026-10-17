@@ -39,6 +39,16 @@ export function splitAdmissionFields<T extends Record<string, unknown>>(row: T):
   return { base: base as Omit<T, MemberAdmissionField>, extras };
 }
 
+/**
+ * The admission columns an edit BLANKED (present in the edit, empty now, set before). splitAdmissionFields
+ * keeps only non-empty values, so without this a cleared resolution no. stayed in the cloud and came
+ * back after F5 (member-area stage A, M-4). The step-2 update writes these as null.
+ */
+export function clearedAdmissionFields(edit: Record<string, unknown>, before: Record<string, unknown>): MemberAdmissionField[] {
+  const empty = (v: unknown) => v === undefined || v === null || v === '';
+  return MEMBER_ADMISSION_FIELDS.filter((f) => f in edit && empty(edit[f]) && !empty(before[f]));
+}
+
 const DAY = 86_400_000;
 const parse = (d: string) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));
 const iso = (t: number) => new Date(t).toISOString().slice(0, 10);

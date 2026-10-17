@@ -32,6 +32,7 @@ import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
 import { todayStr } from '@/lib/dateUtils';
 import type { Loan, LoanType, LoanStatus } from '@/types';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
+import { canHoldShares } from '@/lib/members/shareRules';
 
 const EMPTY_FORM = {
   memberId: '',
@@ -213,6 +214,8 @@ const LoanRegister: React.FC = () => {
     toast({ title: hi ? '✅ चुकौती दर्ज (बही में पोस्ट)' : '✅ Repayment recorded & posted', description: `₹${totalAmt.toLocaleString('en-IN')}${interest > 0 ? ` · ${hi ? 'ब्याज' : 'interest'} ₹${interest.toLocaleString('en-IN')}` : ''}` });
   };
   const approvedMembers = useMemo(() => members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved'), [members]);
+  // A new loan only for a live member (the edit form and the PDF keep every approved member's name).
+  const lendableMembers = useMemo(() => members.filter(canHoldShares), [members]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -266,7 +269,7 @@ const LoanRegister: React.FC = () => {
       toast({ title: hi ? 'चुकाई गई राशि ऋण राशि से ज़्यादा नहीं हो सकती' : 'Repaid amount cannot exceed the loan amount', variant: 'destructive' });
       return;
     }
-    addLoan({
+    const created = addLoan({
       memberId: form.memberId,
       loanType: form.loanType,
       purpose: form.purpose,
@@ -278,6 +281,7 @@ const LoanRegister: React.FC = () => {
       status: form.status,
       security: form.security,
     });
+    if (!created.id) return;   // refused (FY lock / not a live member) — the context said why; keep the form
     toast({ title: hi ? 'ऋण जोड़ा गया' : 'Loan added' });
     setForm(EMPTY_FORM);
     setIsAddOpen(false);
@@ -510,7 +514,7 @@ const LoanRegister: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'नया ऋण जोड़ें' : 'Add New Loan'}</DialogTitle>
           </DialogHeader>
-          <LoanForm form={form} setForm={setForm} hi={hi} members={approvedMembers} onSubmit={handleAdd} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
+          <LoanForm form={form} setForm={setForm} hi={hi} members={lendableMembers} onSubmit={handleAdd} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
         </DialogContent>
       </Dialog>
 

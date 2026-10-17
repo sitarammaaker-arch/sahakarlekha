@@ -60,9 +60,15 @@ ok(b2.length === 1 && b2[0].id === 'ob' && b2[0].creditMinor === 50000 && b2[0].
 const b3 = book([deposit('d1', 'M1', 1000), deposit('dx', 'M9', 9999)], 'M1');
 ok(b3.length === 1 && b3[0].id === 'd1', 'only the requested member’s vouchers appear');
 
-// 4. Withdrawal (Dr share-capital) → debit, balance decreases; with an OB (no Cr voucher).
-const b4 = book([withdrawal('w1', 'M3', 200, { date: '2025-06-05' })], 'M3', { openingMinor: 100000 });
-ok(row(b4, 'ob') && row(b4, 'w1').debitMinor === 20000 && row(b4, 'w1').balanceMinor === 80000, 'withdrawal debits and reduces the balance (100000 − 20000)');
+// 4. Withdrawal (Dr share-capital) → debit, balance decreases; with an OB (no Cr voucher). openingMinor
+//    is the member's scalar AFTER the withdrawal (80000), so the OB is the implied 100000 (member-area
+//    stage A, H-1 — the refund used to be subtracted from the already-reduced scalar a second time).
+const b4 = book([withdrawal('w1', 'M3', 200, { date: '2025-06-05' })], 'M3', { openingMinor: 80000 });
+ok(row(b4, 'ob')?.creditMinor === 100000 && row(b4, 'w1').debitMinor === 20000 && row(b4, 'w1').balanceMinor === 80000, 'withdrawal debits and reduces the balance (100000 − 20000), ending on the scalar');
+
+// 4b. H-1: an old member (OB) who later buys shares keeps the OB row.
+const b4b = book([deposit('p1', 'M4', 500, { date: '2025-07-01' })], 'M4', { openingMinor: 150000, joinDate: '2023-04-01' });
+ok(row(b4b, 'ob')?.creditMinor === 100000 && row(b4b, 'p1').balanceMinor === 150000, 'OB kept when a later purchase voucher exists (100000 + 50000)');
 ok(row(b4, 'w1').particulars === 'Share withdrawal', 'withdrawal default particulars');
 
 // 5. A cancelled deposit is excluded.
