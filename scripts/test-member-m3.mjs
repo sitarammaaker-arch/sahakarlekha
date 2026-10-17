@@ -70,5 +70,10 @@ ok(mem.includes('generateShareCertificatePDF(certMember, society)') && sr.includ
 const pdf = read('src/lib/pdf.ts');
 ok(/export function generateShareCertificatePDF\(/.test(pdf) && pdf.includes("new jsPDF('l', 'mm', 'a5')") && pdf.includes("'SHARE CERTIFICATE'"), 'share certificate PDF (landscape A5)');
 
+// Live M925 certificate (2026-10-17): "Rs. Rs. 100.00" (fmt already says Rs.) and a two-line address overprinting the next line.
+ok(!/Rs\. \$\{(face \? )?fmt\(/.test(pdf), 'no "Rs. " before fmt() anywhere in pdf.ts (fmt prints Rs. itself)');
+const cert = pdf.slice(pdf.indexOf('export function generateShareCertificatePDF('));
+ok(cert.includes("text.replace(/\\s*\\n\\s*/g, ', ')") && cert.includes('y += (lines.length - 1) * 4.6 + gap;') && cert.includes('block(`Resident of: ${member.address}`, 7)'), 'certificate wraps each field and moves down by its line count');
+
 console.log(`member-m3: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
