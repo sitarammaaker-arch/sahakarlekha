@@ -37,6 +37,7 @@ import { validateCertificate } from '@/lib/shareCertUtils';
 import { memberStatusLabel, memberTypeLabel } from '@/lib/memberLifecycle';
 import { useSubscription } from '@/hooks/useSubscription';
 import { MemberPortalDialog } from '@/components/members/MemberPortalDialog';
+import { MemberPhotoPicker } from '@/components/members/MemberPhotoPicker';
 import { memberPhoneError } from '@/lib/memberValidation';
 import { callMemberPortalAdmin, portalPlanAllowed, type PortalLoginRow } from '@/lib/memberPortalAdmin';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
@@ -92,9 +93,14 @@ interface MemberFormProps {
   /** Edit mode locks the share fields — share changes must go through Share Register
    *  (which posts a voucher) so the member scalar never drifts from the ledger control. */
   isEdit?: boolean;
+  /** The photograph (s.40) — held outside `form` so it never rides the member row; uploaded after the save. */
+  photoFile: File | null;
+  onPhoto: (file: File | null) => void;
+  existingPhotoUrl?: string | null;
+  onPhotoError: (message: string) => void;
 }
 
-const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onSubmit, submitLabel, onCancel, isEdit }) => {
+const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onSubmit, submitLabel, onCancel, isEdit, photoFile, onPhoto, existingPhotoUrl, onPhotoError }) => {
   const hi = language === 'hi';
   const f = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
   // ECR-16: multiple-nominee editor helpers (functional updates → no stale-closure lost writes)
@@ -113,6 +119,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
   <form onSubmit={onSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
     {/* Basic */}
     <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide">{hi ? 'मूल जानकारी' : 'Basic details'}</p>
+    <MemberPhotoPicker file={photoFile} onChange={onPhoto} existingUrl={existingPhotoUrl} hi={hi} onError={onPhotoError} />
     <div className="grid grid-cols-2 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{t('memberId')} <span className="text-muted-foreground">({hi ? 'स्वचालित' : 'auto'})</span></Label>
@@ -426,6 +433,10 @@ const Members: React.FC = () => {
   // M6: the viewed member's photo (private bucket → short-lived signed URL)
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
+  // Photo chosen in the add / edit form — uploaded once the member row is saved (it never rides `form`).
+  const [formPhoto, setFormPhoto] = useState<File | null>(null);
+  const [editPhotoUrl, setEditPhotoUrl] = useState<string | null>(null);
+  const photoError = (message: string) => toast({ title: hi ? 'फ़ोटो' : 'Photo', description: message, variant: 'destructive' });
   const photoInput = useRef<HTMLInputElement>(null);
   // M6: Rules r.14 / r.15 eligibility, declared at approval (recorded in the audit; unticked → warning, never a block)
   const [declared, setDeclared] = useState({ notInsolvent: false, notConvicted: false, noOtherCreditSociety: false });
@@ -572,6 +583,7 @@ const Members: React.FC = () => {
     const nomWarn = nomineeCountWarning((form.nomineeName.trim() ? 1 : 0) + cleanNominees.length, Number(form.shareCount) || undefined);
     if (nomWarn) toast({ title: hi ? 'नामांकन जाँचें' : 'Check nomination', description: nomWarn, duration: 10000 });
     Object.assign(form, { memberId });
+    const photoToUpload = formPhoto;   // captured now — the form resets right after
     const created = addMember({
       ...form, memberId,
       shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
@@ -599,14 +611,18 @@ const Members: React.FC = () => {
       admissionResolutionDate: form.admissionResolutionDate || undefined,
     }, {
       // D5: "added" only once the cloud has the row (a failure rolls back and says so itself).
-      onSaved: m => toast({
-        title: hi ? 'सदस्य जोड़ा गया' : 'Member added',
-        description: `${m.name} (${m.memberId})${m.admissionResolutionNo ? '' : (hi ? ' — समिति प्रस्ताव संख्या नहीं भरी; edit करके भर सकते हैं।' : ' — no committee resolution number; you can add it by editing.')}`,
-      }),
+      onSaved: m => {
+        toast({
+          title: hi ? 'सदस्य जोड़ा गया' : 'Member added',
+          description: `${m.name} (${m.memberId})${m.admissionResolutionNo ? '' : (hi ? ' — समिति प्रस्ताव संख्या नहीं भरी; edit करके भर सकते हैं।' : ' — no committee resolution number; you can add it by editing.')}`,
+        });
+        if (photoToUpload) void uploadMemberPhoto(m.id, photoToUpload);
+      },
     });
     if (!created.id) return;   // refused (FY lock) — keep the form so nothing typed is lost
     trackEvent('member_added');
     setForm(EMPTY_FORM);
+    setFormPhoto(null);
     setIsAddOpen(false);
   };
 
@@ -652,11 +668,16 @@ const Members: React.FC = () => {
       admissionResolutionDate: form.admissionResolutionDate || undefined,
     }, { onSaved: () => toast({ title: hi ? 'सदस्य अपडेट किया गया' : 'Member updated' }) });
     if (!applied) return;
+    if (formPhoto) void uploadMemberPhoto(editMember.id, formPhoto);
+    setFormPhoto(null);
     setEditMember(null);
   };
 
   const openEdit = (m: Member) => {
     setEditMember(m);
+    setFormPhoto(null);
+    setEditPhotoUrl(null);
+    if (m.photoPath) memberPhotoUrl(m.photoPath).then(setEditPhotoUrl);
     setForm({
       memberId: m.memberId, name: m.name, fatherName: m.fatherName, address: m.address, phone: m.phone,
       shareCapital: String(m.shareCapital), admissionFee: String(m.admissionFee || 0),
@@ -966,7 +987,7 @@ const Members: React.FC = () => {
                   <ClipboardList className="h-5 w-5 shrink-0 text-amber-600" />
                   <span><span className="block font-semibold">{hi ? 'नया आवेदन' : 'New application'}</span><span className="block text-xs text-muted-foreground">{hi ? 'आवेदन "पेंडिंग" में जाएगा; समिति के फ़ैसले के बाद स्वीकृत/अस्वीकृत करें।' : 'Goes to Pending; approve or reject after the committee decides.'}</span></span>
                 </Button>
-                <Button variant="outline" className="h-auto justify-start gap-3 py-3 text-left whitespace-normal" onClick={() => { setAddChooserOpen(false); setForm({ ...EMPTY_FORM, memberId: getNextMemberId() }); setIsAddOpen(true); }}>
+                <Button variant="outline" className="h-auto justify-start gap-3 py-3 text-left whitespace-normal" onClick={() => { setAddChooserOpen(false); setForm({ ...EMPTY_FORM, memberId: getNextMemberId() }); setFormPhoto(null); setIsAddOpen(true); }}>
                   <CheckCircle className="h-5 w-5 shrink-0 text-green-600" />
                   <span><span className="block font-semibold">{hi ? 'स्वीकृत / पुराना सदस्य दर्ज करें' : 'Record an admitted / existing member'}</span><span className="block text-xs text-muted-foreground">{hi ? 'जिसे समिति स्वीकृत कर चुकी है — दाख़िला तिथि और प्रस्ताव संख्या भरें।' : 'Already admitted by the committee — enter the admission date and resolution.'}</span></span>
                 </Button>
@@ -979,7 +1000,8 @@ const Members: React.FC = () => {
                 <DialogTitle>{hi ? 'स्वीकृत / पुराना सदस्य दर्ज करें' : 'Record an admitted member'}</DialogTitle>
                 <DialogDescription>{hi ? 'जिस सदस्य को समिति स्वीकृत कर चुकी है। नए व्यक्ति के लिए "नया आवेदन" चुनें।' : 'A member the committee has already admitted. For a new person, choose "New application".'}</DialogDescription>
               </DialogHeader>
-              <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleAdd} submitLabel={t('save')} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); }} />
+              <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleAdd} submitLabel={t('save')} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); setFormPhoto(null); }}
+                photoFile={formPhoto} onPhoto={setFormPhoto} onPhotoError={photoError} />
             </DialogContent>
           </Dialog>
         </div>
@@ -1119,7 +1141,8 @@ const Members: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{hi ? 'सदस्य संपादित करें' : 'Edit Member'}</DialogTitle>
           </DialogHeader>
-          <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleEdit} submitLabel={hi ? 'अपडेट करें' : 'Update'} onCancel={() => setEditMember(null)} isEdit />
+          <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleEdit} submitLabel={hi ? 'अपडेट करें' : 'Update'} onCancel={() => { setEditMember(null); setFormPhoto(null); }} isEdit
+            photoFile={formPhoto} onPhoto={setFormPhoto} existingPhotoUrl={editPhotoUrl} onPhotoError={photoError} />
         </DialogContent>
       </Dialog>
 

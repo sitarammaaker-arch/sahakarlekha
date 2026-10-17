@@ -14,6 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { generateMemberApplicationPDF } from '@/lib/pdf';
 import { validateKyc } from '@/lib/kycUtils';
 import { ageOn } from '@/lib/members/voters';
+import { MemberPhotoPicker } from '@/components/members/MemberPhotoPicker';
+import { photoDataUrl } from '@/lib/members/photo';
 import { FileText, ArrowLeft } from 'lucide-react';
 import type { MemberType, CasteCategory } from '@/types';
 
@@ -39,7 +41,9 @@ const EMPTY_FORM = {
 
 const MemberApplication: React.FC = () => {
   const { language } = useLanguage();
-  const { members, addMember, society } = useData();
+  const { members, addMember, society, uploadMemberPhoto } = useData();
+  // s.40 photograph — held outside `form` (never rides the member row); uploaded once the application is saved.
+  const [photo, setPhoto] = useState<File | null>(null);
   const { can } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -59,7 +63,7 @@ const MemberApplication: React.FC = () => {
     return `M${String(next).padStart(3, '0')}`;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) {
       toast({ title: language === 'hi' ? 'नाम आवश्यक है' : 'Name is required', variant: 'destructive' });
@@ -81,6 +85,7 @@ const MemberApplication: React.FC = () => {
     const nomErr = memberNomineeError(form.nomineeName, [], hiLang);
     if (nomErr) { toast({ title: hiLang ? 'नामांकित ज़रूरी है' : 'Nominee required', description: nomErr, variant: 'destructive' }); return; }
 
+    const chosenPhoto = photo;   // captured now — the form resets right after
     const newMember = addMember({
       memberId: getNextMemberId(),
       name: form.name.trim(),
@@ -118,16 +123,22 @@ const MemberApplication: React.FC = () => {
       nomineePhone: form.nomineePhone.trim() || undefined,
     }, {
       // D5: "submitted" only once the cloud has the application.
-      onSaved: m => toast({
-        title: language === 'hi' ? 'आवेदन जमा हुआ' : 'Application Submitted',
-        description: language === 'hi' ? `${m.name} (${m.memberId}) का आवेदन पेंडिंग है।` : `${m.name} (${m.memberId})'s application is pending approval.`,
-      }),
+      onSaved: m => {
+        toast({
+          title: language === 'hi' ? 'आवेदन जमा हुआ' : 'Application Submitted',
+          description: language === 'hi' ? `${m.name} (${m.memberId}) का आवेदन पेंडिंग है।` : `${m.name} (${m.memberId})'s application is pending approval.`,
+        });
+        if (chosenPhoto) void uploadMemberPhoto(m.id, chosenPhoto);
+      },
     });
 
     if (!newMember.id) return;   // refused (FY lock) — no PDF, no "submitted", the form stays filled
 
-    // Generate PDF
-    generateMemberApplicationPDF(newMember, society);
+    // Generate PDF — with the photograph printed in its box when one was chosen
+    let photoUrl: string | undefined;
+    if (chosenPhoto) { try { photoUrl = await photoDataUrl(chosenPhoto); } catch { photoUrl = undefined; } }
+    generateMemberApplicationPDF(newMember, society, photoUrl);
+    setPhoto(null);
 
     setForm(EMPTY_FORM);
     navigate('/members?tab=pending');
@@ -235,6 +246,7 @@ const MemberApplication: React.FC = () => {
                 </Select>
               </div>
             </div>
+            <MemberPhotoPicker file={photo} onChange={setPhoto} hi={hi} onError={msg => toast({ title: hi ? 'फ़ोटो' : 'Photo', description: msg, variant: 'destructive' })} />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>{hi ? 'आवेदन प्राप्ति तिथि *' : 'Application received on *'}</Label>

@@ -76,5 +76,17 @@ ok(mp.includes('notInsolvent') && mp.includes('noOtherCreditSociety') && mp.incl
 ok(mp.includes("'पत्राचार का पता (अलग हो तो)'") && mp.includes('uploadMemberPhoto(viewMember.id, file)'), 'members: correspondence address + photo');
 ok(read('src/lib/pdf.ts').includes('not a member of any other primary credit society'), 'application PDF declares r.14 / r.15');
 
+// Photo in the admission forms (founder 2026-10-17: "दोनों मेंबर अड्मिशन फॉर्म में फोटो का ऑप्शन नहीं मिला").
+const picker = read('src/components/members/MemberPhotoPicker.tsx');
+ok(picker.includes('capture="environment"') && picker.includes('photoFileError(f)') && picker.includes('r.readAsDataURL(file)'), 'picker: camera, validation, data-URL preview');
+ok(mp.includes('<MemberPhotoPicker file={photoFile} onChange={onPhoto}') && mp.includes('photoFile={formPhoto} onPhoto={setFormPhoto} onPhotoError={photoError}'), 'record-an-admitted-member + edit forms have the photo');
+ok(mp.includes('if (photoToUpload) void uploadMemberPhoto(m.id, photoToUpload);') && mp.includes('if (formPhoto) void uploadMemberPhoto(editMember.id, formPhoto);'), 'photo uploaded only after the member row is saved');
+ok(!/photoFile[,:]/.test(mp.slice(mp.indexOf('const EMPTY_FORM'), mp.indexOf('interface MemberFormProps'))), 'the photo never rides the member form / row');
+const ap = read('src/pages/MemberApplication.tsx');
+ok(ap.includes('<MemberPhotoPicker file={photo} onChange={setPhoto}') && ap.includes('if (chosenPhoto) void uploadMemberPhoto(m.id, chosenPhoto);'), 'new application has the photo, uploaded after the save');
+ok(ap.includes('generateMemberApplicationPDF(newMember, society, photoUrl)'), 'application PDF gets the photo');
+const pdf2 = read('src/lib/pdf.ts');
+ok(pdf2.includes('generateMemberApplicationPDF(member: Member, society: SocietySettings, photoDataUrl?: string)') && pdf2.includes("doc.addImage(photoDataUrl, 'JPEG'") && pdf2.includes("doc.text('Affix'"), 'application PDF: photo box — the photo, or "Affix Photograph"');
+
 console.log(`member-m6: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
