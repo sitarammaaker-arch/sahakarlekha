@@ -99,7 +99,8 @@ import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib
 import { accountDeleteFailure, coaResetBlockers, coaResetLiveData } from '@/lib/accounting/accountDelete';
 import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
 import { memberAuditDiff } from '@/lib/members/memberAudit';
-import { splitAdmissionFields, applicationReceivedOn, MEMBER_PROFILE_FIELDS, type AdmissionDecision } from '@/lib/members/admission';
+import { splitAdmissionFields, applicationReceivedOn, MEMBER_PROFILE_FIELDS, MEMBER_CONTACT_FIELDS, MEMBER_PHOTO_FIELD, type AdmissionDecision } from '@/lib/members/admission';
+import { MEMBER_PHOTO_BUCKET, memberPhotoPath, photoFileError, downscalePhoto } from '@/lib/members/photo';
 import { canHoldShares } from '@/lib/members/shareRules';
 import { MEMBER_STATUS_EXTRA_FIELDS } from '@/lib/members/cessation';
 import { isCountedVoucher } from '@/lib/countedVoucher';
@@ -229,6 +230,9 @@ interface DataContextType {
   updateMember: (id: string, data: Partial<Member>, opts?: { onSaved?: () => void }) => boolean;
   changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string, opts?: { effectiveDate?: string; resolutionNo?: string; resolutionDate?: string }) => boolean;
   deleteMember: (id: string) => void;
+  uploadMemberPhoto: (id: string, file: File) => Promise<boolean>;
+  removeMemberPhoto: (id: string) => Promise<boolean>;
+  memberPhotoUrl: (path: string | undefined) => Promise<string | null>;
   refundShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
   /** Two-step refund: committee approval (Dr Share Capital / Cr Share Refund Payable) … */
   approveShareRefund: (memberId: string, amount: number, date: string, resolution: string) => boolean;
@@ -442,7 +446,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const base: Record<string, any> = splitAdmissionFields(identitySplitRef.current ? stripMemberPII(m) : m).base;
     for (const f of MEMBER_STATUS_EXTRA_FIELDS) delete base[f];   // M4: migration-117 columns ride their own update
     for (const f of MEMBER_PROFILE_FIELDS) delete base[f];        // M5: migration-118 columns ride their own update
+    for (const f of MEMBER_CONTACT_FIELDS) delete base[f];        // M6: migration-119 columns ride their own update
+    delete base[MEMBER_PHOTO_FIELD];                              // M6: set only by uploadMemberPhoto / removeMemberPhoto
     return withSoc(base);
+  };
+  // M6 step 2: the correspondence address in its own update (119) — a missing 119 must not drop gender / DOB (118).
+  const persistMemberContact = (id: string, member: Record<string, any>, touched: boolean) => {
+    if (!touched) return;
+    const patch: Record<string, string | null> = {};
+    for (const f of MEMBER_CONTACT_FIELDS) patch[f] = member[f] || null;
+    supabase.from('members').update(patch).eq('id', id).then(({ error }) => {
+      if (!error) return;
+      reportError('write-partial', error.message, { at: 'member contact fields' });
+      toastRef.current({ title: 'सदस्य सेव हुआ — पर पत्राचार का पता नहीं', description: `पत्राचार का पता सेव नहीं हुआ (${error.message})। Migration 119 चलाएँ, फिर दोबारा सेव करें।`, duration: 10000 });
+    });
   };
   // M5 step 2: gender / date of birth in their own update (a missing 118 must not drop the admission fields).
   const persistMemberProfile = (id: string, member: Record<string, any>, touched: boolean) => {
@@ -3286,6 +3303,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         persistMemberAdmission(newMember.id, newMember);
         persistMemberProfile(newMember.id, newMember, !!(newMember.gender || newMember.dateOfBirth));
+        persistMemberContact(newMember.id, newMember, !!newMember.correspondenceAddress);
         // Member-audit M1 (D4/D5): the page's success message waits for the cloud; one audit row per member
         // (a bulk import passes quiet and is summarised by the importer instead of one row per member).
         if (!opts.quiet) emitAudit({ entityType: 'member', entityId: newMember.id, action: 'create', after: { memberId: newMember.memberId, name: newMember.name, shareCapital: newMember.shareCapital || 0, admissionFee: newMember.admissionFee || 0, approvalStatus: newMember.approvalStatus ?? 'approved' } });
@@ -3339,6 +3357,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         if (Object.keys(splitAdmissionFields(data as Record<string, unknown>).extras).length) persistMemberAdmission(id, updatedMember);
         persistMemberProfile(id, updatedMember, MEMBER_PROFILE_FIELDS.some(f => f in data && (data as Record<string, unknown>)[f] !== (oldMember as unknown as Record<string, unknown>)[f]));
+        persistMemberContact(id, updatedMember, MEMBER_CONTACT_FIELDS.some(f => f in data && (data as Record<string, unknown>)[f] !== (oldMember as unknown as Record<string, unknown>)[f]));
         // Member-audit M1 (D4): who changed what — Aadhaar / PAN are named, never their values.
         const changed = memberAuditDiff(oldMember as unknown as Record<string, unknown>, updatedMember as unknown as Record<string, unknown>);
         if (changed) emitAudit({ entityType: 'member', entityId: id, action: 'update', before: changed.before, after: changed.after });
@@ -3438,6 +3457,58 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { status: current.status, statusChangedAt: current.statusChangedAt ?? null }, after: { status: newStatus, statusChangedAt: changedAt, resolutionNo: resolutionNo ?? null, resolutionDate: resolutionDate ?? null }, reason });
     toastRef.current({ title: '✅ सदस्य स्थिति अपडेट', description: `${current.name}: ${current.status} → ${newStatus}`, variant: 'default', duration: 6000 });
     return true;
+  }, []);
+
+  // M6 (Act s.40 proviso): the member's photograph in the PRIVATE 'member-photos' bucket. Upload first; only when the
+  // file is stored does photoPath move (step-2 update) — a failed upload changes nothing (RULE 1).
+  const uploadMemberPhoto = useCallback(async (id: string, file: File): Promise<boolean> => {
+    if (guardPermission('update', 'सदस्य की फ़ोटो बदलने')) return false;
+    if (guardFYLocked()) return false;
+    const member = membersRef.current.find(m => m.id === id);
+    if (!member) return false;
+    const bad = photoFileError(file);
+    if (bad) { toastRef.current({ title: 'फ़ोटो नहीं ली जा सकी', description: bad, variant: 'destructive' }); return false; }
+    let blob: Blob;
+    try { blob = await downscalePhoto(file); } catch { toastRef.current({ title: 'फ़ोटो नहीं पढ़ी जा सकी', description: 'दूसरी फ़ोटो (JPG/PNG) आज़माएँ। (Could not read the image.)', variant: 'destructive' }); return false; }
+    const path = memberPhotoPath(societyIdRef.current, id);
+    const { error: upErr } = await supabase.storage.from(MEMBER_PHOTO_BUCKET).upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '60' });
+    if (upErr) {
+      reportError('db-sync', upErr.message, { at: 'member photo upload' });
+      toastRef.current({ title: 'फ़ोटो सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुई — ${upErr.message}. (Migration 119 चलाया है?)`, variant: 'destructive', duration: 12000 });
+      return false;
+    }
+    const { error } = await supabase.from('members').update({ photoPath: path }).eq('id', id);
+    if (error) {
+      reportError('write-partial', error.message, { at: 'member photoPath' });
+      toastRef.current({ title: 'फ़ोटो सेव हुई — पर सदस्य से नहीं जुड़ी', description: `${error.message}. Migration 119 चलाएँ।`, variant: 'destructive', duration: 12000 });
+      return false;
+    }
+    membersRef.current = membersRef.current.map(m => m.id === id ? { ...m, photoPath: path } : m);
+    setMembersState(prev => prev.map(m => m.id === id ? { ...m, photoPath: path } : m));
+    emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { photoPath: member.photoPath ? '(set)' : null }, after: { photoPath: '(changed)' }, reason: 'Member photograph updated' });
+    toastRef.current({ title: '✅ फ़ोटो सेव हुई', description: `${member.name} (${member.memberId})` });
+    return true;
+  }, []);
+
+  const removeMemberPhoto = useCallback(async (id: string): Promise<boolean> => {
+    if (guardPermission('update', 'सदस्य की फ़ोटो हटाने')) return false;
+    if (guardFYLocked()) return false;
+    const member = membersRef.current.find(m => m.id === id);
+    if (!member?.photoPath) return false;
+    const { error } = await supabase.from('members').update({ photoPath: null }).eq('id', id);
+    if (error) { toastRef.current({ title: 'फ़ोटो नहीं हटी', description: error.message, variant: 'destructive' }); return false; }
+    await supabase.storage.from(MEMBER_PHOTO_BUCKET).remove([member.photoPath]);   // best effort: the link is already gone
+    membersRef.current = membersRef.current.map(m => m.id === id ? { ...m, photoPath: undefined } : m);
+    setMembersState(prev => prev.map(m => m.id === id ? { ...m, photoPath: undefined } : m));
+    emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { photoPath: '(set)' }, after: { photoPath: null }, reason: 'Member photograph removed' });
+    return true;
+  }, []);
+
+  /** A short-lived signed URL for a member photo (private bucket), or null. */
+  const memberPhotoUrl = useCallback(async (path: string | undefined): Promise<string | null> => {
+    if (!path) return null;
+    const { data, error } = await supabase.storage.from(MEMBER_PHOTO_BUCKET).createSignedUrl(path, 600);
+    return error ? null : data?.signedUrl ?? null;
   }, []);
 
   const deleteMember = useCallback((id: string) => {
@@ -4185,7 +4256,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // gets no receipt; cheque / online go to the bank. Falls back to the approver's active branch.
       persistMemberAdmission(id, approved);
       postJoiningReceipts(approved, { fallbackBranch: branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) });
-      emitAudit({ entityType: 'member', entityId: id, action: 'approve', before: { approvalStatus: member.approvalStatus ?? 'pending', joinDate: member.joinDate }, after: { approvalStatus: 'approved', admissionDate, resolutionNo: approved.admissionResolutionNo ?? null, resolutionDate: approved.admissionResolutionDate ?? null } });
+      emitAudit({ entityType: 'member', entityId: id, action: 'approve', before: { approvalStatus: member.approvalStatus ?? 'pending', joinDate: member.joinDate }, after: { approvalStatus: 'approved', admissionDate, resolutionNo: approved.admissionResolutionNo ?? null, resolutionDate: approved.admissionResolutionDate ?? null, eligibilityConfirmed: decision?.eligibility ?? null } });
       toastRef.current({ title: 'सदस्य स्वीकृत', description: `${member.name} (${member.memberId}) अब सत्यापित सदस्य है` });
     });
   }, [postJoiningReceipts]);
@@ -7954,7 +8025,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
     addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
-    addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
+    addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
     addAccount, updateAccount, assignMissingAccountCodes, deleteAccount, mergeAccounts, resetAccounts, updateSociety, closeFinancialYear,
@@ -7993,7 +8064,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
     addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
-    addMember, updateMember, changeMemberStatus, deleteMember, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
+    addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
     addAccount, updateAccount, assignMissingAccountCodes, deleteAccount, mergeAccounts, resetAccounts, updateSociety, closeFinancialYear,

@@ -47,7 +47,7 @@ export function overdueByMember(loans: readonly L[], kcc: readonly K[], asOf: st
 export type ExclusionReason = 'not_approved' | 'nominal' | 'not_yet_member' | 'ceased' | 'defaulter';
 export const EXCLUSION_LABEL: Record<ExclusionReason, string> = {
   not_approved: 'आवेदन स्वीकृत नहीं',
-  nominal: 'नाममात्र सदस्य — मत का अधिकार नहीं (धारा 18/20)',
+  nominal: 'नाममात्र / सहयोगी सदस्य — मत का अधिकार नहीं (धारा 18/20)',
   not_yet_member: 'उस तिथि तक सदस्य नहीं बने थे',
   ceased: 'सदस्यता समाप्त (त्यागपत्र/निष्कासन/मृत्यु)',
   defaulter: 'बक़ायादार — मत का अधिकार नहीं (धारा 20(d))',
@@ -70,7 +70,7 @@ export function voterRoll<T extends M>(members: readonly T[], loans: readonly L[
     const joined = m.admissionDate || m.joinDate;
     if (joined && joined > asOf) { excluded.push({ member: m, reason: 'not_yet_member' }); continue; }
     if (EXIT.has(m.status ?? '') && (!m.statusChangedAt || m.statusChangedAt <= asOf)) { excluded.push({ member: m, reason: 'ceased' }); continue; }
-    if (m.memberType === 'nominal') { excluded.push({ member: m, reason: 'nominal' }); continue; }
+    if (m.memberType === 'nominal' || m.memberType === 'associate') { excluded.push({ member: m, reason: 'nominal' }); continue; }
     const od = overdue.get(m.id);
     if (od) { excluded.push({ member: m, reason: 'defaulter', overdue: od.amount }); continue; }
     voters.push(m);

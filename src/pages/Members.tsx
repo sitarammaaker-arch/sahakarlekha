@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,7 +34,7 @@ import type { Member, MemberStatus, Nominee, KycStatus, ShareCertStatus } from '
 import { validateNominees, nomineeShareTotal } from '@/lib/nomineeUtils';
 import { validateKyc } from '@/lib/kycUtils';
 import { validateCertificate } from '@/lib/shareCertUtils';
-import { memberStatusLabel } from '@/lib/memberLifecycle';
+import { memberStatusLabel, memberTypeLabel } from '@/lib/memberLifecycle';
 import { useSubscription } from '@/hooks/useSubscription';
 import { MemberPortalDialog } from '@/components/members/MemberPortalDialog';
 import { memberPhoneError } from '@/lib/memberValidation';
@@ -78,6 +78,7 @@ const EMPTY_FORM = {
   aadhaar: '', pan: '', kycStatus: '' as KycStatus | '',   // ECR-16: KYC
   admissionResolutionNo: '', admissionResolutionDate: '',   // M2: the committee resolution that admitted the member
   gender: '' as '' | 'female' | 'male' | 'other', dateOfBirth: '',   // M5: s.28(1) reservation needs the women count
+  correspondenceAddress: '',   // M6: s.40 proviso — correspondence address besides the permanent one
 };
 
 interface MemberFormProps {
@@ -183,8 +184,13 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
     {/* Address */}
     <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide border-t border-border pt-3">{hi ? 'पता' : 'Address'}</p>
     <div className="space-y-1">
-      <Label className="text-xs">{t('address')}</Label>
+      <Label className="text-xs">{hi ? 'स्थायी पता' : 'Permanent address'}</Label>
       <Textarea value={form.address} onChange={e => f('address', e.target.value)} placeholder={hi ? 'पूरा पता' : 'Full address'} className="h-16" />
+    </div>
+    <div className="space-y-1">
+      <Label className="text-xs">{hi ? 'पत्राचार का पता (अलग हो तो)' : 'Correspondence address (if different)'}</Label>
+      <Textarea value={form.correspondenceAddress} onChange={e => f('correspondenceAddress', e.target.value)} placeholder={hi ? 'खाली छोड़ें तो स्थायी पता ही माना जाएगा' : 'Leave blank if the same'} className="h-12" />
+      <p className="text-[11px] text-muted-foreground">{hi ? 'धारा 40: पता बदले तो 15 दिन में समिति को बताना होता है — यहीं बदलें, बदलाव audit में दर्ज होता है।' : 's.40: report an address change within 15 days — change it here; the change is audited.'}</p>
     </div>
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div className="space-y-1">
@@ -223,7 +229,8 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="member">{hi ? 'सदस्य' : 'Member'}</SelectItem>
-            <SelectItem value="nominal">{hi ? 'नॉमिनल' : 'Nominal'}</SelectItem>
+            <SelectItem value="nominal">{hi ? 'नाममात्र सदस्य' : 'Nominal'}</SelectItem>
+            <SelectItem value="associate">{hi ? 'सहयोगी सदस्य (मत/लाभांश नहीं)' : 'Associate (no vote / dividend)'}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -388,7 +395,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
   const { can, user } = useAuth();
-  const { members: allMembers, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks, matchesActiveBranch, loans, kccLoans, approveShareRefund } = useData();
+  const { members: allMembers, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks, matchesActiveBranch, loans, kccLoans, approveShareRefund, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl } = useData();
   // ECR-17 Phase 4: scope the member list to the active branch ('all' → every member).
   const members = allMembers.filter(m => matchesActiveBranch(m.branchId));
   // ECR-06 17-role: RBAC permission gate, not a hardcoded legacy list. `update` (not `create`)
@@ -416,6 +423,26 @@ const Members: React.FC = () => {
   const today = new Date().toISOString().split('T')[0];
   const [decisionForm, setDecisionForm] = useState({ admissionDate: today, resolutionNo: '', resolutionDate: '', reason: '' });
   const [addChooserOpen, setAddChooserOpen] = useState(false);
+  // M6: the viewed member's photo (private bucket → short-lived signed URL)
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const photoInput = useRef<HTMLInputElement>(null);
+  // M6: Rules r.14 / r.15 eligibility, declared at approval (recorded in the audit; unticked → warning, never a block)
+  const [declared, setDeclared] = useState({ notInsolvent: false, notConvicted: false, noOtherCreditSociety: false });
+  const viewPhotoPath = viewMember ? allMembers.find(m => m.id === viewMember.id)?.photoPath : undefined;
+  useEffect(() => {
+    let live = true;
+    setPhotoUrl(null);
+    if (viewPhotoPath) memberPhotoUrl(viewPhotoPath).then(u => { if (live) setPhotoUrl(u); });
+    return () => { live = false; };
+  }, [viewPhotoPath, memberPhotoUrl]);
+  const onPhotoPicked = async (file: File | undefined) => {
+    if (!file || !viewMember) return;
+    setPhotoBusy(true);
+    await uploadMemberPhoto(viewMember.id, file);
+    setPhotoBusy(false);
+    if (photoInput.current) photoInput.current.value = '';
+  };
   const [ledgerMember, setLedgerMember] = useState<Member | null>(null);
   // Member Portal S2b: admin-only portal-login management (the Edge Function re-checks admin + plan).
   const isAdmin = user?.role === 'admin';
@@ -465,7 +492,7 @@ const Members: React.FC = () => {
   const exportMembersExcel = () => {
     const rows = filterBySearch(approvedMembers).map((m, i) => [
       i + 1, m.memberId, m.name, m.fatherName || '', m.gender === 'female' ? 'Female' : m.gender === 'male' ? 'Male' : m.gender === 'other' ? 'Other' : '',
-      m.dateOfBirth || '', m.occupation || '', m.caste || '', m.address || '', m.phone || '', m.memberType === 'nominal' ? 'Nominal' : 'Member',
+      m.dateOfBirth || '', m.occupation || '', m.caste || '', m.address || '', m.phone || '', memberTypeLabel(m.memberType),
       m.admissionDate || m.joinDate || '', memberStatusLabel(m.status), isExit(m.status) ? (m.statusChangedAt || '') : '',
       m.shareCount ?? '', m.shareCapital || 0, m.nomineeName || '',
     ]);
@@ -567,6 +594,7 @@ const Members: React.FC = () => {
       admissionDate: form.joinDate || undefined,
       gender: form.gender || undefined, dateOfBirth: form.dateOfBirth || undefined,
       age: form.dateOfBirth ? ageOn(form.dateOfBirth, new Date().toISOString().split('T')[0]) : (form.age ? Number(form.age) : undefined),
+      correspondenceAddress: form.correspondenceAddress.trim() || undefined,
       admissionResolutionNo: form.admissionResolutionNo.trim() || undefined,
       admissionResolutionDate: form.admissionResolutionDate || undefined,
     }, {
@@ -619,6 +647,7 @@ const Members: React.FC = () => {
       admissionDate: editMember.approvalStatus === 'pending' ? editMember.admissionDate : (form.joinDate || undefined),
       gender: form.gender || undefined, dateOfBirth: form.dateOfBirth || undefined,
       age: form.dateOfBirth ? ageOn(form.dateOfBirth, new Date().toISOString().split('T')[0]) : (form.age ? Number(form.age) : undefined),
+      correspondenceAddress: form.correspondenceAddress.trim() || undefined,
       admissionResolutionNo: form.admissionResolutionNo.trim() || undefined,
       admissionResolutionDate: form.admissionResolutionDate || undefined,
     }, { onSaved: () => toast({ title: hi ? 'सदस्य अपडेट किया गया' : 'Member updated' }) });
@@ -644,6 +673,7 @@ const Members: React.FC = () => {
       aadhaar: m.aadhaar || '', pan: m.pan || '', kycStatus: m.kycStatus || '',
       admissionResolutionNo: m.admissionResolutionNo || '', admissionResolutionDate: m.admissionResolutionDate || '',
       gender: m.gender || '', dateOfBirth: m.dateOfBirth || '',
+      correspondenceAddress: m.correspondenceAddress || '',
     });
   };
 
@@ -681,6 +711,7 @@ const Members: React.FC = () => {
   // U9: approve / reject go through a confirmation; the success message comes from DataContext once saved (D5).
   const openDecision = (member: Member, action: 'approve' | 'reject') => {
     setDecisionForm({ admissionDate: today, resolutionNo: '', resolutionDate: '', reason: '' });
+    setDeclared({ notInsolvent: false, notConvicted: false, noOtherCreditSociety: false });
     setDecision({ member, action });
   };
   const handleApprove = (member: Member) => openDecision(member, 'approve');
@@ -692,7 +723,7 @@ const Members: React.FC = () => {
       const v = validateAdmission({ admissionDate: decisionForm.admissionDate, resolutionNo: decisionForm.resolutionNo, resolutionDate: decisionForm.resolutionDate || undefined },
         { receivedOn: applicationReceivedOn(decision.member), today });
       if (!v.ok) { toast({ title: hi ? 'जाँचें' : 'Check', description: v.error, variant: 'destructive' }); return; }
-      approveMember(decision.member.id, { admissionDate: decisionForm.admissionDate, resolutionNo: decisionForm.resolutionNo, resolutionDate: decisionForm.resolutionDate || undefined });
+      approveMember(decision.member.id, { admissionDate: decisionForm.admissionDate, resolutionNo: decisionForm.resolutionNo, resolutionDate: decisionForm.resolutionDate || undefined, eligibility: declared });
     } else {
       const v = validateRejection(decisionForm.reason);
       if (!v.ok) { toast({ title: hi ? 'कारण ज़रूरी है' : 'Reason required', description: v.error, variant: 'destructive' }); return; }
@@ -791,8 +822,8 @@ const Members: React.FC = () => {
                   <div className="flex items-center gap-1 text-sm"><Phone className="h-3 w-3 text-muted-foreground" />{member.phone}</div>
                 </TableCell>
                 <TableCell className="text-center">
-                  <Badge variant="outline" className={member.memberType === 'nominal' ? 'border-amber-500 text-amber-600' : 'border-primary text-primary'}>
-                    {member.memberType === 'nominal' ? (hi ? 'नॉमिनल' : 'Nominal') : (hi ? 'सदस्य' : 'Member')}
+                  <Badge variant="outline" className={member.memberType && member.memberType !== 'member' ? 'border-amber-500 text-amber-600' : 'border-primary text-primary'}>
+                    {memberTypeLabel(member.memberType, hi)}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right font-semibold">{fmt(member.shareCapital)}</TableCell>
@@ -1014,6 +1045,7 @@ const Members: React.FC = () => {
                 <SelectItem value="all">{hi ? 'सभी प्रकार' : 'All types'}</SelectItem>
                 <SelectItem value="member">{hi ? 'सदस्य' : 'Member'}</SelectItem>
                 <SelectItem value="nominal">{hi ? 'नाममात्र सदस्य' : 'Nominal'}</SelectItem>
+                <SelectItem value="associate">{hi ? 'सहयोगी सदस्य' : 'Associate'}</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="outline" size="sm" className="gap-1" onClick={exportMembersExcel}><FileSpreadsheet className="h-4 w-4" />Excel</Button>
@@ -1272,18 +1304,29 @@ const Members: React.FC = () => {
           </DialogHeader>
           {viewMember && (
             <div className="space-y-3 text-sm overflow-y-auto flex-1 pr-2">
-              <div className="flex justify-center mb-4">
-                <Avatar className="h-16 w-16">
-                  <AvatarFallback className="bg-primary/10 text-primary text-xl">{getInitials(viewMember.name)}</AvatarFallback>
-                </Avatar>
+              <div className="mb-4 flex flex-col items-center gap-2">
+                {photoUrl
+                  ? <img src={photoUrl} alt={viewMember.name} className="h-24 w-24 rounded-md border object-cover" />
+                  : <Avatar className="h-16 w-16"><AvatarFallback className="bg-primary/10 text-primary text-xl">{getInitials(viewMember.name)}</AvatarFallback></Avatar>}
+                {canEdit && (
+                  <div className="flex gap-2">
+                    <input ref={photoInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => onPhotoPicked(e.target.files?.[0])} />
+                    <Button size="sm" variant="outline" disabled={photoBusy} onClick={() => photoInput.current?.click()}>
+                      {photoBusy ? (hi ? 'सेव हो रही है…' : 'Saving…') : viewPhotoPath ? (hi ? 'फ़ोटो बदलें' : 'Change photo') : (hi ? 'फ़ोटो जोड़ें' : 'Add photo')}
+                    </Button>
+                    {viewPhotoPath && <Button size="sm" variant="ghost" disabled={photoBusy} onClick={() => removeMemberPhoto(viewMember.id)}>{hi ? 'हटाएँ' : 'Remove'}</Button>}
+                  </div>
+                )}
+                {!viewPhotoPath && <p className="text-[11px] text-muted-foreground">{hi ? 'धारा 40: प्राथमिक समिति के हर सदस्य की फ़ोटो रखनी होती है।' : 's.40: a photograph of every member of a primary society.'}</p>}
               </div>
               {[
                 [t('memberId'), viewMember.memberId],
                 [t('memberName'), viewMember.name],
                 [hi ? 'पिता/पति' : 'Father/Husband', viewMember.fatherName],
                 [t('phone'), viewMember.phone],
-                [t('address'), viewMember.address],
-                [hi ? 'सदस्यता प्रकार' : 'Member Type', viewMember.memberType === 'nominal' ? (hi ? 'नॉमिनल सदस्य' : 'Nominal Member') : (hi ? 'सदस्य' : 'Member')],
+                [hi ? 'स्थायी पता' : 'Permanent Address', viewMember.address],
+                ...(viewMember.correspondenceAddress ? [[hi ? 'पत्राचार का पता' : 'Correspondence Address', viewMember.correspondenceAddress]] : []),
+                [hi ? 'सदस्यता प्रकार' : 'Member Type', memberTypeLabel(viewMember.memberType, hi)],
                 [t('shareCapital'), fmt(viewMember.shareCapital)],
                 [hi ? 'प्रवेश शुल्क' : 'Admission Fee', fmt(viewMember.admissionFee || 0)],
                 [hi ? 'दाख़िला तिथि' : 'Admission Date', fmtDate(viewMember.admissionDate || viewMember.joinDate)],
@@ -1462,6 +1505,22 @@ const Members: React.FC = () => {
               <div className="space-y-1">
                 <Label className="text-xs">{hi ? 'प्रस्ताव तिथि' : 'Resolution date'}</Label>
                 <Input type="date" value={decisionForm.resolutionDate} max={today} onChange={e => setDecisionForm(d => ({ ...d, resolutionDate: e.target.value }))} />
+              </div>
+              <div className="sm:col-span-3 space-y-1 rounded-md border p-2">
+                <p className="text-xs font-medium">{hi ? 'पात्रता की पुष्टि (नियम 14 / 15)' : 'Eligibility (Rules 14 / 15)'}</p>
+                {([
+                  ['notInsolvent', hi ? 'आवेदक दिवालिया नहीं है, न दिवालिया घोषित होने का आवेदन किया है' : 'Not an insolvent, no insolvency application'],
+                  ['notConvicted', hi ? 'पिछले 5 साल में नैतिक अधमता के अपराध में सज़ा नहीं हुई' : 'No conviction (moral turpitude) in the last 5 years'],
+                  ['noOtherCreditSociety', hi ? 'किसी दूसरी प्राथमिक credit समिति का सदस्य नहीं (या रजिस्ट्रार की अनुमति है)' : 'Not a member of another primary credit society (or Registrar permitted)'],
+                ] as const).map(([k, label]) => (
+                  <label key={k} className="flex items-start gap-2 text-xs">
+                    <input type="checkbox" className="mt-0.5" checked={declared[k]} onChange={e => setDeclared(d => ({ ...d, [k]: e.target.checked }))} />
+                    <span>{label}</span>
+                  </label>
+                ))}
+                {!(declared.notInsolvent && declared.notConvicted && declared.noOtherCreditSociety) && (
+                  <p className="text-[11px] text-amber-700">{hi ? 'सब पुष्ट न हों तो भी स्वीकृत कर सकते हैं — जो पुष्ट हुआ वह audit में दर्ज होगा।' : 'You can approve anyway — what was confirmed is recorded in the audit.'}</p>
+                )}
               </div>
               {missingResolution && (
                 <p className="sm:col-span-3 text-xs text-amber-700">{hi ? 'प्रस्ताव संख्या खाली है — फिर भी स्वीकृत कर सकते हैं, पर रजिस्टर व ऑडिट के लिए भरना अच्छा रहेगा।' : 'No resolution number — you can still approve, but the register and the audit need it.'}</p>

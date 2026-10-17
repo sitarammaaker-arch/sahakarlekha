@@ -418,6 +418,7 @@
     "test:member-m3": "node scripts/test-member-m3.mjs",
     "test:member-m4": "node scripts/test-member-m4.mjs",
     "test:member-m5": "node scripts/test-member-m5.mjs",
+    "test:member-m6": "node scripts/test-member-m6.mjs",
     "test:opening-difference": "node scripts/test-opening-difference.mjs"
   },
   "dependencies": {

@@ -20,6 +20,10 @@ export type MemberAdmissionField = typeof MEMBER_ADMISSION_FIELDS[number];
 
 /** M5 (migration 118): gender + date of birth — also step-2, written by persistMemberProfile. */
 export const MEMBER_PROFILE_FIELDS = ['gender', 'dateOfBirth'] as const;
+/** M6 (migration 119): correspondence address — its OWN step-2 update (a missing 119 must not drop gender / DOB). */
+export const MEMBER_CONTACT_FIELDS = ['correspondenceAddress'] as const;
+/** M6 (migration 119): set only by uploadMemberPhoto / removeMemberPhoto — never by the base upsert. */
+export const MEMBER_PHOTO_FIELD = 'photoPath' as const;
 
 /** Split a member row into the base columns and the step-2 admission columns (only those that carry a value). */
 export function splitAdmissionFields<T extends Record<string, unknown>>(row: T): { base: Omit<T, MemberAdmissionField>; extras: Partial<Record<MemberAdmissionField, string>> } {
@@ -72,7 +76,13 @@ export function admissionClock(receivedOn: string | undefined, today: string, op
 /** The date an application was received: the recorded one, else (older rows) the joinDate the form stamped. */
 export const applicationReceivedOn = (m: { applicationDate?: string; joinDate?: string }) => m.applicationDate || m.joinDate;
 
-export interface AdmissionDecision { admissionDate: string; resolutionNo?: string; resolutionDate?: string }
+export interface AdmissionDecision {
+  admissionDate: string;
+  resolutionNo?: string;
+  resolutionDate?: string;
+  /** M6: Rules r.14 (insolvent / convicted → not eligible) and r.15 (one primary credit society) — as confirmed at approval. */
+  eligibility?: { notInsolvent: boolean; notConvicted: boolean; noOtherCreditSociety: boolean };
+}
 
 /** Approve: a real admission date (not before the application, not in the future); a missing resolution only warns. */
 export function validateAdmission(d: AdmissionDecision, ctx: { receivedOn?: string; today: string }): { ok: boolean; error?: string; warnings: string[] } {

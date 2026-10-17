@@ -282,7 +282,7 @@ const UniversalImporter: React.FC = () => {
         phone: row.data.phone?.trim() || '',
         shareCapital: parseFloat(row.data.share_capital) || 0,
         admissionFee: parseFloat(row.data.admission_fee) || 0,
-        memberType: (row.data.member_type?.toLowerCase() === 'nominal' ? 'nominal' : 'member') as Member['memberType'],
+        memberType: ((['nominal', 'associate'] as string[]).includes(row.data.member_type?.toLowerCase()) ? row.data.member_type.toLowerCase() : 'member') as Member['memberType'],
         joinDate: row.data.join_date?.trim() || new Date().toISOString().split('T')[0],
         status: (row.data.status?.toLowerCase() === 'inactive' ? 'inactive' : 'active') as Member['status'],
         shareCount: parseFloat(row.data.share_count) || undefined,

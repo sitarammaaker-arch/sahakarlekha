@@ -36,3 +36,18 @@ export function memberStatusLabel(status: MemberStatus | undefined, hi = false):
   const l = MEMBER_STATUS_LABEL[status ?? 'active'] ?? MEMBER_STATUS_LABEL.active;
   return hi ? l.hi : l.en;
 }
+
+/**
+ * M6: one label per member type. "नाममात्र सदस्य" (nominal) — never "नॉमिनल", which sounds like "नामांकित" (nominee).
+ * Associate (Haryana Act s.18): no share in assets / profits, no vote.
+ */
+export const MEMBER_TYPE_LABEL: Record<'member' | 'nominal' | 'associate', { hi: string; en: string }> = {
+  member: { hi: 'सदस्य', en: 'Member' },
+  nominal: { hi: 'नाममात्र सदस्य', en: 'Nominal' },
+  associate: { hi: 'सहयोगी सदस्य', en: 'Associate' },
+};
+
+export function memberTypeLabel(type: string | undefined, hi = false): string {
+  const l = MEMBER_TYPE_LABEL[(type as 'member') || 'member'] ?? MEMBER_TYPE_LABEL.member;
+  return hi ? l.hi : l.en;
+}
