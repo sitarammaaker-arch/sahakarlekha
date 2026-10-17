@@ -1352,11 +1352,11 @@ export function generateMaintenanceReceiptPDF(input: MaintenanceReceiptInput, so
   doc.setFont(font, 'normal');
   doc.text(`Receipt No: ${input.receiptNo}`, 15, y);
   doc.text(`Date: ${fmtDate(input.date)}`, 195, y, { align: 'right' }); y += 10;
-  const bodyText = `Received with thanks from ${input.memberName || 'the member'} (Flat ${input.flatNo}) a sum of Rs. ${fmt(input.amount)} towards maintenance bill ${input.billNo}, paid by ${input.mode}${input.reference ? ` (Ref: ${input.reference})` : ''}.`;
+  const bodyText = `Received with thanks from ${input.memberName || 'the member'} (Flat ${input.flatNo}) a sum of ${fmt(input.amount)} towards maintenance bill ${input.billNo}, paid by ${input.mode}${input.reference ? ` (Ref: ${input.reference})` : ''}.`;
   doc.text(bodyText, 15, y, { maxWidth: 180 }); y += 18;
   doc.setFont(font, 'bold');
   doc.setFontSize(13);
-  doc.text(`Rs. ${fmt(input.amount)}`, 15, y); y += 6;
+  doc.text(fmt(input.amount), 15, y); y += 6;
   doc.setFont(font, 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(90);
@@ -4052,13 +4052,19 @@ export function generateShareCertificatePDF(member: Member, society: SocietySett
   doc.setFontSize(10);
   let y = 62;
   doc.text('This is to certify that', 16, y); y += 7;
+  // A line per wrapped row: a multi-line address (Enter in the form) used to run into the next line (live M925).
+  const block = (text: string, gap = 6) => {
+    const lines = doc.splitTextToSize(text.replace(/\s*\n\s*/g, ', '), W - 32) as string[];
+    doc.text(lines, 16, y);
+    y += (lines.length - 1) * 4.6 + gap;
+  };
   doc.setFont(font, 'bold');
-  doc.text(member.name, 16, y, { maxWidth: W - 32 }); y += 6;
+  block(member.name);
   doc.setFont(font, 'normal');
-  if (member.fatherName) { doc.text(`S/o, D/o, W/o: ${member.fatherName}`, 16, y, { maxWidth: W - 32 }); y += 6; }
-  if (member.address) { doc.text(`Resident of: ${member.address}`, 16, y, { maxWidth: W - 32 }); y += 7; }
+  if (member.fatherName) block(`S/o, D/o, W/o: ${member.fatherName}`);
+  if (member.address) block(`Resident of: ${member.address}`, 7);
   const body = doc.splitTextToSize(
-    `is the registered holder of ${count || '-'} share(s) of Rs. ${face ? fmt(face) : '-'} each, amount paid Rs. ${fmt(paid)}, `
+    `is the registered holder of ${count || '-'} share(s) of ${face ? fmt(face) : '-'} each, amount paid ${fmt(paid)}, `
     + 'in the above society, subject to the Act, the Rules and the bye-laws of the society.', W - 32);
   doc.text(body, 16, y); y += body.length * 5 + 3;
   doc.setFontSize(9);
