@@ -116,6 +116,7 @@ const BankBook: React.FC = () => {
       creditAccountId: entryType === 'deposit' ? otherAccount : activeBankId,
       amount: Number(entryAmount),
       narration: entryNarration,
+      origin: 'manual',   // ECR-11: user-created → subject to the approval matrix
       createdBy: user?.name || 'System',
     });
     // addVoucher refuses (permission / FY lock / expired plan) with an empty id — never claim "saved".

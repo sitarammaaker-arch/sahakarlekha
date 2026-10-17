@@ -1,4 +1,5 @@
 import type { Sale, Purchase, Voucher, BillAllocation, BillMethod } from '@/types';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 
 /**
  * Bill-wise settlement helpers (Tally-style "Bill-wise Details").
@@ -9,7 +10,7 @@ import type { Sale, Purchase, Voucher, BillAllocation, BillMethod } from '@/type
  * (method 'against'), or held unallocated (method 'advance' / 'on-account').
  *
  * Every bill's settled amount is DERIVED by summing 'against' allocations across all
- * ACTIVE (non-deleted) vouchers — ONE source of truth (RULE 2/5): deleting or editing a
+ * COUNTED vouchers (not deleted, not pending, not rejected — isCountedVoucher) — ONE source of truth (RULE 2/5): deleting or editing a
  * receipt/payment automatically updates bill balances; no stored field can drift.
  */
 
@@ -28,7 +29,8 @@ export function allocMethod(a: BillAllocation): BillMethod {
 export function getBillSettledMap(vouchers: Voucher[]): Record<string, number> {
   const map: Record<string, number> = {};
   for (const v of vouchers) {
-    if (v.isDeleted || !v.billAllocations) continue;
+    // Pending (awaiting approval) and rejected vouchers never settle a bill (isCountedVoucher).
+    if (!isCountedVoucher(v) || !v.billAllocations) continue;
     for (const a of v.billAllocations) {
       if (allocMethod(a) !== 'against') continue;
       const id = allocBillId(a);
@@ -108,7 +110,7 @@ export function getPartyUnallocated(
 ): number {
   let sum = 0;
   for (const v of vouchers) {
-    if (v.isDeleted || v.refType !== refType || v.refId !== partyId || !v.billAllocations) continue;
+    if (!isCountedVoucher(v) || v.refType !== refType || v.refId !== partyId || !v.billAllocations) continue;
     for (const a of v.billAllocations) {
       const m = allocMethod(a);
       if (m === 'advance' || m === 'on-account') sum += a.amount || 0;
