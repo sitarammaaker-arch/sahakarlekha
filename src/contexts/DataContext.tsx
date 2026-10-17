@@ -99,8 +99,9 @@ import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib
 import { accountDeleteFailure, coaResetBlockers, coaResetLiveData } from '@/lib/accounting/accountDelete';
 import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
 import { memberAuditDiff } from '@/lib/members/memberAudit';
-import { splitAdmissionFields, applicationReceivedOn, type AdmissionDecision } from '@/lib/members/admission';
+import { splitAdmissionFields, applicationReceivedOn, MEMBER_PROFILE_FIELDS, type AdmissionDecision } from '@/lib/members/admission';
 import { canHoldShares } from '@/lib/members/shareRules';
+import { MEMBER_STATUS_EXTRA_FIELDS } from '@/lib/members/cessation';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 
 /* T-09 — the `ledger_events` row → LedgerEvent mapper now lives in lib/ledger/rows.ts.
@@ -226,7 +227,7 @@ interface DataContextType {
 
   addMember: (data: Omit<Member, 'id'>, opts?: { quiet?: boolean; onSaved?: (m: Member) => void }) => Member;
   updateMember: (id: string, data: Partial<Member>, opts?: { onSaved?: () => void }) => boolean;
-  changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string) => boolean;
+  changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string, opts?: { effectiveDate?: string; resolutionNo?: string; resolutionDate?: string }) => boolean;
   deleteMember: (id: string) => void;
   refundShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
   /** Two-step refund: committee approval (Dr Share Capital / Cr Share Refund Payable) … */
@@ -437,7 +438,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // LEGACY (table not migrated yet): behaviour is exactly as before, nothing is lost.
   const identitySplitRef = useRef(false);
   // M2: the admission columns (migration 116) never ride the base upsert — persistMemberAdmission writes them after.
-  const memberRow = (m: Record<string, any>) => withSoc(splitAdmissionFields(identitySplitRef.current ? stripMemberPII(m) : m).base);
+  const memberRow = (m: Record<string, any>) => {
+    const base: Record<string, any> = splitAdmissionFields(identitySplitRef.current ? stripMemberPII(m) : m).base;
+    for (const f of MEMBER_STATUS_EXTRA_FIELDS) delete base[f];   // M4: migration-117 columns ride their own update
+    for (const f of MEMBER_PROFILE_FIELDS) delete base[f];        // M5: migration-118 columns ride their own update
+    return withSoc(base);
+  };
+  // M5 step 2: gender / date of birth in their own update (a missing 118 must not drop the admission fields).
+  const persistMemberProfile = (id: string, member: Record<string, any>, touched: boolean) => {
+    if (!touched) return;
+    const patch: Record<string, string | null> = {};
+    for (const f of MEMBER_PROFILE_FIELDS) patch[f] = member[f] || null;
+    supabase.from('members').update(patch).eq('id', id).then(({ error }) => {
+      if (!error) return;
+      reportError('write-partial', error.message, { at: 'member profile fields' });
+      toastRef.current({ title: 'सदस्य सेव हुआ — पर लिंग/जन्मतिथि नहीं', description: `लिंग या जन्मतिथि सेव नहीं हुई (${error.message})। Migration 118 चलाएँ, फिर सदस्य को दोबारा सेव करें।`, duration: 10000 });
+    });
+  };
   // RULE 1 step 2 for the admission columns: the member row is already safe; a failure here (migration 116 not run)
   // keeps the member and says so mildly — no rollback.
   const persistMemberAdmission = (id: string, member: Record<string, any>) => {
@@ -3268,6 +3285,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             () => setMembersState(prev => prev.map(m => m.id === newMember.id ? { ...m, aadhaar: undefined, pan: undefined } : m)));
         }
         persistMemberAdmission(newMember.id, newMember);
+        persistMemberProfile(newMember.id, newMember, !!(newMember.gender || newMember.dateOfBirth));
         // Member-audit M1 (D4/D5): the page's success message waits for the cloud; one audit row per member
         // (a bulk import passes quiet and is summarised by the importer instead of one row per member).
         if (!opts.quiet) emitAudit({ entityType: 'member', entityId: newMember.id, action: 'create', after: { memberId: newMember.memberId, name: newMember.name, shareCapital: newMember.shareCapital || 0, admissionFee: newMember.admissionFee || 0, approvalStatus: newMember.approvalStatus ?? 'approved' } });
@@ -3320,6 +3338,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             () => setMembersState(prev => prev.map(m => m.id === id ? { ...m, aadhaar: oldMember.aadhaar, pan: oldMember.pan } : m)));
         }
         if (Object.keys(splitAdmissionFields(data as Record<string, unknown>).extras).length) persistMemberAdmission(id, updatedMember);
+        persistMemberProfile(id, updatedMember, MEMBER_PROFILE_FIELDS.some(f => f in data && (data as Record<string, unknown>)[f] !== (oldMember as unknown as Record<string, unknown>)[f]));
         // Member-audit M1 (D4): who changed what — Aadhaar / PAN are named, never their values.
         const changed = memberAuditDiff(oldMember as unknown as Record<string, unknown>, updatedMember as unknown as Record<string, unknown>);
         if (changed) emitAudit({ entityType: 'member', entityId: id, action: 'update', before: changed.before, after: changed.after });
@@ -3376,7 +3395,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ECR-16 (member lifecycle): record a lifecycle transition (resign/expel/death/reactivate)
   // with reason + date. `status` (base column) is persisted reliably; the reason/date
   // metadata rides a targeted best-effort .update() so the change is safe pre-migration.
-  const changeMemberStatus = useCallback((id: string, newStatus: MemberStatus, reason: string): boolean => {
+  const changeMemberStatus = useCallback((id: string, newStatus: MemberStatus, reason: string, opts?: { effectiveDate?: string; resolutionNo?: string; resolutionDate?: string }): boolean => {
     if (guardFYLocked()) return false;
     const current = membersRef.current.find(m => m.id === id);
     if (!current) return false;
@@ -3390,8 +3409,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
       return false;
     }
-    const changedAt = new Date().toISOString().split('T')[0];
-    const updated: Member = { ...current, status: newStatus, statusReason: reason, statusChangedAt: changedAt };
+    // M4: r.22(c) — the date the member really ceased (a resignation / death recorded later keeps its own date).
+    const changedAt = opts?.effectiveDate || new Date().toISOString().split('T')[0];
+    const resolutionNo = opts?.resolutionNo?.trim() || undefined;
+    const resolutionDate = opts?.resolutionDate || undefined;
+    const updated: Member = { ...current, status: newStatus, statusReason: reason, statusChangedAt: changedAt, statusResolutionNo: resolutionNo, statusResolutionDate: resolutionDate };
     membersRef.current = membersRef.current.map(m => m.id === id ? updated : m);
     setMembersState(prev => prev.map(m => m.id === id ? updated : m));
     // Persist status (base column) reliably — roll back on failure (RULE 1).
@@ -3407,7 +3429,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('members').update({ statusReason: reason, statusChangedAt: changedAt }).eq('id', id).then(({ error }) => {
       if (error) { console.warn('Member status metadata not persisted — run latest supabase-tables.sql migration:', error.message); reportError('write-partial', error.message, { at: 'member status metadata' }); }
     });
-    emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { status: current.status }, after: { status: newStatus }, reason });
+    // M4: the resolution (migration 117) in its OWN update — one missing column must not drop the reason/date above.
+    supabase.from('members').update({ statusResolutionNo: resolutionNo ?? null, statusResolutionDate: resolutionDate ?? null }).eq('id', id).then(({ error }) => {
+      if (!error) return;
+      reportError('write-partial', error.message, { at: 'member status resolution' });
+      if (resolutionNo || resolutionDate) toastRef.current({ title: 'स्थिति सेव हुई — पर प्रस्ताव संख्या नहीं', description: `प्रस्ताव संख्या/तिथि सेव नहीं हुई (${error.message})। Migration 117 चलाएँ।`, duration: 10000 });
+    });
+    emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { status: current.status, statusChangedAt: current.statusChangedAt ?? null }, after: { status: newStatus, statusChangedAt: changedAt, resolutionNo: resolutionNo ?? null, resolutionDate: resolutionDate ?? null }, reason });
     toastRef.current({ title: '✅ सदस्य स्थिति अपडेट', description: `${current.name}: ${current.status} → ${newStatus}`, variant: 'default', duration: 6000 });
     return true;
   }, []);

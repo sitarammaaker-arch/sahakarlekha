@@ -416,6 +416,8 @@
     "test:member-m2": "node scripts/test-member-m2.mjs",
     "test:account-change-guard": "node scripts/test-account-change-guard.mjs",
     "test:member-m3": "node scripts/test-member-m3.mjs",
+    "test:member-m4": "node scripts/test-member-m4.mjs",
+    "test:member-m5": "node scripts/test-member-m5.mjs",
     "test:opening-difference": "node scripts/test-opening-difference.mjs"
   },
   "dependencies": {

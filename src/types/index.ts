@@ -189,7 +189,9 @@ export interface Member {
   joinDate: string;
   status: MemberStatus;
   statusReason?: string;      // ECR-16: why the last lifecycle change (resigned/expelled/deceased/reactivated)
-  statusChangedAt?: string;   // ECR-16: ISO date of the last lifecycle change
+  statusChangedAt?: string;   // ECR-16: ISO date of the last lifecycle change (M4: the EFFECTIVE date — r.22(c) date of ceasing)
+  statusResolutionNo?: string;    // M4 (migration 117): resolution behind the change — r.19 GM resolution for expulsion, Board for withdrawal
+  statusResolutionDate?: string;  // M4 (migration 117): date of that resolution
   creditLimit?: number;   // Consumer C3 — max member-store credit outstanding (0/undefined = no cap; POS warns, never blocks)
   // Share Register fields
   shareCertNo?: string;
@@ -218,6 +220,9 @@ export interface Member {
   rejectionReason?: string;          // r.17: reason communicated to a refused applicant
   decidedAt?: string;                // date the application was approved / rejected
   age?: number;
+  // M5 (migration 118, step-2): Haryana Act s.28(1) committee reservation needs the women count; DOB keeps the age current.
+  gender?: 'female' | 'male' | 'other';
+  dateOfBirth?: string;
   occupation?: string;
   caste?: CasteCategory;
   tehsil?: string;

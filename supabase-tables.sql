@@ -3565,3 +3565,14 @@ alter table members add column if not exists "admissionResolutionNo" text;
 alter table members add column if not exists "admissionResolutionDate" text;
 alter table members add column if not exists "rejectionReason" text;
 alter table members add column if not exists "decidedAt" text;
+
+-- ── Member status resolution (migration 117, member-area audit M4) ──────────────────────────────────────────
+-- Rules r.19 (expulsion by GM resolution), Bye-laws cl.7(10) (withdrawal by Board resolution). Own update after the
+-- status change. "statusChangedAt" now carries the EFFECTIVE date (r.22(c) date of ceasing).
+alter table members add column if not exists "statusResolutionNo" text;
+alter table members add column if not exists "statusResolutionDate" text;
+
+-- ── Member gender + date of birth (migration 118, member-area audit M5) ─────────────────────────────────────
+-- Act s.28(1) committee reservation (two women) needs the gender; DOB keeps the age current. Own update (RULE 1).
+alter table members add column if not exists "gender" text;
+alter table members add column if not exists "dateOfBirth" text;

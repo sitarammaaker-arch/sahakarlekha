@@ -52,6 +52,7 @@ export const translations: Translations = {
   meetingRegister: { hi: 'AGM / बैठक रजिस्टर', en: 'Meeting Register' },
   nominationRegister: { hi: 'नामांकन रजिस्टर', en: 'Nomination Register' },
   form1MemberList: { hi: 'प्रपत्र 1 — सदस्य सूची', en: 'Form 1 — Member List' },
+  votersList: { hi: 'मतदाता व बक़ायादार सूची', en: 'Voters & Defaulters List' },
   auditCertificate: { hi: 'ऑडिट प्रमाणपत्र', en: 'Audit Certificate' },
   auditSchedules: { hi: 'ऑडिट अनुसूचियां', en: 'Audit Schedules' },
   groupSchedule: { hi: 'समूह अनुसूची', en: 'Group Schedule' },

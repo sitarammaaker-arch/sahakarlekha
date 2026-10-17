@@ -22,7 +22,7 @@ import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award, KeyRound, ContactRound } from 'lucide-react';
+import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award, KeyRound, ContactRound, HandCoins, FileSpreadsheet } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MemberType, CasteCategory } from '@/types';
@@ -43,6 +43,10 @@ import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 import { admissionClock, applicationReceivedOn, validateAdmission, validateRejection, isHaryana } from '@/lib/members/admission';
 import { generateMemberRefusalLetterPDF, generateShareCertificatePDF } from '@/lib/pdf';
 import { nomineeCountWarning, certificateNoTakenBy } from '@/lib/members/shareRules';
+import { validateStatusChange, liabilityUntil, isExit, deathSettlement } from '@/lib/members/cessation';
+import { loanOutstanding, kccOutstanding } from '@/lib/memberSnapshot';
+import { ageOn } from '@/lib/members/voters';
+import { downloadExcel } from '@/lib/exportUtils';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
 const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }> = {
@@ -73,6 +77,7 @@ const EMPTY_FORM = {
   nominees: [] as Nominee[],   // ECR-16: multiple nominees
   aadhaar: '', pan: '', kycStatus: '' as KycStatus | '',   // ECR-16: KYC
   admissionResolutionNo: '', admissionResolutionDate: '',   // M2: the committee resolution that admitted the member
+  gender: '' as '' | 'female' | 'male' | 'other', dateOfBirth: '',   // M5: s.28(1) reservation needs the women count
 };
 
 interface MemberFormProps {
@@ -139,9 +144,26 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
     </div>
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div className="space-y-1">
-        <Label className="text-xs">{hi ? 'आयु' : 'Age'}</Label>
-        <Input type="number" value={form.age} onChange={e => f('age', e.target.value)} placeholder="25" min="1" max="120" />
+        <Label className="text-xs">{hi ? 'लिंग' : 'Gender'}{!isEdit && ' *'}</Label>
+        <Select value={form.gender || undefined} onValueChange={v => { if (v) f('gender', v); }}>
+          <SelectTrigger><SelectValue placeholder={hi ? 'चुनें' : 'Select'} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="female">{hi ? 'महिला' : 'Female'}</SelectItem>
+            <SelectItem value="male">{hi ? 'पुरुष' : 'Male'}</SelectItem>
+            <SelectItem value="other">{hi ? 'अन्य' : 'Other'}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'जन्म तिथि (वैकल्पिक)' : 'Date of birth (optional)'}</Label>
+        <Input type="date" value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} onChange={e => f('dateOfBirth', e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'आयु' : 'Age'}{form.dateOfBirth ? (hi ? ' (जन्म तिथि से)' : ' (from DOB)') : ''}</Label>
+        <Input type="number" value={form.dateOfBirth ? String(ageOn(form.dateOfBirth, new Date().toISOString().split('T')[0]) ?? '') : form.age} readOnly={!!form.dateOfBirth} onChange={e => f('age', e.target.value)} placeholder="25" min="1" max="120" />
+      </div>
+    </div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'व्यवसाय' : 'Occupation'}</Label>
         <Input value={form.occupation} onChange={e => f('occupation', e.target.value)} placeholder={hi ? 'किसान' : 'Farmer'} />
@@ -366,7 +388,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
   const { can, user } = useAuth();
-  const { members: allMembers, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks, matchesActiveBranch } = useData();
+  const { members: allMembers, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks, matchesActiveBranch, loans, kccLoans, approveShareRefund } = useData();
   // ECR-17 Phase 4: scope the member list to the active branch ('all' → every member).
   const members = allMembers.filter(m => matchesActiveBranch(m.branchId));
   // ECR-06 17-role: RBAC permission gate, not a hardcoded legacy list. `update` (not `create`)
@@ -382,6 +404,8 @@ const Members: React.FC = () => {
   const activeTab = searchParams.get('tab') || 'approved';
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | MemberStatus>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | MemberType>('all');
   useDeepLinkQuery(setSearchQuery);   // ECR-25 P2: focus a member deep-linked from global search (?q=)
   const [isAddOpen, setIsAddOpen] = useState(false);
   useOpenOnNew(() => setAddChooserOpen(true));   // ＋ नई entry → सदस्य (U1: the same chooser as the button)
@@ -409,6 +433,12 @@ const Members: React.FC = () => {
   const [statusMember, setStatusMember] = useState<Member | null>(null);
   const [statusNew, setStatusNew] = useState<MemberStatus>('inactive');
   const [statusReason, setStatusReason] = useState('');
+  // M4: the effective date (r.22(c)) + the resolution behind the change (r.19 / Board)
+  const [statusDate, setStatusDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [statusResNo, setStatusResNo] = useState('');
+  const [statusResDate, setStatusResDate] = useState('');
+  const [settleMember, setSettleMember] = useState<Member | null>(null);
+  const [settleForm, setSettleForm] = useState({ date: new Date().toISOString().split('T')[0], resolution: '', amount: '' });
   // ECR-16: share-certificate dialog
   const [certMember, setCertMember] = useState<Member | null>(null);
   const [certForm, setCertForm] = useState({ certNo: '', count: '', faceValue: '', status: 'issued' as ShareCertStatus, reason: '' });
@@ -425,10 +455,22 @@ const Members: React.FC = () => {
   const rejectedMembers = members.filter(m => m.approvalStatus === 'rejected');
 
   const filterBySearch = (list: Member[]) => list.filter(m =>
-    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     m.memberId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (m.phone || '').includes(searchQuery)
+    (m.phone || '').includes(searchQuery))
+    && (statusFilter === 'all' || m.status === statusFilter)
+    && (typeFilter === 'all' || (m.memberType || 'member') === typeFilter)
   );
+  // U6 (M5): the verified list as it is filtered on screen, to Excel.
+  const exportMembersExcel = () => {
+    const rows = filterBySearch(approvedMembers).map((m, i) => [
+      i + 1, m.memberId, m.name, m.fatherName || '', m.gender === 'female' ? 'Female' : m.gender === 'male' ? 'Male' : m.gender === 'other' ? 'Other' : '',
+      m.dateOfBirth || '', m.occupation || '', m.caste || '', m.address || '', m.phone || '', m.memberType === 'nominal' ? 'Nominal' : 'Member',
+      m.admissionDate || m.joinDate || '', memberStatusLabel(m.status), isExit(m.status) ? (m.statusChangedAt || '') : '',
+      m.shareCount ?? '', m.shareCapital || 0, m.nomineeName || '',
+    ]);
+    downloadExcel([{ name: 'Members', headers: ['S.No', 'Member No.', 'Name', 'Father/Husband', 'Gender', 'Date of Birth', 'Occupation', 'Category', 'Address', 'Phone', 'Type', 'Admission Date', 'Status', 'Ceased On', 'Shares', 'Share Capital', 'Nominee'], rows }], 'members');
+  };
 
   const totalShareCapital = approvedMembers.reduce((s, m) => s + m.shareCapital, 0);
   const activeApproved = approvedMembers.filter(m => m.status === 'active').length;
@@ -482,6 +524,8 @@ const Members: React.FC = () => {
       return;
     }
     if (phoneError(form.phone)) { toast({ title: phoneError(form.phone)!, variant: 'destructive' }); return; }
+    // M5: a NEW member records the gender (s.28(1) committee reservation); older members may stay blank.
+    if (!form.gender) { toast({ title: hi ? 'लिंग चुनें' : 'Select gender', description: hi ? 'समिति में महिला आरक्षण (धारा 28) के हिसाब के लिए ज़रूरी।' : 'Needed for the committee reservation (s.28).', variant: 'destructive' }); return; }
     const memberId = form.memberId.trim() || getNextMemberId();
     if (allMembers.some(m => m.memberId.trim().toLowerCase() === memberId.toLowerCase())) {   // D6: every branch, not just the one on screen
       toast({ title: hi ? 'यह सदस्य ID पहले से मौजूद है' : 'Member ID already exists', variant: 'destructive' });
@@ -504,7 +548,7 @@ const Members: React.FC = () => {
     const created = addMember({
       ...form, memberId,
       shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
-      age: form.age ? Number(form.age) : undefined, caste: form.caste || undefined,
+      caste: form.caste || undefined,
       occupation: form.occupation || undefined, postOffice: form.postOffice || undefined,
       tehsil: form.tehsil || undefined, district: form.district || undefined,
       state: form.state || undefined, pinCode: form.pinCode || undefined,
@@ -521,6 +565,8 @@ const Members: React.FC = () => {
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
       // M2: recorded as an already-admitted member — the admission date and the committee resolution.
       admissionDate: form.joinDate || undefined,
+      gender: form.gender || undefined, dateOfBirth: form.dateOfBirth || undefined,
+      age: form.dateOfBirth ? ageOn(form.dateOfBirth, new Date().toISOString().split('T')[0]) : (form.age ? Number(form.age) : undefined),
       admissionResolutionNo: form.admissionResolutionNo.trim() || undefined,
       admissionResolutionDate: form.admissionResolutionDate || undefined,
     }, {
@@ -555,7 +601,7 @@ const Members: React.FC = () => {
     const applied = updateMember(editMember.id, {
       ...form,
       shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
-      age: form.age ? Number(form.age) : undefined, caste: form.caste || undefined,
+      caste: form.caste || undefined,
       occupation: form.occupation || undefined, postOffice: form.postOffice || undefined,
       tehsil: form.tehsil || undefined, district: form.district || undefined,
       state: form.state || undefined, pinCode: form.pinCode || undefined,
@@ -571,6 +617,8 @@ const Members: React.FC = () => {
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
       admissionDate: editMember.approvalStatus === 'pending' ? editMember.admissionDate : (form.joinDate || undefined),
+      gender: form.gender || undefined, dateOfBirth: form.dateOfBirth || undefined,
+      age: form.dateOfBirth ? ageOn(form.dateOfBirth, new Date().toISOString().split('T')[0]) : (form.age ? Number(form.age) : undefined),
       admissionResolutionNo: form.admissionResolutionNo.trim() || undefined,
       admissionResolutionDate: form.admissionResolutionDate || undefined,
     }, { onSaved: () => toast({ title: hi ? 'सदस्य अपडेट किया गया' : 'Member updated' }) });
@@ -595,6 +643,7 @@ const Members: React.FC = () => {
       nominees: (m.nominees || []).filter(n => n.role !== 'primary'),   // additional-only in the editor; primary lives in the block above
       aadhaar: m.aadhaar || '', pan: m.pan || '', kycStatus: m.kycStatus || '',
       admissionResolutionNo: m.admissionResolutionNo || '', admissionResolutionDate: m.admissionResolutionDate || '',
+      gender: m.gender || '', dateOfBirth: m.dateOfBirth || '',
     });
   };
 
@@ -652,6 +701,27 @@ const Members: React.FC = () => {
     setDecision(null);
   };
   const missingResolution = decision?.action === 'approve' && !decisionForm.resolutionNo.trim();
+  // M4: lifecycle change — a real date, warnings for a missing resolution (never blocking)
+  const statusChangeCheck = statusMember
+    ? validateStatusChange({ to: statusNew, effectiveDate: statusDate, resolutionNo: statusResNo, resolutionDate: statusResDate || undefined },
+      { today, joinedOn: statusMember.admissionDate || statusMember.joinDate })
+    : { ok: true, warnings: [] as string[] };
+  // M4: s.23 / s.55 — a deceased member's share money, after their loan + KCC dues, goes to the nominee
+  const memberDues = (m: Member) => loans.filter(l => l.memberId === m.id && !l.isDeleted).reduce((s, l) => s + loanOutstanding(l), 0)
+    + kccLoans.filter(k => k.memberId === m.id).reduce((s, k) => s + kccOutstanding(k), 0);
+  const settlement = settleMember ? deathSettlement({ shareCapital: settleMember.shareCapital || 0, dues: memberDues(settleMember), dateOfDeath: settleMember.statusChangedAt }) : null;
+  const nomineeNames = (m: Member) => {
+    const list = (m.nominees || []).filter(n => n.name?.trim()).map(n => `${n.name}${n.relation ? ` (${n.relation})` : ''}${n.sharePercent ? ` ${n.sharePercent}%` : ''}`);
+    if (!list.length && m.nomineeName) list.push(`${m.nomineeName}${m.nomineeRelation ? ` (${m.nomineeRelation})` : ''}`);
+    return list;
+  };
+  const openSettle = (m: Member) => { setSettleForm({ date: today, resolution: '', amount: String(deathSettlement({ shareCapital: m.shareCapital || 0, dues: memberDues(m) }).shareCapital) }); setSettleMember(m); };
+  const confirmSettle = () => {
+    if (!settleMember) return;
+    const amount = Number(settleForm.amount) || 0;
+    const who = nomineeNames(settleMember).join(', ') || (hi ? 'वारिस' : 'heir');
+    if (approveShareRefund(settleMember.id, amount, settleForm.date, `${settleForm.resolution.trim()} — मृत्यु निपटारा, नामांकित: ${who}`)) setSettleMember(null);
+  };
 
   const handleDownloadPDF = (member: Member) => {
     generateMemberApplicationPDF(member, society);
@@ -747,6 +817,11 @@ const Members: React.FC = () => {
                     <Badge variant="outline" className={STATUS_META[member.status]?.cls}>
                       {hi ? STATUS_META[member.status]?.hi : STATUS_META[member.status]?.en}
                     </Badge>
+                    {isExit(member.status) && member.statusChangedAt && (
+                      <p className="mt-0.5 text-[10px] text-muted-foreground" title={hi ? 'धारा 24: पूर्व/मृत सदस्य की देनदारी 2 साल' : 's.24: two-year liability of a past member'}>
+                        {fmtDate(member.statusChangedAt)}{liabilityUntil(member.statusChangedAt) && today <= liabilityUntil(member.statusChangedAt)! ? (hi ? ` · देनदारी ${fmtDate(liabilityUntil(member.statusChangedAt))} तक` : ` · liable till ${fmtDate(liabilityUntil(member.statusChangedAt))}`) : ''}
+                      </p>
+                    )}
                   </TableCell>
                 )}
                 <TableCell>
@@ -794,8 +869,15 @@ const Members: React.FC = () => {
                     {canEdit && !showApprovalActions && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                         title={hi ? 'स्थिति बदलें (त्यागपत्र/निष्कासन/मृत्यु)' : 'Change status (resign/expel/death)'}
-                        onClick={() => { setStatusMember(member); setStatusNew(member.status === 'active' ? 'resigned' : 'active'); setStatusReason(''); }}>
+                        onClick={() => { setStatusMember(member); setStatusNew(member.status === 'active' ? 'resigned' : 'active'); setStatusReason(''); setStatusDate(new Date().toISOString().split('T')[0]); setStatusResNo(''); setStatusResDate(''); }}>
                         <UserCog className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canEdit && !showApprovalActions && member.status === 'deceased' && (member.shareCapital || 0) > 0 && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-700 hover:bg-slate-100"
+                        title={hi ? 'मृत्यु निपटारा — शेयर राशि नामांकित को' : 'Death settlement — share money to the nominee'}
+                        onClick={() => openSettle(member)}>
+                        <HandCoins className="h-4 w-4" />
                       </Button>
                     )}
                     {canEdit && !showApprovalActions && (
@@ -909,14 +991,32 @@ const Members: React.FC = () => {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder={hi ? 'नाम, ID या फोन से खोजें...' : 'Search by name, ID or phone...'}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full max-w-md sm:w-auto sm:flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={hi ? 'नाम, ID या फोन से खोजें...' : 'Search by name, ID or phone...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={v => { if (v) setStatusFilter(v as 'all' | MemberStatus); }}>
+              <SelectTrigger className="h-9 w-36" aria-label={hi ? 'स्थिति' : 'Status'}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{hi ? 'सभी स्थिति' : 'All statuses'}</SelectItem>
+                {(Object.keys(STATUS_META) as MemberStatus[]).map(st => <SelectItem key={st} value={st}>{hi ? STATUS_META[st].hi : STATUS_META[st].en}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={typeFilter} onValueChange={v => { if (v) setTypeFilter(v as 'all' | MemberType); }}>
+              <SelectTrigger className="h-9 w-36" aria-label={hi ? 'प्रकार' : 'Type'}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{hi ? 'सभी प्रकार' : 'All types'}</SelectItem>
+                <SelectItem value="member">{hi ? 'सदस्य' : 'Member'}</SelectItem>
+                <SelectItem value="nominal">{hi ? 'नाममात्र सदस्य' : 'Nominal'}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" className="gap-1" onClick={exportMembersExcel}><FileSpreadsheet className="h-4 w-4" />Excel</Button>
           </div>
         </CardContent>
       </Card>
@@ -1021,6 +1121,27 @@ const Members: React.FC = () => {
                 <Textarea className="mt-1" rows={2} value={statusReason} onChange={e => setStatusReason(e.target.value)}
                   placeholder={hi ? 'कारण लिखें (त्यागपत्र/निष्कासन/मृत्यु आदि)...' : 'Enter reason...'} />
               </div>
+              <div>
+                <Label className="text-sm">{statusNew === 'deceased' ? (hi ? 'मृत्यु की तिथि *' : 'Date of death *') : (hi ? 'किस तिथि से *' : 'Effective date *')}</Label>
+                <Input className="mt-1" type="date" value={statusDate} max={new Date().toISOString().split('T')[0]} onChange={e => setStatusDate(e.target.value)} />
+                <p className="text-[11px] text-muted-foreground mt-0.5">{hi ? 'जिस दिन सच में हुआ — रजिस्टर में यही "सदस्यता समाप्ति तिथि" छपेगी (नियम 22)।' : 'The day it actually happened — the register prints this (Rule 22).'}</p>
+              </div>
+              {(statusNew === 'resigned' || statusNew === 'expelled') && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">{statusNew === 'expelled' ? (hi ? 'आम सभा प्रस्ताव सं.' : 'GM resolution no.') : (hi ? 'संचालक मंडल प्रस्ताव सं.' : 'Board resolution no.')}</Label>
+                    <Input className="mt-1" value={statusResNo} onChange={e => setStatusResNo(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">{hi ? 'प्रस्ताव तिथि' : 'Resolution date'}</Label>
+                    <Input className="mt-1" type="date" value={statusResDate} max={new Date().toISOString().split('T')[0]} onChange={e => setStatusResDate(e.target.value)} />
+                  </div>
+                </div>
+              )}
+              {statusChangeCheck.warnings.map(w => <p key={w} className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">⚠ {w}</p>)}
+              {isExit(statusNew) && (
+                <p className="text-[11px] text-muted-foreground">{hi ? `धारा 24: पूर्व/मृत सदस्य की देनदारी ${liabilityUntil(statusDate) ? fmtDate(liabilityUntil(statusDate)) : '2 साल'} तक बनी रहती है।` : `s.24: a past / deceased member stays liable until ${liabilityUntil(statusDate) ? fmtDate(liabilityUntil(statusDate)) : 'two years'}.`}</p>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -1028,9 +1149,61 @@ const Members: React.FC = () => {
             <Button
               disabled={!statusReason.trim() || !statusMember || statusNew === statusMember.status}
               onClick={() => {
-                if (statusMember && changeMemberStatus(statusMember.id, statusNew, statusReason.trim())) setStatusMember(null);
+                if (!statusMember) return;
+                if (!statusChangeCheck.ok) { toast({ title: hi ? 'जाँचें' : 'Check', description: statusChangeCheck.error, variant: 'destructive' }); return; }
+                if (changeMemberStatus(statusMember.id, statusNew, statusReason.trim(), { effectiveDate: statusDate, resolutionNo: statusResNo, resolutionDate: statusResDate || undefined })) setStatusMember(null);
               }}>
               {hi ? 'बदलें' : 'Update'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* M4: death settlement (s.23 nominee, s.55 set-off) */}
+      <Dialog open={!!settleMember} onOpenChange={(o) => { if (!o) setSettleMember(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{hi ? 'मृत्यु निपटारा — शेयर राशि' : 'Death settlement — share money'}</DialogTitle>
+            <DialogDescription>{settleMember?.name} ({settleMember?.memberId}){settleMember?.statusChangedAt ? ` · ${hi ? 'मृत्यु' : 'died'} ${fmtDate(settleMember.statusChangedAt)}` : ''}</DialogDescription>
+          </DialogHeader>
+          {settleMember && settlement && (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-md border p-2">
+                <p className="text-xs text-muted-foreground">{hi ? 'नामांकित' : 'Nominee(s)'}</p>
+                <p className="font-medium">{nomineeNames(settleMember).join(', ') || (hi ? 'कोई नामांकित नहीं — वारिस/कानूनी प्रतिनिधि (धारा 23)' : 'No nominee — heir / legal representative (s.23)')}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-md bg-muted p-2"><p className="text-[11px] text-muted-foreground">{hi ? 'शेयर राशि' : 'Share money'}</p><p className="font-semibold">{fmt(settlement.shareCapital)}</p></div>
+                <div className="rounded-md bg-muted p-2"><p className="text-[11px] text-muted-foreground">{hi ? 'ऋण/KCC बक़ाया' : 'Loan/KCC dues'}</p><p className="font-semibold">{fmt(settlement.dues)}</p></div>
+                <div className="rounded-md bg-muted p-2"><p className="text-[11px] text-muted-foreground">{hi ? 'नामांकित को' : 'To nominee'}</p><p className="font-semibold">{fmt(settlement.payableToNominee)}</p></div>
+              </div>
+              {settlement.setOff > 0 && (
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">⚠ {hi ? `धारा 55: बक़ाया ${fmt(settlement.setOff)} शेयर राशि से काटा जा सकता है। स्वीकृति के बाद "देय" राशि में से पहले ऋण/KCC में ${fmt(settlement.setOff)} की वसूली दर्ज करें, फिर शेष ${fmt(settlement.payableToNominee)} नामांकित को दें।` : `s.55: dues of ${fmt(settlement.setOff)} may be set off. After approval, record that recovery from the payable first, then pay the balance ${fmt(settlement.payableToNominee)} to the nominee.`}</p>
+              )}
+              {settlement.courtOrderWindowUntil && (
+                <p className="text-[11px] text-muted-foreground">{hi ? `धारा 23: अन्य राशियाँ ${fmtDate(settlement.courtOrderWindowUntil)} तक अदालती आदेश न आने पर दी जाती हैं।` : `s.23: other moneys are paid unless a court order arrives by ${fmtDate(settlement.courtOrderWindowUntil)}.`}</p>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">{hi ? 'राशि (शेयर पूँजी से देय में)' : 'Amount (to the payable)'}</Label>
+                  <Input type="number" className="mt-1" value={settleForm.amount} max={settlement.shareCapital} onChange={e => setSettleForm(f => ({ ...f, amount: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">{hi ? 'तिथि' : 'Date'}</Label>
+                  <Input type="date" className="mt-1" value={settleForm.date} max={today} onChange={e => setSettleForm(f => ({ ...f, date: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">{hi ? 'समिति प्रस्ताव संख्या / संदर्भ *' : 'Committee resolution / reference *'}</Label>
+                <Input className="mt-1" value={settleForm.resolution} onChange={e => setSettleForm(f => ({ ...f, resolution: e.target.value }))} />
+              </div>
+              <p className="text-[11px] text-muted-foreground">{hi ? 'Dr शेयर पूँजी / Cr शेयर वापसी देय। भुगतान बाद में शेयर रजिस्टर के "देय भुगतान" से।' : 'Posts Dr Share Capital / Cr Share Refund Payable; pay later from the Share Register ("Pay refund").'}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSettleMember(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button disabled={!settlement || !(Number(settleForm.amount) > 0) || Number(settleForm.amount) > (settlement?.shareCapital || 0) || settleForm.resolution.trim().length < 2} onClick={confirmSettle}>
+              {hi ? 'स्वीकृत करें' : 'Approve'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -42,7 +42,7 @@ export const HUBS: HubDef[] = [
     { hi: 'स्टॉक रिपोर्ट', en: 'Stock reports', moduleIds: ['closingStockReport', 'stockValuation'] },
   ] },
   { id: 'members', hi: 'सदस्य व ऋण', en: 'Members & loans', icon: Users, sections: [
-    { hi: 'सदस्य', en: 'Members', moduleIds: ['members', 'memberApplication', 'form1MemberList', 'nominationRegister', 'shareRegister'] },
+    { hi: 'सदस्य', en: 'Members', moduleIds: ['members', 'memberApplication', 'form1MemberList', 'votersList', 'nominationRegister', 'shareRegister'] },
     { hi: 'ऋण व जमा', en: 'Loans & deposits', moduleIds: ['loanRegister', 'loanInterest', 'kccLoan', 'deposits'] },
   ] },
   // The society-type modules — one section per domain; only the domains this society has show up.

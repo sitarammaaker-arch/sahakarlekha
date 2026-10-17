@@ -25,6 +25,7 @@ import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { memberStatusLabel } from '@/lib/memberLifecycle';
+import { isExit } from '@/lib/members/cessation';
 import { addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, registerReportIdentity } from '@/lib/pdf';
 
 const Form1MemberList: React.FC = () => {
@@ -57,24 +58,29 @@ const Form1MemberList: React.FC = () => {
   const totalShareCapital = filtered.reduce((s, m) => s + (m.shareCapital || 0), 0);
   const totalShares       = filtered.reduce((s, m) => s + (m.shareCount  || 0), 0);
 
-  // ── CSV / Excel ────────────────────────────────────────────────────────────
-  const csvHeaders = ['S.No.', 'Member No.', 'Name', "Father's/Spouse Name", 'Address', 'Phone', 'Join Date', 'Type', 'Shares', 'Share Capital', 'Nominee', 'Relation', 'Status'];
-  const getCsvRows = () =>
-    filtered.map((m, i) => [
-      i + 1,
-      m.memberId,
-      m.name,
-      m.fatherName || '—',
-      m.address || '—',
-      m.phone || '—',
-      m.joinDate ? fmtDate(m.joinDate) : '—',
-      m.memberType === 'nominal' ? 'Nominal' : 'Regular',
-      m.shareCount ?? '—',
-      m.shareCapital || 0,
-      m.nomineeName || '—',
-      m.nomineeRelation || '—',
-      memberStatusLabel(m.status),
-    ]);
+  // ── The register of members (Haryana Rules r.22): name, address, OCCUPATION, shares, date of entry, date of
+  //    CEASING, nominees — one column set for CSV, Excel and PDF (M5). ─────────────────────────────────────────
+  const csvHeaders = ['S.No.', 'Member No.', 'Name', "Father's/Spouse Name", 'Gender', 'Occupation', 'Address', 'Phone', 'Admission Date', 'Type', 'Shares', 'Share Capital', 'Nominee', 'Relation', 'Status', 'Ceased On'];
+  const GENDER = { female: 'Female', male: 'Male', other: 'Other' } as const;
+  const registerRow = (m: typeof filtered[number], i: number, money: (n: number) => string | number) => [
+    i + 1,
+    m.memberId,
+    m.name,
+    m.fatherName || '—',
+    m.gender ? GENDER[m.gender] : '—',
+    m.occupation || '—',
+    m.address || '—',
+    m.phone || '—',
+    (m.admissionDate || m.joinDate) ? fmtDate(m.admissionDate || m.joinDate) : '—',
+    m.memberType === 'nominal' ? 'Nominal' : 'Regular',
+    m.shareCount ?? '—',
+    money(m.shareCapital || 0),
+    m.nomineeName || '—',
+    m.nomineeRelation || '—',
+    memberStatusLabel(m.status),
+    isExit(m.status) && m.statusChangedAt ? fmtDate(m.statusChangedAt) : '—',
+  ];
+  const getCsvRows = () => filtered.map((m, i) => registerRow(m, i, n => n));
 
   const handleCSV = () =>
     downloadCSV(csvHeaders, getCsvRows(), 'form1-member-list');
@@ -108,39 +114,21 @@ const Form1MemberList: React.FC = () => {
 
     autoTable(doc, {
       startY: y,
-      head: [[
-        'S.No.', 'Member No.', 'Name', "Father's / Spouse Name", 'Address',
-        'Phone', 'Join Date', 'Type', 'Shares', 'Share Capital (Rs.)',
-        'Nominee', 'Relation', 'Status',
-      ]],
-      body: filtered.map((m, i) => [
-        i + 1,
-        m.memberId,
-        m.name,
-        m.fatherName || '—',
-        m.address    || '—',
-        m.phone      || '—',
-        m.joinDate   ? fmtDate(m.joinDate) : '—',
-        m.memberType === 'nominal' ? 'Nominal' : 'Regular',
-        m.shareCount ?? '—',
-        (m.shareCapital || 0).toLocaleString('en-IN'),
-        m.nomineeName     || '—',
-        m.nomineeRelation || '—',
-        memberStatusLabel(m.status),
-      ]),
+      head: [csvHeaders.map(h => (h === 'Share Capital' ? 'Share Capital (Rs.)' : h))],
+      body: filtered.map((m, i) => registerRow(m, i, n => n.toLocaleString('en-IN'))),
       foot: [[
-        '', '', '', '', '', '', '', `Total: ${filtered.length}`,
+        '', '', '', '', '', '', '', '', '', `Total: ${filtered.length}`,
         totalShares.toLocaleString('en-IN'),
         totalShareCapital.toLocaleString('en-IN'),
-        '', '', '',
+        '', '', '', '',
       ]],
       styles: { fontSize: 6.5, cellPadding: 1.5 },
       headStyles: { fillColor: [30, 64, 175], fontSize: 7 },
       footStyles: { fontStyle: 'bold', fontSize: 7 },
       columnStyles: {
-        9:  { halign: 'right' },
-        7:  { halign: 'center' },
-        12: { halign: 'center' },
+        11: { halign: 'right' },
+        9:  { halign: 'center' },
+        14: { halign: 'center' },
       },
     });
 
@@ -253,19 +241,21 @@ const Form1MemberList: React.FC = () => {
                 <TableHead className="text-white">{hi ? 'सदस्य नं.' : 'Member No.'}</TableHead>
                 <TableHead className="text-white">{hi ? 'नाम' : 'Name'}</TableHead>
                 <TableHead className="text-white">{hi ? 'पिता/पति' : "Father's/Spouse"}</TableHead>
+                <TableHead className="text-white">{hi ? 'व्यवसाय' : 'Occupation'}</TableHead>
                 <TableHead className="text-white">{hi ? 'पता' : 'Address'}</TableHead>
                 <TableHead className="text-white">{hi ? 'फोन' : 'Phone'}</TableHead>
-                <TableHead className="text-white">{hi ? 'सदस्यता तिथि' : 'Join Date'}</TableHead>
+                <TableHead className="text-white">{hi ? 'दाख़िला तिथि' : 'Admission Date'}</TableHead>
                 <TableHead className="text-white text-right">{hi ? 'शेयर' : 'Shares'}</TableHead>
                 <TableHead className="text-white text-right">{hi ? 'शेयर कैपिटल' : 'Share Capital'}</TableHead>
                 <TableHead className="text-white">{hi ? 'नामिती' : 'Nominee'}</TableHead>
                 <TableHead className="text-white">{hi ? 'स्थिति' : 'Status'}</TableHead>
+                <TableHead className="text-white">{hi ? 'समाप्ति तिथि' : 'Ceased On'}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={13} className="text-center py-8 text-gray-500">
                     {hi ? 'कोई सदस्य नहीं मिला' : 'No members found'}
                   </TableCell>
                 </TableRow>
@@ -275,9 +265,10 @@ const Form1MemberList: React.FC = () => {
                   <TableCell className="font-mono font-medium">{m.memberId}</TableCell>
                   <TableCell className="font-medium">{m.name}</TableCell>
                   <TableCell>{m.fatherName || '—'}</TableCell>
+                  <TableCell>{m.occupation || '—'}</TableCell>
                   <TableCell className="max-w-36 truncate">{m.address || '—'}</TableCell>
                   <TableCell>{m.phone || '—'}</TableCell>
-                  <TableCell>{m.joinDate ? fmtDate(m.joinDate) : '—'}</TableCell>
+                  <TableCell>{(m.admissionDate || m.joinDate) ? fmtDate(m.admissionDate || m.joinDate) : '—'}</TableCell>
                   <TableCell className="text-right">{m.shareCount ?? '—'}</TableCell>
                   <TableCell className="text-right">₹{(m.shareCapital || 0).toLocaleString('hi-IN')}</TableCell>
                   <TableCell>
@@ -291,6 +282,7 @@ const Form1MemberList: React.FC = () => {
                       {memberStatusLabel(m.status, hi)}
                     </Badge>
                   </TableCell>
+                  <TableCell>{isExit(m.status) && m.statusChangedAt ? fmtDate(m.statusChangedAt) : '—'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

@@ -4082,3 +4082,57 @@ export function generateShareCertificatePDF(member: Member, society: SocietySett
   });
   doc.save(pdfFileName(`ShareCertificate_${member.memberId}`, society));
 }
+
+/**
+ * Member-audit M5 (2026-10-17): the voters list as on a date (Haryana Rules App. A para 35 — prepared by the Manager
+ * and exhibited for objections; Act s.20(d) — defaulters have no vote) and the defaulters list for the general
+ * meeting (Act s.25(3)(d)). The rows are built by lib/members/voters (one rule for screen, PDF and Excel).
+ */
+export function generateVotersListPDF(voters: Member[], society: SocietySettings, asOnDate: string): void {
+  const doc = new jsPDF({ orientation: 'portrait' });
+  const { startY, font } = addHeader(doc, 'LIST OF VOTERS', society, `As on ${fmtDate(asOnDate)}  |  ${voters.length} voter(s)`, { reportCode: 'VL' });
+  autoTable(doc, {
+    startY: startY + 2,
+    head: [['S.No', 'Member No.', 'Name', 'Father / Husband', 'Address', 'Signature']],
+    body: voters.map((m, i) => [String(i + 1), m.memberId, m.name, m.fatherName || '', m.address || '', '']),
+    styles: { fontSize: 8, cellPadding: 1.8 },
+    headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
+    columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 22 }, 5: { cellWidth: 28 } },
+  });
+  const y = (doc as any).lastAutoTable.finalY + 8;
+  doc.setFontSize(8);
+  doc.setFont(font, 'normal');
+  doc.setTextColor(60);
+  doc.text('Members in default of any sum due to the society, nominal members and members who had ceased are not entered (Act s.20).', 15, y, { maxWidth: doc.internal.pageSize.width - 30 });
+  doc.text('Objections, if any, may be filed with the Returning Officer within the period notified.', 15, y + 5);
+  doc.setTextColor(0);
+  addSignatureBlock(doc, font, ['Secretary / Manager\n(with Seal)', 'Returning Officer'], y + 14);
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName('VotersList', society, asOnDate));
+}
+
+export function generateDefaulterListPDF(rows: { member: Member; amount: number; items: string[] }[], society: SocietySettings, asOnDate: string): void {
+  const doc = new jsPDF({ orientation: 'portrait' });
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  const { startY, font } = addHeader(doc, 'LIST OF DEFAULTERS', society, `As on ${fmtDate(asOnDate)}  |  ${rows.length} member(s)`, { reportCode: 'DL' });
+  autoTable(doc, {
+    startY: startY + 2,
+    head: [['S.No', 'Member No.', 'Name', 'Father / Husband', 'Overdue', 'Amount (Rs.)']],
+    body: rows.map((r, i) => [String(i + 1), r.member.memberId, r.member.name, r.member.fatherName || '', r.items.join(', '), fmt(r.amount)]),
+    foot: [['', '', '', '', 'Total', fmt(total)]],
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
+    footStyles: { fontStyle: 'bold' },
+    columnStyles: { 5: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(5),
+  });
+  const y = (doc as any).lastAutoTable.finalY + 8;
+  doc.setFontSize(8);
+  doc.setFont(font, 'normal');
+  doc.setTextColor(60);
+  doc.text('Placed before the annual general meeting (Haryana Co-operative Societies Act, 1984, s.25(3)(d)).', 15, y);
+  doc.setTextColor(0);
+  addSignatureBlock(doc, font, ['Secretary / Manager', 'President'], y + 8);
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName('DefaulterList', society, asOnDate));
+}

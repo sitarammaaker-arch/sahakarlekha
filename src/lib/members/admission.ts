@@ -18,6 +18,9 @@ export const MEMBER_ADMISSION_FIELDS = [
 ] as const;
 export type MemberAdmissionField = typeof MEMBER_ADMISSION_FIELDS[number];
 
+/** M5 (migration 118): gender + date of birth — also step-2, written by persistMemberProfile. */
+export const MEMBER_PROFILE_FIELDS = ['gender', 'dateOfBirth'] as const;
+
 /** Split a member row into the base columns and the step-2 admission columns (only those that carry a value). */
 export function splitAdmissionFields<T extends Record<string, unknown>>(row: T): { base: Omit<T, MemberAdmissionField>; extras: Partial<Record<MemberAdmissionField, string>> } {
   const base: Record<string, unknown> = { ...row };

@@ -18,7 +18,7 @@ const LANDSCAPE = [
 const PORTRAIT = [
   'CashBook', 'BankBook', 'Ledger', 'MemberPassbook',                    // books: Date | particulars | amount | balance
   'DemandNotice', 'MaintenanceBill', 'MaintenanceReceipt',               // notices / bills
-  'SalarySlip', 'Voucher', 'MemberRefusalLetter',                                               // small per-document formats (A5)
+  'SalarySlip', 'Voucher', 'MemberRefusalLetter', 'VotersList', 'DefaulterList',                                               // small per-document formats (A5)
   'SaleInvoice', 'PurchaseRecord', 'MemberApplication',                  // per-document / forms
   'GstSummary', 'AuditSchedules',                                        // see note: GST Summary stays portrait for now
 ];
