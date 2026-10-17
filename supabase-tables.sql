@@ -3581,3 +3581,29 @@ alter table members add column if not exists "dateOfBirth" text;
 -- Act s.40 proviso. Photos live in the PRIVATE storage bucket 'member-photos' (policies in migration 119).
 alter table members add column if not exists "correspondenceAddress" text;
 alter table members add column if not exists "photoPath" text;
+
+-- ── Member register columns prod has had for a long time but this file never declared (re-audit 2026-10-17, M-14) ──
+-- The app sends every one of them in the BASE members upsert, so a database built from this file alone would refuse
+-- every member save. Types copied from prod (read-only check 2026-10-17).
+alter table members add column if not exists "approvalStatus" text default 'approved';
+alter table members add column if not exists "age" integer;
+alter table members add column if not exists "occupation" text;
+alter table members add column if not exists "caste" text;
+alter table members add column if not exists "tehsil" text;
+alter table members add column if not exists "district" text;
+alter table members add column if not exists "state" text;
+alter table members add column if not exists "pinCode" text;
+alter table members add column if not exists "postOffice" text;
+alter table members add column if not exists "paymentMode" text;
+alter table members add column if not exists "nomineeAge" integer;
+alter table members add column if not exists "nomineeOccupation" text;
+alter table members add column if not exists "nomineeAddress" text;
+alter table members add column if not exists "nomineeShares" integer;
+alter table members add column if not exists "nomineeFatherName" text;
+
+-- ── Members write scope, server FY lock, one live member number (migration 120, re-audit stage B) ─────────────────
+-- The policies, trigger and function live in supabase/migrations/120_members_write_scope.sql; the index is here too
+-- so a fresh database refuses duplicate member numbers from day one.
+create unique index if not exists members_society_memberid_live_uq
+  on members (society_id, "memberId")
+  where not coalesce("isDeleted", false) and coalesce("memberId", '') <> '';

@@ -3,8 +3,10 @@
  * (Member Portal S2a). Hand-written plain JS (NOT an esbuild bundle) so Deno and the node tests
  * import the very same file — there is no build step that could drift.
  *
- *   memberLoginEmail  — the deterministic, members-only login email for (society, member number).
- *                       The S3 login page must derive the identical string (parity-tested there).
+ *   memberLoginEmail  — the LEGACY (unkeyed) login email for (society, member number); still accepted at login
+ *                       until the login's PIN is reset.
+ *   memberLoginEmailV2 — the keyed login email (HMAC with MEMBER_LOGIN_PEPPER) used for every new / reset login.
+ *   loginAttemptKey / parseLoginRequest — the member-portal-login Edge Function's attempt key and body check.
  *   generatePin       — a uniformly random 6-digit PIN, rejecting trivially guessable ones.
  *   canManagePortal   — only an active ADMIN may issue / reset / revoke (founder decision 2026-09-25).
  *   portalPlanAllowed — the same plan gate as member_portal_snapshot() (064).
@@ -39,6 +41,39 @@ export async function memberLoginEmail(societyId, memberNo) {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
   const hex = Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
   return `m-${hex.slice(0, 40)}@${MEMBER_EMAIL_DOMAIN}`;
+}
+
+/**
+ * Re-audit 2026-10-17 (H-6): the login email is a KEYED hash — HMAC-SHA256(pepper, "<societyId>|<MEMBER NO>") —
+ * so nobody without the Edge Functions' secret MEMBER_LOGIN_PEPPER can work out a member's login address and guess
+ * PINs straight against Supabase Auth. `m2-` keeps it apart from the legacy sha256 `m-` addresses, which
+ * member-portal-login still accepts until each login's PIN is reset (reset_pin moves it to the keyed address).
+ */
+export async function memberLoginEmailV2(societyId, memberNo, pepper) {
+  const sid = String(societyId ?? '').trim();
+  const no = normalizeMemberNo(memberNo);
+  if (!sid || !no) throw new Error('societyId and memberNo are required');
+  if (!pepper || String(pepper).length < 32) throw new Error('MEMBER_LOGIN_PEPPER missing or too short');
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(pepper)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${sid}|${no}`)));
+  const hex = Array.from(mac, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `m2-${hex.slice(0, 40)}@${MEMBER_EMAIL_DOMAIN}`;
+}
+
+/** The attempt-limit key for a login (migration 123): sha256 of the keyed email — no email or PIN is stored. */
+export async function loginAttemptKey(email) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(email).toLowerCase())));
+  return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Validates a portal login body. Anything malformed gets the same answer as a wrong PIN. */
+export function parseLoginRequest(body) {
+  const societyId = typeof body?.society_id === 'string' ? body.society_id.trim() : '';
+  const memberNo = normalizeMemberNo(typeof body?.member_no === 'string' ? body.member_no : '');
+  const pin = typeof body?.pin === 'string' ? body.pin.trim() : '';
+  if (!societyId || !memberNo || societyId.length > 64 || memberNo.length > 32) return { ok: false };
+  if (pin.length !== PIN_LENGTH || !/^\d+$/.test(pin)) return { ok: false };
+  return { ok: true, societyId, memberNo, pin };
 }
 
 /** True for PINs a person would guess first: one repeated digit, or a straight run (012345 / 987654). */

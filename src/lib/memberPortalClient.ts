@@ -7,7 +7,6 @@
  * AuthContext (which listens to the staff client) never sees a member.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { memberLoginEmail } from './memberPortalLogin';
 import type { PortalDenied, PortalSnapshot } from './memberPortalView';
 
 export const MEMBER_PORTAL_STORAGE_KEY = 'sl-member-portal';
@@ -45,16 +44,33 @@ export function memberPortalClient(): SupabaseClient {
   return client;
 }
 
-export type LoginResult = { ok: true } | { ok: false; reason: 'invalid' | 'rate_limited' | 'network' };
+export type LoginResult = { ok: true } | { ok: false; reason: 'invalid' | 'locked' | 'rate_limited' | 'network' };
 
+/**
+ * Re-audit 2026-10-17 (H-6): sign-in goes through the member-portal-login Edge Function — it holds the secret that
+ * derives the login email and limits attempts per login (5 per 15 min). The browser no longer knows (or computes)
+ * the member's login address; it only receives the session and stores it in this client.
+ */
 export async function memberSignIn(societyId: string, memberNo: string, pin: string): Promise<LoginResult> {
-  let email: string;
-  try { email = await memberLoginEmail(societyId, memberNo); } catch { return { ok: false, reason: 'invalid' }; }
-  const { error } = await memberPortalClient().auth.signInWithPassword({ email, password: pin });
-  if (!error) return { ok: true };
-  if (error.status === 429) return { ok: false, reason: 'rate_limited' };
+  const base = (import.meta.env.VITE_SUPABASE_URL as string) || '';
+  const anon = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
+  let res: Response;
+  try {
+    res = await fetch(`${base}/functions/v1/member-portal-login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', apikey: anon, authorization: `Bearer ${anon}` },
+      body: JSON.stringify({ society_id: societyId, member_no: memberNo, pin }),
+    });
+  } catch { return { ok: false, reason: 'network' }; }
+  const body = await res.json().catch(() => null) as { ok?: boolean; reason?: string; access_token?: string; refresh_token?: string } | null;
+  if (res.ok && body?.ok && body.access_token && body.refresh_token) {
+    const { error } = await memberPortalClient().auth.setSession({ access_token: body.access_token, refresh_token: body.refresh_token });
+    return error ? { ok: false, reason: 'network' } : { ok: true };
+  }
+  if (body?.reason === 'locked') return { ok: false, reason: 'locked' };
+  if (body?.reason === 'rate_limited') return { ok: false, reason: 'rate_limited' };
   // Wrong number, wrong PIN, revoked (banned) — one generic answer, so nothing reveals which member numbers exist.
-  if (error.status && error.status < 500) return { ok: false, reason: 'invalid' };
+  if (res.status >= 400 && res.status < 500) return { ok: false, reason: 'invalid' };
   return { ok: false, reason: 'network' };
 }
 
