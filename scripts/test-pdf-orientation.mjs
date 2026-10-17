@@ -13,7 +13,7 @@ const src = fs.readFileSync(new URL('../src/lib/pdf.ts', import.meta.url), 'utf8
 const LANDSCAPE = [
   'TrialBalance', 'IncomeExpenditure', 'ReceiptsPayments', 'BalanceSheet', 'TradingAccount',   // two-sided statements
   'ShareRegister', 'HousingShareNomination', 'LoanRegister', 'AssetRegister', 'AuditRegister',
-  'SaleRegister', 'PurchaseRegister', 'ClosingStock', 'DepreciationSchedule', 'DayBook', 'Budget', 'GroupSchedule',   // wide registers / schedules
+  'SaleRegister', 'PurchaseRegister', 'ClosingStock', 'DepreciationSchedule', 'DayBook', 'Budget', 'GroupSchedule', 'ShareCertificate',   // wide registers / schedules
 ];
 const PORTRAIT = [
   'CashBook', 'BankBook', 'Ledger', 'MemberPassbook',                    // books: Date | particulars | amount | balance

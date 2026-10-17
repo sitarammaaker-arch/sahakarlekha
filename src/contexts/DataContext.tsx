@@ -100,6 +100,7 @@ import { accountDeleteFailure, coaResetBlockers, coaResetLiveData } from '@/lib/
 import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
 import { memberAuditDiff } from '@/lib/members/memberAudit';
 import { splitAdmissionFields, applicationReceivedOn, type AdmissionDecision } from '@/lib/members/admission';
+import { canHoldShares } from '@/lib/members/shareRules';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 
 /* T-09 — the `ledger_events` row → LedgerEvent mapper now lives in lib/ledger/rows.ts.
@@ -3600,6 +3601,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!member) return;
     const buy = toRupees(toMinor(Math.max(0, amount)));
     if (!(buy > 0)) { toastRef.current({ title: 'राशि सही नहीं है', description: 'राशि 0 से अधिक होनी चाहिए। (Amount must be > 0.)', variant: 'destructive' }); return; }
+    // M3: shares are issued only to a live, approved member (never to a resigned / expelled / deceased one).
+    if (!canHoldShares(member)) { toastRef.current({ title: 'शेयर नहीं दिए जा सकते', description: `${member.name} सक्रिय/स्वीकृत सदस्य नहीं हैं (स्थिति: ${member.status}) — शेयर नहीं जोड़े जा सकते।`, variant: 'destructive', duration: 10000 }); return; }
     const debitAcc = mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     if (voucherBirthBlocked(date)) return;
     const voucher = addVoucher({
@@ -3637,6 +3640,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const from = membersRef.current.find(m => m.id === fromMemberId);
     const to = membersRef.current.find(m => m.id === toMemberId);
     if (!from || !to) return;
+    // M3: the recipient must be a live, approved member.
+    if (!canHoldShares(to)) { toastRef.current({ title: 'हस्तांतरण नहीं हो सकता', description: `${to.name} सक्रिय/स्वीकृत सदस्य नहीं हैं (स्थिति: ${to.status}) — उन्हें शेयर हस्तांतरित नहीं हो सकते।`, variant: 'destructive', duration: 10000 }); return; }
     const amt = toRupees(toMinor(Math.max(0, Math.min(amount, from.shareCapital || 0))));
     if (!(amt > 0)) { toastRef.current({ title: 'राशि सही नहीं है', description: 'राशि 0 से अधिक और देने वाले सदस्य की अंश पूँजी से कम या बराबर हो। (Amount must be > 0 and ≤ the sender\'s share capital.)', variant: 'destructive' }); return; }
     // ECR-16 (MS-11): enforce the share-transfer premium cap (% of face value) BEFORE posting.

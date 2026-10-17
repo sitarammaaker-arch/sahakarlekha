@@ -15,16 +15,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BookMarked, Download, Search, Edit, Users, History } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { generateShareRegisterPDF } from '@/lib/pdf';
+import { generateShareRegisterPDF, generateShareCertificatePDF } from '@/lib/pdf';
 import type { Member } from '@/types';
 import type { ShareOpType } from '@/lib/shareOps';
 import { premiumCap as sharePremiumCap, premiumAllowed as isSharePremiumAllowed } from '@/lib/sharePremium';
 import { memberStatusLabel } from '@/lib/memberLifecycle';
+import { shareCapWarning, transferHoldingWarning, sharesHeldSince, canHoldShares, previousMarch31, refundLimitWarning } from '@/lib/members/shareRules';
 import { useAuth } from '@/contexts/AuthContext';
 
 const ShareRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { members, updateMember, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, society, updateSociety, vouchers } = useData();
+  const { members, updateMember, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, society, updateSociety, vouchers, getTrialBalance } = useData();
   const { toast } = useToast();
   // Member-audit M1 (D7): share actions post vouchers → `create`; register edits → `update`. The page used to show
   // every button to every role that could open it.
@@ -47,6 +48,18 @@ const ShareRegister: React.FC = () => {
   );
 
   const totalShares = approvedMembers.reduce((s, m) => s + (m.shareCount || 0), 0);
+  // M3: what the statutory share warnings need — total capital (s.6), and for r.18(3) the paid-up individual share
+  // capital (1102; Government share capital 1101 excluded) on the previous 31 March + the refunds since then.
+  const shareRules: ShareRuleCtx = {
+    totalCapital: approvedMembers.reduce((s, m) => s + (m.shareCapital || 0), 0),
+    refundCheck: (date: string, amount: number) => {
+      const base = previousMarch31(date);
+      const row = getTrialBalance(base).find(b => b.account.id === '1102');
+      const paidUp = row ? Math.max(0, -(row.netBalance || 0)) : 0;
+      const refunded = shareTxns.filter(t => t.type === 'refund' && t.date > base && t.date <= date).reduce((s, t) => s + t.amountOut, 0);
+      return refundLimitWarning({ paidUpOnBaseDate: paidUp, refundedThisYear: refunded, thisRefund: amount, baseDate: base });
+    },
+  };
   const totalCapital = approvedMembers.reduce((s, m) => s + m.shareCapital, 0);
   const withNominee = approvedMembers.filter(m => m.nomineeName).length;
 
@@ -254,12 +267,17 @@ const ShareRegister: React.FC = () => {
                     <TableCell>
                       <div className="flex gap-1 items-center">
                         {canPost && <>
-                          <ShareTxnButton member={m} hi={hi} kind="purchase" onSubmit={purchaseShareCapital} />
-                          {m.shareCapital > 0 && <ShareTxnButton member={m} hi={hi} kind="refund" onSubmit={refundShareCapital} />}
-                          <ShareRefundPayableButtons member={m} hi={hi} outstanding={shareRefundOutstanding(vouchers, m.id)} onApprove={approveShareRefund} onPay={payShareRefund} />
-                          {m.shareCapital > 0 && <TransferShareButton member={m} members={approvedMembers} hi={hi} maxPremiumPct={society.maxSharePremiumPercent ?? 0} onTransfer={transferShareCapital} />}
+                          {canHoldShares(m) && <ShareTxnButton member={m} hi={hi} kind="purchase" onSubmit={purchaseShareCapital} rules={shareRules} />}
+                          {m.shareCapital > 0 && <ShareTxnButton member={m} hi={hi} kind="refund" onSubmit={refundShareCapital} rules={shareRules} />}
+                          <ShareRefundPayableButtons member={m} hi={hi} outstanding={shareRefundOutstanding(vouchers, m.id)} onApprove={approveShareRefund} onPay={payShareRefund} rules={shareRules} />
+                          {m.shareCapital > 0 && <TransferShareButton member={m} members={approvedMembers} hi={hi} maxPremiumPct={society.maxSharePremiumPercent ?? 0} onTransfer={transferShareCapital} rules={shareRules} />}
                           <ShareOpButton member={m} hi={hi} onSubmit={shareOperation} />
                         </>}
+                        {m.shareCertNo && m.shareCertStatus !== 'cancelled' && (
+                          <Button variant="ghost" size="icon" onClick={() => generateShareCertificatePDF(m, society)} title={hi ? 'शेयर प्रमाणपत्र (PDF)' : 'Share certificate (PDF)'} aria-label={hi ? 'शेयर प्रमाणपत्र' : 'Share certificate'}>
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        )}
                         {canEdit && <Button variant="ghost" size="icon" onClick={() => openEdit(m)} aria-label={hi ? 'संपादित करें' : 'Edit'}>
                           <Edit className="h-4 w-4" />
                         </Button>}
@@ -401,7 +419,14 @@ const ShareRegister: React.FC = () => {
   );
 };
 
-function ShareTxnButton({ member, hi, kind, onSubmit }: { member: Member; hi: boolean; kind: 'purchase' | 'refund'; onSubmit: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void }) {
+// M3: statutory share warnings (Haryana Act s.6 / s.22, Rules r.18(3)) — shown, never blocking.
+interface ShareRuleCtx { totalCapital: number; refundCheck: (date: string, amount: number) => string | null }
+function RuleWarning({ text }: { text: string | null }) {
+  if (!text) return null;
+  return <p className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">⚠ {text} <span className="block opacity-80">फिर भी दर्ज कर सकते हैं — कारण narration / प्रस्ताव में लिखें।</span></p>;
+}
+
+function ShareTxnButton({ member, hi, kind, onSubmit, rules }: { member: Member; hi: boolean; kind: 'purchase' | 'refund'; onSubmit: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void; rules: ShareRuleCtx }) {
   const [open, setOpen] = useState(false);
   const [amt, setAmt] = useState('');
   const [mode, setMode] = useState<'cash' | 'bank'>('cash');
@@ -412,6 +437,7 @@ function ShareTxnButton({ member, hi, kind, onSubmit }: { member: Member; hi: bo
   const overCap = isRefund && val > cap;
   const fmtC = (n: number) => n.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' });
   const btnLabel = isRefund ? (hi ? 'वापसी' : 'Refund') : (hi ? 'शेयर जोड़ें' : 'Add Shares');
+  const warning = !(val > 0) ? null : isRefund ? rules.refundCheck(date, val) : shareCapWarning(cap + val, rules.totalCapital + val);
   const title = isRefund ? (hi ? 'शेयर पूँजी वापसी' : 'Refund Share Capital') : (hi ? 'अतिरिक्त शेयर पूँजी' : 'Additional Share Capital');
   const help = isRefund
     ? (hi ? 'Dr शेयर पूँजी / Cr नकद-बैंक — मूल रसीद अपरिवर्तित रहेगी।' : 'Posts Dr Share Capital / Cr Cash-Bank; the original receipt stays intact.')
@@ -441,6 +467,7 @@ function ShareTxnButton({ member, hi, kind, onSubmit }: { member: Member; hi: bo
               <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
             </div>
             <p className="text-[11px] text-muted-foreground">{help}</p>
+            <RuleWarning text={warning} />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
               <Button disabled={!(val > 0) || overCap} onClick={() => { onSubmit(member.id, val, mode, date); setOpen(false); setAmt(''); }}>
@@ -455,8 +482,8 @@ function ShareTxnButton({ member, hi, kind, onSubmit }: { member: Member; hi: bo
 }
 
 // Two-step refund: the committee approves (share capital moves to a payable), the society pays later.
-function ShareRefundPayableButtons({ member, hi, outstanding, onApprove, onPay }: {
-  member: Member; hi: boolean; outstanding: number;
+function ShareRefundPayableButtons({ member, hi, outstanding, onApprove, onPay, rules }: {
+  member: Member; hi: boolean; outstanding: number; rules: ShareRuleCtx;
   onApprove: (memberId: string, amount: number, date: string, resolution: string) => boolean;
   onPay: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => boolean;
 }) {
@@ -471,6 +498,7 @@ function ShareRefundPayableButtons({ member, hi, outstanding, onApprove, onPay }
   const approving = open === 'approve';
   const limit = approving ? cap : outstanding;
   const close = () => { setOpen(null); setAmt(''); setResolution(''); };
+  const warning = approving && val > 0 ? rules.refundCheck(date, val) : null;
   const submit = () => {
     const done = approving ? onApprove(member.id, val, date, resolution) : onPay(member.id, val, mode, date);
     if (done) close();
@@ -513,6 +541,7 @@ function ShareRefundPayableButtons({ member, hi, outstanding, onApprove, onPay }
                 ? (hi ? 'Dr शेयर पूँजी / Cr शेयर वापसी देय — पैसा अभी नहीं जाता; भुगतान बाद में अलग से।' : 'Posts Dr Share Capital / Cr Share Refund Payable; the payment is a separate later step.')
                 : (hi ? 'Dr शेयर वापसी देय / Cr नकद-बैंक।' : 'Posts Dr Share Refund Payable / Cr Cash-Bank.')}
             </p>
+            <RuleWarning text={warning} />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={close}>{hi ? 'रद्द' : 'Cancel'}</Button>
               <Button disabled={!(val > 0) || val > limit || (approving && resolution.trim().length < 2)} onClick={submit}>
@@ -605,7 +634,7 @@ function ShareOpButton({ member, hi, onSubmit }: { member: Member; hi: boolean; 
   );
 }
 
-function TransferShareButton({ member, members, hi, maxPremiumPct, onTransfer }: { member: Member; members: Member[]; hi: boolean; maxPremiumPct: number; onTransfer: (fromId: string, toId: string, amount: number, date: string, premium?: number, opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string }) => void }) {
+function TransferShareButton({ member, members, hi, maxPremiumPct, onTransfer, rules }: { member: Member; members: Member[]; hi: boolean; maxPremiumPct: number; onTransfer: (fromId: string, toId: string, amount: number, date: string, premium?: number, opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string }) => void; rules: ShareRuleCtx }) {
   const [open, setOpen] = useState(false);
   const [toId, setToId] = useState('');
   const [amt, setAmt] = useState('');
@@ -617,7 +646,13 @@ function TransferShareButton({ member, members, hi, maxPremiumPct, onTransfer }:
   const cap = member.shareCapital || 0;
   const premiumCap = sharePremiumCap(val, maxPremiumPct);   // ECR-16 MS-11
   const overPremium = !isSharePremiumAllowed(prem, val, maxPremiumPct);
-  const recipients = members.filter(m => m.id !== member.id);
+  // M3: shares go only to a live (active / inactive, approved) member — never to a resigned, expelled or deceased one.
+  const recipients = members.filter(m => m.id !== member.id && canHoldShares(m));
+  const recipient = recipients.find(m => m.id === toId);
+  const warnings = [
+    val > 0 ? transferHoldingWarning(sharesHeldSince(member), date) : null,
+    val > 0 && recipient ? shareCapWarning((recipient.shareCapital || 0) + val, rules.totalCapital) : null,
+  ].filter(Boolean) as string[];
   const fmtC = (n: number) => n.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' });
 
   return (
@@ -664,6 +699,7 @@ function TransferShareButton({ member, members, hi, maxPremiumPct, onTransfer }:
               <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
             </div>
             <p className="text-[11px] text-muted-foreground">{hi ? 'अंकित मूल्य सदस्यों के बीच स्थानांतरित; प्रीमियम समिति के संचय में (Dr नकद-बैंक / Cr संचय)।' : 'Face value moves between members; premium goes to the society reserve (Dr Cash-Bank / Cr Reserve).'}</p>
+            {warnings.map(w => <RuleWarning key={w} text={w} />)}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
               <Button disabled={!toId || !(val > 0) || val > cap || overPremium} onClick={() => { onTransfer(member.id, toId, val, date, prem, { mode }); setOpen(false); setAmt(''); setPremium(''); setToId(''); }}>

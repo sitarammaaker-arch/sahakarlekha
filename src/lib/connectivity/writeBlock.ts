@@ -25,12 +25,16 @@ export const PART_LABEL_HI: Record<string, string> = {
   recoverables: 'वसूली योग्य', kachi_aarat_entries: 'कच्ची आढ़त', p7_entries: 'P7',
 };
 
-export type BlockReason = 'offline' | 'incomplete' | null;
+export type BlockReason = 'offline' | 'incomplete' | 'account' | null;
 
 export interface ConnectivityState {
   online: boolean;
   /** Load parts that returned an error on the last load (empty = full load or not loaded yet). */
   failedParts: readonly string[];
+  /** 2026-10-17: another tab signed in with a DIFFERENT account. Every tab shares one Supabase session, so this
+   *  tab would keep showing society A while writing with account B's token (seen live: a member save refused by
+   *  RLS with "PLATFORM" in the error log). Entry stops until the page is reloaded. */
+  accountChanged?: boolean;
 }
 
 export interface WriteBlockDecision {
@@ -47,6 +51,7 @@ const CORE = new Set<string>(CORE_PARTS);
 export function decideWriteBlock(s: ConnectivityState): WriteBlockDecision {
   const failedCore = s.failedParts.filter(p => CORE.has(p));
   const failedOther = s.failedParts.filter(p => !CORE.has(p));
+  if (s.accountChanged) return { blocked: true, reason: 'account', failedCore, failedOther };
   if (!s.online) return { blocked: true, reason: 'offline', failedCore, failedOther };
   if (failedCore.length > 0) return { blocked: true, reason: 'incomplete', failedCore, failedOther };
   return { blocked: false, reason: null, failedCore, failedOther };
@@ -54,6 +59,12 @@ export function decideWriteBlock(s: ConnectivityState): WriteBlockDecision {
 
 /** Hindi-first toast text for a refused mutation. */
 export function blockMessage(d: WriteBlockDecision): { title: string; description: string } {
+  if (d.reason === 'account') {
+    return {
+      title: 'दूसरे tab में दूसरा account — entry बंद',
+      description: 'इसी browser के किसी दूसरे tab में किसी और account से login हुआ है। यह page पुराने account का data दिखा रहा है — page दोबारा खोलें। कुछ सेव नहीं हुआ। (Another account signed in in another tab — reload this page.)',
+    };
+  }
   if (d.reason === 'offline') {
     return {
       title: 'इंटरनेट नहीं है — entry बंद',
@@ -102,6 +113,28 @@ function set(next: ConnectivityState) {
 
 export function setOnline(online: boolean) {
   if (online !== state.online) set({ ...state, online });
+}
+
+/** Another tab signed in as a different account (see ConnectivityState.accountChanged). Cleared only by a reload. */
+export function setAccountChanged(changed: boolean) {
+  if (changed !== !!state.accountChanged) set({ ...state, accountChanged: changed });
+}
+
+/** Pure: the email inside a Supabase auth-token storage value (`sb-<ref>-auth-token`), or null. */
+export function emailFromAuthStorage(key: string | null, value: string | null): string | null {
+  if (!key || !/^sb-.+-auth-token$/.test(key) || !value) return null;
+  try {
+    const v = JSON.parse(value) as { user?: { email?: string }; currentSession?: { user?: { email?: string } } };
+    const email = v?.user?.email ?? v?.currentSession?.user?.email;
+    return email ? String(email).trim().toLowerCase() : null;
+  } catch { return null; }
+}
+
+/** Pure: a signed-in tab whose shared session now belongs to someone else. Unknown on either side → no mismatch. */
+export function isAccountMismatch(tabEmail: string | null | undefined, sessionEmail: string | null | undefined): boolean {
+  const a = (tabEmail || '').trim().toLowerCase();
+  const b = (sessionEmail || '').trim().toLowerCase();
+  return !!a && !!b && a !== b;
 }
 
 /** Called once per society load with the parts that errored (an empty list clears the block). */

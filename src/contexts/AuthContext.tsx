@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { generateSecret, otpauthUri } from '@/lib/totp';
 import { isMfaPending } from '@/lib/auth/mfaPending';
+import { setAccountChanged, emailFromAuthStorage, isAccountMismatch } from '@/lib/connectivity/writeBlock';
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes of inactivity
 
@@ -197,6 +198,20 @@ async function readPlatformMfaStatus(): Promise<boolean | null> {
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => restoreSession());
+  // The account this tab is showing — read by the cross-tab account-change guard (no re-subscribe per login).
+  const userEmailRef = useRef<string | null>(user?.email ?? null);
+  useEffect(() => { userEmailRef.current = user?.email ?? null; }, [user?.email]);
+  // 2026-10-17: every tab shares one Supabase session. When ANOTHER tab writes a different account into it, this tab
+  // would keep showing society A while writing with account B's token — stop entry until reload (writeBlock).
+  // The storage event fires only in the OTHER tabs, so this tab's own login never trips it.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      const email = emailFromAuthStorage(e.key, e.newValue);
+      if (isAccountMismatch(userEmailRef.current, email)) setAccountChanged(true);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
   const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(() => {
     const session = getAuthSession();
     return session?.societyId === 'PLATFORM';
