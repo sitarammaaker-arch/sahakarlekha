@@ -26,6 +26,7 @@ import { groupWithSubtotals, type GroupableLine } from '@/lib/reports/groupSubto
 import { buildBalanceSheetLayout, visibleRows, pyResult, type BsSide } from '@/lib/reports/balanceSheetLayout';
 import type { GroupSchedule } from '@/lib/reports/groupSchedule';
 import { memberStatusLabel } from '@/lib/memberLifecycle';
+import { appealLastDate, applicationReceivedOn, isHaryana } from '@/lib/members/admission';
 import type { BlankPdfSpec } from '@/content/downloads';
 
 // Hindi DATA (names, narrations) in any PDF table is drawn by the browser — labels stay English.
@@ -3931,4 +3932,69 @@ export function generateGroupSchedulePDF(schedules: GroupSchedule[], society: So
   });
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName(fileStem, society));
+}
+
+/**
+ * Member-audit M2 (2026-10-16): the letter that tells a refused applicant why (Haryana Rules r.17: "communicate its
+ * decision together with reasons thereof") and when an appeal is due (Act s.114(1)(c), (2): 60 days). Labels are
+ * English (helvetica); the reason is the user's own text and may be Hindi — doc.text draws it through pdfDevanagari.
+ */
+export function generateMemberRefusalLetterPDF(member: Member, society: SocietySettings): void {
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const font = setupFont(doc);
+  const pageW = doc.internal.pageSize.width;
+  const cx = pageW / 2;
+  const mL = 20;
+  const textW = pageW - 40;
+  const decided = member.decidedAt || new Date().toISOString().split('T')[0];
+  const applied = applicationReceivedOn(member);
+  const lastAppeal = appealLastDate(decided);
+
+  doc.setFontSize(12);
+  doc.setFont(font, 'bold');
+  doc.text(society.name, cx, 18, { align: 'center' });
+  doc.setFontSize(9);
+  doc.setFont(font, 'normal');
+  const addrParts = [society.address, society.district, society.state ? getStateName(society.state) : ''].filter(Boolean);
+  if (addrParts.length) doc.text(addrParts.join(', '), cx, 24, { align: 'center' });
+  if (society.registrationNo) doc.text(`Reg. No.: ${society.registrationNo}`, cx, 29, { align: 'center' });
+  doc.setLineWidth(0.4);
+  doc.line(mL, 32, pageW - mL, 32);
+
+  let y = 40;
+  doc.setFontSize(10);
+  doc.text(`Ref.: ${member.memberId}`, mL, y);
+  doc.text(`Date: ${fmtDate(decided)}`, pageW - mL, y, { align: 'right' });
+  y += 10;
+  doc.text('To,', mL, y); y += 5;
+  doc.text(member.name, mL, y); y += 5;
+  if (member.fatherName) { doc.text(`S/o, D/o, W/o: ${member.fatherName}`, mL, y); y += 5; }
+  if (member.address) { const a = doc.splitTextToSize(member.address, textW); doc.text(a, mL, y); y += a.length * 5; }
+  y += 4;
+  doc.setFont(font, 'bold');
+  doc.text(`Subject: Your application for membership${applied ? ` received on ${fmtDate(applied)}` : ''}.`, mL, y);
+  y += 9;
+  doc.setFont(font, 'normal');
+  const body = doc.splitTextToSize('Your application for membership of the society has been considered and has not been accepted, for the reason(s) stated below:', textW);
+  doc.text(body, mL, y); y += body.length * 5 + 3;
+
+  doc.setFont(font, 'bold');
+  doc.text('Reason(s):', mL, y); y += 6;
+  doc.setFont(font, 'normal');
+  const reason = member.rejectionReason || '-';
+  const rLines = doc.splitTextToSize(reason, textW - 6);
+  doc.text(reason, mL + 6, y, { maxWidth: textW - 6 });
+  y += Math.max(rLines.length, 2) * 5 + 6;
+
+  const appeal = doc.splitTextToSize(
+    `If you are aggrieved by this decision, you may file an appeal within 60 days of the decision${lastAppeal ? ` (on or before ${fmtDate(lastAppeal)})` : ''}`
+    + (isHaryana(society.state) ? ' under section 114 of the Haryana Co-operative Societies Act, 1984.' : ' before the authority provided under the Co-operative Societies Act of the State.'),
+    textW);
+  doc.text(appeal, mL, y); y += appeal.length * 5 + 3;
+  const refund = doc.splitTextToSize('Please contact the society office for the return of any amount deposited with the application.', textW);
+  doc.text(refund, mL, y); y += refund.length * 5 + 12;
+
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Secretary', 'President'], y, undefined, [sig.secretary, sig.president]);
+  doc.save(pdfFileName('MembershipRefusal', society));
 }

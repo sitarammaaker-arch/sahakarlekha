@@ -10,7 +10,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); 
 ok(!/from\('members'\)\.(upsert|insert)\(withSoc\(/.test(src), 'no members upsert/insert bypasses memberRow()');
 const sites = (src.match(/from\('members'\)\.upsert\(memberRow\(/g) || []).length;
 ok(sites >= 10, `all member upserts use memberRow() (found ${sites})`);
-ok(/const memberRow = \(m: Record<string, any>\) => withSoc\(identitySplitRef\.current \? stripMemberPII\(m\) : m\)/.test(src), 'memberRow strips PII in split mode');
+ok(/const memberRow = \(m: Record<string, any>\) => withSoc\(splitAdmissionFields\(identitySplitRef\.current \? stripMemberPII\(m\) : m\)\.base\)/.test(src), 'memberRow strips PII in split mode (and the step-2 admission columns, M2)');
 ok(/fetchAllPaged<IdentityRow>\('member_identity', \['member_id'\]\)/.test(src), 'load reads member_identity paged by member_id');
 ok(/isMissingIdentityTable\(idRes\.error\)/.test(src), 'missing table => legacy mode (no failure)');
 ok(/applyMemberIdentity\(activeMembers, idRes\.data, canReadMemberPii\(/.test(src), 'load overlays identity, role-gated');

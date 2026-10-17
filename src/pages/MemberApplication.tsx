@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { generateMemberApplicationPDF } from '@/lib/pdf';
+import { validateKyc } from '@/lib/kycUtils';
 import { FileText, ArrowLeft } from 'lucide-react';
 import type { MemberType, CasteCategory } from '@/types';
 
@@ -29,6 +30,8 @@ const EMPTY_FORM = {
   shareFaceValue: '', paymentMode: 'cash' as 'cash' | 'cheque' | 'online',
   nomineeName: '', nomineeFatherName: '', nomineeRelation: '', nomineeAge: '',
   nomineeOccupation: '', nomineeAddress: '', nomineeShares: '', nomineePhone: '',
+  // M2: the date the application reached the society (r.17 / s.16 clock) + KYC like the member form
+  applicationDate: new Date().toISOString().split('T')[0], aadhaar: '', pan: '',
 };
 
 const MemberApplication: React.FC = () => {
@@ -64,6 +67,13 @@ const MemberApplication: React.FC = () => {
     const hiLang = language === 'hi';
     const phoneErr = memberPhoneError(form.phone, hiLang);
     if (phoneErr) { toast({ title: phoneErr, variant: 'destructive' }); return; }
+    const today = new Date().toISOString().split('T')[0];
+    if (!form.applicationDate || form.applicationDate > today) {
+      toast({ title: hiLang ? 'आवेदन प्राप्ति तिथि सही भरें' : 'Enter a valid application date', description: hiLang ? 'तिथि आज के बाद की नहीं हो सकती।' : 'It cannot be in the future.', variant: 'destructive' });
+      return;
+    }
+    const kv = validateKyc(form.aadhaar, form.pan);
+    if (!kv.ok) { toast({ title: 'KYC', description: kv.error, variant: 'destructive' }); return; }
     const nomErr = memberNomineeError(form.nomineeName, [], hiLang);
     if (nomErr) { toast({ title: hiLang ? 'नामांकित ज़रूरी है' : 'Nominee required', description: nomErr, variant: 'destructive' }); return; }
 
@@ -73,10 +83,12 @@ const MemberApplication: React.FC = () => {
       fatherName: form.fatherName.trim(),
       address: form.address.trim(),
       phone: form.phone.trim(),
-      shareCapital: parseFloat(form.shareCapital) || 0,
+      shareCapital: capitalAuto ? autoCapital : (parseFloat(form.shareCapital) || 0),
       admissionFee: parseFloat(form.admissionFee) || 0,
       memberType: form.memberType,
-      joinDate: new Date().toISOString().split('T')[0],
+      joinDate: form.applicationDate,   // the admission date replaces it when the committee approves (r.22(b))
+      applicationDate: form.applicationDate,
+      aadhaar: form.aadhaar.replace(/\s/g, '') || undefined, pan: form.pan.toUpperCase().trim() || undefined,
       status: 'active',
       approvalStatus: 'pending',
       age: form.age ? parseInt(form.age) : undefined,
@@ -116,6 +128,9 @@ const MemberApplication: React.FC = () => {
   };
 
   const f = (key: keyof typeof form, value: string) => setForm(prev => ({ ...prev, [key]: value }));
+  // U8 (M2): share capital = shares × face value when both are given (as in the member form), so they can't disagree.
+  const autoCapital = Math.round((parseFloat(form.shareCount) || 0) * (parseFloat(form.shareFaceValue) || 0) * 100) / 100;
+  const capitalAuto = autoCapital > 0;
   const hi = language === 'hi';
 
   if (!canEdit) {
@@ -182,8 +197,8 @@ const MemberApplication: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>{hi ? 'फ़ोन नम्बर' : 'Phone'} *</Label>
-                <Input type="tel" value={form.phone} onChange={e => f('phone', e.target.value)} placeholder="9876543210" required />
+                <Label>{hi ? 'फ़ोन नम्बर (वैकल्पिक)' : 'Phone (optional)'}</Label>
+                <Input type="tel" value={form.phone} onChange={e => f('phone', e.target.value)} placeholder="9876543210" />
               </div>
               <div className="space-y-2">
                 <Label>{hi ? 'सदस्यता प्रकार' : 'Member Type'}</Label>
@@ -194,6 +209,21 @@ const MemberApplication: React.FC = () => {
                     <SelectItem value="nominal">{hi ? 'नॉमिनल सदस्य' : 'Nominal Member'}</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>{hi ? 'आवेदन प्राप्ति तिथि *' : 'Application received on *'}</Label>
+                <Input type="date" value={form.applicationDate} max={new Date().toISOString().split('T')[0]} onChange={e => f('applicationDate', e.target.value)} />
+                <p className="text-[11px] text-muted-foreground">{hi ? 'इसी तिथि से फ़ैसले की 1 माह की गिनती शुरू होती है।' : 'The one-month decision period starts on this date.'}</p>
+              </div>
+              <div className="space-y-2">
+                <Label>{hi ? 'आधार नंबर' : 'Aadhaar No.'}</Label>
+                <Input value={form.aadhaar} onChange={e => f('aadhaar', e.target.value)} placeholder="1234 5678 9012" inputMode="numeric" />
+              </div>
+              <div className="space-y-2">
+                <Label>PAN</Label>
+                <Input value={form.pan} onChange={e => f('pan', e.target.value.toUpperCase())} placeholder="ABCDE1234F" />
               </div>
             </div>
           </CardContent>
@@ -252,8 +282,8 @@ const MemberApplication: React.FC = () => {
                 <Input type="number" value={form.shareFaceValue} onChange={e => f('shareFaceValue', e.target.value)} placeholder="100" min="1" step="0.01" />
               </div>
               <div className="space-y-2">
-                <Label>{hi ? 'शेयर कैपिटल (₹)' : 'Share Capital (₹)'}</Label>
-                <Input type="number" value={form.shareCapital} onChange={e => f('shareCapital', e.target.value)} placeholder="1000" min="0" step="0.01" />
+                <Label>{hi ? 'शेयर कैपिटल (₹)' : 'Share Capital (₹)'}{capitalAuto && <span className="text-muted-foreground"> — {hi ? 'अपने-आप' : 'auto'}</span>}</Label>
+                <Input type="number" value={capitalAuto ? String(autoCapital) : form.shareCapital} readOnly={capitalAuto} onChange={e => f('shareCapital', e.target.value)} placeholder="1000" min="0" step="0.01" />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

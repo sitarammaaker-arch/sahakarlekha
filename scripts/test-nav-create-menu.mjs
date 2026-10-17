@@ -36,7 +36,7 @@ ok(/bw === 'receive' \|\| bw === 'pay'/.test(vch), 'Vouchers ?billwise= opens th
 ok(/document\.getElementById\(`tpl-\$\{t\}`\)\?\.scrollIntoView/.test(vch) && /id="tpl-receipt"/.test(vch) && /id="tpl-payment"/.test(vch), 'easy mode scrolls to the receipt / payment templates');
 ok(['journal', 'contra'].every((id) => actions.find((a) => a.id === id).to.startsWith('/vouchers?mode=expert&type=')), 'journal + contra open the expert form (easy mode has no journal / contra)');
 const NEW = {
-  'pages/Members.tsx': /useOpenOnNew\(\(\) => \{ setForm\(\{ \.\.\.EMPTY_FORM, memberId: getNextMemberId\(\) \}\); setIsAddOpen\(true\); \}\)/,
+  'pages/Members.tsx': /useOpenOnNew\(\(\) => setAddChooserOpen\(true\)\)/,   // M2: the same new-member chooser as the button
   'pages/Customers.tsx': /useOpenOnNew\(\(\) => openAdd\(\)\)/,
   'pages/Suppliers.tsx': /useOpenOnNew\(\(\) => openAdd\(\)\)/,
   'pages/Inventory.tsx': /useOpenOnNew\(\(\) => openAddItem\(\)\)/,

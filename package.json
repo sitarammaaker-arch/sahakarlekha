@@ -413,6 +413,7 @@
     "test:bs-layout": "node scripts/test-bs-layout.mjs",
     "test:group-schedule": "node scripts/test-group-schedule.mjs",
     "test:member-m1": "node scripts/test-member-m1.mjs",
+    "test:member-m2": "node scripts/test-member-m2.mjs",
     "test:opening-difference": "node scripts/test-opening-difference.mjs"
   },
   "dependencies": {
