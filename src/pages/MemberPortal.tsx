@@ -34,11 +34,12 @@ function writePortalLang(v: 'hi' | 'en') {
 // Masked-text PIN (-webkit-text-security) is supported in Chrome/Edge/Safari/Firefox 124+; detect once.
 const PIN_MASK_SUPPORTED = typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('-webkit-text-security', 'disc');
 
-type LoginErrorKey = 'fill' | 'rate' | 'network' | 'invalid' | 'reload';
+type LoginErrorKey = 'fill' | 'rate' | 'locked' | 'network' | 'invalid' | 'reload';
 function loginErrorText(k: LoginErrorKey, hi: boolean): string {
   switch (k) {
     case 'fill': return hi ? 'सदस्य संख्या और 6 अंकों का PIN भरें।' : 'Enter your member number and 6-digit PIN.';
     case 'rate': return hi ? 'बहुत बार कोशिश हुई। कुछ मिनट बाद फिर करें।' : 'Too many attempts. Please try again in a few minutes.';
+    case 'locked': return hi ? 'कई बार गलत PIN — सुरक्षा के लिए यह login 15 मिनट के लिए रुका है। बाद में फिर करें, या समिति से नया PIN लें।' : 'Too many wrong PINs — this login is paused for 15 minutes. Try later, or ask the society for a new PIN.';
     case 'network': return hi ? 'सर्वर से संपर्क नहीं हो सका। इंटरनेट जाँचें।' : 'Could not reach the server. Check your internet.';
     case 'reload': return hi ? 'जानकारी नहीं मिल सकी। कृपया फिर से login करें।' : 'Could not load your details. Please log in again.';
     default: return hi ? 'सदस्य संख्या या PIN गलत है।' : 'Member number or PIN is incorrect.';
@@ -105,7 +106,7 @@ export default function MemberPortal() {
     setBusy(false);
     setPin('');
     if (res.ok === false) {
-      setErrorKey(res.reason === 'rate_limited' ? 'rate' : res.reason === 'network' ? 'network' : 'invalid');
+      setErrorKey(res.reason === 'rate_limited' ? 'rate' : res.reason === 'locked' ? 'locked' : res.reason === 'network' ? 'network' : 'invalid');
       return;
     }
     await load();
