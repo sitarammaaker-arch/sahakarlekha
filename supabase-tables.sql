@@ -3576,3 +3576,8 @@ alter table members add column if not exists "statusResolutionDate" text;
 -- Act s.28(1) committee reservation (two women) needs the gender; DOB keeps the age current. Own update (RULE 1).
 alter table members add column if not exists "gender" text;
 alter table members add column if not exists "dateOfBirth" text;
+
+-- ── Member photograph + correspondence address (migration 119, member-area audit M6) ─────────────────────────
+-- Act s.40 proviso. Photos live in the PRIVATE storage bucket 'member-photos' (policies in migration 119).
+alter table members add column if not exists "correspondenceAddress" text;
+alter table members add column if not exists "photoPath" text;

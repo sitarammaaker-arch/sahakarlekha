@@ -148,7 +148,8 @@ export interface MemberLedgerEntry {
   balance: number;
 }
 
-export type MemberType = 'member' | 'nominal';
+// M6: 'associate' — Haryana Act s.18: no share in assets / profits (s.18(2)), no vote (s.20 proviso (b)).
+export type MemberType = 'member' | 'nominal' | 'associate';
 
 // ECR-16: member KYC verification lifecycle.
 export type KycStatus = 'pending' | 'verified' | 'rejected';
@@ -223,6 +224,10 @@ export interface Member {
   // M5 (migration 118, step-2): Haryana Act s.28(1) committee reservation needs the women count; DOB keeps the age current.
   gender?: 'female' | 'male' | 'other';
   dateOfBirth?: string;
+  // M6 (migration 119): Act s.40 proviso — a primary society member's photograph and a correspondence address
+  // besides the permanent one (`address`). The photo lives in the private 'member-photos' bucket.
+  correspondenceAddress?: string;
+  photoPath?: string;
   occupation?: string;
   caste?: CasteCategory;
   tehsil?: string;

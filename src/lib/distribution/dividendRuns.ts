@@ -34,11 +34,13 @@ export interface DistributionRun {
   isDeleted?: boolean;
 }
 
-type MemberLike = { id: string; name: string; shareCapital?: number; status?: string; approvalStatus?: string };
+type MemberLike = { id: string; name: string; shareCapital?: number; status?: string; approvalStatus?: string; memberType?: string };
 
-/** Who receives the general dividend — same rule the page always used: active AND approved. */
+/** Who receives the general dividend: active AND approved — and (M6, Haryana Act s.18(2)) never an associate or
+ *  nominal member, who has no share in the profits. */
 export function eligibleDividendMembers<M extends MemberLike>(members: ReadonlyArray<M>): M[] {
-  return members.filter((m) => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved'));
+  return members.filter((m) => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved')
+    && m.memberType !== 'associate' && m.memberType !== 'nominal');
 }
 
 /** Per-member dividend lines = ratePct% of paid-up share capital (same arithmetic as before). */

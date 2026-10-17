@@ -24,7 +24,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
-import { memberStatusLabel } from '@/lib/memberLifecycle';
+import { memberStatusLabel, memberTypeLabel } from '@/lib/memberLifecycle';
 import { isExit } from '@/lib/members/cessation';
 import { addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, registerReportIdentity } from '@/lib/pdf';
 
@@ -37,7 +37,7 @@ const Form1MemberList: React.FC = () => {
   // ── Filters ───────────────────────────────────────────────────────────────
   const [search,      setSearch]      = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
-  const [typeFilter,  setTypeFilter]  = useState<'all' | 'member' | 'nominal'>('all');
+  const [typeFilter,  setTypeFilter]  = useState<'all' | 'member' | 'nominal' | 'associate'>('all');
 
   const filtered = useMemo(() => {
     let list = members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved');
@@ -72,7 +72,7 @@ const Form1MemberList: React.FC = () => {
     m.address || '—',
     m.phone || '—',
     (m.admissionDate || m.joinDate) ? fmtDate(m.admissionDate || m.joinDate) : '—',
-    m.memberType === 'nominal' ? 'Nominal' : 'Regular',
+    m.memberType && m.memberType !== 'member' ? memberTypeLabel(m.memberType) : 'Regular',
     m.shareCount ?? '—',
     money(m.shareCapital || 0),
     m.nomineeName || '—',
@@ -210,7 +210,8 @@ const Form1MemberList: React.FC = () => {
           <SelectContent>
             <SelectItem value="all">{hi ? 'सभी प्रकार' : 'All Types'}</SelectItem>
             <SelectItem value="member">{hi ? 'नियमित' : 'Regular'}</SelectItem>
-            <SelectItem value="nominal">{hi ? 'नामिनल' : 'Nominal'}</SelectItem>
+            <SelectItem value="nominal">{hi ? 'नाममात्र' : 'Nominal'}</SelectItem>
+            <SelectItem value="associate">{hi ? 'सहयोगी' : 'Associate'}</SelectItem>
           </SelectContent>
         </Select>
         <span className="text-xs text-gray-400 ml-auto">

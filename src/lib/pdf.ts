@@ -2621,7 +2621,9 @@ export function generateMemberApplicationPDF(member: Member, society: SocietySet
 
   const para3 =
     'I hereby declare that I will abide by all the rules, rights, duties, and responsibilities as prescribed ' +
-    'under the Cooperative Societies Act and its relevant rules.';
+    'under the Cooperative Societies Act and its relevant rules. I further declare that I am not an insolvent and have ' +
+    'not applied to be adjudged one, that I have not been sentenced for an offence involving moral turpitude in the last ' +
+    'five years, and that I am not a member of any other primary credit society.';   // M6: Haryana Rules r.14 / r.15
   const para3Lines = doc.splitTextToSize(para3, textW);
   doc.text(para3Lines, mL, y); y += para3Lines.length * 4.5 + 8;
 

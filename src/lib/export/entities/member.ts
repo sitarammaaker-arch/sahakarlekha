@@ -120,6 +120,9 @@ const member: EntityDescriptor = {
     // M5 gender + date of birth (migration 118).
     c('gender', 'Gender', 'लिंग', { type: 'enum' }),
     internal('dateOfBirth', 'Date of Birth', 'जन्म तिथि', { type: 'date', piiClass: 'contact' }),
+    // M6 correspondence address + photo link (migration 119). The photo FILE lives in the 'member-photos' bucket.
+    internal('correspondenceAddress', 'Correspondence Address', 'पत्राचार का पता', { piiClass: 'contact' }),
+    internal('photoPath', 'Photo (storage path)', 'फ़ोटो (स्टोरेज पथ)'),
     c('isDeleted', 'Deleted', 'हटाया गया', { type: 'boolean', defaultVisible: false }),
     internal('createdAt', 'Created At', 'निर्माण समय', { type: 'date' }),
   ],

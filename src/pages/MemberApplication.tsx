@@ -34,6 +34,7 @@ const EMPTY_FORM = {
   // M2: the date the application reached the society (r.17 / s.16 clock) + KYC like the member form
   applicationDate: new Date().toISOString().split('T')[0], aadhaar: '', pan: '',
   gender: '', dateOfBirth: '',   // M5: s.28(1) reservation needs the women count
+  correspondenceAddress: '',   // M6: s.40 proviso
 };
 
 const MemberApplication: React.FC = () => {
@@ -96,6 +97,7 @@ const MemberApplication: React.FC = () => {
       approvalStatus: 'pending',
       age: form.dateOfBirth ? ageOn(form.dateOfBirth, today) : (form.age ? parseInt(form.age) : undefined),
       gender: (form.gender || undefined) as 'female' | 'male' | 'other' | undefined, dateOfBirth: form.dateOfBirth || undefined,
+      correspondenceAddress: form.correspondenceAddress.trim() || undefined,
       occupation: form.occupation.trim() || undefined,
       caste: (form.caste as CasteCategory) || undefined,
       tehsil: form.tehsil.trim() || undefined,
@@ -227,7 +229,8 @@ const MemberApplication: React.FC = () => {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="member">{hi ? 'सदस्य' : 'Member'}</SelectItem>
-                    <SelectItem value="nominal">{hi ? 'नॉमिनल सदस्य' : 'Nominal Member'}</SelectItem>
+                    <SelectItem value="nominal">{hi ? 'नाममात्र सदस्य' : 'Nominal Member'}</SelectItem>
+                    <SelectItem value="associate">{hi ? 'सहयोगी सदस्य (मत/लाभांश नहीं)' : 'Associate (no vote / dividend)'}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -257,8 +260,12 @@ const MemberApplication: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>{hi ? 'पूरा पता' : 'Full Address'}</Label>
+              <Label>{hi ? 'स्थायी पता' : 'Permanent Address'}</Label>
               <Textarea value={form.address} onChange={e => f('address', e.target.value)} placeholder={hi ? 'मकान नं., गली, गाँव/शहर' : 'House No., Street, Village/City'} />
+            </div>
+            <div className="space-y-2">
+              <Label>{hi ? 'पत्राचार का पता (अलग हो तो)' : 'Correspondence Address (if different)'}</Label>
+              <Textarea value={form.correspondenceAddress} onChange={e => f('correspondenceAddress', e.target.value)} className="h-14" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">

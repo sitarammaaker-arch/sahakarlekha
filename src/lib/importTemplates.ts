@@ -94,7 +94,7 @@ export function vouchersTemplate(fyStart: string): string {
 
 export const VALID_ACCOUNT_TYPES = ['asset', 'liability', 'income', 'expense', 'equity'];
 export const VALID_BALANCE_TYPES = ['debit', 'credit'];
-export const VALID_MEMBER_TYPES = ['member', 'nominal'];
+export const VALID_MEMBER_TYPES = ['member', 'nominal', 'associate'];
 export const VALID_STATUS = ['active', 'inactive'];
 export const VALID_VOUCHER_TYPES = ['receipt', 'payment', 'journal', 'contra', 'sale', 'purchase'];
 
