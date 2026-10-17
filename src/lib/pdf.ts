@@ -4004,3 +4004,75 @@ export function generateMemberRefusalLetterPDF(member: Member, society: SocietyS
   addSignatureBlock(doc, font, ['Secretary', 'President'], y, undefined, [sig.secretary, sig.president]);
   doc.save(pdfFileName('MembershipRefusal', society));
 }
+
+/**
+ * Member-audit M3 (2026-10-17): the share certificate (Model Bye-laws PACS cl.8(ii): number of shares and amount
+ * paid, signed by the President and the Secretary / CEO). Landscape A5 with a border. Labels English (helvetica);
+ * the member's name / father / address may be Hindi — doc.text draws them through pdfDevanagari.
+ */
+export function generateShareCertificatePDF(member: Member, society: SocietySettings): void {
+  const doc = new jsPDF('l', 'mm', 'a5');
+  const font = setupFont(doc);
+  const W = doc.internal.pageSize.width;
+  const H = doc.internal.pageSize.height;
+  const cx = W / 2;
+  doc.setDrawColor(41, 82, 163);
+  doc.setLineWidth(1.2);
+  doc.rect(6, 6, W - 12, H - 12);
+  doc.setLineWidth(0.3);
+  doc.rect(8.5, 8.5, W - 17, H - 17);
+
+  doc.setFont(font, 'bold');
+  doc.setFontSize(13);
+  doc.text(society.name, cx, 19, { align: 'center', maxWidth: W - 30 });
+  doc.setFont(font, 'normal');
+  doc.setFontSize(8);
+  const addr = [society.address, society.district, society.state ? getStateName(society.state) : ''].filter(Boolean).join(', ');
+  if (addr) doc.text(addr, cx, 25, { align: 'center' });
+  if (society.registrationNo) doc.text(`Reg. No.: ${society.registrationNo}`, cx, 29.5, { align: 'center' });
+
+  doc.setFont(font, 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(41, 82, 163);
+  doc.text('SHARE CERTIFICATE', cx, 40, { align: 'center' });
+  doc.setTextColor(0);
+  if (member.shareCertStatus === 'reissued') {
+    doc.setFontSize(8);
+    doc.text('(DUPLICATE / RE-ISSUED)', cx, 45, { align: 'center' });
+  }
+
+  doc.setFontSize(9);
+  doc.setFont(font, 'normal');
+  doc.text(`Certificate No.: ${member.shareCertNo || '-'}`, 16, 52);
+  doc.text(`Member No.: ${member.memberId}`, W - 16, 52, { align: 'right' });
+
+  const count = member.shareCount || 0;
+  const face = member.shareFaceValue || 0;
+  const paid = member.shareCapital || 0;
+  doc.setFontSize(10);
+  let y = 62;
+  doc.text('This is to certify that', 16, y); y += 7;
+  doc.setFont(font, 'bold');
+  doc.text(member.name, 16, y, { maxWidth: W - 32 }); y += 6;
+  doc.setFont(font, 'normal');
+  if (member.fatherName) { doc.text(`S/o, D/o, W/o: ${member.fatherName}`, 16, y, { maxWidth: W - 32 }); y += 6; }
+  if (member.address) { doc.text(`Resident of: ${member.address}`, 16, y, { maxWidth: W - 32 }); y += 7; }
+  const body = doc.splitTextToSize(
+    `is the registered holder of ${count || '-'} share(s) of Rs. ${face ? fmt(face) : '-'} each, amount paid Rs. ${fmt(paid)}, `
+    + 'in the above society, subject to the Act, the Rules and the bye-laws of the society.', W - 32);
+  doc.text(body, 16, y); y += body.length * 5 + 3;
+  doc.setFontSize(9);
+  doc.text(`Issued on: ${member.shareCertIssuedAt ? fmtDate(member.shareCertIssuedAt) : '-'}`, 16, y);
+
+  // Signatures drawn here: addSignatureBlock needs 35 mm and would push them onto a second A5 page.
+  const sig = getSignatoryNames(society);
+  doc.setLineWidth(0.3);
+  doc.setDrawColor(80);
+  ([[W * 0.25, 'Secretary', sig.secretary], [W * 0.75, 'President', sig.president]] as const).forEach(([x, label, name]) => {
+    doc.line(x - 28, H - 24, x + 28, H - 24);
+    doc.setFontSize(8);
+    if (name) doc.text(name, x, H - 26, { align: 'center' });
+    doc.text(label, x, H - 19, { align: 'center' });
+  });
+  doc.save(pdfFileName(`ShareCertificate_${member.memberId}`, society));
+}

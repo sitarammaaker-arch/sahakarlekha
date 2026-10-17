@@ -41,7 +41,8 @@ import { memberPhoneError } from '@/lib/memberValidation';
 import { callMemberPortalAdmin, portalPlanAllowed, type PortalLoginRow } from '@/lib/memberPortalAdmin';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 import { admissionClock, applicationReceivedOn, validateAdmission, validateRejection, isHaryana } from '@/lib/members/admission';
-import { generateMemberRefusalLetterPDF } from '@/lib/pdf';
+import { generateMemberRefusalLetterPDF, generateShareCertificatePDF } from '@/lib/pdf';
+import { nomineeCountWarning, certificateNoTakenBy } from '@/lib/members/shareRules';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
 const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }> = {
@@ -496,6 +497,9 @@ const Members: React.FC = () => {
     if (!nv.ok) { toast({ title: hi ? 'नामांकित त्रुटि' : 'Nominee error', description: nv.error, variant: 'destructive' }); return; }
     const kv = validateKyc(form.aadhaar, form.pan);
     if (!kv.ok) { toast({ title: 'KYC', description: kv.error, variant: 'destructive' }); return; }
+    // M3: r.21 — nominees may not outnumber the shares (warning only).
+    const nomWarn = nomineeCountWarning((form.nomineeName.trim() ? 1 : 0) + cleanNominees.length, Number(form.shareCount) || undefined);
+    if (nomWarn) toast({ title: hi ? 'नामांकन जाँचें' : 'Check nomination', description: nomWarn, duration: 10000 });
     Object.assign(form, { memberId });
     const created = addMember({
       ...form, memberId,
@@ -540,6 +544,12 @@ const Members: React.FC = () => {
     if (!nv.ok) { toast({ title: hi ? 'नामांकित त्रुटि' : 'Nominee error', description: nv.error, variant: 'destructive' }); return; }
     const kv = validateKyc(form.aadhaar, form.pan);
     if (!kv.ok) { toast({ title: 'KYC', description: kv.error, variant: 'destructive' }); return; }
+    // M3: r.21 — every member nominates, and nominees may not outnumber the shares (warnings, never blocking).
+    const nomCount = (form.nomineeName.trim() ? 1 : 0) + cleanNominees.length;
+    const nomWarn = nomCount === 0
+      ? (hi ? 'इस सदस्य का कोई नामांकित नहीं है — नियम 21: हर सदस्य नामांकन करेगा।' : 'This member has no nominee — Rule 21: every member shall nominate.')
+      : nomineeCountWarning(nomCount, editMember.shareCount);
+    if (nomWarn) toast({ title: hi ? 'नामांकन जाँचें' : 'Check nomination', description: nomWarn, duration: 10000 });
     // Only a CHANGED phone is checked — an old member's legacy number must not block an unrelated edit.
     if ((form.phone || '').trim() !== (editMember.phone || '').trim() && phoneError(form.phone)) { toast({ title: phoneError(form.phone)!, variant: 'destructive' }); return; }
     const applied = updateMember(editMember.id, {
@@ -603,6 +613,9 @@ const Members: React.FC = () => {
     if (!certMember) return;
     const v = validateCertificate({ status: certForm.status, certNo: certForm.certNo, count: Number(certForm.count), reason: certForm.reason });
     if (!v.ok) { toast({ title: hi ? 'प्रमाणपत्र त्रुटि' : 'Certificate error', description: v.error, variant: 'destructive' }); return; }
+    // M3: a certificate number belongs to one member only.
+    const taken = certificateNoTakenBy(allMembers, certForm.certNo, certMember.id);
+    if (taken) { toast({ title: hi ? 'प्रमाणपत्र संख्या पहले से है' : 'Certificate number in use', description: hi ? `यह संख्या ${taken.name} (${taken.memberId}) को दी जा चुकी है।` : `Already issued to ${taken.name} (${taken.memberId}).`, variant: 'destructive' }); return; }
     const name = certMember.name;
     const applied = updateMember(certMember.id, {
       shareCertNo: certForm.certNo.trim() || undefined,
@@ -1067,6 +1080,11 @@ const Members: React.FC = () => {
             </div>
           )}
           <DialogFooter>
+            {certMember?.shareCertNo && certMember.shareCertStatus !== 'cancelled' && (
+              <Button variant="outline" className="gap-1 sm:mr-auto" onClick={() => generateShareCertificatePDF(certMember, society)} title={hi ? 'सेव हुआ प्रमाणपत्र छापें' : 'Print the saved certificate'}>
+                <Download className="h-4 w-4" />{hi ? 'प्रमाणपत्र PDF' : 'Certificate PDF'}
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setCertMember(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
             <Button onClick={handleSaveCertificate}>{hi ? 'सहेजें' : 'Save'}</Button>
           </DialogFooter>

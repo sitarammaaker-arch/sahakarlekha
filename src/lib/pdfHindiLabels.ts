@@ -10,6 +10,9 @@
  */
 export const PDF_HI_EXTRA: Record<string, string> = {
   'to,': 'सेवा में,',
+  'share certificate': 'शेयर प्रमाणपत्र',
+  '(duplicate / re-issued)': '(प्रतिलिपि / पुनः जारी)',
+  'this is to certify that': 'प्रमाणित किया जाता है कि',
   'reason(s):': 'कारण:',
   'sr': 'क्रम',
   'name (english / hindi)': 'नाम (अंग्रेज़ी / हिंदी)',
