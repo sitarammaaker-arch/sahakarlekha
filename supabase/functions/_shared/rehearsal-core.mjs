@@ -321,6 +321,9 @@ var member = {
     internal2("admissionResolutionDate", "Admission Resolution Date", "\u0926\u093E\u0916\u093C\u093F\u0932\u093E \u092A\u094D\u0930\u0938\u094D\u0924\u093E\u0935 \u0924\u093F\u0925\u093F", { type: "date" }),
     internal2("rejectionReason", "Rejection Reason", "\u0905\u0938\u094D\u0935\u0940\u0915\u0943\u0924\u093F \u0915\u093E \u0915\u093E\u0930\u0923"),
     internal2("decidedAt", "Decided On", "\u0928\u093F\u0930\u094D\u0923\u092F \u0924\u093F\u0925\u093F", { type: "date" }),
+    // M4 status resolution (migration 117).
+    internal2("statusResolutionNo", "Status Resolution No.", "\u0938\u094D\u0925\u093F\u0924\u093F \u092A\u094D\u0930\u0938\u094D\u0924\u093E\u0935 \u0938\u0902\u0916\u094D\u092F\u093E"),
+    internal2("statusResolutionDate", "Status Resolution Date", "\u0938\u094D\u0925\u093F\u0924\u093F \u092A\u094D\u0930\u0938\u094D\u0924\u093E\u0935 \u0924\u093F\u0925\u093F", { type: "date" }),
     c2("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false }),
     internal2("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]

@@ -101,6 +101,7 @@ import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
 import { memberAuditDiff } from '@/lib/members/memberAudit';
 import { splitAdmissionFields, applicationReceivedOn, type AdmissionDecision } from '@/lib/members/admission';
 import { canHoldShares } from '@/lib/members/shareRules';
+import { MEMBER_STATUS_EXTRA_FIELDS } from '@/lib/members/cessation';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 
 /* T-09 — the `ledger_events` row → LedgerEvent mapper now lives in lib/ledger/rows.ts.
@@ -226,7 +227,7 @@ interface DataContextType {
 
   addMember: (data: Omit<Member, 'id'>, opts?: { quiet?: boolean; onSaved?: (m: Member) => void }) => Member;
   updateMember: (id: string, data: Partial<Member>, opts?: { onSaved?: () => void }) => boolean;
-  changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string) => boolean;
+  changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string, opts?: { effectiveDate?: string; resolutionNo?: string; resolutionDate?: string }) => boolean;
   deleteMember: (id: string) => void;
   refundShareCapital: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void;
   /** Two-step refund: committee approval (Dr Share Capital / Cr Share Refund Payable) … */
@@ -437,7 +438,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // LEGACY (table not migrated yet): behaviour is exactly as before, nothing is lost.
   const identitySplitRef = useRef(false);
   // M2: the admission columns (migration 116) never ride the base upsert — persistMemberAdmission writes them after.
-  const memberRow = (m: Record<string, any>) => withSoc(splitAdmissionFields(identitySplitRef.current ? stripMemberPII(m) : m).base);
+  const memberRow = (m: Record<string, any>) => {
+    const base: Record<string, any> = splitAdmissionFields(identitySplitRef.current ? stripMemberPII(m) : m).base;
+    for (const f of MEMBER_STATUS_EXTRA_FIELDS) delete base[f];   // M4: migration-117 columns ride their own update
+    return withSoc(base);
+  };
   // RULE 1 step 2 for the admission columns: the member row is already safe; a failure here (migration 116 not run)
   // keeps the member and says so mildly — no rollback.
   const persistMemberAdmission = (id: string, member: Record<string, any>) => {
@@ -3376,7 +3381,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ECR-16 (member lifecycle): record a lifecycle transition (resign/expel/death/reactivate)
   // with reason + date. `status` (base column) is persisted reliably; the reason/date
   // metadata rides a targeted best-effort .update() so the change is safe pre-migration.
-  const changeMemberStatus = useCallback((id: string, newStatus: MemberStatus, reason: string): boolean => {
+  const changeMemberStatus = useCallback((id: string, newStatus: MemberStatus, reason: string, opts?: { effectiveDate?: string; resolutionNo?: string; resolutionDate?: string }): boolean => {
     if (guardFYLocked()) return false;
     const current = membersRef.current.find(m => m.id === id);
     if (!current) return false;
@@ -3390,8 +3395,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
       return false;
     }
-    const changedAt = new Date().toISOString().split('T')[0];
-    const updated: Member = { ...current, status: newStatus, statusReason: reason, statusChangedAt: changedAt };
+    // M4: r.22(c) — the date the member really ceased (a resignation / death recorded later keeps its own date).
+    const changedAt = opts?.effectiveDate || new Date().toISOString().split('T')[0];
+    const resolutionNo = opts?.resolutionNo?.trim() || undefined;
+    const resolutionDate = opts?.resolutionDate || undefined;
+    const updated: Member = { ...current, status: newStatus, statusReason: reason, statusChangedAt: changedAt, statusResolutionNo: resolutionNo, statusResolutionDate: resolutionDate };
     membersRef.current = membersRef.current.map(m => m.id === id ? updated : m);
     setMembersState(prev => prev.map(m => m.id === id ? updated : m));
     // Persist status (base column) reliably — roll back on failure (RULE 1).
@@ -3407,7 +3415,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('members').update({ statusReason: reason, statusChangedAt: changedAt }).eq('id', id).then(({ error }) => {
       if (error) { console.warn('Member status metadata not persisted — run latest supabase-tables.sql migration:', error.message); reportError('write-partial', error.message, { at: 'member status metadata' }); }
     });
-    emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { status: current.status }, after: { status: newStatus }, reason });
+    // M4: the resolution (migration 117) in its OWN update — one missing column must not drop the reason/date above.
+    supabase.from('members').update({ statusResolutionNo: resolutionNo ?? null, statusResolutionDate: resolutionDate ?? null }).eq('id', id).then(({ error }) => {
+      if (!error) return;
+      reportError('write-partial', error.message, { at: 'member status resolution' });
+      if (resolutionNo || resolutionDate) toastRef.current({ title: 'स्थिति सेव हुई — पर प्रस्ताव संख्या नहीं', description: `प्रस्ताव संख्या/तिथि सेव नहीं हुई (${error.message})। Migration 117 चलाएँ।`, duration: 10000 });
+    });
+    emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { status: current.status, statusChangedAt: current.statusChangedAt ?? null }, after: { status: newStatus, statusChangedAt: changedAt, resolutionNo: resolutionNo ?? null, resolutionDate: resolutionDate ?? null }, reason });
     toastRef.current({ title: '✅ सदस्य स्थिति अपडेट', description: `${current.name}: ${current.status} → ${newStatus}`, variant: 'default', duration: 6000 });
     return true;
   }, []);

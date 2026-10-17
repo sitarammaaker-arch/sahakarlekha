@@ -114,6 +114,9 @@ const member: EntityDescriptor = {
     internal('admissionResolutionDate', 'Admission Resolution Date', 'दाख़िला प्रस्ताव तिथि', { type: 'date' }),
     internal('rejectionReason', 'Rejection Reason', 'अस्वीकृति का कारण'),
     internal('decidedAt', 'Decided On', 'निर्णय तिथि', { type: 'date' }),
+    // M4 status resolution (migration 117).
+    internal('statusResolutionNo', 'Status Resolution No.', 'स्थिति प्रस्ताव संख्या'),
+    internal('statusResolutionDate', 'Status Resolution Date', 'स्थिति प्रस्ताव तिथि', { type: 'date' }),
     c('isDeleted', 'Deleted', 'हटाया गया', { type: 'boolean', defaultVisible: false }),
     internal('createdAt', 'Created At', 'निर्माण समय', { type: 'date' }),
   ],

@@ -189,7 +189,9 @@ export interface Member {
   joinDate: string;
   status: MemberStatus;
   statusReason?: string;      // ECR-16: why the last lifecycle change (resigned/expelled/deceased/reactivated)
-  statusChangedAt?: string;   // ECR-16: ISO date of the last lifecycle change
+  statusChangedAt?: string;   // ECR-16: ISO date of the last lifecycle change (M4: the EFFECTIVE date — r.22(c) date of ceasing)
+  statusResolutionNo?: string;    // M4 (migration 117): resolution behind the change — r.19 GM resolution for expulsion, Board for withdrawal
+  statusResolutionDate?: string;  // M4 (migration 117): date of that resolution
   creditLimit?: number;   // Consumer C3 — max member-store credit outstanding (0/undefined = no cap; POS warns, never blocks)
   // Share Register fields
   shareCertNo?: string;

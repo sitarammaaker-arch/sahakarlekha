@@ -22,7 +22,7 @@ import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award, KeyRound, ContactRound } from 'lucide-react';
+import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award, KeyRound, ContactRound, HandCoins } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MemberType, CasteCategory } from '@/types';
@@ -43,6 +43,8 @@ import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 import { admissionClock, applicationReceivedOn, validateAdmission, validateRejection, isHaryana } from '@/lib/members/admission';
 import { generateMemberRefusalLetterPDF, generateShareCertificatePDF } from '@/lib/pdf';
 import { nomineeCountWarning, certificateNoTakenBy } from '@/lib/members/shareRules';
+import { validateStatusChange, liabilityUntil, isExit, deathSettlement } from '@/lib/members/cessation';
+import { loanOutstanding, kccOutstanding } from '@/lib/memberSnapshot';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
 const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }> = {
@@ -366,7 +368,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
   const { can, user } = useAuth();
-  const { members: allMembers, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks, matchesActiveBranch } = useData();
+  const { members: allMembers, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks, matchesActiveBranch, loans, kccLoans, approveShareRefund } = useData();
   // ECR-17 Phase 4: scope the member list to the active branch ('all' → every member).
   const members = allMembers.filter(m => matchesActiveBranch(m.branchId));
   // ECR-06 17-role: RBAC permission gate, not a hardcoded legacy list. `update` (not `create`)
@@ -409,6 +411,12 @@ const Members: React.FC = () => {
   const [statusMember, setStatusMember] = useState<Member | null>(null);
   const [statusNew, setStatusNew] = useState<MemberStatus>('inactive');
   const [statusReason, setStatusReason] = useState('');
+  // M4: the effective date (r.22(c)) + the resolution behind the change (r.19 / Board)
+  const [statusDate, setStatusDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [statusResNo, setStatusResNo] = useState('');
+  const [statusResDate, setStatusResDate] = useState('');
+  const [settleMember, setSettleMember] = useState<Member | null>(null);
+  const [settleForm, setSettleForm] = useState({ date: new Date().toISOString().split('T')[0], resolution: '', amount: '' });
   // ECR-16: share-certificate dialog
   const [certMember, setCertMember] = useState<Member | null>(null);
   const [certForm, setCertForm] = useState({ certNo: '', count: '', faceValue: '', status: 'issued' as ShareCertStatus, reason: '' });
@@ -652,6 +660,27 @@ const Members: React.FC = () => {
     setDecision(null);
   };
   const missingResolution = decision?.action === 'approve' && !decisionForm.resolutionNo.trim();
+  // M4: lifecycle change — a real date, warnings for a missing resolution (never blocking)
+  const statusChangeCheck = statusMember
+    ? validateStatusChange({ to: statusNew, effectiveDate: statusDate, resolutionNo: statusResNo, resolutionDate: statusResDate || undefined },
+      { today, joinedOn: statusMember.admissionDate || statusMember.joinDate })
+    : { ok: true, warnings: [] as string[] };
+  // M4: s.23 / s.55 — a deceased member's share money, after their loan + KCC dues, goes to the nominee
+  const memberDues = (m: Member) => loans.filter(l => l.memberId === m.id && !l.isDeleted).reduce((s, l) => s + loanOutstanding(l), 0)
+    + kccLoans.filter(k => k.memberId === m.id).reduce((s, k) => s + kccOutstanding(k), 0);
+  const settlement = settleMember ? deathSettlement({ shareCapital: settleMember.shareCapital || 0, dues: memberDues(settleMember), dateOfDeath: settleMember.statusChangedAt }) : null;
+  const nomineeNames = (m: Member) => {
+    const list = (m.nominees || []).filter(n => n.name?.trim()).map(n => `${n.name}${n.relation ? ` (${n.relation})` : ''}${n.sharePercent ? ` ${n.sharePercent}%` : ''}`);
+    if (!list.length && m.nomineeName) list.push(`${m.nomineeName}${m.nomineeRelation ? ` (${m.nomineeRelation})` : ''}`);
+    return list;
+  };
+  const openSettle = (m: Member) => { setSettleForm({ date: today, resolution: '', amount: String(deathSettlement({ shareCapital: m.shareCapital || 0, dues: memberDues(m) }).shareCapital) }); setSettleMember(m); };
+  const confirmSettle = () => {
+    if (!settleMember) return;
+    const amount = Number(settleForm.amount) || 0;
+    const who = nomineeNames(settleMember).join(', ') || (hi ? 'वारिस' : 'heir');
+    if (approveShareRefund(settleMember.id, amount, settleForm.date, `${settleForm.resolution.trim()} — मृत्यु निपटारा, नामांकित: ${who}`)) setSettleMember(null);
+  };
 
   const handleDownloadPDF = (member: Member) => {
     generateMemberApplicationPDF(member, society);
@@ -747,6 +776,11 @@ const Members: React.FC = () => {
                     <Badge variant="outline" className={STATUS_META[member.status]?.cls}>
                       {hi ? STATUS_META[member.status]?.hi : STATUS_META[member.status]?.en}
                     </Badge>
+                    {isExit(member.status) && member.statusChangedAt && (
+                      <p className="mt-0.5 text-[10px] text-muted-foreground" title={hi ? 'धारा 24: पूर्व/मृत सदस्य की देनदारी 2 साल' : 's.24: two-year liability of a past member'}>
+                        {fmtDate(member.statusChangedAt)}{liabilityUntil(member.statusChangedAt) && today <= liabilityUntil(member.statusChangedAt)! ? (hi ? ` · देनदारी ${fmtDate(liabilityUntil(member.statusChangedAt))} तक` : ` · liable till ${fmtDate(liabilityUntil(member.statusChangedAt))}`) : ''}
+                      </p>
+                    )}
                   </TableCell>
                 )}
                 <TableCell>
@@ -794,8 +828,15 @@ const Members: React.FC = () => {
                     {canEdit && !showApprovalActions && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                         title={hi ? 'स्थिति बदलें (त्यागपत्र/निष्कासन/मृत्यु)' : 'Change status (resign/expel/death)'}
-                        onClick={() => { setStatusMember(member); setStatusNew(member.status === 'active' ? 'resigned' : 'active'); setStatusReason(''); }}>
+                        onClick={() => { setStatusMember(member); setStatusNew(member.status === 'active' ? 'resigned' : 'active'); setStatusReason(''); setStatusDate(new Date().toISOString().split('T')[0]); setStatusResNo(''); setStatusResDate(''); }}>
                         <UserCog className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canEdit && !showApprovalActions && member.status === 'deceased' && (member.shareCapital || 0) > 0 && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-700 hover:bg-slate-100"
+                        title={hi ? 'मृत्यु निपटारा — शेयर राशि नामांकित को' : 'Death settlement — share money to the nominee'}
+                        onClick={() => openSettle(member)}>
+                        <HandCoins className="h-4 w-4" />
                       </Button>
                     )}
                     {canEdit && !showApprovalActions && (
@@ -1021,6 +1062,27 @@ const Members: React.FC = () => {
                 <Textarea className="mt-1" rows={2} value={statusReason} onChange={e => setStatusReason(e.target.value)}
                   placeholder={hi ? 'कारण लिखें (त्यागपत्र/निष्कासन/मृत्यु आदि)...' : 'Enter reason...'} />
               </div>
+              <div>
+                <Label className="text-sm">{statusNew === 'deceased' ? (hi ? 'मृत्यु की तिथि *' : 'Date of death *') : (hi ? 'किस तिथि से *' : 'Effective date *')}</Label>
+                <Input className="mt-1" type="date" value={statusDate} max={new Date().toISOString().split('T')[0]} onChange={e => setStatusDate(e.target.value)} />
+                <p className="text-[11px] text-muted-foreground mt-0.5">{hi ? 'जिस दिन सच में हुआ — रजिस्टर में यही "सदस्यता समाप्ति तिथि" छपेगी (नियम 22)।' : 'The day it actually happened — the register prints this (Rule 22).'}</p>
+              </div>
+              {(statusNew === 'resigned' || statusNew === 'expelled') && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">{statusNew === 'expelled' ? (hi ? 'आम सभा प्रस्ताव सं.' : 'GM resolution no.') : (hi ? 'संचालक मंडल प्रस्ताव सं.' : 'Board resolution no.')}</Label>
+                    <Input className="mt-1" value={statusResNo} onChange={e => setStatusResNo(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">{hi ? 'प्रस्ताव तिथि' : 'Resolution date'}</Label>
+                    <Input className="mt-1" type="date" value={statusResDate} max={new Date().toISOString().split('T')[0]} onChange={e => setStatusResDate(e.target.value)} />
+                  </div>
+                </div>
+              )}
+              {statusChangeCheck.warnings.map(w => <p key={w} className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">⚠ {w}</p>)}
+              {isExit(statusNew) && (
+                <p className="text-[11px] text-muted-foreground">{hi ? `धारा 24: पूर्व/मृत सदस्य की देनदारी ${liabilityUntil(statusDate) ? fmtDate(liabilityUntil(statusDate)) : '2 साल'} तक बनी रहती है।` : `s.24: a past / deceased member stays liable until ${liabilityUntil(statusDate) ? fmtDate(liabilityUntil(statusDate)) : 'two years'}.`}</p>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -1028,9 +1090,61 @@ const Members: React.FC = () => {
             <Button
               disabled={!statusReason.trim() || !statusMember || statusNew === statusMember.status}
               onClick={() => {
-                if (statusMember && changeMemberStatus(statusMember.id, statusNew, statusReason.trim())) setStatusMember(null);
+                if (!statusMember) return;
+                if (!statusChangeCheck.ok) { toast({ title: hi ? 'जाँचें' : 'Check', description: statusChangeCheck.error, variant: 'destructive' }); return; }
+                if (changeMemberStatus(statusMember.id, statusNew, statusReason.trim(), { effectiveDate: statusDate, resolutionNo: statusResNo, resolutionDate: statusResDate || undefined })) setStatusMember(null);
               }}>
               {hi ? 'बदलें' : 'Update'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* M4: death settlement (s.23 nominee, s.55 set-off) */}
+      <Dialog open={!!settleMember} onOpenChange={(o) => { if (!o) setSettleMember(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{hi ? 'मृत्यु निपटारा — शेयर राशि' : 'Death settlement — share money'}</DialogTitle>
+            <DialogDescription>{settleMember?.name} ({settleMember?.memberId}){settleMember?.statusChangedAt ? ` · ${hi ? 'मृत्यु' : 'died'} ${fmtDate(settleMember.statusChangedAt)}` : ''}</DialogDescription>
+          </DialogHeader>
+          {settleMember && settlement && (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-md border p-2">
+                <p className="text-xs text-muted-foreground">{hi ? 'नामांकित' : 'Nominee(s)'}</p>
+                <p className="font-medium">{nomineeNames(settleMember).join(', ') || (hi ? 'कोई नामांकित नहीं — वारिस/कानूनी प्रतिनिधि (धारा 23)' : 'No nominee — heir / legal representative (s.23)')}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-md bg-muted p-2"><p className="text-[11px] text-muted-foreground">{hi ? 'शेयर राशि' : 'Share money'}</p><p className="font-semibold">{fmt(settlement.shareCapital)}</p></div>
+                <div className="rounded-md bg-muted p-2"><p className="text-[11px] text-muted-foreground">{hi ? 'ऋण/KCC बक़ाया' : 'Loan/KCC dues'}</p><p className="font-semibold">{fmt(settlement.dues)}</p></div>
+                <div className="rounded-md bg-muted p-2"><p className="text-[11px] text-muted-foreground">{hi ? 'नामांकित को' : 'To nominee'}</p><p className="font-semibold">{fmt(settlement.payableToNominee)}</p></div>
+              </div>
+              {settlement.setOff > 0 && (
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">⚠ {hi ? `धारा 55: बक़ाया ${fmt(settlement.setOff)} शेयर राशि से काटा जा सकता है। स्वीकृति के बाद "देय" राशि में से पहले ऋण/KCC में ${fmt(settlement.setOff)} की वसूली दर्ज करें, फिर शेष ${fmt(settlement.payableToNominee)} नामांकित को दें।` : `s.55: dues of ${fmt(settlement.setOff)} may be set off. After approval, record that recovery from the payable first, then pay the balance ${fmt(settlement.payableToNominee)} to the nominee.`}</p>
+              )}
+              {settlement.courtOrderWindowUntil && (
+                <p className="text-[11px] text-muted-foreground">{hi ? `धारा 23: अन्य राशियाँ ${fmtDate(settlement.courtOrderWindowUntil)} तक अदालती आदेश न आने पर दी जाती हैं।` : `s.23: other moneys are paid unless a court order arrives by ${fmtDate(settlement.courtOrderWindowUntil)}.`}</p>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">{hi ? 'राशि (शेयर पूँजी से देय में)' : 'Amount (to the payable)'}</Label>
+                  <Input type="number" className="mt-1" value={settleForm.amount} max={settlement.shareCapital} onChange={e => setSettleForm(f => ({ ...f, amount: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">{hi ? 'तिथि' : 'Date'}</Label>
+                  <Input type="date" className="mt-1" value={settleForm.date} max={today} onChange={e => setSettleForm(f => ({ ...f, date: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">{hi ? 'समिति प्रस्ताव संख्या / संदर्भ *' : 'Committee resolution / reference *'}</Label>
+                <Input className="mt-1" value={settleForm.resolution} onChange={e => setSettleForm(f => ({ ...f, resolution: e.target.value }))} />
+              </div>
+              <p className="text-[11px] text-muted-foreground">{hi ? 'Dr शेयर पूँजी / Cr शेयर वापसी देय। भुगतान बाद में शेयर रजिस्टर के "देय भुगतान" से।' : 'Posts Dr Share Capital / Cr Share Refund Payable; pay later from the Share Register ("Pay refund").'}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSettleMember(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button disabled={!settlement || !(Number(settleForm.amount) > 0) || Number(settleForm.amount) > (settlement?.shareCapital || 0) || settleForm.resolution.trim().length < 2} onClick={confirmSettle}>
+              {hi ? 'स्वीकृत करें' : 'Approve'}
             </Button>
           </DialogFooter>
         </DialogContent>
