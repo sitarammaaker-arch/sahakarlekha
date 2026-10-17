@@ -324,6 +324,9 @@ var member = {
     // M4 status resolution (migration 117).
     internal2("statusResolutionNo", "Status Resolution No.", "\u0938\u094D\u0925\u093F\u0924\u093F \u092A\u094D\u0930\u0938\u094D\u0924\u093E\u0935 \u0938\u0902\u0916\u094D\u092F\u093E"),
     internal2("statusResolutionDate", "Status Resolution Date", "\u0938\u094D\u0925\u093F\u0924\u093F \u092A\u094D\u0930\u0938\u094D\u0924\u093E\u0935 \u0924\u093F\u0925\u093F", { type: "date" }),
+    // M5 gender + date of birth (migration 118).
+    c2("gender", "Gender", "\u0932\u093F\u0902\u0917", { type: "enum" }),
+    internal2("dateOfBirth", "Date of Birth", "\u091C\u0928\u094D\u092E \u0924\u093F\u0925\u093F", { type: "date", piiClass: "contact" }),
     c2("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false }),
     internal2("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]

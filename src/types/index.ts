@@ -220,6 +220,9 @@ export interface Member {
   rejectionReason?: string;          // r.17: reason communicated to a refused applicant
   decidedAt?: string;                // date the application was approved / rejected
   age?: number;
+  // M5 (migration 118, step-2): Haryana Act s.28(1) committee reservation needs the women count; DOB keeps the age current.
+  gender?: 'female' | 'male' | 'other';
+  dateOfBirth?: string;
   occupation?: string;
   caste?: CasteCategory;
   tehsil?: string;

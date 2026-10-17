@@ -10,6 +10,17 @@
  */
 export const PDF_HI_EXTRA: Record<string, string> = {
   'to,': 'सेवा में,',
+  'amount (rs.)': 'राशि (रु.)',
+  'member no.': 'सदस्य सं.',
+  'father / husband': 'पिता / पति',
+  'signature': 'हस्ताक्षर',
+  'overdue': 'अतिदेय',
+  'list of voters': 'मतदाता सूची',
+  'list of defaulters': 'बक़ायादार सूची',
+  'returning officer': 'निर्वाचन अधिकारी',
+  'members in default of any sum due to the society, nominal members and members who had ceased are not entered (act s.20).': 'समिति के बक़ायादार, नाममात्र सदस्य और जिनकी सदस्यता समाप्त हो चुकी है, वे इस सूची में नहीं हैं (अधिनियम धारा 20)।',
+  'objections, if any, may be filed with the returning officer within the period notified.': 'आपत्ति हो तो सूचित अवधि में निर्वाचन अधिकारी के पास दर्ज करें।',
+  'placed before the annual general meeting (haryana co-operative societies act, 1984, s.25(3)(d)).': 'वार्षिक आम सभा के समक्ष प्रस्तुत (हरियाणा सहकारी समिति अधिनियम, 1984, धारा 25(3)(d))।',
   'share certificate': 'शेयर प्रमाणपत्र',
   '(duplicate / re-issued)': '(प्रतिलिपि / पुनः जारी)',
   'this is to certify that': 'प्रमाणित किया जाता है कि',

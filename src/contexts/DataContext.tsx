@@ -99,7 +99,7 @@ import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib
 import { accountDeleteFailure, coaResetBlockers, coaResetLiveData } from '@/lib/accounting/accountDelete';
 import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
 import { memberAuditDiff } from '@/lib/members/memberAudit';
-import { splitAdmissionFields, applicationReceivedOn, type AdmissionDecision } from '@/lib/members/admission';
+import { splitAdmissionFields, applicationReceivedOn, MEMBER_PROFILE_FIELDS, type AdmissionDecision } from '@/lib/members/admission';
 import { canHoldShares } from '@/lib/members/shareRules';
 import { MEMBER_STATUS_EXTRA_FIELDS } from '@/lib/members/cessation';
 import { isCountedVoucher } from '@/lib/countedVoucher';
@@ -441,7 +441,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const memberRow = (m: Record<string, any>) => {
     const base: Record<string, any> = splitAdmissionFields(identitySplitRef.current ? stripMemberPII(m) : m).base;
     for (const f of MEMBER_STATUS_EXTRA_FIELDS) delete base[f];   // M4: migration-117 columns ride their own update
+    for (const f of MEMBER_PROFILE_FIELDS) delete base[f];        // M5: migration-118 columns ride their own update
     return withSoc(base);
+  };
+  // M5 step 2: gender / date of birth in their own update (a missing 118 must not drop the admission fields).
+  const persistMemberProfile = (id: string, member: Record<string, any>, touched: boolean) => {
+    if (!touched) return;
+    const patch: Record<string, string | null> = {};
+    for (const f of MEMBER_PROFILE_FIELDS) patch[f] = member[f] || null;
+    supabase.from('members').update(patch).eq('id', id).then(({ error }) => {
+      if (!error) return;
+      reportError('write-partial', error.message, { at: 'member profile fields' });
+      toastRef.current({ title: 'सदस्य सेव हुआ — पर लिंग/जन्मतिथि नहीं', description: `लिंग या जन्मतिथि सेव नहीं हुई (${error.message})। Migration 118 चलाएँ, फिर सदस्य को दोबारा सेव करें।`, duration: 10000 });
+    });
   };
   // RULE 1 step 2 for the admission columns: the member row is already safe; a failure here (migration 116 not run)
   // keeps the member and says so mildly — no rollback.
@@ -3273,6 +3285,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             () => setMembersState(prev => prev.map(m => m.id === newMember.id ? { ...m, aadhaar: undefined, pan: undefined } : m)));
         }
         persistMemberAdmission(newMember.id, newMember);
+        persistMemberProfile(newMember.id, newMember, !!(newMember.gender || newMember.dateOfBirth));
         // Member-audit M1 (D4/D5): the page's success message waits for the cloud; one audit row per member
         // (a bulk import passes quiet and is summarised by the importer instead of one row per member).
         if (!opts.quiet) emitAudit({ entityType: 'member', entityId: newMember.id, action: 'create', after: { memberId: newMember.memberId, name: newMember.name, shareCapital: newMember.shareCapital || 0, admissionFee: newMember.admissionFee || 0, approvalStatus: newMember.approvalStatus ?? 'approved' } });
@@ -3325,6 +3338,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             () => setMembersState(prev => prev.map(m => m.id === id ? { ...m, aadhaar: oldMember.aadhaar, pan: oldMember.pan } : m)));
         }
         if (Object.keys(splitAdmissionFields(data as Record<string, unknown>).extras).length) persistMemberAdmission(id, updatedMember);
+        persistMemberProfile(id, updatedMember, MEMBER_PROFILE_FIELDS.some(f => f in data && (data as Record<string, unknown>)[f] !== (oldMember as unknown as Record<string, unknown>)[f]));
         // Member-audit M1 (D4): who changed what — Aadhaar / PAN are named, never their values.
         const changed = memberAuditDiff(oldMember as unknown as Record<string, unknown>, updatedMember as unknown as Record<string, unknown>);
         if (changed) emitAudit({ entityType: 'member', entityId: id, action: 'update', before: changed.before, after: changed.after });

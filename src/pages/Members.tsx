@@ -22,7 +22,7 @@ import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { EntityLink } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award, KeyRound, ContactRound, HandCoins } from 'lucide-react';
+import { Plus, Users, Search, Eye, Edit, Phone, IndianRupee, Trash2, BookOpen, Download, CheckCircle, XCircle, FileText, ClipboardList, UserCog, Award, KeyRound, ContactRound, HandCoins, FileSpreadsheet } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MemberType, CasteCategory } from '@/types';
@@ -45,6 +45,8 @@ import { generateMemberRefusalLetterPDF, generateShareCertificatePDF } from '@/l
 import { nomineeCountWarning, certificateNoTakenBy } from '@/lib/members/shareRules';
 import { validateStatusChange, liabilityUntil, isExit, deathSettlement } from '@/lib/members/cessation';
 import { loanOutstanding, kccOutstanding } from '@/lib/memberSnapshot';
+import { ageOn } from '@/lib/members/voters';
+import { downloadExcel } from '@/lib/exportUtils';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
 const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }> = {
@@ -75,6 +77,7 @@ const EMPTY_FORM = {
   nominees: [] as Nominee[],   // ECR-16: multiple nominees
   aadhaar: '', pan: '', kycStatus: '' as KycStatus | '',   // ECR-16: KYC
   admissionResolutionNo: '', admissionResolutionDate: '',   // M2: the committee resolution that admitted the member
+  gender: '' as '' | 'female' | 'male' | 'other', dateOfBirth: '',   // M5: s.28(1) reservation needs the women count
 };
 
 interface MemberFormProps {
@@ -141,9 +144,26 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
     </div>
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div className="space-y-1">
-        <Label className="text-xs">{hi ? 'आयु' : 'Age'}</Label>
-        <Input type="number" value={form.age} onChange={e => f('age', e.target.value)} placeholder="25" min="1" max="120" />
+        <Label className="text-xs">{hi ? 'लिंग' : 'Gender'}{!isEdit && ' *'}</Label>
+        <Select value={form.gender || undefined} onValueChange={v => { if (v) f('gender', v); }}>
+          <SelectTrigger><SelectValue placeholder={hi ? 'चुनें' : 'Select'} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="female">{hi ? 'महिला' : 'Female'}</SelectItem>
+            <SelectItem value="male">{hi ? 'पुरुष' : 'Male'}</SelectItem>
+            <SelectItem value="other">{hi ? 'अन्य' : 'Other'}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'जन्म तिथि (वैकल्पिक)' : 'Date of birth (optional)'}</Label>
+        <Input type="date" value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} onChange={e => f('dateOfBirth', e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">{hi ? 'आयु' : 'Age'}{form.dateOfBirth ? (hi ? ' (जन्म तिथि से)' : ' (from DOB)') : ''}</Label>
+        <Input type="number" value={form.dateOfBirth ? String(ageOn(form.dateOfBirth, new Date().toISOString().split('T')[0]) ?? '') : form.age} readOnly={!!form.dateOfBirth} onChange={e => f('age', e.target.value)} placeholder="25" min="1" max="120" />
+      </div>
+    </div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'व्यवसाय' : 'Occupation'}</Label>
         <Input value={form.occupation} onChange={e => f('occupation', e.target.value)} placeholder={hi ? 'किसान' : 'Farmer'} />
@@ -384,6 +404,8 @@ const Members: React.FC = () => {
   const activeTab = searchParams.get('tab') || 'approved';
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | MemberStatus>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | MemberType>('all');
   useDeepLinkQuery(setSearchQuery);   // ECR-25 P2: focus a member deep-linked from global search (?q=)
   const [isAddOpen, setIsAddOpen] = useState(false);
   useOpenOnNew(() => setAddChooserOpen(true));   // ＋ नई entry → सदस्य (U1: the same chooser as the button)
@@ -433,10 +455,22 @@ const Members: React.FC = () => {
   const rejectedMembers = members.filter(m => m.approvalStatus === 'rejected');
 
   const filterBySearch = (list: Member[]) => list.filter(m =>
-    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     m.memberId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (m.phone || '').includes(searchQuery)
+    (m.phone || '').includes(searchQuery))
+    && (statusFilter === 'all' || m.status === statusFilter)
+    && (typeFilter === 'all' || (m.memberType || 'member') === typeFilter)
   );
+  // U6 (M5): the verified list as it is filtered on screen, to Excel.
+  const exportMembersExcel = () => {
+    const rows = filterBySearch(approvedMembers).map((m, i) => [
+      i + 1, m.memberId, m.name, m.fatherName || '', m.gender === 'female' ? 'Female' : m.gender === 'male' ? 'Male' : m.gender === 'other' ? 'Other' : '',
+      m.dateOfBirth || '', m.occupation || '', m.caste || '', m.address || '', m.phone || '', m.memberType === 'nominal' ? 'Nominal' : 'Member',
+      m.admissionDate || m.joinDate || '', memberStatusLabel(m.status), isExit(m.status) ? (m.statusChangedAt || '') : '',
+      m.shareCount ?? '', m.shareCapital || 0, m.nomineeName || '',
+    ]);
+    downloadExcel([{ name: 'Members', headers: ['S.No', 'Member No.', 'Name', 'Father/Husband', 'Gender', 'Date of Birth', 'Occupation', 'Category', 'Address', 'Phone', 'Type', 'Admission Date', 'Status', 'Ceased On', 'Shares', 'Share Capital', 'Nominee'], rows }], 'members');
+  };
 
   const totalShareCapital = approvedMembers.reduce((s, m) => s + m.shareCapital, 0);
   const activeApproved = approvedMembers.filter(m => m.status === 'active').length;
@@ -490,6 +524,8 @@ const Members: React.FC = () => {
       return;
     }
     if (phoneError(form.phone)) { toast({ title: phoneError(form.phone)!, variant: 'destructive' }); return; }
+    // M5: a NEW member records the gender (s.28(1) committee reservation); older members may stay blank.
+    if (!form.gender) { toast({ title: hi ? 'लिंग चुनें' : 'Select gender', description: hi ? 'समिति में महिला आरक्षण (धारा 28) के हिसाब के लिए ज़रूरी।' : 'Needed for the committee reservation (s.28).', variant: 'destructive' }); return; }
     const memberId = form.memberId.trim() || getNextMemberId();
     if (allMembers.some(m => m.memberId.trim().toLowerCase() === memberId.toLowerCase())) {   // D6: every branch, not just the one on screen
       toast({ title: hi ? 'यह सदस्य ID पहले से मौजूद है' : 'Member ID already exists', variant: 'destructive' });
@@ -512,7 +548,7 @@ const Members: React.FC = () => {
     const created = addMember({
       ...form, memberId,
       shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
-      age: form.age ? Number(form.age) : undefined, caste: form.caste || undefined,
+      caste: form.caste || undefined,
       occupation: form.occupation || undefined, postOffice: form.postOffice || undefined,
       tehsil: form.tehsil || undefined, district: form.district || undefined,
       state: form.state || undefined, pinCode: form.pinCode || undefined,
@@ -529,6 +565,8 @@ const Members: React.FC = () => {
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
       // M2: recorded as an already-admitted member — the admission date and the committee resolution.
       admissionDate: form.joinDate || undefined,
+      gender: form.gender || undefined, dateOfBirth: form.dateOfBirth || undefined,
+      age: form.dateOfBirth ? ageOn(form.dateOfBirth, new Date().toISOString().split('T')[0]) : (form.age ? Number(form.age) : undefined),
       admissionResolutionNo: form.admissionResolutionNo.trim() || undefined,
       admissionResolutionDate: form.admissionResolutionDate || undefined,
     }, {
@@ -563,7 +601,7 @@ const Members: React.FC = () => {
     const applied = updateMember(editMember.id, {
       ...form,
       shareCapital: Number(form.shareCapital) || 0, admissionFee: Number(form.admissionFee) || 0,
-      age: form.age ? Number(form.age) : undefined, caste: form.caste || undefined,
+      caste: form.caste || undefined,
       occupation: form.occupation || undefined, postOffice: form.postOffice || undefined,
       tehsil: form.tehsil || undefined, district: form.district || undefined,
       state: form.state || undefined, pinCode: form.pinCode || undefined,
@@ -579,6 +617,8 @@ const Members: React.FC = () => {
       shareCount: form.shareCount ? Number(form.shareCount) : undefined,
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
       admissionDate: editMember.approvalStatus === 'pending' ? editMember.admissionDate : (form.joinDate || undefined),
+      gender: form.gender || undefined, dateOfBirth: form.dateOfBirth || undefined,
+      age: form.dateOfBirth ? ageOn(form.dateOfBirth, new Date().toISOString().split('T')[0]) : (form.age ? Number(form.age) : undefined),
       admissionResolutionNo: form.admissionResolutionNo.trim() || undefined,
       admissionResolutionDate: form.admissionResolutionDate || undefined,
     }, { onSaved: () => toast({ title: hi ? 'सदस्य अपडेट किया गया' : 'Member updated' }) });
@@ -603,6 +643,7 @@ const Members: React.FC = () => {
       nominees: (m.nominees || []).filter(n => n.role !== 'primary'),   // additional-only in the editor; primary lives in the block above
       aadhaar: m.aadhaar || '', pan: m.pan || '', kycStatus: m.kycStatus || '',
       admissionResolutionNo: m.admissionResolutionNo || '', admissionResolutionDate: m.admissionResolutionDate || '',
+      gender: m.gender || '', dateOfBirth: m.dateOfBirth || '',
     });
   };
 
@@ -950,14 +991,32 @@ const Members: React.FC = () => {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder={hi ? 'नाम, ID या फोन से खोजें...' : 'Search by name, ID or phone...'}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full max-w-md sm:w-auto sm:flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={hi ? 'नाम, ID या फोन से खोजें...' : 'Search by name, ID or phone...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={v => { if (v) setStatusFilter(v as 'all' | MemberStatus); }}>
+              <SelectTrigger className="h-9 w-36" aria-label={hi ? 'स्थिति' : 'Status'}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{hi ? 'सभी स्थिति' : 'All statuses'}</SelectItem>
+                {(Object.keys(STATUS_META) as MemberStatus[]).map(st => <SelectItem key={st} value={st}>{hi ? STATUS_META[st].hi : STATUS_META[st].en}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={typeFilter} onValueChange={v => { if (v) setTypeFilter(v as 'all' | MemberType); }}>
+              <SelectTrigger className="h-9 w-36" aria-label={hi ? 'प्रकार' : 'Type'}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{hi ? 'सभी प्रकार' : 'All types'}</SelectItem>
+                <SelectItem value="member">{hi ? 'सदस्य' : 'Member'}</SelectItem>
+                <SelectItem value="nominal">{hi ? 'नाममात्र सदस्य' : 'Nominal'}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" className="gap-1" onClick={exportMembersExcel}><FileSpreadsheet className="h-4 w-4" />Excel</Button>
           </div>
         </CardContent>
       </Card>

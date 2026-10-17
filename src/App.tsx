@@ -126,6 +126,7 @@ const VoucherApproval = lazyWithRetry(() => import("./pages/VoucherApproval"));
 const MeetingRegister = lazyWithRetry(() => import("./pages/MeetingRegister"));
 const NominationRegister = lazyWithRetry(() => import("./pages/NominationRegister"));
 const Form1MemberList = lazyWithRetry(() => import("./pages/Form1MemberList"));
+const VotersList = lazyWithRetry(() => import("./pages/VotersList"));
 const AuditCertificate = lazyWithRetry(() => import("./pages/AuditCertificate"));
 const BackupRestore = lazyWithRetry(() => import("./pages/BackupRestore"));
 const GstSummary = lazyWithRetry(() => import("./pages/GstSummary"));
@@ -379,6 +380,7 @@ const AppRoutes = () => {
       <Route path="/meeting-register" element={<ProtectedRoute><MeetingRegister /></ProtectedRoute>} />
       <Route path="/nomination-register" element={<ProtectedRoute><NominationRegister /></ProtectedRoute>} />
       <Route path="/form1-member-list" element={<ProtectedRoute><Form1MemberList /></ProtectedRoute>} />
+      <Route path="/voters-list" element={<ProtectedRoute><VotersList /></ProtectedRoute>} />
       <Route path="/audit-certificate" element={<ProtectedRoute><AuditCertificate /></ProtectedRoute>} />
       <Route path="/audit-schedules" element={<ProtectedRoute><AuditSchedules /></ProtectedRoute>} />
       <Route path="/group-schedule" element={<ProtectedRoute><GroupSchedule /></ProtectedRoute>} />

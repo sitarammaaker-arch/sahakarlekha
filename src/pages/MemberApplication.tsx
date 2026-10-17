@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { generateMemberApplicationPDF } from '@/lib/pdf';
 import { validateKyc } from '@/lib/kycUtils';
+import { ageOn } from '@/lib/members/voters';
 import { FileText, ArrowLeft } from 'lucide-react';
 import type { MemberType, CasteCategory } from '@/types';
 
@@ -32,6 +33,7 @@ const EMPTY_FORM = {
   nomineeOccupation: '', nomineeAddress: '', nomineeShares: '', nomineePhone: '',
   // M2: the date the application reached the society (r.17 / s.16 clock) + KYC like the member form
   applicationDate: new Date().toISOString().split('T')[0], aadhaar: '', pan: '',
+  gender: '', dateOfBirth: '',   // M5: s.28(1) reservation needs the women count
 };
 
 const MemberApplication: React.FC = () => {
@@ -74,6 +76,7 @@ const MemberApplication: React.FC = () => {
     }
     const kv = validateKyc(form.aadhaar, form.pan);
     if (!kv.ok) { toast({ title: 'KYC', description: kv.error, variant: 'destructive' }); return; }
+    if (!form.gender) { toast({ title: hiLang ? 'लिंग चुनें' : 'Select gender', description: hiLang ? 'समिति में महिला आरक्षण (धारा 28) के हिसाब के लिए ज़रूरी।' : 'Needed for the committee reservation (s.28).', variant: 'destructive' }); return; }
     const nomErr = memberNomineeError(form.nomineeName, [], hiLang);
     if (nomErr) { toast({ title: hiLang ? 'नामांकित ज़रूरी है' : 'Nominee required', description: nomErr, variant: 'destructive' }); return; }
 
@@ -91,7 +94,8 @@ const MemberApplication: React.FC = () => {
       aadhaar: form.aadhaar.replace(/\s/g, '') || undefined, pan: form.pan.toUpperCase().trim() || undefined,
       status: 'active',
       approvalStatus: 'pending',
-      age: form.age ? parseInt(form.age) : undefined,
+      age: form.dateOfBirth ? ageOn(form.dateOfBirth, today) : (form.age ? parseInt(form.age) : undefined),
+      gender: (form.gender || undefined) as 'female' | 'male' | 'other' | undefined, dateOfBirth: form.dateOfBirth || undefined,
       occupation: form.occupation.trim() || undefined,
       caste: (form.caste as CasteCategory) || undefined,
       tehsil: form.tehsil.trim() || undefined,
@@ -176,9 +180,26 @@ const MemberApplication: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>{hi ? 'आयु (वर्ष)' : 'Age (Years)'}</Label>
-                <Input type="number" value={form.age} onChange={e => f('age', e.target.value)} placeholder="25" min="1" max="120" />
+                <Label>{hi ? 'लिंग *' : 'Gender *'}</Label>
+                <Select value={form.gender || undefined} onValueChange={v => { if (v) f('gender', v); }}>
+                  <SelectTrigger><SelectValue placeholder={hi ? 'चुनें' : 'Select'} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="female">{hi ? 'महिला' : 'Female'}</SelectItem>
+                    <SelectItem value="male">{hi ? 'पुरुष' : 'Male'}</SelectItem>
+                    <SelectItem value="other">{hi ? 'अन्य' : 'Other'}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+              <div className="space-y-2">
+                <Label>{hi ? 'जन्म तिथि (वैकल्पिक)' : 'Date of birth (optional)'}</Label>
+                <Input type="date" value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} onChange={e => f('dateOfBirth', e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>{hi ? 'आयु (वर्ष)' : 'Age (Years)'}</Label>
+                <Input type="number" value={form.dateOfBirth ? String(ageOn(form.dateOfBirth, new Date().toISOString().split('T')[0]) ?? '') : form.age} readOnly={!!form.dateOfBirth} onChange={e => f('age', e.target.value)} placeholder="25" min="1" max="120" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{hi ? 'व्यवसाय' : 'Occupation'}</Label>
                 <Input value={form.occupation} onChange={e => f('occupation', e.target.value)} placeholder={hi ? 'किसान / व्यापारी / नौकरी' : 'Farmer / Business / Service'} />

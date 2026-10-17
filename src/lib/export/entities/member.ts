@@ -117,6 +117,9 @@ const member: EntityDescriptor = {
     // M4 status resolution (migration 117).
     internal('statusResolutionNo', 'Status Resolution No.', 'स्थिति प्रस्ताव संख्या'),
     internal('statusResolutionDate', 'Status Resolution Date', 'स्थिति प्रस्ताव तिथि', { type: 'date' }),
+    // M5 gender + date of birth (migration 118).
+    c('gender', 'Gender', 'लिंग', { type: 'enum' }),
+    internal('dateOfBirth', 'Date of Birth', 'जन्म तिथि', { type: 'date', piiClass: 'contact' }),
     c('isDeleted', 'Deleted', 'हटाया गया', { type: 'boolean', defaultVisible: false }),
     internal('createdAt', 'Created At', 'निर्माण समय', { type: 'date' }),
   ],
