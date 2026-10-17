@@ -100,7 +100,8 @@ ok(/storageKey: MEMBER_PORTAL_STORAGE_KEY/.test(client) && /'sl-member-portal'/.
 ok(/window\.sessionStorage/.test(client) && !/localStorage/.test(client), 'session lasts until the browser closes (sessionStorage, founder decision)');
 ok(!/from '\.\/supabase'|from '@\/lib\/supabase'/.test(client), 'does NOT reuse the staff supabase client');
 ok(/signOut\(\{ scope: 'local' \}\)/.test(client) && /removeItem\(MEMBER_PORTAL_STORAGE_KEY\)/.test(client), 'logout clears THIS device even with no network (scope local + key removed)');
-ok(/rpc\('member_portal_snapshot'\)/.test(client) && !/\.from\(/.test(client), 'data only via the snapshot RPC — no direct table reads');
+// 124: the only other read is the member's OWN photo from storage (policy member_photos_portal_select) — no table.
+ok(/rpc\('member_portal_snapshot'\)/.test(client) && !/\.from\(/.test(client.replace(/\.storage\.from\('member-photos'\)/g, '')), 'data only via the snapshot RPC — no direct table reads (own photo via storage only)');
 const page = strip('src/pages/MemberPortal.tsx');
 ok(/robots: 'noindex, nofollow'/.test(page), 'portal page is noindex');
 ok(!/@\/lib\/supabase'|useAuth\(|useData\(/.test(page), 'page never touches staff auth/data contexts');

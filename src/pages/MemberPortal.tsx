@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { fmtDate } from '@/lib/dateUtils';
 import { Languages, KeyRound, LogOut, Printer, Loader2 } from 'lucide-react';
-import { memberSignIn, memberSignOut, hasMemberSession, fetchMemberSnapshot } from '@/lib/memberPortalClient';
+import { memberSignIn, memberSignOut, hasMemberSession, fetchMemberSnapshot, memberOwnPhotoUrl } from '@/lib/memberPortalClient';
 import { buildPortalView, deniedMessage, type PortalSnapshot, type PortalDenied } from '@/lib/memberPortalView';
 import { buildVerticalViews, type PortalVerticalPayload } from '@/lib/memberPortalVerticals';
 import { MemberAccountView } from '@/components/member-portal/MemberAccountView';
@@ -64,6 +64,15 @@ export default function MemberPortal() {
 
   const [phase, setPhase] = useState<Phase>('checking');
   const [snapshot, setSnapshot] = useState<PortalSnapshot | null>(null);
+  // 124: the member's own photograph (s.40) beside the name — and so on the printed page.
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const photoPath = snapshot?.member?.photoPath ?? null;
+  useEffect(() => {
+    let live = true;
+    setPhotoUrl(null);
+    if (photoPath) memberOwnPhotoUrl(photoPath).then((u) => { if (live) setPhotoUrl(u); });
+    return () => { live = false; };
+  }, [photoPath]);
   const [denied, setDenied] = useState('');
   const [memberNo, setMemberNo] = useState('');
   const [pin, setPin] = useState('');
@@ -183,13 +192,16 @@ export default function MemberPortal() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="flex items-start gap-4">
+          {photoUrl && <img src={photoUrl} alt={m.name} className="h-24 w-20 shrink-0 rounded-md border object-cover" onError={() => setPhotoUrl(null)} />}
+          <div>
           {societyName && <p className="text-sm text-muted-foreground">{societyName}</p>}
           <h1 className="text-2xl font-bold">{m.name}</h1>
           <p className="text-sm text-muted-foreground">
             {hi ? 'सदस्य संख्या' : 'Member no.'} <span className="font-mono font-semibold text-foreground">{m.memberId}</span>
             {m.joinDate && <> · {hi ? 'सदस्यता' : 'Member since'} {fmtDate(m.joinDate)}</>}
           </p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2 print:hidden">
           {langToggle}

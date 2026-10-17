@@ -90,6 +90,19 @@ export async function hasMemberSession(): Promise<boolean> {
   return !!data.session;
 }
 
+/**
+ * The member's OWN photograph (migration 124): a 10-minute signed URL from the private bucket. The storage policy
+ * lets a portal member read exactly the one object their snapshot names — any other path is refused. null when
+ * there is no photo or it cannot be read (the page then simply shows no photo).
+ */
+export async function memberOwnPhotoUrl(path: string | null | undefined): Promise<string | null> {
+  if (!path) return null;
+  try {
+    const { data, error } = await memberPortalClient().storage.from('member-photos').createSignedUrl(path, 600);
+    return error ? null : data?.signedUrl ?? null;
+  } catch { return null; }
+}
+
 export async function fetchMemberSnapshot(): Promise<PortalSnapshot | PortalDenied | { ok: false; reason: 'network' }> {
   const { data, error } = await memberPortalClient().rpc('member_portal_snapshot');
   if (error || !data) return { ok: false, reason: 'network' };
