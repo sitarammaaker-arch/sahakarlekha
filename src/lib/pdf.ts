@@ -2546,7 +2546,7 @@ export function generateAuditSchedulesPDF(
   doc.save(pdfFileName('AuditSchedules', society));
 }
 
-export function generateMemberApplicationPDF(member: Member, society: SocietySettings): void {
+export function generateMemberApplicationPDF(member: Member, society: SocietySettings, photoDataUrl?: string): void {
   const doc = new jsPDF('p', 'mm', 'a4');
   const font = setupFont(doc);
   const pageW = doc.internal.pageSize.width;
@@ -2559,6 +2559,22 @@ export function generateMemberApplicationPDF(member: Member, society: SocietySet
   doc.setFontSize(14);
   doc.setFont(font, 'bold');
   doc.text('Membership Application Form', cx, 18, { align: 'center' });
+
+  // Photograph box, top right (Haryana Act s.40 proviso): the photo when one was given, else a box to affix one.
+  const phW = 26, phH = 30, phX = mR - phW, phY = 36;
+  doc.setDrawColor(120);
+  doc.setLineWidth(0.3);
+  doc.rect(phX, phY, phW, phH);
+  if (photoDataUrl) {
+    try { doc.addImage(photoDataUrl, 'JPEG', phX + 0.5, phY + 0.5, phW - 1, phH - 1); } catch { /* a bad image never breaks the form */ }
+  } else {
+    doc.setFontSize(7);
+    doc.setFont(font, 'normal');
+    doc.setTextColor(140);
+    doc.text('Affix', phX + phW / 2, phY + phH / 2 - 1.5, { align: 'center' });
+    doc.text('Photograph', phX + phW / 2, phY + phH / 2 + 2.5, { align: 'center' });
+    doc.setTextColor(0);
+  }
 
   // Society name
   doc.setFontSize(11);

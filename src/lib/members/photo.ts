@@ -41,3 +41,14 @@ export async function downscalePhoto(file: Blob): Promise<Blob> {
   bitmap.close?.();
   return await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => (b ? resolve(b) : reject(new Error('encode failed'))), 'image/jpeg', 0.82));
 }
+
+/** Browser only: the downscaled photo as a JPEG data URL (for printing it on the application PDF). */
+export async function photoDataUrl(file: Blob): Promise<string> {
+  const small = await downscalePhoto(file);
+  return await new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(small);
+  });
+}

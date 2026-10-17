@@ -16,8 +16,12 @@ function header for the read-only / privacy (CL-6) guarantees.
 
 ```bash
 # from repo root, with the Supabase CLI linked to the project
-supabase functions deploy scheduled-rehearsal
+supabase functions deploy scheduled-rehearsal --no-verify-jwt
 ```
+
+> **`--no-verify-jwt` is critical** (same as scheduled-backup). The cron calls with only `x-backup-secret` and no
+> `Authorization` header; without the flag the gateway 401s the cron silently (hit 2026-10-17, fixed the same day).
+> The function itself still refuses every call without the secret.
 
 ## Secrets (fail-closed)
 

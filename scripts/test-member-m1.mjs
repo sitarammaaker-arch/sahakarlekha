@@ -99,7 +99,7 @@ ok(!/console\.info\(`\[AUDIT\] Member id=/.test(dc), 'console-only "audit" lines
 const mem = read('src/pages/Members.tsx');
 ok(mem.includes('blockOnLinks') && mem.includes('softDelete'), 'member delete dialog blocks on red links + says soft delete');
 ok(!/deleteMember\(deleteGuard\.id\);\s*toast\(/.test(mem), 'no page toast right after delete (D5)');
-ok(/onSaved: m => toast\(\{\s*title: hi \? 'सदस्य जोड़ा गया'/.test(mem) && mem.includes('if (!created.id) return;'), 'add: toast on save, form kept on refusal');
+ok(/onSaved: m => \{?\s*toast\(\{\s*title: hi \? 'सदस्य जोड़ा गया'/.test(mem) && mem.includes('if (!created.id) return;'), 'add: toast on save, form kept on refusal');
 ok(mem.includes("allMembers.some(m => m.memberId.trim().toLowerCase() === memberId.toLowerCase())"), 'member number unique across branches (D6)');
 ok(mem.includes("openDecision(member, 'approve')") && mem.includes('setDecision({ member, action })') && mem.includes('confirmDecision'), 'approve / reject go through a confirmation (U9)');
 ok(!/approveMember\(member\.id\);\s*toast\(/.test(mem), 'no premature approve toast');
