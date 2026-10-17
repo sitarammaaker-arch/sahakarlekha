@@ -119,7 +119,7 @@ for (const f of ['src/pages/Form1MemberList.tsx', 'src/pages/ShareRegister.tsx',
   ok(!/status === 'active' \? (\(hi \? 'सक्रिय' : 'Active'\)|'Active') : (\(hi \? 'निष्क्रिय' : 'Inactive'\)|'Inactive')/.test(read(f)), `${f}: no Active/Inactive collapse (U4)`);
 }
 ok(read('src/pages/Form1MemberList.tsx').includes("list.filter(m => m.status !== 'active')"), 'Form-1 "not active" filter reaches resigned/expelled/deceased');
-ok(read('src/pages/MemberApplication.tsx').includes('if (!newMember.id) return;'), 'application refused → no PDF, no "submitted"');
+ok(read('src/pages/MemberApplication.tsx').includes('if (!newMember.id) { setSubmitting(false); return; }'), 'application refused → no PDF, no "submitted"');
 
 console.log(`member-m1: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

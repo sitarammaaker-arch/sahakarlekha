@@ -36,7 +36,8 @@ import type { HousingFlat, MaintenanceBill, MaintenanceBillLine, HousingChargeHe
 interface HousingDataContextValue {
   housingFlats: HousingFlat[];
   addHousingFlat: (data: Omit<HousingFlat, 'id' | 'createdAt'>) => HousingFlat;
-  updateHousingFlat: (id: string, data: Partial<HousingFlat>) => void;
+  /** false when refused (FY lock / unknown flat); opts.onSaved fires once the cloud has it. */
+  updateHousingFlat: (id: string, data: Partial<HousingFlat>, opts?: { onSaved?: () => void }) => boolean;
   deleteHousingFlat: (id: string) => void;
 
   maintenanceBills: MaintenanceBill[];
@@ -251,10 +252,10 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     return flat;
   }, []);
 
-  const updateHousingFlat = useCallback((id: string, data: Partial<HousingFlat>) => {
-    if (guardFYLocked()) return;
+  const updateHousingFlat = useCallback((id: string, data: Partial<HousingFlat>, opts?: { onSaved?: () => void }): boolean => {
+    if (guardFYLocked()) return false;
     const old = housingFlats.find(f => f.id === id);
-    if (!old) return;
+    if (!old) return false;
     const updated = { ...old, ...data };
     setHousingFlatsState(prev => { const u = prev.map(f => f.id === id ? updated : f); storage.setHousingFlats(u); return u; });
     supabase.from('housing_flats').upsert(withSoc(updated)).then(({ error }) => {
@@ -262,8 +263,11 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         console.error('Housing flat update error:', error.message); reportError('housing-save', error.message);
         setHousingFlatsState(prev => { const u = prev.map(f => f.id === id ? old : f); storage.setHousingFlats(u); return u; });
         toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        return;
       }
+      opts?.onSaved?.();
     });
+    return true;
   }, [housingFlats]);
 
   const deleteHousingFlat = useCallback((id: string) => {

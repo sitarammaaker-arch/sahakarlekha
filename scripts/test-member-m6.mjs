@@ -84,7 +84,7 @@ ok(mp.includes('if (photoToUpload) void uploadMemberPhoto(m.id, photoToUpload);'
 ok(!/photoFile[,:]/.test(mp.slice(mp.indexOf('const EMPTY_FORM'), mp.indexOf('interface MemberFormProps'))), 'the photo never rides the member form / row');
 const ap = read('src/pages/MemberApplication.tsx');
 ok(ap.includes('<MemberPhotoPicker file={photo} onChange={setPhoto}') && ap.includes('if (chosenPhoto) void uploadMemberPhoto(m.id, chosenPhoto);'), 'new application has the photo, uploaded after the save');
-ok(ap.includes('generateMemberApplicationPDF(newMember, society, photoUrl)'), 'application PDF gets the photo');
+ok(ap.includes('generateMemberApplicationPDF(m, society, photoUrl)'), 'application PDF gets the photo');
 const pdf2 = read('src/lib/pdf.ts');
 ok(pdf2.includes('generateMemberApplicationPDF(member: Member, society: SocietySettings, photoDataUrl?: string)') && pdf2.includes("doc.addImage(photoDataUrl, 'JPEG'") && pdf2.includes("doc.text('Affix'"), 'application PDF: photo box — the photo, or "Affix Photograph"');
 

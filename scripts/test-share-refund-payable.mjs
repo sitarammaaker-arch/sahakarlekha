@@ -88,7 +88,7 @@ ok(/guardFYLocked\(\)/.test(approve) && /guardFYLocked\(\)/.test(payFn), 'both g
 ok(/guardPeriodLock\(date\)/.test(approve) && /guardPeriodLock\(date\)/.test(payFn), 'both guard the period lock');
 ok(/shareRefundPayableAccountId\(accounts\)/.test(approve) && /MISSING_HEAD_TOAST\.shareRefund/.test(approve), 'approval refuses with the Hindi toast when the head is missing');
 ok(approve.indexOf('addVoucher(') < approve.indexOf("from('members')"), 'the voucher is created before the member row is touched');
-ok(/cancelVoucher\(v\.id/.test(approve) && /before : m/.test(approve), 'a failed member save restores the member AND cancels the voucher (RULE 1)');
+ok(/cancelLinkedVouchers\(\[v\.id\]/.test(approve) && /before : m/.test(approve), 'a failed member save restores the member AND cancels the voucher (RULE 1)');
 ok(/refType: SHARE_REFUND_APPROVE_REF/.test(approve) && /refType: SHARE_REFUND_PAY_REF/.test(payFn), 'vouchers carry their refType');
 ok(!/from\('members'\)/.test(payFn), 'payment does not touch the member row (shareCapital already reduced at approval)');
 ok(/vouchersRef\.current, memberId/.test(payFn), 'payment limit is read from live vouchers');

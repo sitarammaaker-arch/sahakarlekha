@@ -1,6 +1,7 @@
 // Member Portal S0 — proves the extracted pure member calculations are a NO-BEHAVIOUR-CHANGE move.
 // buildMemberShareLedger is compared against a verbatim copy of the pre-S0 inline body of
-// DataContext.getMemberLedger over hand cases + 500 randomised fixtures; loanOutstanding /
+// DataContext.getMemberLedger over hand cases + 500 randomised fixtures (since member-area stage A
+// only where the legacy OB rule was right; the H-1 opening cases are asserted separately); loanOutstanding /
 // kccOutstanding against the inline formulas they replaced. Run: node scripts/test-member-snapshot.mjs
 import { register } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -103,9 +104,41 @@ for (let t = 0; t < 500; t++) {
       amt: Math.round(rnd() * 100000) / 100, m: pick(['m1', 'm2', undefined]), nar: pick(['', 'x']),
     }));
   }
-  if (!same(buildMemberShareLedger(member, list, SC), legacy(member, list))) { ok(false, `random fixture #${t} diverges from legacy`); break; }
+  // Member-area stage A (H-1): the legacy rule is kept wherever it was right — no share vouchers, or a
+  // joining Cr voucher on/before the join date. Otherwise the OB is the implied opening, and the khata
+  // must end on the scalar whenever that opening is non-negative.
+  const mine = list.filter(x => x.memberId === member.id && (x.creditAccountId === SC || x.debitAccountId === SC));
+  const joining = mine.some(x => x.creditAccountId === SC && x.date <= member.joinDate);
+  const got = buildMemberShareLedger(member, list, SC);
+  if (mine.length === 0 || joining) {
+    if (!same(got, legacy(member, list))) { ok(false, `random fixture #${t} diverges from legacy`); break; }
+  } else {
+    const net = mine.reduce((s, x) => s + (x.creditAccountId === SC ? toMinor(x.amount) : -toMinor(x.amount)), 0);
+    const implied = toMinor(member.shareCapital) - net;
+    const end = got.length ? toMinor(got[got.length - 1].balance) : 0;
+    if (implied >= 0 && end !== toMinor(member.shareCapital)) { ok(false, `random fixture #${t}: khata ${end} ≠ scalar`); break; }
+    if (implied < 0 && got.some(r => r.voucherNo === 'OB')) { ok(false, `random fixture #${t}: OB shown for negative implied opening`); break; }
+  }
   ok(true, '');
 }
+
+// ── H-1: a member who joined before the vouchers began (OB) and later bought / returned shares ──
+// Old member, ₹1,000 opening, buys ₹500 later: scalar 1,500 → khata OB 1,000 + 500 = 1,500 (was 500).
+const OLD = { id: 'm1', shareCapital: 1500, joinDate: '2023-04-01' };
+r = buildMemberShareLedger(OLD, [v({ id: 'buy', date: '2026-07-01', dr: '1001', cr: SC, amt: 500, m: 'm1' })], SC);
+ok(r.length === 2 && r[0].voucherNo === 'OB' && r[0].credit === 1000 && r[1].balance === 1500, `OB kept when a later purchase voucher exists (got ${JSON.stringify(r.map(x => x.balance))})`);
+// Old member, ₹1,000 opening, refunded ₹400: scalar 600 → khata OB 1,000 − 400 = 600 (was 200).
+r = buildMemberShareLedger({ ...OLD, shareCapital: 600 }, [v({ id: 'ref', date: '2026-07-01', dr: SC, cr: '1001', amt: 400, m: 'm1' })], SC);
+ok(r.length === 2 && r[0].credit === 1000 && r[1].balance === 600, `refund not subtracted twice (got ${JSON.stringify(r.map(x => x.balance))})`);
+// Joining voucher on the join date + a scalar the vouchers don't explain → no OB, gap stays visible.
+r = buildMemberShareLedger({ id: 'm1', shareCapital: 500, joinDate: '2026-08-19' }, [
+  v({ id: 'j', date: '2026-08-19', dr: '1001', cr: SC, amt: 400, m: 'm1' }),
+  v({ id: 'x', date: '2026-08-19', dr: SC, cr: '3301', amt: 150, m: 'm1' }),
+], SC);
+ok(r.length === 2 && r[1].balance === 250, 'joining voucher ⇒ no OB; scalar gap (500 vs 250) still shows');
+// Vouchers exceed the scalar for an old member → no OB row (negative opening is never invented).
+r = buildMemberShareLedger({ ...OLD, shareCapital: 100 }, [v({ id: 'buy2', date: '2026-07-01', dr: '1001', cr: SC, amt: 500, m: 'm1' })], SC);
+ok(r.length === 1 && r[0].balance === 500, 'negative implied opening ⇒ no OB, mismatch visible');
 
 // ── Outstanding formulas ──
 ok(loanOutstanding({ amount: 10000, repaidAmount: 2500 }) === 7500, 'loan outstanding = amount − repaid');

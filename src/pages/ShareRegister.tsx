@@ -200,7 +200,10 @@ const ShareRegister: React.FC = () => {
         <Label className="text-xs whitespace-nowrap">{hi ? 'अधिकतम ट्रांसफर प्रीमियम %' : 'Max transfer premium %'}</Label>
         <Input type="number" min="0" max="100" value={premiumCapInput} onChange={e => setPremiumCapInput(e.target.value)} className="h-8 w-24" placeholder="0" />
         <Button size="sm" variant="outline" className="h-8" disabled={!canEdit}
-          onClick={() => { updateSociety({ maxSharePremiumPercent: premiumCapInput === '' ? undefined : Number(premiumCapInput) }); toast({ title: hi ? 'प्रीमियम सीमा सहेजी' : 'Premium cap saved' }); }}>
+          onClick={() => updateSociety({ maxSharePremiumPercent: premiumCapInput === '' ? undefined : Number(premiumCapInput) }, {
+            // The toast waits for the cloud (it said "saved" even when the save failed — member-area stage A).
+            onSaved: () => toast({ title: hi ? 'प्रीमियम सीमा सहेजी' : 'Premium cap saved' }),
+          })}>
           {hi ? 'सहेजें' : 'Save'}
         </Button>
         <span className="text-[11px] text-muted-foreground">{hi ? '0 या खाली = प्रीमियम की अनुमति नहीं (अंकित मूल्य पर ट्रांसफर)।' : '0 or empty = no premium allowed (transfers at face value).'}</span>

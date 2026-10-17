@@ -38,16 +38,16 @@ export default function ShareNominationRegister() {
     setNomName(f.nomineeName || ''); setNomRel(f.nomineeRelation || ''); setNomPhone(f.nomineePhone || '');
   };
   const save = () => {
-    updateHousingFlat(editId, {
+    // "सहेजा गया" only once the cloud has it (it toasted even on an FY-lock refusal — member-area stage A).
+    const accepted = updateHousingFlat(editId, {
       shareCertNo: certNo.trim() || undefined,
       shareCount: shares ? Number(shares) : undefined,
       shareFaceValue: faceVal ? Number(faceVal) : undefined,
       nomineeName: nomName.trim() || undefined,
       nomineeRelation: nomRel.trim() || undefined,
       nomineePhone: nomPhone.trim() || undefined,
-    });
-    toast({ title: hi ? 'सहेजा गया' : 'Saved' });
-    setEditId('');
+    }, { onSaved: () => toast({ title: hi ? 'सहेजा गया' : 'Saved' }) });
+    if (accepted) setEditId('');
   };
 
   const totalShares = flats.reduce((s, f) => s + (f.shareCount || 0), 0);

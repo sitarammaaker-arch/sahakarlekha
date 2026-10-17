@@ -71,7 +71,7 @@ ok(/begin;[\s\S]*commit;/.test(up) && up.includes("values ('116', 'member_admiss
 // ── wiring ──
 const dc = read('src/contexts/DataContext.tsx');
 ok(dc.includes('splitAdmissionFields(identitySplitRef.current ? stripMemberPII(m) : m).base;') && dc.includes('return withSoc(base);'), 'memberRow strips the admission columns (base upsert safe before 116)');
-ok(/const persistMemberAdmission = [\s\S]*?update\(extras\)[\s\S]*?Migration 116 चलाएँ/.test(dc), 'step-2 writer + mild warning, no rollback');
+ok(/const persistMemberAdmission = [\s\S]*?update\(payload\)[\s\S]*?Migration 116 चलाएँ/.test(dc), 'step-2 writer + mild warning, no rollback');
 const fn = (name) => { const i = dc.indexOf(`const ${name} = useCallback(`); return dc.slice(i, dc.indexOf('\n  }, [', i)); };
 ok(fn('addMember').includes("data.approvalStatus === 'pending' && !data.applicationDate ? { applicationDate: today }") && fn('addMember').includes('persistMemberAdmission(newMember.id, newMember)'), 'new application stamps its date; step 2 after the base save');
 const ap = fn('approveMember');

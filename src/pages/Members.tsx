@@ -739,19 +739,22 @@ const Members: React.FC = () => {
   const handleApprove = (member: Member) => openDecision(member, 'approve');
   const handleReject = (member: Member) => openDecision(member, 'reject');
   // M2: approve records the admission date + committee resolution (r.22(b)); reject needs the reason (r.17).
-  const confirmDecision = () => {
-    if (!decision) return;
+  // Returns false when the entry is invalid — the dialog then STAYS open with what was typed (it used to
+  // close on the error toast, losing the reason; member-area stage A, M-1).
+  const confirmDecision = (): boolean => {
+    if (!decision) return false;
     if (decision.action === 'approve') {
       const v = validateAdmission({ admissionDate: decisionForm.admissionDate, resolutionNo: decisionForm.resolutionNo, resolutionDate: decisionForm.resolutionDate || undefined },
         { receivedOn: applicationReceivedOn(decision.member), today });
-      if (!v.ok) { toast({ title: hi ? 'जाँचें' : 'Check', description: v.error, variant: 'destructive' }); return; }
+      if (!v.ok) { toast({ title: hi ? 'जाँचें' : 'Check', description: v.error, variant: 'destructive' }); return false; }
       approveMember(decision.member.id, { admissionDate: decisionForm.admissionDate, resolutionNo: decisionForm.resolutionNo, resolutionDate: decisionForm.resolutionDate || undefined, eligibility: declared });
     } else {
       const v = validateRejection(decisionForm.reason);
-      if (!v.ok) { toast({ title: hi ? 'कारण ज़रूरी है' : 'Reason required', description: v.error, variant: 'destructive' }); return; }
+      if (!v.ok) { toast({ title: hi ? 'कारण ज़रूरी है' : 'Reason required', description: v.error, variant: 'destructive' }); return false; }
       rejectMember(decision.member.id, decisionForm.reason);
     }
     setDecision(null);
+    return true;
   };
   const missingResolution = decision?.action === 'approve' && !decisionForm.resolutionNo.trim();
   // M4: lifecycle change — a real date, warnings for a missing resolution (never blocking)
@@ -1563,7 +1566,7 @@ const Members: React.FC = () => {
           )}
           <AlertDialogFooter>
             <AlertDialogCancel>{hi ? 'वापस' : 'Back'}</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDecision} className={decision?.action === 'reject' ? 'bg-red-600 hover:bg-red-700' : undefined}>
+            <AlertDialogAction onClick={e => { if (!confirmDecision()) e.preventDefault(); }} className={decision?.action === 'reject' ? 'bg-red-600 hover:bg-red-700' : undefined}>
               {decision?.action === 'approve' ? (hi ? 'हाँ, स्वीकृत करें' : 'Yes, approve') : (hi ? 'हाँ, अस्वीकृत करें' : 'Yes, reject')}
             </AlertDialogAction>
           </AlertDialogFooter>

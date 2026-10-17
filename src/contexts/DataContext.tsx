@@ -99,7 +99,7 @@ import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib
 import { accountDeleteFailure, coaResetBlockers, coaResetLiveData } from '@/lib/accounting/accountDelete';
 import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
 import { memberAuditDiff } from '@/lib/members/memberAudit';
-import { splitAdmissionFields, applicationReceivedOn, MEMBER_PROFILE_FIELDS, MEMBER_CONTACT_FIELDS, MEMBER_PHOTO_FIELD, type AdmissionDecision } from '@/lib/members/admission';
+import { splitAdmissionFields, clearedAdmissionFields, applicationReceivedOn, MEMBER_PROFILE_FIELDS, MEMBER_CONTACT_FIELDS, MEMBER_PHOTO_FIELD, type AdmissionDecision } from '@/lib/members/admission';
 import { MEMBER_PHOTO_BUCKET, memberPhotoPath, photoFileError, downscalePhoto } from '@/lib/members/photo';
 import { canHoldShares } from '@/lib/members/shareRules';
 import { MEMBER_STATUS_EXTRA_FIELDS } from '@/lib/members/cessation';
@@ -226,7 +226,7 @@ interface DataContextType {
   upsertP7Entry: (data: Omit<P7Entry, 'id' | 'createdAt'> & { id?: string }) => P7Entry;
   deleteP7Entry: (id: string) => void;
 
-  addMember: (data: Omit<Member, 'id'>, opts?: { quiet?: boolean; onSaved?: (m: Member) => void }) => Member;
+  addMember: (data: Omit<Member, 'id'>, opts?: { quiet?: boolean; onSaved?: (m: Member) => void; onFailed?: () => void }) => Member;
   updateMember: (id: string, data: Partial<Member>, opts?: { onSaved?: () => void }) => boolean;
   changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string, opts?: { effectiveDate?: string; resolutionNo?: string; resolutionDate?: string }) => boolean;
   deleteMember: (id: string) => void;
@@ -474,10 +474,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
   // RULE 1 step 2 for the admission columns: the member row is already safe; a failure here (migration 116 not run)
   // keeps the member and says so mildly — no rollback.
-  const persistMemberAdmission = (id: string, member: Record<string, any>) => {
+  const persistMemberAdmission = (id: string, member: Record<string, any>, cleared: readonly string[] = []) => {
     const { extras } = splitAdmissionFields(member);
-    if (!Object.keys(extras).length) return;
-    supabase.from('members').update(extras).eq('id', id).then(({ error }) => {
+    // A blanked field is written as null — leaving it out kept the old value in the cloud (M-4).
+    const payload: Record<string, string | null> = { ...extras, ...Object.fromEntries(cleared.map(f => [f, null])) };
+    if (!Object.keys(payload).length) return;
+    supabase.from('members').update(payload).eq('id', id).then(({ error }) => {
       if (!error) return;
       reportError('write-partial', error.message, { at: 'member admission fields' });
       toastRef.current({
@@ -1710,6 +1712,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  // Member-area stage A (M-6): a NEW loan or deposit account only for a live member — never for a
+  // pending / rejected applicant or a resigned / expelled / deceased member (the pickers listed them).
+  // Existing accounts of a member who later ceased are untouched (repayments, closure still work).
+  const refuseNonLiveMember = (memberId: string | undefined, what: string): boolean => {
+    if (!memberId) return false;
+    const m = membersRef.current.find(x => x.id === memberId);
+    if (!m || canHoldShares(m)) return false;
+    toastRef.current({ title: `${what} नहीं खुल सकता`, description: `${m.name} सक्रिय/स्वीकृत सदस्य नहीं हैं (स्थिति: ${m.approvalStatus === 'pending' || m.approvalStatus === 'rejected' ? m.approvalStatus : m.status}) — नया ${what} केवल सक्रिय सदस्य के लिए।`, variant: 'destructive', duration: 10000 });
+    return true;
+  };
+
   // RULE 1 · a delete / save whose cloud write FAILED: put the record back on screen and say so loudly
   // (was an English "Save failed" with the row left gone locally — it came back on F5). Delete paths with a
   // cascade (linked vouchers, stock, party ledger) run that cascade only AFTER the parent write succeeds,
@@ -2639,6 +2652,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
       }
     }
+    // Member-area stage A (H-3): a system share-capital DEBIT (refund, refund approval, forfeit / redeem /
+    // surrender) moved the member's share-capital scalar down. Cancelling it here restored the ledger
+    // but not the scalar (register ≠ ledger, dividend on the wrong base). A hand-made voucher
+    // (origin 'manual') never moved the scalar, so it stays cancellable.
+    if (current.memberId && current.debitAccountId === ACCOUNT_IDS.SHARE_CAP && current.origin !== 'manual' && !opts?.viaParent) {
+      toastRef.current({
+        title: 'यहाँ रद्द नहीं होगा',
+        description: 'यह सदस्य की शेयर-वापसी / शेयर-संचालन का वाउचर है — इससे सदस्य की शेयर राशि घटी थी। गलती सुधारने के लिए Share Register से उल्टी entry (अतिरिक्त शेयर) करें, तभी सदस्य की राशि और बही साथ ठीक रहेंगे।',
+        variant: 'destructive', duration: 10000,
+      });
+      return false;
+    }
     if (current.memberId && (current.creditAccountId === ACCOUNT_IDS.SHARE_CAP || current.creditAccountId === ACCOUNT_IDS.ADM_FEE)) {
       const kind = current.creditAccountId === ACCOUNT_IDS.SHARE_CAP ? 'Share Capital' : 'Admission Fee';
       toastRef.current({
@@ -3267,7 +3292,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
-  const addMember = useCallback((data: Omit<Member, 'id'>, opts: { quiet?: boolean; onSaved?: (m: Member) => void } = {}): Member => {
+  const addMember = useCallback((data: Omit<Member, 'id'>, opts: { quiet?: boolean; onSaved?: (m: Member) => void; onFailed?: () => void } = {}): Member => {
     if (guardFYLocked()) return { ...data, id: '' } as Member;
     const today = new Date().toISOString().split('T')[0];
     const newMember: Member = {
@@ -3295,6 +3320,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           setMembersState(prev => prev.filter(m => m.id !== newMember.id));   // RULE 1: roll back local state
           toastRef.current({ title: 'सदस्य सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+          opts.onFailed?.();
           return;
         }
         if (newMember.aadhaar || newMember.pan) {
@@ -3307,14 +3333,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Member-audit M1 (D4/D5): the page's success message waits for the cloud; one audit row per member
         // (a bulk import passes quiet and is summarised by the importer instead of one row per member).
         if (!opts.quiet) emitAudit({ entityType: 'member', entityId: newMember.id, action: 'create', after: { memberId: newMember.memberId, name: newMember.name, shareCapital: newMember.shareCapital || 0, admissionFee: newMember.admissionFee || 0, approvalStatus: newMember.approvalStatus ?? 'approved' } });
+        // Share capital / admission fee receipts — one rule for add / import / approve (see
+        // postJoiningReceipts). ONLY once the member row is durable (as approveMember does): a receipt
+        // posted before a failed member save would survive the rollback as a voucher with no member.
+        // Pending applications get theirs on approval.
+        if (newMember.approvalStatus !== 'pending') postJoiningReceipts(newMember, { quiet: opts.quiet });
         opts.onSaved?.(newMember);
       });
     };
     attemptMemberSave(newMember);
-    // Skip auto-vouchers for pending applications (created on approval)
-    if (newMember.approvalStatus === 'pending') return newMember;
-    // Share capital / admission fee receipts — one rule for add / import / approve (see postJoiningReceipts).
-    postJoiningReceipts(newMember, { quiet: opts.quiet });
     return newMember;
   }, [postJoiningReceipts]);
 
@@ -3334,37 +3361,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updated = prev.map(m => m.id === id ? updatedMember : m);
       return updated;
     });
-    // ECR-17 Phase 5: branchId rides IN the base upsert (see addMember); stale-schema-cache
-    // fallback keeps RULE 1 intact.
-    const attemptMemberUpdate = (payload: Member) => {
-      supabase.from('members').upsert(memberRow(payload)).then(({ error }) => {
-        if (error) {
-          if (isMissingBranchColumn(error) && 'branchId' in payload) {
-            const { branchId: _b, ...noBranch } = payload;
-            attemptMemberUpdate(noBranch as Member);
-            return;
-          }
-          console.error('DB sync error:', error.message); reportError('db-sync', error.message);
-          setMembersState(prev => prev.map(m => m.id === id ? oldMember : m));   // RULE 1: roll back to prior state
-          toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
-          return;
-        }
-        // Step 2 (PII split): only when aadhaar/pan actually changed.
-        if (('aadhaar' in data || 'pan' in data)
-            && ((updatedMember.aadhaar || '') !== (oldMember.aadhaar || '') || (updatedMember.pan || '') !== (oldMember.pan || ''))) {
-          persistMemberIdentity(id, { aadhaar: updatedMember.aadhaar, pan: updatedMember.pan },
-            () => setMembersState(prev => prev.map(m => m.id === id ? { ...m, aadhaar: oldMember.aadhaar, pan: oldMember.pan } : m)));
-        }
-        if (Object.keys(splitAdmissionFields(data as Record<string, unknown>).extras).length) persistMemberAdmission(id, updatedMember);
-        persistMemberProfile(id, updatedMember, MEMBER_PROFILE_FIELDS.some(f => f in data && (data as Record<string, unknown>)[f] !== (oldMember as unknown as Record<string, unknown>)[f]));
-        persistMemberContact(id, updatedMember, MEMBER_CONTACT_FIELDS.some(f => f in data && (data as Record<string, unknown>)[f] !== (oldMember as unknown as Record<string, unknown>)[f]));
-        // Member-audit M1 (D4): who changed what — Aadhaar / PAN are named, never their values.
-        const changed = memberAuditDiff(oldMember as unknown as Record<string, unknown>, updatedMember as unknown as Record<string, unknown>);
-        if (changed) emitAudit({ entityType: 'member', entityId: id, action: 'update', before: changed.before, after: changed.after });
-        opts?.onSaved?.();
-      });
-    };
-    attemptMemberUpdate(updatedMember);
     // Helper: re-sync a member's auto-voucher (Share Capital / Admission Fee).
     // S3-e-3: through the ONE voucher-edit path (updateVoucher) — its guards, its rollback, its journal
     // events (reversed + reposted) and, under the posting service, edit_voucher (one transaction that
@@ -3402,12 +3398,46 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
 
-    if (data.shareCapital !== undefined && data.shareCapital !== oldMember.shareCapital) {
-      resyncMemberVoucher(ACCOUNT_IDS.SHARE_CAP, data.shareCapital, 'Share Capital');
-    }
-    if (data.admissionFee !== undefined && data.admissionFee !== oldMember.admissionFee) {
-      resyncMemberVoucher(ACCOUNT_IDS.ADM_FEE, data.admissionFee, 'Admission Fee');
-    }
+    // ECR-17 Phase 5: branchId rides IN the base upsert (see addMember); stale-schema-cache
+    // fallback keeps RULE 1 intact.
+    const attemptMemberUpdate = (payload: Member) => {
+      supabase.from('members').upsert(memberRow(payload)).then(({ error }) => {
+        if (error) {
+          if (isMissingBranchColumn(error) && 'branchId' in payload) {
+            const { branchId: _b, ...noBranch } = payload;
+            attemptMemberUpdate(noBranch as Member);
+            return;
+          }
+          console.error('DB sync error:', error.message); reportError('db-sync', error.message);
+          setMembersState(prev => prev.map(m => m.id === id ? oldMember : m));   // RULE 1: roll back to prior state
+          toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+          return;
+        }
+        // Step 2 (PII split): only when aadhaar/pan actually changed.
+        if (('aadhaar' in data || 'pan' in data)
+            && ((updatedMember.aadhaar || '') !== (oldMember.aadhaar || '') || (updatedMember.pan || '') !== (oldMember.pan || ''))) {
+          persistMemberIdentity(id, { aadhaar: updatedMember.aadhaar, pan: updatedMember.pan },
+            () => setMembersState(prev => prev.map(m => m.id === id ? { ...m, aadhaar: oldMember.aadhaar, pan: oldMember.pan } : m)));
+        }
+        const clearedAdmission = clearedAdmissionFields(data as Record<string, unknown>, oldMember as unknown as Record<string, unknown>);
+        if (Object.keys(splitAdmissionFields(data as Record<string, unknown>).extras).length || clearedAdmission.length) persistMemberAdmission(id, updatedMember, clearedAdmission);
+        persistMemberProfile(id, updatedMember, MEMBER_PROFILE_FIELDS.some(f => f in data && (data as Record<string, unknown>)[f] !== (oldMember as unknown as Record<string, unknown>)[f]));
+        persistMemberContact(id, updatedMember, MEMBER_CONTACT_FIELDS.some(f => f in data && (data as Record<string, unknown>)[f] !== (oldMember as unknown as Record<string, unknown>)[f]));
+        // Member-audit M1 (D4): who changed what — Aadhaar / PAN are named, never their values.
+        const changed = memberAuditDiff(oldMember as unknown as Record<string, unknown>, updatedMember as unknown as Record<string, unknown>);
+        if (changed) emitAudit({ entityType: 'member', entityId: id, action: 'update', before: changed.before, after: changed.after });
+        // The linked auto-voucher follows ONLY once the member row is durable: re-syncing first and then
+        // rolling the member back would leave the voucher on the new amount (register ≠ ledger).
+        if (data.shareCapital !== undefined && data.shareCapital !== oldMember.shareCapital) {
+          resyncMemberVoucher(ACCOUNT_IDS.SHARE_CAP, data.shareCapital, 'Share Capital');
+        }
+        if (data.admissionFee !== undefined && data.admissionFee !== oldMember.admissionFee) {
+          resyncMemberVoucher(ACCOUNT_IDS.ADM_FEE, data.admissionFee, 'Admission Fee');
+        }
+        opts?.onSaved?.();
+      });
+    };
+    attemptMemberUpdate(updatedMember);
     return true;
   }, [updateVoucher]);
 
@@ -3435,27 +3465,33 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updated: Member = { ...current, status: newStatus, statusReason: reason, statusChangedAt: changedAt, statusResolutionNo: resolutionNo, statusResolutionDate: resolutionDate };
     membersRef.current = membersRef.current.map(m => m.id === id ? updated : m);
     setMembersState(prev => prev.map(m => m.id === id ? updated : m));
-    // Persist status (base column) reliably — roll back on failure (RULE 1).
+    // Persist status (base column) reliably — roll back on failure (RULE 1). Everything else (the
+    // metadata, the audit row, the success toast) waits for it: a "✅ updated" toast and an audit row for
+    // a change the cloud then refused was the false-success pattern (member-area stage A, M-3).
     supabase.from('members').update({ status: newStatus }).eq('id', id).then(({ error }) => {
       if (error) {
         console.error('DB sync error (member status):', error.message);
         membersRef.current = membersRef.current.map(m => m.id === id ? current : m);
         setMembersState(prev => prev.map(m => m.id === id ? current : m));
         toastRef.current({ title: 'स्थिति सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        return;
       }
+      // Metadata (late-added columns) — the base status above is already safe, so no rollback; but the
+      // date is the r.22(c) "ceased on" date the register and voters list read, so a failure is SAID.
+      supabase.from('members').update({ statusReason: reason, statusChangedAt: changedAt }).eq('id', id).then(({ error: e1 }) => {
+        if (!e1) return;
+        reportError('write-partial', e1.message, { at: 'member status metadata' });
+        toastRef.current({ title: 'स्थिति सेव हुई — पर तिथि/कारण नहीं', description: `समाप्ति की तिथि और कारण सेव नहीं हुए (${e1.message})। Migration चलाएँ, फिर स्थिति दोबारा दर्ज करें।`, duration: 10000 });
+      });
+      // M4: the resolution (migration 117) in its OWN update — one missing column must not drop the reason/date above.
+      supabase.from('members').update({ statusResolutionNo: resolutionNo ?? null, statusResolutionDate: resolutionDate ?? null }).eq('id', id).then(({ error: e2 }) => {
+        if (!e2) return;
+        reportError('write-partial', e2.message, { at: 'member status resolution' });
+        if (resolutionNo || resolutionDate) toastRef.current({ title: 'स्थिति सेव हुई — पर प्रस्ताव संख्या नहीं', description: `प्रस्ताव संख्या/तिथि सेव नहीं हुई (${e2.message})। Migration 117 चलाएँ।`, duration: 10000 });
+      });
+      emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { status: current.status, statusChangedAt: current.statusChangedAt ?? null }, after: { status: newStatus, statusChangedAt: changedAt, resolutionNo: resolutionNo ?? null, resolutionDate: resolutionDate ?? null }, reason });
+      toastRef.current({ title: '✅ सदस्य स्थिति अपडेट', description: `${current.name}: ${current.status} → ${newStatus}`, variant: 'default', duration: 6000 });
     });
-    // Metadata (late-added columns) — best-effort; base status above is already safe.
-    supabase.from('members').update({ statusReason: reason, statusChangedAt: changedAt }).eq('id', id).then(({ error }) => {
-      if (error) { console.warn('Member status metadata not persisted — run latest supabase-tables.sql migration:', error.message); reportError('write-partial', error.message, { at: 'member status metadata' }); }
-    });
-    // M4: the resolution (migration 117) in its OWN update — one missing column must not drop the reason/date above.
-    supabase.from('members').update({ statusResolutionNo: resolutionNo ?? null, statusResolutionDate: resolutionDate ?? null }).eq('id', id).then(({ error }) => {
-      if (!error) return;
-      reportError('write-partial', error.message, { at: 'member status resolution' });
-      if (resolutionNo || resolutionDate) toastRef.current({ title: 'स्थिति सेव हुई — पर प्रस्ताव संख्या नहीं', description: `प्रस्ताव संख्या/तिथि सेव नहीं हुई (${error.message})। Migration 117 चलाएँ।`, duration: 10000 });
-    });
-    emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { status: current.status, statusChangedAt: current.statusChangedAt ?? null }, after: { status: newStatus, statusChangedAt: changedAt, resolutionNo: resolutionNo ?? null, resolutionDate: resolutionDate ?? null }, reason });
-    toastRef.current({ title: '✅ सदस्य स्थिति अपडेट', description: `${current.name}: ${current.status} → ${newStatus}`, variant: 'default', duration: 6000 });
     return true;
   }, []);
 
@@ -3577,7 +3613,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Share refund member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
-        toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        // …and the voucher with it — a refund voucher without the reduced scalar is register ≠ ledger.
+        cancelLinkedVouchers([voucher.id], 'Share refund not saved (cloud save failed)', userRef.current?.name ?? 'System');
+        toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, variant: 'destructive', duration: 12000 });
       } else {
         emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital || 0, shareCount: before.shareCount ?? null }, after: { shareCapital: updated.shareCapital, shareCount: updated.shareCount ?? null, voucherNo: voucher.voucherNo || voucher.id }, reason: `Share capital refunded ₹${refund}` });
         toastRef.current({ title: '✅ शेयर पूँजी वापस', description: `₹${refund.toLocaleString('en-IN')} · ${member.name}` });
@@ -3616,14 +3654,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Share refund approval member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
-        cancelVoucher(v.id, 'Share refund approval not saved (cloud save failed)', userRef.current?.name ?? 'System');
+        // The cascade path, not cancelVoucher: the rollback must not depend on this user's delete right
+        // nor be refused by the share-debit guard there.
+        cancelLinkedVouchers([v.id], 'Share refund approval not saved (cloud save failed)', userRef.current?.name ?? 'System');
         toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, variant: 'destructive', duration: 12000 });
       }
     });
     emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital }, after: { shareCapital: updated.shareCapital }, reason: `share:refund-approved — ${resolution.trim()}` });
     toastRef.current({ title: '✅ शेयर वापसी स्वीकृत', description: `${member.name} · ₹${built.amount.toLocaleString('en-IN')} देय दर्ज` });
     return true;
-  }, [accounts, addVoucher, cancelVoucher]);
+  }, [accounts, addVoucher]);
 
   const payShareRefund = useCallback((memberId: string, amount: number, mode: 'cash' | 'bank', date: string): boolean => {
     if (guardFYLocked()) return false;
@@ -3682,7 +3722,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Share operation member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
-        toastRef.current({ title: 'शेयर संचालन सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        cancelLinkedVouchers([voucher.id], `Share ${type} not saved (cloud save failed)`, userRef.current?.name ?? 'System');
+        toastRef.current({ title: 'शेयर संचालन सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, variant: 'destructive', duration: 12000 });
       }
     });
     emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital }, after: { shareCapital: updated.shareCapital }, reason: `share:${type}${opts?.reason ? ' — ' + opts.reason : ''}` });
@@ -3720,7 +3761,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Share purchase member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
-        toastRef.current({ title: 'अतिरिक्त शेयर सेव नहीं हुए', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        cancelLinkedVouchers([voucher.id], 'Share purchase not saved (cloud save failed)', userRef.current?.name ?? 'System');
+        toastRef.current({ title: 'अतिरिक्त शेयर सेव नहीं हुए', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, variant: 'destructive', duration: 12000 });
       } else {
         emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital || 0, shareCount: before.shareCount ?? null }, after: { shareCapital: updated.shareCapital, shareCount: updated.shareCount ?? null, voucherNo: voucher.voucherNo || voucher.id }, reason: `Additional share capital ₹${buy}` });
         toastRef.current({ title: '✅ अतिरिक्त शेयर पूँजी', description: `₹${buy.toLocaleString('en-IN')} · ${member.name}` });
@@ -3776,19 +3818,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       narration: `Shares transferred from ${from.name} to ${to.name} — ${date}`,
       createdBy: user?.name ?? 'System', memberId: toMemberId, refType: 'share.transfer', refId: transferId,
     });
+    // Member-area stage A (H-3): a half-posted transfer is unwound here through the cascade path —
+    // cancelVoucher refuses a lone transfer half, so asking the user to cancel it was a dead end.
+    const unwind = (ids: string[], why: string) => cancelLinkedVouchers(ids, why, userRef.current?.name ?? 'System');
     if (!inHalf?.id) {
-      toastRef.current({ title: 'शेयर स्थानांतरण अधूरा', description: `दूसरा वाउचर नहीं बना — पहला वाउचर (${outHalf.voucherNo || outHalf.id}) रद्द करें और दोबारा करें। सदस्यों की शेयर राशि नहीं बदली।`, variant: 'destructive', duration: 15000 });
+      unwind([outHalf.id], 'Share transfer incomplete (second half not posted)');
+      toastRef.current({ title: 'शेयर स्थानांतरण नहीं हुआ', description: `दूसरा वाउचर नहीं बना, इसलिए पहला वाउचर (${outHalf.voucherNo || outHalf.id}) अपने-आप रद्द कर दिया गया। सदस्यों की शेयर राशि नहीं बदली — दोबारा करें।`, variant: 'destructive', duration: 15000 });
       return;
     }
     // ECR-16 (MS-11): premium paid to the society → Dr Cash/Bank / Cr Reserve (capped above).
+    let premiumId: string | undefined;
     if (prem > 0) {
       const payout = opts?.mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
-      addVoucher({
+      const premV = addVoucher({
         type: 'receipt', date, debitAccountId: payout, creditAccountId: opts?.reserveAccountId || '1201', amount: prem,
         narration: `Share transfer premium from ${to.name} (transfer from ${from.name}) — ${date}`,
         createdBy: user?.name ?? 'System', memberId: toMemberId,
       });
+      if (!premV?.id) {
+        unwind([outHalf.id, inHalf.id], 'Share transfer premium not posted');
+        toastRef.current({ title: 'शेयर स्थानांतरण नहीं हुआ', description: 'प्रीमियम का वाउचर नहीं बना, इसलिए दोनों ट्रांसफर वाउचर रद्द कर दिए गए। सदस्यों की शेयर राशि नहीं बदली — दोबारा करें।', variant: 'destructive', duration: 15000 });
+        return;
+      }
+      premiumId = premV.id;
     }
+    const transferVoucherIds = [outHalf.id, inHalf.id, ...(premiumId ? [premiumId] : [])];
     const beforeFrom = from, beforeTo = to;
     const updFrom = withShareCapital(from, toRupees(subMinor(toMinor(from.shareCapital || 0), toMinor(amt))));
     const updTo = withShareCapital(to, toRupees(addMinor(toMinor(to.shareCapital || 0), toMinor(amt))));
@@ -3797,11 +3851,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setMembersState(prev => prev.map(m => m.id === a.id ? a : m.id === b.id ? b : m));
     };
     applyBoth(updFrom, updTo);
-    const rollback = () => { applyBoth(beforeFrom, beforeTo); toastRef.current({ title: 'शेयर स्थानांतरण सेव नहीं हुआ', description: 'क्लाउड में सेव नहीं हुआ — transfer rolled back.', variant: 'destructive', duration: 12000 }); };
+    // RULE 1: scalars back, AND the vouchers cancelled — otherwise both halves stand while neither
+    // member's share moved (and cancelVoucher refuses the halves).
+    const rollback = () => {
+      applyBoth(beforeFrom, beforeTo);
+      unwind(transferVoucherIds, 'Share transfer not saved (cloud save failed)');
+      toastRef.current({ title: 'शेयर स्थानांतरण सेव नहीं हुआ', description: 'क्लाउड में सेव नहीं हुआ — स्थानांतरण और उसके वाउचर वापस ले लिए गए। दोबारा करें।', variant: 'destructive', duration: 12000 });
+    };
     supabase.from('members').upsert(memberRow(updFrom)).then(({ error }) => {
       if (error) { reportCascade('Share transfer (from) sync', error); rollback(); return; }
       supabase.from('members').upsert(memberRow(updTo)).then(({ error: e2 }) => {
-        if (e2) { reportCascade('Share transfer (to) sync', e2); rollback(); }
+        if (e2) {
+          reportCascade('Share transfer (to) sync', e2);
+          // The transferor's row DID save — put it back in the cloud too.
+          supabase.from('members').upsert(memberRow(beforeFrom)).then(({ error: e3 }) => {
+            if (e3) {
+              reportCascade('Share transfer (from) restore', e3);
+              toastRef.current({ title: 'ध्यान दें: देने वाले सदस्य की राशि', description: `${beforeFrom.name} की शेयर राशि cloud में ₹${updFrom.shareCapital} रह गई हो सकती है (होनी चाहिए ₹${beforeFrom.shareCapital || 0})। Refresh करके Share Register में जाँचें।`, variant: 'destructive', duration: 15000 });
+            }
+          });
+          rollback();
+        }
         else {
           emitAudit({ entityType: 'member', entityId: fromMemberId, action: 'update', before: { shareCapital: beforeFrom.shareCapital || 0 }, after: { shareCapital: updFrom.shareCapital, transferredTo: to.memberId, transferId }, reason: `Shares transferred ₹${amt} to ${to.name}` });
           emitAudit({ entityType: 'member', entityId: toMemberId, action: 'update', before: { shareCapital: beforeTo.shareCapital || 0 }, after: { shareCapital: updTo.shareCapital, transferredFrom: from.memberId, transferId }, reason: `Shares received ₹${amt} from ${from.name}` });
@@ -3857,6 +3927,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addDepositAccount = useCallback((data: Omit<DepositAccount, 'id' | 'accountNo' | 'balance' | 'status' | 'createdAt'> & { openingAmount?: number; mode?: 'cash' | 'bank' }): DepositAccount | null => {
     if (guardFYLocked()) return null;
+    if (refuseNonLiveMember(data.memberId, 'जमा खाता')) return null;
     const { openingAmount = 0, mode = 'cash', ...rest } = data;
     // Refuse BEFORE creating anything when the chart has no liability head for this product — otherwise the account
     // would be created empty and every later deposit would fail, with a "जमा खाता खुला" toast on top of the error.
@@ -5739,6 +5810,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addLoan = useCallback((data: Omit<Loan, 'id' | 'loanNo' | 'createdAt'>): Loan => {
     if (guardFYLocked()) return { ...data, id: '' } as unknown as Loan;
+    if (refuseNonLiveMember(data.memberId, 'ऋण')) return { ...data, id: '' } as unknown as Loan;
     const fy = society.financialYear;
     const maxNum = loansRef.current.filter(l => l.loanNo?.includes(fy)).reduce((max, l) => {
       const m = l.loanNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;

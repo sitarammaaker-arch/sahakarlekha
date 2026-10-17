@@ -11,12 +11,13 @@
  */
 import type { Member, MemberLedgerEntry, Voucher, Loan, KccLoan } from '@/types';
 import { toMinor, toRupees, addMinor } from './money';
+import { memberShareOpeningMinor } from './members/shareOpening';
 
 /**
  * PURE — a member's share-capital ledger from active vouchers. Only vouchers tagged with this member
  * and touching the share-capital account are included (admission fee etc. are excluded). When the
- * member has no share-capital credit voucher, the member.shareCapital scalar is shown as an OB row
- * (backward compatibility for members imported without a voucher). Running balance in integer paise.
+ * member joined before the vouchers began, the opening they brought is shown as an OB row (the rule is
+ * memberShareOpeningMinor, shared with the journal path). Running balance in integer paise.
  */
 export function buildMemberShareLedger(
   member: Pick<Member, 'id' | 'shareCapital' | 'joinDate'>,
@@ -28,18 +29,18 @@ export function buildMemberShareLedger(
     // Deterministic tie-break — same key as projectMemberLedger.
     .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || '').localeCompare(b.voucherNo || '') || a.id.localeCompare(b.id));
 
-  const hasShareCapVoucher = memberVouchers.some(v => v.creditAccountId === shareCapAccountId);
-  // If a proper voucher exists, start at 0 (voucher covers it). Otherwise show OB row.
-  let balanceMinor = toMinor(hasShareCapVoucher ? 0 : (member.shareCapital || 0));
+  const openingMinor = memberShareOpeningMinor(toMinor(member.shareCapital || 0), member.joinDate,
+    memberVouchers.map(v => ({ date: v.date, isCredit: v.creditAccountId === shareCapAccountId, amountMinor: toMinor(v.amount) })));
+  let balanceMinor = openingMinor;
   const result: MemberLedgerEntry[] = [];
 
-  if (!hasShareCapVoucher && (member.shareCapital || 0) > 0) {
+  if (openingMinor > 0) {
     result.push({
       id: 'ob',
       date: member.joinDate,
       voucherNo: 'OB',
       particulars: 'Opening Share Capital',
-      credit: member.shareCapital,
+      credit: toRupees(openingMinor),
       debit: 0,
       balance: toRupees(balanceMinor),
     });
