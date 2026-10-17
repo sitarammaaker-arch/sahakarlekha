@@ -1095,7 +1095,8 @@ export function generateLedgerPDF(
 export function generateMemberPassbookPDF(
   member: Member,
   entries: MemberLedgerEntry[],
-  society: SocietySettings
+  society: SocietySettings,
+  photoDataUrl?: string | null,
 ) {
   const doc = new jsPDF();
   const { startY, font } = addHeader(doc, 'Member Share Ledger', society, `Member: ${member.name} | ID: ${member.memberId}`, { reportCode: 'MSL' });
@@ -1108,6 +1109,15 @@ export function generateMemberPassbookPDF(
   doc.text(`Address: ${member.address || '-'}`, 15, startY + 12);
   doc.text(`Join Date: ${fmtDate(member.joinDate)}`, 120, startY + 2);
   doc.text(`Status: ${member.status.toUpperCase()}`, 120, startY + 7);
+  // The member's photograph (s.40), top right of the info block, when one is stored.
+  const pageW = doc.internal.pageSize.width;
+  if (photoDataUrl) {
+    try {
+      doc.setDrawColor(150);
+      doc.rect(pageW - 34, startY - 2, 19, 23);
+      doc.addImage(photoDataUrl, 'JPEG', pageW - 33.5, startY - 1.5, 18, 22);
+    } catch { /* a bad image never breaks the passbook */ }
+  }
 
   const totalCredit = entries.reduce((s, e) => s + e.credit, 0);
   const totalDebit = entries.reduce((s, e) => s + e.debit, 0);
@@ -1123,7 +1133,7 @@ export function generateMemberPassbookPDF(
   ]);
 
   autoTable(doc, {
-    startY: startY + 18,
+    startY: startY + (photoDataUrl ? 24 : 18),
     head: [['Date', 'Voucher No.', 'Particulars', 'Credit (Cr)', 'Debit (Dr)', 'Balance']],
     body,
     foot: [['', '', 'Total', fmt(totalCredit), fmt(totalDebit), closing ? fmt(closing.balance) : '']],

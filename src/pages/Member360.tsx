@@ -36,13 +36,21 @@ export default function Member360() {
   const { language } = useLanguage();
   const hi = language === 'hi';
   const {
-    members, vouchers, loans, depositAccounts, depositTransactions, kccLoans, accounts, sales, society, matchesActiveBranch,
+    members, vouchers, loans, depositAccounts, depositTransactions, kccLoans, accounts, sales, society, matchesActiveBranch, memberPhotoUrl,
   } = useData();
   const { milkEntries, settlements, inputIssues, distributions } = useDairyData();
   const { maintenanceBills, housingFlats } = useHousingData();
   const { memberRecoveries, salesReturns, patronageRuns } = useConsumerData();
 
   const member = members.find((m) => m.id === id);
+  // The member's photograph (s.40) in the header — and so on the printed page (private bucket, signed URL).
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    setPhotoUrl(null);
+    if (member?.photoPath) memberPhotoUrl(member.photoPath).then((u) => { if (live) setPhotoUrl(u); });
+    return () => { live = false; };
+  }, [member?.photoPath, memberPhotoUrl]);
   const { runs: distributionRuns } = useDistributionRuns();
   const { accruals: loanAccruals } = useLoanAccruals();
 
@@ -118,6 +126,8 @@ export default function Member360() {
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          {photoUrl && <img src={photoUrl} alt={member.name} className="h-24 w-20 shrink-0 rounded-md border object-cover" />}
         <div className="space-y-1">
           {back}
           <h1 className="text-2xl font-bold flex items-center gap-2"><ContactRound className="h-6 w-6 text-primary" />{member.name}</h1>
@@ -127,6 +137,7 @@ export default function Member360() {
             {' · '}<Badge variant="outline">{hi ? (STATUS_HI[member.status] ?? member.status) : member.status}</Badge>
           </p>
           <p className="text-xs text-muted-foreground">{hi ? 'सदस्य का पूरा हिसाब — वही जो सदस्य portal पर देखता है।' : 'The member’s whole account — exactly what they see on the member portal.'}</p>
+        </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 print:hidden">
           {isAdmin && portalLogin !== undefined && (

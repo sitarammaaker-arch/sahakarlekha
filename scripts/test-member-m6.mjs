@@ -88,5 +88,13 @@ ok(ap.includes('generateMemberApplicationPDF(newMember, society, photoUrl)'), 'a
 const pdf2 = read('src/lib/pdf.ts');
 ok(pdf2.includes('generateMemberApplicationPDF(member: Member, society: SocietySettings, photoDataUrl?: string)') && pdf2.includes("doc.addImage(photoDataUrl, 'JPEG'") && pdf2.includes("doc.text('Affix'"), 'application PDF: photo box — the photo, or "Affix Photograph"');
 
+// The stored photo on the reprints (founder 2026-10-17 "फोटो देखें": reprinted application, passbook, Member-360 print).
+ok(mp.includes('const photoForPdf = async (m: Member) => (m.photoPath ? urlToDataUrl(await memberPhotoUrl(m.photoPath)) : null);'), 'reprints fetch the stored photo (signed URL → data URL)');
+ok(mp.includes('generateMemberApplicationPDF(member, society, (await photoForPdf(member)) ?? undefined)') && mp.includes('generateMemberPassbookPDF(ledgerMember, entries, society, await photoForPdf(ledgerMember))'), 'pending-list application PDF + passbook carry the photo');
+const pdf3 = read('src/lib/pdf.ts');
+ok(pdf3.includes('photoDataUrl?: string | null,') && pdf3.includes("doc.addImage(photoDataUrl, 'JPEG', pageW - 33.5, startY - 1.5, 18, 22)") && pdf3.includes('startY: startY + (photoDataUrl ? 24 : 18)'), 'passbook: photo box + table moved below it');
+const m360 = read('src/pages/Member360.tsx');
+ok(m360.includes('memberPhotoUrl(member.photoPath)') && m360.includes('<img src={photoUrl} alt={member.name}'), 'Member-360 header (and its print) shows the photo');
+
 console.log(`member-m6: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

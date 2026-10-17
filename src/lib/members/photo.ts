@@ -52,3 +52,19 @@ export async function photoDataUrl(file: Blob): Promise<string> {
     r.readAsDataURL(small);
   });
 }
+
+/** Browser only: a stored photo (signed URL) as a data URL, for printing it on a PDF; null when it cannot be read. */
+export async function urlToDataUrl(url: string | null | undefined): Promise<string | null> {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(blob);
+    });
+  } catch { return null; }
+}
