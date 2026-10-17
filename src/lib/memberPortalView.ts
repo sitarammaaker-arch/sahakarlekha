@@ -21,6 +21,8 @@ export interface PortalSnapshot {
     nomineeName?: string | null; nomineeRelation?: string | null;
     nominees?: { name?: string; relation?: string; sharePct?: number }[];
     kycStatus?: string | null; aadhaarMasked?: string | null; panMasked?: string | null;
+    /** 124: the member's own photo in the private 'member-photos' bucket (absent before 124 ⇒ no photo shown). */
+    photoPath?: string | null;
   };
   shareVouchers: Voucher[];
   loans: (Pick<Loan, 'id' | 'loanNo' | 'loanType' | 'purpose' | 'amount' | 'interestRate' | 'disbursementDate' | 'dueDate' | 'repaidAmount' | 'status'>)[];
