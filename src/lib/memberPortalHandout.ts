@@ -28,15 +28,19 @@ export function whatsappPhone(phone: string | undefined): string {
   return '';
 }
 
-/** The Hindi-first hand-out message the admin sends to the member. */
-export function handoutMessage(p: { memberName: string; societyName?: string; memberNo: string; pin: string; url: string }): string {
+/**
+ * The Hindi-first hand-out message the admin sends to the member. `pin: null` leaves the PIN out — the WhatsApp link
+ * carries its text IN THE URL (browser history, wa.me logs), so the PIN never goes that way (re-audit 2026-10-17, H-6);
+ * it is told to the member separately (call / SMS / in person), or sent with "copy message".
+ */
+export function handoutMessage(p: { memberName: string; societyName?: string; memberNo: string; pin: string | null; url: string }): string {
   return [
     `नमस्ते ${p.memberName} जी,`,
     `${p.societyName ? p.societyName + ' — ' : ''}सदस्य portal पर आप अपना शेयर, ऋण और जमा का हिसाब देख सकते हैं।`,
     ``,
     `🔗 ${p.url}`,
     `सदस्य संख्या: ${p.memberNo}`,
-    `PIN: ${p.pin}`,
+    p.pin ? `PIN: ${p.pin}` : `PIN: समिति आपको अलग से (फ़ोन / SMS / सामने) बताएगी।`,
     ``,
     `कृपया यह PIN किसी को न बताएँ।`,
   ].join('\n');

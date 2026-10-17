@@ -102,6 +102,7 @@ import { memberAuditDiff } from '@/lib/members/memberAudit';
 import { splitAdmissionFields, clearedAdmissionFields, applicationReceivedOn, MEMBER_PROFILE_FIELDS, MEMBER_CONTACT_FIELDS, MEMBER_PHOTO_FIELD, type AdmissionDecision } from '@/lib/members/admission';
 import { MEMBER_PHOTO_BUCKET, memberPhotoPath, photoFileError, downscalePhoto } from '@/lib/members/photo';
 import { canHoldShares } from '@/lib/members/shareRules';
+import { memberWriteErrorText } from '@/lib/members/writeErrors';
 import { MEMBER_STATUS_EXTRA_FIELDS } from '@/lib/members/cessation';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 
@@ -3319,7 +3320,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           setMembersState(prev => prev.filter(m => m.id !== newMember.id));   // RULE 1: roll back local state
-          toastRef.current({ title: 'सदस्य सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'सदस्य सेव नहीं हुआ', description: memberWriteErrorText(error) ?? `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
           opts.onFailed?.();
           return;
         }
@@ -3410,7 +3411,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           setMembersState(prev => prev.map(m => m.id === id ? oldMember : m));   // RULE 1: roll back to prior state
-          toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: memberWriteErrorText(error) ?? `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
           return;
         }
         // Step 2 (PII split): only when aadhaar/pan actually changed.
@@ -3473,7 +3474,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error (member status):', error.message);
         membersRef.current = membersRef.current.map(m => m.id === id ? current : m);
         setMembersState(prev => prev.map(m => m.id === id ? current : m));
-        toastRef.current({ title: 'स्थिति सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: 'स्थिति सेव नहीं हुई', description: memberWriteErrorText(error) ?? `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         return;
       }
       // Metadata (late-added columns) — the base status above is already safe, so no rollback; but the

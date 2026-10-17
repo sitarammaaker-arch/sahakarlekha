@@ -60,6 +60,8 @@ export function MemberPortalDialog({ member, login, societyName, planAllowed, hi
 
   const url = handout ? portalUrl(window.location.origin, memberPortalPath(handout.societyId)) : '';
   const message = handout ? handoutMessage({ memberName: member.name, societyName, memberNo: handout.memberNo, pin: handout.pin, url }) : '';
+  // H-6: the WhatsApp link puts its text in the URL — so it goes WITHOUT the PIN (tell the PIN separately).
+  const whatsappMessage = handout ? handoutMessage({ memberName: member.name, societyName, memberNo: handout.memberNo, pin: null, url }) : '';
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(message);
@@ -99,9 +101,12 @@ export function MemberPortalDialog({ member, login, societyName, planAllowed, hi
             <div className="flex flex-col sm:flex-row gap-2">
               <Button variant="outline" className="flex-1 gap-2" onClick={copy}><Copy className="h-4 w-4" />{hi ? 'संदेश copy करें' : 'Copy message'}</Button>
               <Button asChild className="flex-1 gap-2 bg-green-600 hover:bg-green-700">
-                <a href={whatsappLink(member.phone, message)} target="_blank" rel="noopener noreferrer"><MessageCircle className="h-4 w-4" />{hi ? 'WhatsApp पर भेजें' : 'Send on WhatsApp'}</a>
+                <a href={whatsappLink(member.phone, whatsappMessage)} target="_blank" rel="noopener noreferrer"><MessageCircle className="h-4 w-4" />{hi ? 'WhatsApp पर भेजें (बिना PIN)' : 'Send on WhatsApp (no PIN)'}</a>
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {hi ? 'सुरक्षा के लिए WhatsApp संदेश में PIN नहीं जाता — PIN सदस्य को फ़ोन पर या सामने बताएँ। "संदेश copy करें" में PIN शामिल है।' : 'For safety the WhatsApp message carries no PIN — tell the member the PIN by phone or in person. "Copy message" includes it.'}
+            </p>
           </div>
         ) : !planAllowed && !active ? (
           <div className="space-y-3 text-sm">
