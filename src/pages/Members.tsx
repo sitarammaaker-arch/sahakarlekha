@@ -43,6 +43,7 @@ import { callMemberPortalAdmin, portalPlanAllowed, type PortalLoginRow } from '@
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 import { admissionClock, applicationReceivedOn, validateAdmission, validateRejection, isHaryana } from '@/lib/members/admission';
 import { generateMemberRefusalLetterPDF, generateShareCertificatePDF } from '@/lib/pdf';
+import { urlToDataUrl } from '@/lib/members/photo';
 import { nomineeCountWarning, certificateNoTakenBy } from '@/lib/members/shareRules';
 import { validateStatusChange, liabilityUntil, isExit, deathSettlement } from '@/lib/members/cessation';
 import { loanOutstanding, kccOutstanding } from '@/lib/memberSnapshot';
@@ -775,8 +776,10 @@ const Members: React.FC = () => {
     if (approveShareRefund(settleMember.id, amount, settleForm.date, `${settleForm.resolution.trim()} — मृत्यु निपटारा, नामांकित: ${who}`)) setSettleMember(null);
   };
 
-  const handleDownloadPDF = (member: Member) => {
-    generateMemberApplicationPDF(member, society);
+  // The stored photograph (s.40) on a reprinted form — fetched through a short-lived signed URL.
+  const photoForPdf = async (m: Member) => (m.photoPath ? urlToDataUrl(await memberPhotoUrl(m.photoPath)) : null);
+  const handleDownloadPDF = async (member: Member) => {
+    generateMemberApplicationPDF(member, society, (await photoForPdf(member)) ?? undefined);
   };
 
   // M2: the r.17 (one month) / s.16 (PACS, 60 days) clock on a pending application — law references only for Haryana.
@@ -1403,7 +1406,7 @@ const Members: React.FC = () => {
                       size="sm"
                       variant="outline"
                       className="gap-2"
-                      onClick={() => generateMemberPassbookPDF(ledgerMember, entries, society)}
+                      onClick={async () => generateMemberPassbookPDF(ledgerMember, entries, society, await photoForPdf(ledgerMember))}
                     >
                       <Download className="h-4 w-4" />
                       PDF
