@@ -43,7 +43,7 @@ import { computeTrialBalance } from '@/lib/reports/trialBalance';
 import { computeTradingAccount, computeProfitLoss } from '@/lib/reports/tradingAndProfitLoss';
 import { computeReceiptsPayments } from '@/lib/reports/receiptsPayments';
 import { computeCashBook, computeBankBook } from '@/lib/reports/accountBook';
-import { computeEntityLinks } from '@/lib/entityLinks';
+import { computeEntityLinks, type MemberDomainLinkSources } from '@/lib/entityLinks';
 import { fetchSubscriptionRow } from '@/lib/subscriptionRow';
 import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate, reconcileMovements } from '@/lib/stockUtils';
@@ -230,7 +230,8 @@ interface DataContextType {
   addMember: (data: Omit<Member, 'id'>, opts?: { quiet?: boolean; onSaved?: (m: Member) => void; onFailed?: () => void }) => Member;
   updateMember: (id: string, data: Partial<Member>, opts?: { onSaved?: (saved?: Member) => void }) => boolean;
   changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string, opts?: { effectiveDate?: string; resolutionNo?: string; resolutionDate?: string; details?: Record<string, unknown> }) => boolean;
-  deleteMember: (id: string) => void;
+  /** `domain`: the housing / dairy / portal records the Members page sees (they also block the delete). */
+  deleteMember: (id: string, domain?: MemberDomainLinkSources) => void;
   uploadMemberPhoto: (id: string, file: File) => Promise<boolean>;
   removeMemberPhoto: (id: string) => Promise<boolean>;
   memberPhotoUrl: (path: string | undefined) => Promise<string | null>;
@@ -387,7 +388,7 @@ interface DataContextType {
     unallocated: { purchases: number; directExp: number; otherSales: number };
   };
   postClosingStock: (fy?: string) => { posted: boolean; amount: number; alreadyPosted: boolean };
-  getEntityLinks: (entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan' | 'asset', id: string) => EntityLink[];
+  getEntityLinks: (entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan' | 'asset', id: string, domain?: MemberDomainLinkSources) => EntityLink[];
   isLoading: boolean;
 }
 
@@ -3571,16 +3572,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return error ? null : data?.signedUrl ?? null;
   }, []);
 
-  const deleteMember = useCallback((id: string) => {
+  const deleteMember = useCallback((id: string, domain?: MemberDomainLinkSources) => {
     if (guardPermission('delete', 'सदस्य मिटाने')) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     // Member-audit M1 (D3): a member with live vouchers, loans, deposit accounts or KCC loans is never deleted —
     // the dialog used to offer "Proceed anyway" and this then cancelled ALL their vouchers (share capital, loans).
     // Such a member leaves through a status change (resigned / expelled / deceased); delete is for a wrong entry.
+    // Re-audit leftovers: consumer credit sales (sales) and the page-supplied housing / dairy / portal links block too.
     const live = computeEntityLinks('member', id, {
       vouchers: vouchersRef.current.filter(v => !v.isDeleted), loans: loansRef.current,
-      sales: [], purchases: [], stockMovements: [], salaryRecords: [], suppliers: [], customers: [], assets: [],
-      depositAccounts: depositAccountsRef.current, kccLoans: kccLoansRef.current,
+      sales: salesRef.current, purchases: [], stockMovements: [], salaryRecords: [], suppliers: [], customers: [], assets: [],
+      depositAccounts: depositAccountsRef.current, kccLoans: kccLoansRef.current, ...domain,
     }).filter(l => l.blocking);
     if (live.length) {
       toastRef.current({
@@ -8081,13 +8083,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, [customers, deleteAccountRow]);
 
-  const getEntityLinks = useCallback((entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan' | 'asset', id: string): EntityLink[] => {
+  const getEntityLinks = useCallback((entityType: 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan' | 'asset', id: string, domain?: MemberDomainLinkSources): EntityLink[] => {
     // K5: the pre-check is a pure module (lib/entityLinks) — same rules, testable alone.
     return computeEntityLinks(entityType, id, {
       vouchers: vouchersRef.current.filter(v => !v.isDeleted),
       loans: loansRef.current, sales: salesRef.current, purchases: purchasesRef.current, stockMovements,
       salaryRecords: salaryRecordsRef.current, suppliers: suppliersRef.current, customers: customersRef.current,
-      assets: assetsRef.current, depositAccounts: depositAccountsRef.current, kccLoans: kccLoansRef.current,
+      assets: assetsRef.current, depositAccounts: depositAccountsRef.current, kccLoans: kccLoansRef.current, ...domain,
     });
   }, [stockMovements]); // eslint-disable-line
 

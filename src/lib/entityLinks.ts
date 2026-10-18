@@ -24,12 +24,33 @@ export interface EntityLinkSources {
   /** Member-audit M1 (D3): a member's deposit accounts and KCC loans also block a member delete. */
   depositAccounts?: { memberId: string }[];
   kccLoans?: { memberId: string }[];
+  /**
+   * Re-audit leftovers (2026-10-18): the domain records that also point at a member. The domain providers sit INSIDE
+   * DataProvider, so the Members page passes these (DataContext's own deleteMember gate sees the core ones only).
+   * RULE 5: soft-deleted rows and revoked logins never block.
+   */
+  housingFlats?: { memberId?: string; isDeleted?: boolean }[];
+  dairySettlements?: { memberId: string; isDeleted?: boolean }[];
+  dairyInputIssues?: { memberId: string; isDeleted?: boolean }[];
+  milkEntries?: { memberId: string }[];
+  /** Member-portal logins (callMemberPortalAdmin('list')); only an active one blocks. */
+  portalLogins?: { member_id: string; is_active: boolean }[];
 }
+
+/** The member links only the Members page can see (the domain providers are below DataProvider). */
+export type MemberDomainLinkSources = Pick<EntityLinkSources, 'housingFlats' | 'dairySettlements' | 'dairyInputIssues' | 'milkEntries' | 'portalLogins'>;
+
+/** One blocking member link (all member links read the same way: change the status, don't delete). */
+const memberBlock = (module: string, count: number, labelHi: string, labelEn: string, instructionHi: string, instructionEn: string): EntityLink =>
+  ({ module, count, labelHi, labelEn, instructionHi, instructionEn, blocking: true });
 
 export function computeEntityLinks(
   entityType: EntityLinkType,
   id: string,
-  { vouchers, loans, sales, purchases, stockMovements, salaryRecords, suppliers, customers, assets, depositAccounts = [], kccLoans = [] }: EntityLinkSources,
+  {
+    vouchers, loans, sales, purchases, stockMovements, salaryRecords, suppliers, customers, assets, depositAccounts = [], kccLoans = [],
+    housingFlats = [], dairySettlements = [], dairyInputIssues = [], milkEntries = [], portalLogins = [],
+  }: EntityLinkSources,
 ): EntityLink[] {
   const links: EntityLink[] = [];
 
@@ -67,6 +88,25 @@ export function computeEntityLinks(
       instructionEn: "A KCC loan is in this member's name — the member cannot be deleted",
       blocking: true,
     });
+    // Consumer store credit (C3): a live credit sale to this member is a due the society must still recover.
+    const csCount = sales.filter(s => s.memberId === id && s.paymentMode === 'credit' && !s.isDeleted).length;
+    if (csCount > 0) links.push(memberBlock('Consumer credit', csCount, `${csCount} उधार बिक्री`, `${csCount} credit sale(s)`,
+      'उपभोक्ता भंडार में इस सदस्य की उधार बिक्री है — सदस्य को हटाया नहीं जा सकता', "Consumer credit sales are in this member's name — the member cannot be deleted"));
+    const hCount = housingFlats.filter(f => f.memberId === id && !f.isDeleted).length;
+    if (hCount > 0) links.push(memberBlock('Housing', hCount, `${hCount} फ़्लैट`, `${hCount} flat(s)`,
+      'फ़्लैट इस सदस्य के नाम है — पहले फ़्लैट हस्तांतरण करें, सदस्य को हटाया नहीं जा सकता', "A flat is in this member's name — transfer it first; the member cannot be deleted"));
+    const dsCount = dairySettlements.filter(d => d.memberId === id && !d.isDeleted).length;
+    if (dsCount > 0) links.push(memberBlock('Dairy settlements', dsCount, `${dsCount} दूध भुगतान`, `${dsCount} dairy settlement(s)`,
+      'इस सदस्य के दूध भुगतान (settlement) दर्ज हैं — सदस्य को हटाया नहीं जा सकता', "Dairy settlements are in this member's name — the member cannot be deleted"));
+    const diCount = dairyInputIssues.filter(d => d.memberId === id && !d.isDeleted).length;
+    if (diCount > 0) links.push(memberBlock('Dairy inputs', diCount, `${diCount} पशु-आहार/इनपुट`, `${diCount} dairy input issue(s)`,
+      'इस सदस्य को पशु-आहार / इनपुट दिए गए हैं — सदस्य को हटाया नहीं जा सकता', 'Dairy inputs were issued to this member — the member cannot be deleted'));
+    const meCount = milkEntries.filter(m => m.memberId === id).length;
+    if (meCount > 0) links.push(memberBlock('Milk entries', meCount, `${meCount} दूध प्रविष्टि`, `${meCount} milk entr(ies)`,
+      'इस सदस्य का दूध संग्रह दर्ज है — सदस्य को हटाया नहीं जा सकता', 'Milk collection is recorded for this member — the member cannot be deleted'));
+    const pCount = portalLogins.filter(p => p.member_id === id && p.is_active).length;
+    if (pCount > 0) links.push(memberBlock('Portal', pCount, 'सक्रिय portal login', 'Active portal login',
+      'सदस्य का portal login चालू है — पहले "Portal login" में जाकर login बंद करें', 'The member has an active portal login — revoke it first'));
   }
 
   if (entityType === 'customer') {

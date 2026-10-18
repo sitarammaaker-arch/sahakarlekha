@@ -127,14 +127,56 @@ export function candidateDisqualifications<T extends { id: string; name: string 
   return out;
 }
 
-/** Result sanity: total of candidate votes vs votes cast vs voters, and a tie for the top place. */
-export function electionResultIssues(votes: readonly number[], votesCast: number, totalVoters: number): string[] {
+// ── Re-audit leftovers (2026-10-18): the election module's rules ──
+//  • status follows the date (computed on render, never frozen at creation); a recorded result means completed.
+//  • a post with N seats (director) elects the top N; a tie AT THE CUT-OFF names nobody for the last seat(s) —
+//    it is decided under the bye-laws / election rules (founder rule: report, never choose).
+export type ElectionStatus = 'upcoming' | 'ongoing' | 'completed';
+
+/** The status on `today` (both 'YYYY-MM-DD'); a recorded result is completed whatever the date. */
+export function electionStatusOn(electionDate: string, today: string, resultRecorded = false): ElectionStatus {
+  if (resultRecorded) return 'completed';
+  if (!electionDate) return 'upcoming';
+  return electionDate > today ? 'upcoming' : electionDate === today ? 'ongoing' : 'completed';
+}
+
+/** A result is recorded once any vote is entered or a winner is marked (legacy rows carry only winnerId). */
+export function hasElectionResult(e: { votesCast?: number; winnerId?: string | null; candidates: readonly { votes?: number; elected?: boolean }[] }): boolean {
+  return (e.votesCast || 0) > 0 || !!e.winnerId || e.candidates.some(c => (c.votes || 0) > 0 || c.elected);
+}
+
+export interface ElectionOutcome {
+  /** Elected outright (votes above the cut-off, or within the seats with no tie at the cut-off). */
+  winnerIds: string[];
+  /** Tied at the cut-off for the remaining seat(s) — nobody is chosen among them. */
+  tiedIds: string[];
+  /** Seats left open by the tie. */
+  openSeats: number;
+}
+
+/** Top `seats` candidates by votes; candidates with 0 votes are never elected. */
+export function electionOutcome(candidates: readonly { id: string; votes: number }[], seats = 1): ElectionOutcome {
+  const n = Math.max(1, Math.floor(seats || 1));
+  const sorted = candidates.filter(c => (c.votes || 0) > 0).slice().sort((a, b) => b.votes - a.votes);
+  if (sorted.length <= n) return { winnerIds: sorted.map(c => c.id), tiedIds: [], openSeats: 0 };
+  const cutoff = sorted[n - 1].votes;
+  if (sorted[n].votes !== cutoff) return { winnerIds: sorted.slice(0, n).map(c => c.id), tiedIds: [], openSeats: 0 };
+  const winnerIds = sorted.filter(c => c.votes > cutoff).map(c => c.id);
+  return { winnerIds, tiedIds: sorted.filter(c => c.votes === cutoff).map(c => c.id), openSeats: n - winnerIds.length };
+}
+
+/** Result sanity: total of candidate votes vs votes cast vs voters, and a tie at the cut-off (the top place when seats = 1). */
+export function electionResultIssues(votes: readonly number[], votesCast: number, totalVoters: number, seats = 1): string[] {
   const issues: string[] = [];
   const sum = votes.reduce((s, v) => s + (v || 0), 0);
   if (totalVoters > 0 && votesCast > totalVoters) issues.push(`डाले गए मत (${votesCast}) कुल मतदाताओं (${totalVoters}) से ज़्यादा हैं।`);
   if (votesCast > 0 && sum > votesCast) issues.push(`उम्मीदवारों के मतों का जोड़ (${sum}) डाले गए मतों (${votesCast}) से ज़्यादा है।`);
-  const sorted = [...votes].sort((a, b) => b - a);
-  if (sorted.length > 1 && sorted[0] > 0 && sorted[0] === sorted[1]) issues.push('सबसे ज़्यादा मत बराबर हैं — विजेता अपने-आप तय नहीं होगा; उपनियम / निर्वाचन नियमों के अनुसार तय करके टिप्पणी में लिखें।');
+  const out = electionOutcome(votes.map((v, i) => ({ id: String(i), votes: v || 0 })), seats);
+  if (out.tiedIds.length) {
+    issues.push(seats > 1
+      ? `${seats} सीटों की आख़िरी जगह पर ${out.tiedIds.length} उम्मीदवारों के मत बराबर हैं — ${out.openSeats} सीट(ें) अपने-आप तय नहीं होंगी; उपनियम / निर्वाचन नियमों के अनुसार तय करके टिप्पणी में लिखें।`
+      : 'सबसे ज़्यादा मत बराबर हैं — विजेता अपने-आप तय नहीं होगा; उपनियम / निर्वाचन नियमों के अनुसार तय करके टिप्पणी में लिखें।');
+  }
   return issues;
 }
 

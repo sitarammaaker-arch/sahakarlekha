@@ -1,6 +1,6 @@
 import { shareRefundOutstanding } from '@/lib/shares/refundPayable';
 import React, { useState, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ListPager, usePaged, useDebounced } from '@/components/ListPager';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
@@ -22,7 +22,7 @@ import type { Member } from '@/types';
 import type { ShareOpType } from '@/lib/shareOps';
 import { premiumCap as sharePremiumCap, premiumAllowed as isSharePremiumAllowed } from '@/lib/sharePremium';
 import { memberStatusLabel } from '@/lib/memberLifecycle';
-import { shareCapWarning, canHoldShares, previousMarch31, refundLimitWarning } from '@/lib/members/shareRules';
+import { shareCapWarning, canHoldShares, previousMarch31, refundLimitWarning, nomineeCountWarning, nomineeCountAfterEdit, syncPrimaryNominee, memberEditLink } from '@/lib/members/shareRules';
 import { shareHeldTwoYears, transferTwoYearWarning, REFUND_BASE_ACCOUNTS } from '@/lib/members/legal';
 import { isHaryana } from '@/lib/members/admission';
 import { useAuth } from '@/contexts/AuthContext';
@@ -139,13 +139,18 @@ const ShareRegister: React.FC = () => {
     // deliberately NOT written: changing the member's share scalar without a voucher
     // makes it drift from the ledger control (the "बेमेल" badge). Share quantity/value
     // changes must go through Add Shares / Transfer / Refund / Ops, which post vouchers.
+    // Re-audit leftovers: nominees[]'s primary entry follows the flat fields; r.21 count warned (never blocking).
+    const nominees = syncPrimaryNominee(editMember.nominees, { name: form.nomineeName, relation: form.nomineeRelation, phone: form.nomineePhone });
     const applied = updateMember(editMember.id, {
       shareCertNo: form.shareCertNo,
       nomineeName: form.nomineeName,
       nomineeRelation: form.nomineeRelation,
       nomineePhone: form.nomineePhone,
+      ...(nominees ? { nominees } : {}),
     }, { onSaved: () => toast({ title: hi ? 'अपडेट किया गया' : 'Updated successfully' }) });
     if (!applied) return;
+    const nomWarn = nomineeCountWarning(nomineeCountAfterEdit(editMember.nominees, form.nomineeName), editMember.shareCount);
+    if (nomWarn) toast({ title: hi ? 'नामांकन जाँचें' : 'Check nomination', description: nomWarn, duration: 10000 });
     setEditMember(null);
   };
 
@@ -424,6 +429,15 @@ const ShareRegister: React.FC = () => {
                 <Label>{hi ? 'नामांकित फोन' : 'Nominee Phone'}</Label>
                 <Input value={form.nomineePhone} onChange={e => setForm(f => ({ ...f, nomineePhone: e.target.value }))} placeholder="9876543210" />
               </div>
+              {/* Re-audit leftovers: the same r.21 check as the Members form, and a way to the full nomination there. */}
+              {editMember && nomineeCountWarning(nomineeCountAfterEdit(editMember.nominees, form.nomineeName), editMember.shareCount) && (
+                <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">⚠ {nomineeCountWarning(nomineeCountAfterEdit(editMember.nominees, form.nomineeName), editMember.shareCount)}</p>
+              )}
+              {editMember && (
+                <Link to={memberEditLink(editMember.id)} className="mt-2 inline-block text-xs text-primary underline">
+                  {hi ? 'पूरा नामांकन बदलें' : 'Edit full nomination'} →
+                </Link>
+              )}
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setEditMember(null)}>{hi ? 'रद्द' : 'Cancel'}</Button>

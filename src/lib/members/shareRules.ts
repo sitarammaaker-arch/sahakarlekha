@@ -78,6 +78,32 @@ export function nomineeCountWarning(nomineeCount: number, shareCount: number | u
   return `${nomineeCount} नामांकित हैं पर शेयर सिर्फ़ ${shareCount} — नियम 21: नामांकितों की संख्या शेयरों की संख्या से ज़्यादा नहीं हो सकती।`;
 }
 
+/**
+ * Re-audit leftovers (2026-10-18): the two short nominee editors (Share Register, Nomination Register) edit only the
+ * primary nominee's name / relation / phone. Count the nominees as the Members form does (primary + additional), so
+ * the same r.21 warning shows everywhere.
+ */
+export function nomineeCountAfterEdit(nominees: readonly { name?: string; role?: string }[] | undefined, primaryName: string): number {
+  const additional = (nominees ?? []).filter((n) => n.role !== 'primary' && n.name?.trim()).length;
+  return (primaryName.trim() ? 1 : 0) + additional;
+}
+
+/**
+ * …and keep nominees[]'s primary entry (the canonical list the Members form writes) in step with the flat fields the
+ * short editors change: update it, or drop it when the name is cleared. Without a primary entry nothing is added —
+ * the full form (Members → edit) builds it with the father's name / age / address.
+ */
+export function syncPrimaryNominee<N extends { name: string; relation: string; phone?: string; role?: string }>(
+  nominees: readonly N[] | undefined, edit: { name: string; relation: string; phone: string },
+): N[] | undefined {
+  if (!nominees?.some((n) => n.role === 'primary')) return undefined;
+  const name = edit.name.trim();
+  return nominees.flatMap((n) => (n.role !== 'primary' ? [n] : name ? [{ ...n, name, relation: edit.relation.trim(), phone: edit.phone.trim() || undefined }] : []));
+}
+
+/** Members page deep link that opens the member's full edit form (all nominee fields + checks). */
+export const memberEditLink = (memberRowId: string) => `/members?edit=${encodeURIComponent(memberRowId)}`;
+
 /** Share-certificate numbers are unique in a society (data rule): the other member already holding `certNo`. */
 export function certificateNoTakenBy<M extends { id: string; shareCertNo?: string; isDeleted?: boolean }>(members: readonly M[], certNo: string, selfId: string): M | undefined {
   const key = certNo.trim().toLowerCase();

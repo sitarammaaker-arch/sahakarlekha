@@ -15,10 +15,16 @@ export function memberPhotoPath(societyId: string, memberRowId: string): string 
   return `${safe(societyId)}/${safe(memberRowId)}.jpg`;
 }
 
-/** Refuse what is not an image, or absurdly large, before reading it. */
-export function photoFileError(file: { type?: string; size?: number } | undefined): string | null {
+/**
+ * Refuse what is not an image, or absurdly large, before reading it. HEIC/HEIF (iPhone's default) is refused up front:
+ * most browsers cannot decode it, so the downscale would fail later with no useful message.
+ */
+export function photoFileError(file: { type?: string; size?: number; name?: string } | undefined): string | null {
   if (!file) return 'फ़ोटो चुनें। (Choose a photo.)';
-  if (!/^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type || '')) return 'सिर्फ़ फ़ोटो (JPG / PNG / WEBP) चुनें। (Images only.)';
+  if (/^image\/hei[cf]/i.test(file.type || '') || /\.hei[cf]$/i.test(file.name || '')) {
+    return 'HEIC/HEIF फ़ोटो यहाँ नहीं खुलती। iPhone में Settings → Camera → Formats → "Most Compatible" चुनें, या फ़ोटो का screenshot लेकर JPG चुनें। (HEIC is not supported — use JPG / PNG.)';
+  }
+  if (!/^image\/(jpeg|png|webp)$/i.test(file.type || '')) return 'सिर्फ़ फ़ोटो (JPG / PNG / WEBP) चुनें। (Images only.)';
   if ((file.size || 0) > MEMBER_PHOTO_MAX_INPUT_BYTES) return 'फ़ोटो 10 MB से छोटी होनी चाहिए। (Max 10 MB.)';
   return null;
 }

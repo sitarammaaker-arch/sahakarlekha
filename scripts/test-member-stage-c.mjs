@@ -70,7 +70,7 @@ ok(mem.includes('s40ChangeReminder(changed)'), 'edit: s.40 reminder');
 ok(read('src/pages/MemberApplication.tsx').includes('minorWarning({ dateOfBirth: form.dateOfBirth || undefined'), 'application: age warning');
 const el = read('src/pages/ElectionModule.tsx');
 ok(el.includes('voterRoll(members, loans, kccLoans, rollDate)') && el.includes('const activeMembers = roll.voters;') && el.includes('totalVoters: parseInt(form.totalVoters) || roll.voters.length'), 'election: voters + candidates from the voters roll');
-ok(el.includes('const winner = tie ? undefined : sorted[0];') && el.includes('electionResultIssues('), 'election: tie names no winner; result checks shown');
+ok(el.includes('electionOutcome(updatedCandidates, seats)') && el.includes('electionResultIssues('), 'election: tie names no winner (leftovers: N seats, test-member-leftovers); result checks shown');
 ok(!el.includes("title: 'Save failed'"), 'election: Hindi save errors');
 ok(read('src/contexts/LanguageContext.tsx').includes("form1MemberList: { hi: 'सदस्य रजिस्टर (नियम 22)'") && read('src/pages/Form1MemberList.tsx').includes("registerReportIdentity(doc, 'F1', society, 'Register of Members (Rule 22)')"), 'member register titled by r.22 (Report ID code unchanged)');
 

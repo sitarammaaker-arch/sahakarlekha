@@ -20,9 +20,10 @@ import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFil
 import { electionSelect, electionInsert, electionUpdate } from '@/lib/supabaseService';
 import { voterRoll } from '@/lib/members/voters';
 import { MemberPicker } from '@/components/MemberPicker';
-import { candidateDisqualifications, electionResultIssues } from '@/lib/members/legal';
+import { candidateDisqualifications, electionResultIssues, electionStatusOn, hasElectionResult, electionOutcome, type ElectionStatus } from '@/lib/members/legal';
+import { fmtDate, todayStr } from '@/lib/dateUtils';
+import { ELECTION_EXPORT_COLUMNS, pick } from '@/lib/members/exportHeaders';
 
-type ElectionStatus = 'upcoming' | 'ongoing' | 'completed';
 type PostType = 'president' | 'vice_president' | 'secretary' | 'treasurer' | 'director' | 'other';
 
 interface Candidate {
@@ -30,6 +31,9 @@ interface Candidate {
   name: string;
   memberId?: string;
   votes: number;
+  /** Re-audit leftovers: per-candidate outcome, stored in the candidates JSON (no new column). */
+  elected?: boolean;
+  tiedAtCutoff?: boolean;
 }
 
 interface Election {
@@ -70,7 +74,8 @@ export default function ElectionModule() {
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
-  const societyId = user?.societyId || 'SOC001';
+  // Re-audit leftovers: no demo-society fallback — without the user's society nothing is loaded or saved.
+  const societyId = user?.societyId || '';
 
   const [elections, setElections] = useState<Election[]>([]);
   const [showDialog, setShowDialog] = useState(false);
@@ -82,14 +87,13 @@ export default function ElectionModule() {
   useEffect(() => {
     if (!societyId) return;
     electionSelect(societyId).then(({ data, error }) => {
-      if (error) { console.error('Elections load error:', error); return; }
-      const parsed = data.map((e: any) => ({
-        ...e,
-        candidates: Array.isArray(e.candidates) ? e.candidates : [],
-      })) as Election[];
-      setElections(parsed);
+      if (error) {
+        toast({ title: hi ? 'चुनाव लोड नहीं हुए' : 'Elections could not be loaded', description: error, variant: 'destructive', duration: 10000 });
+        return;
+      }
+      setElections((data as Election[]).map(e => ({ ...e, candidates: Array.isArray(e.candidates) ? e.candidates : [] })));
     });
-  }, [societyId]);
+  }, [societyId]); // eslint-disable-line react-hooks/exhaustive-deps -- hi/toast only word the error
 
   // Stage C: voters and candidates come from the SAME roll as the Voters List (voters.ts — approved, joined by the
   // election date, not ceased, not associate/nominal, not in default), as on the election date. r.27(a): a defaulter
@@ -101,12 +105,16 @@ export default function ElectionModule() {
   const nextNo = () => `ELECT-${new Date().getFullYear()}-${String(elections.length + 1).padStart(3, '0')}`;
 
   const handleCreate = async () => {
+    if (!societyId) {
+      toast({ title: hi ? 'समिति नहीं मिली' : 'No society', description: hi ? 'दोबारा login करें — बिना समिति के चुनाव सेव नहीं होगा।' : 'Sign in again — an election is not saved without a society.', variant: 'destructive', duration: 10000 });
+      return;
+    }
     if (!form.title || !form.electionDate) {
       toast({ title: hi ? 'शीर्षक और चुनाव तिथि भरें' : 'Enter the title and election date', variant: 'destructive' });
       return;
     }
-    const now = new Date().toISOString().split('T')[0];
-    const status: ElectionStatus = form.electionDate > now ? 'upcoming' : form.electionDate === now ? 'ongoing' : 'completed';
+    // Stored for older readers only — the page computes the status from the date on every render.
+    const status: ElectionStatus = electionStatusOn(form.electionDate, todayStr());
     const election: Election & { society_id: string } = {
       id: `elec_${Date.now()}`,
       electionNo: nextNo(),
@@ -135,12 +143,13 @@ export default function ElectionModule() {
     toast({ title: hi ? 'चुनाव दर्ज किया गया' : 'Election created' });
   };
 
-  const handleSaveVotes = async (electionId: string, updatedCandidates: Candidate[], votesCast: number) => {
-    const sorted = [...updatedCandidates].sort((a, b) => b.votes - a.votes);
-    // Stage C: a tie for the top place names no winner — it is decided under the bye-laws / election rules.
-    const tie = sorted.length > 1 && sorted[0].votes > 0 && sorted[0].votes === sorted[1].votes;
-    const winner = tie ? undefined : sorted[0];
-    const updates = { candidates: updatedCandidates, votesCast, status: 'completed' as ElectionStatus, winnerId: winner?.id };
+  const handleSaveVotes = async (electionId: string, updatedCandidates: Candidate[], votesCast: number, seats: number) => {
+    if (!societyId) return;
+    // Stage C + leftovers: the top `seats` are elected; a tie at the cut-off names nobody for those seats — it is
+    // decided under the bye-laws / election rules. winnerId keeps the top winner for older readers.
+    const outcome = electionOutcome(updatedCandidates, seats);
+    const marked = updatedCandidates.map(c => ({ ...c, elected: outcome.winnerIds.includes(c.id), tiedAtCutoff: outcome.tiedIds.includes(c.id) }));
+    const updates = { candidates: marked, votesCast, status: 'completed' as ElectionStatus, winnerId: outcome.winnerIds[0] ?? null };
 
     const { error } = await electionUpdate(electionId, updates);
     if (error) {
@@ -151,12 +160,22 @@ export default function ElectionModule() {
     toast({ title: hi ? 'परिणाम दर्ज किया गया' : 'Results recorded' });
   };
 
-  const csvHeaders = ['No.', 'Title', 'Post', 'Date', 'Candidates', 'Winner', 'Status'];
+  // Leftovers: the status follows the date (and a recorded result), never the value frozen at creation.
+  const today = todayStr();
+  const rows = useMemo(() => elections.map(e => ({ ...e, status: electionStatusOn(e.electionDate, today, hasElectionResult(e)) })), [elections, today]);
+  const statusText = (s: ElectionStatus, inHindi: boolean) =>
+    s === 'upcoming' ? (inHindi ? 'आगामी' : 'Upcoming') : s === 'ongoing' ? (inHindi ? 'जारी' : 'Ongoing') : (inHindi ? 'पूर्ण' : 'Completed');
+  const winnerText = (e: Election, inHindi: boolean) => {
+    const w = winnersOf(e);
+    const tied = e.candidates.filter(c => c.tiedAtCutoff).map(c => c.name);
+    const parts = [w.map(c => c.name).join(', ')].filter(Boolean);
+    if (tied.length) parts.push(inHindi ? `बराबरी: ${tied.join(', ')}` : `Tie: ${tied.join(', ')}`);
+    return parts.join(' · ') || '—';
+  };
+
+  const csvHeaders = pick(ELECTION_EXPORT_COLUMNS, hi);
   const getCsvRows = () =>
-    elections.map(e => {
-      const winner = e.winnerId ? e.candidates.find(c => c.id === e.winnerId) : null;
-      return [e.electionNo, e.title, postLabel[e.post].en, e.electionDate, e.candidates.length, winner?.name || '—', e.status];
-    });
+    rows.map(e => [e.electionNo, e.title, hi ? postLabel[e.post].hi : postLabel[e.post].en, fmtDate(e.electionDate), e.candidates.length, winnerText(e, hi), statusText(e.status, hi)]);
 
   const handleCSV = () => downloadCSV(csvHeaders, getCsvRows(), 'election-module');
   const handleExcel = () => downloadExcelSingle(csvHeaders, getCsvRows(), 'election-module', 'Elections');
@@ -164,17 +183,15 @@ export default function ElectionModule() {
   const handlePDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const { startY, font } = addHeader(doc, 'Election Report', society, `Financial Year: ${society.financialYear}`, { reportCode: 'ELC' });
+    // PDF headers stay English: the PDF font (helvetica) has no Devanagari.
     autoTable(doc, {
       startY,
-      head: [['No.', 'Title', 'Post', 'Date', 'Candidates', 'Winner', 'Status']],
-      body: elections.map(e => {
-        const winner = e.winnerId ? e.candidates.find(c => c.id === e.winnerId) : null;
-        return [e.electionNo, e.title, postLabel[e.post].en, e.electionDate, e.candidates.length, winner?.name || '—', e.status];
-      }),
+      head: [pick(ELECTION_EXPORT_COLUMNS, false)],
+      body: rows.map(e => [e.electionNo, e.title, postLabel[e.post].en, fmtDate(e.electionDate), e.candidates.length, winnerText(e, false), statusText(e.status, false)]),
       styles: { fontSize: 8 },
       headStyles: { fillColor: [52, 73, 94] },
     });
-    const sigY = (doc as any).lastAutoTable.finalY + 10;
+    const sigY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
     const sig = getSignatoryNames(society);
     addSignatureBlock(doc, font, ['Secretary', 'Election Officer', 'President'], sigY, undefined,
       [sig.secretary, '', sig.president]);
@@ -183,9 +200,9 @@ export default function ElectionModule() {
     doc.save(pdfFileName('ElectionReport', society));
   };
 
-  const upcoming = elections.filter(e => e.status === 'upcoming');
-  const ongoing = elections.filter(e => e.status === 'ongoing');
-  const completed = elections.filter(e => e.status === 'completed');
+  const upcoming = rows.filter(e => e.status === 'upcoming');
+  const ongoing = rows.filter(e => e.status === 'ongoing');
+  const completed = rows.filter(e => e.status === 'completed');
 
   return (
     <div className="p-6 space-y-6">
@@ -218,7 +235,7 @@ export default function ElectionModule() {
           <TabsTrigger value="all">{hi ? 'सभी' : 'All'}</TabsTrigger>
         </TabsList>
         {(['upcoming', 'ongoing', 'completed', 'all'] as const).map(tab => {
-          const data = tab === 'all' ? elections : elections.filter(e => e.status === tab);
+          const data = tab === 'all' ? rows : rows.filter(e => e.status === tab);
           return (
             <TabsContent key={tab} value={tab}>
               <Card><CardContent className="p-0">
@@ -242,24 +259,30 @@ export default function ElectionModule() {
                         {hi ? 'कोई चुनाव नहीं' : 'No elections'}
                       </TableCell></TableRow>
                     ) : data.map(e => {
-                      const winner = e.winnerId ? e.candidates.find(c => c.id === e.winnerId) : null;
+                      const winners = winnersOf(e);
+                      const tied = e.candidates.filter(c => c.tiedAtCutoff);
+                      const resultDone = hasElectionResult(e);
                       return (
                         <TableRow key={e.id}>
                           <TableCell className="font-mono text-xs">{e.electionNo}</TableCell>
                           <TableCell className="font-medium">{e.title}</TableCell>
                           <TableCell>{hi ? postLabel[e.post].hi : postLabel[e.post].en}</TableCell>
-                          <TableCell>{e.electionDate}</TableCell>
+                          <TableCell>{fmtDate(e.electionDate)}</TableCell>
                           <TableCell className="text-center">{e.candidates.length}</TableCell>
                           <TableCell>
-                            {winner ? <span className="flex items-center gap-1 text-green-700"><Trophy className="h-3 w-3" />{winner.name}</span> : '—'}
+                            {winners.length ? <span className="flex items-center gap-1 text-green-700"><Trophy className="h-3 w-3" />{winners.map(c => c.name).join(', ')}</span> : (!tied.length && '—')}
+                            {tied.length > 0 && (
+                              <span className="block text-[11px] text-amber-700">{hi ? `बराबरी (तय नहीं): ${tied.map(c => c.name).join(', ')}` : `Tie (not decided): ${tied.map(c => c.name).join(', ')}`}</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[e.status]}`}>
-                              {e.status === 'upcoming' ? (hi ? 'आगामी' : 'Upcoming') : e.status === 'ongoing' ? (hi ? 'जारी' : 'Ongoing') : (hi ? 'पूर्ण' : 'Completed')}
+                              {statusText(e.status, hi)}
                             </span>
+                            {e.status === 'completed' && !resultDone && <span className="block text-[11px] text-amber-700">{hi ? 'परिणाम बाकी' : 'Result pending'}</span>}
                           </TableCell>
                           <TableCell>
-                            {e.status !== 'completed' && user?.role === 'admin' && (
+                            {!resultDone && user?.role === 'admin' && (
                               <Button size="sm" variant="outline" onClick={() => setShowVoteDialog(e)}>
                                 {hi ? 'परिणाम' : 'Results'}
                               </Button>
@@ -340,15 +363,26 @@ export default function ElectionModule() {
   );
 }
 
+/** Elected candidates: the per-candidate flags, or (rows saved before them) the single winnerId. */
+function winnersOf(e: Election): Candidate[] {
+  if (e.candidates.some(c => c.elected !== undefined)) return e.candidates.filter(c => c.elected);
+  const w = e.winnerId ? e.candidates.find(c => c.id === e.winnerId) : undefined;
+  return w ? [w] : [];
+}
+
 function VoteEntryDialog({ election, hi, onSave, onClose }: {
   election: Election; hi: boolean;
-  onSave: (id: string, candidates: Candidate[], votesCast: number) => void;
+  onSave: (id: string, candidates: Candidate[], votesCast: number, seats: number) => void;
   onClose: () => void;
 }) {
   const [candidates, setCandidates] = useState<Candidate[]>(election.candidates.map(c => ({ ...c })));
   const [votesCast, setVotesCast] = useState(String(election.votesCast || ''));
+  // Leftovers: a director election may fill more than one seat — the top N are elected.
+  const multiSeat = election.post === 'director';
+  const [seatsText, setSeatsText] = useState(String(Math.max(1, winnersOf(election).length)));
+  const seats = multiSeat ? Math.max(1, Math.min(candidates.length || 1, parseInt(seatsText) || 1)) : 1;
   const totalVotes = candidates.reduce((s, c) => s + c.votes, 0);
-  const issues = electionResultIssues(candidates.map(c => c.votes), parseInt(votesCast) || totalVotes, election.totalVoters || 0);
+  const issues = electionResultIssues(candidates.map(c => c.votes), parseInt(votesCast) || totalVotes, election.totalVoters || 0, seats);
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -357,6 +391,11 @@ function VoteEntryDialog({ election, hi, onSave, onClose }: {
         <div className="space-y-3">
           <div><Label>{hi ? 'कुल मत डाले गए' : 'Total Votes Cast'}</Label>
             <Input type="number" value={votesCast} onChange={e => setVotesCast(e.target.value)} /></div>
+          {multiSeat && (
+            <div><Label>{hi ? 'सीटें (कितने संचालक चुने जाने हैं)' : 'Seats (directors to be elected)'}</Label>
+              <Input type="number" min="1" value={seatsText} onChange={e => setSeatsText(e.target.value)} />
+              <p className="mt-0.5 text-[11px] text-muted-foreground">{hi ? `सबसे ज़्यादा मत वाले ${seats} उम्मीदवार विजेता माने जाएँगे।` : `The top ${seats} by votes are elected.`}</p></div>
+          )}
           <p className="text-sm font-medium">{hi ? 'उम्मीदवार-वार मत' : 'Candidate-wise Votes'}</p>
           {candidates.map((c, i) => (
             <div key={c.id} className="flex items-center gap-3">
@@ -369,7 +408,7 @@ function VoteEntryDialog({ election, hi, onSave, onClose }: {
           {issues.map(w => <p key={w} className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">⚠ {w}</p>)}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>{hi ? 'रद्द' : 'Cancel'}</Button>
-            <Button onClick={() => onSave(election.id, candidates, parseInt(votesCast) || totalVotes)}>
+            <Button onClick={() => onSave(election.id, candidates, parseInt(votesCast) || totalVotes, seats)}>
               {hi ? 'परिणाम सहेजें' : 'Save Results'}
             </Button>
           </div>

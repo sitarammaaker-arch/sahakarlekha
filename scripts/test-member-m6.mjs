@@ -33,7 +33,12 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); 
 // ── photo helpers ──
 ok(P.memberPhotoPath('9ef456de-b509', 'abc-123') === '9ef456de-b509/abc-123.jpg', 'path = <society>/<member>.jpg (the policy checks the first folder)');
 ok(P.memberPhotoPath('S/../x', 'a b') === 'S____x/a_b.jpg', 'path cannot escape its society folder');
-ok(P.photoFileError({ type: 'image/jpeg', size: 3_000_000 }) === null && P.photoFileError({ type: 'image/heic', size: 10 }) === null, 'phone photos accepted');
+ok(P.photoFileError({ type: 'image/jpeg', size: 3_000_000 }) === null && P.photoFileError({ type: 'image/webp', size: 10 }) === null, 'phone photos accepted');
+// Leftovers 2026-10-18: HEIC/HEIF cannot be decoded by most browsers — refused up front with a Hindi how-to.
+for (const f of [{ type: 'image/heic', size: 10 }, { type: 'image/heif', size: 10 }, { type: '', size: 10, name: 'IMG_0001.HEIC' }, { type: 'image/heic-sequence', size: 10 }]) {
+  const e = P.photoFileError(f);
+  ok(e && e.includes('HEIC') && /[ऀ-ॿ]/.test(e), `HEIC refused with a Hindi message: ${JSON.stringify(f)}`);
+}
 ok(P.photoFileError({ type: 'application/pdf', size: 10 }) && P.photoFileError({ type: 'image/png', size: 11 * 1024 * 1024 }) && P.photoFileError(undefined), 'non-image / huge / missing refused');
 ok(JSON.stringify(P.fitWithin(4000, 3000)) === JSON.stringify({ width: 480, height: 360 }) && JSON.stringify(P.fitWithin(300, 200)) === JSON.stringify({ width: 300, height: 200 }), 'downscale to 480 on the long side, never upscale');
 
