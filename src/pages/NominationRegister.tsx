@@ -6,6 +6,7 @@
  * Allows bulk view + edit, and PDF download.
  */
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -31,6 +32,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName } from '@/lib/pdf';
+import { nomineeCountWarning, nomineeCountAfterEdit, syncPrimaryNominee, memberEditLink } from '@/lib/members/shareRules';
+import { NOMINATION_EXPORT_COLUMNS, pick } from '@/lib/members/exportHeaders';
 
 // A member is nominated if the primary (flat) nominee OR any entry of nominees[] (ECR-16 multi-nominee) names
 // someone — a member with only additional nominees was listed as "Pending" here.
@@ -89,17 +92,26 @@ const NominationRegister: React.FC = () => {
 
   const handleSave = () => {
     if (!editMember) return;
+    // Re-audit leftovers: nominees[]'s primary entry follows the flat fields; r.21 count warned (never blocking).
+    const nominees = syncPrimaryNominee(editMember.nominees, { name: nomName, relation: nomRelation, phone: nomPhone });
     const applied = updateMember(editMember.id, {
       nomineeName: nomName.trim(),
       nomineeRelation: nomRelation.trim(),
       nomineePhone: nomPhone.trim(),
+      ...(nominees ? { nominees } : {}),
     }, { onSaved: () => toast({ title: hi ? 'नामांकन अपडेट किया गया' : 'Nomination updated' }) });
     if (!applied) return;
+    const nomWarn = nomineeCountWarning(nomineeCountAfterEdit(editMember.nominees, nomName), editMember.shareCount);
+    if (nomWarn) toast({ title: hi ? 'नामांकन जाँचें' : 'Check nomination', description: nomWarn, duration: 10000 });
     setEditMember(null);
   };
 
   // ── CSV / Excel ────────────────────────────────────────────────────────────
-  const csvHeaders = ['Member ID', 'Member Name', 'Phone', 'Share Capital', 'Nominee Name', 'Relation', 'Nominee Phone', 'Status'];
+  // Re-audit leftovers: Excel / CSV follow the page language (the PDF stays English — its font has no Devanagari).
+  const csvHeaders = pick(NOMINATION_EXPORT_COLUMNS, hi);
+  const statusCell = (m: Member) => hasNominee(m)
+    ? (otherNominees(m) ? (hi ? `नामांकित (+${otherNominees(m)} और)` : `Nominated (+${otherNominees(m)} more)`) : (hi ? 'नामांकित' : 'Nominated'))
+    : (hi ? 'लम्बित' : 'Pending');
   const getCsvRows = () =>
     activeMembers.map(m => [
       m.memberId,
@@ -109,7 +121,7 @@ const NominationRegister: React.FC = () => {
       m.nomineeName || '—',
       m.nomineeRelation || '—',
       m.nomineePhone || '—',
-      hasNominee(m) ? (otherNominees(m) ? `Nominated (+${otherNominees(m)} more)` : 'Nominated') : 'Pending',
+      statusCell(m),
     ]);
 
   const handleCSV = () =>
@@ -151,7 +163,7 @@ const NominationRegister: React.FC = () => {
     });
 
     const sigNames = getSignatoryNames(society);
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    const finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
     addSignatureBlock(doc, font, ['Secretary / Manager', 'President / Chairman'], finalY, undefined,
       [sigNames.secretary, sigNames.president]);
     addPageNumbers(doc, font, society?.name);
@@ -342,6 +354,13 @@ const NominationRegister: React.FC = () => {
                   placeholder="9XXXXXXXXX"
                 />
               </div>
+              {/* Re-audit leftovers: the same r.21 check as the Members form, and a way to the full nomination there. */}
+              {nomineeCountWarning(nomineeCountAfterEdit(editMember.nominees, nomName), editMember.shareCount) && (
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">⚠ {nomineeCountWarning(nomineeCountAfterEdit(editMember.nominees, nomName), editMember.shareCount)}</p>
+              )}
+              <Link to={memberEditLink(editMember.id)} className="inline-block text-xs text-primary underline">
+                {hi ? 'पूरा नामांकन बदलें' : 'Edit full nomination'} →
+              </Link>
               <div className="flex gap-2 pt-2">
                 <Button onClick={handleSave} className="flex-1">
                   {hi ? 'सहेजें' : 'Save'}

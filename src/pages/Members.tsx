@@ -4,6 +4,10 @@ import { ListPager, pageSlice, useDebounced } from '@/components/ListPager';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
+import { useHousingData } from '@/contexts/HousingDataContext';
+import { useDairyData } from '@/contexts/DairyDataContext';
+import type { MemberDomainLinkSources } from '@/lib/entityLinks';
+import { GENDER_LABEL, MEMBER_EXPORT_COLUMNS, pick } from '@/lib/members/exportHeaders';
 import { trackEvent } from '@/lib/analytics';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -412,6 +416,8 @@ const Members: React.FC = () => {
   const { members: allMembers, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks, matchesActiveBranch, loans, kccLoans, approveShareRefund, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl } = useData();
   // ECR-17 Phase 4: scope the member list to the active branch ('all' → every member).
   const members = allMembers.filter(m => matchesActiveBranch(m.branchId));
+  const { housingFlats } = useHousingData();
+  const { settlements: dairySettlements, inputIssues: dairyInputIssues, milkEntries } = useDairyData();
   // ECR-06 17-role: RBAC permission gate, not a hardcoded legacy list. `update` (not `create`)
   // keeps the auditor family — whose `create` is audit-objection-scoped — read-only here;
   // byte-identical for the 4 legacy roles, opens edit to operational roles (delete fail-closes
@@ -519,12 +525,13 @@ const Members: React.FC = () => {
   // U6 (M5): the verified list as it is filtered on screen, to Excel.
   const exportMembersExcel = () => {
     const rows = filterBySearch(approvedMembers).map((m, i) => [
-      i + 1, m.memberId, m.name, m.fatherName || '', m.gender === 'female' ? 'Female' : m.gender === 'male' ? 'Male' : m.gender === 'other' ? 'Other' : '',
-      m.dateOfBirth || '', m.occupation || '', m.caste || '', m.address || '', m.phone || '', memberTypeLabel(m.memberType),
-      m.admissionDate || m.joinDate || '', memberStatusLabel(m.status), isExit(m.status) ? (m.statusChangedAt || '') : '',
+      i + 1, m.memberId, m.name, m.fatherName || '', m.gender && GENDER_LABEL[m.gender] ? (hi ? GENDER_LABEL[m.gender].hi : GENDER_LABEL[m.gender].en) : '',
+      m.dateOfBirth || '', m.occupation || '', m.caste || '', m.address || '', m.phone || '', memberTypeLabel(m.memberType, hi),
+      m.admissionDate || m.joinDate || '', memberStatusLabel(m.status, hi), isExit(m.status) ? (m.statusChangedAt || '') : '',
       m.shareCount ?? '', m.shareCapital || 0, m.nomineeName || '',
     ]);
-    downloadExcel([{ name: 'Members', headers: ['S.No', 'Member No.', 'Name', 'Father/Husband', 'Gender', 'Date of Birth', 'Occupation', 'Category', 'Address', 'Phone', 'Type', 'Admission Date', 'Status', 'Ceased On', 'Shares', 'Share Capital', 'Nominee'], rows }], 'members');
+    // Re-audit leftovers: headers (and gender / type / status words) follow the page language.
+    downloadExcel([{ name: 'Members', headers: pick(MEMBER_EXPORT_COLUMNS, hi), rows }], 'members');
   };
 
   const totalShareCapital = approvedMembers.reduce((s, m) => s + m.shareCapital, 0);
@@ -539,8 +546,13 @@ const Members: React.FC = () => {
     return `M${String(next).padStart(3, '0')}`;
   };
 
+  // Re-audit leftovers: a member's flat, dairy settlements / inputs / milk entries and an active portal login also block
+  // the delete (the domain providers are below DataProvider, so the page hands them to the pre-check AND the gate).
+  const memberDomainLinks = (): MemberDomainLinkSources => ({
+    housingFlats, dairySettlements, dairyInputIssues, milkEntries, portalLogins: Object.values(portalLogins),
+  });
   const handleDeleteClick = (member: Member) => {
-    const links = getEntityLinks('member', member.id);
+    const links = getEntityLinks('member', member.id, memberDomainLinks());
     setDeleteGuard({ open: true, id: member.id, name: `${member.name} (${member.memberId})`, links });
   };
 
@@ -736,6 +748,17 @@ const Members: React.FC = () => {
       correspondenceAddress: m.correspondenceAddress || '',
     });
   };
+
+  // Re-audit leftovers: /members?edit=<row id> (the "पूरा नामांकन बदलें" link on the Share / Nomination Registers)
+  // opens that member's full edit form once the list has loaded; the param is then dropped so F5 does not reopen it.
+  const editParam = searchParams.get('edit');
+  useEffect(() => {
+    if (!editParam || !canEdit) return;
+    const m = members.find(x => x.id === editParam);
+    if (!m) return;
+    openEdit(m);
+    setSearchParams(p => { const n = new URLSearchParams(p); n.delete('edit'); return n; }, { replace: true });
+  }, [editParam, members.length, canEdit]); // eslint-disable-line react-hooks/exhaustive-deps -- open once per link
 
   // ECR-16: open / save share-certificate dialog
   const openCert = (m: Member) => {
@@ -1715,7 +1738,7 @@ const Members: React.FC = () => {
         softDelete
         onConfirmDelete={() => {
           // The success toast comes from DataContext once the cloud delete has landed (D5).
-          if (deleteGuard.id) deleteMember(deleteGuard.id);
+          if (deleteGuard.id) deleteMember(deleteGuard.id, memberDomainLinks());
         }}
       />
     </div>
