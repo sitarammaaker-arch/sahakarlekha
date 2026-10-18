@@ -18,6 +18,7 @@ import { balanceSheetTallied, fyEndDate } from '@/lib/balanceSheetLeaves';
 import { loanOutstanding } from '@/lib/memberSnapshot';
 import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
 import { todayStr } from '@/lib/dateUtils';
+import { admissionClock, applicationReceivedOn } from '@/lib/members/admission';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
@@ -128,6 +129,15 @@ const Dashboard: React.FC = () => {
       advisories.push({ severity: 'warning', route: '/loan-register', en: `Loan utilisation at ${sec32Pct.toFixed(0)}% of 10× owned funds — approaching the ceiling`, hi: `ऋण उपयोग स्वामित्व निधि के 10 गुना का ${sec32Pct.toFixed(0)}% — सीमा के निकट` });
     if (overdueCount > 0)
       advisories.push({ severity: 'warning', route: '/loan-register', en: `${overdueCount} overdue loan${overdueCount > 1 ? 's' : ''} — initiate recovery proceedings promptly`, hi: `${overdueCount} अतिदेय ऋण — तत्काल वसूली कार्यवाही प्रारंभ करें` });
+    // Stage D: membership applications waiting for a decision — r.17's one month (a verified producer society excepted)
+    // used to be visible only on the Members page, so a deadline could pass unnoticed.
+    const pendingApps = members.filter(m => !m.isDeleted && m.approvalStatus === 'pending');
+    if (pendingApps.length > 0) {
+      const overdueApps = pendingApps.filter(m => admissionClock(applicationReceivedOn(m), todayStr(), { societyType: society.societyType, producer: society.producerSociety === true })?.overdue).length;
+      advisories.push(overdueApps > 0
+        ? { severity: 'critical', route: '/members?tab=pending', en: `${pendingApps.length} membership application${pendingApps.length > 1 ? 's' : ''} pending — ${overdueApps} past the one-month limit (Rule 17); decide now`, hi: `${pendingApps.length} सदस्यता आवेदन लंबित — ${overdueApps} की 1 माह की सीमा (नियम 17) निकल चुकी; तुरंत निर्णय लें` }
+        : { severity: 'warning', route: '/members?tab=pending', en: `${pendingApps.length} membership application${pendingApps.length > 1 ? 's' : ''} pending a committee decision`, hi: `${pendingApps.length} सदस्यता आवेदन समिति के निर्णय हेतु लंबित` });
+    }
     if (pendingObjections > 0)
       advisories.push({ severity: 'warning', route: '/audit-register', en: `${pendingObjections} pending audit objection${pendingObjections > 1 ? 's' : ''} — resolve before locking the financial year`, hi: `${pendingObjections} लंबित ऑडिट आपत्तियां — वित्त वर्ष लॉक से पूर्व निराकरण करें` });
     if (!fyLocked) {
@@ -170,7 +180,7 @@ const Dashboard: React.FC = () => {
     const checks = healthChecks(healthInputs);
 
     return { reservePosted, bsTallied, stockOk, sec32Ok, fyLocked, netProfit, healthScore, checks, advisories, physicalClosingStock, sec32Pct, shareRecon };
-  }, [vouchers, getTrialBalance, getTradingAccount, loans, society, netProfit, auditObjections, getShareCapitalReconciliation, getAssetRegisterReconciliation]);
+  }, [vouchers, getTrialBalance, getTradingAccount, loans, society, netProfit, auditObjections, getShareCapitalReconciliation, getAssetRegisterReconciliation, members]);
 
   const recentVouchers = [...vouchers.filter(v => !v.isDeleted)]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))

@@ -8,6 +8,8 @@
 import React, { useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { ListPager, usePaged } from '@/components/ListPager';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +42,9 @@ const RELATIONS = ['Son', 'Daughter', 'Spouse', 'Father', 'Mother', 'Brother', '
 const NominationRegister: React.FC = () => {
   const { language } = useLanguage();
   const { members, society, updateMember } = useData();
+  // Stage D: the edit pencil only for roles that may change members (auditors / viewers saw it, then the server refused).
+  const { can } = useAuth();
+  const canEdit = can('update');
   const { toast } = useToast();
 
   const hi = language === 'hi';
@@ -64,6 +69,7 @@ const NominationRegister: React.FC = () => {
     }
     return list;
   }, [activeMembers, search, filterStatus]);
+  const paged = usePaged(filtered, `${search}|${filterStatus}`);
 
   const withNominee    = activeMembers.filter(hasNominee).length;
   const withoutNominee = activeMembers.length - withNominee;
@@ -257,9 +263,9 @@ const NominationRegister: React.FC = () => {
                     {hi ? 'कोई रिकॉर्ड नहीं' : 'No records found'}
                   </TableCell>
                 </TableRow>
-              ) : filtered.map((m, i) => (
+              ) : paged.rows.map((m, i) => (
                 <TableRow key={m.id}>
-                  <TableCell className="text-gray-400 text-sm">{i + 1}</TableCell>
+                  <TableCell className="text-gray-400 text-sm">{paged.from + i}</TableCell>
                   <TableCell className="font-mono text-sm">{m.memberId}</TableCell>
                   <TableCell className="font-medium text-sm">{m.name}</TableCell>
                   <TableCell className="text-sm">{m.phone || '—'}</TableCell>
@@ -281,14 +287,17 @@ const NominationRegister: React.FC = () => {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(m)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
+                    {canEdit && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(m)} title={hi ? 'नामांकित बदलें' : 'Edit nominee'} aria-label={hi ? 'नामांकित बदलें' : 'Edit nominee'}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          <ListPager {...paged} hi={hi} />
         </CardContent>
       </Card>
 

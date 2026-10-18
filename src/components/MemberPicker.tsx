@@ -22,20 +22,24 @@ interface MemberPickerProps {
   onChange: (id: string) => void;
   className?: string;
   triggerClassName?: string;
+  /** Stage D: limit the choice to these members (e.g. the voters roll for election candidates). Default: active, approved. */
+  options?: readonly Member[];
+  /** Label when nothing is chosen. */
+  noneLabel?: string;
 }
 
 const memberLabel = (m: Member) => `${m.memberId} — ${m.name}`;
 
-export const MemberPicker: React.FC<MemberPickerProps> = ({ value, onChange, className, triggerClassName }) => {
+export const MemberPicker: React.FC<MemberPickerProps> = ({ value, onChange, className, triggerClassName, options, noneLabel }) => {
   const { members } = useData();
   const { language } = useLanguage();
   const hi = language === 'hi';
   const [open, setOpen] = useState(false);
 
-  const list = useMemo(() => members
-    .filter(m => m.id === value || (m.status === 'active' && m.approvalStatus !== 'pending' && m.approvalStatus !== 'rejected'))
+  const list = useMemo(() => (options ? [...options] : members
+    .filter(m => m.id === value || (m.status === 'active' && m.approvalStatus !== 'pending' && m.approvalStatus !== 'rejected')))
     .sort((a, b) => (a.memberId || '').localeCompare(b.memberId || '', undefined, { numeric: true })),
-  [members, value]);
+  [members, value, options]);
 
   const selected = members.find(m => m.id === value);
 
@@ -45,7 +49,7 @@ export const MemberPicker: React.FC<MemberPickerProps> = ({ value, onChange, cla
         <Button type="button" variant="outline" role="combobox" aria-expanded={open}
           className={cn('w-full justify-between font-normal h-11', triggerClassName)}>
           <span className="truncate">
-            {selected ? memberLabel(selected) : (hi ? 'कोई सदस्य नहीं' : 'No member linked')}
+            {selected ? memberLabel(selected) : (noneLabel ?? (hi ? 'कोई सदस्य नहीं' : 'No member linked'))}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>

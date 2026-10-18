@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ListPager, pageSlice, useDebounced } from '@/components/ListPager';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -29,7 +30,7 @@ import type { MemberType, CasteCategory } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { useDeepLinkQuery } from '@/hooks/useDeepLinkQuery';
 import { generateMemberPassbookPDF, generateMemberApplicationPDF } from '@/lib/pdf';
-import { fmtDate } from '@/lib/dateUtils';
+import { fmtDate, todayStr } from '@/lib/dateUtils';
 import type { Member, MemberStatus, Nominee, KycStatus, ShareCertStatus } from '@/types';
 import { validateNominees, nomineeShareTotal } from '@/lib/nomineeUtils';
 import { validateKyc } from '@/lib/kycUtils';
@@ -73,7 +74,7 @@ const CASTE_OPTIONS: { value: CasteCategory; label: string; labelHi: string }[] 
 const EMPTY_FORM = {
   memberId: '', name: '', fatherName: '', address: '', phone: '',
   shareCapital: '', admissionFee: '', memberType: 'member' as MemberType,
-  joinDate: new Date().toISOString().split('T')[0], status: 'active' as MemberStatus,
+  joinDate: todayStr(), status: 'active' as MemberStatus,
   age: '', occupation: '', caste: '' as CasteCategory | '',
   postOffice: '', tehsil: '', district: '', state: '', pinCode: '',
   paymentMode: 'cash' as 'cash' | 'cheque' | 'online',
@@ -125,7 +126,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
     {/* Basic */}
     <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide">{hi ? 'मूल जानकारी' : 'Basic details'}</p>
     <MemberPhotoPicker file={photoFile} onChange={onPhoto} existingUrl={existingPhotoUrl} hi={hi} onError={onPhotoError} />
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{t('memberId')} <span className="text-muted-foreground">({hi ? 'स्वचालित' : 'auto'})</span></Label>
         <Input value={form.memberId} onChange={e => f('memberId', e.target.value)} placeholder="M001" />
@@ -135,7 +136,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
         <Input type="date" value={form.joinDate} onChange={e => f('joinDate', e.target.value)} />
       </div>
     </div>
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'समिति प्रस्ताव संख्या' : 'Committee resolution no.'}</Label>
         <Input value={form.admissionResolutionNo} onChange={e => f('admissionResolutionNo', e.target.value)} placeholder={hi ? 'जैसे 12/2025' : 'e.g. 12/2025'} />
@@ -145,7 +146,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
         <Input type="date" value={form.admissionResolutionDate} onChange={e => f('admissionResolutionDate', e.target.value)} />
       </div>
     </div>
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{t('memberName')} *</Label>
         <Input value={form.name} onChange={e => f('name', e.target.value)} placeholder={hi ? 'पूरा नाम' : 'Full name'} required />
@@ -169,11 +170,11 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
       </div>
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'जन्म तिथि (वैकल्पिक)' : 'Date of birth (optional)'}</Label>
-        <Input type="date" value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} onChange={e => f('dateOfBirth', e.target.value)} />
+        <Input type="date" value={form.dateOfBirth} max={todayStr()} onChange={e => f('dateOfBirth', e.target.value)} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'आयु' : 'Age'}{form.dateOfBirth ? (hi ? ' (जन्म तिथि से)' : ' (from DOB)') : ''}</Label>
-        <Input type="number" value={form.dateOfBirth ? String(ageOn(form.dateOfBirth, new Date().toISOString().split('T')[0]) ?? '') : form.age} readOnly={!!form.dateOfBirth} onChange={e => f('age', e.target.value)} placeholder="25" min="1" max="120" />
+        <Input type="number" value={form.dateOfBirth ? String(ageOn(form.dateOfBirth, todayStr()) ?? '') : form.age} readOnly={!!form.dateOfBirth} onChange={e => f('age', e.target.value)} placeholder="25" min="1" max="120" />
       </div>
     </div>
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -234,7 +235,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
     </div>
     {/* Member type & Finance */}
     <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide border-t border-border pt-3">{hi ? 'सदस्यता व शेयर' : 'Membership & shares'}</p>
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'सदस्यता प्रकार' : 'Member Type'}</Label>
         <Select value={form.memberType} onValueChange={v => f('memberType', v)}>
@@ -284,14 +285,15 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
         {hi
           ? 'शेयर संख्या/मूल्य यहाँ से नहीं बदलते — "शेयर रजिस्टर" पेज पर जाएँ, ताकि बदलाव बही में सही दर्ज हो और शेष मेल खाता रहे।'
           : 'Share count/value can\'t be changed here — use the Share Register page so the change posts to the ledger and the balance stays reconciled.'}
+        {' '}<Link to={`/share-register?q=${encodeURIComponent(form.memberId || '')}`} className="font-medium text-primary underline">{hi ? 'शेयर रजिस्टर में यह सदस्य खोलें →' : 'Open this member in the Share Register →'}</Link>
       </p>
     )}
     {/* Nominee — primary (drives the statutory nomination form / Form-1) */}
     <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide border-t border-border pt-3">{hi ? 'मुख्य नामांकित' : 'Primary Nominee'}</p>
-    <p className="text-[11px] text-muted-foreground -mt-1">{hi ? 'यही विवरण नामांकन फॉर्म व Form-1 पर छपता है — पूरा भरें।' : 'These details print on the nomination form & Form-1 — fill them in full.'}</p>
-    <div className="grid grid-cols-2 gap-3">
+    <p className="text-[11px] text-muted-foreground -mt-1">{hi ? 'यही विवरण नामांकन फॉर्म व सदस्य रजिस्टर पर छपता है — पूरा भरें।' : 'These details print on the nomination form & the register of members — fill them in full.'}</p>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="space-y-1">
-        <Label className="text-xs">{hi ? 'नामांकित का नाम' : 'Nominee Name'}</Label>
+        <Label className="text-xs">{hi ? 'नामांकित का नाम' : 'Nominee Name'}{!isEdit && <span className="text-destructive"> *</span>}</Label>
         <Input value={form.nomineeName} onChange={e => f('nomineeName', e.target.value)} />
       </div>
       <div className="space-y-1">
@@ -313,7 +315,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
         <Input type="tel" value={form.nomineePhone} onChange={e => f('nomineePhone', e.target.value)} />
       </div>
     </div>
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="space-y-1">
         <Label className="text-xs">{hi ? 'नामांकित व्यवसाय' : 'Nominee Occupation'}</Label>
         <Input value={form.nomineeOccupation} onChange={e => f('nomineeOccupation', e.target.value)} />
@@ -365,7 +367,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
       </div>
       <p className="text-[11px] text-muted-foreground mt-1">{hi ? 'सिर्फ़ तब भरें जब एक से ज़्यादा नामांकित हों और लाभ %-वार बाँटना हो (कुल 100% तक)। एक ही नामांकित हो तो ऊपर "मुख्य नामांकित" काफ़ी है।' : 'Only if there is more than one nominee and benefits are split by % (up to 100% total). For a single nominee, the Primary Nominee above is enough.'}</p>
       {nominees.map((n, i) => (
-        <div key={n.id} className="grid grid-cols-12 gap-2 mt-2 items-end">
+        <div key={n.id} className="grid grid-cols-2 sm:grid-cols-12 gap-2 mt-2 items-end">
           <div className="col-span-4 space-y-1">
             <Label className="text-[10px]">{hi ? 'नाम' : 'Name'}</Label>
             <Input className="h-8" value={n.name} onChange={e => updateNominee(i, { name: e.target.value })} />
@@ -383,7 +385,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
             <Input className="h-8" type="number" min="0" max="100" value={n.sharePercent || ''} onChange={e => updateNominee(i, { sharePercent: Number(e.target.value) || 0 })} />
           </div>
           <div className="col-span-1">
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeNominee(i)}>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeNominee(i)} title={hi ? 'यह नामांकित हटाएँ' : 'Remove this nominee'} aria-label={hi ? 'यह नामांकित हटाएँ' : 'Remove this nominee'}>
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -425,6 +427,10 @@ const Members: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | MemberStatus>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | MemberType>('all');
+  // Stage D: a long register is searched as a whole but rendered a page at a time; typing settles before filtering.
+  const q = useDebounced(searchQuery).toLowerCase();
+  const [memberPage, setMemberPage] = useState(0);
+  useEffect(() => { setMemberPage(0); }, [q, statusFilter, typeFilter, activeTab]);
   useDeepLinkQuery(setSearchQuery);   // ECR-25 P2: focus a member deep-linked from global search (?q=)
   const [isAddOpen, setIsAddOpen] = useState(false);
   useOpenOnNew(() => setAddChooserOpen(true));   // ＋ नई entry → सदस्य (U1: the same chooser as the button)
@@ -432,7 +438,7 @@ const Members: React.FC = () => {
   const [viewMember, setViewMember] = useState<Member | null>(null);
   const [deleteGuard, setDeleteGuard] = useState<{ open: boolean; id: string; name: string; links: EntityLink[] }>({ open: false, id: '', name: '', links: [] });
   const [decision, setDecision] = useState<{ member: Member; action: 'approve' | 'reject' } | null>(null);
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayStr();
   const [decisionForm, setDecisionForm] = useState({ admissionDate: today, resolutionNo: '', resolutionDate: '', reason: '' });
   const haryanaLaw = isHaryana(society.state);
   const [addChooserOpen, setAddChooserOpen] = useState(false);
@@ -478,14 +484,14 @@ const Members: React.FC = () => {
   const [statusNew, setStatusNew] = useState<MemberStatus>('inactive');
   const [statusReason, setStatusReason] = useState('');
   // M4: the effective date (r.22(c)) + the resolution behind the change (r.19 / Board)
-  const [statusDate, setStatusDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [statusDate, setStatusDate] = useState(() => todayStr());
   const [statusResNo, setStatusResNo] = useState('');
   const [statusResDate, setStatusResDate] = useState('');
   // Stage C-2 (founder 2026-10-18): the facts each way of leaving needs — r.14(2), r.19, r.18 (members.statusDetails).
   const [statusDetails, setStatusDetails] = useState<CessationDetails>({});
   const sd = <K extends keyof CessationDetails>(k: K, v: CessationDetails[K]) => setStatusDetails(d => ({ ...d, [k]: v }));
   const [settleMember, setSettleMember] = useState<Member | null>(null);
-  const [settleForm, setSettleForm] = useState({ date: new Date().toISOString().split('T')[0], resolution: '', amount: '' });
+  const [settleForm, setSettleForm] = useState({ date: todayStr(), resolution: '', amount: '' });
   // Stage C, s.23(1)(iii): no transfer or payment without the nominee's / heir's consent — recorded with the resolution.
   const [settleConsent, setSettleConsent] = useState(false);
   // ECR-16: share-certificate dialog
@@ -504,9 +510,9 @@ const Members: React.FC = () => {
   const rejectedMembers = members.filter(m => m.approvalStatus === 'rejected');
 
   const filterBySearch = (list: Member[]) => list.filter(m =>
-    (m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    m.memberId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (m.phone || '').includes(searchQuery))
+    (m.name.toLowerCase().includes(q) ||
+    m.memberId.toLowerCase().includes(q) ||
+    (m.phone || '').includes(q))
     && (statusFilter === 'all' || m.status === statusFilter)
     && (typeFilter === 'all' || (m.memberType || 'member') === typeFilter)
   );
@@ -619,7 +625,7 @@ const Members: React.FC = () => {
       // M2: recorded as an already-admitted member — the admission date and the committee resolution.
       admissionDate: form.joinDate || undefined,
       gender: form.gender || undefined, dateOfBirth: form.dateOfBirth || undefined,
-      age: form.dateOfBirth ? ageOn(form.dateOfBirth, new Date().toISOString().split('T')[0]) : (form.age ? Number(form.age) : undefined),
+      age: form.dateOfBirth ? ageOn(form.dateOfBirth, todayStr()) : (form.age ? Number(form.age) : undefined),
       correspondenceAddress: form.correspondenceAddress.trim() || undefined,
       admissionResolutionNo: form.admissionResolutionNo.trim() || undefined,
       admissionResolutionDate: form.admissionResolutionDate || undefined,
@@ -684,7 +690,7 @@ const Members: React.FC = () => {
       shareFaceValue: form.shareFaceValue ? Number(form.shareFaceValue) : undefined,
       admissionDate: editMember.approvalStatus === 'pending' ? editMember.admissionDate : (form.joinDate || undefined),
       gender: form.gender || undefined, dateOfBirth: form.dateOfBirth || undefined,
-      age: form.dateOfBirth ? ageOn(form.dateOfBirth, new Date().toISOString().split('T')[0]) : (form.age ? Number(form.age) : undefined),
+      age: form.dateOfBirth ? ageOn(form.dateOfBirth, todayStr()) : (form.age ? Number(form.age) : undefined),
       correspondenceAddress: form.correspondenceAddress.trim() || undefined,
       admissionResolutionNo: form.admissionResolutionNo.trim() || undefined,
       admissionResolutionDate: form.admissionResolutionDate || undefined,
@@ -754,7 +760,7 @@ const Members: React.FC = () => {
       shareCount: certForm.count ? Number(certForm.count) : undefined,
       shareFaceValue: certForm.faceValue ? Number(certForm.faceValue) : undefined,
       shareCertStatus: certForm.status,
-      shareCertIssuedAt: new Date().toISOString().split('T')[0],
+      shareCertIssuedAt: todayStr(),
       shareCertReason: certForm.reason.trim() || undefined,
     }, { onSaved: () => toast({ title: hi ? 'शेयर प्रमाणपत्र अपडेट' : 'Share certificate updated', description: name }) });
     if (!applied) return;
@@ -846,6 +852,7 @@ const Members: React.FC = () => {
 
   const renderMemberTable = (memberList: Member[], showApprovalActions: boolean, rejectedList = false) => {
     const filtered = filterBySearch(memberList);
+    const pg = pageSlice(filtered, memberPage);
     if (filtered.length === 0) {
       if (allMembers.length === 0) {
         return (
@@ -877,7 +884,7 @@ const Members: React.FC = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map(member => (
+            {pg.rows.map(member => (
               <TableRow key={member.id} className="hover:bg-muted/30">
                 <TableCell><Badge variant="outline" className="font-mono">{member.memberId}</Badge></TableCell>
                 <TableCell>
@@ -935,74 +942,74 @@ const Members: React.FC = () => {
                   <div className="flex items-center justify-center gap-1">
                     {showApprovalActions && canEdit && (
                       <>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50" onClick={() => handleApprove(member)} title={hi ? 'स्वीकृत' : 'Approve'}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50" onClick={() => handleApprove(member)} title={rejectedList ? (hi ? 'फिर से स्वीकृत करें (अपील/पुनर्विचार के बाद)' : 'Approve again (after appeal / review)') : (hi ? 'स्वीकृत करें' : 'Approve')} aria-label={rejectedList ? (hi ? 'फिर से स्वीकृत करें' : 'Approve again') : (hi ? 'स्वीकृत करें' : 'Approve')}>
                           <CheckCircle className="h-4 w-4" />
                         </Button>
                         {!rejectedList && (
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleReject(member)} title={hi ? 'अस्वीकृत' : 'Reject'}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleReject(member)} title={hi ? 'अस्वीकृत करें' : 'Reject'} aria-label={hi ? 'अस्वीकृत करें' : 'Reject'}>
                             <XCircle className="h-4 w-4" />
                           </Button>
                         )}
                         {rejectedList && member.rejectionReason && (
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-700 hover:bg-red-50" onClick={() => generateMemberRefusalLetterPDF(member, society)} title={hi ? 'अस्वीकृति पत्र (PDF)' : 'Refusal letter (PDF)'}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-700 hover:bg-red-50" onClick={() => generateMemberRefusalLetterPDF(member, society)} title={hi ? 'अस्वीकृति पत्र (PDF)' : 'Refusal letter (PDF)'} aria-label={hi ? 'अस्वीकृति पत्र (PDF)' : 'Refusal letter (PDF)'}>
                             <Download className="h-4 w-4" />
                           </Button>
                         )}
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => handleDownloadPDF(member)} title="PDF">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => handleDownloadPDF(member)} title={hi ? 'आवेदन पत्र (PDF)' : 'Application form (PDF)'} aria-label={hi ? 'आवेदन पत्र (PDF)' : 'Application form (PDF)'}>
                           <FileText className="h-4 w-4" />
                         </Button>
                       </>
                     )}
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewMember(member)}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewMember(member)} title={hi ? 'विवरण देखें' : 'View details'} aria-label={hi ? 'विवरण देखें' : 'View details'}>
                       <Eye className="h-4 w-4" />
                     </Button>
                     {!showApprovalActions && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
-                        title={hi ? 'सदस्य 360° — पूरा हिसाब एक जगह' : 'Member 360° — whole account'}
+                        title={hi ? 'सदस्य 360° — पूरा हिसाब एक जगह' : 'Member 360° — whole account'} aria-label={hi ? 'सदस्य 360°' : 'Member 360°'}
                         onClick={() => navigate(`/members/${member.id}`)}>
                         <ContactRound className="h-4 w-4" />
                       </Button>
                     )}
                     {!showApprovalActions && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" onClick={() => setLedgerMember(member)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" onClick={() => setLedgerMember(member)} title={hi ? 'शेयर खाता' : 'Share ledger'} aria-label={hi ? 'शेयर खाता' : 'Share ledger'}>
                         <BookOpen className="h-4 w-4" />
                       </Button>
                     )}
                     {canEdit && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(member)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(member)} title={hi ? 'बदलें' : 'Edit'} aria-label={hi ? 'बदलें' : 'Edit'}>
                         <Edit className="h-4 w-4" />
                       </Button>
                     )}
                     {canEdit && !showApprovalActions && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                        title={hi ? 'स्थिति बदलें (त्यागपत्र/निष्कासन/मृत्यु)' : 'Change status (resign/expel/death)'}
-                        onClick={() => { setStatusMember(member); setStatusNew(member.status === 'active' ? 'resigned' : 'active'); setStatusReason(''); setStatusDate(new Date().toISOString().split('T')[0]); setStatusResNo(''); setStatusResDate(''); setStatusDetails({}); }}>
+                        title={hi ? 'स्थिति बदलें (त्यागपत्र/निष्कासन/मृत्यु/अयोग्यता)' : 'Change status (resign/expel/death/disqualify)'} aria-label={hi ? 'स्थिति बदलें' : 'Change status'}
+                        onClick={() => { setStatusMember(member); setStatusNew(member.status === 'active' ? 'resigned' : 'active'); setStatusReason(''); setStatusDate(todayStr()); setStatusResNo(''); setStatusResDate(''); setStatusDetails({}); }}>
                         <UserCog className="h-4 w-4" />
                       </Button>
                     )}
                     {canEdit && !showApprovalActions && member.status === 'deceased' && (member.shareCapital || 0) > 0 && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-700 hover:bg-slate-100"
-                        title={hi ? 'मृत्यु निपटारा — शेयर राशि नामांकित को' : 'Death settlement — share money to the nominee'}
+                        title={hi ? 'मृत्यु निपटारा — शेयर राशि नामांकित को' : 'Death settlement — share money to the nominee'} aria-label={hi ? 'मृत्यु निपटारा' : 'Death settlement'}
                         onClick={() => openSettle(member)}>
                         <HandCoins className="h-4 w-4" />
                       </Button>
                     )}
                     {canEdit && !showApprovalActions && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                        title={hi ? 'शेयर प्रमाणपत्र (जारी/पुनः/रद्द)' : 'Share certificate (issue/reissue/cancel)'}
+                        title={hi ? 'शेयर प्रमाणपत्र (जारी/पुनः/रद्द)' : 'Share certificate (issue/reissue/cancel)'} aria-label={hi ? 'शेयर प्रमाणपत्र' : 'Share certificate'}
                         onClick={() => openCert(member)}>
                         <Award className="h-4 w-4" />
                       </Button>
                     )}
                     {isAdmin && !showApprovalActions && !['resigned', 'expelled', 'deceased', 'disqualified'].includes(member.status) && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-teal-600 hover:text-teal-700 hover:bg-teal-50"
-                        title={hi ? 'सदस्य portal login' : 'Member portal login'}
+                        title={hi ? 'सदस्य portal login' : 'Member portal login'} aria-label={hi ? 'सदस्य portal login' : 'Member portal login'}
                         onClick={() => setPortalMember(member)}>
                         <KeyRound className="h-4 w-4" />
                       </Button>
                     )}
                     {canEdit && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteClick(member)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteClick(member)} title={showApprovalActions ? (hi ? 'ग़लत प्रविष्टि हटाएँ' : 'Delete a wrong entry') : (hi ? 'हटाएँ (केवल ग़लत प्रविष्टि — सदस्यता समाप्ति के लिए "स्थिति बदलें")' : 'Delete (wrong entry only — use "Change status" to end a membership)')} aria-label={hi ? 'हटाएँ' : 'Delete'}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     )}
@@ -1012,6 +1019,7 @@ const Members: React.FC = () => {
             ))}
           </TableBody>
         </Table>
+        <ListPager {...pg} total={filtered.length} setPage={setMemberPage} hi={hi} />
       </div>
     );
   };
@@ -1233,7 +1241,7 @@ const Members: React.FC = () => {
               </div>
               <div>
                 <Label className="text-sm">{statusNew === 'deceased' ? (hi ? 'मृत्यु की तिथि *' : 'Date of death *') : statusNew === 'disqualified' ? (hi ? 'अयोग्यता किस तिथि को हुई *' : 'Date the disqualification was incurred *') : (hi ? 'किस तिथि से *' : 'Effective date *')}</Label>
-                <Input className="mt-1" type="date" value={statusDate} max={new Date().toISOString().split('T')[0]} onChange={e => setStatusDate(e.target.value)} />
+                <Input className="mt-1" type="date" value={statusDate} max={todayStr()} onChange={e => setStatusDate(e.target.value)} />
                 <p className="text-[11px] text-muted-foreground mt-0.5">{hi ? 'जिस दिन सच में हुआ — रजिस्टर में यही "सदस्यता समाप्ति तिथि" छपेगी (नियम 22)।' : 'The day it actually happened — the register prints this (Rule 22).'}</p>
               </div>
               {(statusNew === 'resigned' || statusNew === 'expelled') && (
@@ -1244,7 +1252,7 @@ const Members: React.FC = () => {
                   </div>
                   <div>
                     <Label className="text-xs">{hi ? 'प्रस्ताव तिथि' : 'Resolution date'}</Label>
-                    <Input className="mt-1" type="date" value={statusResDate} max={new Date().toISOString().split('T')[0]} onChange={e => setStatusResDate(e.target.value)} />
+                    <Input className="mt-1" type="date" value={statusResDate} max={todayStr()} onChange={e => setStatusResDate(e.target.value)} />
                   </div>
                 </div>
               )}
@@ -1458,7 +1466,7 @@ const Members: React.FC = () => {
                     <Button size="sm" variant="outline" disabled={photoBusy} onClick={() => photoInput.current?.click()}>
                       {photoBusy ? (hi ? 'सेव हो रही है…' : 'Saving…') : viewPhotoPath ? (hi ? 'फ़ोटो बदलें' : 'Change photo') : (hi ? 'फ़ोटो जोड़ें' : 'Add photo')}
                     </Button>
-                    {viewPhotoPath && <Button size="sm" variant="ghost" disabled={photoBusy} onClick={() => removeMemberPhoto(viewMember.id)}>{hi ? 'हटाएँ' : 'Remove'}</Button>}
+                    {viewPhotoPath && <Button size="sm" variant="ghost" disabled={photoBusy} onClick={() => { if (window.confirm(hi ? 'सदस्य की फ़ोटो हटाएँ? (धारा 40 के अनुसार फ़ोटो रखना ज़रूरी है)' : 'Remove the member photo? (s.40 requires one)')) removeMemberPhoto(viewMember.id); }}>{hi ? 'फ़ोटो हटाएँ' : 'Remove photo'}</Button>}
                   </div>
                 )}
                 {!viewPhotoPath && <p className="text-[11px] text-muted-foreground">{hi ? 'धारा 40: प्राथमिक समिति के हर सदस्य की फ़ोटो रखनी होती है।' : 's.40: a photograph of every member of a primary society.'}</p>}

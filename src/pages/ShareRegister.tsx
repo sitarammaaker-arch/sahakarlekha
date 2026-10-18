@@ -1,5 +1,7 @@
 import { shareRefundOutstanding } from '@/lib/shares/refundPayable';
 import React, { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { ListPager, usePaged, useDebounced } from '@/components/ListPager';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { getVoucherLines } from '@/lib/voucherUtils';
@@ -35,7 +37,10 @@ const ShareRegister: React.FC = () => {
   const canPost = can('create');
   const canEdit = can('update');
 
-  const [search, setSearch] = useState('');
+  // Stage D: opened from a member's edit form as /share-register?q=<member no.>; debounced over long registers.
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
+  const q = useDebounced(search).toLowerCase();
   const [premiumCapInput, setPremiumCapInput] = useState(String(society.maxSharePremiumPercent ?? ''));   // ECR-16 MS-11
   const [editMember, setEditMember] = useState<Member | null>(null);
   const [form, setForm] = useState({ shareCertNo: '', shareCount: '', shareFaceValue: '', nomineeName: '', nomineeRelation: '', nomineePhone: '' });
@@ -43,11 +48,13 @@ const ShareRegister: React.FC = () => {
   const hi = language === 'hi';
   const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
-  const approvedMembers = members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved');
-  const filtered = approvedMembers.filter(m =>
-    m.name.toLowerCase().includes(search.toLowerCase()) ||
-    m.memberId.toLowerCase().includes(search.toLowerCase())
-  );
+  const approvedMembers = useMemo(() => members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved'), [members]);
+  const filtered = useMemo(() => approvedMembers.filter(m =>
+    m.name.toLowerCase().includes(q) ||
+    m.memberId.toLowerCase().includes(q)
+  ), [approvedMembers, q]);
+  // Stage D: one page of rows at a time — the per-row ledger reconciliation runs for 50 rows, not all of them.
+  const paged = usePaged(filtered, q);
 
   const totalShares = approvedMembers.reduce((s, m) => s + (m.shareCount || 0), 0);
   // M3: what the statutory share warnings need — total capital (s.6), and for r.18(3) the paid-up share capital
@@ -247,7 +254,7 @@ const ShareRegister: React.FC = () => {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((m, i) => (
+                paged.rows.map((m, i) => (
                   <TableRow key={m.id} className="hover:bg-muted/30">
                     <TableCell className="font-mono text-sm">{m.memberId}</TableCell>
                     <TableCell className="font-medium">{m.name}</TableCell>
@@ -297,6 +304,7 @@ const ShareRegister: React.FC = () => {
               )}
             </TableBody>
           </Table>
+          <ListPager {...paged} hi={hi} />
         </CardContent>
       </Card>
 

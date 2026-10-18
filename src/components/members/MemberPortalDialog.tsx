@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { fmtDate } from '@/lib/dateUtils';
 import { KeyRound, Copy, MessageCircle, Loader2 } from 'lucide-react';
 import type { Member } from '@/types';
@@ -31,6 +32,13 @@ interface Props {
 
 export function MemberPortalDialog({ member, login, societyName, planAllowed, hi, onClose, onChanged }: Props) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  // Stage D: the society's portal link, copyable any time (it never changes; no PIN in it).
+  const portalLink = user?.societyId ? portalUrl(window.location.origin, memberPortalPath(user.societyId)) : '';
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(portalLink); toast({ title: hi ? 'Portal link copy हो गया' : 'Portal link copied' }); }
+    catch { toast({ title: hi ? 'Copy नहीं हुआ — link हाथ से लिख लें' : 'Copy failed — note the link down', variant: 'destructive' }); }
+  };
   const [busy, setBusy] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
   const [handout, setHandout] = useState<PortalHandout | null>(null);
@@ -122,6 +130,12 @@ export function MemberPortalDialog({ member, login, societyName, planAllowed, hi
               {!login && <Badge variant="outline">{hi ? 'अभी login नहीं दिया' : 'No login yet'}</Badge>}
             </div>
             {active && <p className="text-muted-foreground">{hi ? 'चालू तिथि:' : 'Active since:'} {fmtDate(login!.created_at)}</p>}
+            {portalLink && (
+              <div className="flex items-center gap-2 rounded-md border p-2">
+                <p className="min-w-0 flex-1 break-all text-xs text-muted-foreground">{portalLink}</p>
+                <Button size="sm" variant="outline" className="gap-1 shrink-0" onClick={copyLink} aria-label={hi ? 'Portal link copy करें' : 'Copy portal link'}><Copy className="h-3.5 w-3.5" />{hi ? 'Link copy' : 'Copy link'}</Button>
+              </div>
+            )}
             {revoked && login?.revoked_at && <p className="text-muted-foreground">{hi ? 'बंद तिथि:' : 'Revoked on:'} {fmtDate(login.revoked_at)}</p>}
             {confirmRevoke && (
               <p className="text-destructive font-medium">

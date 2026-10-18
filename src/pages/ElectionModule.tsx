@@ -19,6 +19,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName } from '@/lib/pdf';
 import { electionSelect, electionInsert, electionUpdate } from '@/lib/supabaseService';
 import { voterRoll } from '@/lib/members/voters';
+import { MemberPicker } from '@/components/MemberPicker';
 import { candidateDisqualifications, electionResultIssues } from '@/lib/members/legal';
 
 type ElectionStatus = 'upcoming' | 'ongoing' | 'completed';
@@ -303,13 +304,11 @@ export default function ElectionModule() {
               {candidates.map((c, i) => (
                 <div key={i} className="flex gap-2 mb-2">
                   <Input placeholder={hi ? 'नाम' : 'Name'} value={c.name} onChange={e => { const u = [...candidates]; u[i].name = e.target.value; setCandidates(u); }} />
-                  <Select value={c.memberId} onValueChange={v => { const u = [...candidates]; u[i].memberId = v; if (v !== '__none__') { const m = activeMembers.find(m => m.id === v); if (m) u[i].name = m.name; } setCandidates(u); }}>
-                    <SelectTrigger className="w-40"><SelectValue placeholder={hi ? 'सदस्य' : 'Member'} /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">{hi ? 'बाहरी' : 'External'}</SelectItem>
-                      {activeMembers.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  {/* Stage D: searchable over the voters roll (a plain dropdown of every member could not be searched). */}
+                  <div className="w-48 shrink-0">
+                    <MemberPicker value={c.memberId === '__none__' ? '' : c.memberId} options={activeMembers} noneLabel={hi ? 'सदस्य चुनें' : 'Pick member'} triggerClassName="h-10"
+                      onChange={v => { const u = [...candidates]; u[i] = { ...u[i], memberId: v }; const m = activeMembers.find(x => x.id === v); if (m) u[i].name = m.name; setCandidates(u); }} />
+                  </div>
                   {candidates.length > 1 && <Button size="sm" variant="ghost" onClick={() => setCandidates(candidates.filter((_, j) => j !== i))}>✕</Button>}
                 </div>
               ))}

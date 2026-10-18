@@ -24,6 +24,7 @@ import { downloadExcel } from '@/lib/exportUtils';
 import { generateVotersListPDF, generateDefaulterListPDF } from '@/lib/pdf';
 import { voterRoll, defaulterList, reservationSummary, EXCLUSION_LABEL } from '@/lib/members/voters';
 import { useMemberDues } from '@/hooks/useMemberDues';
+import { ListPager, usePaged } from '@/components/ListPager';
 import { isHaryana } from '@/lib/members/admission';
 
 const VotersList: React.FC = () => {
@@ -36,6 +37,8 @@ const VotersList: React.FC = () => {
   const haryana = isHaryana(society.state);
 
   const roll = useMemo(() => voterRoll(members, loans, kccLoans, asOn), [members, loans, kccLoans, asOn]);
+  // Stage D: the on-screen list is paged; the PDF / Excel still carry every voter.
+  const votersPage = usePaged(roll.voters, asOn);
   const defaulters = useMemo(() => defaulterList(members, loans, kccLoans, asOn), [members, loans, kccLoans, asOn]);
   // Founder 2026-10-18 (point 1): every due recorded; the legal default (s.20(d)) by its own rule — see legal.duesRow.
   const duesOf = useMemberDues(asOn);
@@ -104,11 +107,12 @@ const VotersList: React.FC = () => {
                   </TableRow></TableHeader>
                   <TableBody>
                     {roll.voters.length === 0 && <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">{hi ? 'इस तिथि पर कोई मतदाता नहीं।' : 'No voters on this date.'}</TableCell></TableRow>}
-                    {roll.voters.map((m, i) => (
-                      <TableRow key={m.id}><TableCell className="text-muted-foreground">{i + 1}</TableCell><TableCell className="font-mono">{m.memberId}</TableCell><TableCell className="font-medium">{m.name}</TableCell><TableCell>{m.fatherName || '—'}</TableCell><TableCell className="max-w-56 truncate">{m.address || '—'}</TableCell></TableRow>
+                    {votersPage.rows.map((m, i) => (
+                      <TableRow key={m.id}><TableCell className="text-muted-foreground">{votersPage.from + i}</TableCell><TableCell className="font-mono">{m.memberId}</TableCell><TableCell className="font-medium">{m.name}</TableCell><TableCell>{m.fatherName || '—'}</TableCell><TableCell className="max-w-56 truncate">{m.address || '—'}</TableCell></TableRow>
                     ))}
                   </TableBody>
                 </Table>
+                <ListPager {...votersPage} hi={hi} />
               </div>
               {roll.excluded.length > 0 && (
                 <details className="rounded-md border p-3">
