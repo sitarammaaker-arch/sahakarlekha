@@ -84,3 +84,16 @@ export function certificateNoTakenBy<M extends { id: string; shareCertNo?: strin
   if (!key) return undefined;
   return members.find((m) => m.id !== selfId && !m.isDeleted && (m.shareCertNo || '').trim().toLowerCase() === key);
 }
+
+/**
+ * Final batch (prod read-only check 2026-10-18): two members' share khata disagreed with their share capital
+ * because MANUAL vouchers (Vouchers page) on Share Capital 1102 were tagged to the member — a manual voucher never
+ * moves member.shareCapital, so register and ledger drift apart. A member's share moves only through the Share
+ * Register (purchase / refund / transfer / share operations), which posts the voucher AND moves the share.
+ */
+export function touchesShareCapital(v: { debitAccountId?: string; creditAccountId?: string; lines?: readonly { accountId: string }[] }, shareCapAccountId = '1102'): boolean {
+  return v.debitAccountId === shareCapAccountId || v.creditAccountId === shareCapAccountId
+    || (v.lines ?? []).some((l) => l.accountId === shareCapAccountId);
+}
+
+export const MANUAL_MEMBER_SHARE_VOUCHER_MESSAGE = 'सदस्य के नाम पर शेयर पूँजी (1102) का वाउचर यहाँ से नहीं बनता — सदस्य का शेयर "शेयर रजिस्टर" से ख़रीदें/वापस करें/हस्तांतरित करें, ताकि सदस्य की शेयर राशि और बही साथ बदलें। (Member share moves go through the Share Register.)';

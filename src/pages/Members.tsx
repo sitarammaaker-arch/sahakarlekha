@@ -532,7 +532,8 @@ const Members: React.FC = () => {
 
   const getNextMemberId = () => {
     const nums = allMembers   // scan ALL members (not branch-scoped) so IDs stay unique society-wide
-      .map(m => parseInt(m.memberId.replace(/\D/g, ''), 10))
+      // Final batch: the trailing number only — "HR-12/045" is 45, not 12045 (every digit used to be joined).
+      .map(m => parseInt((m.memberId.match(/(\d+)\D*$/) || [])[1] ?? '', 10))
       .filter(n => !isNaN(n) && n > 0);
     const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
     return `M${String(next).padStart(3, '0')}`;
@@ -762,7 +763,11 @@ const Members: React.FC = () => {
       shareCertStatus: certForm.status,
       shareCertIssuedAt: todayStr(),
       shareCertReason: certForm.reason.trim() || undefined,
-    }, { onSaved: () => toast({ title: hi ? 'शेयर प्रमाणपत्र अपडेट' : 'Share certificate updated', description: name }) });
+    }, { onSaved: (saved?: Member) => {
+      toast({ title: hi ? 'शेयर प्रमाणपत्र अपडेट' : 'Share certificate updated', description: name });
+      // Final batch (M-10): print straight away — the dialog used to close and had to be reopened for the PDF.
+      if (saved && saved.shareCertNo && certForm.status === 'issued') generateShareCertificatePDF(saved, society);
+    } });
     if (!applied) return;
     setCertMember(null);
   };
@@ -1489,13 +1494,13 @@ const Members: React.FC = () => {
                 ...(viewMember.approvalStatus ? [[hi ? 'अनुमोदन' : 'Approval', viewMember.approvalStatus === 'pending' ? (hi ? 'पेंडिंग' : 'Pending') : viewMember.approvalStatus === 'approved' ? (hi ? 'स्वीकृत' : 'Approved') : (hi ? 'अस्वीकृत' : 'Rejected')]] : []),
                 ...(viewMember.age ? [[hi ? 'आयु' : 'Age', `${viewMember.age} ${hi ? 'वर्ष' : 'years'}`]] : []),
                 ...(viewMember.occupation ? [[hi ? 'व्यवसाय' : 'Occupation', viewMember.occupation]] : []),
-                ...(viewMember.caste ? [[hi ? 'जाति वर्ग' : 'Caste', viewMember.caste]] : []),
+                ...(viewMember.caste ? [[hi ? 'जाति वर्ग' : 'Caste', (() => { const c = CASTE_OPTIONS.find(o => o.value === viewMember.caste); return c ? (hi ? c.labelHi : c.label) : viewMember.caste; })()]] : []),
                 ...(viewMember.postOffice ? [[hi ? 'डाकघर' : 'Post Office', viewMember.postOffice]] : []),
                 ...(viewMember.tehsil ? [[hi ? 'तहसील' : 'Tehsil', viewMember.tehsil]] : []),
                 ...(viewMember.district ? [[hi ? 'जिला' : 'District', viewMember.district]] : []),
                 ...(viewMember.state ? [[hi ? 'राज्य' : 'State', viewMember.state]] : []),
                 ...(viewMember.pinCode ? [[hi ? 'पिन कोड' : 'Pin Code', viewMember.pinCode]] : []),
-                ...(viewMember.paymentMode ? [[hi ? 'भुगतान माध्यम' : 'Payment Mode', viewMember.paymentMode]] : []),
+                ...(viewMember.paymentMode ? [[hi ? 'भुगतान माध्यम' : 'Payment Mode', hi ? ({ cash: 'नकद', cheque: 'चेक', online: 'ऑनलाइन' } as Record<string, string>)[viewMember.paymentMode] ?? viewMember.paymentMode : viewMember.paymentMode]] : []),
                 ...(viewMember.shareCount ? [[hi ? 'शेयर संख्या' : 'Shares', String(viewMember.shareCount)]] : []),
                 ...(viewMember.nomineeName ? [[hi ? 'नामांकित' : 'Nominee', viewMember.nomineeName]] : []),
                 ...(viewMember.nomineeRelation ? [[hi ? 'सम्बन्ध' : 'Relation', viewMember.nomineeRelation]] : []),

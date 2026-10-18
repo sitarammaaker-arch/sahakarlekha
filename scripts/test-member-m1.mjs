@@ -92,7 +92,7 @@ const del = fn('deleteMember');
 ok(del.indexOf("computeEntityLinks('member'") > 0 && del.indexOf('.filter(l => l.blocking)') > 0 && del.indexOf('if (live.length)') < del.indexOf("supabase.from('members').update({ isDeleted: true })"), 'deleteMember refuses live records before the soft delete (D3)');
 ok(del.includes('depositAccounts: depositAccountsRef.current, kccLoans: kccLoansRef.current'), 'deleteMember checks deposits + KCC');
 ok(fn('addMember').includes("action: 'create'") && fn('addMember').includes('opts.onSaved?.(newMember)'), 'addMember: audit + onSaved after the cloud (D4/D5)');
-ok(fn('updateMember').includes('memberAuditDiff(') && fn('updateMember').includes('opts?.onSaved?.()') && fn('updateMember').includes('return true;'), 'updateMember: audit diff, onSaved, boolean result');
+ok(fn('updateMember').includes('memberAuditDiff(') && fn('updateMember').includes('opts?.onSaved?.(updatedMember)') && fn('updateMember').includes('return true;'), 'updateMember: audit diff, onSaved, boolean result');
 ok(fn('approveMember').includes("action: 'approve'") && fn('rejectMember').includes("action: 'reject'"), 'approve / reject audited');
 ok(!/console\.info\(`\[AUDIT\] Member id=/.test(dc), 'console-only "audit" lines replaced');
 
