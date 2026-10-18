@@ -39,5 +39,16 @@ ok(src.includes("'[Rule 22, Haryana Co-operative Societies Rules, 1989]'") && sr
 ok(src.includes('doc.splitTextToSize(`Society: ${society.name}`, pageW - marginL * 2)') && !src.includes('marginL + 90'), 'name on its own line, no fixed-offset overlap');
 ok(src.includes("registerReportIdentity(doc, 'F1', society, 'Register of Members (Rule 22)')"), 'Report ID code F1 unchanged');
 
+// 5. paper choice: A4 landscape by default (societies print on A4), A3 optional; fonts readable at 100%
+ok(src.includes("useState<'a4' | 'a3'>('a4')") && src.includes("format: paper"), 'A4 default, A3 selectable');
+const fontM = src.match(/const PAPER_FONT = \{ a4: \{ body: ([\d.]+), head: ([\d.]+) \}, a3: \{ body: ([\d.]+), head: ([\d.]+) \} \}/);
+ok(fontM && +fontM[1] >= 8 && +fontM[3] >= 10, 'body font ≥ 8 pt on A4, ≥ 10 pt on A3 (was 6.5 pt on A3 = ~4.5 pt on A4)');
+const wM = src.match(/const A4_WIDTHS = \[([\d, ]+)\]/);
+const widths = wM ? wM[1].split(',').map(Number) : [];
+ok(widths.length === 16 && widths.reduce((a, b) => a + b, 0) === 277, `A4 widths: 16 columns filling 297 − 2×10 mm (got ${widths.length}, ${widths.reduce((a, b) => a + b, 0)})`);
+ok(src.includes("const marginL = paper === 'a4' ? 10 : 14;") && src.includes('margin: { left: marginL, right: marginL }'), 'A4 margins match the widths');
+ok(src.includes("showHead: 'everyPage'"), 'column headings on every page');
+ok(src.includes("`Download PDF (${paper.toUpperCase()})`") && src.includes("hi ? 'A4 (आड़ा)'"), 'paper picker + button say the paper');
+
 console.log(`form1-pdf: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

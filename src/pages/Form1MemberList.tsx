@@ -29,6 +29,12 @@ import { isExit } from '@/lib/members/cessation';
 import { isHaryana } from '@/lib/members/admission';
 import { addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, registerReportIdentity } from '@/lib/pdf';
 
+// Table font per paper (pt): read at 100% on the paper it is printed on.
+const PAPER_FONT = { a4: { body: 8, head: 7.5 }, a3: { body: 10, head: 10 } } as const;
+// A4 landscape leaves 277 mm for 16 columns, so every width is fixed (sum 277): a phone number or a date never
+// breaks mid-way, and a long name / address wraps onto a second line inside its own column.
+const A4_WIDTHS = [9, 12, 26, 26, 11, 17, 29, 20, 17, 15, 11, 15, 23, 14, 15, 17];
+
 const Form1MemberList: React.FC = () => {
   const { language } = useLanguage();
   const { members, society } = useData();
@@ -39,6 +45,8 @@ const Form1MemberList: React.FC = () => {
   const [search,      setSearch]      = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
   const [typeFilter,  setTypeFilter]  = useState<'all' | 'member' | 'nominal' | 'associate'>('all');
+  // Paper the register is printed on. Societies print on A4: an A3 file shrunk onto A4 printed 6.5 pt as ~4.5 pt.
+  const [paper, setPaper] = useState<'a4' | 'a3'>('a4');
 
   const filtered = useMemo(() => {
     let list = members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved');
@@ -97,8 +105,10 @@ const Form1MemberList: React.FC = () => {
 
   // ── PDF ────────────────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
-    const marginL = 14;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: paper });
+    // Readable at 100% on the chosen paper (was a fixed 6.5 pt on A3). The header row repeats on every page.
+    const font = PAPER_FONT[paper];
+    const marginL = paper === 'a4' ? 10 : 14;
     let y = 12;
 
     const pageW = doc.internal.pageSize.getWidth();
@@ -139,15 +149,15 @@ const Form1MemberList: React.FC = () => {
       ]],
       // The grand total only once, under the last row — on every page it read as that page's total.
       showFoot: 'lastPage',
-      styles: { fontSize: 6.5, cellPadding: 1.5 },
-      headStyles: { fillColor: [30, 64, 175], fontSize: 7 },
-      footStyles: { fontStyle: 'bold', fontSize: 7 },
-      columnStyles: {
-        10: { halign: 'right' },
-        11: { halign: 'right' },
-        9:  { halign: 'center' },
-        14: { halign: 'center' },
-      },
+      showHead: 'everyPage',
+      margin: { left: marginL, right: marginL },
+      styles: { fontSize: font.body, cellPadding: paper === 'a4' ? 1 : 1.5, overflow: 'linebreak' },
+      headStyles: { fillColor: [30, 64, 175], fontSize: font.head },
+      footStyles: { fontStyle: 'bold', fontSize: font.head },
+      columnStyles: Object.fromEntries(Array.from({ length: 16 }, (_, c) => [c, {
+        ...(paper === 'a4' && A4_WIDTHS[c] ? { cellWidth: A4_WIDTHS[c] } : {}),
+        ...(c === 10 || c === 11 ? { halign: 'right' as const } : c === 9 || c === 14 ? { halign: 'center' as const } : {}),
+      }])),
     });
 
     // Footer — signature block via shared helper
@@ -181,9 +191,18 @@ const Form1MemberList: React.FC = () => {
           </p>
         </div>
         <div className="ml-auto flex gap-2 flex-wrap">
+          <Select value={paper} onValueChange={v => setPaper(v as 'a4' | 'a3')}>
+            <SelectTrigger className="h-9 w-[150px]" aria-label={hi ? 'काग़ज़ का आकार' : 'Paper size'}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="a4">{hi ? 'A4 (आड़ा)' : 'A4 (landscape)'}</SelectItem>
+              <SelectItem value="a3">{hi ? 'A3 (आड़ा)' : 'A3 (landscape)'}</SelectItem>
+            </SelectContent>
+          </Select>
           <Button size="sm" className="gap-2" onClick={handleDownloadPDF}>
             <Download className="h-4 w-4" />
-            {hi ? 'PDF A3' : 'Download PDF (A3)'}
+            {hi ? `PDF (${paper.toUpperCase()})` : `Download PDF (${paper.toUpperCase()})`}
           </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={handleCSV}>
             <FileSpreadsheet className="h-4 w-4" />
