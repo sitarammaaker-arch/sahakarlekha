@@ -12,7 +12,8 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { publishedOrder, postsInCategory } from '@/content/blog';
 import { categoryBySlug } from '@/content/blog/categories';
 import { fetchBlogViewCounts } from '@/lib/blogViews';
-import { CategoryPills, PostGridCard } from '@/components/blog/BlogCards';
+import { CategoryPills, PostGridCard, BlogSearchBox, BlogSearchResults } from '@/components/blog/BlogCards';
+import { useBlogSearch } from '@/lib/useBlogSearch';
 import { ChevronRight, Home } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
@@ -20,14 +21,16 @@ const SITE = 'https://sahakarlekha.com';
 const BlogCategory: React.FC = () => {
   const { cat = '' } = useParams<{ cat: string }>();
   const category = categoryBySlug(cat);
-  const posts = category ? postsInCategory(category.name) : [];
+  const posts = React.useMemo(() => (category ? postsInCategory(category.name) : []), [category]);
   const url = `${SITE}/blog/category/${cat}`;
+  const { input, setInput, query, results, searching } = useBlogSearch(posts, cat);
 
   useDocumentMeta({
     title: category ? category.metaTitle : 'श्रेणी नहीं मिली | सहकार लेखा ब्लॉग',
     description: category?.description,
     canonicalPath: category ? `/blog/category/${category.slug}` : '/blog',
-    robots: category && posts.length ? undefined : 'noindex, follow',
+    // ?q= result lists stay out of the index; the canonical is the hub itself
+    robots: category && posts.length && !searching ? undefined : 'noindex, follow',
     jsonLd: category ? [
       {
         '@context': 'https://schema.org',
@@ -80,8 +83,11 @@ const BlogCategory: React.FC = () => {
               <p className="text-sm md:text-base text-muted-foreground mt-2 max-w-3xl">{category.intro}</p>
               <p className="text-xs text-muted-foreground mt-1">{posts.length} लेख</p>
             </div>
+            {posts.length > 0 && <BlogSearchBox value={input} onChange={setInput} scopeName={category.name} />}
             <CategoryPills active={category.slug} liveCategories={liveCategories} />
-            {posts.length ? (
+            {searching ? (
+              <BlogSearchResults query={query} results={results} views={views} scopeName={category.name} />
+            ) : posts.length ? (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {posts.map((post) => <PostGridCard key={post.slug} post={post} views={views[post.slug]} />)}
               </div>
