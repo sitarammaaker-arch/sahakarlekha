@@ -101,7 +101,7 @@ import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
 import { memberAuditDiff } from '@/lib/members/memberAudit';
 import { splitAdmissionFields, clearedAdmissionFields, applicationReceivedOn, MEMBER_PROFILE_FIELDS, MEMBER_CONTACT_FIELDS, MEMBER_PHOTO_FIELD, type AdmissionDecision } from '@/lib/members/admission';
 import { MEMBER_PHOTO_BUCKET, memberPhotoPath, photoFileError, downscalePhoto } from '@/lib/members/photo';
-import { canHoldShares } from '@/lib/members/shareRules';
+import { canHoldShares, touchesShareCapital, MANUAL_MEMBER_SHARE_VOUCHER_MESSAGE } from '@/lib/members/shareRules';
 import { memberWriteErrorText } from '@/lib/members/writeErrors';
 import { MEMBER_STATUS_EXTRA_FIELDS } from '@/lib/members/cessation';
 import { isCountedVoucher } from '@/lib/countedVoucher';
@@ -228,7 +228,7 @@ interface DataContextType {
   deleteP7Entry: (id: string) => void;
 
   addMember: (data: Omit<Member, 'id'>, opts?: { quiet?: boolean; onSaved?: (m: Member) => void; onFailed?: () => void }) => Member;
-  updateMember: (id: string, data: Partial<Member>, opts?: { onSaved?: () => void }) => boolean;
+  updateMember: (id: string, data: Partial<Member>, opts?: { onSaved?: (saved?: Member) => void }) => boolean;
   changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string, opts?: { effectiveDate?: string; resolutionNo?: string; resolutionDate?: string; details?: Record<string, unknown> }) => boolean;
   deleteMember: (id: string) => void;
   uploadMemberPhoto: (id: string, file: File) => Promise<boolean>;
@@ -1927,6 +1927,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardPeriodLock(data.date)) {
       return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     }
+    // Final batch: a MANUAL voucher on Share Capital 1102 tagged to a member never moves member.shareCapital — the
+    // register and the ledger drifted (2 members in prod). Member share moves go through the Share Register.
+    if (data.origin === 'manual' && data.memberId && touchesShareCapital(data, ACCOUNT_IDS.SHARE_CAP)) {
+      toastRef.current({ title: 'शेयर रजिस्टर से करें', description: MANUAL_MEMBER_SHARE_VOUCHER_MESSAGE, variant: 'destructive', duration: 12000 });
+      return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    }
 
     // P2-3: Warn if voucher date is outside the active FY range
     const fyEnd = `20${society.financialYear.split('-')[1]}-03-31`;
@@ -2358,6 +2364,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return false;
     }
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
+    // Final batch: a manual voucher cannot be edited INTO a member-tagged Share Capital entry (see addVoucher).
+    if (current.origin === 'manual' && (data.memberId ?? current.memberId)
+        && touchesShareCapital({ debitAccountId: data.debitAccountId ?? current.debitAccountId, creditAccountId: data.creditAccountId ?? current.creditAccountId, lines: data.lines ?? current.lines }, ACCOUNT_IDS.SHARE_CAP)
+        && !(current.memberId && touchesShareCapital(current, ACCOUNT_IDS.SHARE_CAP))) {
+      toastRef.current({ title: 'शेयर रजिस्टर से करें', description: MANUAL_MEMBER_SHARE_VOUCHER_MESSAGE, variant: 'destructive', duration: 12000 });
+      return false;
+    }
     // Capture edit audit snapshot — only track the fields that actually changed
     const changedFields = (Object.keys(data) as (keyof typeof data)[]).filter(
       k => data[k] !== current[k]
@@ -3347,7 +3360,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return newMember;
   }, [postJoiningReceipts]);
 
-  const updateMember = useCallback((id: string, data: Partial<Member>, opts?: { onSaved?: () => void }): boolean => {
+  const updateMember = useCallback((id: string, data: Partial<Member>, opts?: { onSaved?: (saved?: Member) => void }): boolean => {
     if (guardFYLocked()) return false;
     const oldMember = membersRef.current.find(m => m.id === id);
     if (!oldMember) return false;
@@ -3436,7 +3449,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (data.admissionFee !== undefined && data.admissionFee !== oldMember.admissionFee) {
           resyncMemberVoucher(ACCOUNT_IDS.ADM_FEE, data.admissionFee, 'Admission Fee');
         }
-        opts?.onSaved?.();
+        opts?.onSaved?.(updatedMember);
       });
     };
     attemptMemberUpdate(updatedMember);
@@ -3471,7 +3484,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Persist status (base column) reliably — roll back on failure (RULE 1). Everything else (the
     // metadata, the audit row, the success toast) waits for it: a "✅ updated" toast and an audit row for
     // a change the cloud then refused was the false-success pattern (member-area stage A, M-3).
-    supabase.from('members').update({ status: newStatus }).eq('id', id).then(({ error }) => {
+    supabase.from('members').update({ status: newStatus }).eq('id', id).select('id').then(({ data: changed, error: err }) => {
+      // Final batch (M-15): 0 rows changed (RLS / missing row) is a failure too, not a silent success.
+      const error = err ?? (!changed?.length ? { message: 'रिकॉर्ड नहीं बदला — अनुमति नहीं या रिकॉर्ड नहीं मिला (0 rows)' } : null);
       if (error) {
         console.error('DB sync error (member status):', error.message);
         membersRef.current = membersRef.current.map(m => m.id === id ? current : m);
@@ -3583,7 +3598,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Soft-delete (P0 #2): retain the row (isDeleted=true) for statutory retention & audit.
     // The in-memory removal above hides it from the app; load filters isDeleted out on refresh.
     // The cascade runs only once the member row is soft-deleted in the cloud (RULE 1 + 3).
-    supabase.from('members').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
+    // Final batch (M-15): an UPDATE that RLS filters out returns no error and changes 0 rows — ask for the row back,
+    // so "deleted" is said only when the cloud really has it (else the member came back on F5).
+    supabase.from('members').update({ isDeleted: true }).eq('id', id).select('id').then(({ data: changed, error: err }) => {
+      const error = err ?? (!changed?.length ? { message: 'रिकॉर्ड नहीं बदला — अनुमति नहीं या रिकॉर्ड नहीं मिला (0 rows)' } : null);
       if (error) { failedCloudWrite('सदस्य हटाना', error, () => setMembersState(prev => putBack(prev, removed))); return; }
       // RULE 3: soft-cancel the member's auto-generated vouchers (share capital /
       // admission fee) so no ghost Share Capital lingers in the Trial Balance.
