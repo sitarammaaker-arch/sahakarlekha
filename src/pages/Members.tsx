@@ -42,6 +42,8 @@ import { memberPhoneError } from '@/lib/memberValidation';
 import { callMemberPortalAdmin, portalPlanAllowed, type PortalLoginRow } from '@/lib/memberPortalAdmin';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 import { admissionClock, applicationReceivedOn, validateAdmission, validateRejection, isHaryana } from '@/lib/members/admission';
+import { minorWarning, agmBlackoutWarning, expulsionAppealLastDate, deathNomineeChoiceUntil, s40ChangeReminder } from '@/lib/members/legal';
+import { meetingSelect } from '@/lib/supabaseService';
 import { generateMemberRefusalLetterPDF, generateShareCertificatePDF } from '@/lib/pdf';
 import { urlToDataUrl } from '@/lib/members/photo';
 import { nomineeCountWarning, certificateNoTakenBy } from '@/lib/members/shareRules';
@@ -430,6 +432,7 @@ const Members: React.FC = () => {
   const [decision, setDecision] = useState<{ member: Member; action: 'approve' | 'reject' } | null>(null);
   const today = new Date().toISOString().split('T')[0];
   const [decisionForm, setDecisionForm] = useState({ admissionDate: today, resolutionNo: '', resolutionDate: '', reason: '' });
+  const haryanaLaw = isHaryana(society.state);
   const [addChooserOpen, setAddChooserOpen] = useState(false);
   // M6: the viewed member's photo (private bucket → short-lived signed URL)
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -478,6 +481,8 @@ const Members: React.FC = () => {
   const [statusResDate, setStatusResDate] = useState('');
   const [settleMember, setSettleMember] = useState<Member | null>(null);
   const [settleForm, setSettleForm] = useState({ date: new Date().toISOString().split('T')[0], resolution: '', amount: '' });
+  // Stage C, s.23(1)(iii): no transfer or payment without the nominee's / heir's consent — recorded with the resolution.
+  const [settleConsent, setSettleConsent] = useState(false);
   // ECR-16: share-certificate dialog
   const [certMember, setCertMember] = useState<Member | null>(null);
   const [certForm, setCertForm] = useState({ certNo: '', count: '', faceValue: '', status: 'issued' as ShareCertStatus, reason: '' });
@@ -583,6 +588,9 @@ const Members: React.FC = () => {
     // M3: r.21 — nominees may not outnumber the shares (warning only).
     const nomWarn = nomineeCountWarning((form.nomineeName.trim() ? 1 : 0) + cleanNominees.length, Number(form.shareCount) || undefined);
     if (nomWarn) toast({ title: hi ? 'नामांकन जाँचें' : 'Check nomination', description: nomWarn, duration: 10000 });
+    // Stage C, s.16(a): an individual member is 18+ on the date of admission (a warning — the record still saves).
+    const ageWarn = haryanaLaw ? minorWarning({ dateOfBirth: form.dateOfBirth || undefined, age: form.age ? Number(form.age) : undefined }, form.joinDate || today) : null;
+    if (ageWarn) toast({ title: hi ? 'आयु जाँचें' : 'Check age', description: ageWarn, duration: 12000 });
     Object.assign(form, { memberId });
     const photoToUpload = formPhoto;   // captured now — the form resets right after
     const created = addMember({
@@ -675,7 +683,17 @@ const Members: React.FC = () => {
       correspondenceAddress: form.correspondenceAddress.trim() || undefined,
       admissionResolutionNo: form.admissionResolutionNo.trim() || undefined,
       admissionResolutionDate: form.admissionResolutionDate || undefined,
-    }, { onSaved: () => toast({ title: hi ? 'सदस्य अपडेट किया गया' : 'Member updated' }) });
+    }, { onSaved: () => {
+      toast({ title: hi ? 'सदस्य अपडेट किया गया' : 'Member updated' });
+      // Stage C, s.40 proviso: a changed photo / address is reported to the Registrar within 15 days (Haryana).
+      const changed = [
+        (form.address || '').trim() !== (editMember.address || '').trim() ? 'address' : '',
+        (form.correspondenceAddress || '').trim() !== (editMember.correspondenceAddress || '').trim() ? 'correspondenceAddress' : '',
+        formPhoto ? 'photoPath' : '',
+      ].filter(Boolean);
+      const reminder = haryanaLaw && editMember.memberType !== 'associate' ? s40ChangeReminder(changed) : null;
+      if (reminder) toast({ title: hi ? 'रजिस्ट्रार को सूचना' : 'Inform the Registrar', description: reminder, duration: 12000 });
+    } });
     if (!applied) return;
     if (formPhoto) void uploadMemberPhoto(editMember.id, formPhoto);
     setFormPhoto(null);
@@ -739,7 +757,12 @@ const Members: React.FC = () => {
   };
 
   // U9: approve / reject go through a confirmation; the success message comes from DataContext once saved (D5).
+  // Stage C, r.16: the AGM dates the approval dialog checks the admission date against (loaded when it opens).
+  const [agms, setAgms] = useState<{ type?: string; date?: string; status?: string }[]>([]);
   const openDecision = (member: Member, action: 'approve' | 'reject') => {
+    if (action === 'approve' && user?.societyId) {
+      meetingSelect(user.societyId).then(({ data }) => setAgms(Array.isArray(data) ? (data as { type?: string; date?: string; status?: string }[]) : []), () => setAgms([]));
+    }
     setDecisionForm({ admissionDate: today, resolutionNo: '', resolutionDate: '', reason: '' });
     setDeclared({ notInsolvent: false, notConvicted: false, noOtherCreditSociety: false });
     setDecision({ member, action });
@@ -765,6 +788,10 @@ const Members: React.FC = () => {
     return true;
   };
   const missingResolution = decision?.action === 'approve' && !decisionForm.resolutionNo.trim();
+  // Stage C (Haryana law, warnings only): s.16(a) age 18+ on the admission date; r.16 no admission within 14 days before an AGM.
+  const admissionLegalWarnings = decision?.action === 'approve' && haryanaLaw
+    ? [minorWarning(decision.member, decisionForm.admissionDate), agmBlackoutWarning(decisionForm.admissionDate, agms)].filter(Boolean) as string[]
+    : [];
   // M4: lifecycle change — a real date, warnings for a missing resolution (never blocking)
   const statusChangeCheck = statusMember
     ? validateStatusChange({ to: statusNew, effectiveDate: statusDate, resolutionNo: statusResNo, resolutionDate: statusResDate || undefined },
@@ -779,12 +806,13 @@ const Members: React.FC = () => {
     if (!list.length && m.nomineeName) list.push(`${m.nomineeName}${m.nomineeRelation ? ` (${m.nomineeRelation})` : ''}`);
     return list;
   };
-  const openSettle = (m: Member) => { setSettleForm({ date: today, resolution: '', amount: String(deathSettlement({ shareCapital: m.shareCapital || 0, dues: memberDues(m) }).shareCapital) }); setSettleMember(m); };
+  const openSettle = (m: Member) => { setSettleConsent(false); setSettleForm({ date: today, resolution: '', amount: String(deathSettlement({ shareCapital: m.shareCapital || 0, dues: memberDues(m) }).shareCapital) }); setSettleMember(m); };
   const confirmSettle = () => {
     if (!settleMember) return;
     const amount = Number(settleForm.amount) || 0;
     const who = nomineeNames(settleMember).join(', ') || (hi ? 'वारिस' : 'heir');
-    if (approveShareRefund(settleMember.id, amount, settleForm.date, `${settleForm.resolution.trim()} — मृत्यु निपटारा, नामांकित: ${who}`)) setSettleMember(null);
+    const consent = settleConsent ? 'सहमति ली (धारा 23(1)(iii))' : 'सहमति दर्ज नहीं';
+    if (approveShareRefund(settleMember.id, amount, settleForm.date, `${settleForm.resolution.trim()} — मृत्यु निपटारा, नामांकित: ${who}; ${consent}`)) setSettleMember(null);
   };
 
   // The stored photograph (s.40) on a reprinted form — fetched through a short-lived signed URL.
@@ -1208,6 +1236,11 @@ const Members: React.FC = () => {
                 </div>
               )}
               {statusChangeCheck.warnings.map(w => <p key={w} className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">⚠ {w}</p>)}
+              {statusNew === 'expelled' && haryanaLaw && expulsionAppealLastDate(statusDate) && (
+                <p className="text-[11px] text-muted-foreground">{hi
+                  ? `धारा 114(1)(d): निष्कासित सदस्य निर्णय से 60 दिन (${fmtDate(expulsionAppealLastDate(statusDate))} तक) में अपील कर सकता है — निर्णय की सूचना सदस्य को लिखित में दें।`
+                  : `s.114(1)(d): the expelled member may appeal within 60 days (till ${fmtDate(expulsionAppealLastDate(statusDate))}) — tell the member in writing.`}</p>
+              )}
               {isExit(statusNew) && (
                 <p className="text-[11px] text-muted-foreground">{hi ? `धारा 24: पूर्व/मृत सदस्य की देनदारी ${liabilityUntil(statusDate) ? fmtDate(liabilityUntil(statusDate)) : '2 साल'} तक बनी रहती है।` : `s.24: a past / deceased member stays liable until ${liabilityUntil(statusDate) ? fmtDate(liabilityUntil(statusDate)) : 'two years'}.`}</p>
               )}
@@ -1266,6 +1299,18 @@ const Members: React.FC = () => {
                 <Label className="text-xs">{hi ? 'समिति प्रस्ताव संख्या / संदर्भ *' : 'Committee resolution / reference *'}</Label>
                 <Input className="mt-1" value={settleForm.resolution} onChange={e => setSettleForm(f => ({ ...f, resolution: e.target.value }))} />
               </div>
+              {haryanaLaw && (
+                <p className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] text-sky-900 dark:bg-sky-950/30 dark:text-sky-200">{hi
+                  ? `धारा 23(1)(ii): सीमित दायित्व समिति में शेयर पहले योग्य नामांकित/वारिस को हस्तांतरित किया जाता है (वह सदस्यता के योग्य हो) — या वह मृत्यु के एक माह के भीतर${deathNomineeChoiceUntil(settleMember.statusChangedAt) ? ` (${fmtDate(deathNomineeChoiceUntil(settleMember.statusChangedAt))} तक)` : ''} किसी योग्य व्यक्ति का नाम दे सकता है। राशि का भुगतान तभी, जब हस्तांतरण संभव न हो या उपनियम ऐसा कहें। हस्तांतरण के लिए यहाँ नहीं, शेयर रजिस्टर का "स्थानांतरण" इस्तेमाल करें।`
+                  : `s.23(1)(ii): in a limited-liability society the share is first TRANSFERRED to a qualified nominee/heir (or, within a month of the death, to a qualified person they name). Pay out only where a transfer is not possible or the bye-laws say so; for a transfer use "Transfer" in the Share Register.`}</p>
+              )}
+              <label className="flex items-start gap-2 text-xs">
+                <input type="checkbox" className="mt-0.5" checked={settleConsent} onChange={e => setSettleConsent(e.target.checked)} />
+                <span>{hi ? 'नामांकित / वारिस की लिखित सहमति ले ली है (धारा 23(1)(iii))' : "The nominee's / heir's written consent is on file (s.23(1)(iii))"}</span>
+              </label>
+              {!settleConsent && (
+                <p className="text-[11px] text-amber-700">{hi ? 'सहमति के बिना हस्तांतरण या भुगतान नहीं होना चाहिए — फिर भी दर्ज कर सकते हैं; "सहमति दर्ज नहीं" audit में लिखा जाएगा।' : 'No transfer or payment should be made without consent — you can still record it; "no consent recorded" goes to the audit.'}</p>
+              )}
               <p className="text-[11px] text-muted-foreground">{hi ? 'Dr शेयर पूँजी / Cr शेयर वापसी देय। भुगतान बाद में शेयर रजिस्टर के "देय भुगतान" से।' : 'Posts Dr Share Capital / Cr Share Refund Payable; pay later from the Share Register ("Pay refund").'}</p>
             </div>
           )}
@@ -1559,6 +1604,9 @@ const Members: React.FC = () => {
                   <p className="text-[11px] text-amber-700">{hi ? 'सब पुष्ट न हों तो भी स्वीकृत कर सकते हैं — जो पुष्ट हुआ वह audit में दर्ज होगा।' : 'You can approve anyway — what was confirmed is recorded in the audit.'}</p>
                 )}
               </div>
+              {admissionLegalWarnings.map(w => (
+                <p key={w} className="sm:col-span-3 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">⚠ {w}</p>
+              ))}
               {missingResolution && (
                 <p className="sm:col-span-3 text-xs text-amber-700">{hi ? 'प्रस्ताव संख्या खाली है — फिर भी स्वीकृत कर सकते हैं, पर रजिस्टर व ऑडिट के लिए भरना अच्छा रहेगा।' : 'No resolution number — you can still approve, but the register and the audit need it.'}</p>
               )}

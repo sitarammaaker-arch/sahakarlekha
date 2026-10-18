@@ -137,7 +137,9 @@ const Form1MemberList: React.FC = () => {
     const sigNames = getSignatoryNames(society);
     addSignatureBlock(doc, 'helvetica', ['Secretary / Manager', 'President / Chairman', 'Registrar / Auditor'], finalY, undefined,
       [sigNames.secretary, sigNames.president, '']);
-    registerReportIdentity(doc, 'F1', society, 'Form 1 - Register of Members');   // keeps the statutory Form 1 heading, adds the verifiable Report ID
+    // Stage C: titled by Rules 1989 r.22 (in those Rules "Form 1" is the registration application, r.5). The Report ID
+    // code stays 'F1' so reports issued earlier still verify.
+    registerReportIdentity(doc, 'F1', society, 'Register of Members (Rule 22)');
     addPageNumbers(doc, 'helvetica', society?.name);
 
     doc.save(pdfFileName('Form1_MemberList', society));
@@ -153,7 +155,7 @@ const Form1MemberList: React.FC = () => {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {hi ? 'प्रपत्र 1 — सदस्य सूची' : 'Form 1 — Register of Members'}
+            {hi ? 'सदस्य रजिस्टर (नियम 22)' : 'Register of Members (Rule 22)'}
           </h1>
           <p className="text-sm text-gray-500">
             {hi ? 'सहकारी समिति अधिनियम के अनुसार' : 'As per Cooperative Societies Act'}

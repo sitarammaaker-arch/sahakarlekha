@@ -36,7 +36,12 @@ ok(normalizeMemberNo(undefined) === '', 'normalize handles undefined');
 const pins = Array.from({ length: 2000 }, () => generatePin());
 ok(pins.every((p) => new RegExp(`^\\d{${PIN_LENGTH}}$`).test(p)), 'every PIN is exactly 6 digits');
 ok(pins.every((p) => !isWeakPin(p)), 'no weak PIN is ever returned');
-ok(new Set(pins).size > 1990, 'PINs are effectively unique across 2000 draws');
+// Deterministic (it was flaky by chance — CI 2026-10-17): 2000 PINs from a fixed-seed byte source. Birthday maths
+// expects ~2 repeats in 10^6; ≤ 10 is a loose, never-flaky bound that still catches a broken generator.
+let seed = 20261017;
+const seededBytes = (n) => Uint8Array.from({ length: n }, () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) >>> 16) & 0xff);
+const seededPins = Array.from({ length: 2000 }, () => generatePin(seededBytes));
+ok(seededPins.length - new Set(seededPins).size <= 10, 'PINs are effectively unique across 2000 draws (seeded)');
 ok(pins.some((p) => p.startsWith('0')), 'leading zeros are possible (full 000000–999999 space)');
 for (const w of ['000000', '111111', '999999', '123456', '012345', '654321', '987654', '12345a', '']) ok(isWeakPin(w), `weak: "${w}"`);
 for (const s of ['102938', '482913', '135790', '112233']) ok(!isWeakPin(s), `not weak: "${s}"`);

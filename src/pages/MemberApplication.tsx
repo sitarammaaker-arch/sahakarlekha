@@ -14,6 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { generateMemberApplicationPDF } from '@/lib/pdf';
 import { validateKyc } from '@/lib/kycUtils';
 import { ageOn } from '@/lib/members/voters';
+import { minorWarning } from '@/lib/members/legal';
+import { isHaryana } from '@/lib/members/admission';
 import { MemberPhotoPicker } from '@/components/members/MemberPhotoPicker';
 import { photoDataUrl } from '@/lib/members/photo';
 import { FileText, ArrowLeft } from 'lucide-react';
@@ -86,6 +88,9 @@ const MemberApplication: React.FC = () => {
     if (!form.gender) { toast({ title: hiLang ? 'लिंग चुनें' : 'Select gender', description: hiLang ? 'समिति में महिला आरक्षण (धारा 28) के हिसाब के लिए ज़रूरी।' : 'Needed for the committee reservation (s.28).', variant: 'destructive' }); return; }
     const nomErr = memberNomineeError(form.nomineeName, [], hiLang);
     if (nomErr) { toast({ title: hiLang ? 'नामांकित ज़रूरी है' : 'Nominee required', description: nomErr, variant: 'destructive' }); return; }
+    // Stage C, s.16(a): an applicant under 18 is not competent to contract — warned here, decided by the committee.
+    const ageWarn = isHaryana(society.state) ? minorWarning({ dateOfBirth: form.dateOfBirth || undefined, age: form.age ? parseInt(form.age) : undefined }, form.applicationDate) : null;
+    if (ageWarn) toast({ title: hiLang ? 'आयु जाँचें' : 'Check age', description: ageWarn, duration: 12000 });
 
     const chosenPhoto = photo;   // captured now — the form resets once the cloud has it
     setSubmitting(true);

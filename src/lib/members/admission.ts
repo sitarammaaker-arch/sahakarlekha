@@ -80,7 +80,10 @@ export function admissionClock(receivedOn: string | undefined, today: string, op
   const decideBy = addOneMonth(receivedOn);
   const pacs = opts.societyType === 'pacs';
   const deemedOn = pacs ? iso(parse(receivedOn) + 60 * DAY) : undefined;
-  return { receivedOn, days, decideBy, overdue: today > decideBy, deemedOn, deemed: !!deemedOn && today >= deemedOn };
+  // Stage C: r.17's one-month limit is for "a co-operative society other than a producer society" (s.2(p): producing /
+  // disposing of goods collectively, incl. collective disposal of labour) — no overdue flag there.
+  const producer = opts.societyType === 'producer' || opts.societyType === 'labour';
+  return { receivedOn, days, decideBy, overdue: !producer && today > decideBy, deemedOn, deemed: !!deemedOn && today >= deemedOn };
 }
 
 /** The date an application was received: the recorded one, else (older rows) the joinDate the form stamped. */

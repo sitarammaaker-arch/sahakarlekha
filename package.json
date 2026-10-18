@@ -422,6 +422,7 @@
     "test:member-stage-a": "node scripts/test-member-stage-a.mjs",
     "test:member-stage-b": "node scripts/test-member-stage-b.mjs",
     "test:member-portal-photo": "node scripts/test-member-portal-photo.mjs",
+    "test:member-stage-c": "node scripts/test-member-stage-c.mjs",
     "test:opening-difference": "node scripts/test-opening-difference.mjs"
   },
   "dependencies": {

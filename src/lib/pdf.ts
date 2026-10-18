@@ -4020,9 +4020,14 @@ export function generateMemberRefusalLetterPDF(member: Member, society: SocietyS
   doc.text(reason, mL + 6, y, { maxWidth: textW - 6 });
   y += Math.max(rLines.length, 2) * 5 + 6;
 
+  // Stage C: s.114(1)(c) gives the appeal against a refusal for "a co-operative society, other than a producer society"
+  // (s.2(p); labour societies included) — a producer society's letter must not promise a s.114 appeal.
+  const producer = society.societyType === 'producer' || society.societyType === 'labour';
   const appeal = doc.splitTextToSize(
-    `If you are aggrieved by this decision, you may file an appeal within 60 days of the decision${lastAppeal ? ` (on or before ${fmtDate(lastAppeal)})` : ''}`
-    + (isHaryana(society.state) ? ' under section 114 of the Haryana Co-operative Societies Act, 1984.' : ' before the authority provided under the Co-operative Societies Act of the State.'),
+    producer && isHaryana(society.state)
+      ? 'If you are aggrieved by this decision, you may seek any remedy available under the bye-laws of the society and the Haryana Co-operative Societies Act, 1984.'
+      : `If you are aggrieved by this decision, you may file an appeal within 60 days of the decision${lastAppeal ? ` (on or before ${fmtDate(lastAppeal)})` : ''}`
+        + (isHaryana(society.state) ? ' under section 114 of the Haryana Co-operative Societies Act, 1984.' : ' before the authority provided under the Co-operative Societies Act of the State.'),
     textW);
   doc.text(appeal, mL, y); y += appeal.length * 5 + 3;
   const refund = doc.splitTextToSize('Please contact the society office for the return of any amount deposited with the application.', textW);

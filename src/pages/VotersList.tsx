@@ -89,7 +89,7 @@ const VotersList: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-xs text-muted-foreground">{hi
-                ? `स्वीकृत, नाममात्र नहीं, उस तिथि तक सदस्य बने और सदस्यता समाप्त न हुई हो, और बक़ायादार न हों${law(' (हरियाणा अधिनियम धारा 20)')}। सूची सूचना-पट पर आपत्तियों के लिए लगाई जाती है${law(' (नियम, परिशिष्ट A पैरा 35)')}।`
+                ? `स्वीकृत, नाममात्र नहीं, उस तिथि तक सदस्य बने और सदस्यता समाप्त न हुई हो, और बक़ायादार न हों${law(' (हरियाणा अधिनियम धारा 20)')}। सूची सूचना-पट पर आपत्तियों के लिए लगाई जाती है${law(' (नियम, परिशिष्ट A — 300 से अधिक सदस्य वाली प्राथमिक समिति: भाग III पैरा 35; 300 तक: भाग IV)')}।`
                 : 'Approved, not nominal, a member by the date, not ceased and not in default (Act s.20). The list is exhibited for objections.'}</p>
               <div className="overflow-x-auto">
                 <Table>
