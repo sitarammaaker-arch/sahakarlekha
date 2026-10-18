@@ -138,6 +138,43 @@ const InIcon = (p: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={p.className} fill="currentColor" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z" /></svg>
 );
 
+/**
+ * The article outline for phones/tablets — the sticky sidebar TOC is lg+ only. Collapsed by default.
+ * Picking a section closes it FIRST and then scrolls, so the collapse cannot shift the target away.
+ */
+const MobileToc: React.FC<{ sections: { text: string; id: string }[] }> = ({ sections }) => {
+  const ref = React.useRef<HTMLDetailsElement>(null);
+  const go = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    if (ref.current) ref.current.open = false;
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.history.replaceState(null, '', `#${id}`);
+  };
+  return (
+    <details ref={ref} className="group lg:hidden mb-8 rounded-xl border bg-muted/30 no-print">
+      <summary className="flex items-center justify-between gap-2 cursor-pointer list-none px-4 py-3 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+        <span className="inline-flex items-center gap-1.5">
+          <List className="h-4 w-4 text-primary" aria-hidden="true" /> इस लेख में
+          <span className="font-normal text-muted-foreground">· {sections.length} हिस्से</span>
+        </span>
+        <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <nav aria-label="इस लेख में" className="px-2 pb-3">
+        <ol className="space-y-0.5 text-sm">
+          {sections.map((s, i) => (
+            <li key={s.id}>
+              <a href={`#${s.id}`} onClick={(e) => go(e, s.id)} className="flex gap-2 rounded px-2 py-2 text-muted-foreground hover:bg-primary/10 hover:text-primary">
+                <span className="tabular-nums text-muted-foreground/70">{i + 1}.</span>
+                <span>{s.text}</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+      </nav>
+    </details>
+  );
+};
+
 const ShareBar: React.FC<{ url: string; title: string }> = ({ url, title }) => {
   const [copied, setCopied] = React.useState(false);
   const enc = encodeURIComponent;
@@ -201,7 +238,14 @@ const BlogPost: React.FC = () => {
   const parsedFaq = parseFaqs(faqSlice.inner);
   const faqs = parsedFaq.faqs;
   const faqExtra = parsedFaq.extra;
-  const cleanBody = faqs.length ? faqSlice.rest : bodyAfterTk;
+  const bodyAfterFaq = faqs.length ? faqSlice.rest : bodyAfterTk;
+
+  // A hand-written "## इस लेख में" outline (plain numbered list, no links — 14 posts) is replaced by the
+  // page's own clickable TOC (sidebar on desktop, collapsible on mobile); kept as prose it showed twice
+  // and listed itself in the TOC. Lifted out only when every line is a list item — otherwise kept.
+  const ownTocSlice = sliceSection(bodyAfterFaq, /##\s+इस लेख में[^\n]*\r?\n/);
+  const ownTocIsList = ownTocSlice.inner !== '' && ownTocSlice.inner.split('\n').every((l) => !l.trim() || /^\s*(\d+[.)]|[-*])\s+/.test(l));
+  const cleanBody = ownTocIsList ? ownTocSlice.rest : bodyAfterFaq;
 
   // Byline author (defaults to the site's author; per-post `author` slug later).
   const author = getAuthor((post as { author?: string } | undefined)?.author);
@@ -425,6 +469,8 @@ const BlogPost: React.FC = () => {
                 </ul>
               </div>
             )}
+
+            {sections.length > 1 && <MobileToc sections={sections} />}
 
             <GuideMarkdown source={bodyTop} linkGlossary hideLink={isScheduledBlogHref} />
             {midPos > 0 && <EmailCapture magnet={mag} className="my-8" />}

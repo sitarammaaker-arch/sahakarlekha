@@ -22,6 +22,7 @@ import { FAQ_CATEGORIES } from '@/content/faq';
 import { allGlossary } from '@/content/glossary';
 import { CALCULATORS } from '@/content/calculators';
 import { norm, searchIndex } from './search/rank';
+import { blogSearchDoc } from './blogSearch';
 import type { SearchDoc, SearchResult, SearchType } from './search/rank';
 
 // Re-exported so existing importers (AskAssistant, SearchDialog, …) need no change.
@@ -66,13 +67,8 @@ export function buildIndex(): SearchDoc[] {
       haystack: norm([g.shortTitle, g.title, entry?.summary || ''].join(' ')),
     });
   }
-  for (const b of BLOG_POSTS) {
-    docs.push({
-      id: `blog:${b.slug}`, type: 'blog', title: b.title, url: `/blog/${b.slug}`,
-      snippet: b.excerpt, category: b.category,
-      haystack: norm([b.title, b.excerpt, b.category, ...b.tags].join(' ')),
-    });
-  }
+  // same per-post document as the /blog search box (blogSearch.ts), so both find the same articles
+  for (const b of BLOG_POSTS) docs.push(blogSearchDoc(b));
   for (const cat of FAQ_CATEGORIES) {
     cat.items.forEach((it, i) => {
       docs.push({
