@@ -1682,6 +1682,15 @@ export function findPost(slug: string): BlogPost | null {
   return BLOG_POSTS.find((p) => p.slug === slug) ?? null;
 }
 
+/** True for a `/blog/<slug>` href whose post exists but is still scheduled — articles may link ahead to a
+ *  drip post; the link renders as plain text until its date, so the reader is never bounced to /blog. */
+export function isScheduledBlogHref(href: string): boolean {
+  const m = href.match(/^\/blog\/([a-z0-9-]+)\/?(?:[?#].*)?$/);
+  if (!m) return false;
+  const p = findPost(m[1]);
+  return !!p && !isPublished(p);
+}
+
 /** Estimated reading time in minutes from the post's markdown (Hindi ~130 wpm). */
 export function readingMinutes(slug: string): number {
   return META['./' + slug + '.md']?.minutes ?? 1;   // J2: computed at build time (mdMeta.ts)

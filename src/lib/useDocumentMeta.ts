@@ -41,10 +41,13 @@ export function useDocumentMeta(opts: {
   robots?: string;
   /** Optional absolute or site-relative image → og:image + twitter:image. */
   image?: string;
+  /** Article pages: og:type=article + article:published_time / modified_time / section. */
+  article?: { publishedTime: string; modifiedTime?: string; section?: string };
 }) {
-  const { title, description, canonicalPath, jsonLd, robots, image } = opts;
+  const { title, description, canonicalPath, jsonLd, robots, image, article } = opts;
   // Stringify once so the effect dep is stable across re-renders (inline objects change identity each render).
   const jsonLdStr = jsonLd ? JSON.stringify(jsonLd) : undefined;
+  const articleStr = article ? JSON.stringify(article) : undefined;
   useEffect(() => {
     const prev: Array<[HTMLElement, string, string | null]> = [];
     const set = (el: HTMLElement, attr: string, value?: string) => {
@@ -83,8 +86,27 @@ export function useDocumentMeta(opts: {
       set(metaByProp('og:url'), 'content', SITE + canonicalPath);
     }
 
+    // article:* tags belong to one article URL only — drop them (static or ours) when this page unmounts.
+    const articleEls: HTMLElement[] = [];
+    if (articleStr) {
+      const a = JSON.parse(articleStr) as NonNullable<typeof article>;
+      set(metaByProp('og:type'), 'content', 'article');
+      const put = (prop: string, value?: string) => {
+        if (!value) return;
+        const el = metaByProp(prop);
+        el.setAttribute('content', value);
+        articleEls.push(el);
+      };
+      put('article:published_time', a.publishedTime);
+      put('article:modified_time', a.modifiedTime);
+      put('article:section', a.section);
+    }
+
     let scriptEl: HTMLScriptElement | null = null;
     if (jsonLdStr) {
+      // The prerendered page's own JSON-LD (scripts/prerender-guide.mjs marks it) describes this same
+      // page; keeping it next to ours gave crawlers two BlogPosting/FAQPage blocks that disagreed.
+      document.head.querySelectorAll('script[data-prerendered-jsonld]').forEach((s) => s.remove());
       scriptEl = document.createElement('script');
       scriptEl.type = 'application/ld+json';
       scriptEl.setAttribute('data-managed-jsonld', '');
@@ -95,6 +117,7 @@ export function useDocumentMeta(opts: {
     return () => {
       document.title = prevTitle;
       if (scriptEl && scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
+      articleEls.forEach((el) => el.remove());
       // restore changed attributes (in reverse so first-seen wins)
       for (let i = prev.length - 1; i >= 0; i--) {
         const [el, attr, old] = prev[i];
@@ -102,7 +125,7 @@ export function useDocumentMeta(opts: {
         else el.setAttribute(attr, old);
       }
     };
-  }, [title, description, canonicalPath, jsonLdStr, robots, image]);
+  }, [title, description, canonicalPath, jsonLdStr, robots, image, articleStr]);
 }
 
 /**

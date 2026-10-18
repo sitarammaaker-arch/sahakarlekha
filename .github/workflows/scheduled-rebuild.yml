@@ -16,6 +16,9 @@ name: Scheduled rebuild (publish drip)
 
 on:
   schedule:
+    # Just after midnight IST, so a post's static page (and the noindex stub it replaces) flips the
+    # same moment the blog index reveals it in the reader's browser; 09:00 IST is a retry.
+    - cron: '35 18 * * *'  # daily 18:35 UTC (00:05 IST)
     - cron: '30 3 * * *'   # daily 03:30 UTC (09:00 IST)
   workflow_dispatch: {}      # allow manual run from the Actions tab
 
@@ -47,8 +50,9 @@ jobs:
           HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
         run: |
           if [ -z "$HOOK" ]; then
-            echo "VERCEL_DEPLOY_HOOK secret not set — nothing to do."
-            exit 0
+            # A post is due but nothing will rebuild: its URL keeps serving the noindex stub. Fail loudly.
+            echo "::error::VERCEL_DEPLOY_HOOK secret not set — a scheduled post is due but no rebuild fired."
+            exit 1
           fi
           curl -fsS -X POST "$HOOK" && echo "Triggered Vercel rebuild."
 

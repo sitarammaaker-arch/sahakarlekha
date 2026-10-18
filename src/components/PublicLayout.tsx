@@ -58,19 +58,25 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-background overflow-x-clip">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[70] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
+      >
+        सीधे सामग्री पर जाएँ
+      </a>
       {/* Navbar */}
-      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b shadow-sm overflow-hidden">
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b shadow-sm overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-lg">स</div>
-            <div>
-              <span className="block font-bold text-lg text-foreground leading-tight">SahakarLekha</span>
+          <Link to="/" className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-lg">स</div>
+            <div className="min-w-0">
+              <span className="block font-bold text-base sm:text-lg text-foreground leading-tight">SahakarLekha</span>
               <p className="text-xs text-muted-foreground">सहकार लेखा</p>
             </div>
           </Link>
 
           {/* Desktop primary nav (md+). Mobile users get the same via the drawer below. */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav aria-label="मुख्य मेन्यू" className="hidden md:flex items-center gap-1">
             {DESKTOP_NAV_LINKS.map((l) => {
               const active = pathname === l.to || pathname.startsWith(l.to + '/');
               return (
@@ -95,27 +101,29 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
               cost hours of hunting an auth bug that never existed.
               Anonymous render stays byte-identical, so prerendered marketing HTML is unchanged
               — a crawler is never authenticated, and hydration swaps this for a real user. */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
             {isAuthenticated ? (
-              <Link to="/dashboard">
-                <Button size="sm" className="gap-1">
+              <Button asChild size="sm" className="gap-1">
+                <Link to="/dashboard">
                   <span className="hidden lg:inline">डैशबोर्ड / Dashboard</span>
                   <span className="lg:hidden">डैशबोर्ड</span>
                   <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             ) : (
               <>
-                <Link to="/login">
-                  <Button variant="outline" size="sm">Login</Button>
-                </Link>
-                <Link to="/register">
-                  <Button size="sm" className="gap-1">
+                {/* Below sm the Login button moves into the drawer — on a 375px phone the four header
+                    controls overflowed and the clipped menu button sat half off-screen. */}
+                <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex">
+                  <Link to="/login">Login</Link>
+                </Button>
+                <Button asChild size="sm" className="gap-1">
+                  <Link to="/register">
                     <span className="hidden lg:inline">Get Started</span>
                     <span className="lg:hidden">Register</span>
                     <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </>
             )}
 
@@ -131,7 +139,14 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                 <SheetHeader>
                   <SheetTitle className="text-left">सहकार लेखा</SheetTitle>
                 </SheetHeader>
-                <nav className="mt-4 flex flex-col">
+                <nav aria-label="मेन्यू" className="mt-4 flex flex-col">
+                  {!isAuthenticated && (
+                    <SheetClose asChild>
+                      <Link to="/login" className="sm:hidden py-3 px-1 border-b font-medium text-primary hover:underline">
+                        लॉगिन / Login
+                      </Link>
+                    </SheetClose>
+                  )}
                   {MOBILE_NAV_LINKS.map((l) => (
                     <SheetClose asChild key={l.to}>
                       <Link
@@ -147,10 +162,12 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
             </Sheet>
           </div>
         </div>
-      </nav>
+      </header>
 
-      {/* Page Content */}
-      {children}
+      {/* Page Content — skip-link target (a div: several pages render their own <main>) */}
+      <div id="main" tabIndex={-1} className="outline-none">
+        {children}
+      </div>
 
       {/* Footer */}
       <footer className="py-10 bg-muted/50 border-t">
