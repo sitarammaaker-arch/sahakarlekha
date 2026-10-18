@@ -205,7 +205,7 @@ const header = strip2('src/components/member-portal/SectionHeader.tsx');
 ok(/print:hidden/.test(header), 'source links are never printed');
 const p360 = strip2('src/pages/Member360.tsx');
 for (const [k, to] of [['share', '/share-register'], ['loans', '/loan-register'], ['deposits', '/deposits'], ['kcc', '/kcc-loan'], ['dairy', '/dairy-registers'], ['housing', '/member-statement'], ['consumer', '/member-credit']]) {
-  ok(new RegExp(`${k}: \\{ to: '${to.replace('/', '\\/')}'`).test(p360), `section ${k} links to ${to}`);
+  ok(new RegExp(`${k}: \\{ to: '${to.replace('/', '\\/')}'`).test(p360) || (k === 'share' && p360.includes('share: { to: `/share-register${')), `section ${k} links to ${to}`);   // stage D: share link adds ?q=<member no.>
 }
 const appSrc = readFileSync(pathResolve(ROOT, 'src/App.tsx'), 'utf8');
 for (const to of ['/share-register', '/loan-register', '/deposits', '/kcc-loan', '/dairy-registers', '/member-statement', '/member-credit']) {

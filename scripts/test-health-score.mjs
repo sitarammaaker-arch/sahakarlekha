@@ -44,7 +44,7 @@ const mv = read('lib/memberValidation.ts');
 ok(/memberPhoneError\(phone, hi\)/.test(mem) && /MOBILE_RE\.test\(v\)/.test(mv) && /\/\^\(\\d\)\\1\{9\}\$\//.test(mv), 'a given phone must be a 10-digit mobile, and not one digit ×10 (shared lib/memberValidation)');
 const app = read('pages/MemberApplication.tsx');
 ok(/memberPhoneError\(form\.phone, hiLang\)/.test(app) && /memberNomineeError\(form\.nomineeName/.test(app), 'the Member Application form enforces the same phone + nominee rules');
-ok(/\(m\.phone \|\| ''\)\.includes\(searchQuery\)/.test(mem), 'search survives a member without a phone');
+ok(/\(m\.phone \|\| ''\)\.includes\(q\)/.test(mem), 'search survives a member without a phone (stage D: debounced query q)');
 ok(/form\.phone \|\| ''\)\.trim\(\) !== \(editMember\.phone/.test(mem), 'edit checks the phone only when it changed (old numbers never block an edit)');
 
 // 4. Login claims

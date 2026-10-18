@@ -71,7 +71,8 @@ export default function Member360() {
   // Source pages — where staff act on each part of the account (this page is read-only).
   const open = (hiName: string, enName: string) => (hi ? `${hiName} में खोलें` : `Open in ${enName}`);
   const links: SectionLinks = {
-    share: { to: '/share-register', label: open('शेयर रजिस्टर', 'Share Register') },
+    // Stage D: the Share Register opens filtered to this member.
+    share: { to: `/share-register${member?.memberId ? `?q=${encodeURIComponent(member.memberId)}` : ''}`, label: open('शेयर रजिस्टर', 'Share Register') },
     loans: { to: '/loan-register', label: open('ऋण रजिस्टर', 'Loan Register') },
     deposits: { to: '/deposits', label: open('जमा', 'Deposits') },
     kcc: { to: '/kcc-loan', label: open('KCC', 'KCC') },

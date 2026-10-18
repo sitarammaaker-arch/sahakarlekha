@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { memberPhoneError, memberNomineeError } from '@/lib/memberValidation';
+import { todayStr } from '@/lib/dateUtils';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
@@ -36,7 +37,7 @@ const EMPTY_FORM = {
   nomineeName: '', nomineeFatherName: '', nomineeRelation: '', nomineeAge: '',
   nomineeOccupation: '', nomineeAddress: '', nomineeShares: '', nomineePhone: '',
   // M2: the date the application reached the society (r.17 / s.16 clock) + KYC like the member form
-  applicationDate: new Date().toISOString().split('T')[0], aadhaar: '', pan: '',
+  applicationDate: todayStr(), aadhaar: '', pan: '',
   gender: '', dateOfBirth: '',   // M5: s.28(1) reservation needs the women count
   correspondenceAddress: '',   // M6: s.40 proviso
 };
@@ -78,7 +79,7 @@ const MemberApplication: React.FC = () => {
     const hiLang = language === 'hi';
     const phoneErr = memberPhoneError(form.phone, hiLang);
     if (phoneErr) { toast({ title: phoneErr, variant: 'destructive' }); return; }
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayStr();
     if (!form.applicationDate || form.applicationDate > today) {
       toast({ title: hiLang ? 'आवेदन प्राप्ति तिथि सही भरें' : 'Enter a valid application date', description: hiLang ? 'तिथि आज के बाद की नहीं हो सकती।' : 'It cannot be in the future.', variant: 'destructive' });
       return;
@@ -155,6 +156,12 @@ const MemberApplication: React.FC = () => {
   };
 
   const f = (key: keyof typeof form, value: string) => setForm(prev => ({ ...prev, [key]: value }));
+  // Stage D: a half-filled application is not thrown away by one stray click.
+  const leave = () => {
+    const dirty = (Object.keys(EMPTY_FORM) as (keyof typeof EMPTY_FORM)[]).some(k => k !== 'applicationDate' && form[k] !== EMPTY_FORM[k]) || !!photo;
+    if (dirty && !window.confirm(hi ? 'भरा हुआ आवेदन छोड़कर जाएँ? जानकारी सेव नहीं होगी।' : 'Leave this application? What you typed will be lost.')) return;
+    navigate('/members');
+  };
   // U8 (M2): share capital = shares × face value when both are given (as in the member form), so they can't disagree.
   const autoCapital = Math.round((parseFloat(form.shareCount) || 0) * (parseFloat(form.shareFaceValue) || 0) * 100) / 100;
   const capitalAuto = autoCapital > 0;
@@ -171,7 +178,7 @@ const MemberApplication: React.FC = () => {
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/members')}>
+        <Button variant="ghost" size="icon" onClick={leave} title={hi ? 'वापस' : 'Back'} aria-label={hi ? 'वापस' : 'Back'}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
@@ -215,11 +222,11 @@ const MemberApplication: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <Label>{hi ? 'जन्म तिथि (वैकल्पिक)' : 'Date of birth (optional)'}</Label>
-                <Input type="date" value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} onChange={e => f('dateOfBirth', e.target.value)} />
+                <Input type="date" value={form.dateOfBirth} max={todayStr()} onChange={e => f('dateOfBirth', e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>{hi ? 'आयु (वर्ष)' : 'Age (Years)'}</Label>
-                <Input type="number" value={form.dateOfBirth ? String(ageOn(form.dateOfBirth, new Date().toISOString().split('T')[0]) ?? '') : form.age} readOnly={!!form.dateOfBirth} onChange={e => f('age', e.target.value)} placeholder="25" min="1" max="120" />
+                <Input type="number" value={form.dateOfBirth ? String(ageOn(form.dateOfBirth, todayStr()) ?? '') : form.age} readOnly={!!form.dateOfBirth} onChange={e => f('age', e.target.value)} placeholder="25" min="1" max="120" />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -260,7 +267,7 @@ const MemberApplication: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>{hi ? 'आवेदन प्राप्ति तिथि *' : 'Application received on *'}</Label>
-                <Input type="date" value={form.applicationDate} max={new Date().toISOString().split('T')[0]} onChange={e => f('applicationDate', e.target.value)} />
+                <Input type="date" value={form.applicationDate} max={todayStr()} onChange={e => f('applicationDate', e.target.value)} />
                 <p className="text-[11px] text-muted-foreground">{hi ? 'इसी तिथि से फ़ैसले की 1 माह की गिनती शुरू होती है।' : 'The one-month decision period starts on this date.'}</p>
               </div>
               <div className="space-y-2">
@@ -364,7 +371,7 @@ const MemberApplication: React.FC = () => {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>{hi ? 'नामांकित का नाम' : 'Nominee Name'}</Label>
+                <Label>{hi ? 'नामांकित का नाम' : 'Nominee Name'}<span className="text-destructive"> *</span></Label>
                 <Input value={form.nomineeName} onChange={e => f('nomineeName', e.target.value)} />
               </div>
               <div className="space-y-2">
@@ -405,7 +412,7 @@ const MemberApplication: React.FC = () => {
 
         {/* Submit */}
         <div className="flex gap-3 justify-end">
-          <Button variant="outline" type="button" onClick={() => navigate('/members')}>
+          <Button variant="outline" type="button" onClick={leave}>
             {hi ? 'रद्द करें' : 'Cancel'}
           </Button>
           <Button type="submit" className="gap-2" disabled={submitting}>
