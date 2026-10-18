@@ -2,6 +2,11 @@
   "trailingSlash": false,
   "redirects": [
     {
+      "source": "/blog/category",
+      "destination": "/blog",
+      "permanent": true
+    },
+    {
       "source": "/guide/bhumika",
       "destination": "/guide/introduction",
       "permanent": true
@@ -818,11 +823,7 @@
   ],
   "rewrites": [
     {
-      "source": "/blog/:slug",
-      "destination": "/404-blog.html"
-    },
-    {
-      "source": "/((?!api/|assets/).*)",
+      "source": "/((?!api/|assets/|blog/).*)",
       "destination": "/index.html"
     }
   ]
