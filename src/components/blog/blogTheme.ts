@@ -48,13 +48,8 @@ export const ACCENTS: Record<BlogPost['accent'], Accent> = {
   },
 };
 
-/** Format an ISO date as a readable Hindi-friendly date, e.g. "30 जून 2026". */
-const HI_MONTHS = ['जनवरी', 'फरवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्तूबर', 'नवंबर', 'दिसंबर'];
-export function formatDate(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  return `${d} ${HI_MONTHS[m - 1]} ${y}`;
-}
+/** Format an ISO date as a readable Hindi-friendly date, e.g. "30 जून 2026" (shared with the prerender). */
+export { formatHindiDate as formatDate } from '@/lib/hindiDate';
 
 /** Deterministic accent colour per category (stable across renders). */
 const CAT_COLORS = ['#185FA5', '#0F6E56', '#BA7517', '#534AB7', '#993C1D', '#993556', '#3B6D11', '#0C447C'];
