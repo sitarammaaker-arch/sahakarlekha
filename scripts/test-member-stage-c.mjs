@@ -20,10 +20,10 @@ ok(L.minorWarning({ age: 17 }, '2026-10-18') !== null && L.minorWarning({ age: 4
 ok(L.minorWarning({}, '2026-10-18') === null, 'no age known — no claim');
 
 // ── s.2(p) producer society: r.17 one-month clock does not apply ──
-ok(L.isProducerSociety('producer') && L.isProducerSociety('labour') && !L.isProducerSociety('pacs') && !L.isProducerSociety('dairy'), 'producer = producer + labour (s.2(p) includes collective disposal of labour); dairy not assumed');
-ok(A.admissionClock('2026-08-01', '2026-10-18', { societyType: 'producer' }).overdue === false && A.admissionClock('2026-08-01', '2026-10-18', { societyType: 'consumer' }).overdue === true, 'r.17 overdue flag off for a producer society only');
+ok(L.isProducerSociety({ producerSociety: true }) && !L.isProducerSociety({}) && !L.isProducerSociety({ producerSociety: false }), 'producer ONLY when verified and recorded (founder 2026-10-18) — never from the type');
+ok(A.admissionClock('2026-08-01', '2026-10-18', { societyType: 'producer' }).overdue === true && A.admissionClock('2026-08-01', '2026-10-18', { producer: true }).overdue === false, 'r.17 overdue flag off only for a verified producer society');
 const pdf = read('src/lib/pdf.ts');
-ok(pdf.includes("const producer = society.societyType === 'producer' || society.societyType === 'labour';") && pdf.includes('producer && isHaryana(society.state)'), 'refusal letter: no s.114(1)(c) appeal promised by a producer society');
+ok(pdf.includes('const producer = society.producerSociety === true;') && pdf.includes('producer && isHaryana(society.state)'), 'refusal letter: no s.114(1)(c) appeal promised by a (verified) producer society');
 
 // ── r.16: no admission within 14 days before the AGM ──
 const agm = (date, extra = {}) => ({ type: 'AGM', date, status: 'scheduled', ...extra });
@@ -73,6 +73,50 @@ ok(el.includes('voterRoll(members, loans, kccLoans, rollDate)') && el.includes('
 ok(el.includes('const winner = tie ? undefined : sorted[0];') && el.includes('electionResultIssues('), 'election: tie names no winner; result checks shown');
 ok(!el.includes("title: 'Save failed'"), 'election: Hindi save errors');
 ok(read('src/contexts/LanguageContext.tsx').includes("form1MemberList: { hi: 'सदस्य रजिस्टर (नियम 22)'") && read('src/pages/Form1MemberList.tsx').includes("registerReportIdentity(doc, 'F1', society, 'Register of Members (Rule 22)')"), 'member register titled by r.22 (Report ID code unchanged)');
+
+// ── Stage C-2: founder answers 2026-10-18 ──
+// (1) every due recorded; legal default by its own rule
+const dr = L.duesRow({ loans: 1000, kcc: 0, consumer: 250.5, housing: 300, dairyInputs: 0, legalDefault: 0 });
+ok(dr.total === 1550.5 && dr.inDefault === false, 'dues recorded but NOT a legal default without a past-due amount');
+ok(L.duesRow({ loans: 1000, kcc: 0, consumer: 0, housing: 0, dairyInputs: 0, legalDefault: 400 }).inDefault === true, 'past-due (separate rule) → legal default');
+const hook = read('src/hooks/useMemberDues.ts');
+ok(hook.includes('overdueByMember(loans, kccLoans, asOf)') && hook.includes('getMemberOutstanding(memberId)') && hook.includes('memberInputOutstanding('), 'one hook: all categories + the separate overdue rule');
+ok(read('src/pages/VotersList.tsx').includes('<TabsTrigger value="dues">'), 'Voters list: All-dues tab');
+// (2) r.14(2) — proven ground required
+const V = (to, d, ctx = {}) => L.validateCessation(to, d, { haryana: true, dues: 0, effectiveDate: '2026-10-01', ...ctx });
+ok(!V('disqualified', {}).ok && !V('disqualified', { ground: 'insolvency' }).ok && V('disqualified', { ground: 'insolvency', evidenceRef: 'CWP 123/2026' }).ok, 'disqualified needs a r.14(1) ground + proof');
+ok(!L.validateCessation('disqualified', {}, { haryana: false, dues: 0, effectiveDate: '2026-10-01' }).ok, 'proof required in every state (data rule)');
+// (3) r.19 two-thirds at a GM
+const gm = { gmDate: '2026-09-30', presentEntitled: 90, byelawProcessRef: 'cl.12 notice 01/09' };
+ok(!V('expelled', { ...gm, votesFor: 59 }, { resolutionNo: 'GM/4' }).ok, '59 of 90 < 2/3 — refused');
+ok(V('expelled', { ...gm, votesFor: 60 }, { resolutionNo: 'GM/4' }).ok, '60 of 90 = 2/3 — passes');
+ok(!V('expelled', { ...gm, votesFor: 80 }).ok, 'GM resolution no. required');
+ok(!V('expelled', { ...gm, votesFor: 91 }, { resolutionNo: 'GM/4' }).ok, 'votes for > present — refused');
+ok(V('expelled', { gmDate: '2026-09-30', presentEntitled: 9, votesFor: 9 }, { resolutionNo: 'GM/4' }).warnings.some((w) => /उपनियम/.test(w)), 'missing bye-law process reference warns');
+ok(L.validateCessation('expelled', {}, { haryana: false, dues: 0, effectiveDate: '2026-10-01' }).ok, 'outside Haryana r.19 is not enforced');
+// (4) r.18 by liability
+ok(V('resigned', {}, {}).warnings.some((w) => /दायित्व-प्रकार/.test(w)) && V('resigned', {}, {}).ok, 'liability not recorded → warning only');
+ok(!V('resigned', { noticeDate: '2026-09-01', notSurety: true }, { liability: 'unlimited', dues: 10 }).ok, 'unlimited: indebted member cannot withdraw');
+ok(!V('resigned', { noticeDate: '2026-09-01' }, { liability: 'unlimited' }).ok, 'unlimited: surety confirmation required');
+ok(!V('resigned', { notSurety: true }, { liability: 'unlimited' }).ok && V('resigned', { notSurety: true, noticeDate: '2026-09-01' }, { liability: 'unlimited' }).ok, 'unlimited: notice date required, then allowed');
+ok(!V('resigned', {}, { liability: 'limited' }).ok && V('resigned', { shareRoute: 'transfer' }, { liability: 'limited' }).ok, 'limited: choose transfer or fund refund');
+ok(!V('resigned', { shareRoute: 'fund_refund' }, { liability: 'limited', resolutionNo: 'BR/2' }).ok && !V('resigned', { shareRoute: 'fund_refund', transferFundExists: true }, { liability: 'limited' }).ok && V('resigned', { shareRoute: 'fund_refund', transferFundExists: true }, { liability: 'limited', resolutionNo: 'BR/2' }).ok, 'limited fund refund: fund + committee resolution');
+// (5)(6) recorded with proof
+const ss = read('src/pages/SocietySetup.tsx');
+ok(ss.includes('form.liabilityType && !form.liabilityEvidence.trim()') && ss.includes('form.producerSociety && !form.producerEvidence.trim()'), 'Society Setup: liability / producer only with proof');
+// migration 125 = 124 portal functions + 'disqualified'
+const fn = (sql, name) => { const a = sql.indexOf(`create or replace function public.${name}()`); const b = sql.indexOf(`grant execute on function public.${name}() to authenticated;`, a); return a < 0 || b < 0 ? '' : sql.slice(a, b); };
+const m124 = read('supabase/migrations/124_member_portal_photo.sql'), m125 = read('supabase/migrations/125_member_legal_fields.sql'), d125 = read('supabase/migrations/125_member_legal_fields_down.sql');
+const Q = "'resigned', 'expelled', 'deceased'", Q2 = "'resigned', 'expelled', 'deceased', 'disqualified'";
+for (const name of ['member_portal_snapshot', 'member_portal_own_photo_path']) {
+  ok(fn(m125, name) === fn(m124, name).replace(Q, Q2) && fn(m125, name).includes(Q2), `125 ${name} = 124 + 'disqualified'`);
+  ok(fn(d125, name) === fn(m124, name), `125 down restores the 124 ${name}`);
+}
+ok(/add column if not exists "liabilityType"/.test(m125) && /check \("liabilityType" is null or "liabilityType" in \('limited', 'unlimited'\)\)/.test(m125) && /"statusDetails"\s+jsonb/.test(m125), '125 adds the columns + liability check');
+const dc = read('src/contexts/DataContext.tsx');
+ok(dc.includes("delete base.statusDetails;") && dc.includes(".update({ statusDetails: details ?? null })"), 'statusDetails never in the base upsert; own update');
+ok(read('src/lib/export/entities/member.ts').includes("internal('statusDetails'") && read('src/lib/export/entities/core.ts').includes("internal('liabilityType'") && read('supabase/functions/_shared/backup-core.mjs').includes('"statusDetails"'), 'backup / export carry the new fields');
+ok(read('supabase/functions/_shared/member-portal-core.mjs').includes("'disqualified'") && read('src/lib/members/voters.ts').includes("'disqualified'"), 'disqualified = exited for the portal and the voters roll');
 
 console.log(`member-stage-c: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

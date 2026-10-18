@@ -23,6 +23,7 @@ import { fmtDate } from '@/lib/dateUtils';
 import { downloadExcel } from '@/lib/exportUtils';
 import { generateVotersListPDF, generateDefaulterListPDF } from '@/lib/pdf';
 import { voterRoll, defaulterList, reservationSummary, EXCLUSION_LABEL } from '@/lib/members/voters';
+import { useMemberDues } from '@/hooks/useMemberDues';
 import { isHaryana } from '@/lib/members/admission';
 
 const VotersList: React.FC = () => {
@@ -36,6 +37,10 @@ const VotersList: React.FC = () => {
 
   const roll = useMemo(() => voterRoll(members, loans, kccLoans, asOn), [members, loans, kccLoans, asOn]);
   const defaulters = useMemo(() => defaulterList(members, loans, kccLoans, asOn), [members, loans, kccLoans, asOn]);
+  // Founder 2026-10-18 (point 1): every due recorded; the legal default (s.20(d)) by its own rule — see legal.duesRow.
+  const duesOf = useMemberDues(asOn);
+  const allDues = useMemo(() => members.filter(m => !m.isDeleted && m.approvalStatus !== 'pending' && m.approvalStatus !== 'rejected')
+    .map(m => ({ member: m, d: duesOf(m.id) })).filter(r => r.d.total > 0.005).sort((a, b) => b.d.total - a.d.total), [members, duesOf]);
   // Reservation counts over the members on the roll that day (voters + defaulters — defaulters stay members).
   const live = useMemo(() => [...roll.voters, ...roll.excluded.filter(x => x.reason === 'defaulter').map(x => x.member)], [roll]);
   const res = useMemo(() => reservationSummary(live), [live]);
@@ -73,6 +78,7 @@ const VotersList: React.FC = () => {
         <TabsList>
           <TabsTrigger value="voters">{hi ? 'मतदाता सूची' : 'Voters'}</TabsTrigger>
           <TabsTrigger value="defaulters">{hi ? 'बक़ायादार सूची' : 'Defaulters'}</TabsTrigger>
+          <TabsTrigger value="dues">{hi ? 'सभी बकाये' : 'All dues'}</TabsTrigger>
           <TabsTrigger value="reservation">{hi ? 'आरक्षण सार' : 'Reservation'}</TabsTrigger>
         </TabsList>
 
@@ -147,6 +153,40 @@ const VotersList: React.FC = () => {
                       <TableRow key={d.member.id}><TableCell className="text-muted-foreground">{i + 1}</TableCell><TableCell className="font-mono">{d.member.memberId}</TableCell><TableCell className="font-medium">{d.member.name}</TableCell><TableCell className="text-xs">{d.items.join(', ')}</TableCell><TableCell className="text-right tabular-nums">{fmt(d.amount)}</TableCell></TableRow>
                     ))}
                     {defaulters.length > 0 && <TableRow className="font-semibold"><TableCell colSpan={4}>{hi ? 'कुल' : 'Total'}</TableCell><TableCell className="text-right tabular-nums">{fmt(defaulters.reduce((s, d) => s + d.amount, 0))}</TableCell></TableRow>}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="dues">
+          <Card>
+            <CardHeader><CardTitle className="text-lg">{hi ? `सभी बकाये — ${fmtDate(asOn)}` : `All dues — ${fmtDate(asOn)}`}</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">{hi
+                ? `हर सदस्य का हर बकाया दर्ज है — ऋण, KCC, उधार बिक्री, रखरखाव, दूध आदान। पर मत/उम्मीदवारी की कानूनी अयोग्यता अलग नियम से तय होती है: केवल वह राशि जिसकी नियत तिथि बीत चुकी है (अभी: अतिदेय ऋण/KCC)${law(' — धारा 20(d), नियम 27(a)')}। बिना नियत तिथि वाला बकाया अपने-आप अयोग्य नहीं करता।`
+                : 'Every due is recorded — loans, KCC, credit sales, maintenance, dairy inputs. Legal disqualification is decided by a separate rule: only an amount past its due date (today: overdue loans / KCC) — s.20(d), r.27(a).'}</p>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>{hi ? 'सदस्य नं.' : 'Member No.'}</TableHead><TableHead>{hi ? 'नाम' : 'Name'}</TableHead>
+                    <TableHead className="text-right">{hi ? 'ऋण' : 'Loans'}</TableHead><TableHead className="text-right">KCC</TableHead>
+                    <TableHead className="text-right">{hi ? 'उधार बिक्री' : 'Credit sales'}</TableHead><TableHead className="text-right">{hi ? 'रखरखाव' : 'Maintenance'}</TableHead>
+                    <TableHead className="text-right">{hi ? 'दूध आदान' : 'Dairy inputs'}</TableHead><TableHead className="text-right">{hi ? 'कुल' : 'Total'}</TableHead>
+                    <TableHead>{hi ? 'कानूनी अयोग्यता' : 'Legal default'}</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {allDues.length === 0 && <TableRow><TableCell colSpan={9} className="py-8 text-center text-muted-foreground">{hi ? 'कोई बकाया नहीं।' : 'No dues.'}</TableCell></TableRow>}
+                    {allDues.map(({ member: m, d }) => (
+                      <TableRow key={m.id}>
+                        <TableCell className="font-mono">{m.memberId}</TableCell><TableCell className="font-medium">{m.name}</TableCell>
+                        <TableCell className="text-right tabular-nums">{d.loans ? fmt(d.loans) : '—'}</TableCell><TableCell className="text-right tabular-nums">{d.kcc ? fmt(d.kcc) : '—'}</TableCell>
+                        <TableCell className="text-right tabular-nums">{d.consumer ? fmt(d.consumer) : '—'}</TableCell><TableCell className="text-right tabular-nums">{d.housing ? fmt(d.housing) : '—'}</TableCell>
+                        <TableCell className="text-right tabular-nums">{d.dairyInputs ? fmt(d.dairyInputs) : '—'}</TableCell><TableCell className="text-right tabular-nums font-semibold">{fmt(d.total)}</TableCell>
+                        <TableCell className="text-xs">{d.inDefault ? <span className="font-medium text-destructive">{hi ? `हाँ — अतिदेय ${fmt(d.legalDefault)}` : `Yes — overdue ${fmt(d.legalDefault)}`}</span> : (hi ? 'नहीं' : 'No')}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </div>

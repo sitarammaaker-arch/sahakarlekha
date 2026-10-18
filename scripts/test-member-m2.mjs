@@ -84,7 +84,7 @@ ok(dc.includes('approveMember: (id: string, decision?: AdmissionDecision) => voi
 const mem = read('src/pages/Members.tsx');
 ok(mem.includes('validateAdmission(') && mem.includes('validateRejection(decisionForm.reason)'), 'decision dialog validates');
 ok(mem.includes("approveMember(decision.member.id, { admissionDate: decisionForm.admissionDate"), 'approve passes the admission date + resolution');
-ok(mem.includes('admissionClock(applicationReceivedOn(m), today, { societyType: society.societyType })'), 'pending rows show the r.17 / s.16 clock');
+ok(mem.includes('admissionClock(applicationReceivedOn(m), today, { societyType: society.societyType, producer: society.producerSociety === true })'), 'pending rows show the r.17 / s.16 clock (producer only when verified)');
 ok(mem.includes('renderMemberTable(rejectedMembers, true, true)') && mem.includes('generateMemberRefusalLetterPDF(member, society)'), 'rejected tab: reason + refusal letter');
 ok(mem.includes('setAddChooserOpen(true)') && mem.includes("navigate('/member-application')") && !mem.includes("'नया सदस्य जोड़ें (सीधा)'"), 'one "new member" entry with a chooser (U1)');
 ok(mem.includes('useOpenOnNew(() => setAddChooserOpen(true))'), '＋ new entry opens the same chooser');

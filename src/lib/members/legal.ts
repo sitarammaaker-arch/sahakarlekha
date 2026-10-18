@@ -8,6 +8,7 @@
  *    18 under the Majority Act). Warn below 18.
  *  • s.2(p) — "producer society" (producing and disposing of goods as collective property; includes collective
  *    disposal of members' labour). r.17 (one-month decision) and s.114(1)(c) (appeal against refusal) do NOT apply.
+ *    Recorded per society with proof (migration 125) — never inferred from the type.
  *  • r.16 — no admission within fourteen days before the date of the annual general meeting.
  *  • s.22 — a share is transferred only after it has been held two years: counted per share, oldest first.
  *  • r.18(3) — refund base = paid-up share capital EXCLUDING Government contributions (so 1102 + 1103, not 1101).
@@ -50,8 +51,11 @@ export function minorWarning(p: { dateOfBirth?: string; age?: number }, onDate: 
   return `आयु ${age} वर्ष — धारा 16(a): सदस्य "अनुबंध करने में सक्षम" होना चाहिए (भारतीय संविदा अधिनियम धारा 11: 18 वर्ष या अधिक)। नाबालिग को सदस्य न बनाएँ। (Under 18 — not competent to contract.)`;
 }
 
-/** s.2(p): a producer society (labour societies included by the definition). */
-export const isProducerSociety = (societyType?: string) => societyType === 'producer' || societyType === 'labour';
+/**
+ * s.2(p): a producer society — ONLY when the society has recorded it, with proof, in Society Setup (founder 2026-10-18:
+ * verify against the legal definition and the registration; never infer from a dairy / marketing / labour name or type).
+ */
+export const isProducerSociety = (society?: { producerSociety?: boolean }) => society?.producerSociety === true;
 
 /** r.16: an annual general meeting falls 0–14 days after the admission date. */
 export function agmBlackoutWarning(admissionDate: string, meetings: readonly { type?: string; date?: string; status?: string }[]): string | null {
@@ -132,4 +136,98 @@ export function electionResultIssues(votes: readonly number[], votesCast: number
   const sorted = [...votes].sort((a, b) => b - a);
   if (sorted.length > 1 && sorted[0] > 0 && sorted[0] === sorted[1]) issues.push('सबसे ज़्यादा मत बराबर हैं — विजेता अपने-आप तय नहीं होगा; उपनियम / निर्वाचन नियमों के अनुसार तय करके टिप्पणी में लिखें।');
   return issues;
+}
+
+/**
+ * Founder 2026-10-18, point 1: EVERY due is recorded (loans, KCC, consumer credit, housing maintenance, dairy inputs),
+ * but the LEGAL default that disqualifies (s.20(d) vote, r.27(a) candidature) is decided by its own, separate rule:
+ * an amount past its due date — today the loans / KCC overdue rule of the voters roll (voters.overdueByMember).
+ * A due without a due date (an open credit sale, a fresh bill) is recorded here but never disqualifies by itself.
+ */
+export interface DuesRow { loans: number; kcc: number; consumer: number; housing: number; dairyInputs: number; total: number; legalDefault: number; inDefault: boolean }
+
+export function duesRow(p: { loans: number; kcc: number; consumer: number; housing: number; dairyInputs: number; legalDefault: number }): DuesRow {
+  const c = (n: number) => Math.max(0, Math.round((n || 0) * 100) / 100);
+  const row = { loans: c(p.loans), kcc: c(p.kcc), consumer: c(p.consumer), housing: c(p.housing), dairyInputs: c(p.dairyInputs) };
+  const total = Math.round((row.loans + row.kcc + row.consumer + row.housing + row.dairyInputs) * 100) / 100;
+  const legalDefault = c(p.legalDefault);
+  return { ...row, total, legalDefault, inDefault: legalDefault > 0.005 };
+}
+
+/**
+ * Founder 2026-10-18, points 2–4: the facts each way of leaving needs (stored in members.statusDetails, migration 125).
+ *  • disqualified — r.14(2): deemed to have ceased FROM THE DATE the disqualification was incurred; only on a proven
+ *    ground (r.14(1)(a) insolvency, (b) sentence) with its document. ENFORCED.
+ *  • expelled — r.19: a general meeting held for the purpose; a resolution by not less than two-thirds of the members
+ *    present and entitled to vote. ENFORCED (Haryana). Further steps (notice, hearing) come from the registered
+ *    bye-laws — recorded, warned when missing.
+ *  • resigned — r.18: unlimited liability: not indebted to the society and not a surety, after the bye-law notice
+ *    (refund without interest after the bye-law period); limited liability: shares are not ordinarily withdrawn —
+ *    either transfer them, or refund from a share-transfer fund built from earned profits with the committee's leave
+ *    (≤ 5% a year, checked at the refund). ENFORCED (Haryana) once the liability type is recorded.
+ */
+export interface CessationDetails {
+  ground?: 'insolvency' | 'conviction';
+  evidenceRef?: string;
+  evidenceDate?: string;
+  gmDate?: string;
+  presentEntitled?: number;
+  votesFor?: number;
+  byelawProcessRef?: string;
+  noticeDate?: string;
+  notSurety?: boolean;
+  shareRoute?: 'transfer' | 'fund_refund';
+  transferFundExists?: boolean;
+}
+
+export function validateCessation(
+  to: string,
+  d: CessationDetails,
+  ctx: { haryana: boolean; liability?: 'limited' | 'unlimited'; dues: number; effectiveDate: string; resolutionNo?: string },
+): { ok: boolean; error?: string; warnings: string[] } {
+  const warnings: string[] = [];
+  const fail = (error: string) => ({ ok: false, error, warnings });
+  if (to === 'disqualified') {
+    if (d.ground !== 'insolvency' && d.ground !== 'conviction') return fail('अयोग्यता का आधार चुनें — नियम 14(1)(a) दिवाला या 14(1)(b) सज़ा। (Choose the r.14 ground.)');
+    if ((d.evidenceRef || '').trim().length < 3) return fail('प्रमाण दर्ज करें — न्यायालय आदेश / निर्णय संख्या। (Record the proof: order / judgment no.)');
+    if (d.evidenceDate && isIso(d.evidenceDate) && isIso(ctx.effectiveDate) && d.evidenceDate < ctx.effectiveDate) {
+      warnings.push('आदेश की तिथि अयोग्यता की तिथि से पहले है — जाँच लें कि "किस तिथि से" सही है।');
+    }
+    return { ok: true, warnings };
+  }
+  if (!ctx.haryana) return { ok: true, warnings };
+  if (to === 'expelled') {
+    if (!(ctx.resolutionNo || '').trim()) return fail('नियम 19: आम सभा का निष्कासन प्रस्ताव संख्या भरें। (GM resolution no. required.)');
+    if (!isIso(d.gmDate)) return fail('नियम 19: आम सभा की तिथि भरें। (Enter the general-meeting date.)');
+    const present = Math.floor(Number(d.presentEntitled) || 0), yes = Math.floor(Number(d.votesFor) || 0);
+    if (present < 1) return fail('नियम 19: उपस्थित व मत-योग्य सदस्यों की संख्या भरें। (Members present and entitled to vote.)');
+    if (yes < 0 || yes > present) return fail('पक्ष में मत उपस्थित मत-योग्य सदस्यों से ज़्यादा नहीं हो सकते।');
+    if (yes * 3 < present * 2) return fail(`नियम 19: ${present} उपस्थित में से कम से कम ${Math.ceil((present * 2) / 3)} मत पक्ष में चाहिए — ${yes} मिले। प्रस्ताव पारित नहीं, निष्कासन नहीं हो सकता।`);
+    if (isIso(ctx.effectiveDate) && ctx.effectiveDate < d.gmDate) return fail('निष्कासन की तिथि आम सभा की तिथि से पहले नहीं हो सकती।');
+    if (!(d.byelawProcessRef || '').trim()) warnings.push('पंजीकृत उपनियमों के अनुसार नोटिस / सुनवाई का संदर्भ दर्ज नहीं — उपनियम की प्रक्रिया पूरी होने का प्रमाण रखें।');
+    return { ok: true, warnings };
+  }
+  if (to === 'resigned') {
+    if (!ctx.liability) {
+      warnings.push('समिति का दायित्व-प्रकार (सीमित/असीमित) Society Setup में प्रमाण सहित दर्ज नहीं — नियम 18 का सही कार्यप्रवाह उसी से तय होता है।');
+      return { ok: true, warnings };
+    }
+    if (ctx.liability === 'unlimited') {
+      if (ctx.dues > 0.005) return fail(`नियम 18(1): असीमित दायित्व समिति में ऋणी सदस्य त्यागपत्र नहीं दे सकता — बकाया ₹${ctx.dues.toLocaleString('en-IN')} पहले चुकाएँ।`);
+      if (d.notSurety !== true) return fail('नियम 18(1): सदस्य किसी बकाया ऋण का ज़मानतदार नहीं — इसकी पुष्टि करें।');
+      if (!isIso(d.noticeDate)) return fail('नियम 18(1): उपनियम के अनुसार सचिव को दिए नोटिस की तिथि भरें।');
+      if (isIso(ctx.effectiveDate) && ctx.effectiveDate < d.noticeDate) return fail('त्यागपत्र की तिथि नोटिस की तिथि से पहले नहीं हो सकती।');
+      warnings.push('नियम 18(2): शेयर की राशि बिना ब्याज, उपनियम में तय अवधि के बाद लौटाई जाती है।');
+      return { ok: true, warnings };
+    }
+    // limited
+    if (d.shareRoute !== 'transfer' && d.shareRoute !== 'fund_refund') return fail('नियम 18(3): शेयर का निपटारा चुनें — योग्य सदस्य को हस्तांतरण, या शेयर-हस्तांतरण कोष से वापसी।');
+    if (d.shareRoute === 'fund_refund') {
+      if (d.transferFundExists !== true) return fail('नियम 18(3): सीमित दायित्व समिति में शेयर वापसी तभी, जब अर्जित लाभ से शेयर-हस्तांतरण कोष बना हो — पुष्टि करें, या हस्तांतरण चुनें।');
+      if (!(ctx.resolutionNo || '').trim()) return fail('नियम 18(3): प्रबंध समिति की अनुमति का प्रस्ताव संख्या भरें।');
+      warnings.push('नियम 18(3): वर्ष में कुल वापसी 31 मार्च की चुकता पूँजी (सरकारी अंश छोड़कर) के 5% से अधिक नहीं — वापसी दर्ज करते समय जाँच होगी।');
+    }
+    return { ok: true, warnings };
+  }
+  return { ok: true, warnings };
 }

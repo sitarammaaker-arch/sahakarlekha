@@ -57,7 +57,7 @@ ok(/setHandout\(null\)/.test(dlg), 'PIN dropped when the dialog closes');
 ok(/rel="noopener noreferrer"/.test(dlg), 'WhatsApp link opened safely');
 const page = strip('src/pages/Members.tsx');
 ok(/const isAdmin = user\?\.role === 'admin'/.test(page), 'Members page gates on admin');
-ok(/isAdmin && !showApprovalActions && !\['resigned', 'expelled', 'deceased'\]\.includes\(member\.status\)/.test(page), 'portal button: admin only, not for exited members');
+ok(/isAdmin && !showApprovalActions && !\['resigned', 'expelled', 'deceased', 'disqualified'\]\.includes\(member\.status\)/.test(page), 'portal button: admin only, not for exited members (incl. disqualified)');
 ok(/if \(!isAdmin\) return;/.test(page), 'non-admins never call the function');
 
 console.log(`member-portal hand-out (S2b): ${pass} passed, ${fail} failed`);

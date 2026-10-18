@@ -42,13 +42,14 @@ import { memberPhoneError } from '@/lib/memberValidation';
 import { callMemberPortalAdmin, portalPlanAllowed, type PortalLoginRow } from '@/lib/memberPortalAdmin';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 import { admissionClock, applicationReceivedOn, validateAdmission, validateRejection, isHaryana } from '@/lib/members/admission';
-import { minorWarning, agmBlackoutWarning, expulsionAppealLastDate, deathNomineeChoiceUntil, s40ChangeReminder } from '@/lib/members/legal';
+import { minorWarning, agmBlackoutWarning, expulsionAppealLastDate, deathNomineeChoiceUntil, s40ChangeReminder, validateCessation, type CessationDetails } from '@/lib/members/legal';
+import { useMemberDues } from '@/hooks/useMemberDues';
 import { meetingSelect } from '@/lib/supabaseService';
 import { generateMemberRefusalLetterPDF, generateShareCertificatePDF } from '@/lib/pdf';
 import { urlToDataUrl } from '@/lib/members/photo';
 import { nomineeCountWarning, certificateNoTakenBy } from '@/lib/members/shareRules';
 import { validateStatusChange, liabilityUntil, isExit, deathSettlement } from '@/lib/members/cessation';
-import { loanOutstanding, kccOutstanding } from '@/lib/memberSnapshot';
+
 import { ageOn } from '@/lib/members/voters';
 import { downloadExcel } from '@/lib/exportUtils';
 
@@ -59,6 +60,7 @@ const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }>
   resigned: { hi: 'त्यागपत्र', en: 'Resigned', cls: 'bg-amber-100 text-amber-800 border-amber-300' },
   expelled: { hi: 'निष्कासित', en: 'Expelled', cls: 'bg-red-100 text-red-800 border-red-300' },
   deceased: { hi: 'मृत',       en: 'Deceased', cls: 'bg-slate-300 text-slate-800' },
+  disqualified: { hi: 'अयोग्य (नियम 14)', en: 'Disqualified (r.14)', cls: 'bg-rose-100 text-rose-800 border-rose-300' },
 };
 
 const CASTE_OPTIONS: { value: CasteCategory; label: string; labelHi: string }[] = [
@@ -479,6 +481,9 @@ const Members: React.FC = () => {
   const [statusDate, setStatusDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [statusResNo, setStatusResNo] = useState('');
   const [statusResDate, setStatusResDate] = useState('');
+  // Stage C-2 (founder 2026-10-18): the facts each way of leaving needs — r.14(2), r.19, r.18 (members.statusDetails).
+  const [statusDetails, setStatusDetails] = useState<CessationDetails>({});
+  const sd = <K extends keyof CessationDetails>(k: K, v: CessationDetails[K]) => setStatusDetails(d => ({ ...d, [k]: v }));
   const [settleMember, setSettleMember] = useState<Member | null>(null);
   const [settleForm, setSettleForm] = useState({ date: new Date().toISOString().split('T')[0], resolution: '', amount: '' });
   // Stage C, s.23(1)(iii): no transfer or payment without the nominee's / heir's consent — recorded with the resolution.
@@ -793,13 +798,21 @@ const Members: React.FC = () => {
     ? [minorWarning(decision.member, decisionForm.admissionDate), agmBlackoutWarning(decisionForm.admissionDate, agms)].filter(Boolean) as string[]
     : [];
   // M4: lifecycle change — a real date, warnings for a missing resolution (never blocking)
-  const statusChangeCheck = statusMember
+  const duesOf = useMemberDues(today);
+  const statusChangeBase = statusMember
     ? validateStatusChange({ to: statusNew, effectiveDate: statusDate, resolutionNo: statusResNo, resolutionDate: statusResDate || undefined },
       { today, joinedOn: statusMember.admissionDate || statusMember.joinDate })
     : { ok: true, warnings: [] as string[] };
+  // Stage C-2: the legal workflow on top (r.14(2) proof; r.19 two-thirds; r.18 by liability type) — enforced.
+  const cessationCheck = statusMember
+    ? validateCessation(statusNew, statusDetails, { haryana: haryanaLaw, liability: society.liabilityType, dues: duesOf(statusMember.id).total, effectiveDate: statusDate, resolutionNo: statusResNo })
+    : { ok: true, warnings: [] as string[] };
+  const statusChangeCheck = !statusChangeBase.ok ? statusChangeBase
+    : !cessationCheck.ok ? { ok: false, error: cessationCheck.error, warnings: statusChangeBase.warnings }
+    : { ok: true, warnings: [...statusChangeBase.warnings, ...cessationCheck.warnings] };
   // M4: s.23 / s.55 — a deceased member's share money, after their loan + KCC dues, goes to the nominee
-  const memberDues = (m: Member) => loans.filter(l => l.memberId === m.id && !l.isDeleted).reduce((s, l) => s + loanOutstanding(l), 0)
-    + kccLoans.filter(k => k.memberId === m.id).reduce((s, k) => s + kccOutstanding(k), 0);
+  // Stage C-2: every due (loans, KCC, credit sales, maintenance, dairy inputs) — the same figure as "सभी बकाये".
+  const memberDues = (m: Member) => duesOf(m.id).total;
   const settlement = settleMember ? deathSettlement({ shareCapital: settleMember.shareCapital || 0, dues: memberDues(settleMember), dateOfDeath: settleMember.statusChangedAt }) : null;
   const nomineeNames = (m: Member) => {
     const list = (m.nominees || []).filter(n => n.name?.trim()).map(n => `${n.name}${n.relation ? ` (${n.relation})` : ''}${n.sharePercent ? ` ${n.sharePercent}%` : ''}`);
@@ -824,7 +837,7 @@ const Members: React.FC = () => {
   // M2: the r.17 (one month) / s.16 (PACS, 60 days) clock on a pending application — law references only for Haryana.
   const haryana = isHaryana(society.state);
   const clockBadge = (m: Member) => {
-    const c = admissionClock(applicationReceivedOn(m), today, { societyType: society.societyType });
+    const c = admissionClock(applicationReceivedOn(m), today, { societyType: society.societyType, producer: society.producerSociety === true });
     if (!c) return null;
     if (c.deemed) return <Badge variant="destructive" className="text-[10px]">{hi ? `${c.days} दिन — ${haryana ? 'धारा 16: स्वतः सदस्य माना जाएगा' : '60 दिन पूरे'}` : `${c.days} days — ${haryana ? 's.16: deemed admitted' : '60 days passed'}`}</Badge>;
     if (c.overdue) return <Badge className="bg-orange-100 text-orange-800 border-orange-300 text-[10px]" variant="outline">{hi ? `${c.days} दिन — 1 माह पार${haryana ? ' (नियम 17)' : ''}` : `${c.days} days — over one month${haryana ? ' (r.17)' : ''}`}</Badge>;
@@ -963,7 +976,7 @@ const Members: React.FC = () => {
                     {canEdit && !showApprovalActions && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                         title={hi ? 'स्थिति बदलें (त्यागपत्र/निष्कासन/मृत्यु)' : 'Change status (resign/expel/death)'}
-                        onClick={() => { setStatusMember(member); setStatusNew(member.status === 'active' ? 'resigned' : 'active'); setStatusReason(''); setStatusDate(new Date().toISOString().split('T')[0]); setStatusResNo(''); setStatusResDate(''); }}>
+                        onClick={() => { setStatusMember(member); setStatusNew(member.status === 'active' ? 'resigned' : 'active'); setStatusReason(''); setStatusDate(new Date().toISOString().split('T')[0]); setStatusResNo(''); setStatusResDate(''); setStatusDetails({}); }}>
                         <UserCog className="h-4 w-4" />
                       </Button>
                     )}
@@ -981,7 +994,7 @@ const Members: React.FC = () => {
                         <Award className="h-4 w-4" />
                       </Button>
                     )}
-                    {isAdmin && !showApprovalActions && !['resigned', 'expelled', 'deceased'].includes(member.status) && (
+                    {isAdmin && !showApprovalActions && !['resigned', 'expelled', 'deceased', 'disqualified'].includes(member.status) && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-teal-600 hover:text-teal-700 hover:bg-teal-50"
                         title={hi ? 'सदस्य portal login' : 'Member portal login'}
                         onClick={() => setPortalMember(member)}>
@@ -1219,7 +1232,7 @@ const Members: React.FC = () => {
                   placeholder={hi ? 'कारण लिखें (त्यागपत्र/निष्कासन/मृत्यु आदि)...' : 'Enter reason...'} />
               </div>
               <div>
-                <Label className="text-sm">{statusNew === 'deceased' ? (hi ? 'मृत्यु की तिथि *' : 'Date of death *') : (hi ? 'किस तिथि से *' : 'Effective date *')}</Label>
+                <Label className="text-sm">{statusNew === 'deceased' ? (hi ? 'मृत्यु की तिथि *' : 'Date of death *') : statusNew === 'disqualified' ? (hi ? 'अयोग्यता किस तिथि को हुई *' : 'Date the disqualification was incurred *') : (hi ? 'किस तिथि से *' : 'Effective date *')}</Label>
                 <Input className="mt-1" type="date" value={statusDate} max={new Date().toISOString().split('T')[0]} onChange={e => setStatusDate(e.target.value)} />
                 <p className="text-[11px] text-muted-foreground mt-0.5">{hi ? 'जिस दिन सच में हुआ — रजिस्टर में यही "सदस्यता समाप्ति तिथि" छपेगी (नियम 22)।' : 'The day it actually happened — the register prints this (Rule 22).'}</p>
               </div>
@@ -1235,7 +1248,55 @@ const Members: React.FC = () => {
                   </div>
                 </div>
               )}
+              {statusNew === 'disqualified' && (
+                <div className="space-y-2 rounded-md border p-2">
+                  <p className="text-xs font-medium">{hi ? 'नियम 14(2): अयोग्य होने की तिथि से सदस्यता समाप्त मानी जाती है — प्रमाणित आधार ज़रूरी' : 'r.14(2): deemed to have ceased from the date incurred — proven ground required'}</p>
+                  <Select value={statusDetails.ground ?? ''} onValueChange={v => sd('ground', v as CessationDetails['ground'])}>
+                    <SelectTrigger><SelectValue placeholder={hi ? 'आधार चुनें *' : 'Ground *'} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="insolvency">{hi ? 'नियम 14(1)(a): दिवालिया घोषित होने का आवेदन / अमुक्त दिवालिया' : 'r.14(1)(a): insolvency application / undischarged insolvent'}</SelectItem>
+                      <SelectItem value="conviction">{hi ? 'नियम 14(1)(b): अपराध में सज़ा (राजनीतिक / नैतिक अधमता रहित को छोड़), सज़ा पूरी होने के 5 वर्ष के भीतर' : 'r.14(1)(b): sentenced (not political / no moral turpitude excluded), within 5 years of the sentence ending'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input value={statusDetails.evidenceRef ?? ''} onChange={e => sd('evidenceRef', e.target.value)} placeholder={hi ? 'न्यायालय आदेश / निर्णय सं. *' : 'Court order / judgment no. *'} />
+                    <Input type="date" value={statusDetails.evidenceDate ?? ''} max={today} onChange={e => sd('evidenceDate', e.target.value)} />
+                  </div>
+                </div>
+              )}
+              {statusNew === 'expelled' && haryanaLaw && (
+                <div className="space-y-2 rounded-md border p-2">
+                  <p className="text-xs font-medium">{hi ? 'नियम 19: इसी हेतु बुलाई गई आम सभा में उपस्थित व मत-योग्य सदस्यों के कम से कम 2/3 बहुमत से' : 'r.19: by at least two-thirds of the members present and entitled to vote, at a general meeting held for the purpose'}</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div><Label className="text-[11px]">{hi ? 'आम सभा तिथि *' : 'GM date *'}</Label><Input type="date" value={statusDetails.gmDate ?? ''} max={today} onChange={e => sd('gmDate', e.target.value)} /></div>
+                    <div><Label className="text-[11px]">{hi ? 'उपस्थित मत-योग्य *' : 'Present & entitled *'}</Label><Input type="number" min={1} value={statusDetails.presentEntitled ?? ''} onChange={e => sd('presentEntitled', e.target.value === '' ? undefined : Number(e.target.value))} /></div>
+                    <div><Label className="text-[11px]">{hi ? 'पक्ष में मत *' : 'Votes for *'}</Label><Input type="number" min={0} value={statusDetails.votesFor ?? ''} onChange={e => sd('votesFor', e.target.value === '' ? undefined : Number(e.target.value))} /></div>
+                  </div>
+                  <Input value={statusDetails.byelawProcessRef ?? ''} onChange={e => sd('byelawProcessRef', e.target.value)} placeholder={hi ? 'उपनियम के अनुसार नोटिस / सुनवाई का संदर्भ (उपनियम क्रमांक, नोटिस तिथि)' : 'Bye-law notice / hearing reference (clause, notice date)'} />
+                </div>
+              )}
+              {statusNew === 'resigned' && haryanaLaw && society.liabilityType === 'unlimited' && (
+                <div className="space-y-2 rounded-md border p-2">
+                  <p className="text-xs font-medium">{hi ? 'नियम 18(1),(2): असीमित दायित्व — ऋणी न हो, ज़मानतदार न हो, उपनियम के अनुसार नोटिस' : 'r.18(1),(2): unlimited liability — not indebted, not a surety, bye-law notice'}</p>
+                  <p className="text-[11px] text-muted-foreground">{hi ? `सदस्य का कुल बकाया: ${fmt(duesOf(statusMember.id).total)}` : `Member's total dues: ${fmt(duesOf(statusMember.id).total)}`}</p>
+                  <div className="grid grid-cols-2 gap-2 items-end">
+                    <div><Label className="text-[11px]">{hi ? 'सचिव को नोटिस की तिथि *' : 'Notice to the Secretary *'}</Label><Input type="date" value={statusDetails.noticeDate ?? ''} max={today} onChange={e => sd('noticeDate', e.target.value)} /></div>
+                    <label className="flex items-start gap-2 text-xs"><input type="checkbox" className="mt-0.5" checked={statusDetails.notSurety === true} onChange={e => sd('notSurety', e.target.checked)} /><span>{hi ? 'किसी बकाया ऋण का ज़मानतदार नहीं' : 'Not a surety for any unpaid debt'}</span></label>
+                  </div>
+                </div>
+              )}
+              {statusNew === 'resigned' && haryanaLaw && society.liabilityType === 'limited' && (
+                <div className="space-y-2 rounded-md border p-2">
+                  <p className="text-xs font-medium">{hi ? 'नियम 18(3): सीमित दायित्व — शेयर सामान्यतः वापस नहीं होते। शेयर का निपटारा चुनें:' : 'r.18(3): limited liability — shares are not ordinarily withdrawn. How are the shares settled?'}</p>
+                  <label className="flex items-start gap-2 text-xs"><input type="radio" name="shareRoute" checked={statusDetails.shareRoute === 'transfer'} onChange={() => sd('shareRoute', 'transfer')} /><span>{hi ? 'किसी योग्य सदस्य को हस्तांतरण (शेयर रजिस्टर → स्थानांतरण)' : 'Transfer to a qualified member (Share Register → Transfer)'}</span></label>
+                  <label className="flex items-start gap-2 text-xs"><input type="radio" name="shareRoute" checked={statusDetails.shareRoute === 'fund_refund'} onChange={() => sd('shareRoute', 'fund_refund')} /><span>{hi ? 'शेयर-हस्तांतरण कोष से वापसी — प्रबंध समिति की अनुमति से (प्रस्ताव सं. ऊपर भरें)' : 'Refund from the share-transfer fund — with the committee\'s leave (resolution no. above)'}</span></label>
+                  {statusDetails.shareRoute === 'fund_refund' && (
+                    <label className="flex items-start gap-2 text-xs"><input type="checkbox" className="mt-0.5" checked={statusDetails.transferFundExists === true} onChange={e => sd('transferFundExists', e.target.checked)} /><span>{hi ? 'समिति ने अर्जित लाभ से शेयर-हस्तांतरण कोष बनाया है' : 'The society has a share-transfer fund built from earned profits'}</span></label>
+                  )}
+                </div>
+              )}
               {statusChangeCheck.warnings.map(w => <p key={w} className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">⚠ {w}</p>)}
+              {!statusChangeCheck.ok && statusChangeCheck.error && <p className="rounded-md border border-red-300 bg-red-50 px-2 py-1.5 text-[11px] text-red-800">✕ {statusChangeCheck.error}</p>}
               {statusNew === 'expelled' && haryanaLaw && expulsionAppealLastDate(statusDate) && (
                 <p className="text-[11px] text-muted-foreground">{hi
                   ? `धारा 114(1)(d): निष्कासित सदस्य निर्णय से 60 दिन (${fmtDate(expulsionAppealLastDate(statusDate))} तक) में अपील कर सकता है — निर्णय की सूचना सदस्य को लिखित में दें।`
@@ -1253,7 +1314,8 @@ const Members: React.FC = () => {
               onClick={() => {
                 if (!statusMember) return;
                 if (!statusChangeCheck.ok) { toast({ title: hi ? 'जाँचें' : 'Check', description: statusChangeCheck.error, variant: 'destructive' }); return; }
-                if (changeMemberStatus(statusMember.id, statusNew, statusReason.trim(), { effectiveDate: statusDate, resolutionNo: statusResNo, resolutionDate: statusResDate || undefined })) setStatusMember(null);
+                const details = ['disqualified', 'expelled', 'resigned'].includes(statusNew) ? { kind: statusNew, ...statusDetails, liabilityType: society.liabilityType ?? null } : undefined;
+                if (changeMemberStatus(statusMember.id, statusNew, statusReason.trim(), { effectiveDate: statusDate, resolutionNo: statusResNo, resolutionDate: statusResDate || undefined, details })) setStatusMember(null);
               }}>
               {hi ? 'बदलें' : 'Update'}
             </Button>

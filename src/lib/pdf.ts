@@ -4021,8 +4021,8 @@ export function generateMemberRefusalLetterPDF(member: Member, society: SocietyS
   y += Math.max(rLines.length, 2) * 5 + 6;
 
   // Stage C: s.114(1)(c) gives the appeal against a refusal for "a co-operative society, other than a producer society"
-  // (s.2(p); labour societies included) — a producer society's letter must not promise a s.114 appeal.
-  const producer = society.societyType === 'producer' || society.societyType === 'labour';
+  // (s.2(p)) — a producer society's letter must not promise a s.114 appeal. Verified record only (migration 125).
+  const producer = society.producerSociety === true;
   const appeal = doc.splitTextToSize(
     producer && isHaryana(society.state)
       ? 'If you are aggrieved by this decision, you may seek any remedy available under the bye-laws of the society and the Haryana Co-operative Societies Act, 1984.'

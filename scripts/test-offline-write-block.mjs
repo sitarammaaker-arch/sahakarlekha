@@ -56,7 +56,7 @@ ok('back online → suppression off immediately', m.suppressAfterRefusal() === f
 const ut = readFileSync(resolve(root, 'src/hooks/use-toast.ts'), 'utf8');
 ok('use-toast drops non-destructive toasts during the suppression window', /variant !== "destructive" && suppressAfterRefusal\(\)/.test(ut));
 const ss = readFileSync(resolve(root, 'src/pages/SocietySetup.tsx'), 'utf8');
-ok('SocietySetup says "सहेजा गया" only from onSaved', (ss.match(/updateSociety\((form|fyForm), \{ onSaved/g) || []).length === 2);
+ok('SocietySetup says "सहेजा गया" only from onSaved', (ss.match(/updateSociety\((form|fyForm|\{ \.\.\.rest,[^\n]*?\}), \{ onSaved/g) || []).length === 2);   // stage C: the basic save passes a cleaned payload
 
 // ── wiring ──
 const dc = readFileSync(resolve(root, 'src/contexts/DataContext.tsx'), 'utf8');

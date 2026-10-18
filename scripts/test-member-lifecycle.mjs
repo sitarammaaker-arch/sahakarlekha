@@ -35,8 +35,8 @@ const { MEMBER_STATUSES, canTransitionMember, isMemberActive } = await import(ab
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
 
-// 1. The five lifecycle states exist.
-ok(MEMBER_STATUSES.length === 5, 'five lifecycle states');
+// 1. The six lifecycle states exist (stage C: 'disqualified', r.14(2)).
+ok(MEMBER_STATUSES.length === 6 && MEMBER_STATUSES.includes('disqualified'), 'six lifecycle states (incl. disqualified)');
 
 // 2. Normal exits from active are allowed.
 ok(canTransitionMember('active', 'resigned'), 'active → resigned allowed');

@@ -57,11 +57,11 @@ ok(cs.includes('.update({ statusResolutionNo: resolutionNo ?? null, statusResolu
 ok(cs.indexOf('update({ statusReason: reason, statusChangedAt: changedAt })') > 0, 'reason / date update untouched (one missing column cannot drop them)');
 
 const mem = read('src/pages/Members.tsx');
-ok(mem.includes('changeMemberStatus(statusMember.id, statusNew, statusReason.trim(), { effectiveDate: statusDate, resolutionNo: statusResNo, resolutionDate: statusResDate || undefined })'), 'status dialog passes date + resolution');
+ok(mem.includes('changeMemberStatus(statusMember.id, statusNew, statusReason.trim(), { effectiveDate: statusDate, resolutionNo: statusResNo, resolutionDate: statusResDate || undefined, details })'), 'status dialog passes date + resolution (+ stage C details)');
 ok(mem.includes('validateStatusChange({ to: statusNew, effectiveDate: statusDate') && mem.includes("'मृत्यु की तिथि *'"), 'status dialog validates; death asks the date of death');
 ok(mem.includes('liabilityUntil(member.statusChangedAt)') && mem.includes('देनदारी'), 'exited members show the s.24 liability date');
 ok(mem.includes("member.status === 'deceased' && (member.shareCapital || 0) > 0") && mem.includes('approveShareRefund(settleMember.id, amount, settleForm.date'), 'death settlement → share refund payable (approval step)');
-ok(mem.includes('loanOutstanding(l)') && mem.includes('kccOutstanding(k)') && mem.includes('!l.isDeleted'), 'dues = live loans + KCC (same formulas as the staff pages)');
+ok(mem.includes('const memberDues = (m: Member) => duesOf(m.id).total;') && read('src/hooks/useMemberDues.ts').includes('loanOutstanding(l)') && read('src/hooks/useMemberDues.ts').includes('!l.isDeleted'), 'dues = every due (stage C: loans, KCC, credit, maintenance, dairy inputs) from the shared hook');
 
 console.log(`member-m4: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
