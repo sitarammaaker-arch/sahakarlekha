@@ -9,6 +9,7 @@
  *  - ## / ### headings get stable slug ids so the in-chapter TOC can link to them.
  */
 import React from 'react';
+import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { linkifyText, newLinkifyState } from '@/lib/glossaryLinkify';
@@ -85,6 +86,24 @@ const GuideImg: React.FC<{ src?: string; alt?: string }> = ({ src, alt }) => {
   );
 };
 
+const ulClass = (cls?: string) =>
+  cls?.includes('contains-task-list') ? 'list-none pl-1 my-3 space-y-1.5' : 'list-disc pl-6 my-3 space-y-1.5 marker:text-primary';
+const liClass = (cls?: string) => (cls?.includes('task-list-item') ? 'leading-relaxed relative pl-6' : 'leading-relaxed');
+
+/* A markdown href that must render as plain text (e.g. a blog post still scheduled for a later date). */
+const HideLinkContext = React.createContext<((href: string) => boolean) | undefined>(undefined);
+
+const MdLink: React.FC<{ href?: string; children?: React.ReactNode }> = ({ href, children }) => {
+  const hide = React.useContext(HideLinkContext);
+  // L8: a hand-written /glossary/<slug> link to a term that doesn't exist → plain text (lib: glossaryLinks).
+  const to = resolveGlossaryHref(href, (slug) => !!findTerm(slug));
+  if (to === null || (to && hide?.(to))) return <>{children}</>;
+  const cls = 'text-primary underline underline-offset-2 hover:opacity-80';
+  // Internal links go through the router — a plain <a> reloaded the whole app on every click.
+  if (to && to.startsWith('/') && !to.startsWith('//')) return <Link to={to} className={cls}>{children}</Link>;
+  return <a href={to} className={cls}>{children}</a>;
+};
+
 const components: React.ComponentProps<typeof ReactMarkdown>['components'] = {
   img: ({ src, alt }) => <GuideImg src={src as string} alt={alt as string} />,
   h1: ({ children }) => (
@@ -94,20 +113,15 @@ const components: React.ComponentProps<typeof ReactMarkdown>['components'] = {
   h3: ({ children }) => <Heading level={3}>{children}</Heading>,
   h4: ({ children }) => <Heading level={4}>{children}</Heading>,
   p: ({ children }) => <p className="my-3 leading-relaxed text-foreground/90">{children}</p>,
-  a: ({ href, children }) => {
-    // L8: a hand-written /glossary/<slug> link to a term that doesn't exist → plain text (lib: glossaryLinks).
-    const to = resolveGlossaryHref(href, (slug) => !!findTerm(slug));
-    if (to === null) return <>{children}</>;
-    return (
-      <a href={to} className="text-primary underline underline-offset-2 hover:opacity-80">
-        {children}
-      </a>
-    );
-  },
+  a: ({ href, children }) => <MdLink href={href}>{children}</MdLink>,
   strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-  ul: ({ children }) => <ul className="list-disc pl-6 my-3 space-y-1.5 marker:text-primary">{children}</ul>,
+  ul: ({ className, children }) => <ul className={ulClass(className)}>{children}</ul>,
   ol: ({ children }) => <ol className="list-decimal pl-6 my-3 space-y-1.5 marker:text-primary">{children}</ol>,
-  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  li: ({ className, children }) => <li className={liClass(className)}>{children}</li>,
+  // GFM task lists ("- [ ]") are printable checklists, not form controls: a disabled <input> was
+  // announced as a dimmed checkbox by screen readers and surfaced as "[Input]" in crawled text.
+  input: ({ type, checked }) =>
+    type === 'checkbox' ? <span className="absolute left-0 text-primary" aria-hidden="true">{checked ? '☑' : '☐'}</span> : null,
   hr: () => <hr className="my-8 border-border" />,
   code: ({ children }) => (
     <code className="px-1.5 py-0.5 rounded bg-muted text-[0.85em] font-mono text-foreground">
@@ -140,7 +154,12 @@ const components: React.ComponentProps<typeof ReactMarkdown>['components'] = {
  * term in body text (paragraphs + list items only). Memoized so it does not re-run the
  * linkifier on unrelated parent re-renders (e.g. the blog reading-progress bar).
  */
-const GuideMarkdown: React.FC<{ source: string; linkGlossary?: boolean }> = ({ source, linkGlossary }) => {
+const GuideMarkdown: React.FC<{
+  source: string;
+  linkGlossary?: boolean;
+  /** href → true to render that link as plain text (blog: posts not yet published). */
+  hideLink?: (href: string) => boolean;
+}> = ({ source, linkGlossary, hideLink }) => {
   let comps = components;
   if (linkGlossary) {
     // Fresh per render → page-level "once per term" dedup; React.memo keeps renders to prop changes.
@@ -150,15 +169,17 @@ const GuideMarkdown: React.FC<{ source: string; linkGlossary?: boolean }> = ({ s
     comps = {
       ...components,
       p: ({ children }) => <p className="my-3 leading-relaxed text-foreground/90">{proc(children)}</p>,
-      li: ({ children }) => <li className="leading-relaxed">{proc(children)}</li>,
+      li: ({ className, children }) => <li className={liClass(className)}>{proc(children)}</li>,
     };
   }
   return (
-    <div className="text-[0.95rem]">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={comps}>
-        {source}
-      </ReactMarkdown>
-    </div>
+    <HideLinkContext.Provider value={hideLink}>
+      <div className="text-[0.95rem]">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={comps}>
+          {source}
+        </ReactMarkdown>
+      </div>
+    </HideLinkContext.Provider>
   );
 };
 

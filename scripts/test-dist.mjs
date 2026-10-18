@@ -38,17 +38,17 @@ for (const f of htmlFiles(DIST)) {
   prerendered.add(p === '/index.html' ? '/' : p);
 }
 
-// Scheduled (future-dated) blog posts: hand-authored articles may reference them
-// ahead of time. Until the publish date the SPA redirects them to /blog (not a
-// 404), and they become real pages on their date — treat as resolvable.
-const blogSrcFile = resolve(ROOT, 'src', 'content', 'blog', 'index.ts');
-if (existsSync(blogSrcFile)) {
-  const src = readFileSync(blogSrcFile, 'utf-8');
-  for (const m of src.matchAll(/^    slug: '([a-z0-9-]+)'/gm)) prerendered.add('/blog/' + m[1]);
+// noindex stubs (scheduled drip posts) are files, but a static link to one is still a dead end for the
+// reader until its date — the prerender turns such links into plain text, so none may remain.
+const noindexPages = new Set();
+for (const f of htmlFiles(DIST)) {
+  if (!/<meta name="robots" content="noindex/.test(readFileSync(f, 'utf-8'))) continue;
+  noindexPages.add('/' + f.slice(DIST.length + 1).replace(/[\\/]?index\.html$/, '').replace(/\\/g, '/'));
 }
 
 const resolves = (path) => {
   const clean = path.replace(/\/$/, '') || '/';
+  if (noindexPages.has(clean)) return false;
   return prerendered.has(clean) || SPA_ROUTES.has(clean) || SPA_PREFIXES.some((pre) => clean.startsWith(pre));
 };
 
@@ -61,7 +61,7 @@ for (const file of htmlFiles(DIST)) {
   pagesChecked++;
 
   // 1. JSON-LD validity
-  for (const m of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
+  for (const m of html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)) {
     ldChecked++;
     try { JSON.parse(m[1]); } catch (e) {
       errors.push(`${rel}: invalid JSON-LD (${e.message.slice(0, 60)})`);
@@ -77,13 +77,20 @@ for (const file of htmlFiles(DIST)) {
     const target = m[1].split('?')[0].split('#')[0];
     if (!resolves(target)) errors.push(`${rel}: broken internal link → ${target}`);
   }
+  // GFM task lists must render as ☐ text — a static <input> surfaced as "[Input]" in crawled text.
+  if (/<input[\s>]/.test(body)) errors.push(`${rel}: <input> in the static body (task-list checkbox?)`);
 }
+
+// Blog soft-404 guards: the author page and the blog not-found page are real files.
+if (!existsSync(resolve(DIST, 'author', 'sitaram', 'index.html'))) errors.push('author/sitaram/index.html missing (crawlers get the homepage template)');
+const nf = existsSync(resolve(DIST, '404-blog.html')) ? readFileSync(resolve(DIST, '404-blog.html'), 'utf-8') : '';
+if (!/<meta name="robots" content="noindex/.test(nf)) errors.push('404-blog.html missing or not noindex');
 
 // 3. L2 — sitemap ↔ files. Every <loc> must be a prerendered file whose canonical is that same URL and
 //    whose title is its own (not the homepage template's); no lastmod after today; no duplicate <loc>.
 //    Every prerendered page: a non-empty meta description and exactly ONE <h1> in its static body.
 const SITE = 'https://sahakarlekha.com';
-const today = new Date().toISOString().slice(0, 10);
+const today = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10); // IST, as the prerender
 const fileFor = (path) => (path === '/' ? resolve(DIST, 'index.html') : resolve(DIST, path.slice(1), 'index.html'));
 const homeTitle = (readFileSync(resolve(DIST, 'index.html'), 'utf-8').match(/<title>([\s\S]*?)<\/title>/) || [])[1];
 let locsChecked = 0;

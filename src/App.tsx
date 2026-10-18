@@ -219,12 +219,9 @@ const SuperAdminDashboard = lazyWithRetry(() => import("./pages/SuperAdminDashbo
 const SuperAdminFeedback = lazyWithRetry(() => import("./pages/SuperAdminFeedback"));
 import { SuperAdminRoute } from "@/components/SuperAdminRoute";
 
-import { preloadHindiFont } from '@/lib/fontLoader';
+import { staticSnapshotFor } from '@/lib/staticSnapshot';
 
 const queryClient = new QueryClient();
-
-// Start loading Hindi font in background so it's ready when user generates a PDF
-preloadHindiFont();
 
 // Protected Route wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -264,12 +261,17 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
-// Lightweight fallback shown while a route chunk is being fetched.
-const PageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center bg-background">
-    <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-  </div>
-);
+// Lightweight fallback shown while a route chunk is being fetched. On the first load of a prerendered
+// public page it keeps showing that page's static body instead of a blank spinner.
+const PageLoader = () => {
+  const staticHtml = staticSnapshotFor(window.location.pathname);
+  if (staticHtml) return <div dangerouslySetInnerHTML={{ __html: staticHtml }} />;
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+    </div>
+  );
+};
 
 const AppRoutes = () => {
   usePageTracking();

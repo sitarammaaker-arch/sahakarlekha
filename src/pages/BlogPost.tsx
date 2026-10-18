@@ -16,7 +16,8 @@ import { trackEvent } from '@/lib/analytics';
 import { reloadOnceForStaleChunk } from '@/lib/chunkReload';
 import { reportError } from '@/lib/errorReporting';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
-import { findPost, loadBlogRaw, readingMinutes, relatedPosts, publishedOrder, isPublished } from '@/content/blog';
+import { findPost, loadBlogRaw, readingMinutes, relatedPosts, publishedOrder, isPublished, isScheduledBlogHref } from '@/content/blog';
+import { staticSnapshotFor } from '@/lib/staticSnapshot';
 import { getAuthor, authorInitials } from '@/content/blog/authors';
 import { incrementBlogView, fetchBlogViewCount, formatViews } from '@/lib/blogViews';
 import { guideForBlog } from '@/content/crossLinks';
@@ -26,7 +27,7 @@ import { HELP_TASKS } from '@/content/help';
 import { ACCENTS, formatDate } from '@/components/blog/blogTheme';
 import {
   Home, ChevronRight, ChevronLeft, ChevronDown, Calendar, Clock, List, ArrowRight,
-  Share2, Check, Newspaper, Lightbulb, Eye,
+  Share2, Check, Newspaper, Lightbulb, Eye, Link2,
 } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
@@ -109,7 +110,7 @@ const FaqList: React.FC<{ items: { q: string; a: string }[]; extra?: string }> =
               </button>
               {isOpen && (
                 <div className="px-4 pb-4">
-                  <GuideMarkdown source={f.a} />
+                  <GuideMarkdown source={f.a} hideLink={isScheduledBlogHref} />
                 </div>
               )}
             </div>
@@ -118,7 +119,7 @@ const FaqList: React.FC<{ items: { q: string; a: string }[]; extra?: string }> =
       </div>
       {extra && (
         <div className="mt-5 text-sm text-muted-foreground">
-          <GuideMarkdown source={extra} />
+          <GuideMarkdown source={extra} hideLink={isScheduledBlogHref} />
         </div>
       )}
     </section>
@@ -149,12 +150,13 @@ const ShareBar: React.FC<{ url: string; title: string }> = ({ url, title }) => {
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs font-medium text-muted-foreground inline-flex items-center gap-1 mr-1"><Share2 className="h-3.5 w-3.5" /> शेयर:</span>
-      <a href={tw} target="_blank" rel="noopener noreferrer" aria-label="Share on X" className={`${base} hover:bg-black`}><XIcon className="h-4 w-4" /></a>
-      <a href={wa} target="_blank" rel="noopener noreferrer" aria-label="Share on WhatsApp" className={`${base} hover:bg-green-500`}><WaIcon className="h-4 w-4" /></a>
-      <a href={li} target="_blank" rel="noopener noreferrer" aria-label="Share on LinkedIn" className={`${base} hover:bg-blue-600`}><InIcon className="h-4 w-4" /></a>
-      <button onClick={copy} aria-label="Copy link" className={`${base} hover:bg-primary`}>
-        {copied ? <Check className="h-4 w-4 text-green-600" /> : <Share2 className="h-4 w-4" />}
+      <a href={wa} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp पर भेजें" className={`${base} hover:bg-green-500`}><WaIcon className="h-4 w-4" /></a>
+      <a href={tw} target="_blank" rel="noopener noreferrer" aria-label="X पर शेयर करें" className={`${base} hover:bg-black`}><XIcon className="h-4 w-4" /></a>
+      <a href={li} target="_blank" rel="noopener noreferrer" aria-label="LinkedIn पर शेयर करें" className={`${base} hover:bg-blue-600`}><InIcon className="h-4 w-4" /></a>
+      <button type="button" onClick={copy} aria-label="लेख का लिंक कॉपी करें" className={`${base} hover:bg-primary`}>
+        {copied ? <Check className="h-4 w-4 text-green-600" /> : <Link2 className="h-4 w-4" />}
       </button>
+      <span className="sr-only" aria-live="polite">{copied ? 'लिंक कॉपी हो गया' : ''}</span>
     </div>
   );
 };
@@ -241,15 +243,18 @@ const BlogPost: React.FC = () => {
       articleSection: post.category,
       keywords: post.tags.join(', '),
       author: { '@type': 'Person', name: author.name, jobTitle: author.designation, url: `${SITE}/author/${author.slug}`, ...(author.photo ? { image: `${SITE}${author.photo}` } : {}) },
-      publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
-      ...(post.image ? { image: `${SITE}${post.image}` } : {}),
+      // Same shape as the prerendered BlogPosting (scripts/prerender-guide.mjs) — useDocumentMeta swaps
+      // that static copy for this one, so the two must not disagree.
+      publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE, logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` } },
+      image: post.image ? `${SITE}${post.image}` : `${SITE}/og-image.png`,
     },
     {
       '@context': 'https://schema.org',
       '@type': 'BreadcrumbList',
       itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'ब्लॉग', item: `${SITE}/blog` },
-        { '@type': 'ListItem', position: 2, name: post.shortTitle, item: url },
+        { '@type': 'ListItem', position: 1, name: 'होम', item: `${SITE}/` },
+        { '@type': 'ListItem', position: 2, name: 'ब्लॉग', item: `${SITE}/blog` },
+        { '@type': 'ListItem', position: 3, name: post.title, item: url },
       ],
     },
     ...(faqs.length ? [{
@@ -269,6 +274,7 @@ const BlogPost: React.FC = () => {
     canonicalPath: `/blog/${slug}`,
     jsonLd,
     image: post?.image,
+    article: post ? { publishedTime: post.date, modifiedTime: post.updated || post.date, section: post.category } : undefined,
   });
 
   // Unknown post, missing body, or a still-scheduled (future-dated) post → bounce
@@ -289,8 +295,10 @@ const BlogPost: React.FC = () => {
     );
   }
   if (raw === undefined) {
-    // Body still loading (one small chunk) — keep the page shell; the prerendered HTML already served
-    // crawlers the full article.
+    // Body still loading (one small chunk). On the first load the prerendered article is already on
+    // screen — keep showing it rather than replacing a readable page with a loading line.
+    const staticHtml = staticSnapshotFor(`/blog/${slug}`);
+    if (staticHtml) return <div dangerouslySetInnerHTML={{ __html: staticHtml }} />;
     return (
       <PublicLayout>
         <div className="max-w-3xl mx-auto px-4 py-16 text-center text-muted-foreground" aria-busy="true">लेख लोड हो रहा है…</div>
@@ -336,12 +344,12 @@ const BlogPost: React.FC = () => {
       {/* Clean editorial header (Medium/Ahrefs-style, replaces the gradient hero) */}
       <header className="border-b bg-background">
         <div className="mx-auto max-w-6xl px-4 pt-8 md:pt-12 pb-6 [&>*]:max-w-3xl">
-          <nav className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground mb-5">
-            <Link to="/" className="inline-flex items-center gap-1 hover:text-primary"><Home className="h-3.5 w-3.5" /> होम</Link>
-            <ChevronRight className="h-3.5 w-3.5" />
+          <nav aria-label="ब्रेडक्रम्ब" className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground mb-5">
+            <Link to="/" className="inline-flex items-center gap-1 hover:text-primary"><Home className="h-3.5 w-3.5" aria-hidden="true" /> होम</Link>
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
             <Link to="/blog" className="hover:text-primary">ब्लॉग</Link>
-            <ChevronRight className="h-3.5 w-3.5" />
-            <span className="text-foreground/70 line-clamp-1">{post.category}</span>
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="text-foreground/70 line-clamp-1" aria-current="page">{post.category}</span>
           </nav>
           <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${a.chip}`}>
             {post.category}
@@ -353,7 +361,7 @@ const BlogPost: React.FC = () => {
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-6 pt-5 border-t text-sm">
             <Link to={`/author/${author.slug}`} className="inline-flex items-center gap-2 group">
               {author.photo ? (
-                <img src={author.photo} alt={author.name} className="h-9 w-9 rounded-full object-cover" />
+                <img src={author.photo} alt="" width={36} height={36} loading="lazy" decoding="async" className="h-9 w-9 rounded-full object-cover" />
               ) : (
                 <span className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{authorInitials(author.name)}</span>
               )}
@@ -416,9 +424,9 @@ const BlogPost: React.FC = () => {
               </div>
             )}
 
-            <GuideMarkdown source={bodyTop} linkGlossary />
+            <GuideMarkdown source={bodyTop} linkGlossary hideLink={isScheduledBlogHref} />
             {midPos > 0 && <EmailCapture magnet={mag} className="my-8" />}
-            {bodyBottom && <GuideMarkdown source={bodyBottom} linkGlossary />}
+            {bodyBottom && <GuideMarkdown source={bodyBottom} linkGlossary hideLink={isScheduledBlogHref} />}
 
             {/* FAQ — accordion + FAQPage schema (content-driven) */}
             {faqs.length > 0 && <FaqList items={faqs} extra={faqExtra} />}
@@ -473,8 +481,8 @@ const BlogPost: React.FC = () => {
                   वाउचर से बैलेंस शीट तक, सब एक क्लिक पर। सहकारी समितियों के लिए ही बना, हिन्दी-केंद्रित प्लेटफ़ॉर्म।
                 </p>
                 <div className="flex flex-wrap gap-3 justify-center mt-4">
-                  <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'register', post: slug })}><Button className="gap-2">रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
-                  <Link to="/guide" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'guide', post: slug })}><Button variant="outline">संपूर्ण गाइड पढ़ें</Button></Link>
+                  <Button asChild className="gap-2"><Link to="/register" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'register', post: slug })}>रजिस्टर करें <ArrowRight className="h-4 w-4" /></Link></Button>
+                  <Button asChild variant="outline"><Link to="/guide" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'guide', post: slug })}>संपूर्ण गाइड पढ़ें</Link></Button>
                 </div>
               </CardContent>
             </Card>
@@ -566,11 +574,9 @@ const BlogPost: React.FC = () => {
                       </a>
                     ))}
                   </nav>
-                  <Link to="/blog">
-                    <Button variant="outline" size="sm" className="w-full mt-4 gap-1">
-                      <ChevronLeft className="h-3.5 w-3.5" /> सभी लेख
-                    </Button>
-                  </Link>
+                  <Button asChild variant="outline" size="sm" className="w-full mt-4 gap-1">
+                    <Link to="/blog"><ChevronLeft className="h-3.5 w-3.5" /> सभी लेख</Link>
+                  </Button>
                 </CardContent>
               </Card>
             </aside>

@@ -36,6 +36,7 @@ const SOCIETY_TYPES = resolve(ROOT, 'src', 'content', 'societyTypes.tsx');
 const STATES_FILE = resolve(ROOT, 'src', 'content', 'states.ts');
 const BLOG_FILE = resolve(ROOT, 'src', 'content', 'blog', 'index.ts');
 const BLOG_DIR = resolve(ROOT, 'src', 'content', 'blog');
+const AUTHORS_FILE = resolve(ROOT, 'src', 'content', 'blog', 'authors.ts');
 const GUIDE_DIR = resolve(ROOT, 'src', 'content', 'guide');
 const HELP_FILE = resolve(ROOT, 'src', 'content', 'help', 'index.ts');
 const COOKBOOK_FILE = resolve(ROOT, 'src', 'content', 'cookbook', 'index.ts');
@@ -66,6 +67,9 @@ const LASTMOD = {
 };
 
 marked.setOptions({ gfm: true });
+// GFM task lists ("- [ ]") are printable checklists: a disabled <input type="checkbox"> showed up as
+// "[Input]" in crawled text and as a dimmed checkbox to screen readers. Mirrors GuideMarkdown.
+marked.use({ renderer: { checkbox: ({ checked }) => (checked ? '☑ ' : '☐ ') } });
 
 const esc = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -79,7 +83,10 @@ const maxDate = (dates, fallback) => {
 
 // L2: a content date can be typed in the future (a post's `updated:` set ahead). A sitemap lastmod /
 // dateModified after the day of the build is invalid — clamp to the build day.
-const BUILD_DAY = new Date().toISOString().slice(0, 10);
+// Dates are India dates: the drip rebuild runs just after midnight IST (still the previous UTC day), and
+// the reader's browser (index.ts isPublished) also flips at IST midnight.
+const istToday = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
+const BUILD_DAY = istToday();
 const notFuture = (d) => (d && d > BUILD_DAY ? BUILD_DAY : d);
 
 const crumb = (items) => ({
@@ -266,6 +273,7 @@ async function loadData() {
     ['society', SOCIETY_TYPES, 'SOCIETY_TYPES'],
     ['states', STATES_FILE, 'STATES'],
     ['rel', RELATED_FILE, null], // whole module (edge maps + helpers), GOS-11
+    ['authors', AUTHORS_FILE, null], // /author/<slug> profile pages (E-E-A-T) — AUTHORS + DEFAULT_AUTHOR_SLUG
   ];
   for (const [key, file, exportName] of jobs) {
     try {
@@ -489,17 +497,24 @@ function statePages(DATA) {
 
 function blogPages(DATA) {
   const posts = [];
+  const scheduled = [];
   if (existsSync(BLOG_FILE)) {
     const src = readFileSync(BLOG_FILE, 'utf-8');
     // per post, in declared order: slug, metaTitle, metaDescription, date [, updated]
     const re = /slug:\s*'([^']+)'[\s\S]*?metaTitle:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?metaDescription:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?date:\s*'([^']+)'(?:,\s*\r?\n\s*updated:\s*'([^']+)')?/g;
     let m;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = istToday();
     while ((m = re.exec(src))) {
       const [, slug, title, description, date, updated] = m;
-      if (date > today) continue; // scheduled (future-dated) post — not live yet
+      if (date > today) { scheduled.push({ slug, date }); continue; } // drip post — not live yet
       posts.push({ slug, title, description, date, updated: notFuture(updated) });
     }
+  }
+  // category per post — og article:section
+  const categories = {};
+  if (existsSync(BLOG_FILE)) {
+    const csrc = readFileSync(BLOG_FILE, 'utf-8');
+    for (const cm of csrc.matchAll(/slug:\s*'([^']+)'(?:(?!slug:)[\s\S])*?\n\s*category:\s*'([^']+)'/g)) categories[cm[1]] = cm[2];
   }
   // optional featured image per post (declared after `slug:` in the same entry)
   const images = {};
@@ -561,12 +576,14 @@ function blogPages(DATA) {
       description: p.description,
       lastmod: p.updated || p.date,
       image: images[p.slug] ? `${SITE}${images[p.slug]}` : undefined,
+      article: { publishedTime: p.date, modifiedTime: p.updated || p.date, section: categories[p.slug] },
       body,
       jsonLd: [
         {
           '@context': 'https://schema.org',
           '@type': 'BlogPosting',
-          headline: p.title,
+          // the on-page h1 (`title:`), same as BlogPost's runtime JSON-LD — not the <title> with its brand suffix
+          headline: headings[p.slug] || p.title,
           description: p.description,
           inLanguage: 'hi',
           url,
@@ -578,8 +595,9 @@ function blogPages(DATA) {
           publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE, logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` } },
         },
         crumb([
+          { name: 'होम', item: `${SITE}/` },
           { name: 'ब्लॉग', item: `${SITE}/blog` },
-          { name: p.title, item: url },
+          { name: headings[p.slug] || p.title, item: url },
         ]),
         ...(faqs.length ? [{
           '@context': 'https://schema.org',
@@ -589,7 +607,86 @@ function blogPages(DATA) {
       ],
     });
   }
+  // A scheduled (drip) post's URL used to fall through to the SPA rewrite and serve the HOMEPAGE
+  // template (canonical "/", HTTP 200). Give it its own noindex stub until its date; the daily
+  // rebuild (scheduled-rebuild.yml, just after midnight IST) replaces it with the real article.
+  for (const s of scheduled) {
+    pages.push({
+      path: `/blog/${s.slug}`,
+      noindex: true,
+      title: 'जल्द आ रहा है | सहकार लेखा ब्लॉग',
+      description: `यह लेख ${s.date} को प्रकाशित होगा। तब तक सहकार लेखा ब्लॉग के बाक़ी लेख पढ़ें।`,
+      body: shell({
+        crumbs: [['/blog', 'ब्लॉग']],
+        current: 'जल्द आ रहा है',
+        html: `<h1>यह लेख जल्द आ रहा है</h1><p>यह लेख ${esc(s.date)} को प्रकाशित होगा। तब तक <a href="/blog">ब्लॉग के बाक़ी लेख</a> पढ़ें।</p>`,
+      }),
+    });
+  }
   return pages;
+}
+
+/* ---------------- author profiles + blog not-found ---------------- */
+
+// /author/<slug> was CSR-only: crawlers got the homepage template (canonical "/") for the page every
+// BlogPosting's author.url points at. Same title/description/JSON-LD as src/pages/AuthorProfile.tsx.
+function authorPages(DATA, blog) {
+  const A = DATA.authors;
+  if (!A || !A.AUTHORS) return [];
+  const live = blog.filter((p) => p.path.startsWith('/blog/') && !p.noindex)
+    .map((p) => ({ path: p.path, title: (p.jsonLd && p.jsonLd[0] && p.jsonLd[0].headline) || p.title, date: p.lastmod }));
+  return Object.values(A.AUTHORS).map((a) => {
+    const url = `${SITE}/author/${a.slug}`;
+    // single-author blog: every post belongs to the default author (BlogPost/AuthorProfile do the same)
+    const posts = a.slug === A.DEFAULT_AUTHOR_SLUG ? live : [];
+    return {
+      path: `/author/${a.slug}`,
+      title: `${a.name} — ${a.designation} | सहकार लेखा`,
+      description: a.tagline,
+      lastmod: maxDate(posts.map((p) => p.date), LASTMOD.static),
+      jsonLd: [{
+        '@context': 'https://schema.org',
+        '@type': 'ProfilePage',
+        mainEntity: {
+          '@type': 'Person',
+          name: a.name,
+          jobTitle: a.designation,
+          description: a.tagline,
+          url,
+          ...(a.photo ? { image: `${SITE}${a.photo}` } : {}),
+          worksFor: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
+          alumniOf: a.alumniOf.map((n) => ({ '@type': 'Organization', name: n })),
+          knowsAbout: a.knowsAbout,
+          ...(a.socials && a.socials.length ? { sameAs: a.socials.map((s) => s.href) } : {}),
+        },
+      }],
+      body: shell({
+        crumbs: [['/blog', 'ब्लॉग']],
+        current: a.name,
+        html:
+          `<h1>${esc(a.name)}</h1><p><strong>${esc(a.designation)} · सहकार लेखा</strong></p><p>${esc(a.tagline)}</p>` +
+          `<h2>योग्यता</h2><ul>${a.credentials.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` +
+          `<h2>अनुभव</h2><ul>${a.experience.map((e) => `<li>${esc(e.years)} वर्ष — ${esc(e.field)}</li>`).join('')}</ul>` +
+          (posts.length ? `<h2>लेख (${posts.length})</h2><ul>${posts.map((p) => `<li><a href="${p.path}">${esc(p.title)}</a></li>`).join('')}</ul>` : ''),
+      }),
+    };
+  });
+}
+
+// Unknown /blog/<slug> used to get the homepage template with HTTP 200 (a soft-404 that called itself
+// "/"). vercel.json rewrites /blog/:slug that has no file to this noindex page instead.
+function blogNotFoundPage() {
+  return {
+    file: '404-blog.html',
+    noindex: true,
+    title: 'लेख नहीं मिला | सहकार लेखा ब्लॉग',
+    description: 'यह लेख नहीं मिला। सहकार लेखा ब्लॉग के बाक़ी लेख पढ़ें।',
+    body: shell({
+      crumbs: [['/blog', 'ब्लॉग']],
+      current: 'लेख नहीं मिला',
+      html: `<h1>यह लेख नहीं मिला</h1><p>लिंक पुराना या ग़लत हो सकता है। <a href="/blog">सभी लेख देखें</a>।</p>`,
+    }),
+  };
 }
 
 /* ---------------- help routes (regex meta + registry-data body) ---------------- */
@@ -1249,7 +1346,7 @@ function staticExtraPages(DATA) {
 function buildBlogRss() {
   if (!existsSync(BLOG_FILE)) return null;
   const src = readFileSync(BLOG_FILE, 'utf-8');
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();
   const re = /slug:\s*'([^']+)'[\s\S]*?metaTitle:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?metaDescription:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?date:\s*'([^']+)'(?:,\s*\r?\n\s*updated:\s*'([^']+)')?/g;
   const posts = [];
   let m;
@@ -1322,7 +1419,8 @@ function buildSitemaps(dynamicPages, blogMax) {
   // app entry points whose canonical is the homepage.
   const PAGE_LASTMOD = { '/': blogMax, '/privacy': '2026-10-02', '/guide/quick-start': LASTMOD.guide,
     '/guide/certificate': LASTMOD.guide, '/guide/verify': LASTMOD.guide };
-  const all = dynamicPages.filter((p) => p && p.path).map((p) => ({
+  // noindex stubs (scheduled drip posts) have a file but must never be sitemapped
+  const all = dynamicPages.filter((p) => p && p.path && !p.noindex).map((p) => ({
     path: p.path,
     lastmod: notFuture(PAGE_LASTMOD[p.path] || (p.path.startsWith('/guide/quiz/') ? LASTMOD.guide : p.lastmod) || LASTMOD.static),
   }));
@@ -1359,7 +1457,7 @@ function buildSitemaps(dynamicPages, blogMax) {
 /* ---------------- head + body transform ---------------- */
 
 function transform(template, page) {
-  const url = SITE + page.path;
+  const url = SITE + (page.path || '/blog');
   let html = template;
 
   // Subpages: drop the homepage-only template schemas (SoftwareApplication + the
@@ -1383,10 +1481,22 @@ function transform(template, page) {
   }
   sub(/<meta name="twitter:title"[^>]*>/, `<meta name="twitter:title" content="${esc(page.title)}" />`);
   sub(/<meta name="twitter:description"[^>]*>/, `<meta name="twitter:description" content="${esc(page.description)}" />`);
+  if (page.noindex) sub(/<meta name="robots"[^>]*>/, `<meta name="robots" content="noindex, follow" />`);
+  if (page.article) {
+    const a = page.article;
+    const tags = [
+      `<meta property="article:published_time" content="${esc(a.publishedTime)}" />`,
+      a.modifiedTime ? `<meta property="article:modified_time" content="${esc(a.modifiedTime)}" />` : '',
+      a.section ? `<meta property="article:section" content="${esc(a.section)}" />` : '',
+    ].filter(Boolean).join('\n    ');
+    sub(/<meta property="og:type"[^>]*>/, `<meta property="og:type" content="article" />\n    ${tags}`);
+  }
   if (page.jsonLd && page.jsonLd.length) {
     // Escape "<" so a value containing "</script>" can never break out of the tag (safe JSON-in-HTML).
     const json = JSON.stringify(page.jsonLd).replace(/</g, '\\u003c');
-    const ld = `<script type="application/ld+json">${json}</script>\n  </head>`;
+    // data-prerendered-jsonld: useDocumentMeta removes this copy when the page mounts and injects its
+    // own — otherwise a JS-rendering crawler saw every BlogPosting/FAQPage twice.
+    const ld = `<script type="application/ld+json" data-prerendered-jsonld>${json}</script>\n  </head>`;
     html = html.replace('</head>', ld);
   }
   // GOS-01: real static body inside #root (React's createRoot replaces it on mount).
@@ -1409,12 +1519,14 @@ try {
   // Published (live-today) blog slugs — body builders use this so static HTML
   // never links to a still-scheduled drip post.
   DATA.publishedBlog = new Set();
+  DATA.scheduledBlog = new Set();
   if (existsSync(BLOG_FILE)) {
     const src = readFileSync(BLOG_FILE, 'utf-8');
-    const today = new Date().toISOString().slice(0, 10);
+    const today = istToday();
     // same proven per-post pattern as blogPages(): slug → metaTitle → metaDescription → date
     for (const m of src.matchAll(/slug:\s*'([^']+)'[\s\S]*?metaTitle:\s*'(?:[^'\\]|\\.)*'[\s\S]*?metaDescription:\s*'(?:[^'\\]|\\.)*'[\s\S]*?date:\s*'([^']+)'/g)) {
       if (m[2] <= today) DATA.publishedBlog.add(m[1]);
+      else DATA.scheduledBlog.add(m[1]);
     }
   }
 
@@ -1431,7 +1543,16 @@ try {
     ...staticExtraPages(DATA),
     ...appShellPages(DATA),
     ...downloadsPages(DATA),
+    ...authorPages(DATA, blog),
   ];
+
+  // A hand-written link to a drip post that is still scheduled → plain text until its date (mirrors
+  // GuideMarkdown's hideLink in BlogPost); the daily rebuild turns it back into a link on publish day.
+  for (const page of pages) {
+    if (!page || !page.body) continue;
+    page.body = page.body.replace(/<a href="\/blog\/([a-z0-9-]+)\/?"[^>]*>([\s\S]*?)<\/a>/g, (m0, slug, inner) =>
+      (DATA.scheduledBlog.has(slug) ? inner : m0));
+  }
 
   // L8: same rule as GuideMarkdown — a /glossary/<slug> link to a term that doesn't exist becomes plain
   // text (or goes to its exact synonym), so static HTML never carries the dead link either.
@@ -1455,7 +1576,9 @@ try {
     n++;
     if (page.body) withBody++;
   }
-  console.log(`[prerender] wrote ${n} static pages (${withBody} with full HTML body).`);
+  const notFound = blogNotFoundPage();
+  writeFileSync(resolve(DIST, notFound.file), transform(template, notFound), 'utf-8');
+  console.log(`[prerender] wrote ${n} static pages (${withBody} with full HTML body) + ${notFound.file}.`);
 
   try {
     const blogMax = maxDate(blog.map((p) => p.lastmod), LASTMOD.static);
