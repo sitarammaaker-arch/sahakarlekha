@@ -31,9 +31,12 @@ import { addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, regi
 
 // Table font per paper (pt): read at 100% on the paper it is printed on.
 const PAPER_FONT = { a4: { body: 8, head: 7.5 }, a3: { body: 10, head: 10 } } as const;
-// A4 landscape leaves 277 mm for 16 columns, so every width is fixed (sum 277): a phone number or a date never
-// breaks mid-way, and a long name / address wraps onto a second line inside its own column.
-const A4_WIDTHS = [9, 12, 26, 26, 11, 17, 29, 20, 17, 15, 11, 15, 23, 14, 15, 17];
+// Every width is fixed per paper (A4 landscape: 297 − 2×10 = 277 mm; A3 landscape: 420 − 2×14 = 392 mm): a phone
+// number, a date, the status or "Total: 454" never breaks mid-way, and a long name / address wraps inside its column.
+const COL_WIDTHS = {
+  a4: [9, 12, 26, 26, 11, 17, 29, 20, 17, 15, 11, 15, 23, 14, 15, 17],
+  a3: [13, 19, 36, 36, 15, 24, 42, 26, 22, 21, 15, 22, 32, 19, 24, 26],
+} as const;
 
 const Form1MemberList: React.FC = () => {
   const { language } = useLanguage();
@@ -150,12 +153,14 @@ const Form1MemberList: React.FC = () => {
       // The grand total only once, under the last row — on every page it read as that page's total.
       showFoot: 'lastPage',
       showHead: 'everyPage',
+      // One member's row stays on one page — a 4-line address used to continue at the top of the next page.
+      rowPageBreak: 'avoid',
       margin: { left: marginL, right: marginL },
       styles: { fontSize: font.body, cellPadding: paper === 'a4' ? 1 : 1.5, overflow: 'linebreak' },
       headStyles: { fillColor: [30, 64, 175], fontSize: font.head },
       footStyles: { fontStyle: 'bold', fontSize: font.head },
       columnStyles: Object.fromEntries(Array.from({ length: 16 }, (_, c) => [c, {
-        ...(paper === 'a4' && A4_WIDTHS[c] ? { cellWidth: A4_WIDTHS[c] } : {}),
+        cellWidth: COL_WIDTHS[paper][c],
         ...(c === 10 || c === 11 ? { halign: 'right' as const } : c === 9 || c === 14 ? { halign: 'center' as const } : {}),
       }])),
     });
