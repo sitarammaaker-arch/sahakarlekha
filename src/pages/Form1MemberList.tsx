@@ -23,9 +23,10 @@ import { ClipboardList, Download, Search, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { fmtDate } from '@/lib/dateUtils';
+import { fmtDate, todayStr } from '@/lib/dateUtils';
 import { memberStatusLabel, memberTypeLabel } from '@/lib/memberLifecycle';
 import { isExit } from '@/lib/members/cessation';
+import { isHaryana } from '@/lib/members/admission';
 import { addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, registerReportIdentity } from '@/lib/pdf';
 
 const Form1MemberList: React.FC = () => {
@@ -52,7 +53,8 @@ const Form1MemberList: React.FC = () => {
         m.address.toLowerCase().includes(q)
       );
     }
-    return [...list].sort((a, b) => a.memberId.localeCompare(b.memberId));
+    // Natural order: 2, 11, 100, M924 — a plain string sort printed 100, 101, 11, 110 (the register looked shuffled).
+    return [...list].sort((a, b) => a.memberId.localeCompare(b.memberId, 'en', { numeric: true, sensitivity: 'base' }));
   }, [members, statusFilter, typeFilter, search]);
 
   const totalShareCapital = filtered.reduce((s, m) => s + (m.shareCapital || 0), 0);
@@ -62,6 +64,11 @@ const Form1MemberList: React.FC = () => {
   //    CEASING, nominees — one column set for CSV, Excel and PDF (M5). ─────────────────────────────────────────
   const csvHeaders = ['S.No.', 'Member No.', 'Name', "Father's/Spouse Name", 'Gender', 'Occupation', 'Address', 'Phone', 'Admission Date', 'Type', 'Shares', 'Share Capital', 'Nominee', 'Relation', 'Status', 'Ceased On'];
   const GENDER = { female: 'Female', male: 'Male', other: 'Other' } as const;
+  // A dummy number (9999999999, 0000000000…) typed only to get past the form is not a phone — print "—" in the register.
+  const realPhone = (p?: string) => {
+    const d = (p || '').replace(/\D/g, '');
+    return !d || /^(\d)\1+$/.test(d) ? '—' : p!;
+  };
   const registerRow = (m: typeof filtered[number], i: number, money: (n: number) => string | number) => [
     i + 1,
     m.memberId,
@@ -70,7 +77,7 @@ const Form1MemberList: React.FC = () => {
     m.gender ? GENDER[m.gender] : '—',
     m.occupation || '—',
     m.address || '—',
-    m.phone || '—',
+    realPhone(m.phone),
     (m.admissionDate || m.joinDate) ? fmtDate(m.admissionDate || m.joinDate) : '—',
     m.memberType && m.memberType !== 'member' ? memberTypeLabel(m.memberType) : 'Regular',
     m.shareCount ?? '—',
@@ -94,23 +101,31 @@ const Form1MemberList: React.FC = () => {
     const marginL = 14;
     let y = 12;
 
-    // Title block
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-    doc.text('FORM — 1', doc.internal.pageSize.getWidth() / 2, y, { align: 'center' }); y += 6;
-    doc.setFontSize(11);
-    doc.text('REGISTER OF MEMBERS', doc.internal.pageSize.getWidth() / 2, y, { align: 'center' }); y += 5;
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.text(`[Under the Cooperative Societies Act]`, doc.internal.pageSize.getWidth() / 2, y, { align: 'center' }); y += 6;
+    const pageW = doc.internal.pageSize.getWidth();
+    const haryana = isHaryana(society.state);
 
-    doc.setFontSize(9);
-    doc.text(`Society: ${society.name}`, marginL, y);
-    doc.text(`Reg. No.: ${society.registrationNo || '—'}`, marginL + 90, y);
-    doc.text(`District: ${society.district || '—'}`, marginL + 160, y);
+    // Title block — the register of members is r.22 of the Haryana Rules, 1989 (there "Form 1" is the registration
+    // application, r.5), so the printed heading no longer says "FORM — 1".
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('REGISTER OF MEMBERS', pageW / 2, y, { align: 'center' }); y += 6;
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    doc.text(haryana
+      ? '[Rule 22, Haryana Co-operative Societies Rules, 1989]'
+      : '[Under the Co-operative Societies Act and Rules]', pageW / 2, y, { align: 'center' }); y += 7;
+
+    // Society name on its own full-width line: a long name used to run over "Reg. No." placed at a fixed offset.
+    doc.setFont('helvetica', 'bold');
+    const nameLines: string[] = doc.splitTextToSize(`Society: ${society.name}`, pageW - marginL * 2);
+    doc.text(nameLines, marginL, y); y += 5 * nameLines.length;
+    doc.setFont('helvetica', 'normal');
+    const col = (pageW - marginL * 2) / 3;
+    doc.text(`Reg. No.: ${society.registrationNo || '—'}`, marginL, y);
+    doc.text(`District: ${society.district || '—'}`, marginL + col, y);
+    doc.text(`Financial Year: ${society.financialYear}`, marginL + col * 2, y);
     y += 5;
-    doc.text(`Financial Year: ${society.financialYear}`, marginL, y);
-    doc.text(`Date of Print: ${new Date().toLocaleDateString('en-IN')}`, marginL + 90, y);
-    doc.text(`Total Members: ${filtered.length}`, marginL + 160, y);
-    y += 8;
+    doc.text(`Date of Print: ${fmtDate(todayStr())}`, marginL, y);
+    doc.text(`Total Members: ${filtered.length}`, marginL + col, y);
+    y += 7;
 
     autoTable(doc, {
       startY: y,
@@ -118,14 +133,17 @@ const Form1MemberList: React.FC = () => {
       body: filtered.map((m, i) => registerRow(m, i, n => n.toLocaleString('en-IN'))),
       foot: [[
         '', '', '', '', '', '', '', '', '', `Total: ${filtered.length}`,
-        totalShares.toLocaleString('en-IN'),
-        totalShareCapital.toLocaleString('en-IN'),
+        { content: totalShares.toLocaleString('en-IN'), styles: { halign: 'right' } },
+        { content: totalShareCapital.toLocaleString('en-IN'), styles: { halign: 'right' } },
         '', '', '', '',
       ]],
+      // The grand total only once, under the last row — on every page it read as that page's total.
+      showFoot: 'lastPage',
       styles: { fontSize: 6.5, cellPadding: 1.5 },
       headStyles: { fillColor: [30, 64, 175], fontSize: 7 },
       footStyles: { fontStyle: 'bold', fontSize: 7 },
       columnStyles: {
+        10: { halign: 'right' },
         11: { halign: 'right' },
         9:  { halign: 'center' },
         14: { halign: 'center' },
@@ -180,7 +198,7 @@ const Form1MemberList: React.FC = () => {
 
       {/* Print header (visible only when printing) */}
       <div className="hidden print:block text-center mb-4">
-        <p className="text-lg font-bold">FORM — 1 : REGISTER OF MEMBERS</p>
+        <p className="text-lg font-bold">REGISTER OF MEMBERS (Rule 22)</p>
         <p className="text-sm">{society.name} | Reg. No.: {society.registrationNo || '—'} | FY {society.financialYear}</p>
       </div>
 
