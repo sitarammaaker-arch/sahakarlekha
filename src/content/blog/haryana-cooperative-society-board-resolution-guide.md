@@ -1,5 +1,7 @@
 Managing Committee (Board) की बैठक में जब भी कोई निर्णय लिया जाता है — चाहे वह financial sanction हो, कोई नियुक्ति, कोई ख़रीद, या कोई अन्य प्रशासनिक मामला — उसे एक औपचारिक Resolution के रूप में दर्ज करना ज़रूरी है। कई समितियां इसे सिर्फ़ Minutes Book में लिख देती हैं, पर बैंक, सरकारी विभाग या किसी तीसरे पक्ष को दिखाने लायक़ एक ठीक-ठाक Resolution और उसकी Certified True Copy किस ढांचे में होनी चाहिए, यह अक्सर स्पष्ट नहीं होता। यह गाइड वही ढाँचा, ज़रूरी हिस्से, Rule 30 (conflict of interest) व Certified Copy — सब आसान भाषा में बताती है।
 
+> ⚠️ **जानकारी 18 अक्टूबर 2026 तक जाँची गई।** इस लेख में जिन धाराओं और नियमों का ज़िक्र है, वे अधिनियम के सरकारी पाठ (अक्टूबर 2007 तक संशोधित), 2013 के संशोधन और Rules 1989 की Indian Kanoon प्रति से मिलाए गए हैं (नीचे "स्रोत" देखें)। Resolution का ढाँचा (RESOLVED THAT आदि) अच्छी प्रथा है, किसी नियम का तय प्रारूप नहीं। यह सामान्य जानकारी है, क़ानूनी सलाह नहीं।
+
 > 💡 society की registered bye-laws में "Board" को Managing Committee या सिर्फ़ Committee भी कहा जा सकता है — कोई फ़र्क़ नहीं, bye-laws में दी गई सही शब्दावली अपनाएं। इस प्रारूप का इस्तेमाल सिर्फ़ committee की powers के भीतर आने वाले मामलों के लिए करें — जहाँ भी Act/Rules/bye-laws/विभागीय निर्देश General Body, Registrar या किसी अन्य प्राधिकरण की अनुमति मांगते हों, वह अलग से लें।
 
 ## Resolution क्यों इतना ज़रूरी है
@@ -16,7 +18,13 @@ Managing Committee (Board) की बैठक में जब भी कोई
 - **संपत्ति/अनुबंध:** ज़मीन/भवन का लेन-देन, कोई बड़ा अनुबंध।
 - **प्रशासनिक:** किसी योजना में आवेदन, किसी को समिति का प्रतिनिधित्व करने हेतु अधिकृत करना।
 
-ध्यान रहे — इनमें से कई पर committee ख़ुद निर्णय ले सकती है, पर कुछ (जैसे उपनियम-संशोधन, बड़े नीतिगत फ़ैसले) पर General Body या Registrar की मंज़ूरी भी ज़रूरी होती है। इसलिए Resolution बनाने से पहले यह देख लें कि विषय committee की powers में है या नहीं।
+ध्यान रहे — इनमें से कई पर committee ख़ुद निर्णय ले सकती है, पर कुछ पर General Body या Registrar की भूमिका क़ानून में तय है। कुछ उदाहरण:
+
+- **bye-laws संशोधन:** General Body की बैठक में प्रस्ताव, जिसमें कम से कम दो-तिहाई सदस्य मौजूद हों (Rule 10), और फिर Registrar से पंजीकरण (Section 10)।
+- **समिति की अधिकतम उधार-सीमा (maximum credit limit):** यह सिर्फ़ General Body तय करती है, Registrar की मंज़ूरी से — PACS जैसी Primary Credit Service Societies को Registrar की मंज़ूरी नहीं चाहिए (Rule 24)।
+- **सालाना आम सभा के विषय:** अगले साल का कार्यक्रम, ऑडिट रिपोर्ट, defaulters की सूची, reserves, पदाधिकारियों के रिश्तेदार कर्मचारियों की सूची, चुनाव, bye-laws संशोधन, और 2013 से पैनल में से auditor की नियुक्ति (Section 25(3))।
+
+इसलिए Resolution बनाने से पहले यह देख लें कि विषय committee की powers में है या नहीं।
 
 ## Meeting Details — सबसे ऊपर क्या दर्ज हो
 
@@ -41,11 +49,15 @@ Managing Committee (Board) की बैठक में जब भी कोई
 
 Voting/Decision Record में Result (Unanimous/Majority), For, Against, Abstained, और Conflict/Recusal (यदि कोई हो) दर्ज होना चाहिए — ताकि यह साफ़ रहे कि निर्णय किस बहुमत/सहमति से लिया गया।
 
-> ⚠️ Haryana Co-operative Societies Rules, 1989 का **Rule 30** कहता है कि society के किसी officer का किसी contract, संपत्ति की ख़रीद-बिक्री या lease में — चाहे प्रत्यक्ष या अप्रत्यक्ष रूप से — अपनी officer वाली हैसियत के अलावा कोई हित (interest) नहीं होना चाहिए। अगर committee के किसी सदस्य का किसी contract/property/transaction में प्रत्यक्ष या अप्रत्यक्ष हित है, तो निर्णय में भाग लेने से पहले Rule 30 और registered bye-laws देखें, और conflict/recusal को स्पष्ट रूप से record करें।
+> ⚠️ Haryana Co-operative Societies Rules, 1989 का **Rule 30** कहता है कि society के किसी officer का — प्रत्यक्ष या अप्रत्यक्ष रूप से, officer की हैसियत के अलावा — इनमें कोई हित (interest) **नहीं होगा**: (a) society के साथ कोई contract; (b) society द्वारा या society को बेची, ख़रीदी या lease पर दी गई संपत्ति; (c) society का कोई और लेन-देन। छूट सिर्फ़ इनकी है: society में निवेश, society से लिया कर्ज़, और वेतनभोगी कर्मचारी को society का दिया आवास। साथ ही, कोई officer बकाया वसूली में बिकी किसी सदस्य की संपत्ति नहीं ख़रीद सकता, और ये रोकें पद छोड़ने के **2 साल बाद तक** लागू रहती हैं।
+
+ध्यान दें: Rule 30 एक **रोक** है, सिर्फ़ "बताकर अलग हो जाने" का नियम नहीं। किसी सदस्य का ऐसा हित हो, तो सिर्फ़ recusal दर्ज कर देने से मामला ठीक नहीं होता — पहले देखें कि वह contract या लेन-देन होना ही चाहिए या नहीं। Society के साथ contract में हित रखने वाला व्यक्ति committee का चुनाव लड़ने के लिए भी अयोग्य है (Rule 27(b)), और ऐसी अयोग्यता आने पर उसे पद से हटाया जा सकता है (Rule 28)। फिर भी, बैठक में अगर किसी सदस्य ने हित बताया और वह चर्चा से अलग रहा, तो यह voting record में साफ़ दर्ज करें।
 
 ## Certified True Copy कब और क्यों चाहिए
 
-जब resolution की एक प्रति बैंक, सरकारी विभाग या किसी तीसरे पक्ष को देनी हो (जैसे किसी authorised signatory की नियुक्ति साबित करने के लिए), तो सिर्फ़ Minutes Book का extract काफ़ी नहीं होता — एक प्रमाणित (certified) प्रति चाहिए होती है। इसमें Resolution No., Agenda Item No., Subject और दोनों RESOLVED clauses को दोबारा एक स्वतंत्र प्रमाणित प्रारूप में लिखा जाता है, जिसे नाम, पद, हस्ताक्षर, दिनांक और society की मुहर के साथ जारी किया जाता है — यह हमेशा **original Minutes Book के अधीन (subject to)** होती है।
+जब resolution की एक प्रति बैंक, सरकारी विभाग या किसी तीसरे पक्ष को देनी हो (जैसे किसी authorised signatory की नियुक्ति साबित करने के लिए), तो एक प्रमाणित (certified) प्रति दी जाती है। इसमें Resolution No., Agenda Item No., Subject और दोनों RESOLVED clauses को दोबारा एक स्वतंत्र प्रारूप में लिखा जाता है, जिसे नाम, पद, हस्ताक्षर, दिनांक और society की मुहर के साथ जारी किया जाता है — यह हमेशा **original Minutes Book के अधीन (subject to)** होती है।
+
+**क़ानून क्या कहता है:** Act की Section 42 के अनुसार, society की नियमित रखी किताब की किसी entry की प्रमाणित प्रति किसी मुकदमे या क़ानूनी कार्यवाही में उस entry का प्रथम दृष्टया (prima facie) सबूत मानी जाती है। प्रमाणित करने का तरीक़ा Rule 32 में है: प्रति के नीचे एक प्रमाणपत्र लिखा जाए कि यह उस entry की सच्ची प्रति है और वह किताब society की कस्टडी में है; इस पर **तारीख़ और committee द्वारा अधिकृत officer के हस्ताक्षर** हों। इसलिए Certified True Copy पर हस्ताक्षर उसी officer से कराएँ जिसे committee ने इसके लिए अधिकृत किया है।
 
 ## Minutes Book बनाम Resolution — फ़र्क़ समझें
 
@@ -73,8 +85,9 @@ Voting/Decision Record में Result (Unanimous/Majority), For, Against, Abst
 
 **"Board" और "Managing Committee" में क्या फ़र्क़ है?** — कोई फ़र्क़ नहीं; society की registered bye-laws में इसे Managing Committee, Board, या सिर्फ़ Committee भी कहा जा सकता है — bye-laws में दी गई सही शब्दावली अपनाएं।
 **क्या हर मामले पर Managing Committee अंतिम निर्णय ले सकती है?** — नहीं। सिर्फ़ उन मामलों पर जो committee की powers के भीतर आते हैं। जहाँ Act, Rules, bye-laws या विभागीय निर्देश General Body, Registrar या किसी अन्य प्राधिकरण की approval मांगते हैं, वह अलग से लेनी होगी।
-**Conflict of interest हो तो क्या करें?** — Rule 30 के अनुसार, अगर किसी committee सदस्य का किसी contract/property/transaction में direct या indirect हित है, तो निर्णय में भाग लेने से पहले registered bye-laws देखें और recusal को voting/decision record में स्पष्ट दर्ज करें।
-**Certified True Copy की ज़रूरत कब पड़ती है?** — जब resolution की एक प्रमाणित प्रति बैंक, सरकारी विभाग या किसी अन्य तीसरे पक्ष को देनी हो — जैसे authorised signatory साबित करने के लिए। यह हमेशा original Minutes Book के अधीन होती है।
+**Conflict of interest हो तो क्या करें?** — Rule 30 officer के लिए society के contract, संपत्ति के सौदे या दूसरे लेन-देन में हित रखने पर रोक लगाता है (निवेश, कर्ज़ और कर्मचारी-आवास को छोड़कर)। इसलिए पहले देखें कि सौदा होना ही चाहिए या नहीं; और बैठक में जो सदस्य अलग रहा, उसे voting record में साफ़ दर्ज करें।
+**Certified True Copy की ज़रूरत कब पड़ती है?** — जब resolution की एक प्रमाणित प्रति बैंक, सरकारी विभाग या किसी अन्य तीसरे पक्ष को देनी हो। Rule 32 के अनुसार उस पर "सच्ची प्रति" का प्रमाणपत्र, तारीख़ और committee द्वारा अधिकृत officer के हस्ताक्षर हों; Section 42 के तहत ऐसी प्रति सबूत के रूप में मानी जाती है।
+**Committee की बैठक कौन बुलाता है?** — Rule 23 के अनुसार Chief Executive Officer या उनका अधिकृत officer, bye-laws में बताए प्राधिकारी के निर्देश पर। Registrar या bye-laws में तय सदस्यों की लिखित माँग मिलने पर society को एक महीने के भीतर बैठक बुलानी होती है (Section 26)।
 **Resolution क्यों ज़रूरी है?** — यह फ़ैसले का कानूनी व लेखा-प्रमाण है — विधिवत अधिकृत होने, ऑडिट-सबूत, व तीसरे पक्ष (बैंक/विभाग) को दिखाने के लिए।
 **Minutes Book व Certified Copy में फ़र्क़?** — Minutes Book पूरी बैठक का मूल, प्राथमिक रिकॉर्ड; Certified Copy उसी में से एक निर्णय का प्रमाणित उद्धरण (हमेशा मूल के अधीन)।
 **RESOLVED THAT व RESOLVED FURTHER THAT में क्या अंतर?** — पहला मुख्य निर्णय; दूसरा सहायक निर्णय (जैसे किसी को अधिकृत करना)।
@@ -84,7 +97,7 @@ Voting/Decision Record में Result (Unanimous/Majority), For, Against, Abst
 ## तीन बातें याद रखें
 
 - 📝 हर Resolution में बैठक-विवरण (quorum), Background, RESOLVED THAT और RESOLVED FURTHER THAT — सभी स्पष्ट रूप से दर्ज हों, ताकि निर्णय का आधार व दायरा दोनों साफ़ रहें।
-- ⚠️ Rule 30 के तहत conflict of interest को छुपाना नहीं, record करना है — किसी सदस्य का प्रत्यक्ष/अप्रत्यक्ष हित हो तो recusal स्पष्ट रूप से दर्ज करें।
+- ⚠️ Rule 30 officer के हित पर रोक है, सिर्फ़ recusal का नियम नहीं — हित हो तो पहले सौदे पर सवाल उठाएँ, और जो सदस्य अलग रहा उसे record में दर्ज करें।
 - 📄 Certified True Copy हमेशा original Minutes Book के अधीन होती है — यह Minutes Book की जगह नहीं लेती, सिर्फ़ तीसरे पक्ष को दिखाने के लिए एक प्रमाणित उद्धरण है।
 - ✅ Resolution बनाने से पहले जाँचें कि विषय committee की powers में है — वरना General Body/Registrar की मंज़ूरी अलग से लें।
 
@@ -92,10 +105,16 @@ Voting/Decision Record में Result (Unanimous/Majority), For, Against, Abst
 
 एक अच्छा Board Resolution समिति के फ़ैसले को कागज़ पर मज़बूत, प्रमाण-योग्य व विवाद-रहित बनाता है। इसका ढाँचा सरल है — बैठक-विवरण (quorum-सहित), फिर Background व दोनों RESOLVED clauses, financial मामलों में राशि-सीमा-अधिकारी, और conflict हो तो recusal का record। जब तीसरे पक्ष को चाहिए, तो मूल Minutes Book के अधीन एक Certified True Copy जारी करें। इन बुनियादी बातों का पालन करने वाली समिति के फ़ैसले हर ऑडिट व हर बैंक-विभाग जाँच में सहज पास होते हैं — क्योंकि तब हर निर्णय का साफ़, अधिकृत व प्रमाणित रिकॉर्ड मौजूद रहता है।
 
-> ✅ प्रस्ताव, कार्यवृत्त व वित्तीय-मंज़ूरी का रिकॉर्ड पारदर्शी व खोज-योग्य रखें — [SahakarLekha पर रजिस्टर करें](/register)।
+> ✅ प्रस्ताव, कार्यवृत्त व वित्तीय-मंज़ूरी का रिकॉर्ड पारदर्शी व खोज-योग्य रखें — [सहकार लेखा पर रजिस्टर करें](/register)।
 
 **जुड़ी पढ़ाई:** [हरियाणा सहकारी समिति अधिनियम 1984 व नियम 1989 गाइड](/blog/haryana-cooperative-act-1984-rules-1989-guide) · [सदस्यता आवेदन गाइड](/blog/haryana-cooperative-society-membership-application-guide) · [AGM की तैयारी](/blog/agm-preparation-checklist) · [समिति में आंतरिक नियंत्रण](/blog/internal-control-in-cooperatives)
 
 **जुड़े शब्द:** [Board Resolution](/glossary/board-resolution) · [Managing Committee](/glossary/managing-committee) · [Certified True Copy](/glossary/certified-true-copy) · [Rule 30](/glossary/rule-30) · [Quorum](/glossary/quorum) · [Minutes Book](/glossary/minutes-book)
 
-> 📘 नोट: यह जानकारी Haryana Co-operative Societies Act 1984 व Rules 1989 (जैसे Rule 23, Rule 30) के संदर्भ में सामान्य मार्गदर्शन है। सही शब्दावली, powers व प्रक्रिया अपनी society की registered bye-laws व विभागीय निर्देशों से पुष्टि करें; विशिष्ट मामले में विशेषज्ञ/ARCS से सलाह लें। Evidence Level A (शैक्षिक)।
+## स्रोत
+
+1. [The Haryana Co-operative Societies Act, 1984 (हरियाणा अधिनियम 22, 1984; अक्टूबर 2007 तक संशोधित) — सहकारिता मंत्रालय, भारत सरकार (PDF)](https://cooperation.gov.in/sites/default/files/inline-files/HARYANA-CO-OPERATIVE-SOCIETIES-ACT.pdf): धाराएँ 10, 25, 26 और 42। 18 अक्टूबर 2026 को इन धाराओं का पाठ पढ़ा। यही फ़ाइल [हरियाणा सहकारिता विभाग की साइट](https://coop.haryana.gov.in/sites/default/files/2025-12/fILE%201.pdf) पर भी है।
+2. [हरियाणा सहकारी समिति (संशोधन) अधिनियम, 2013 (हरियाणा अधिनियम 10, 2013) — हरियाणा राजपत्र, 10 मई 2013 (स्कैन PDF)](https://coop.haryana.gov.in/sites/default/files/2025-12/Notification%20dated%2010%20%2C%20May%202013%20in%20Haryana%20Co-operative%20Societies%20Act%2C%201984.pdf): धारा 25(3) में बदलाव (साल ख़त्म होने के 6 महीने के भीतर आम सभा; पैनल से auditor की नियुक्ति)। 18 अक्टूबर 2026 को सभी 10 पन्ने पढ़े।
+3. [The Haryana Co-operative Societies Rules, 1989 — Indian Kanoon पर पुनर्प्रकाशित पाठ](https://indiankanoon.org/doc/66802510/): नियम 10, 23, 24, 27, 28, 30 और 32। 18 अक्टूबर 2026 को पढ़ा (तृतीय-पक्ष प्रति)। **इन नियमों का [विभाग की स्कैन प्रति](https://coop.haryana.gov.in/sites/default/files/2025-12/The%20Haryana%20Co-operative%20Societies%20Rules%2C%201989.pdf) से मिलान बाक़ी है।**
+
+> 📘 **पद्धति नोट:** पुराने संस्करण में Rule 30 का सार अधूरा था — उसमें "दूसरे लेन-देन", छूट (निवेश, कर्ज़, कर्मचारी-आवास), वसूली में बिकी संपत्ति की ख़रीद पर रोक और 2 साल तक लागू रहने वाली बात नहीं थी। लेख यह भी जताता था कि हित होने पर recusal दर्ज करना काफ़ी है; नियम असल में हित रखने पर ही रोक लगाता है, इसलिए यह ठीक किया गया और Rules 27(b) व 28 जोड़े गए। Certified True Copy के लिए Section 42 और Rule 32 का असल तरीक़ा जोड़ा गया। General Body की भूमिका के उदाहरण (Rule 10, Rule 24, Section 25(3)) जोड़े गए। Resolution का ढाँचा (RESOLVED THAT, Financial Sanction का हिस्सा, voting record) अच्छी प्रथा के रूप में लिखा है — Act या Rules में ऐसा कोई तय प्रारूप हमें नहीं मिला। Quorum की संख्या bye-laws तय करते हैं, इसलिए वह यहाँ नहीं दी गई। 2013 के बाद अधिनियम में या 2019 के बाद Rules में कोई संशोधन हुआ हो, तो उसका पाठ हमने नहीं देखा।
