@@ -38,6 +38,8 @@ const BLOG_FILE = resolve(ROOT, 'src', 'content', 'blog', 'index.ts');
 const BLOG_DIR = resolve(ROOT, 'src', 'content', 'blog');
 const AUTHORS_FILE = resolve(ROOT, 'src', 'content', 'blog', 'authors.ts');
 const BLOG_CATEGORIES_FILE = resolve(ROOT, 'src', 'content', 'blog', 'categories.ts');
+const EDITORIAL_POLICY_FILE = resolve(ROOT, 'src', 'content', 'editorialPolicy.ts');
+const HINDI_DATE_FILE = resolve(ROOT, 'src', 'lib', 'hindiDate.ts');
 const GUIDE_DIR = resolve(ROOT, 'src', 'content', 'guide');
 const HELP_FILE = resolve(ROOT, 'src', 'content', 'help', 'index.ts');
 const COOKBOOK_FILE = resolve(ROOT, 'src', 'content', 'cookbook', 'index.ts');
@@ -276,6 +278,8 @@ async function loadData() {
     ['rel', RELATED_FILE, null], // whole module (edge maps + helpers), GOS-11
     ['authors', AUTHORS_FILE, null], // /author/<slug> profile pages (E-E-A-T) — AUTHORS + DEFAULT_AUTHOR_SLUG
     ['blogCats', BLOG_CATEGORIES_FILE, 'BLOG_CATEGORIES'], // /blog sections + /blog/category/<slug> hubs
+    ['policy', EDITORIAL_POLICY_FILE, null], // /editorial-policy text + the article trust note — same module as the pages
+    ['hindiDate', HINDI_DATE_FILE, 'formatHindiDate'],
   ];
   for (const [key, file, exportName] of jobs) {
     try {
@@ -530,6 +534,29 @@ function blogPages(DATA) {
     const hsrc = readFileSync(BLOG_FILE, 'utf-8');
     for (const hm of hsrc.matchAll(/slug:\s*'([^']+)'(?:(?!slug:)[\s\S])*?\n\s*title:\s*'((?:[^'\\]|\\.)*)'/g)) headings[hm[1]] = hm[2].replace(/\\'/g, "'");
   }
+  // trust fields (optional, declared right after `category:`): real review date + state
+  const reviewed = {};
+  const jurisdiction = {};
+  if (existsSync(BLOG_FILE)) {
+    const tsrc = readFileSync(BLOG_FILE, 'utf-8');
+    for (const m of tsrc.matchAll(/slug:\s*'([^']+)'(?:(?!slug:)[\s\S])*?\n\s*reviewed:\s*'([^']+)'/g)) reviewed[m[1]] = m[2];
+    for (const m of tsrc.matchAll(/slug:\s*'([^']+)'(?:(?!slug:)[\s\S])*?\n\s*jurisdiction:\s*'([^']+)'/g)) jurisdiction[m[1]] = m[2];
+  }
+  // The article trust note — same rule and words as TrustNote in src/pages/BlogPost.tsx.
+  const trustHtml = (slug) => {
+    const P = DATA.policy;
+    if (!P) return '';
+    const T = P.TRUST_NOTE;
+    const sensitive = P.TRUST_NOTE_CATEGORIES.includes(categories[slug]);
+    if (!jurisdiction[slug] && !reviewed[slug] && !sensitive) return '';
+    const fmt = DATA.hindiDate || ((d) => d);
+    let h = '';
+    if (jurisdiction[slug] === 'haryana') h += `<p><strong>${esc(T.haryanaBadge)}</strong> ${esc(T.haryana)}</p>`;
+    if (reviewed[slug]) h += `<p><strong>${esc(T.reviewedLabel)}: ${esc(fmt(reviewed[slug]))}</strong>। ${esc(T.reviewed)}</p>`;
+    else if (sensitive) h += `<p>${esc(T.notReviewed)}</p>`;
+    h += `<p><a href="${P.EDITORIAL_POLICY_PATH}">${esc(T.policyLink)}</a></p>`;
+    return `<aside class="sl-trust" aria-label="जानकारी के बारे में">${h}</aside>`;
+  };
   posts.sort((a, b) => (a.date < b.date ? 1 : -1));
 
   // Category groups, in BLOG_CATEGORIES order (src/content/blog/categories.ts — the same list the
@@ -632,7 +659,7 @@ function blogPages(DATA) {
         body = shell({
           crumbs: [['/blog', 'ब्लॉग'], ...(hub ? [[hub, categories[p.slug]]] : [])],
           current: heading,
-          html: `<h1>${esc(heading)}</h1>` + md(raw.replace(/^﻿?\s*#\s+.*(\r?\n)+/, '')) + helpLinks + registerCta(),
+          html: `<h1>${esc(heading)}</h1>` + trustHtml(p.slug) + md(raw.replace(/^﻿?\s*#\s+.*(\r?\n)+/, '')) + helpLinks + registerCta(),
         });
       }
     } catch { /* body optional */ }
@@ -656,6 +683,7 @@ function blogPages(DATA) {
           mainEntityOfPage: url,
           datePublished: p.date,
           dateModified: p.updated || p.date,
+          ...(jurisdiction[p.slug] === 'haryana' ? { spatialCoverage: { '@type': 'Place', name: 'Haryana, India' } } : {}),
           image: images[p.slug] ? `${SITE}${images[p.slug]}` : `${SITE}/og-image.png`,
           author: BLOG_AUTHOR,
           publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE, logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` } },
@@ -1350,6 +1378,31 @@ function staticExtraPages(DATA) {
         registerCta(),
     }),
   });
+
+  // संपादकीय व सुधार नीति — same text module as src/pages/EditorialPolicy.tsx.
+  if (DATA.policy) {
+    const P = DATA.policy;
+    const E = P.EDITORIAL_POLICY;
+    pages.push({
+      path: P.EDITORIAL_POLICY_PATH,
+      title: E.title,
+      description: E.description,
+      lastmod: '2026-10-18', // when this policy text last changed
+      jsonLd: [crumb([
+        { name: 'होम', item: `${SITE}/` },
+        { name: 'ब्लॉग', item: `${SITE}/blog` },
+        { name: E.h1, item: `${SITE}${P.EDITORIAL_POLICY_PATH}` },
+      ])],
+      body: shell({
+        crumbs: [['/blog', 'ब्लॉग']],
+        current: E.h1,
+        html:
+          `<h1>${esc(E.h1)}</h1><p>${esc(E.intro)}</p>` +
+          E.sections.map((s) => `<h2>${esc(s.heading)}</h2>` + s.paras.map((t) => `<p>${esc(t)}</p>`).join('')).join('') +
+          `<p><a href="/contact">ग़लती बताएँ: संपर्क पन्ना</a> · <a href="/author/sitaram">लेखक की प्रोफ़ाइल</a> · <a href="/blog">सभी लेख</a></p>`,
+      }),
+    });
+  }
 
   pages.push({
     path: '/pricing',

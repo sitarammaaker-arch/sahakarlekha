@@ -118,6 +118,22 @@ if (!/<meta name="robots" content="noindex/.test(nf)) errors.push('404.html miss
   for (const p of onHubs.keys()) if (!livePosts.has(p)) errors.push(`blog post ${p} is on a category hub but not on /blog`);
 }
 
+// Blog trust note (batch 2): crawlers see the same review date / "general information" note / state
+// badge as readers, every note links to the editorial policy, and that policy page is prerendered.
+{
+  const read = (rel) => (existsSync(resolve(DIST, rel)) ? readFileSync(resolve(DIST, rel), 'utf-8') : '');
+  if (!/<h1>संपादकीय व सुधार नीति<\/h1>/.test(read('editorial-policy/index.html'))) errors.push('editorial-policy/index.html missing or without its h1');
+  const reviewedPost = read('blog/haryana-cooperative-act-1984-rules-1989-guide/index.html');
+  if (!/class="sl-trust"[\s\S]*?अंतिम समीक्षा:[\s\S]*?हरियाणा[\s\S]*?href="\/editorial-policy"/.test(reviewedPost) && !/class="sl-trust"[\s\S]*?हरियाणा[\s\S]*?अंतिम समीक्षा:[\s\S]*?href="\/editorial-policy"/.test(reviewedPost)) {
+    errors.push('blog/haryana-cooperative-act-1984-rules-1989-guide: static trust note (review date + Haryana + policy link) missing');
+  }
+  const unreviewed = read('blog/tds-and-26q-for-societies/index.html');
+  if (!/class="sl-trust"[\s\S]*?सामान्य जानकारी[\s\S]*?href="\/editorial-policy"/.test(unreviewed) || /अंतिम समीक्षा:/.test(unreviewed)) {
+    errors.push('blog/tds-and-26q-for-societies: static "general information" note missing, or it claims a review');
+  }
+  if (/class="sl-trust"/.test(read('blog/debit-credit-and-double-entry/index.html'))) errors.push('blog/debit-credit-and-double-entry: trust note on a non-legal, non-state post');
+}
+
 // 3. L2 — sitemap ↔ files. Every <loc> must be a prerendered file whose canonical is that same URL and
 //    whose title is its own (not the homepage template's); no lastmod after today; no duplicate <loc>.
 //    Every prerendered page: a non-empty meta description and exactly ONE <h1> in its static body.

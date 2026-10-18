@@ -238,6 +238,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                 <li><Link to="/ask" className="text-primary font-medium hover:underline">Ask SahakarLekha / पूछें →</Link></li>
                 <li><Link to="/faq" className="text-muted-foreground hover:text-primary transition-colors">FAQ / सामान्य प्रश्न</Link></li>
                 <li><Link to="/contact" className="text-muted-foreground hover:text-primary transition-colors">Contact / संपर्क</Link></li>
+                <li><Link to="/editorial-policy" className="text-muted-foreground hover:text-primary transition-colors">Editorial Policy / संपादकीय नीति</Link></li>
                 <li><Link to="/privacy" className="text-muted-foreground hover:text-primary transition-colors">Privacy Policy / गोपनीयता</Link></li>
                 <li><Link to="/terms" className="text-muted-foreground hover:text-primary transition-colors">Terms / नियम एवं शर्तें</Link></li>
               </ul>

@@ -72,6 +72,7 @@ const BlogIndex = lazyWithRetry(() => import("./pages/BlogIndex"));
 const MemberPortal = lazyWithRetry(() => import("./pages/MemberPortal"));
 const BlogPost = lazyWithRetry(() => import("./pages/BlogPost"));
 const BlogCategory = lazyWithRetry(() => import("./pages/BlogCategory"));
+const EditorialPolicy = lazyWithRetry(() => import("./pages/EditorialPolicy"));
 const AuthorProfile = lazyWithRetry(() => import("./pages/AuthorProfile"));
 const Glossary = lazyWithRetry(() => import("./pages/Glossary"));
 const GlossaryTerm = lazyWithRetry(() => import("./pages/GlossaryTerm"));
@@ -322,6 +323,7 @@ const AppRoutes = () => {
       <Route path="/blog/category/:cat" element={<BlogCategory />} />
       <Route path="/blog/:slug" element={<BlogPost />} />
       <Route path="/author/:slug" element={<AuthorProfile />} />
+      <Route path="/editorial-policy" element={<EditorialPolicy />} />
       <Route path="/glossary" element={<Glossary />} />
       <Route path="/glossary/:slug" element={<GlossaryTerm />} />
       <Route path="/tools" element={<CalculatorHub />} />

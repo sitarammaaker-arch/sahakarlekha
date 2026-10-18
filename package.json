@@ -40,6 +40,7 @@
     "test:s4a-server-paths": "node scripts/test-s4a-server-paths.mjs",
     "test:private-noindex": "node scripts/private-noindex.mjs",
     "test:blog-search": "node scripts/test-blog-search.mjs",
+    "test:blog-trust": "node scripts/test-blog-trust.mjs",
     "test:calculator-links": "node scripts/test-calculator-links.mjs",
     "test:content-standards": "node scripts/test-content-standards.mjs",
     "test:downloads": "node scripts/test-downloads.mjs",

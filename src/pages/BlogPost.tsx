@@ -20,6 +20,7 @@ import { findPost, loadBlogRaw, readingMinutes, relatedPosts, publishedOrder, is
 import { staticSnapshotFor } from '@/lib/staticSnapshot';
 import { getAuthor, authorInitials } from '@/content/blog/authors';
 import { categoryHref } from '@/content/blog/categories';
+import { EDITORIAL_POLICY_PATH, TRUST_NOTE, TRUST_NOTE_CATEGORIES } from '@/content/editorialPolicy';
 import { incrementBlogView, fetchBlogViewCount, formatViews } from '@/lib/blogViews';
 import { guideForBlog } from '@/content/crossLinks';
 import { calculatorForArticle } from '@/content/calculators';
@@ -28,10 +29,44 @@ import { HELP_TASKS } from '@/content/help';
 import { ACCENTS, formatDate } from '@/components/blog/blogTheme';
 import {
   Home, ChevronRight, ChevronLeft, ChevronDown, Calendar, Clock, List, ArrowRight,
-  Share2, Check, Newspaper, Lightbulb, Eye, Link2,
+  Share2, Check, Newspaper, Lightbulb, Eye, Link2, ShieldCheck, Info,
 } from 'lucide-react';
+import type { BlogPost as BlogPostMeta } from '@/content/blog';
 
 const SITE = 'https://sahakarlekha.com';
+
+/**
+ * Trust note under the byline (same rule + words as the prerendered copy in prerender-guide.mjs):
+ * a state badge for state-specific posts, and on law / tax / scheme posts either the real
+ * "अंतिम समीक्षा" date or a "general information — confirm before acting" note. Both link to
+ * /editorial-policy, which explains what the review date means and how to report a mistake.
+ */
+const TrustNote: React.FC<{ post: BlogPostMeta }> = ({ post }) => {
+  const sensitive = TRUST_NOTE_CATEGORIES.includes(post.category);
+  if (!post.jurisdiction && !post.reviewed && !sensitive) return null;
+  return (
+    <div className="mt-5 rounded-lg border bg-muted/40 px-4 py-3 text-sm space-y-1.5">
+      {post.jurisdiction === 'haryana' && (
+        <p className="text-foreground/90">
+          <span className="mr-1.5 inline-flex items-center rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100 px-2 py-0.5 text-xs font-semibold">{TRUST_NOTE.haryanaBadge}</span>
+          {TRUST_NOTE.haryana}
+        </p>
+      )}
+      {post.reviewed ? (
+        <p className="flex gap-1.5 text-foreground/90">
+          <ShieldCheck className="h-4 w-4 flex-shrink-0 mt-0.5 text-primary" aria-hidden="true" />
+          <span><strong>{TRUST_NOTE.reviewedLabel}: {formatDate(post.reviewed)}</strong>। {TRUST_NOTE.reviewed}</span>
+        </p>
+      ) : sensitive ? (
+        <p className="flex gap-1.5 text-muted-foreground">
+          <Info className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+          <span>{TRUST_NOTE.notReviewed}</span>
+        </p>
+      ) : null}
+      <p><Link to={EDITORIAL_POLICY_PATH} className="text-xs font-medium text-primary hover:underline">{TRUST_NOTE.policyLink} →</Link></p>
+    </div>
+  );
+};
 
 /**
  * Pull a "## <heading>" section out of the markdown body. Returns the section's
@@ -286,6 +321,8 @@ const BlogPost: React.FC = () => {
       datePublished: post.date,
       dateModified: post.updated || post.date,
       articleSection: post.category,
+      // state-specific posts say where they apply (same as the prerendered BlogPosting)
+      ...(post.jurisdiction === 'haryana' ? { spatialCoverage: { '@type': 'Place', name: 'Haryana, India' } } : {}),
       keywords: post.tags.join(', '),
       author: { '@type': 'Person', name: author.name, jobTitle: author.designation, url: `${SITE}/author/${author.slug}`, ...(author.photo ? { image: `${SITE}${author.photo}` } : {}) },
       // Same shape as the prerendered BlogPosting (scripts/prerender-guide.mjs) — useDocumentMeta swaps
@@ -423,6 +460,7 @@ const BlogPost: React.FC = () => {
               <span className="inline-flex items-center gap-1 text-muted-foreground"><Eye className="h-4 w-4" /> {formatViews(views)} बार पढ़ा</span>
             )}
           </div>
+          <TrustNote post={post} />
         </div>
       </header>
 
