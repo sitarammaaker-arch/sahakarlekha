@@ -20,12 +20,14 @@ import type { Member } from '@/types';
 import type { ShareOpType } from '@/lib/shareOps';
 import { premiumCap as sharePremiumCap, premiumAllowed as isSharePremiumAllowed } from '@/lib/sharePremium';
 import { memberStatusLabel } from '@/lib/memberLifecycle';
-import { shareCapWarning, transferHoldingWarning, sharesHeldSince, canHoldShares, previousMarch31, refundLimitWarning } from '@/lib/members/shareRules';
+import { shareCapWarning, canHoldShares, previousMarch31, refundLimitWarning } from '@/lib/members/shareRules';
+import { shareHeldTwoYears, transferTwoYearWarning, REFUND_BASE_ACCOUNTS } from '@/lib/members/legal';
+import { isHaryana } from '@/lib/members/admission';
 import { useAuth } from '@/contexts/AuthContext';
 
 const ShareRegister: React.FC = () => {
   const { language } = useLanguage();
-  const { members, updateMember, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, society, updateSociety, vouchers, getTrialBalance } = useData();
+  const { members, updateMember, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, getMemberLedger, society, updateSociety, vouchers, getTrialBalance } = useData();
   const { toast } = useToast();
   // Member-audit M1 (D7): share actions post vouchers → `create`; register edits → `update`. The page used to show
   // every button to every role that could open it.
@@ -48,14 +50,18 @@ const ShareRegister: React.FC = () => {
   );
 
   const totalShares = approvedMembers.reduce((s, m) => s + (m.shareCount || 0), 0);
-  // M3: what the statutory share warnings need — total capital (s.6), and for r.18(3) the paid-up individual share
-  // capital (1102; Government share capital 1101 excluded) on the previous 31 March + the refunds since then.
+  // M3: what the statutory share warnings need — total capital (s.6), and for r.18(3) the paid-up share capital
+  // EXCLUDING Government contributions (stage C: 1102 individual + 1103 institutional; 1101 Government left out) on the
+  // previous 31 March + the refunds since then. These are HARYANA sections — other states get no such warning.
   const shareRules: ShareRuleCtx = {
+    haryana: isHaryana(society.state),
     totalCapital: approvedMembers.reduce((s, m) => s + (m.shareCapital || 0), 0),
+    // s.22 per share, oldest first (stage C): the amount of this member's shares held two years on the transfer date.
+    heldTwoYears: (memberId: string, date: string) => shareHeldTwoYears(getMemberLedger(memberId), date),
     refundCheck: (date: string, amount: number) => {
       const base = previousMarch31(date);
-      const row = getTrialBalance(base).find(b => b.account.id === '1102');
-      const paidUp = row ? Math.max(0, -(row.netBalance || 0)) : 0;
+      const tb = getTrialBalance(base);
+      const paidUp = REFUND_BASE_ACCOUNTS.reduce((sum, id) => { const row = tb.find(b => b.account.id === id); return sum + (row ? Math.max(0, -(row.netBalance || 0)) : 0); }, 0);
       const refunded = shareTxns.filter(t => t.type === 'refund' && t.date > base && t.date <= date).reduce((s, t) => s + t.amountOut, 0);
       return refundLimitWarning({ paidUpOnBaseDate: paidUp, refundedThisYear: refunded, thisRefund: amount, baseDate: base });
     },
@@ -423,7 +429,7 @@ const ShareRegister: React.FC = () => {
 };
 
 // M3: statutory share warnings (Haryana Act s.6 / s.22, Rules r.18(3)) — shown, never blocking.
-interface ShareRuleCtx { totalCapital: number; refundCheck: (date: string, amount: number) => string | null }
+interface ShareRuleCtx { haryana: boolean; totalCapital: number; heldTwoYears: (memberId: string, date: string) => number; refundCheck: (date: string, amount: number) => string | null }
 function RuleWarning({ text }: { text: string | null }) {
   if (!text) return null;
   return <p className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">⚠ {text} <span className="block opacity-80">फिर भी दर्ज कर सकते हैं — कारण narration / प्रस्ताव में लिखें।</span></p>;
@@ -440,7 +446,7 @@ function ShareTxnButton({ member, hi, kind, onSubmit, rules }: { member: Member;
   const overCap = isRefund && val > cap;
   const fmtC = (n: number) => n.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' });
   const btnLabel = isRefund ? (hi ? 'वापसी' : 'Refund') : (hi ? 'शेयर जोड़ें' : 'Add Shares');
-  const warning = !(val > 0) ? null : isRefund ? rules.refundCheck(date, val) : shareCapWarning(cap + val, rules.totalCapital + val);
+  const warning = !(val > 0) || !rules.haryana ? null : isRefund ? rules.refundCheck(date, val) : shareCapWarning(cap + val, rules.totalCapital + val);
   const title = isRefund ? (hi ? 'शेयर पूँजी वापसी' : 'Refund Share Capital') : (hi ? 'अतिरिक्त शेयर पूँजी' : 'Additional Share Capital');
   const help = isRefund
     ? (hi ? 'Dr शेयर पूँजी / Cr नकद-बैंक — मूल रसीद अपरिवर्तित रहेगी।' : 'Posts Dr Share Capital / Cr Cash-Bank; the original receipt stays intact.')
@@ -501,7 +507,7 @@ function ShareRefundPayableButtons({ member, hi, outstanding, onApprove, onPay, 
   const approving = open === 'approve';
   const limit = approving ? cap : outstanding;
   const close = () => { setOpen(null); setAmt(''); setResolution(''); };
-  const warning = approving && val > 0 ? rules.refundCheck(date, val) : null;
+  const warning = approving && val > 0 && rules.haryana ? rules.refundCheck(date, val) : null;
   const submit = () => {
     const done = approving ? onApprove(member.id, val, date, resolution) : onPay(member.id, val, mode, date);
     if (done) close();
@@ -652,10 +658,10 @@ function TransferShareButton({ member, members, hi, maxPremiumPct, onTransfer, r
   // M3: shares go only to a live (active / inactive, approved) member — never to a resigned, expelled or deceased one.
   const recipients = members.filter(m => m.id !== member.id && canHoldShares(m));
   const recipient = recipients.find(m => m.id === toId);
-  const warnings = [
-    val > 0 ? transferHoldingWarning(sharesHeldSince(member), date) : null,
+  const warnings = (rules.haryana ? [
+    val > 0 ? transferTwoYearWarning(val, rules.heldTwoYears(member.id, date)) : null,
     val > 0 && recipient ? shareCapWarning((recipient.shareCapital || 0) + val, rules.totalCapital) : null,
-  ].filter(Boolean) as string[];
+  ] : []).filter(Boolean) as string[];
   const fmtC = (n: number) => n.toLocaleString('hi-IN', { style: 'currency', currency: 'INR' });
 
   return (

@@ -74,13 +74,16 @@ export interface AdmissionClock {
 }
 
 /** The r.17 / s.16 clock of a pending application, or null when no receipt date is known. */
-export function admissionClock(receivedOn: string | undefined, today: string, opts: { societyType?: string } = {}): AdmissionClock | null {
+export function admissionClock(receivedOn: string | undefined, today: string, opts: { societyType?: string; producer?: boolean } = {}): AdmissionClock | null {
   if (!isIso(receivedOn) || !isIso(today)) return null;
   const days = Math.max(0, Math.round((parse(today) - parse(receivedOn)) / DAY));
   const decideBy = addOneMonth(receivedOn);
   const pacs = opts.societyType === 'pacs';
   const deemedOn = pacs ? iso(parse(receivedOn) + 60 * DAY) : undefined;
-  return { receivedOn, days, decideBy, overdue: today > decideBy, deemedOn, deemed: !!deemedOn && today >= deemedOn };
+  // Stage C: r.17's one-month limit is for "a co-operative society other than a producer society" (s.2(p)) — no
+  // overdue flag there. Producer status is the society's VERIFIED record (migration 125), never its type.
+  const producer = opts.producer === true;
+  return { receivedOn, days, decideBy, overdue: !producer && today > decideBy, deemedOn, deemed: !!deemedOn && today >= deemedOn };
 }
 
 /** The date an application was received: the recorded one, else (older rows) the joinDate the form stamped. */

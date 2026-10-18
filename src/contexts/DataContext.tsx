@@ -229,7 +229,7 @@ interface DataContextType {
 
   addMember: (data: Omit<Member, 'id'>, opts?: { quiet?: boolean; onSaved?: (m: Member) => void; onFailed?: () => void }) => Member;
   updateMember: (id: string, data: Partial<Member>, opts?: { onSaved?: () => void }) => boolean;
-  changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string, opts?: { effectiveDate?: string; resolutionNo?: string; resolutionDate?: string }) => boolean;
+  changeMemberStatus: (id: string, newStatus: MemberStatus, reason: string, opts?: { effectiveDate?: string; resolutionNo?: string; resolutionDate?: string; details?: Record<string, unknown> }) => boolean;
   deleteMember: (id: string) => void;
   uploadMemberPhoto: (id: string, file: File) => Promise<boolean>;
   removeMemberPhoto: (id: string) => Promise<boolean>;
@@ -446,6 +446,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const memberRow = (m: Record<string, any>) => {
     const base: Record<string, any> = splitAdmissionFields(identitySplitRef.current ? stripMemberPII(m) : m).base;
     for (const f of MEMBER_STATUS_EXTRA_FIELDS) delete base[f];   // M4: migration-117 columns ride their own update
+    delete base.statusDetails;   // stage C (migration 125): its own update in changeMemberStatus, never the base upsert
     for (const f of MEMBER_PROFILE_FIELDS) delete base[f];        // M5: migration-118 columns ride their own update
     for (const f of MEMBER_CONTACT_FIELDS) delete base[f];        // M6: migration-119 columns ride their own update
     delete base[MEMBER_PHOTO_FIELD];                              // M6: set only by uploadMemberPhoto / removeMemberPhoto
@@ -3445,7 +3446,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ECR-16 (member lifecycle): record a lifecycle transition (resign/expel/death/reactivate)
   // with reason + date. `status` (base column) is persisted reliably; the reason/date
   // metadata rides a targeted best-effort .update() so the change is safe pre-migration.
-  const changeMemberStatus = useCallback((id: string, newStatus: MemberStatus, reason: string, opts?: { effectiveDate?: string; resolutionNo?: string; resolutionDate?: string }): boolean => {
+  const changeMemberStatus = useCallback((id: string, newStatus: MemberStatus, reason: string, opts?: { effectiveDate?: string; resolutionNo?: string; resolutionDate?: string; details?: Record<string, unknown> }): boolean => {
     if (guardFYLocked()) return false;
     const current = membersRef.current.find(m => m.id === id);
     if (!current) return false;
@@ -3463,7 +3464,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const changedAt = opts?.effectiveDate || new Date().toISOString().split('T')[0];
     const resolutionNo = opts?.resolutionNo?.trim() || undefined;
     const resolutionDate = opts?.resolutionDate || undefined;
-    const updated: Member = { ...current, status: newStatus, statusReason: reason, statusChangedAt: changedAt, statusResolutionNo: resolutionNo, statusResolutionDate: resolutionDate };
+    const details = opts?.details && Object.keys(opts.details).length ? opts.details : undefined;
+    const updated: Member = { ...current, status: newStatus, statusReason: reason, statusChangedAt: changedAt, statusResolutionNo: resolutionNo, statusResolutionDate: resolutionDate, statusDetails: details };
     membersRef.current = membersRef.current.map(m => m.id === id ? updated : m);
     setMembersState(prev => prev.map(m => m.id === id ? updated : m));
     // Persist status (base column) reliably — roll back on failure (RULE 1). Everything else (the
@@ -3490,7 +3492,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportError('write-partial', e2.message, { at: 'member status resolution' });
         if (resolutionNo || resolutionDate) toastRef.current({ title: 'स्थिति सेव हुई — पर प्रस्ताव संख्या नहीं', description: `प्रस्ताव संख्या/तिथि सेव नहीं हुई (${e2.message})। Migration 117 चलाएँ।`, duration: 10000 });
       });
-      emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { status: current.status, statusChangedAt: current.statusChangedAt ?? null }, after: { status: newStatus, statusChangedAt: changedAt, resolutionNo: resolutionNo ?? null, resolutionDate: resolutionDate ?? null }, reason });
+      // Stage C (migration 125): the facts behind the cessation (r.14(2) proof, r.19 count, r.18 facts) — own update.
+      supabase.from('members').update({ statusDetails: details ?? null }).eq('id', id).then(({ error: e3 }) => {
+        if (!e3) return;
+        reportError('write-partial', e3.message, { at: 'member status details' });
+        if (details) toastRef.current({ title: 'स्थिति सेव हुई — पर विवरण नहीं', description: `अयोग्यता का प्रमाण / आम सभा की गिनती / त्यागपत्र का विवरण सेव नहीं हुआ (${e3.message})। Migration 125 चलाएँ, फिर स्थिति दोबारा दर्ज करें।`, duration: 10000 });
+      });
+      emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { status: current.status, statusChangedAt: current.statusChangedAt ?? null }, after: { status: newStatus, statusChangedAt: changedAt, resolutionNo: resolutionNo ?? null, resolutionDate: resolutionDate ?? null, details: details ?? null }, reason });
       toastRef.current({ title: '✅ सदस्य स्थिति अपडेट', description: `${current.name}: ${current.status} → ${newStatus}`, variant: 'default', duration: 6000 });
     });
     return true;

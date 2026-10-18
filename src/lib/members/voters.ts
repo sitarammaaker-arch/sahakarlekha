@@ -23,7 +23,7 @@ type L = { id: string; loanNo: string; memberId: string; amount: number; repaidA
 type K = { id: string; memberId: string; status: string; dueDate?: string; outstandingAmount?: number; drawnAmount?: number; repaidAmount?: number };
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-const EXIT = new Set(['resigned', 'expelled', 'deceased']);
+const EXIT = new Set(['resigned', 'expelled', 'deceased', 'disqualified']);
 
 /** Overdue dues of each member on `asOf` (loans + KCC), memberId → { amount, items }. */
 export function overdueByMember(loans: readonly L[], kcc: readonly K[], asOf: string): Map<string, { amount: number; items: string[] }> {
@@ -49,7 +49,7 @@ export const EXCLUSION_LABEL: Record<ExclusionReason, string> = {
   not_approved: 'आवेदन स्वीकृत नहीं',
   nominal: 'नाममात्र / सहयोगी सदस्य — मत का अधिकार नहीं (धारा 18/20)',
   not_yet_member: 'उस तिथि तक सदस्य नहीं बने थे',
-  ceased: 'सदस्यता समाप्त (त्यागपत्र/निष्कासन/मृत्यु)',
+  ceased: 'सदस्यता समाप्त (त्यागपत्र/निष्कासन/मृत्यु/अयोग्यता)',
   defaulter: 'बक़ायादार — मत का अधिकार नहीं (धारा 20(d))',
 };
 

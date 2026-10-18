@@ -44,6 +44,11 @@ var society = {
     internal("fyUnlockRequestedBy", "FY Unlock Requested By", "\u0905\u0928\u0932\u0949\u0915 \u0905\u0928\u0941\u0930\u094B\u0927 \u0926\u094D\u0935\u093E\u0930\u093E"),
     internal("storageLossNormPct", "Storage Loss Norm %", "\u092D\u0902\u0921\u093E\u0930\u0923 \u0939\u093E\u0928\u093F \u092E\u093E\u0928\u0915 %", { type: "number" }),
     internal("maxSharePremiumPercent", "Max Share Premium %", "\u0905\u0927\u093F\u0915\u0924\u092E \u0936\u0947\u092F\u0930 \u092A\u094D\u0930\u0940\u092E\u093F\u092F\u092E %", { type: "number" }),
+    // Stage C (migration 125): liability type + producer status, each with its proof.
+    internal("liabilityType", "Liability Type", "\u0926\u093E\u092F\u093F\u0924\u094D\u0935 \u0915\u093E \u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
+    internal("liabilityEvidence", "Liability Proof", "\u0926\u093E\u092F\u093F\u0924\u094D\u0935 \u0915\u093E \u092A\u094D\u0930\u092E\u093E\u0923"),
+    internal("producerSociety", "Producer Society", "\u0909\u0924\u094D\u092A\u093E\u0926\u0915 \u0938\u092E\u093F\u0924\u093F", { type: "boolean" }),
+    internal("producerEvidence", "Producer Proof", "\u0909\u0924\u094D\u092A\u093E\u0926\u0915 \u0938\u092E\u093F\u0924\u093F \u0915\u093E \u092A\u094D\u0930\u092E\u093E\u0923"),
     internal("notificationChannels", "Notification Channels", "\u0938\u0942\u091A\u0928\u093E \u091A\u0948\u0928\u0932", { type: "json" }),
     internal("plan", "Plan", "\u092F\u094B\u091C\u0928\u093E", { type: "enum" }),
     internal("plan_expires_at", "Plan Expires", "\u092F\u094B\u091C\u0928\u093E \u0938\u092E\u093E\u092A\u094D\u0924\u093F", { type: "date" }),
@@ -330,6 +335,8 @@ var member = {
     // M6 correspondence address + photo link (migration 119). The photo FILE lives in the 'member-photos' bucket.
     internal2("correspondenceAddress", "Correspondence Address", "\u092A\u0924\u094D\u0930\u093E\u091A\u093E\u0930 \u0915\u093E \u092A\u0924\u093E", { piiClass: "contact" }),
     internal2("photoPath", "Photo (storage path)", "\u092B\u093C\u094B\u091F\u094B (\u0938\u094D\u091F\u094B\u0930\u0947\u091C \u092A\u0925)"),
+    // Stage C (migration 125): the facts behind a cessation — r.14(2) proof, r.19 GM count, r.18 withdrawal facts.
+    internal2("statusDetails", "Status Details", "\u0938\u094D\u0925\u093F\u0924\u093F \u0935\u093F\u0935\u0930\u0923", { type: "json" }),
     c2("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false }),
     internal2("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]

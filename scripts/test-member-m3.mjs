@@ -55,10 +55,10 @@ ok(fn('purchaseShareCapital').indexOf('if (!canHoldShares(member))') > 0 && fn('
 ok(fn('transferShareCapital').indexOf('if (!canHoldShares(to))') > 0 && fn('transferShareCapital').indexOf('if (!canHoldShares(to))') < fn('transferShareCapital').indexOf('addVoucher('), 'transfer refused to a non-live recipient, before any voucher');
 
 const sr = read('src/pages/ShareRegister.tsx');
-ok(sr.includes("getTrialBalance(base).find(b => b.account.id === '1102')") && sr.includes("t.type === 'refund' && t.date > base && t.date <= date"), 'r.18(3) base = 1102 on the previous 31 March, refunds since');
+ok(sr.includes("REFUND_BASE_ACCOUNTS.reduce(") && sr.includes("t.type === 'refund' && t.date > base && t.date <= date"), 'r.18(3) base = share capital excl. Government (1102 + 1103) on the previous 31 March, refunds since');
 ok(sr.includes('shareCapWarning(cap + val, rules.totalCapital + val)') && sr.includes('rules.refundCheck(date, val)'), 'purchase / refund dialogs warn');
-ok(sr.includes('const warning = approving && val > 0 ? rules.refundCheck(date, val) : null;'), 'approve-refund warns');
-ok(sr.includes('members.filter(m => m.id !== member.id && canHoldShares(m))') && sr.includes('transferHoldingWarning(sharesHeldSince(member), date)'), 'transfer: live recipients only + two-year warning');
+ok(sr.includes('const warning = approving && val > 0 && rules.haryana ? rules.refundCheck(date, val) : null;'), 'approve-refund warns (Haryana societies)');
+ok(sr.includes('members.filter(m => m.id !== member.id && canHoldShares(m))') && sr.includes('transferTwoYearWarning(val, rules.heldTwoYears(member.id, date))'), 'transfer: live recipients only + two-year warning (stage C: per share, oldest first)');
 ok(sr.includes('{canHoldShares(m) && <ShareTxnButton member={m} hi={hi} kind="purchase"'), 'no "add shares" for an exited member');
 ok(/<Button disabled=\{!\(val > 0\) \|\| overCap\} onClick=\{\(\) => \{ onSubmit/.test(sr), 'warnings never disable the post button');
 

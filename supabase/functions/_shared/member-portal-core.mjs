@@ -18,7 +18,7 @@ export const MEMBER_EMAIL_DOMAIN = 'm.sahakarlekha.com';
 export const PIN_LENGTH = 6;
 export const ACTIONS = ['list', 'issue', 'reset_pin', 'revoke'];
 
-const EXITED = new Set(['resigned', 'expelled', 'deceased']);
+const EXITED = new Set(['resigned', 'expelled', 'deceased', 'disqualified']);
 const PORTAL_PLANS = new Set(['plus', 'pro', 'enterprise', 'legacy', 'trial']);
 const PORTAL_STATUSES = new Set(['active', 'trialing', 'grace']);
 

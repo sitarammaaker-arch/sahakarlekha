@@ -21,7 +21,7 @@ const isIso = (d?: string): d is string => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Statuses that end membership (r.22(c) date of ceasing). */
-export const EXIT_STATUSES: MemberStatus[] = ['resigned', 'expelled', 'deceased'];
+export const EXIT_STATUSES: MemberStatus[] = ['resigned', 'expelled', 'deceased', 'disqualified'];
 export const isExit = (s?: string) => EXIT_STATUSES.includes(s as MemberStatus);
 
 /** Same day, N months later (clamped to the month's end). */

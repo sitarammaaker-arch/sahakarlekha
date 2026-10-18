@@ -19,7 +19,8 @@ export type AccountType = 'asset' | 'liability' | 'income' | 'expense' | 'equity
 // ECR-16: member lifecycle. 'active'/'inactive' kept for backward-compat; resigned/
 // expelled/deceased are the exit states (all !== 'active' ⇒ auto-excluded from dividend
 // & active counts). Deceased is terminal (shares pass to nominee via a separate flow).
-export type MemberStatus = 'active' | 'inactive' | 'resigned' | 'expelled' | 'deceased';
+// 'disqualified' (stage C, Rules 1989 r.14(2)): deemed to have ceased from the date the disqualification was incurred.
+export type MemberStatus = 'active' | 'inactive' | 'resigned' | 'expelled' | 'deceased' | 'disqualified';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type CasteCategory = 'General' | 'Backward Class' | 'Schedule Caste' | 'Schedule Tribe';
 
@@ -193,6 +194,8 @@ export interface Member {
   statusChangedAt?: string;   // ECR-16: ISO date of the last lifecycle change (M4: the EFFECTIVE date — r.22(c) date of ceasing)
   statusResolutionNo?: string;    // M4 (migration 117): resolution behind the change — r.19 GM resolution for expulsion, Board for withdrawal
   statusResolutionDate?: string;  // M4 (migration 117): date of that resolution
+  /** Stage C (migration 125): the facts behind a cessation — r.14(2) ground + proof, r.19 GM count, r.18 withdrawal. */
+  statusDetails?: Record<string, unknown>;
   creditLimit?: number;   // Consumer C3 — max member-store credit outstanding (0/undefined = no cap; POS warns, never blocks)
   // Share Register fields
   shareCertNo?: string;
@@ -1017,6 +1020,12 @@ export interface SocietySettings {
   financialYear: string;
   financialYearStart: string;
   societyType?: SocietyType;
+  /** Stage C (migration 125): limited / unlimited liability — from the registration certificate or registered bye-laws. */
+  liabilityType?: 'limited' | 'unlimited';
+  liabilityEvidence?: string;
+  /** Stage C (migration 125): a producer society under Act s.2(p) — set only when verified against the registration. */
+  producerSociety?: boolean;
+  producerEvidence?: string;
   previousFinancialYear?: string;
   previousYearBalances?: Record<string, number>; // accountId → amount (positive = debit, negative = credit)
   previousYearIE?: {            // Saved at FY rollover — I&E comparison column

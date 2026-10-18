@@ -5,14 +5,15 @@
 import type { MemberStatus } from '@/types';
 
 /** The five lifecycle states, in canonical order. */
-export const MEMBER_STATUSES: MemberStatus[] = ['active', 'inactive', 'resigned', 'expelled', 'deceased'];
+export const MEMBER_STATUSES: MemberStatus[] = ['active', 'inactive', 'resigned', 'expelled', 'deceased', 'disqualified'];
 
 /**
  * Valid lifecycle transition? No self-transition; 'deceased' is terminal (shares pass to a nominee
  * via a separate flow). Every other move between distinct states is allowed.
  */
 export function canTransitionMember(from: MemberStatus, to: MemberStatus): boolean {
-  return from !== to && from !== 'deceased' && MEMBER_STATUSES.includes(to);
+  // 'disqualified' is terminal too (r.14(2)): a person who later becomes eligible again applies afresh.
+  return from !== to && from !== 'deceased' && from !== 'disqualified' && MEMBER_STATUSES.includes(to);
 }
 
 /** Is a member currently active (counts toward quorum, dividends, eligibility)? */
@@ -30,6 +31,7 @@ export const MEMBER_STATUS_LABEL: Record<MemberStatus, { hi: string; en: string 
   resigned: { hi: 'त्यागपत्र', en: 'Resigned' },
   expelled: { hi: 'निष्कासित', en: 'Expelled' },
   deceased: { hi: 'मृत', en: 'Deceased' },
+  disqualified: { hi: 'अयोग्य (नियम 14)', en: 'Disqualified (r.14)' },
 };
 
 export function memberStatusLabel(status: MemberStatus | undefined, hi = false): string {

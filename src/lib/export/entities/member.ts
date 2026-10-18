@@ -123,6 +123,8 @@ const member: EntityDescriptor = {
     // M6 correspondence address + photo link (migration 119). The photo FILE lives in the 'member-photos' bucket.
     internal('correspondenceAddress', 'Correspondence Address', 'पत्राचार का पता', { piiClass: 'contact' }),
     internal('photoPath', 'Photo (storage path)', 'फ़ोटो (स्टोरेज पथ)'),
+    // Stage C (migration 125): the facts behind a cessation — r.14(2) proof, r.19 GM count, r.18 withdrawal facts.
+    internal('statusDetails', 'Status Details', 'स्थिति विवरण', { type: 'json' }),
     c('isDeleted', 'Deleted', 'हटाया गया', { type: 'boolean', defaultVisible: false }),
     internal('createdAt', 'Created At', 'निर्माण समय', { type: 'date' }),
   ],

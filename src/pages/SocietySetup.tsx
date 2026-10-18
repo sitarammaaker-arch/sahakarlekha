@@ -123,6 +123,11 @@ const SocietySetup: React.FC = () => {
     bankIfsc: society.bankIfsc || '',
     bankBranch: society.bankBranch || '',
     upiId: society.upiId || '',
+    // Stage C (migration 125): recorded with proof — never inferred from the name or the society type.
+    liabilityType: (society.liabilityType || '') as '' | 'limited' | 'unlimited',
+    liabilityEvidence: society.liabilityEvidence || '',
+    producerSociety: society.producerSociety ?? false,
+    producerEvidence: society.producerEvidence || '',
   });
 
   // T-14 (ADR-0002): gate the maintenance-GST block on the `housing` CAPABILITY, not the type literal.
@@ -157,8 +162,19 @@ const SocietySetup: React.FC = () => {
   }, [accounts, society.previousYearBalances]);
 
   const handleSaveBasic = () => {
+    const hiL = language === 'hi';
+    // Stage C: a liability type / producer status is accepted only with its proof (certificate or registered bye-laws).
+    if (form.liabilityType && !form.liabilityEvidence.trim()) {
+      toast({ title: hiL ? 'दायित्व-प्रकार का प्रमाण लिखें' : 'Add the proof of the liability type', description: hiL ? 'पंजीकरण प्रमाणपत्र या पंजीकृत उपनियम का संदर्भ (संख्या/तिथि/उपनियम क्रमांक)।' : 'Registration certificate or registered bye-law reference.', variant: 'destructive' });
+      return;
+    }
+    if (form.producerSociety && !form.producerEvidence.trim()) {
+      toast({ title: hiL ? 'Producer समिति का प्रमाण लिखें' : 'Add the proof of producer status', description: hiL ? 'धारा 2(p) की परिभाषा और पंजीकरण/उपनियम के उद्देश्य का संदर्भ।' : 'Act s.2(p) and the registration / bye-law objects reference.', variant: 'destructive' });
+      return;
+    }
+    const { liabilityType, ...rest } = form;
     // F1: "saved" only once the cloud save really landed (refusal / failure already toast red).
-    updateSociety(form, { onSaved: () => {
+    updateSociety({ ...rest, liabilityType: liabilityType || undefined, liabilityEvidence: form.liabilityEvidence.trim() || undefined, producerEvidence: form.producerEvidence.trim() || undefined }, { onSaved: () => {
       toast({
         title: language === 'hi' ? 'सहेजा गया' : 'Saved',
         description: language === 'hi' ? 'समिति विवरण अपडेट हो गया' : 'Society details updated successfully',
@@ -571,6 +587,33 @@ const SocietySetup: React.FC = () => {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              {/* Stage C (migration 125): liability type + producer status, each with its proof */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 rounded-md border p-4">
+                <div className="space-y-2">
+                  <Label>{language === 'hi' ? 'दायित्व का प्रकार' : 'Liability type'}</Label>
+                  <Select value={form.liabilityType || 'unset'} onValueChange={v => setForm(f => ({ ...f, liabilityType: (v === 'unset' ? '' : v) as '' | 'limited' | 'unlimited' }))}>
+                    <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unset">{language === 'hi' ? 'दर्ज नहीं' : 'Not recorded'}</SelectItem>
+                      <SelectItem value="limited">{language === 'hi' ? 'सीमित दायित्व (Limited)' : 'Limited liability'}</SelectItem>
+                      <SelectItem value="unlimited">{language === 'hi' ? 'असीमित दायित्व (Unlimited)' : 'Unlimited liability'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input value={form.liabilityEvidence} onChange={e => setForm(f => ({ ...f, liabilityEvidence: e.target.value }))} className="h-11"
+                    placeholder={language === 'hi' ? 'प्रमाण: पंजीकरण प्रमाणपत्र सं./तिथि या उपनियम क्रमांक' : 'Proof: registration certificate no./date or bye-law clause'} />
+                  <p className="text-xs text-muted-foreground">{language === 'hi' ? 'त्यागपत्र/शेयर वापसी (नियम 18) और मृत्यु पर शेयर (धारा 23) इसी से तय होते हैं। नाम में "Ltd." होने से अपने-आप नहीं माना जाता।' : 'Withdrawal / share refund (r.18) and shares on death (s.23) depend on it. Never assumed from "Ltd." in the name.'}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <input type="checkbox" checked={form.producerSociety} onChange={e => setForm(f => ({ ...f, producerSociety: e.target.checked }))} />
+                    {language === 'hi' ? 'Producer समिति (धारा 2(p))' : 'Producer society (s.2(p))'}
+                  </Label>
+                  <Input value={form.producerEvidence} onChange={e => setForm(f => ({ ...f, producerEvidence: e.target.value }))} className="h-11" disabled={!form.producerSociety}
+                    placeholder={language === 'hi' ? 'प्रमाण: पंजीकरण / उपनियम के उद्देश्य का संदर्भ' : 'Proof: registration / bye-law objects reference'} />
+                  <p className="text-xs text-muted-foreground">{language === 'hi' ? 'धारा 2(p): सदस्यों की सामूहिक संपत्ति के रूप में वस्तुओं का उत्पादन व निपटान (श्रम का सामूहिक निपटान भी)। Dairy/Marketing नाम से अपने-आप नहीं माना जाता — पंजीकरण से जाँचकर ही टिक करें। इससे नियम 17 की 1-माह सीमा और धारा 114(1)(c) की अपील लागू नहीं होती।' : 's.2(p): producing and disposing of goods as collective property (incl. collective disposal of labour). Not assumed from a dairy/marketing name — tick only after checking the registration. r.17 and s.114(1)(c) then do not apply.'}</p>
                 </div>
               </div>
 

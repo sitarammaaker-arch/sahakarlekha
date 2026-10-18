@@ -3607,3 +3607,12 @@ alter table members add column if not exists "nomineeFatherName" text;
 create unique index if not exists members_society_memberid_live_uq
   on members (society_id, "memberId")
   where not coalesce("isDeleted", false) and coalesce("memberId", '') <> '';
+
+-- ── Member legal fields (migration 125, re-audit stage C) ──────────────────────────────────────────────────────────
+-- Liability type and producer-society status are recorded with their proof (certificate / registered bye-laws) —
+-- never inferred from the society's name or type. statusDetails: the facts behind a cessation (r.14(2), r.19, r.18).
+alter table society_settings add column if not exists "liabilityType" text;
+alter table society_settings add column if not exists "liabilityEvidence" text;
+alter table society_settings add column if not exists "producerSociety" boolean;
+alter table society_settings add column if not exists "producerEvidence" text;
+alter table members add column if not exists "statusDetails" jsonb;

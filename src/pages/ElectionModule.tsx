@@ -18,6 +18,8 @@ import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName } from '@/lib/pdf';
 import { electionSelect, electionInsert, electionUpdate } from '@/lib/supabaseService';
+import { voterRoll } from '@/lib/members/voters';
+import { candidateDisqualifications, electionResultIssues } from '@/lib/members/legal';
 
 type ElectionStatus = 'upcoming' | 'ongoing' | 'completed';
 type PostType = 'president' | 'vice_president' | 'secretary' | 'treasurer' | 'director' | 'other';
@@ -62,7 +64,7 @@ const statusColor: Record<ElectionStatus, string> = {
 };
 
 export default function ElectionModule() {
-  const { members, society } = useData();
+  const { members, society, loans, kccLoans } = useData();
   const { user } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
@@ -88,11 +90,20 @@ export default function ElectionModule() {
     });
   }, [societyId]);
 
-  const activeMembers = useMemo(() => members.filter(m => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved')), [members]);
+  // Stage C: voters and candidates come from the SAME roll as the Voters List (voters.ts — approved, joined by the
+  // election date, not ceased, not associate/nominal, not in default), as on the election date. r.27(a): a defaulter
+  // cannot stand for the committee, so the candidate picker offers voters only.
+  const rollDate = form.electionDate || new Date().toISOString().split('T')[0];
+  const roll = useMemo(() => voterRoll(members, loans, kccLoans, rollDate), [members, loans, kccLoans, rollDate]);
+  const activeMembers = roll.voters;
+  const candidateIssues = candidateDisqualifications(candidates.map(c => c.memberId).filter(id => id && id !== '__none__'), roll);
   const nextNo = () => `ELECT-${new Date().getFullYear()}-${String(elections.length + 1).padStart(3, '0')}`;
 
   const handleCreate = async () => {
-    if (!form.title || !form.electionDate) return;
+    if (!form.title || !form.electionDate) {
+      toast({ title: hi ? 'शीर्षक और चुनाव तिथि भरें' : 'Enter the title and election date', variant: 'destructive' });
+      return;
+    }
     const now = new Date().toISOString().split('T')[0];
     const status: ElectionStatus = form.electionDate > now ? 'upcoming' : form.electionDate === now ? 'ongoing' : 'completed';
     const election: Election & { society_id: string } = {
@@ -104,7 +115,7 @@ export default function ElectionModule() {
       nominationDeadline: form.nominationDeadline,
       status,
       candidates: candidates.filter(c => c.name.trim()).map((c, i) => ({ id: `c_${i}`, name: c.name, memberId: c.memberId, votes: 0 })),
-      totalVoters: parseInt(form.totalVoters) || activeMembers.length,
+      totalVoters: parseInt(form.totalVoters) || roll.voters.length,
       votesCast: 0,
       remarks: form.remarks,
       createdAt: new Date().toISOString(),
@@ -114,7 +125,7 @@ export default function ElectionModule() {
 
     const { error } = await electionInsert(election);
     if (error) {
-      toast({ title: 'Save failed', description: error, variant: 'destructive' }); return;
+      toast({ title: hi ? 'चुनाव सेव नहीं हुआ' : 'Save failed', description: error, variant: 'destructive', duration: 10000 }); return;
     }
     setElections(prev => [election, ...prev]);
     setShowDialog(false);
@@ -124,12 +135,15 @@ export default function ElectionModule() {
   };
 
   const handleSaveVotes = async (electionId: string, updatedCandidates: Candidate[], votesCast: number) => {
-    const winner = [...updatedCandidates].sort((a, b) => b.votes - a.votes)[0];
+    const sorted = [...updatedCandidates].sort((a, b) => b.votes - a.votes);
+    // Stage C: a tie for the top place names no winner — it is decided under the bye-laws / election rules.
+    const tie = sorted.length > 1 && sorted[0].votes > 0 && sorted[0].votes === sorted[1].votes;
+    const winner = tie ? undefined : sorted[0];
     const updates = { candidates: updatedCandidates, votesCast, status: 'completed' as ElectionStatus, winnerId: winner?.id };
 
     const { error } = await electionUpdate(electionId, updates);
     if (error) {
-      toast({ title: 'Save failed', description: error, variant: 'destructive' }); return;
+      toast({ title: hi ? 'परिणाम सेव नहीं हुआ' : 'Save failed', description: error, variant: 'destructive', duration: 10000 }); return;
     }
     setElections(prev => prev.map(e => e.id !== electionId ? e : { ...e, ...updates }));
     setShowVoteDialog(null);
@@ -281,7 +295,8 @@ export default function ElectionModule() {
               <div><Label>{hi ? 'नामांकन अंतिम तिथि' : 'Nomination Deadline'}</Label>
                 <Input type="date" value={form.nominationDeadline} onChange={e => setForm(p => ({ ...p, nominationDeadline: e.target.value }))} /></div>
               <div><Label>{hi ? 'कुल मतदाता' : 'Total Voters'}</Label>
-                <Input type="number" value={form.totalVoters} onChange={e => setForm(p => ({ ...p, totalVoters: e.target.value }))} placeholder={String(activeMembers.length)} /></div>
+                <Input type="number" value={form.totalVoters} onChange={e => setForm(p => ({ ...p, totalVoters: e.target.value }))} placeholder={String(roll.voters.length)} />
+                <p className="mt-0.5 text-[11px] text-muted-foreground">{hi ? `मतदाता सूची (${rollDate.split('-').reverse().join('/')}): ${roll.voters.length} पात्र, ${roll.excluded.length} बाहर` : `Voters roll (${rollDate}): ${roll.voters.length} eligible, ${roll.excluded.length} excluded`}</p></div>
             </div>
             <div>
               <Label className="mb-2 block">{hi ? 'उम्मीदवार' : 'Candidates'}</Label>
@@ -298,6 +313,12 @@ export default function ElectionModule() {
                   {candidates.length > 1 && <Button size="sm" variant="ghost" onClick={() => setCandidates(candidates.filter((_, j) => j !== i))}>✕</Button>}
                 </div>
               ))}
+              {candidateIssues.map(ci => (
+                <p key={ci.id} className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">⚠ {ci.name}: {ci.reason}</p>
+              ))}
+              <p className="mb-2 text-[11px] text-muted-foreground">{hi
+                ? 'सूची में केवल पात्र मतदाता हैं (नियम 27(a): बक़ायेदार उम्मीदवार नहीं हो सकता)। नियम 27 की बाकी शर्तें — ठेके में हित, समान व्यापार, सज़ा, D-श्रेणी समिति, वेतनभोगी कर्मचारी — नामांकन जाँच में हाथ से देखें।'
+                : 'Only eligible voters are listed (r.27(a): a defaulter cannot stand). Check the rest of r.27 — contract interest, same trade, conviction, D-class society, paid employee — at scrutiny.'}</p>
               <Button size="sm" variant="outline" onClick={() => setCandidates([...candidates, { name: '', memberId: '' }])}>
                 <Plus className="h-3 w-3 mr-1" />{hi ? 'उम्मीदवार जोड़ें' : 'Add Candidate'}
               </Button>
@@ -328,6 +349,7 @@ function VoteEntryDialog({ election, hi, onSave, onClose }: {
   const [candidates, setCandidates] = useState<Candidate[]>(election.candidates.map(c => ({ ...c })));
   const [votesCast, setVotesCast] = useState(String(election.votesCast || ''));
   const totalVotes = candidates.reduce((s, c) => s + c.votes, 0);
+  const issues = electionResultIssues(candidates.map(c => c.votes), parseInt(votesCast) || totalVotes, election.totalVoters || 0);
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -345,6 +367,7 @@ function VoteEntryDialog({ election, hi, onSave, onClose }: {
             </div>
           ))}
           <p className="text-xs text-muted-foreground">{hi ? 'कुल:' : 'Total:'} {totalVotes}</p>
+          {issues.map(w => <p key={w} className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">⚠ {w}</p>)}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>{hi ? 'रद्द' : 'Cancel'}</Button>
             <Button onClick={() => onSave(election.id, candidates, parseInt(votesCast) || totalVotes)}>
