@@ -426,6 +426,7 @@
     "test:member-stage-c": "node scripts/test-member-stage-c.mjs",
     "test:member-stage-d": "node scripts/test-member-stage-d.mjs",
     "test:member-final": "node scripts/test-member-final.mjs",
+    "test:form1-pdf": "node scripts/test-form1-pdf.mjs",
     "test:member-leftovers": "node scripts/test-member-leftovers.mjs",
     "test:opening-difference": "node scripts/test-opening-difference.mjs"
   },
