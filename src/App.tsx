@@ -71,6 +71,7 @@ const BlogIndex = lazyWithRetry(() => import("./pages/BlogIndex"));
 // Member Portal S3 — the member's own login + read-only dashboard (outside staff auth).
 const MemberPortal = lazyWithRetry(() => import("./pages/MemberPortal"));
 const BlogPost = lazyWithRetry(() => import("./pages/BlogPost"));
+const BlogCategory = lazyWithRetry(() => import("./pages/BlogCategory"));
 const AuthorProfile = lazyWithRetry(() => import("./pages/AuthorProfile"));
 const Glossary = lazyWithRetry(() => import("./pages/Glossary"));
 const GlossaryTerm = lazyWithRetry(() => import("./pages/GlossaryTerm"));
@@ -318,6 +319,7 @@ const AppRoutes = () => {
       <Route path="/member/:societyId" element={<MemberPortal />} />
       <Route path="/sadasya/:societyId" element={<SadasyaRedirect />} />
       <Route path="/blog" element={<BlogIndex />} />
+      <Route path="/blog/category/:cat" element={<BlogCategory />} />
       <Route path="/blog/:slug" element={<BlogPost />} />
       <Route path="/author/:slug" element={<AuthorProfile />} />
       <Route path="/glossary" element={<Glossary />} />

@@ -81,10 +81,42 @@ for (const file of htmlFiles(DIST)) {
   if (/<input[\s>]/.test(body)) errors.push(`${rel}: <input> in the static body (task-list checkbox?)`);
 }
 
-// Blog soft-404 guards: the author page and the blog not-found page are real files.
+// Blog soft-404 guards: the author page and the not-found page are real files, and no rewrite catches
+// /blog/* — an unknown blog path must fall through to 404.html with a real HTTP 404, not a 200 page.
 if (!existsSync(resolve(DIST, 'author', 'sitaram', 'index.html'))) errors.push('author/sitaram/index.html missing (crawlers get the homepage template)');
-const nf = existsSync(resolve(DIST, '404-blog.html')) ? readFileSync(resolve(DIST, '404-blog.html'), 'utf-8') : '';
-if (!/<meta name="robots" content="noindex/.test(nf)) errors.push('404-blog.html missing or not noindex');
+const nf = existsSync(resolve(DIST, '404.html')) ? readFileSync(resolve(DIST, '404.html'), 'utf-8') : '';
+if (!/<meta name="robots" content="noindex/.test(nf)) errors.push('404.html missing or not noindex');
+{
+  const vercel = JSON.parse(readFileSync(resolve(ROOT, 'vercel.json'), 'utf-8'));
+  for (const r of vercel.rewrites || []) {
+    const src = r.source || '';
+    if (src.startsWith('/blog') || (src.startsWith('/((?!') && !src.includes('blog/'))) {
+      errors.push(`vercel.json: rewrite "${src}" catches /blog/* — unknown blog URLs would answer 200 instead of 404`);
+    }
+  }
+}
+
+// Blog categories: /blog lists every live post under a category <h2>, each category <h2> links to its
+// own prerendered hub, and the hubs together list exactly the live posts (each post on one hub).
+{
+  const blogHtml = existsSync(resolve(DIST, 'blog', 'index.html')) ? readFileSync(resolve(DIST, 'blog', 'index.html'), 'utf-8') : '';
+  const hubSlugs = [...blogHtml.matchAll(/<h2><a href="\/blog\/category\/([a-z0-9-]+)">/g)].map((m) => m[1]);
+  if (hubSlugs.length < 2) errors.push(`blog/index.html: expected category <h2> sections, found ${hubSlugs.length}`);
+  const livePosts = new Set([...blogHtml.matchAll(/<li><a href="\/blog\/([a-z0-9-]+)">/g)].map((m) => m[1]));
+  const onHubs = new Map();
+  for (const s of hubSlugs) {
+    const f = resolve(DIST, 'blog', 'category', s, 'index.html');
+    if (!existsSync(f)) { errors.push(`blog/category/${s}/index.html missing`); continue; }
+    const h = readFileSync(f, 'utf-8');
+    if (!/"@type":"CollectionPage"/.test(h)) errors.push(`blog/category/${s}: no CollectionPage JSON-LD`);
+    for (const m of h.matchAll(/<li><a href="\/blog\/([a-z0-9-]+)">/g)) {
+      if (onHubs.has(m[1])) errors.push(`blog post ${m[1]} is on two category hubs (${onHubs.get(m[1])}, ${s})`);
+      onHubs.set(m[1], s);
+    }
+  }
+  for (const p of livePosts) if (!onHubs.has(p)) errors.push(`blog post ${p} is on /blog but on no category hub`);
+  for (const p of onHubs.keys()) if (!livePosts.has(p)) errors.push(`blog post ${p} is on a category hub but not on /blog`);
+}
 
 // 3. L2 — sitemap ↔ files. Every <loc> must be a prerendered file whose canonical is that same URL and
 //    whose title is its own (not the homepage template's); no lastmod after today; no duplicate <loc>.

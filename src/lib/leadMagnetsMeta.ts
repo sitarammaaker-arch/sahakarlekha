@@ -158,9 +158,12 @@ export const MAGNETS: Record<MagnetKey, Magnet> = {
   },
 };
 
-/** Pick the most relevant magnet for a blog category. */
-export function magnetForCategory(category?: string): MagnetKey {
-  if (category === 'इन्वेंटरी') return 'inventory-checklist';
-  if (category === 'कर अनुपालन') return 'gst-checklist';
+/** Stock-keeping posts (no longer a category of their own) still get the inventory checklist. */
+const INVENTORY_POSTS = new Set(['inventory-and-stock-management', 'consumer-cooperative-store-accounting-audit-prep']);
+
+/** Pick the most relevant magnet for a blog post (by slug, then by category). */
+export function magnetForCategory(category?: string, slug?: string): MagnetKey {
+  if (slug && INVENTORY_POSTS.has(slug)) return 'inventory-checklist';
+  if (category === 'कर व वैधानिक रिटर्न') return 'gst-checklist';
   return 'audit-checklist';
 }

@@ -29,9 +29,11 @@ ok('reportError stamps society_id from the auth session (never throws)', /getAut
 const vercel = JSON.parse(readFileSync(resolve(root, 'vercel.json'), 'utf8'));
 const spa = (vercel.rewrites || []).find(r => r.destination === '/index.html');
 const re = spa && new RegExp('^' + spa.source + '$');
-ok('SPA rewrite still serves app routes', !!re && re.test('/blog/x') && re.test('/dashboard') && re.test('/'));
+ok('SPA rewrite still serves app routes', !!re && re.test('/blog') && re.test('/dashboard') && re.test('/'));
 ok('SPA rewrite never serves index.html for /assets/* (missing chunk ⇒ 404)', !!re && !re.test('/assets/BlogIndex-NHzHmXeZ.js'));
 ok('…nor for /api/*', !!re && !re.test('/api/x'));
+// /blog/<slug> pages are all prerendered files; an unknown one must reach 404.html with a real 404
+ok('…nor for /blog/* (unknown article ⇒ 404)', !!re && !re.test('/blog/x') && !re.test('/blog/category/x'));
 
 console.log(`\nG2/G8 error hygiene: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

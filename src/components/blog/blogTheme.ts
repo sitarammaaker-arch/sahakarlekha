@@ -55,3 +55,11 @@ export function formatDate(iso: string): string {
   if (!y || !m || !d) return iso;
   return `${d} ${HI_MONTHS[m - 1]} ${y}`;
 }
+
+/** Deterministic accent colour per category (stable across renders). */
+const CAT_COLORS = ['#185FA5', '#0F6E56', '#BA7517', '#534AB7', '#993C1D', '#993556', '#3B6D11', '#0C447C'];
+export function catColor(cat: string): string {
+  let h = 0;
+  for (const ch of cat) h += ch.charCodeAt(0);
+  return CAT_COLORS[h % CAT_COLORS.length];
+}

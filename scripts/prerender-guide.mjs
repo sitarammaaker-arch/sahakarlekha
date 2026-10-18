@@ -37,6 +37,7 @@ const STATES_FILE = resolve(ROOT, 'src', 'content', 'states.ts');
 const BLOG_FILE = resolve(ROOT, 'src', 'content', 'blog', 'index.ts');
 const BLOG_DIR = resolve(ROOT, 'src', 'content', 'blog');
 const AUTHORS_FILE = resolve(ROOT, 'src', 'content', 'blog', 'authors.ts');
+const BLOG_CATEGORIES_FILE = resolve(ROOT, 'src', 'content', 'blog', 'categories.ts');
 const GUIDE_DIR = resolve(ROOT, 'src', 'content', 'guide');
 const HELP_FILE = resolve(ROOT, 'src', 'content', 'help', 'index.ts');
 const COOKBOOK_FILE = resolve(ROOT, 'src', 'content', 'cookbook', 'index.ts');
@@ -274,6 +275,7 @@ async function loadData() {
     ['states', STATES_FILE, 'STATES'],
     ['rel', RELATED_FILE, null], // whole module (edge maps + helpers), GOS-11
     ['authors', AUTHORS_FILE, null], // /author/<slug> profile pages (E-E-A-T) — AUTHORS + DEFAULT_AUTHOR_SLUG
+    ['blogCats', BLOG_CATEGORIES_FILE, 'BLOG_CATEGORIES'], // /blog sections + /blog/category/<slug> hubs
   ];
   for (const [key, file, exportName] of jobs) {
     try {
@@ -530,6 +532,21 @@ function blogPages(DATA) {
   }
   posts.sort((a, b) => (a.date < b.date ? 1 : -1));
 
+  // Category groups, in BLOG_CATEGORIES order (src/content/blog/categories.ts — the same list the
+  // React /blog and /blog/category/<slug> pages use). A post whose category isn't in the list (the
+  // BlogCategoryName type should make that impossible) still gets listed, under "अन्य लेख".
+  const cats = DATA.blogCats || [];
+  const known = new Set(cats.map((c) => c.name));
+  const groups = cats
+    .map((c) => ({ c, posts: posts.filter((p) => categories[p.slug] === c.name) }))
+    .filter((g) => g.posts.length);
+  const others = posts.filter((p) => !known.has(categories[p.slug]));
+  const postLi = (p) => `<li><a href="/blog/${p.slug}">${esc(headings[p.slug] || p.title)}</a> <small>(${p.date})</small></li>`;
+  const catHref = (name) => {
+    const c = cats.find((x) => x.name === name);
+    return c ? `/blog/category/${c.slug}` : null;
+  };
+
   const pages = [
     {
       path: '/blog',
@@ -541,13 +558,61 @@ function blogPages(DATA) {
         ? shell({
             current: 'ब्लॉग',
             html:
-              `<h1>सहकार लेखा ब्लॉग</h1><p>सहकारी समितियों के लिए डिजिटल लेखांकन, वाउचर एंट्री, ऑडिट व अनुपालन पर सरल हिन्दी लेख।</p><ul>` +
-              posts.map((p) => `<li><a href="/blog/${p.slug}">${esc(p.title)}</a> <small>(${p.date})</small></li>`).join('') +
-              `</ul>` + registerCta(),
+              `<h1>सहकार लेखा ब्लॉग</h1><p>सहकारी समितियों के लिए डिजिटल लेखांकन, वाउचर एंट्री, ऑडिट व अनुपालन पर सरल हिन्दी लेख।</p>` +
+              (groups.length
+                ? `<nav aria-label="लेखों की श्रेणियाँ"><p><strong>श्रेणियाँ:</strong> ` +
+                  groups.map((g) => `<a href="/blog/category/${g.c.slug}">${esc(g.c.name)}</a> (${g.posts.length})`).join(' · ') +
+                  `</p></nav>`
+                : '') +
+              groups.map((g) =>
+                `<section><h2><a href="/blog/category/${g.c.slug}">${esc(g.c.name)}</a></h2><p>${esc(g.c.intro)}</p>` +
+                `<ul>${g.posts.map(postLi).join('')}</ul></section>`).join('') +
+              (others.length ? `<section><h2>अन्य लेख</h2><ul>${others.map(postLi).join('')}</ul></section>` : '') +
+              registerCta(),
           })
         : undefined,
     },
   ];
+
+  // One crawlable hub per category: /blog/category/<slug>. Same title/description/h1/JSON-LD as
+  // src/pages/BlogCategory.tsx. Categories with no live post yet get no page (and no sitemap entry).
+  for (const { c, posts: catPosts } of groups) {
+    const url = `${SITE}/blog/category/${c.slug}`;
+    pages.push({
+      path: `/blog/category/${c.slug}`,
+      title: c.metaTitle,
+      description: c.description,
+      lastmod: maxDate(catPosts.map((p) => p.updated || p.date), LASTMOD.static),
+      jsonLd: [
+        {
+          '@context': 'https://schema.org',
+          '@type': 'CollectionPage',
+          name: c.name,
+          description: c.description,
+          url,
+          inLanguage: 'hi',
+          isPartOf: { '@type': 'Blog', name: 'सहकार लेखा ब्लॉग', url: `${SITE}/blog` },
+          mainEntity: {
+            '@type': 'ItemList',
+            itemListElement: catPosts.map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: `${SITE}/blog/${p.slug}`, name: headings[p.slug] || p.title })),
+          },
+        },
+        crumb([
+          { name: 'होम', item: `${SITE}/` },
+          { name: 'ब्लॉग', item: `${SITE}/blog` },
+          { name: c.name, item: url },
+        ]),
+      ],
+      body: shell({
+        crumbs: [['/blog', 'ब्लॉग']],
+        current: c.name,
+        html:
+          `<h1>${esc(c.name)}</h1><p>${esc(c.intro)}</p><p><small>${catPosts.length} लेख</small></p>` +
+          `<ul>${catPosts.map(postLi).join('')}</ul>` +
+          `<p><a href="/blog">सभी श्रेणियाँ और लेख</a></p>` + registerCta(),
+      }),
+    });
+  }
   for (const p of posts) {
     const url = `${SITE}/blog/${p.slug}`;
     let body;
@@ -563,8 +628,9 @@ function blogPages(DATA) {
         // L2: mirror BlogPost — its h1 is the post's `title:` and the markdown's own leading "# …" is
         // stripped. 40 posts have no "# " line, so their static HTML had NO h1 at all.
         const heading = headings[p.slug] || p.title;
+        const hub = catHref(categories[p.slug]);
         body = shell({
-          crumbs: [['/blog', 'ब्लॉग']],
+          crumbs: [['/blog', 'ब्लॉग'], ...(hub ? [[hub, categories[p.slug]]] : [])],
           current: heading,
           html: `<h1>${esc(heading)}</h1>` + md(raw.replace(/^﻿?\s*#\s+.*(\r?\n)+/, '')) + helpLinks + registerCta(),
         });
@@ -594,9 +660,11 @@ function blogPages(DATA) {
           author: BLOG_AUTHOR,
           publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE, logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` } },
         },
+        // Same 4 levels as BlogPost's runtime BreadcrumbList: होम › ब्लॉग › category › post
         crumb([
           { name: 'होम', item: `${SITE}/` },
           { name: 'ब्लॉग', item: `${SITE}/blog` },
+          ...(catHref(categories[p.slug]) ? [{ name: categories[p.slug], item: `${SITE}${catHref(categories[p.slug])}` }] : []),
           { name: headings[p.slug] || p.title, item: url },
         ]),
         ...(faqs.length ? [{
@@ -673,11 +741,14 @@ function authorPages(DATA, blog) {
   });
 }
 
-// Unknown /blog/<slug> used to get the homepage template with HTTP 200 (a soft-404 that called itself
-// "/"). vercel.json rewrites /blog/:slug that has no file to this noindex page instead.
+// Unknown /blog/<slug> (or /blog/category/<slug>) used to get the homepage template with HTTP 200 (a
+// soft-404 that called itself "/"). vercel.json now keeps /blog/* out of the SPA rewrite, so a path with
+// no prerendered file falls through to Vercel's not-found handling, which serves THIS root 404.html with
+// a real HTTP 404 status. (Every other path is still rewritten to the SPA, so in practice only blog
+// paths — and missing /api, /assets files — ever see it.)
 function blogNotFoundPage() {
   return {
-    file: '404-blog.html',
+    file: '404.html',
     noindex: true,
     title: 'लेख नहीं मिला | सहकार लेखा ब्लॉग',
     description: 'यह लेख नहीं मिला। सहकार लेखा ब्लॉग के बाक़ी लेख पढ़ें।',

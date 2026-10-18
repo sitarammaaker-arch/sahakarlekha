@@ -19,6 +19,7 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findPost, loadBlogRaw, readingMinutes, relatedPosts, publishedOrder, isPublished, isScheduledBlogHref } from '@/content/blog';
 import { staticSnapshotFor } from '@/lib/staticSnapshot';
 import { getAuthor, authorInitials } from '@/content/blog/authors';
+import { categoryHref } from '@/content/blog/categories';
 import { incrementBlogView, fetchBlogViewCount, formatViews } from '@/lib/blogViews';
 import { guideForBlog } from '@/content/crossLinks';
 import { calculatorForArticle } from '@/content/calculators';
@@ -254,7 +255,8 @@ const BlogPost: React.FC = () => {
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'होम', item: `${SITE}/` },
         { '@type': 'ListItem', position: 2, name: 'ब्लॉग', item: `${SITE}/blog` },
-        { '@type': 'ListItem', position: 3, name: post.title, item: url },
+        { '@type': 'ListItem', position: 3, name: post.category, item: `${SITE}${categoryHref(post.category)}` },
+        { '@type': 'ListItem', position: 4, name: post.title, item: url },
       ],
     },
     ...(faqs.length ? [{
@@ -316,7 +318,7 @@ const BlogPost: React.FC = () => {
   });
 
   // Topic-matched lead magnet + a mid-article opt-in (split the body at a heading).
-  const mag = magnetForCategory(post.category);
+  const mag = magnetForCategory(post.category, post.slug);
   const hIdx = Array.from(body.matchAll(/^##\s+/gm)).map((mm) => mm.index || 0);
   const midPos = hIdx.length >= 4 ? hIdx[Math.floor(hIdx.length / 2)] : -1;
   const bodyTop = midPos > 0 ? body.slice(0, midPos) : body;
@@ -349,11 +351,11 @@ const BlogPost: React.FC = () => {
             <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
             <Link to="/blog" className="hover:text-primary">ब्लॉग</Link>
             <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-            <span className="text-foreground/70 line-clamp-1" aria-current="page">{post.category}</span>
+            <Link to={categoryHref(post.category)} className="text-foreground/70 line-clamp-1 hover:text-primary">{post.category}</Link>
           </nav>
-          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${a.chip}`}>
+          <Link to={categoryHref(post.category)} className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold hover:opacity-80 ${a.chip}`}>
             {post.category}
-          </span>
+          </Link>
           <h1 className="font-serif text-3xl md:text-4xl font-bold text-foreground leading-tight mt-4">{post.title}</h1>
           <p className="text-lg text-muted-foreground mt-4">{post.excerpt}</p>
 
