@@ -588,12 +588,13 @@ const SocietySetup: React.FC = () => {
                   >
                     <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {SOCIETY_TYPES.map(t => (
+                      {SOCIETY_TYPES.filter(t => t.value !== 'other').map(t => (
                         <SelectItem key={t.value} value={t.value}>{language === 'hi' ? t.labelHi : t.label}</SelectItem>
                       ))}
                       {presetsForState(form.state).map(p => (
                         <SelectItem key={p.variant} value={presetChoice(p.variant)}>{language === 'hi' ? p.labelHi : p.label}</SelectItem>
                       ))}
+                      <SelectItem value="other">{language === 'hi' ? 'अन्य' : 'Other'}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

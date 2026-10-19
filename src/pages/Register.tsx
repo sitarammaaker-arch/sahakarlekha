@@ -371,7 +371,7 @@ const Register: React.FC = () => {
                       <SelectValue placeholder={L('समिति का प्रकार चुनें', 'Select society type')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {SOCIETY_TYPES.map(t => (
+                      {SOCIETY_TYPES.filter(t => t.value !== 'other').map(t => (
                         <SelectItem key={t.value} value={t.value}>
                           <span>{t.label}</span>
                           <span className="ml-1 text-xs text-muted-foreground">— {t.labelHi}</span>
@@ -382,6 +382,10 @@ const Register: React.FC = () => {
                           <span>{L(p.labelHi, p.label)}</span>
                         </SelectItem>
                       ))}
+                      <SelectItem value="other">
+                        <span>Other</span>
+                        <span className="ml-1 text-xs text-muted-foreground">— अन्य</span>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

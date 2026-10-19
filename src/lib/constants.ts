@@ -11,6 +11,7 @@ export const SOCIETY_TYPES: { value: SocietyType; label: string; labelHi: string
   { value: 'producer',             label: 'Producer Cooperative (FPO)', labelHi: 'उत्पादक सहकारी (FPO)' },
   { value: 'multistate',           label: 'Multi-State Cooperative Society', labelHi: 'बहु-राज्य सहकारी समिति' },
   { value: 'multipurpose',         label: 'Multipurpose Cooperative Society', labelHi: 'बहुउद्देश्यीय सहकारी समिति' },
+  { value: 'transport',            label: 'Transport Cooperative Society', labelHi: 'परिवहन सहकारी समिति' },
   { value: 'other',                label: 'Other', labelHi: 'अन्य' },
 ];
 

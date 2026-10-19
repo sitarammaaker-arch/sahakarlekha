@@ -67,7 +67,7 @@ ok(!isModuleVisible(deposits, ctx('housing', grant('lending'))), 'housing + lend
 // 5. Empty-diff basis (informational guard): across all 11 default templates, the set of types that
 //    see /deposits is unchanged from the old lending-gating. A divergence here means a template
 //    deliberately split the two caps — expected once deposits and credit are modelled independently.
-const TYPES = ['marketing_processing','pacs','consumer','labour','dairy','housing','sugar','producer','multistate','multipurpose','other'];
+const TYPES = ['marketing_processing','pacs','consumer','labour','dairy','housing','sugar','producer','multistate','multipurpose','transport','other'];
 const shipTimeParity = TYPES.every((t) => {
   const caps = resolveCapabilities(t, [], undefined, undefined);
   return caps.has('deposit_ledger') === caps.has('lending');

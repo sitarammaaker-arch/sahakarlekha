@@ -67,7 +67,7 @@ const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  �
 const NOW = Date.parse('2026-07-12T00:00:00Z');
 
 // ── 1. PARITY holds for EVERY type (the MR-1 guarantee) ──────────────────────
-ok(ALL_TYPES.length === 11, 'all 11 society types are covered');
+ok(ALL_TYPES.length === 12, 'all 12 society types are covered');
 for (const t of ALL_TYPES) {
   ok(hasCutoverParity(t, [], undefined, NOW),
     `parity(${t}): the inferred activities reproduce the type template exactly — no module lost at cutover`);

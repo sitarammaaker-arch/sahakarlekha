@@ -18,5 +18,8 @@ export const SOCIETY_TYPE_CAPABILITIES: Record<SocietyType, Capability[]> = {
   producer: ['inventory_sales', 'procurement_msp', 'gst', 'tds'],             // FPO — input supply + output marketing (T-13 / SC-2)
   multistate: ['inventory_sales', 'lending', 'deposit_ledger', 'procurement_msp', 'gst', 'tds'], // multi-state coop — broad, credit-capable (T-13 / SC-3)
   multipurpose: ['inventory_sales', 'lending', 'deposit_ledger', 'dairy_collection', 'procurement_msp', 'pos_billing', 'subsidy_reconciliation', 'gst', 'tds'], // does many activities at once (T-13 / SC-1)
+  // Founder decision 2026-10-19: its own type (Haryana Act 1984 / Rules 1989 name no transport class, so no
+  // statutory rule reads it). Service society — freight/hire income, own vehicles, drivers (EPF/ESI revocable).
+  transport: ['transport', 'gst', 'tds', 'pf_esi'],
   other: ['inventory_sales', 'lending', 'deposit_ledger', 'gst', 'tds'],      // catch-all — broad
 };

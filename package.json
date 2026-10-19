@@ -133,6 +133,7 @@
     "test:activity-backfill": "node scripts/test-activity-backfill.mjs",
     "test:type-branch-parity": "node scripts/test-type-branch-parity.mjs",
     "test:society-presets": "node scripts/test-society-presets.mjs",
+    "test:transport-type": "node scripts/test-transport-type.mjs",
     "test:ledger-event": "node scripts/test-ledger-event.mjs",
     "test:ledger-events-persist": "node scripts/test-ledger-events-persist.mjs",
     "test:ledger-persist": "node scripts/test-ledger-persist.mjs",

@@ -238,7 +238,7 @@ const stale = KNOWN.filter((v) => !violations.has(v));
 ok(fresh.length === 0, `no NEW template violations (${fresh.length}):\n      ${fresh.join('\n      ')}`);
 ok(stale.length === 0, `no STALE baseline lines — a fixed violation must be deleted from KNOWN (${stale.length}):\n      ${stale.join('\n      ')}`);
 ok(new Set(KNOWN).size === KNOWN.length, 'KNOWN has no duplicate lines');
-ok(Object.keys(charts).length === 8, `8 society types resolve to a chart (${Object.keys(charts).join(', ')})`);
+ok(Object.keys(charts).length === 9, `9 society types resolve to a chart (${Object.keys(charts).join(', ')})`);
 ok(Object.values(charts).every((c) => c.length > 90), 'every chart has more than 90 accounts');
 
 console.log(`template integrity: ${pass} passed, ${fail} failed (baseline ${KNOWN.length} known violations)`);

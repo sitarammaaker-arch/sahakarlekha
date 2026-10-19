@@ -692,8 +692,13 @@ export const CONSUMER_SOCIETY_ACCOUNTS: LedgerAccount[] = [
 import { DAIRY_SOCIETY_ACCOUNTS } from './templates/dairy';
 import { HOUSING_SOCIETY_ACCOUNTS } from './templates/housing';
 import { SUGAR_SOCIETY_ACCOUNTS } from './templates/sugar';
+import { TRANSPORT_EXTRA_ACCOUNTS } from './templates/transport';
 
 // Template map: societyType → accounts array
+// CMS chart + the transport heads. PURE-annotated so esbuild can still tree-shake the templates out of
+// bundles that import storage.ts for other things (the /ask Edge bundle) — a bare spread here pulled all of them in.
+const TRANSPORT_SOCIETY_ACCOUNTS: LedgerAccount[] = /* @__PURE__ */ CMS_SOCIETY_ACCOUNTS.concat(TRANSPORT_EXTRA_ACCOUNTS);
+
 export const SOCIETY_TEMPLATES: Record<string, LedgerAccount[]> = {
   marketing_processing: CMS_SOCIETY_ACCOUNTS,
   pacs:                 PACS_SOCIETY_ACCOUNTS,
@@ -702,6 +707,7 @@ export const SOCIETY_TEMPLATES: Record<string, LedgerAccount[]> = {
   housing:              HOUSING_SOCIETY_ACCOUNTS,
   sugar:                SUGAR_SOCIETY_ACCOUNTS,
   labour:               CMS_SOCIETY_ACCOUNTS,
+  transport:            TRANSPORT_SOCIETY_ACCOUNTS,
   other:                CMS_SOCIETY_ACCOUNTS,
 };
 

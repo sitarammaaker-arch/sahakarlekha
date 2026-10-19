@@ -40,6 +40,8 @@ export const TYPE_INFERRED_ACTIVITIES: Record<SocietyType, Activity[]> = {
   producer: ['marketing_aggregation', 'agri_input_retail'],
   multistate: ['credit_short_term', 'deposits_savings', 'marketing_aggregation'],
   multipurpose: ['credit_short_term', 'deposits_savings', 'milk_procurement', 'consumer_retail', 'fair_price_shop_pds', 'foodgrain_procurement'],
+  // labour_works only for its pf_esi (drivers/conductors); 'labour' is outside the transport entitlement and drops out.
+  transport: ['transport', 'labour_works'],
   other: ['credit_short_term', 'deposits_savings', 'consumer_retail'],
 };
 
