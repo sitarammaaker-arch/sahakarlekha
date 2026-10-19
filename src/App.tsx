@@ -190,6 +190,7 @@ const DepartmentMaster = lazyWithRetry(() => import("./pages/DepartmentMaster"))
 const DepartmentBills = lazyWithRetry(() => import("./pages/DepartmentBills"));
 const WorkerAdvances = lazyWithRetry(() => import("./pages/WorkerAdvances"));
 const WorkOrderProfit = lazyWithRetry(() => import("./pages/WorkOrderProfit"));
+const ActivityIncomeExpenditure = lazyWithRetry(() => import("./pages/ActivityIncomeExpenditure"));
 const WageRegister = lazyWithRetry(() => import("./pages/WageRegister"));
 const WorkerLedger = lazyWithRetry(() => import("./pages/WorkerLedger"));
 const AdvanceRegister = lazyWithRetry(() => import("./pages/AdvanceRegister"));
@@ -455,6 +456,7 @@ const AppRoutes = () => {
       <Route path="/department-bills" element={<ProtectedRoute><DepartmentBills /></ProtectedRoute>} />
       <Route path="/worker-advances" element={<ProtectedRoute><WorkerAdvances /></ProtectedRoute>} />
       <Route path="/work-order-profit" element={<ProtectedRoute><WorkOrderProfit /></ProtectedRoute>} />
+      <Route path="/activity-income-expenditure" element={<ProtectedRoute><ActivityIncomeExpenditure /></ProtectedRoute>} />
       <Route path="/wage-register" element={<ProtectedRoute><WageRegister /></ProtectedRoute>} />
       <Route path="/worker-ledger" element={<ProtectedRoute><WorkerLedger /></ProtectedRoute>} />
       <Route path="/advance-register" element={<ProtectedRoute><AdvanceRegister /></ProtectedRoute>} />

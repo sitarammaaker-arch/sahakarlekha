@@ -137,6 +137,7 @@ export const translations: Translations = {
   workerAdvances: { hi: 'श्रमिक अग्रिम', en: 'Worker Advances' },
   departmentBills: { hi: 'विभाग बिल', en: 'Department Bills' },
   workOrderProfit: { hi: 'कार्य आदेश लाभ', en: 'Work Order Profit' },
+  activityIncomeExpenditure: { hi: 'गतिविधि-वार आय-व्यय', en: 'Activity-wise I&E' },
   wageRegister: { hi: 'मज़दूरी रजिस्टर', en: 'Wage Register' },
   workerLedger: { hi: 'श्रमिक लेजर', en: 'Worker Ledger' },
   advanceRegister: { hi: 'अग्रिम रजिस्टर', en: 'Advance Register' },

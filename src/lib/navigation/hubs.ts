@@ -60,7 +60,7 @@ export const HUBS: HubDef[] = [
     { hi: 'अंतिम खाते', en: 'Final accounts', moduleIds: ['trialBalance', 'tradingAccount', 'profitLoss', 'balanceSheet', 'receiptsPayments'] },
     { hi: 'GST व TDS', en: 'GST & TDS', moduleIds: ['gstSummary', 'gstr9', 'eWayBill', 'tdsRegister', 'tdsForm16A', 'statutoryReconciliation'] },
     { hi: 'पार्टी व बकाया', en: 'Parties & dues', moduleIds: ['billsOutstanding', 'agingAnalysis', 'recoverables'] },
-    { hi: 'विश्लेषण', en: 'Analysis', moduleIds: ['analytics', 'myDashboard', 'budgetModule', 'reports'] },
+    { hi: 'विश्लेषण', en: 'Analysis', moduleIds: ['analytics', 'myDashboard', 'budgetModule', 'activityIncomeExpenditure', 'reports'] },
     { hi: 'वैधानिक व एजेंसी', en: 'Statutory & agency', moduleIds: ['nabardReport', 'federationReport', 'kachiAarat', 'complianceCalendar'] },
   ] },
   { id: 'registers', hi: 'रजिस्टर व ऑडिट', en: 'Registers & audit', icon: ShieldCheck, sections: [

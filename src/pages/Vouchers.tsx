@@ -43,6 +43,9 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { cashInByParty, cashReceiptWarning, type CashReceiptWarning } from '@/lib/rules/cashReceiptLimit';
 import { isEngineVoucher } from '@/lib/accounting/voucherImmutability';
 import { isEditLocked } from '@/lib/voucherReversal';
+import { ActivityTagSelect } from '@/components/ActivityTagSelect';
+import { activityTag, activityOfTag } from '@/lib/reports/activityPL';
+import { ACTIVITY_CATALOG, type Activity } from '@/lib/navigation/activities';
 
 type EntryMode = 'aasan' | 'expert';
 
@@ -59,6 +62,10 @@ const Vouchers: React.FC = () => {
   const canDelete = can('delete');  // cancel — admin/societyAdmin/secretary only (restore is disabled)
   const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, getTrialBalance, matchesActiveBranch } = useData();
   const [submitForApproval, setSubmitForApproval] = useState(false);
+  // CM-PACS activity-wise accounts: optional business-activity tag, stored in Voucher.costCentreId. Sticky
+  // across entries (like the voucher type) so a run of shop vouchers needs one pick; shown next to Save.
+  const [activity, setActivity] = useState<Activity | ''>('');
+  const activityField = activity ? { costCentreId: activityTag(activity) } : {};
   const { toast } = useToast();
 
   // P1-4: Alert when any expense account develops an abnormal credit balance after a voucher save.
@@ -241,6 +248,10 @@ const Vouchers: React.FC = () => {
   const [editAmount, setEditAmount] = useState('');
   const [editNarration, setEditNarration] = useState('');
   const [editMemberId, setEditMemberId] = useState('');
+  // Read-only in the edit dialog: the server's edit_voucher (mig 095) keeps only its editable fields and
+  // ignores costCentreId, so an edited tag would show here and silently revert on refresh (RULE 1).
+  const [editActivity, setEditActivity] = useState<Activity | ''>('');
+  const activityLabel = (a: Activity) => { const d = ACTIVITY_CATALOG.find(x => x.code === a); return d ? (language === 'hi' ? d.labelHi : d.label) : a; };
   // Compound (>2-line) edit — populated by openEdit only for multi-line vouchers, else [].
   const [editLines, setEditLines] = useState<LineEntry[]>([]);
   const editIsCompound = editLines.length > 0;
@@ -319,6 +330,7 @@ const Vouchers: React.FC = () => {
     setEditAmount(String(v.amount));
     setEditNarration(v.narration || '');
     setEditMemberId(v.memberId || '');
+    setEditActivity(activityOfTag(v.costCentreId) ?? '');
     // Multi-line (>2) voucher → edit its lines directly; a simple voucher clears this and uses the Dr/Cr/amount fields.
     const vLines = getVoucherLines(v);
     setEditLines(vLines.length > 2
@@ -449,6 +461,7 @@ const Vouchers: React.FC = () => {
       voucherNo: customNo || undefined,
       approvalStatus: submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
+      ...activityField,
     }, saveOpts('expert', { hi: 'वाउचर सहेजा गया', en: 'Voucher saved' }));
     // addVoucher refuses (permission / FY lock / plan) with an empty id and has already shown why — never claim "saved".
     if (!v?.id) { setSaving(false); return; }
@@ -480,6 +493,7 @@ const Vouchers: React.FC = () => {
         voucherNo: customNo || undefined,
         approvalStatus: submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
+        ...activityField,
       }, saveOpts('contra', { hi: 'कोंट्रा वाउचर सहेजा गया', en: 'Contra Voucher saved' }));
       // addVoucher refuses (permission / FY lock / plan) with an empty id and has already shown why — never claim "saved".
       if (!v?.id) { setSaving(false); return; }
@@ -512,6 +526,7 @@ const Vouchers: React.FC = () => {
       voucherNo: customNo || undefined,
       approvalStatus: submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
+      ...activityField,
     }, saveOpts('simple', { hi: 'वाउचर सहेजा गया', en: 'Voucher saved' }));
     // addVoucher refuses (permission / FY lock / plan) with an empty id and has already shown why — never claim "saved".
     if (!v?.id) { setSaving(false); return; }
@@ -868,6 +883,7 @@ const Vouchers: React.FC = () => {
                           <MemberPicker value={linkedMemberId} onChange={setLinkedMemberId} />
                         </div>
                       )}
+                      <ActivityTagSelect id="activityTag1" value={activity} onChange={setActivity} />
                       <div className="flex items-center gap-2 pb-2">
                         <input
                           type="checkbox"
@@ -1161,6 +1177,7 @@ const Vouchers: React.FC = () => {
                       </div>
                     )}
 
+                    <ActivityTagSelect id="activityTag2" value={activity} onChange={setActivity} />
                     <div className="flex items-center gap-2 pb-2">
                       <input
                         type="checkbox"
@@ -1469,6 +1486,12 @@ const Vouchers: React.FC = () => {
             <div className="space-y-1.5">
               <Label>{t('narration')}</Label>
               <Textarea value={editNarration} onChange={e => setEditNarration(e.target.value)} rows={2} placeholder={language === 'hi' ? 'विवरण...' : 'Narration...'} />
+              {editActivity && (
+                <p className="text-sm text-muted-foreground">
+                  {language === 'hi' ? 'गतिविधि: ' : 'Activity: '}<span className="font-medium text-foreground">{activityLabel(editActivity)}</span>
+                  {language === 'hi' ? ' — वाउचर बनाते समय तय होती है, edit में नहीं बदलती।' : ' — set when the voucher is created; not editable.'}
+                </p>
+              )}
             </div>
             {members.length > 0 && (
               <div className="space-y-1.5">

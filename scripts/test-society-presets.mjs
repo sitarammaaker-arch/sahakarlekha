@@ -54,6 +54,7 @@ const cm = P.SOCIETY_PRESETS.cm_pacs;
 ok(cm.legalType === 'multipurpose' && cm.state === 'hr', 'CM-PACS = multipurpose + Haryana');
 ok(C.SOCIETY_TYPES.some(t => t.value === cm.legalType), 'preset legal type is a real SocietyType');
 ok(C.INDIAN_STATES.some(s => s.value === cm.state), 'preset state is a real INDIAN_STATES code');
+ok(STC.SOCIETY_TYPE_CAPABILITIES[cm.legalType].includes('transport'), 'CM-PACS (multipurpose) gets the transport module — its bye-laws list transport');
 ok(!('cm_pacs' in STC.SOCIETY_TYPE_CAPABILITIES) && !C.SOCIETY_TYPES.some(t => t.value === 'cm_pacs'), 'no cm_pacs SocietyType');
 
 ok(eq(P.resolveTypeChoice(P.presetChoice('cm_pacs')), { societyType: 'multipurpose', societyVariant: 'cm_pacs', state: 'hr' }), 'preset choice → multipurpose + cm_pacs + hr');

@@ -130,6 +130,8 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'complianceCalendar', titleKey: 'complianceCalendar', icon: CalendarDays,    route: '/compliance-calendar',  domain: 'reports', requiredCapabilities: U, order: 1.5 },
   { id: 'tradingAccount',     titleKey: 'tradingAccount',     icon: ShoppingCart,    route: '/trading-account',      domain: 'reports', requiredCapabilities: ['inventory_sales'], order: 2 },
   { id: 'profitLoss',         titleKey: 'profitLoss',         icon: TrendingUp,      route: '/profit-loss',          domain: 'reports', requiredCapabilities: U, order: 3 },
+  // CM-PACS activity-wise accounts: I&E split by the activity tag on vouchers (costCentreId). Universal — any society can tag.
+  { id: 'activityIncomeExpenditure', titleKey: 'activityIncomeExpenditure', icon: Layers, route: '/activity-income-expenditure', domain: 'reports', requiredCapabilities: U, order: 3.5 },
   { id: 'balanceSheet',       titleKey: 'balanceSheet',       icon: FileSpreadsheet, route: '/balance-sheet',        domain: 'reports', requiredCapabilities: U, order: 4 },
   { id: 'reports',            titleKey: 'reports',            icon: BarChart3,       route: '/reports',              domain: 'reports', requiredCapabilities: U, order: 5 },
   { id: 'saleRegister',       titleKey: 'saleRegister',       icon: ShoppingCart,    route: '/sale-register',        domain: 'reports', requiredCapabilities: ['inventory_sales'], order: 6 },
