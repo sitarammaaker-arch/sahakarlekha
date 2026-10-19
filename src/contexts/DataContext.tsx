@@ -56,6 +56,7 @@ import { voucherLinesBalance, snapSubRupeeResidual } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
 import type { SocietyCapabilityRow, Capability, SocietyActivityRow } from '@/lib/navigation';
 import { navigationService, declaredActivities } from '@/lib/navigation';
+import { clearedKeysAsNull } from '@/lib/settingsPayload';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
 import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { resolveJurisdiction, stampTenant } from '@/lib/jurisdiction';
@@ -4967,7 +4968,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           () => { setSocietyState(rollback); failToast('network'); opts?.onFailed?.('network'); },
         );
       };
-      attempt({ id: societyIdRef.current, society_id: societyIdRef.current, ...updated }, []);
+      // RULE 1: keys cleared with undefined (period unlock, FY unlock request, liability "not recorded" …)
+      // travel as null — JSON would drop them and the DB would keep the old value (lib/settingsPayload).
+      attempt({ id: societyIdRef.current, society_id: societyIdRef.current, ...updated, ...clearedKeysAsNull(data) }, []);
       return updated;
     });
   }, []);

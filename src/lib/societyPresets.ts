@@ -8,9 +8,10 @@
  * own model (RCS Haryana memo PA/RCS/225-275, 25.12.2023, Model Bye-laws). It is NOT
  * "मुख्यमंत्री-पैक्स" and NOT the all-India PACS (Primary Agricultural Credit Society).
  *
- * Legal type = 'multipurpose' on purpose: PACS-only statutory rules (s.16 deemed admission,
- * NABARD CAS formats, NABARD return) are NOT applied to a CM-PACS until a source says they
- * apply. Nothing here changes a statutory rule — rules keep reading `societyType`.
+ * Legal type = 'multipurpose' on purpose. Founder decision 2026-10-19: the PACS-only rules — s.16
+ * 60-day deemed admission, NABARD CAS formats (Audit Schedules), the NABARD / RCS return — do NOT
+ * apply to a CM-PACS. They key on societyType === 'pacs', so the preset must never save 'pacs'
+ * (guarded by test:society-presets). Nothing here changes a statutory rule.
  */
 import type { SocietyType } from '@/types';
 
