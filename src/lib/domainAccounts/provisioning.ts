@@ -37,8 +37,12 @@ import {
 import {
   procurementAccountMatches, resolveProcurementAccountId, PROCUREMENT_ACCOUNT_IDS, type ProcurementAccountRole,
 } from '@/lib/procurement/accounts';
+import {
+  resolveTransportAccountId, transportAccountMatches, transportTemplate, TRANSPORT_ACCOUNT_IDS,
+  TRANSPORT_INCOME_ROLES, TRANSPORT_EXPENSE_ROLES, type TransportAccountRole,
+} from '@/lib/transport/accounts';
 
-export type DomainCapability = 'pos_billing' | 'dairy_collection' | 'procurement_msp';
+export type DomainCapability = 'pos_billing' | 'dairy_collection' | 'procurement_msp' | 'transport';
 
 type Acc = Pick<LedgerAccount, 'id' | 'name' | 'nameHi' | 'subtype' | 'isGroup' | 'openingBalance' | 'openingBalanceType'> & Partial<Pick<LedgerAccount, 'type'>>;
 
@@ -77,6 +81,19 @@ const procurement = (role: ProcurementAccountRole, template: Omit<LedgerAccount,
     preferredId: PROCUREMENT_ACCOUNT_IDS[role], parentFallbacks,
   });
 
+// Transport (trips / vehicle expenses) — the transport chart's own heads (templates/transport.ts). A Transport
+// society already has them; a multipurpose / CM-PACS / marketing society with the `transport` capability gets
+// them here. Its chart has no 4500 / 5700 group, so they sit directly under Income (4000) / Expenditure (5000).
+const transport = (role: TransportAccountRole, parentFallbacks: string[]): DomainAccountSpec => {
+  const { id: _id, ...template } = transportTemplate(role);
+  return {
+    key: `transport.${role}`, capability: 'transport', template,
+    resolve: accounts => resolveTransportAccountId(accounts, role),
+    matches: a => transportAccountMatches(a, role),
+    preferredId: TRANSPORT_ACCOUNT_IDS[role], parentFallbacks,
+  };
+};
+
 export const DOMAIN_ACCOUNT_SPECS: ReadonlyArray<DomainAccountSpec> = [
   consumer('consumer.memberReceivable', MEMBER_RECEIVABLE_SUBTYPE, MEMBER_RECEIVABLE_HINTS, resolveMemberReceivableAccountId,
     { name: 'Member Purchase Receivable', nameHi: 'सदस्य खरीद प्राप्य', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300', subtype: MEMBER_RECEIVABLE_SUBTYPE }),
@@ -113,6 +130,9 @@ export const DOMAIN_ACCOUNT_SPECS: ReadonlyArray<DomainAccountSpec> = [
   procurement('commissionIncome',
     { name: 'Procurement Commission', nameHi: 'खरीद कमीशन', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200', subtype: 'commission_income' },
     ['4400', '4000']),
+
+  ...TRANSPORT_INCOME_ROLES.map(r => transport(r, ['4000'])),
+  ...TRANSPORT_EXPENSE_ROLES.map(r => transport(r, ['5000'])),
 ];
 
 /**

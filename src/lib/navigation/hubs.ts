@@ -49,6 +49,7 @@ export const HUBS: HubDef[] = [
   { id: 'society', hi: 'समिति का काम', en: 'Society work', icon: Building, sections: [
     { hi: 'उपभोक्ता भंडार', en: 'Consumer store', domain: 'consumer' },
     { hi: 'विपणन / खरीद एजेंसी', en: 'Marketing / procurement', domain: 'marketing' },
+    { hi: 'परिवहन', en: 'Transport', domain: 'transport' },
     { hi: 'डेयरी', en: 'Dairy', domain: 'dairy' },
     { hi: 'श्रमिक', en: 'Labour', domain: 'labour' },
     { hi: 'आवास', en: 'Housing', domain: 'housing' },

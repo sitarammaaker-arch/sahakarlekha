@@ -60,7 +60,7 @@ export interface ColumnDescriptor {
  */
 export type ExportDomain =
   | 'core' | 'member' | 'inventory' | 'trade' | 'lending' | 'payroll'
-  | 'procurement' | 'dairy' | 'housing' | 'marketing' | 'consumer'
+  | 'procurement' | 'dairy' | 'housing' | 'marketing' | 'consumer' | 'transport'
   | 'compliance' | 'governance' | 'evidence' | 'system';
 
 export type ExportFormat = 'csv' | 'xlsx' | 'pdf' | 'json';
