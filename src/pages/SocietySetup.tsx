@@ -26,6 +26,7 @@ import { unlockAction } from '@/lib/dualControlUnlock';
 import { NotificationChannelsCard } from '@/components/settings/NotificationChannelsCard';
 import { YearCloseCard } from '@/components/fy/YearCloseCard';
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
+import { presetsForState, presetChoice, resolveTypeChoice, typeChoiceOf, type SocietyVariant } from '@/lib/societyPresets';
 import { ucasReserveMinPct } from '@/lib/rules/ucas';
 import { fullChartForType } from '@/lib/storage';
 import { resolveCapabilities } from '@/lib/navigation';
@@ -109,6 +110,8 @@ const SocietySetup: React.FC = () => {
     phone: society.phone,
     email: society.email,
     societyType: society.societyType || 'marketing_processing',
+    // Migration 126: a state preset's name (Haryana CM-PACS); the legal type above is what rules read.
+    societyVariant: (society.societyVariant ?? null) as SocietyVariant | null,
     // Statutory reserve minimum from the UCAS rule SSOT (T-16), not a local literal — national
     // default resolves to 25% (value-identical to the prior hardcoded fallback).
     reserveFundPct: society.reserveFundPct ?? ucasReserveMinPct({ asOf: new Date().toISOString() }),
@@ -577,14 +580,21 @@ const SocietySetup: React.FC = () => {
                 <div className="space-y-2">
                   <Label>{language === 'hi' ? 'समिति का प्रकार' : 'Society Type'}</Label>
                   <Select
-                    value={form.societyType}
-                    onValueChange={v => setForm(f => ({ ...f, societyType: v as SocietyType }))}
+                    value={typeChoiceOf(form.societyType as SocietyType, form.societyVariant)}
+                    onValueChange={v => {
+                      const r = resolveTypeChoice(v);
+                      setForm(f => ({ ...f, societyType: r.societyType, societyVariant: r.societyVariant, ...(r.state ? { state: r.state } : {}) }));
+                    }}
                   >
                     <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {SOCIETY_TYPES.map(t => (
+                      {SOCIETY_TYPES.filter(t => t.value !== 'other').map(t => (
                         <SelectItem key={t.value} value={t.value}>{language === 'hi' ? t.labelHi : t.label}</SelectItem>
                       ))}
+                      {presetsForState(form.state).map(p => (
+                        <SelectItem key={p.variant} value={presetChoice(p.variant)}>{language === 'hi' ? p.labelHi : p.label}</SelectItem>
+                      ))}
+                      <SelectItem value="other">{language === 'hi' ? 'अन्य' : 'Other'}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -718,7 +728,7 @@ const SocietySetup: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>{language === 'hi' ? 'राज्य' : 'State'}</Label>
-                  <Select value={form.state} onValueChange={v => setForm(f => ({ ...f, state: v }))}>
+                  <Select value={form.state} onValueChange={v => setForm(f => ({ ...f, state: v, ...(f.societyVariant && !presetsForState(v).some(p => p.variant === f.societyVariant) ? { societyVariant: null } : {}) }))}>
                     <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {INDIAN_STATES.map(s => (

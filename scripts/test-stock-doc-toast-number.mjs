@@ -19,7 +19,7 @@ const ok = (name, cond) => { if (cond) { pass++; console.log(`  ✓ ${name}`); }
 
 console.log('DataContext');
 ok('usesPostingService() is typed and exposed', /usesPostingService: \(\) => boolean;/.test(dc) && /const usesPostingService = useCallback\(\(\): boolean => postingServiceRef\.current, \[\]\);/.test(dc)
-  && (dc.match(/restoreVoucher, usesPostingService, clearVoucher,/g) || []).length === 2);
+  && (dc.match(/restoreVoucher, usesPostingService, (canEditVoucherActivity, )?clearVoucher,/g) || []).length === 2);
 const ps = dc.slice(dc.indexOf('const postStockDocument = ('), dc.indexOf('const cancelStockDocument = ('));
 ok('postStockDocument toasts the OFFICIAL number on success', /toastRef\.current\(\{ title: `✅ \$\{label\} सहेजी गई: \$\{docNo\}`/.test(ps) && ps.indexOf('✅') > ps.indexOf('const docNo = r.docNo'));
 

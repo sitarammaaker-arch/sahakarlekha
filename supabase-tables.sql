@@ -1538,6 +1538,82 @@ drop policy if exists "society_rw" on public.marketing_transporters;
 create policy "society_rw" on public.marketing_transporters for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+-- Transport operations slice 1 (migration 128): own vehicles, trips, vehicle expenses.
+-- The voucher (refType 'transport.trip' / 'transport.expense', refId = row id) is the money
+-- authority; the row is the vehicle tag. RLS: own society, writes jwt_can_write(), deletes jwt_can_delete().
+create table if not exists transport_vehicles (
+  id text primary key,
+  society_id text not null,
+  jurisdiction text,
+  "regNo" text not null,
+  "vehicleType" text not null default 'truck',
+  capacity text,
+  "assetId" text,
+  "insuranceExpiry" text,
+  "permitExpiry" text,
+  "fitnessExpiry" text,
+  "pucExpiry" text,
+  status text not null default 'active' check (status in ('active', 'inactive')),
+  remarks text,
+  "isDeleted" boolean not null default false,
+  "createdAt" timestamptz not null default now()
+);
+create index if not exists idx_transport_vehicles_society on transport_vehicles(society_id);
+create table if not exists transport_trips (
+  id text primary key,
+  society_id text not null,
+  jurisdiction text,
+  "tripNo" text not null,
+  date text not null,
+  "vehicleId" text not null,
+  "customerId" text not null,
+  "fromPlace" text,
+  "toPlace" text,
+  freight numeric not null default 0,
+  loading numeric,
+  detention numeric,
+  amount numeric not null default 0,
+  "paidAmount" numeric not null default 0,
+  status text not null default 'unpaid' check (status in ('unpaid', 'partial', 'paid')),
+  "voucherId" text,
+  "collectionVoucherIds" jsonb not null default '[]',
+  narration text,
+  "isDeleted" boolean not null default false,
+  "createdAt" timestamptz not null default now()
+);
+create index if not exists idx_transport_trips_society on transport_trips(society_id);
+create table if not exists transport_vehicle_expenses (
+  id text primary key,
+  society_id text not null,
+  jurisdiction text,
+  "expenseNo" text not null,
+  date text not null,
+  "vehicleId" text not null,
+  "accountId" text not null,
+  amount numeric not null default 0,
+  mode text not null default 'cash' check (mode in ('cash', 'bank')),
+  "bankAccountId" text,
+  "voucherId" text,
+  narration text,
+  "isDeleted" boolean not null default false,
+  "createdAt" timestamptz not null default now()
+);
+create index if not exists idx_transport_vehicle_expenses_society on transport_vehicle_expenses(society_id);
+do $$
+declare t text;
+begin
+  foreach t in array array['transport_vehicles', 'transport_trips', 'transport_vehicle_expenses'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists %I on public.%I', t || '_select', t);
+    execute format('drop policy if exists %I on public.%I', t || '_insert', t);
+    execute format('drop policy if exists %I on public.%I', t || '_update', t);
+    execute format('drop policy if exists %I on public.%I', t || '_delete', t);
+    execute format('create policy %I on public.%I for select to authenticated using (society_id::text in (select public.current_user_society_ids()))', t || '_select', t);
+    execute format('create policy %I on public.%I for insert to authenticated with check (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_write())', t || '_insert', t);
+    execute format('create policy %I on public.%I for update to authenticated using (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_write()) with check (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_write())', t || '_update', t);
+    execute format('create policy %I on public.%I for delete to authenticated using (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_delete())', t || '_delete', t);
+  end loop;
+end $$;
 create table if not exists procurement_lots (
   id text primary key,
   society_id text not null default 'SOC001',
@@ -3616,3 +3692,7 @@ alter table society_settings add column if not exists "liabilityEvidence" text;
 alter table society_settings add column if not exists "producerSociety" boolean;
 alter table society_settings add column if not exists "producerEvidence" text;
 alter table members add column if not exists "statusDetails" jsonb;
+
+-- ── Society variant (migration 126, CM-PACS preset) ───────────────────────────────────────────────────────────────
+-- A state preset's name ('cm_pacs' = Haryana CM-PACS); societyType stays the legal type. See src/lib/societyPresets.ts.
+alter table society_settings add column if not exists "societyVariant" text;

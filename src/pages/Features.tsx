@@ -14,6 +14,7 @@ import {
   type Capability, type CapabilityMeta,
 } from '@/lib/navigation';
 import { SOCIETY_TYPES } from '@/lib/constants';
+import { societyTypeDisplay } from '@/lib/societyPresets';
 import { Blocks, Lock, Search, CheckCircle2, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react';
 import { fmtDateTime } from '@/lib/dateUtils';
 
@@ -23,7 +24,7 @@ export default function Features() {
   const { language, t } = useLanguage();
   const hi = language === 'hi';
   const societyType = society.societyType ?? 'other';
-  const typeLabel = SOCIETY_TYPES.find(s => s.value === societyType)?.[hi ? 'labelHi' : 'label'] ?? societyType;
+  const typeLabel = societyTypeDisplay({ societyType, societyVariant: society.societyVariant }, SOCIETY_TYPES, hi);
 
   const entitled = useMemo(() => resolveEntitlements(societyType, societyCapabilities, undefined, society.state), [societyType, societyCapabilities, society.state]);
   const visible = useMemo(() => resolveCapabilities(societyType, societyCapabilities, undefined, society.state), [societyType, societyCapabilities, society.state]);

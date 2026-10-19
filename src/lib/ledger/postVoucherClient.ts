@@ -53,10 +53,13 @@ export function buildPendingVoucherPayload(v: Voucher): { p_voucher: Record<stri
 /** The fields edit_voucher (migration 078) accepts; the server ignores everything else anyway. */
 const EDITABLE = ['id', 'type', 'date', 'debitAccountId', 'creditAccountId', 'amount', 'narration', 'memberId', 'lines', 'editHistory'] as const;
 
-/** edit_voucher payload for an edited voucher: its editable fields + its legs (getVoucherLines, RULE 2). */
-export function buildEditVoucherPayload(v: Voucher): { p_voucher: Record<string, unknown>; p_lines: PostVoucherLeg[] } {
+/** edit_voucher payload for an edited voucher: its editable fields + its legs (getVoucherLines, RULE 2).
+ *  withActivityTag: also send costCentreId (the activity tag) — only when the edit changed it, and only to a
+ *  server that accepts it (migration 127); '' clears the tag (an undefined value would be dropped from JSON). */
+export function buildEditVoucherPayload(v: Voucher, opts: { withActivityTag?: boolean } = {}): { p_voucher: Record<string, unknown>; p_lines: PostVoucherLeg[] } {
   const p_voucher: Record<string, unknown> = {};
   for (const k of EDITABLE) if (k in v) p_voucher[k] = (v as unknown as Record<string, unknown>)[k];
+  if (opts.withActivityTag) p_voucher.costCentreId = v.costCentreId ?? '';
   const p_lines = getVoucherLines(v).map((l) => ({
     id: l.id, accountId: l.accountId, drCr: l.type, amountMinor: toMinor(Number(l.amount) || 0), narration: l.narration ?? null,
   }));

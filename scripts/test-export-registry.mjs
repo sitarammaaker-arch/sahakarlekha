@@ -398,6 +398,8 @@ const EXPECTED = [
   'member_distribution_run',
   // 069 — per-loan interest accruals (full)
   'loan_interest_accrual',
+  // 128 — transport operations slice 1 (full)
+  'transport_vehicle', 'transport_trip', 'transport_vehicle_expense',
 ].sort();
 ok(keys.join(',') === EXPECTED.join(','), `declares exactly the expected ${EXPECTED.length} tables (got ${keys.length}: ${keys.join(',')})`);
 
