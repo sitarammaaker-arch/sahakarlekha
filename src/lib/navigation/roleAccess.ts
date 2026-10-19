@@ -30,7 +30,7 @@ export interface RoleAccess {
 }
 
 const ALL_BUSINESS_DOMAINS: NavDomain[] = [
-  'core', 'operations', 'reports', 'registers', 'consumer', 'dairy', 'housing', 'labour', 'marketing',
+  'core', 'operations', 'reports', 'registers', 'consumer', 'dairy', 'housing', 'labour', 'marketing', 'transport',
 ];
 
 export const ROLE_MODULE_ACCESS: Partial<Record<RbacRole, RoleAccess>> = {

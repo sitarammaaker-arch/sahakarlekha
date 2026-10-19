@@ -33,6 +33,7 @@ const CAPABILITY_LABEL: Record<string, { hi: string; en: string }> = {
   pos_billing: { hi: 'उपभोक्ता', en: 'Consumer' },
   dairy_collection: { hi: 'डेयरी', en: 'Dairy' },
   procurement_msp: { hi: 'MSP खरीद', en: 'MSP procurement' },
+  transport: { hi: 'परिवहन', en: 'Transport' },
 };
 
 const DomainAccountsCard: React.FC<{ hi: boolean }> = ({ hi }) => {

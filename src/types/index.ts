@@ -594,6 +594,63 @@ export interface DepartmentBill {
   createdAt: string;
 }
 
+// ── Transport operations (transport society / CM-PACS transport activity) ──────────────────
+// A vehicle the society owns; trips and vehicle expenses are documents that each post ONE voucher
+// (refType 'transport.trip' / 'transport.expense', refId = document id). That document IS the
+// vehicle tag — no voucher column carries it (src/lib/transport/vehicleProfit.ts).
+export type VehicleType = 'truck' | 'tractor' | 'tanker' | 'pickup' | 'bus' | 'other';
+export interface TransportVehicle {
+  id: string;
+  regNo: string;               // registration number, e.g. HR-12-AB-1234
+  vehicleType: VehicleType;
+  capacity?: string;           // free text: "10 टन", "42 सीट"
+  assetId?: string;            // optional link to the Asset Register row (category 'Vehicle')
+  insuranceExpiry?: string;    // YYYY-MM-DD
+  permitExpiry?: string;
+  fitnessExpiry?: string;
+  pucExpiry?: string;
+  status: 'active' | 'inactive';
+  remarks?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
+export interface TransportTrip {
+  id: string;
+  tripNo: string;              // TRP/0001
+  date: string;
+  vehicleId: string;
+  customerId: string;          // Customer master — receivable sub-ledger = customer.accountId
+  fromPlace: string;
+  toPlace: string;
+  freight: number;             // → 4501 Freight Income
+  loading?: number;            // → 4503 Loading / Unloading Charges
+  detention?: number;          // → 4504 Detention / Waiting Charges
+  amount: number;              // freight + loading + detention = the customer's receivable
+  paidAmount: number;
+  status: 'unpaid' | 'partial' | 'paid';
+  voucherId?: string;          // the trip (income-recognition) voucher
+  collectionVoucherIds?: string[]; // its receipt vouchers — owned by the trip (cancelled only through it)
+  narration?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
+export interface VehicleExpense {
+  id: string;
+  expenseNo: string;           // VEX/0001
+  date: string;
+  vehicleId: string;
+  accountId: string;           // expense head (5701 Diesel … 5708)
+  amount: number;
+  mode: 'cash' | 'bank';
+  bankAccountId?: string;
+  voucherId?: string;
+  narration?: string;
+  isDeleted?: boolean;
+  createdAt: string;
+}
+
 export type LoanType = 'short-term' | 'medium-term' | 'long-term';
 export type LoanStatus = 'active' | 'cleared' | 'overdue';
 

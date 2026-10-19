@@ -16,7 +16,7 @@ import {
   Package, PiggyBank, FileJson, Hash, Landmark, ScrollText, BookMarked, ShieldCheck, Users2, FileCheck, Shield,
   Coins, Trash2, History, Wheat, Vote, Settings, BookOpenCheck, UserCog, DatabaseBackup, Blocks, HardHat,
   MessageSquareWarning, Car, Wrench, Building, ScanBarcode, Tags, PackageX, Undo2, GitCompareArrows, Stethoscope,
-  Download,
+  Download, Route, Fuel,
 } from 'lucide-react';
 import type { Capability, NavDomain, Role } from './capabilities';
 
@@ -93,7 +93,13 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'procurementMasters', titleKey: 'procurementMasters', icon: Table2,  route: '/procurement-masters', domain: 'marketing', requiredCapabilities: ['procurement_msp'], requiredRoles: ['admin', 'accountant'], order: 1 },
   { id: 'agencyReceipts', titleKey: 'agencyReceipts', icon: Landmark,        route: '/agency-receipts', domain: 'marketing', requiredCapabilities: ['procurement_msp'], requiredRoles: ['admin', 'accountant'], order: 2 },
   { id: 'procurementRegisters', titleKey: 'procurementRegisters', icon: FileSpreadsheet, route: '/procurement-registers', domain: 'marketing', requiredCapabilities: ['procurement_msp'], requiredRoles: ['admin', 'accountant', 'viewer'], order: 3 },
-  { id: 'transport', titleKey: 'transport', icon: Truck,                    route: '/transport', domain: 'marketing', requiredCapabilities: ['transport'], requiredRoles: ['admin', 'accountant'], order: 4 },
+  // ── Transport module group (domain: 'transport') — own vehicles, trips, vehicle costs, vehicle-wise profit,
+  // and the hired-transporter master (moved here from 'marketing' so a transport society sees ONE group). ──
+  { id: 'transportVehicles', titleKey: 'transportVehicles', icon: Truck,     route: '/transport-vehicles', domain: 'transport', requiredCapabilities: ['transport'], requiredRoles: ['admin', 'accountant'], order: 0 },
+  { id: 'transportTrips', titleKey: 'transportTrips', icon: Route,           route: '/transport-trips', domain: 'transport', requiredCapabilities: ['transport'], requiredRoles: ['admin', 'accountant'], order: 1 },
+  { id: 'vehicleExpenses', titleKey: 'vehicleExpenses', icon: Fuel,          route: '/vehicle-expenses', domain: 'transport', requiredCapabilities: ['transport'], requiredRoles: ['admin', 'accountant'], order: 2 },
+  { id: 'vehicleProfit', titleKey: 'vehicleProfit', icon: TrendingUp,        route: '/vehicle-profit', domain: 'transport', requiredCapabilities: ['transport'], requiredRoles: ['admin', 'accountant', 'auditor'], order: 3 },
+  { id: 'transport', titleKey: 'transport', icon: Truck,                    route: '/transport', domain: 'transport', requiredCapabilities: ['transport'], requiredRoles: ['admin', 'accountant'], order: 4 },
   // ── Housing-cooperative module group (domain: 'housing') — all housing modules live here so
   // a housing society sees ONE organised "Housing" sidebar group (mirrors the Labour group). ──
   { id: 'buildings', titleKey: 'buildings', icon: Building, route: '/buildings', domain: 'housing', requiredCapabilities: ['housing'], requiredRoles: ['admin', 'accountant'], order: 0 },

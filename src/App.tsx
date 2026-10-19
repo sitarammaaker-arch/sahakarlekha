@@ -11,6 +11,7 @@ import { LabourProvider } from "@/contexts/LabourDataContext";
 import { HousingProvider } from "@/contexts/HousingDataContext";
 import { DairyProvider } from "@/contexts/DairyDataContext";
 import { MarketingProvider } from "@/contexts/MarketingDataContext";
+import { TransportOpsProvider } from "@/contexts/TransportOpsContext";
 import { ConsumerProvider } from "@/contexts/ConsumerDataContext";
 import ExportContextBinder from "@/components/ExportContextBinder";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -152,6 +153,10 @@ const ProcurementMasters = lazyWithRetry(() => import("./pages/marketing/Procure
 const AgencyReceipts = lazyWithRetry(() => import("./pages/marketing/AgencyReceipts"));
 const ProcurementRegisters = lazyWithRetry(() => import("./pages/marketing/ProcurementRegisters"));
 const Transport = lazyWithRetry(() => import("./pages/marketing/Transport"));
+const TransportVehicles = lazyWithRetry(() => import("./pages/transport/Vehicles"));
+const TransportTrips = lazyWithRetry(() => import("./pages/transport/Trips"));
+const VehicleExpenses = lazyWithRetry(() => import("./pages/transport/VehicleExpenses"));
+const VehicleProfit = lazyWithRetry(() => import("./pages/transport/VehicleProfit"));
 const RetailCounter = lazyWithRetry(() => import("./pages/consumer/RetailCounter"));
 const SalesReturn = lazyWithRetry(() => import("./pages/consumer/SalesReturn"));
 const PurchaseReturn = lazyWithRetry(() => import("./pages/consumer/PurchaseReturn"));
@@ -414,6 +419,10 @@ const AppRoutes = () => {
       <Route path="/agency-receipts" element={<ProtectedRoute><AgencyReceipts /></ProtectedRoute>} />
       <Route path="/procurement-registers" element={<ProtectedRoute><ProcurementRegisters /></ProtectedRoute>} />
       <Route path="/transport" element={<ProtectedRoute><Transport /></ProtectedRoute>} />
+      <Route path="/transport-vehicles" element={<ProtectedRoute><TransportVehicles /></ProtectedRoute>} />
+      <Route path="/transport-trips" element={<ProtectedRoute><TransportTrips /></ProtectedRoute>} />
+      <Route path="/vehicle-expenses" element={<ProtectedRoute><VehicleExpenses /></ProtectedRoute>} />
+      <Route path="/vehicle-profit" element={<ProtectedRoute><VehicleProfit /></ProtectedRoute>} />
       <Route path="/retail-counter" element={<ProtectedRoute><RetailCounter /></ProtectedRoute>} />
       <Route path="/sales-return" element={<ProtectedRoute><SalesReturn /></ProtectedRoute>} />
       <Route path="/purchase-return" element={<ProtectedRoute><PurchaseReturn /></ProtectedRoute>} />
@@ -493,6 +502,7 @@ const App = () => (
         <HousingProvider>
         <DairyProvider>
         <MarketingProvider>
+        <TransportOpsProvider>
         <ConsumerProvider>
         <TooltipProvider>
           <ExportContextBinder />
@@ -503,6 +513,7 @@ const App = () => (
           </BrowserRouter>
         </TooltipProvider>
         </ConsumerProvider>
+        </TransportOpsProvider>
         </MarketingProvider>
         </DairyProvider>
         </HousingProvider>

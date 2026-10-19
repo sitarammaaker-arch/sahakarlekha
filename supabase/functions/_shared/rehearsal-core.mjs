@@ -2445,11 +2445,118 @@ var purchaseOrder = {
 };
 var CONSUMER_ENTITIES = [priceList, patronageRun, purchaseOrder];
 
-// src/lib/export/entities/platform.ts
+// src/lib/export/entities/transport.ts
 var c12 = (key, header, headerHi, over = {}) => ({ key, header, headerHi, type: "string", piiClass: "none", defaultVisible: true, ...over });
 var money10 = (key, header, headerHi, over = {}) => c12(key, header, headerHi, { type: "currency", ...over });
-var num9 = (key, header, headerHi, over = {}) => c12(key, header, headerHi, { type: "number", ...over });
 var internal12 = (key, header, headerHi, over = {}) => c12(key, header, headerHi, { defaultVisible: false, ...over });
+var CAP6 = "transport";
+var vehicle = {
+  key: "transport_vehicle",
+  table: "transport_vehicles",
+  domain: "transport",
+  label: "Vehicles",
+  labelHi: "\u0935\u093E\u0939\u0928",
+  capability: CAP6,
+  minRole: "viewer",
+  scope: "society",
+  nature: "master",
+  dependsOn: ["society", "asset"],
+  naturalKey: ["regNo"],
+  softDeleteField: "isDeleted",
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  optionalTable: true,
+  columns: [
+    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c12("regNo", "Registration No.", "\u092A\u0902\u091C\u0940\u0915\u0930\u0923 \u0938\u0902\u0916\u094D\u092F\u093E"),
+    c12("vehicleType", "Vehicle Type", "\u0935\u093E\u0939\u0928 \u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
+    c12("capacity", "Capacity", "\u0915\u094D\u0937\u092E\u0924\u093E"),
+    internal12("assetId", "Asset", "\u0938\u0902\u092A\u0924\u094D\u0924\u093F"),
+    c12("insuranceExpiry", "Insurance Expiry", "\u092C\u0940\u092E\u093E \u0938\u092E\u093E\u092A\u094D\u0924\u093F", { type: "date" }),
+    c12("permitExpiry", "Permit Expiry", "\u092A\u0930\u092E\u093F\u091F \u0938\u092E\u093E\u092A\u094D\u0924\u093F", { type: "date" }),
+    c12("fitnessExpiry", "Fitness Expiry", "\u092B\u093C\u093F\u091F\u0928\u0947\u0938 \u0938\u092E\u093E\u092A\u094D\u0924\u093F", { type: "date" }),
+    c12("pucExpiry", "PUC Expiry", "PUC \u0938\u092E\u093E\u092A\u094D\u0924\u093F", { type: "date" }),
+    c12("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    c12("remarks", "Remarks", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940"),
+    c12("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false }),
+    internal12("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
+  ]
+};
+var trip = {
+  key: "transport_trip",
+  table: "transport_trips",
+  domain: "transport",
+  label: "Trips",
+  labelHi: "\u091F\u094D\u0930\u093F\u092A",
+  capability: CAP6,
+  minRole: "viewer",
+  scope: "society",
+  nature: "transaction",
+  dependsOn: ["society", "transport_vehicle", "customer", "voucher"],
+  naturalKey: ["tripNo"],
+  softDeleteField: "isDeleted",
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  optionalTable: true,
+  columns: [
+    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c12("tripNo", "Trip No.", "\u091F\u094D\u0930\u093F\u092A \u0938\u0902\u0916\u094D\u092F\u093E"),
+    c12("date", "Date", "\u0926\u093F\u0928\u093E\u0902\u0915", { type: "date" }),
+    c12("vehicleId", "Vehicle", "\u0935\u093E\u0939\u0928"),
+    c12("customerId", "Customer", "\u0917\u094D\u0930\u093E\u0939\u0915"),
+    c12("fromPlace", "From", "\u0915\u0939\u093E\u0901 \u0938\u0947"),
+    c12("toPlace", "To", "\u0915\u0939\u093E\u0901 \u0924\u0915"),
+    money10("freight", "Freight", "\u092D\u093E\u0921\u093C\u093E"),
+    money10("loading", "Loading / Unloading", "\u0932\u0926\u093E\u0908 / \u0909\u0924\u0930\u093E\u0908"),
+    money10("detention", "Detention", "\u0930\u0941\u0915\u093E\u0908"),
+    money10("amount", "Amount", "\u0930\u093E\u0936\u093F"),
+    money10("paidAmount", "Received", "\u092A\u094D\u0930\u093E\u092A\u094D\u0924 \u0930\u093E\u0936\u093F"),
+    c12("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    c12("narration", "Narration", "\u0935\u093F\u0935\u0930\u0923"),
+    internal12("voucherId", "Voucher", "\u0935\u093E\u0909\u091A\u0930"),
+    internal12("collectionVoucherIds", "Collection Vouchers", "\u0935\u0938\u0942\u0932\u0940 \u0935\u093E\u0909\u091A\u0930", { type: "json" }),
+    c12("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false }),
+    internal12("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
+  ]
+};
+var vehicleExpense = {
+  key: "transport_vehicle_expense",
+  table: "transport_vehicle_expenses",
+  domain: "transport",
+  label: "Vehicle Expenses",
+  labelHi: "\u0935\u093E\u0939\u0928 \u0916\u0930\u094D\u091A",
+  capability: CAP6,
+  minRole: "viewer",
+  scope: "society",
+  nature: "transaction",
+  dependsOn: ["society", "transport_vehicle", "account", "voucher"],
+  naturalKey: ["expenseNo"],
+  softDeleteField: "isDeleted",
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  optionalTable: true,
+  columns: [
+    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c12("expenseNo", "Expense No.", "\u0916\u0930\u094D\u091A \u0938\u0902\u0916\u094D\u092F\u093E"),
+    c12("date", "Date", "\u0926\u093F\u0928\u093E\u0902\u0915", { type: "date" }),
+    c12("vehicleId", "Vehicle", "\u0935\u093E\u0939\u0928"),
+    c12("accountId", "Expense Head", "\u0916\u0930\u094D\u091A \u0916\u093E\u0924\u093E"),
+    money10("amount", "Amount", "\u0930\u093E\u0936\u093F"),
+    c12("mode", "Mode", "\u092E\u093E\u0927\u094D\u092F\u092E", { type: "enum" }),
+    internal12("bankAccountId", "Bank Account", "\u092C\u0948\u0902\u0915 \u0916\u093E\u0924\u093E"),
+    c12("narration", "Narration", "\u0935\u093F\u0935\u0930\u0923"),
+    internal12("voucherId", "Voucher", "\u0935\u093E\u0909\u091A\u0930"),
+    c12("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false }),
+    internal12("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
+  ]
+};
+var TRANSPORT_ENTITIES = [vehicle, trip, vehicleExpense];
+
+// src/lib/export/entities/platform.ts
+var c13 = (key, header, headerHi, over = {}) => ({ key, header, headerHi, type: "string", piiClass: "none", defaultVisible: true, ...over });
+var money11 = (key, header, headerHi, over = {}) => c13(key, header, headerHi, { type: "currency", ...over });
+var num9 = (key, header, headerHi, over = {}) => c13(key, header, headerHi, { type: "number", ...over });
+var internal13 = (key, header, headerHi, over = {}) => c13(key, header, headerHi, { defaultVisible: false, ...over });
 var asset = {
   key: "asset",
   table: "assets",
@@ -2465,24 +2572,24 @@ var asset = {
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("assetNo", "Asset No.", "\u0938\u0902\u092A\u0924\u094D\u0924\u093F \u0938\u0902\u0916\u094D\u092F\u093E"),
-    c12("name", "Asset Name", "\u0938\u0902\u092A\u0924\u094D\u0924\u093F \u0928\u093E\u092E"),
-    c12("category", "Category", "\u0936\u094D\u0930\u0947\u0923\u0940", { type: "enum" }),
-    c12("purchaseDate", "Purchase Date", "\u0915\u094D\u0930\u092F \u0924\u093F\u0925\u093F", { type: "date" }),
-    money10("cost", "Cost", "\u0932\u093E\u0917\u0924"),
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("assetNo", "Asset No.", "\u0938\u0902\u092A\u0924\u094D\u0924\u093F \u0938\u0902\u0916\u094D\u092F\u093E"),
+    c13("name", "Asset Name", "\u0938\u0902\u092A\u0924\u094D\u0924\u093F \u0928\u093E\u092E"),
+    c13("category", "Category", "\u0936\u094D\u0930\u0947\u0923\u0940", { type: "enum" }),
+    c13("purchaseDate", "Purchase Date", "\u0915\u094D\u0930\u092F \u0924\u093F\u0925\u093F", { type: "date" }),
+    money11("cost", "Cost", "\u0932\u093E\u0917\u0924"),
     num9("depreciationRate", "Depreciation Rate %", "\u092E\u0942\u0932\u094D\u092F\u0939\u094D\u0930\u093E\u0938 \u0926\u0930 %"),
-    c12("depreciationMethod", "Depreciation Method", "\u092E\u0942\u0932\u094D\u092F\u0939\u094D\u0930\u093E\u0938 \u0935\u093F\u0927\u093F", { type: "enum" }),
+    c13("depreciationMethod", "Depreciation Method", "\u092E\u0942\u0932\u094D\u092F\u0939\u094D\u0930\u093E\u0938 \u0935\u093F\u0927\u093F", { type: "enum" }),
     num9("usefulLife", "Useful Life (years)", "\u0909\u092A\u092F\u094B\u0917\u0940 \u0906\u092F\u0941 (\u0935\u0930\u094D\u0937)"),
-    money10("residualValue", "Residual Value", "\u0905\u0935\u0936\u093F\u0937\u094D\u091F \u092E\u0942\u0932\u094D\u092F"),
-    c12("location", "Location", "\u0938\u094D\u0925\u093E\u0928"),
-    c12("description", "Description", "\u0935\u093F\u0935\u0930\u0923"),
-    c12("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
-    c12("disposalDate", "Disposal Date", "\u0928\u093F\u092A\u091F\u093E\u0928 \u0924\u093F\u0925\u093F", { type: "date" }),
-    money10("saleProceeds", "Sale Proceeds", "\u0935\u093F\u0915\u094D\u0930\u092F \u0906\u092F"),
-    internal12("depreciationPostedFY", "Depreciation Posted FY", "\u092E\u0942\u0932\u094D\u092F\u0939\u094D\u0930\u093E\u0938 \u092A\u094B\u0938\u094D\u091F \u0935\u0930\u094D\u0937"),
-    internal12("acquisitionVoucherId", "Acquisition Voucher", "\u0905\u0927\u093F\u0917\u094D\u0930\u0939\u0923 \u0935\u093E\u0909\u091A\u0930"),
-    c12("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false })
+    money11("residualValue", "Residual Value", "\u0905\u0935\u0936\u093F\u0937\u094D\u091F \u092E\u0942\u0932\u094D\u092F"),
+    c13("location", "Location", "\u0938\u094D\u0925\u093E\u0928"),
+    c13("description", "Description", "\u0935\u093F\u0935\u0930\u0923"),
+    c13("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    c13("disposalDate", "Disposal Date", "\u0928\u093F\u092A\u091F\u093E\u0928 \u0924\u093F\u0925\u093F", { type: "date" }),
+    money11("saleProceeds", "Sale Proceeds", "\u0935\u093F\u0915\u094D\u0930\u092F \u0906\u092F"),
+    internal13("depreciationPostedFY", "Depreciation Posted FY", "\u092E\u0942\u0932\u094D\u092F\u0939\u094D\u0930\u093E\u0938 \u092A\u094B\u0938\u094D\u091F \u0935\u0930\u094D\u0937"),
+    internal13("acquisitionVoucherId", "Acquisition Voucher", "\u0905\u0927\u093F\u0917\u094D\u0930\u0939\u0923 \u0935\u093E\u0909\u091A\u0930"),
+    c13("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false })
   ]
 };
 var bankReconciliation = {
@@ -2500,21 +2607,21 @@ var bankReconciliation = {
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("bankAccountId", "Bank Account", "\u092C\u0948\u0902\u0915 \u0916\u093E\u0924\u093E"),
-    c12("bankAccountName", "Bank Account Name", "\u092C\u0948\u0902\u0915 \u0916\u093E\u0924\u093E \u0928\u093E\u092E"),
-    c12("asOfDate", "As On Date", "\u0924\u093F\u0925\u093F \u0924\u0915", { type: "date" }),
-    money10("statementBalance", "Statement Balance", "\u0935\u093F\u0935\u0930\u0923 \u0936\u0947\u0937"),
-    money10("bookBalance", "Book Balance", "\u092C\u0939\u0940 \u0936\u0947\u0937"),
-    money10("unclearedDepositsTotal", "Uncleared Deposits", "\u0905\u0928\u0915\u094D\u0932\u093F\u092F\u0930 \u091C\u092E\u093E"),
-    money10("unclearedPaymentsTotal", "Uncleared Payments", "\u0905\u0928\u0915\u094D\u0932\u093F\u092F\u0930 \u092D\u0941\u0917\u0924\u093E\u0928"),
-    internal12("unclearedDepositIds", "Uncleared Deposit IDs", "\u0905\u0928\u0915\u094D\u0932\u093F\u092F\u0930 \u091C\u092E\u093E \u0906\u0908\u0921\u0940", { type: "json" }),
-    internal12("unclearedPaymentIds", "Uncleared Payment IDs", "\u0905\u0928\u0915\u094D\u0932\u093F\u092F\u0930 \u092D\u0941\u0917\u0924\u093E\u0928 \u0906\u0908\u0921\u0940", { type: "json" }),
-    money10("difference", "Difference", "\u0905\u0902\u0924\u0930"),
-    c12("isReconciled", "Reconciled", "\u0938\u092E\u093E\u0927\u093E\u0928\u093F\u0924", { type: "boolean" }),
-    internal12("reconciledBy", "Reconciled By", "\u0938\u092E\u093E\u0927\u093E\u0928\u0915\u0930\u094D\u0924\u093E"),
-    internal12("reconciledAt", "Reconciled At", "\u0938\u092E\u093E\u0927\u093E\u0928 \u0938\u092E\u092F", { type: "date" }),
-    c12("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false })
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("bankAccountId", "Bank Account", "\u092C\u0948\u0902\u0915 \u0916\u093E\u0924\u093E"),
+    c13("bankAccountName", "Bank Account Name", "\u092C\u0948\u0902\u0915 \u0916\u093E\u0924\u093E \u0928\u093E\u092E"),
+    c13("asOfDate", "As On Date", "\u0924\u093F\u0925\u093F \u0924\u0915", { type: "date" }),
+    money11("statementBalance", "Statement Balance", "\u0935\u093F\u0935\u0930\u0923 \u0936\u0947\u0937"),
+    money11("bookBalance", "Book Balance", "\u092C\u0939\u0940 \u0936\u0947\u0937"),
+    money11("unclearedDepositsTotal", "Uncleared Deposits", "\u0905\u0928\u0915\u094D\u0932\u093F\u092F\u0930 \u091C\u092E\u093E"),
+    money11("unclearedPaymentsTotal", "Uncleared Payments", "\u0905\u0928\u0915\u094D\u0932\u093F\u092F\u0930 \u092D\u0941\u0917\u0924\u093E\u0928"),
+    internal13("unclearedDepositIds", "Uncleared Deposit IDs", "\u0905\u0928\u0915\u094D\u0932\u093F\u092F\u0930 \u091C\u092E\u093E \u0906\u0908\u0921\u0940", { type: "json" }),
+    internal13("unclearedPaymentIds", "Uncleared Payment IDs", "\u0905\u0928\u0915\u094D\u0932\u093F\u092F\u0930 \u092D\u0941\u0917\u0924\u093E\u0928 \u0906\u0908\u0921\u0940", { type: "json" }),
+    money11("difference", "Difference", "\u0905\u0902\u0924\u0930"),
+    c13("isReconciled", "Reconciled", "\u0938\u092E\u093E\u0927\u093E\u0928\u093F\u0924", { type: "boolean" }),
+    internal13("reconciledBy", "Reconciled By", "\u0938\u092E\u093E\u0927\u093E\u0928\u0915\u0930\u094D\u0924\u093E"),
+    internal13("reconciledAt", "Reconciled At", "\u0938\u092E\u093E\u0927\u093E\u0928 \u0938\u092E\u092F", { type: "date" }),
+    c13("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false })
   ]
 };
 var tdsEntry = {
@@ -2533,24 +2640,24 @@ var tdsEntry = {
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("date", "Date", "\u0926\u093F\u0928\u093E\u0902\u0915", { type: "date" }),
-    c12("deducteeName", "Deductee Name", "\u0915\u091F\u094C\u0924\u0940-\u0905\u0927\u0940\u0928 \u0915\u093E \u0928\u093E\u092E"),
-    c12("deducteePan", "Deductee PAN", "\u0915\u091F\u094C\u0924\u0940-\u0905\u0927\u0940\u0928 \u092A\u0948\u0928", { piiClass: "identity" }),
-    c12("deducteeType", "Deductee Type", "\u0915\u091F\u094C\u0924\u0940-\u0905\u0927\u0940\u0928 \u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
-    c12("section", "TDS Section", "\u091F\u0940\u0921\u0940\u090F\u0938 \u0927\u093E\u0930\u093E"),
-    c12("natureOfPayment", "Nature of Payment", "\u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u0940 \u092A\u094D\u0930\u0915\u0943\u0924\u093F"),
-    money10("grossAmount", "Gross Amount", "\u0938\u0915\u0932 \u0930\u093E\u0936\u093F"),
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("date", "Date", "\u0926\u093F\u0928\u093E\u0902\u0915", { type: "date" }),
+    c13("deducteeName", "Deductee Name", "\u0915\u091F\u094C\u0924\u0940-\u0905\u0927\u0940\u0928 \u0915\u093E \u0928\u093E\u092E"),
+    c13("deducteePan", "Deductee PAN", "\u0915\u091F\u094C\u0924\u0940-\u0905\u0927\u0940\u0928 \u092A\u0948\u0928", { piiClass: "identity" }),
+    c13("deducteeType", "Deductee Type", "\u0915\u091F\u094C\u0924\u0940-\u0905\u0927\u0940\u0928 \u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
+    c13("section", "TDS Section", "\u091F\u0940\u0921\u0940\u090F\u0938 \u0927\u093E\u0930\u093E"),
+    c13("natureOfPayment", "Nature of Payment", "\u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u0940 \u092A\u094D\u0930\u0915\u0943\u0924\u093F"),
+    money11("grossAmount", "Gross Amount", "\u0938\u0915\u0932 \u0930\u093E\u0936\u093F"),
     num9("tdsRate", "TDS Rate %", "\u091F\u0940\u0921\u0940\u090F\u0938 \u0926\u0930 %"),
-    money10("tdsAmount", "TDS Amount", "\u091F\u0940\u0921\u0940\u090F\u0938 \u0930\u093E\u0936\u093F"),
-    c12("quarter", "Quarter", "\u0924\u093F\u092E\u093E\u0939\u0940"),
-    c12("financialYear", "Financial Year", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937"),
-    c12("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
-    internal12("challanId", "Challan", "\u091A\u093E\u0932\u093E\u0928"),
-    internal12("voucherId", "Voucher", "\u0935\u093E\u0909\u091A\u0930"),
-    internal12("purchaseId", "Purchase", "\u0916\u0930\u0940\u0926"),
-    c12("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false }),
-    internal12("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
+    money11("tdsAmount", "TDS Amount", "\u091F\u0940\u0921\u0940\u090F\u0938 \u0930\u093E\u0936\u093F"),
+    c13("quarter", "Quarter", "\u0924\u093F\u092E\u093E\u0939\u0940"),
+    c13("financialYear", "Financial Year", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937"),
+    c13("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    internal13("challanId", "Challan", "\u091A\u093E\u0932\u093E\u0928"),
+    internal13("voucherId", "Voucher", "\u0935\u093E\u0909\u091A\u0930"),
+    internal13("purchaseId", "Purchase", "\u0916\u0930\u0940\u0926"),
+    c13("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false }),
+    internal13("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]
 };
 var tdsChallan = {
@@ -2569,17 +2676,17 @@ var tdsChallan = {
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("bsrCode", "BSR Code", "\u092C\u0940\u090F\u0938\u0906\u0930 \u0915\u094B\u0921"),
-    c12("challanDate", "Challan Date", "\u091A\u093E\u0932\u093E\u0928 \u0924\u093F\u0925\u093F", { type: "date" }),
-    c12("challanSerial", "Challan Serial", "\u091A\u093E\u0932\u093E\u0928 \u0915\u094D\u0930\u092E\u093E\u0902\u0915"),
-    money10("amount", "Amount", "\u0930\u093E\u0936\u093F"),
-    c12("bankName", "Bank Name", "\u092C\u0948\u0902\u0915 \u0928\u093E\u092E"),
-    c12("quarter", "Quarter", "\u0924\u093F\u092E\u093E\u0939\u0940"),
-    c12("financialYear", "Financial Year", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937"),
-    c12("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
-    c12("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false }),
-    internal12("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("bsrCode", "BSR Code", "\u092C\u0940\u090F\u0938\u0906\u0930 \u0915\u094B\u0921"),
+    c13("challanDate", "Challan Date", "\u091A\u093E\u0932\u093E\u0928 \u0924\u093F\u0925\u093F", { type: "date" }),
+    c13("challanSerial", "Challan Serial", "\u091A\u093E\u0932\u093E\u0928 \u0915\u094D\u0930\u092E\u093E\u0902\u0915"),
+    money11("amount", "Amount", "\u0930\u093E\u0936\u093F"),
+    c13("bankName", "Bank Name", "\u092C\u0948\u0902\u0915 \u0928\u093E\u092E"),
+    c13("quarter", "Quarter", "\u0924\u093F\u092E\u093E\u0939\u0940"),
+    c13("financialYear", "Financial Year", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937"),
+    c13("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    c13("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false }),
+    internal13("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]
 };
 var tdsChallanLink = {
@@ -2597,9 +2704,9 @@ var tdsChallanLink = {
   formats: ["csv", "json"],
   backupPolicy: "full",
   columns: [
-    c12("society_id", "Society", "\u0938\u092E\u093F\u0924\u093F"),
-    c12("entryId", "TDS Entry", "\u091F\u0940\u0921\u0940\u090F\u0938 \u092A\u094D\u0930\u0935\u093F\u0937\u094D\u091F\u093F"),
-    c12("challanId", "Challan", "\u091A\u093E\u0932\u093E\u0928")
+    c13("society_id", "Society", "\u0938\u092E\u093F\u0924\u093F"),
+    c13("entryId", "TDS Entry", "\u091F\u0940\u0921\u0940\u090F\u0938 \u092A\u094D\u0930\u0935\u093F\u0937\u094D\u091F\u093F"),
+    c13("challanId", "Challan", "\u091A\u093E\u0932\u093E\u0928")
   ]
 };
 var ewayBill = {
@@ -2617,24 +2724,24 @@ var ewayBill = {
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("type", "Type", "\u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
-    c12("docNo", "Document No.", "\u0926\u0938\u094D\u0924\u093E\u0935\u0947\u091C\u093C \u0938\u0902\u0916\u094D\u092F\u093E"),
-    c12("date", "Date", "\u0926\u093F\u0928\u093E\u0902\u0915", { type: "date" }),
-    c12("partyName", "Party Name", "\u092A\u0915\u094D\u0937\u0915\u093E\u0930 \u0928\u093E\u092E"),
-    c12("partyGst", "Party GSTIN", "\u092A\u0915\u094D\u0937\u0915\u093E\u0930 \u091C\u0940\u090F\u0938\u091F\u0940\u0906\u0908\u090F\u0928", { piiClass: "identity" }),
-    internal12("items", "Line Items", "\u092A\u0902\u0915\u094D\u0924\u093F \u0906\u0907\u091F\u092E", { type: "json" }),
-    money10("totalTaxable", "Total Taxable", "\u0915\u0941\u0932 \u0915\u0930 \u092F\u094B\u0917\u094D\u092F"),
-    money10("totalGst", "Total GST", "\u0915\u0941\u0932 \u091C\u0940\u090F\u0938\u091F\u0940"),
-    money10("grandTotal", "Grand Total", "\u092E\u0939\u093E\u092F\u094B\u0917"),
-    c12("transportMode", "Transport Mode", "\u092A\u0930\u093F\u0935\u0939\u0928 \u092E\u093E\u0927\u094D\u092F\u092E", { type: "enum" }),
-    c12("vehicleNo", "Vehicle No.", "\u0935\u093E\u0939\u0928 \u0938\u0902\u0916\u094D\u092F\u093E"),
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("type", "Type", "\u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
+    c13("docNo", "Document No.", "\u0926\u0938\u094D\u0924\u093E\u0935\u0947\u091C\u093C \u0938\u0902\u0916\u094D\u092F\u093E"),
+    c13("date", "Date", "\u0926\u093F\u0928\u093E\u0902\u0915", { type: "date" }),
+    c13("partyName", "Party Name", "\u092A\u0915\u094D\u0937\u0915\u093E\u0930 \u0928\u093E\u092E"),
+    c13("partyGst", "Party GSTIN", "\u092A\u0915\u094D\u0937\u0915\u093E\u0930 \u091C\u0940\u090F\u0938\u091F\u0940\u0906\u0908\u090F\u0928", { piiClass: "identity" }),
+    internal13("items", "Line Items", "\u092A\u0902\u0915\u094D\u0924\u093F \u0906\u0907\u091F\u092E", { type: "json" }),
+    money11("totalTaxable", "Total Taxable", "\u0915\u0941\u0932 \u0915\u0930 \u092F\u094B\u0917\u094D\u092F"),
+    money11("totalGst", "Total GST", "\u0915\u0941\u0932 \u091C\u0940\u090F\u0938\u091F\u0940"),
+    money11("grandTotal", "Grand Total", "\u092E\u0939\u093E\u092F\u094B\u0917"),
+    c13("transportMode", "Transport Mode", "\u092A\u0930\u093F\u0935\u0939\u0928 \u092E\u093E\u0927\u094D\u092F\u092E", { type: "enum" }),
+    c13("vehicleNo", "Vehicle No.", "\u0935\u093E\u0939\u0928 \u0938\u0902\u0916\u094D\u092F\u093E"),
     num9("distance", "Distance (km)", "\u0926\u0942\u0930\u0940 (\u0915\u093F.\u092E\u0940.)"),
-    c12("ewbNo", "EWB No.", "\u0908\u0921\u092C\u094D\u0932\u094D\u092F\u0942\u092C\u0940 \u0938\u0902\u0916\u094D\u092F\u093E"),
-    internal12("transporterName", "Transporter Name", "\u092A\u0930\u093F\u0935\u0939\u0928\u0915\u0930\u094D\u0924\u093E \u0928\u093E\u092E"),
-    internal12("transporterGstin", "Transporter GSTIN", "\u092A\u0930\u093F\u0935\u0939\u0928\u0915\u0930\u094D\u0924\u093E \u091C\u0940\u090F\u0938\u091F\u0940\u0906\u0908\u090F\u0928", { piiClass: "identity" }),
-    internal12("transDocNo", "Transport Doc No.", "\u092A\u0930\u093F\u0935\u0939\u0928 \u0926\u0938\u094D\u0924\u093E\u0935\u0947\u091C\u093C \u0938\u0902\u0916\u094D\u092F\u093E"),
-    internal12("transDocDate", "Transport Doc Date", "\u092A\u0930\u093F\u0935\u0939\u0928 \u0926\u0938\u094D\u0924\u093E\u0935\u0947\u091C\u093C \u0924\u093F\u0925\u093F", { type: "date" })
+    c13("ewbNo", "EWB No.", "\u0908\u0921\u092C\u094D\u0932\u094D\u092F\u0942\u092C\u0940 \u0938\u0902\u0916\u094D\u092F\u093E"),
+    internal13("transporterName", "Transporter Name", "\u092A\u0930\u093F\u0935\u0939\u0928\u0915\u0930\u094D\u0924\u093E \u0928\u093E\u092E"),
+    internal13("transporterGstin", "Transporter GSTIN", "\u092A\u0930\u093F\u0935\u0939\u0928\u0915\u0930\u094D\u0924\u093E \u091C\u0940\u090F\u0938\u091F\u0940\u0906\u0908\u090F\u0928", { piiClass: "identity" }),
+    internal13("transDocNo", "Transport Doc No.", "\u092A\u0930\u093F\u0935\u0939\u0928 \u0926\u0938\u094D\u0924\u093E\u0935\u0947\u091C\u093C \u0938\u0902\u0916\u094D\u092F\u093E"),
+    internal13("transDocDate", "Transport Doc Date", "\u092A\u0930\u093F\u0935\u0939\u0928 \u0926\u0938\u094D\u0924\u093E\u0935\u0947\u091C\u093C \u0924\u093F\u0925\u093F", { type: "date" })
   ]
 };
 var complianceFiling = {
@@ -2651,11 +2758,11 @@ var complianceFiling = {
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("itemId", "Compliance Item", "\u0905\u0928\u0941\u092A\u093E\u0932\u0928 \u092E\u0926"),
-    c12("filedAt", "Filed At", "\u092B\u093E\u0907\u0932 \u0924\u093F\u0925\u093F", { type: "date" }),
-    c12("filedBy", "Filed By", "\u092B\u093E\u0907\u0932\u0915\u0930\u094D\u0924\u093E"),
-    c12("note", "Note", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940")
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("itemId", "Compliance Item", "\u0905\u0928\u0941\u092A\u093E\u0932\u0928 \u092E\u0926"),
+    c13("filedAt", "Filed At", "\u092B\u093E\u0907\u0932 \u0924\u093F\u0925\u093F", { type: "date" }),
+    c13("filedBy", "Filed By", "\u092B\u093E\u0907\u0932\u0915\u0930\u094D\u0924\u093E"),
+    c13("note", "Note", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940")
   ]
 };
 var recoverable = {
@@ -2673,17 +2780,17 @@ var recoverable = {
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("partyName", "Party Name", "\u092A\u0915\u094D\u0937\u0915\u093E\u0930 \u0928\u093E\u092E"),
-    c12("category", "Category", "\u0936\u094D\u0930\u0947\u0923\u0940", { type: "enum" }),
-    c12("legalStage", "Legal Stage", "\u0915\u093E\u0928\u0942\u0928\u0940 \u091A\u0930\u0923", { type: "enum" }),
-    money10("openingBalance", "Opening Balance", "\u092A\u094D\u0930\u093E\u0930\u0902\u092D\u093F\u0915 \u0936\u0947\u0937"),
-    money10("additions", "Additions", "\u0935\u0943\u0926\u094D\u0927\u093F"),
-    money10("recoveries", "Recoveries", "\u0935\u0938\u0942\u0932\u0940"),
-    c12("fyStartDate", "FY Start Date", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937 \u092A\u094D\u0930\u093E\u0930\u0902\u092D", { type: "date" }),
-    c12("narration", "Narration", "\u0935\u093F\u0935\u0930\u0923"),
-    internal12("isDeleted", "Deleted (unused \u2014 rows are hard-deleted)", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E (\u0905\u092A\u094D\u0930\u092F\u0941\u0915\u094D\u0924)", { type: "boolean" }),
-    internal12("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("partyName", "Party Name", "\u092A\u0915\u094D\u0937\u0915\u093E\u0930 \u0928\u093E\u092E"),
+    c13("category", "Category", "\u0936\u094D\u0930\u0947\u0923\u0940", { type: "enum" }),
+    c13("legalStage", "Legal Stage", "\u0915\u093E\u0928\u0942\u0928\u0940 \u091A\u0930\u0923", { type: "enum" }),
+    money11("openingBalance", "Opening Balance", "\u092A\u094D\u0930\u093E\u0930\u0902\u092D\u093F\u0915 \u0936\u0947\u0937"),
+    money11("additions", "Additions", "\u0935\u0943\u0926\u094D\u0927\u093F"),
+    money11("recoveries", "Recoveries", "\u0935\u0938\u0942\u0932\u0940"),
+    c13("fyStartDate", "FY Start Date", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937 \u092A\u094D\u0930\u093E\u0930\u0902\u092D", { type: "date" }),
+    c13("narration", "Narration", "\u0935\u093F\u0935\u0930\u0923"),
+    internal13("isDeleted", "Deleted (unused \u2014 rows are hard-deleted)", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E (\u0905\u092A\u094D\u0930\u092F\u0941\u0915\u094D\u0924)", { type: "boolean" }),
+    internal13("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]
 };
 var kachiAaratEntry = {
@@ -2701,16 +2808,16 @@ var kachiAaratEntry = {
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("date", "Date", "\u0926\u093F\u0928\u093E\u0902\u0915", { type: "date" }),
-    c12("fyStartDate", "FY Start Date", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937 \u092A\u094D\u0930\u093E\u0930\u0902\u092D", { type: "date" }),
-    c12("crop", "Crop", "\u092B\u0938\u0932", { type: "enum" }),
-    c12("partyName", "Farmer / Party", "\u0915\u093F\u0938\u093E\u0928 / \u092A\u0915\u094D\u0937\u0915\u093E\u0930"),
-    money10("businessValue", "Business Value", "\u0935\u094D\u092F\u093E\u092A\u093E\u0930 \u092E\u0942\u0932\u094D\u092F"),
-    money10("damiEarned", "Dami Earned", "\u0926\u093E\u092E\u0940 \u0906\u092F"),
-    c12("narration", "Narration", "\u0935\u093F\u0935\u0930\u0923"),
-    internal12("isDeleted", "Deleted (unused \u2014 rows are hard-deleted)", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E (\u0905\u092A\u094D\u0930\u092F\u0941\u0915\u094D\u0924)", { type: "boolean" }),
-    internal12("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("date", "Date", "\u0926\u093F\u0928\u093E\u0902\u0915", { type: "date" }),
+    c13("fyStartDate", "FY Start Date", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937 \u092A\u094D\u0930\u093E\u0930\u0902\u092D", { type: "date" }),
+    c13("crop", "Crop", "\u092B\u0938\u0932", { type: "enum" }),
+    c13("partyName", "Farmer / Party", "\u0915\u093F\u0938\u093E\u0928 / \u092A\u0915\u094D\u0937\u0915\u093E\u0930"),
+    money11("businessValue", "Business Value", "\u0935\u094D\u092F\u093E\u092A\u093E\u0930 \u092E\u0942\u0932\u094D\u092F"),
+    money11("damiEarned", "Dami Earned", "\u0926\u093E\u092E\u0940 \u0906\u092F"),
+    c13("narration", "Narration", "\u0935\u093F\u0935\u0930\u0923"),
+    internal13("isDeleted", "Deleted (unused \u2014 rows are hard-deleted)", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E (\u0905\u092A\u094D\u0930\u092F\u0941\u0915\u094D\u0924)", { type: "boolean" }),
+    internal13("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]
 };
 var p7Entry = {
@@ -2728,17 +2835,17 @@ var p7Entry = {
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("fyStartDate", "FY Start Date", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937 \u092A\u094D\u0930\u093E\u0930\u0902\u092D", { type: "date" }),
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("fyStartDate", "FY Start Date", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937 \u092A\u094D\u0930\u093E\u0930\u0902\u092D", { type: "date" }),
     num9("rentedGodownCount", "Rented Godowns", "\u0915\u093F\u0930\u093E\u090F \u0915\u0947 \u0917\u094B\u0926\u093E\u092E"),
     num9("rentedCapacityMT", "Rented Capacity (MT)", "\u0915\u093F\u0930\u093E\u090F \u0915\u0940 \u0915\u094D\u0937\u092E\u0924\u093E (\u092E\u0940.\u091F\u0928)"),
-    money10("godownRentPaid", "Godown Rent Paid", "\u0917\u094B\u0926\u093E\u092E \u0915\u093F\u0930\u093E\u092F\u093E \u092D\u0941\u0917\u0924\u093E\u0928"),
+    money11("godownRentPaid", "Godown Rent Paid", "\u0917\u094B\u0926\u093E\u092E \u0915\u093F\u0930\u093E\u092F\u093E \u092D\u0941\u0917\u0924\u093E\u0928"),
     num9("truckCount", "Trucks Operated", "\u0938\u0902\u091A\u093E\u0932\u093F\u0924 \u091F\u094D\u0930\u0915"),
-    money10("transportChargesPaid", "Transport Charges Paid", "\u092A\u0930\u093F\u0935\u0939\u0928 \u0936\u0941\u0932\u094D\u0915 \u092D\u0941\u0917\u0924\u093E\u0928"),
-    money10("sugarCattleFeedSales", "Sugar / Cattle Feed Sales", "\u091A\u0940\u0928\u0940 / \u092A\u0936\u0941 \u0906\u0939\u093E\u0930 \u092C\u093F\u0915\u094D\u0930\u0940"),
-    money10("consumerProductSales", "Consumer Product Sales", "\u0909\u092A\u092D\u094B\u0915\u094D\u0924\u093E \u0909\u0924\u094D\u092A\u093E\u0926 \u092C\u093F\u0915\u094D\u0930\u0940"),
-    c12("narration", "Narration", "\u0935\u093F\u0935\u0930\u0923"),
-    internal12("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
+    money11("transportChargesPaid", "Transport Charges Paid", "\u092A\u0930\u093F\u0935\u0939\u0928 \u0936\u0941\u0932\u094D\u0915 \u092D\u0941\u0917\u0924\u093E\u0928"),
+    money11("sugarCattleFeedSales", "Sugar / Cattle Feed Sales", "\u091A\u0940\u0928\u0940 / \u092A\u0936\u0941 \u0906\u0939\u093E\u0930 \u092C\u093F\u0915\u094D\u0930\u0940"),
+    money11("consumerProductSales", "Consumer Product Sales", "\u0909\u092A\u092D\u094B\u0915\u094D\u0924\u093E \u0909\u0924\u094D\u092A\u093E\u0926 \u092C\u093F\u0915\u094D\u0930\u0940"),
+    c13("narration", "Narration", "\u0935\u093F\u0935\u0930\u0923"),
+    internal13("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]
 };
 var budget = {
@@ -2755,13 +2862,13 @@ var budget = {
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("financialYear", "Financial Year", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937"),
-    internal12("heads", "Budget Heads", "\u092C\u091C\u091F \u0936\u0940\u0930\u094D\u0937\u0915", { type: "json" }),
-    internal12("approvedBy", "Approved By", "\u0905\u0928\u0941\u092E\u094B\u0926\u0915"),
-    internal12("approvedAt", "Approved At", "\u0905\u0928\u0941\u092E\u094B\u0926\u0928 \u0938\u092E\u092F", { type: "date" }),
-    internal12("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" }),
-    internal12("createdBy", "Created By", "\u0928\u093F\u0930\u094D\u092E\u093E\u0924\u093E")
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("financialYear", "Financial Year", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937"),
+    internal13("heads", "Budget Heads", "\u092C\u091C\u091F \u0936\u0940\u0930\u094D\u0937\u0915", { type: "json" }),
+    internal13("approvedBy", "Approved By", "\u0905\u0928\u0941\u092E\u094B\u0926\u0915"),
+    internal13("approvedAt", "Approved At", "\u0905\u0928\u0941\u092E\u094B\u0926\u0928 \u0938\u092E\u092F", { type: "date" }),
+    internal13("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" }),
+    internal13("createdBy", "Created By", "\u0928\u093F\u0930\u094D\u092E\u093E\u0924\u093E")
   ]
 };
 var auditObjection = {
@@ -2779,20 +2886,20 @@ var auditObjection = {
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("objectionNo", "Objection No.", "\u0906\u092A\u0924\u094D\u0924\u093F \u0938\u0902\u0916\u094D\u092F\u093E"),
-    c12("auditYear", "Audit Year", "\u0911\u0921\u093F\u091F \u0935\u0930\u094D\u0937"),
-    c12("paraNo", "Para No.", "\u092A\u0948\u0930\u093E \u0938\u0902\u0916\u094D\u092F\u093E"),
-    c12("category", "Category", "\u0936\u094D\u0930\u0947\u0923\u0940", { type: "enum" }),
-    c12("objection", "Objection", "\u0906\u092A\u0924\u094D\u0924\u093F"),
-    money10("amountInvolved", "Amount Involved", "\u0938\u0902\u0932\u0917\u094D\u0928 \u0930\u093E\u0936\u093F"),
-    c12("dueDate", "Due Date", "\u0926\u0947\u092F \u0924\u093F\u0925\u093F", { type: "date" }),
-    c12("actionTaken", "Action Taken", "\u0915\u0940 \u0917\u0908 \u0915\u093E\u0930\u094D\u0930\u0935\u093E\u0908"),
-    c12("rectifiedDate", "Rectified Date", "\u0938\u0941\u0927\u093E\u0930 \u0924\u093F\u0925\u093F", { type: "date" }),
-    c12("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
-    c12("remarks", "Remarks", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940"),
-    c12("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false }),
-    internal12("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("objectionNo", "Objection No.", "\u0906\u092A\u0924\u094D\u0924\u093F \u0938\u0902\u0916\u094D\u092F\u093E"),
+    c13("auditYear", "Audit Year", "\u0911\u0921\u093F\u091F \u0935\u0930\u094D\u0937"),
+    c13("paraNo", "Para No.", "\u092A\u0948\u0930\u093E \u0938\u0902\u0916\u094D\u092F\u093E"),
+    c13("category", "Category", "\u0936\u094D\u0930\u0947\u0923\u0940", { type: "enum" }),
+    c13("objection", "Objection", "\u0906\u092A\u0924\u094D\u0924\u093F"),
+    money11("amountInvolved", "Amount Involved", "\u0938\u0902\u0932\u0917\u094D\u0928 \u0930\u093E\u0936\u093F"),
+    c13("dueDate", "Due Date", "\u0926\u0947\u092F \u0924\u093F\u0925\u093F", { type: "date" }),
+    c13("actionTaken", "Action Taken", "\u0915\u0940 \u0917\u0908 \u0915\u093E\u0930\u094D\u0930\u0935\u093E\u0908"),
+    c13("rectifiedDate", "Rectified Date", "\u0938\u0941\u0927\u093E\u0930 \u0924\u093F\u0925\u093F", { type: "date" }),
+    c13("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    c13("remarks", "Remarks", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940"),
+    c13("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false }),
+    internal13("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]
 };
 var meeting = {
@@ -2809,18 +2916,18 @@ var meeting = {
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("meetingNo", "Meeting No.", "\u092C\u0948\u0920\u0915 \u0938\u0902\u0916\u094D\u092F\u093E"),
-    c12("type", "Meeting Type", "\u092C\u0948\u0920\u0915 \u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
-    c12("date", "Date", "\u0926\u093F\u0928\u093E\u0902\u0915", { type: "date" }),
-    c12("time", "Time", "\u0938\u092E\u092F"),
-    c12("venue", "Venue", "\u0938\u094D\u0925\u093E\u0928"),
-    c12("agenda", "Agenda", "\u0915\u093E\u0930\u094D\u092F\u0938\u0942\u091A\u0940"),
-    c12("attendees", "Attendees", "\u0909\u092A\u0938\u094D\u0925\u093F\u0924"),
-    c12("resolutions", "Resolutions", "\u0938\u0902\u0915\u0932\u094D\u092A"),
-    c12("minutes", "Minutes", "\u0915\u093E\u0930\u094D\u092F\u0935\u0943\u0924\u094D\u0924"),
-    c12("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
-    internal12("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("meetingNo", "Meeting No.", "\u092C\u0948\u0920\u0915 \u0938\u0902\u0916\u094D\u092F\u093E"),
+    c13("type", "Meeting Type", "\u092C\u0948\u0920\u0915 \u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
+    c13("date", "Date", "\u0926\u093F\u0928\u093E\u0902\u0915", { type: "date" }),
+    c13("time", "Time", "\u0938\u092E\u092F"),
+    c13("venue", "Venue", "\u0938\u094D\u0925\u093E\u0928"),
+    c13("agenda", "Agenda", "\u0915\u093E\u0930\u094D\u092F\u0938\u0942\u091A\u0940"),
+    c13("attendees", "Attendees", "\u0909\u092A\u0938\u094D\u0925\u093F\u0924"),
+    c13("resolutions", "Resolutions", "\u0938\u0902\u0915\u0932\u094D\u092A"),
+    c13("minutes", "Minutes", "\u0915\u093E\u0930\u094D\u092F\u0935\u0943\u0924\u094D\u0924"),
+    c13("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    internal13("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]
 };
 var election = {
@@ -2837,20 +2944,20 @@ var election = {
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("electionNo", "Election No.", "\u091A\u0941\u0928\u093E\u0935 \u0938\u0902\u0916\u094D\u092F\u093E"),
-    c12("title", "Title", "\u0936\u0940\u0930\u094D\u0937\u0915"),
-    c12("post", "Post", "\u092A\u0926"),
-    c12("electionDate", "Election Date", "\u091A\u0941\u0928\u093E\u0935 \u0924\u093F\u0925\u093F", { type: "date" }),
-    c12("nominationDeadline", "Nomination Deadline", "\u0928\u093E\u092E\u093E\u0902\u0915\u0928 \u0905\u0902\u0924\u093F\u092E \u0924\u093F\u0925\u093F", { type: "date" }),
-    c12("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
-    internal12("candidates", "Candidates", "\u0909\u092E\u094D\u092E\u0940\u0926\u0935\u093E\u0930", { type: "json" }),
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("electionNo", "Election No.", "\u091A\u0941\u0928\u093E\u0935 \u0938\u0902\u0916\u094D\u092F\u093E"),
+    c13("title", "Title", "\u0936\u0940\u0930\u094D\u0937\u0915"),
+    c13("post", "Post", "\u092A\u0926"),
+    c13("electionDate", "Election Date", "\u091A\u0941\u0928\u093E\u0935 \u0924\u093F\u0925\u093F", { type: "date" }),
+    c13("nominationDeadline", "Nomination Deadline", "\u0928\u093E\u092E\u093E\u0902\u0915\u0928 \u0905\u0902\u0924\u093F\u092E \u0924\u093F\u0925\u093F", { type: "date" }),
+    c13("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    internal13("candidates", "Candidates", "\u0909\u092E\u094D\u092E\u0940\u0926\u0935\u093E\u0930", { type: "json" }),
     num9("totalVoters", "Total Voters", "\u0915\u0941\u0932 \u092E\u0924\u0926\u093E\u0924\u093E"),
     num9("votesCast", "Votes Cast", "\u0921\u093E\u0932\u0947 \u0917\u090F \u092E\u0924"),
-    c12("winnerId", "Winner", "\u0935\u093F\u091C\u0947\u0924\u093E"),
-    c12("remarks", "Remarks", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940"),
-    internal12("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" }),
-    internal12("createdBy", "Created By", "\u0928\u093F\u0930\u094D\u092E\u093E\u0924\u093E")
+    c13("winnerId", "Winner", "\u0935\u093F\u091C\u0947\u0924\u093E"),
+    c13("remarks", "Remarks", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940"),
+    internal13("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" }),
+    internal13("createdBy", "Created By", "\u0928\u093F\u0930\u094D\u092E\u093E\u0924\u093E")
   ]
 };
 var auditLog = {
@@ -2867,18 +2974,18 @@ var auditLog = {
   formats: ["csv", "json"],
   backupPolicy: "sidecar",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("created_at", "When", "\u0915\u092C", { type: "date" }),
-    c12("actor_name", "Actor", "\u0915\u0930\u094D\u0924\u093E"),
-    c12("actor_email", "Actor Email", "\u0915\u0930\u094D\u0924\u093E \u0908\u092E\u0947\u0932", { piiClass: "contact" }),
-    c12("actor_role", "Actor Role", "\u0915\u0930\u094D\u0924\u093E \u092D\u0942\u092E\u093F\u0915\u093E"),
-    c12("entity_type", "Entity Type", "\u0907\u0915\u093E\u0908 \u092A\u094D\u0930\u0915\u093E\u0930"),
-    c12("entity_id", "Entity ID", "\u0907\u0915\u093E\u0908 \u0906\u0908\u0921\u0940"),
-    c12("action", "Action", "\u0915\u094D\u0930\u093F\u092F\u093E", { type: "enum" }),
-    internal12("before", "Before", "\u092A\u0942\u0930\u094D\u0935", { type: "json" }),
-    internal12("after", "After", "\u092A\u0936\u094D\u091A\u093E\u0924", { type: "json" }),
-    c12("reason", "Reason", "\u0915\u093E\u0930\u0923"),
-    internal12("source", "Source", "\u0938\u094D\u0930\u094B\u0924")
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("created_at", "When", "\u0915\u092C", { type: "date" }),
+    c13("actor_name", "Actor", "\u0915\u0930\u094D\u0924\u093E"),
+    c13("actor_email", "Actor Email", "\u0915\u0930\u094D\u0924\u093E \u0908\u092E\u0947\u0932", { piiClass: "contact" }),
+    c13("actor_role", "Actor Role", "\u0915\u0930\u094D\u0924\u093E \u092D\u0942\u092E\u093F\u0915\u093E"),
+    c13("entity_type", "Entity Type", "\u0907\u0915\u093E\u0908 \u092A\u094D\u0930\u0915\u093E\u0930"),
+    c13("entity_id", "Entity ID", "\u0907\u0915\u093E\u0908 \u0906\u0908\u0921\u0940"),
+    c13("action", "Action", "\u0915\u094D\u0930\u093F\u092F\u093E", { type: "enum" }),
+    internal13("before", "Before", "\u092A\u0942\u0930\u094D\u0935", { type: "json" }),
+    internal13("after", "After", "\u092A\u0936\u094D\u091A\u093E\u0924", { type: "json" }),
+    c13("reason", "Reason", "\u0915\u093E\u0930\u0923"),
+    internal13("source", "Source", "\u0938\u094D\u0930\u094B\u0924")
   ]
 };
 var guideCertificate = {
@@ -2899,12 +3006,12 @@ var guideCertificate = {
   formats: ["csv", "json"],
   backupPolicy: "sidecar",
   columns: [
-    c12("cert_no", "Certificate No.", "\u092A\u094D\u0930\u092E\u093E\u0923\u092A\u0924\u094D\u0930 \u0938\u0902\u0916\u094D\u092F\u093E"),
-    c12("holder_name", "Holder Name", "\u0927\u093E\u0930\u0915 \u0928\u093E\u092E"),
-    c12("email", "Email", "\u0908\u092E\u0947\u0932", { piiClass: "contact" }),
-    c12("society_name", "Society Name", "\u0938\u092E\u093F\u0924\u093F \u0928\u093E\u092E"),
+    c13("cert_no", "Certificate No.", "\u092A\u094D\u0930\u092E\u093E\u0923\u092A\u0924\u094D\u0930 \u0938\u0902\u0916\u094D\u092F\u093E"),
+    c13("holder_name", "Holder Name", "\u0927\u093E\u0930\u0915 \u0928\u093E\u092E"),
+    c13("email", "Email", "\u0908\u092E\u0947\u0932", { piiClass: "contact" }),
+    c13("society_name", "Society Name", "\u0938\u092E\u093F\u0924\u093F \u0928\u093E\u092E"),
     num9("parts_passed", "Parts Passed", "\u0909\u0924\u094D\u0924\u0940\u0930\u094D\u0923 \u092D\u093E\u0917"),
-    c12("issued_at", "Issued At", "\u091C\u093E\u0930\u0940 \u0924\u093F\u0925\u093F", { type: "date" })
+    c13("issued_at", "Issued At", "\u091C\u093E\u0930\u0940 \u0924\u093F\u0925\u093F", { type: "date" })
   ]
 };
 var societies = {
@@ -2921,9 +3028,9 @@ var societies = {
   formats: [],
   backupPolicy: "exclude",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("registration_no", "Registration No.", "\u092A\u0902\u091C\u0940\u0915\u0930\u0923 \u0938\u0902\u0916\u094D\u092F\u093E"),
-    c12("name", "Name", "\u0928\u093E\u092E")
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("registration_no", "Registration No.", "\u092A\u0902\u091C\u0940\u0915\u0930\u0923 \u0938\u0902\u0916\u094D\u092F\u093E"),
+    c13("name", "Name", "\u0928\u093E\u092E")
   ]
 };
 var societyUsers = {
@@ -2940,11 +3047,11 @@ var societyUsers = {
   formats: [],
   backupPolicy: "exclude",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("email", "Email", "\u0908\u092E\u0947\u0932", { piiClass: "contact" }),
-    c12("password", "Password Hash", "\u092A\u093E\u0938\u0935\u0930\u094D\u0921 \u0939\u0948\u0936", { piiClass: "identity", defaultVisible: false }),
-    c12("mfa_secret", "MFA Secret", "\u090F\u092E\u090F\u092B\u090F \u0938\u0940\u0915\u094D\u0930\u0947\u091F", { piiClass: "identity", defaultVisible: false }),
-    c12("role", "Role", "\u092D\u0942\u092E\u093F\u0915\u093E", { type: "enum" })
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("email", "Email", "\u0908\u092E\u0947\u0932", { piiClass: "contact" }),
+    c13("password", "Password Hash", "\u092A\u093E\u0938\u0935\u0930\u094D\u0921 \u0939\u0948\u0936", { piiClass: "identity", defaultVisible: false }),
+    c13("mfa_secret", "MFA Secret", "\u090F\u092E\u090F\u092B\u090F \u0938\u0940\u0915\u094D\u0930\u0947\u091F", { piiClass: "identity", defaultVisible: false }),
+    c13("role", "Role", "\u092D\u0942\u092E\u093F\u0915\u093E", { type: "enum" })
   ]
 };
 var societyCapabilities = {
@@ -2961,10 +3068,10 @@ var societyCapabilities = {
   formats: [],
   backupPolicy: "exclude",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("capability", "Capability", "\u0915\u094D\u0937\u092E\u0924\u093E"),
-    c12("mode", "Mode", "\u0935\u093F\u0927\u093F", { type: "enum" }),
-    c12("source", "Source", "\u0938\u094D\u0930\u094B\u0924", { type: "enum" })
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("capability", "Capability", "\u0915\u094D\u0937\u092E\u0924\u093E"),
+    c13("mode", "Mode", "\u0935\u093F\u0927\u093F", { type: "enum" }),
+    c13("source", "Source", "\u0938\u094D\u0930\u094B\u0924", { type: "enum" })
   ]
 };
 var platformAdmins = {
@@ -2981,9 +3088,9 @@ var platformAdmins = {
   formats: [],
   backupPolicy: "exclude",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("email", "Email", "\u0908\u092E\u0947\u0932", { piiClass: "contact" }),
-    c12("name", "Name", "\u0928\u093E\u092E")
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("email", "Email", "\u0908\u092E\u0947\u0932", { piiClass: "contact" }),
+    c13("name", "Name", "\u0928\u093E\u092E")
   ]
 };
 var userMfa = {
@@ -3000,8 +3107,8 @@ var userMfa = {
   formats: [],
   backupPolicy: "exclude",
   columns: [
-    c12("email", "Email", "\u0908\u092E\u0947\u0932", { piiClass: "contact" }),
-    c12("secret", "TOTP Secret", "\u091F\u0940\u0913\u091F\u0940\u092A\u0940 \u0938\u0940\u0915\u094D\u0930\u0947\u091F", { piiClass: "identity", defaultVisible: false })
+    c13("email", "Email", "\u0908\u092E\u0947\u0932", { piiClass: "contact" }),
+    c13("secret", "TOTP Secret", "\u091F\u0940\u0913\u091F\u0940\u092A\u0940 \u0938\u0940\u0915\u094D\u0930\u0947\u091F", { piiClass: "identity", defaultVisible: false })
   ]
 };
 var userMfaRecovery = {
@@ -3018,9 +3125,9 @@ var userMfaRecovery = {
   formats: [],
   backupPolicy: "exclude",
   columns: [
-    c12("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
-    c12("email", "Email", "\u0908\u092E\u0947\u0932", { piiClass: "contact" }),
-    c12("code_hash", "Recovery Code Hash", "\u0930\u093F\u0915\u0935\u0930\u0940 \u0915\u094B\u0921 \u0939\u0948\u0936", { piiClass: "identity", defaultVisible: false })
+    c13("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c13("email", "Email", "\u0908\u092E\u0947\u0932", { piiClass: "contact" }),
+    c13("code_hash", "Recovery Code Hash", "\u0930\u093F\u0915\u0935\u0930\u0940 \u0915\u094B\u0921 \u0939\u0948\u0936", { piiClass: "identity", defaultVisible: false })
   ]
 };
 var documentSequences = {
@@ -3037,10 +3144,10 @@ var documentSequences = {
   formats: ["json"],
   backupPolicy: "full",
   columns: [
-    c12("book", "Book", "\u092C\u0939\u0940"),
-    c12("fy", "Financial Year", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937"),
-    c12("last_number", "Last Number", "\u0905\u0902\u0924\u093F\u092E \u0938\u0902\u0916\u094D\u092F\u093E", { type: "number" }),
-    c12("updated_at", "Updated At", "\u0905\u0926\u094D\u092F\u0924\u0928", { type: "date", defaultVisible: false })
+    c13("book", "Book", "\u092C\u0939\u0940"),
+    c13("fy", "Financial Year", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937"),
+    c13("last_number", "Last Number", "\u0905\u0902\u0924\u093F\u092E \u0938\u0902\u0916\u094D\u092F\u093E", { type: "number" }),
+    c13("updated_at", "Updated At", "\u0905\u0926\u094D\u092F\u0924\u0928", { type: "date", defaultVisible: false })
   ]
 };
 var ledgerEvents = {
@@ -3057,12 +3164,12 @@ var ledgerEvents = {
   formats: ["json"],
   backupPolicy: "sidecar",
   columns: [
-    c12("event_id", "Event ID", "\u0907\u0935\u0947\u0902\u091F \u0906\u0908\u0921\u0940"),
-    c12("event_type", "Event Type", "\u0907\u0935\u0947\u0902\u091F \u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
-    c12("aggregate_type", "Aggregate", "\u090F\u0917\u094D\u0930\u0940\u0917\u0947\u091F", { type: "enum" }),
-    c12("aggregate_id", "Aggregate ID", "\u090F\u0917\u094D\u0930\u0940\u0917\u0947\u091F \u0906\u0908\u0921\u0940"),
-    c12("sequence", "Sequence", "\u0915\u094D\u0930\u092E", { type: "number", defaultVisible: false }),
-    c12("occurred_at", "Occurred At", "\u0918\u091F\u093F\u0924", { type: "date", defaultVisible: false })
+    c13("event_id", "Event ID", "\u0907\u0935\u0947\u0902\u091F \u0906\u0908\u0921\u0940"),
+    c13("event_type", "Event Type", "\u0907\u0935\u0947\u0902\u091F \u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
+    c13("aggregate_type", "Aggregate", "\u090F\u0917\u094D\u0930\u0940\u0917\u0947\u091F", { type: "enum" }),
+    c13("aggregate_id", "Aggregate ID", "\u090F\u0917\u094D\u0930\u0940\u0917\u0947\u091F \u0906\u0908\u0921\u0940"),
+    c13("sequence", "Sequence", "\u0915\u094D\u0930\u092E", { type: "number", defaultVisible: false }),
+    c13("occurred_at", "Occurred At", "\u0918\u091F\u093F\u0924", { type: "date", defaultVisible: false })
   ]
 };
 var PLATFORM_ENTITIES = [
@@ -3105,6 +3212,7 @@ var REGISTRY = [
   ...HOUSING_ENTITIES,
   ...MARKETING_ENTITIES,
   ...CONSUMER_ENTITIES,
+  ...TRANSPORT_ENTITIES,
   ...PLATFORM_ENTITIES
 ];
 
@@ -3378,15 +3486,15 @@ var inflt = function(dat, st, buf, dict) {
           if (s < 16) {
             ldt[i++] = s;
           } else {
-            var c13 = 0, n = 0;
+            var c14 = 0, n = 0;
             if (s == 16)
-              n = 3 + bits(dat, pos, 3), pos += 2, c13 = ldt[i - 1];
+              n = 3 + bits(dat, pos, 3), pos += 2, c14 = ldt[i - 1];
             else if (s == 17)
               n = 3 + bits(dat, pos, 7), pos += 3;
             else if (s == 18)
               n = 11 + bits(dat, pos, 127), pos += 7;
             while (n--)
-              ldt[i++] = c13;
+              ldt[i++] = c14;
           }
         }
         var lt = ldt.subarray(0, hLit), dt = ldt.subarray(hLit);
@@ -3407,14 +3515,14 @@ var inflt = function(dat, st, buf, dict) {
     var lms = (1 << lbt) - 1, dms = (1 << dbt) - 1;
     var lpos = pos;
     for (; ; lpos = pos) {
-      var c13 = lm[bits16(dat, pos) & lms], sym = c13 >> 4;
-      pos += c13 & 15;
+      var c14 = lm[bits16(dat, pos) & lms], sym = c14 >> 4;
+      pos += c14 & 15;
       if (pos > tbts) {
         if (noSt)
           err(0);
         break;
       }
-      if (!c13)
+      if (!c14)
         err(2);
       if (sym < 256)
         buf[bt++] = sym;
@@ -3484,18 +3592,18 @@ try {
 }
 var dutf8 = function(d) {
   for (var r = "", i = 0; ; ) {
-    var c13 = d[i++];
-    var eb = (c13 > 127) + (c13 > 223) + (c13 > 239);
+    var c14 = d[i++];
+    var eb = (c14 > 127) + (c14 > 223) + (c14 > 239);
     if (i + eb > d.length)
       return { s: r, r: slc(d, i - 1) };
     if (!eb)
-      r += String.fromCharCode(c13);
+      r += String.fromCharCode(c14);
     else if (eb == 3) {
-      c13 = ((c13 & 15) << 18 | (d[i++] & 63) << 12 | (d[i++] & 63) << 6 | d[i++] & 63) - 65536, r += String.fromCharCode(55296 | c13 >> 10, 56320 | c13 & 1023);
+      c14 = ((c14 & 15) << 18 | (d[i++] & 63) << 12 | (d[i++] & 63) << 6 | d[i++] & 63) - 65536, r += String.fromCharCode(55296 | c14 >> 10, 56320 | c14 & 1023);
     } else if (eb & 1)
-      r += String.fromCharCode((c13 & 31) << 6 | d[i++] & 63);
+      r += String.fromCharCode((c14 & 31) << 6 | d[i++] & 63);
     else
-      r += String.fromCharCode((c13 & 15) << 12 | (d[i++] & 63) << 6 | d[i++] & 63);
+      r += String.fromCharCode((c14 & 15) << 12 | (d[i++] & 63) << 6 | d[i++] & 63);
   }
 };
 function strFromU8(dat, latin1) {
@@ -3548,8 +3656,8 @@ function unzipSync(data, opts) {
       err(13);
   }
   ;
-  var c13 = b2(data, e + 8);
-  if (!c13)
+  var c14 = b2(data, e + 8);
+  if (!c14)
     return {};
   var o = b4(data, e + 16);
   var z = b4(data, e - 20) == 117853008;
@@ -3557,12 +3665,12 @@ function unzipSync(data, opts) {
     var ze = b4(data, e - 12);
     z = b4(data, ze) == 101075792;
     if (z) {
-      c13 = b4(data, ze + 32);
+      c14 = b4(data, ze + 32);
       o = b4(data, ze + 48);
     }
   }
   var fltr = opts && opts.filter;
-  for (var i = 0; i < c13; ++i) {
+  for (var i = 0; i < c14; ++i) {
     var _a2 = zh(data, o, z), c_2 = _a2[0], sc = _a2[1], su = _a2[2], fn = _a2[3], no = _a2[4], off = _a2[5], b = slzh(data, off);
     o = no;
     if (!fltr || fltr({
@@ -3737,7 +3845,7 @@ async function registryFingerprint(entities) {
     key: e.key,
     table: e.table,
     policy: e.backupPolicy,
-    columns: e.columns.map((c13) => c13.key).sort()
+    columns: e.columns.map((c14) => c14.key).sort()
   })).sort((a, b) => a.key.localeCompare(b.key));
   return sha256Canonical(shape);
 }
@@ -3807,7 +3915,7 @@ function parseNdjson(text) {
 
 // src/lib/export/contract.ts
 function keyOverrides(entity) {
-  return entity.columns.filter((c13) => c13.storageColumn && c13.storageColumn !== c13.key);
+  return entity.columns.filter((c14) => c14.storageColumn && c14.storageColumn !== c14.key);
 }
 function fromBackupRow(entity, backupRow) {
   const overrides = keyOverrides(entity);

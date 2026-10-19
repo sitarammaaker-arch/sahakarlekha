@@ -21,6 +21,7 @@ import { DAIRY_ENTITIES } from './entities/dairy';
 import { HOUSING_ENTITIES } from './entities/housing';
 import { MARKETING_ENTITIES } from './entities/marketing';
 import { CONSUMER_ENTITIES } from './entities/consumer';
+import { TRANSPORT_ENTITIES } from './entities/transport';
 import { PLATFORM_ENTITIES } from './entities/platform';
 
 export const REGISTRY: readonly EntityDescriptor[] = [
@@ -35,6 +36,7 @@ export const REGISTRY: readonly EntityDescriptor[] = [
   ...HOUSING_ENTITIES,
   ...MARKETING_ENTITIES,
   ...CONSUMER_ENTITIES,
+  ...TRANSPORT_ENTITIES,
   ...PLATFORM_ENTITIES,
 ];
 

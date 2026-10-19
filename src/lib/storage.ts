@@ -1,4 +1,4 @@
-import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun, ConsumerPrice, PatronageRun, PurchaseOrder, SalesReturn, PurchaseReturn, BankReconciliationRecord, TdsEntry, TdsChallan, TdsChallanLink } from '@/types';
+import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun, ConsumerPrice, PatronageRun, PurchaseOrder, SalesReturn, PurchaseReturn, BankReconciliationRecord, TdsEntry, TdsChallan, TdsChallanLink, TransportVehicle, TransportTrip, VehicleExpense } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
 import type { Transporter } from '@/lib/marketing/transport';
 import { composeDocumentNumber, parseDocumentNumber } from './documentNumber';
@@ -84,6 +84,9 @@ const KEYS = {
   procurementQualitySpecs: 'sahayata_procurement_quality_specs',
   procurementBardanaTypes: 'sahayata_procurement_bardana_types',
   marketingTransporters: 'sahayata_marketing_transporters',
+  transportVehicles: 'sahayata_transport_vehicles',
+  transportTrips: 'sahayata_transport_trips',
+  transportVehicleExpenses: 'sahayata_transport_vehicle_expenses',
   consumerPrices: 'sahayata_consumer_prices',
   consumerPatronageRuns: 'sahayata_consumer_patronage_runs',
   consumerPurchaseOrders: 'sahayata_consumer_purchase_orders',
@@ -1038,6 +1041,12 @@ export const getWorkerAdvances = (): WorkerAdvance[] => get(KEYS.workerAdvances,
 export const setWorkerAdvances = (a: WorkerAdvance[]): void => set(KEYS.workerAdvances, a);
 export const getPfEsiRuns = (): PfEsiRun[] => get(KEYS.pfEsiRuns, []);
 export const setPfEsiRuns = (r: PfEsiRun[]): void => set(KEYS.pfEsiRuns, r);
+export const getTransportVehicles = (): TransportVehicle[] => get(KEYS.transportVehicles, []);
+export const setTransportVehicles = (v: TransportVehicle[]): void => set(KEYS.transportVehicles, v);
+export const getTransportTrips = (): TransportTrip[] => get(KEYS.transportTrips, []);
+export const setTransportTrips = (t: TransportTrip[]): void => set(KEYS.transportTrips, t);
+export const getVehicleExpenses = (): VehicleExpense[] => get(KEYS.transportVehicleExpenses, []);
+export const setVehicleExpenses = (e: VehicleExpense[]): void => set(KEYS.transportVehicleExpenses, e);
 
 export const getAccounts = (): LedgerAccount[] => {
   const stored = get<LedgerAccount[] | null>(KEYS.accounts, null);
