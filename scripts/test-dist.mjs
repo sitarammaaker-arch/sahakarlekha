@@ -127,9 +127,10 @@ if (!/<meta name="robots" content="noindex/.test(nf)) errors.push('404.html miss
   if (!/class="sl-trust"[\s\S]*?अंतिम समीक्षा:[\s\S]*?हरियाणा[\s\S]*?href="\/editorial-policy"/.test(reviewedPost) && !/class="sl-trust"[\s\S]*?हरियाणा[\s\S]*?अंतिम समीक्षा:[\s\S]*?href="\/editorial-policy"/.test(reviewedPost)) {
     errors.push('blog/haryana-cooperative-act-1984-rules-1989-guide: static trust note (review date + Haryana + policy link) missing');
   }
-  const unreviewed = read('blog/tds-and-26q-for-societies/index.html');
+  // A tax post that has not been source-reviewed yet (tds-and-26q-for-societies was, in batch 3).
+  const unreviewed = read('blog/gst-for-cooperatives/index.html');
   if (!/class="sl-trust"[\s\S]*?सामान्य जानकारी[\s\S]*?href="\/editorial-policy"/.test(unreviewed) || /अंतिम समीक्षा:/.test(unreviewed)) {
-    errors.push('blog/tds-and-26q-for-societies: static "general information" note missing, or it claims a review');
+    errors.push('blog/gst-for-cooperatives: static "general information" note missing, or it claims a review');
   }
   if (/class="sl-trust"/.test(read('blog/debit-credit-and-double-entry/index.html'))) errors.push('blog/debit-credit-and-double-entry: trust note on a non-legal, non-state post');
 }

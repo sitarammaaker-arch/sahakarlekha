@@ -1,4 +1,6 @@
-देश की Primary Agricultural Credit Societies (PACS) को अब सिर्फ़ फ़सल ऋण, खाद-बीज या कृषि इनपुट तक सीमित संस्था के तौर पर देखना शायद पर्याप्त नहीं होगा। सहकारिता मंत्रालय ने **"Convergence of PM-KUSUM at PACS level"** को अपनी पहलों में शामिल किया है — यानी PACS को सिंचाई-सहायक से आगे बढ़ाकर ग्रामीण renewable-energy की भूमिका में लाने की कोशिश। हरियाणा के संदर्भ में यह अवसर और दिलचस्प है, क्योंकि राज्य में इसका infrastructure और regulatory precedent पहले से मौजूद है।
+देश की Primary Agricultural Credit Societies (PACS) को अब सिर्फ़ फ़सल ऋण, खाद-बीज या कृषि इनपुट तक सीमित संस्था के तौर पर देखना शायद पर्याप्त नहीं होगा। सहकारिता मंत्रालय ने **"Convergence of PM-KUSUM at PACS level"** को अपनी पहलों में शामिल किया है — मंत्रालय की पहल-पुस्तिका (20.11.2025) के शब्दों में, PACS से जुड़े किसान solar कृषि पंप अपना सकते हैं और अपने खेतों में solar (photovoltaic) modules लगा सकते हैं। हरियाणा के संदर्भ में यह अवसर और दिलचस्प है, क्योंकि राज्य में पंपों पर अतिरिक्त राज्य-सब्सिडी है और घटक-A के प्लांट पहले से लगे हैं।
+
+> ⚠️ **जानकारी 18 अक्टूबर 2026 तक जाँची गई — योजना की अवधि पर ख़ास ध्यान दें।** MNRE (नवीन एवं नवीकरणीय ऊर्जा मंत्रालय) की आधिकारिक साइट पर PM-KUSUM की अवधि **"31.03.2026 तक"** लिखी है। समाचार-रिपोर्टों (ट्रेड-प्रेस) के अनुसार मार्च 2026 में सिर्फ़ पहले से मंज़ूर प्रोजेक्ट पूरे करने की समय-सीमा 31.03.2027 तक बढ़ाई गई और "PM-KUSUM 2.0" पर काम चल रहा है — MNRE का वह आदेश हमने नहीं खोला। इसलिए **नए आवेदन अभी खुले हैं या नहीं, यह DISCOM/HAREDA से लिखित में पूछे बिना कोई ख़र्च न करें।** बाक़ी आँकड़ों के स्रोत नीचे "स्रोत" में हैं।
 
 > 💡 यहाँ बात **PACS** (Primary Agriculture Credit Society) की हो रही है, **CM-PACS** की नहीं — दोनों अलग-अलग संस्थाएँ हैं (देखें: [CM-PACS क्या है](/blog/cm-pacs-kya-hai))।
 
@@ -6,21 +8,21 @@
 
 | Component | दायरा |
 | --- | --- |
-| A | Decentralised, grid-connected renewable energy power plants (आमतौर पर 500 kW–2 MW) |
-| B | Standalone solar agricultural pumps |
-| C | मौजूदा grid-connected कृषि पंप व फ़ीडर का solarisation |
+| A | Decentralised, grid-connected renewable energy power plants (500 kW–2 MW; राज्य चाहें तो 500 kW से छोटे भी) — लक्ष्य 10,000 MW |
+| B | Standalone solar agricultural pumps — लक्ष्य 14 लाख पंप |
+| C | मौजूदा grid-connected कृषि पंप व फ़ीडर का solarisation — लक्ष्य 35 लाख पंप |
 
 PACS के लिए इनमें से दो मॉडल ख़ासतौर पर उपयोगी हो सकते हैं — ख़ुद या डेवलपर के ज़रिए solar power plant लगाकर बिजली बेचना (Component-A), और सदस्यों के लिए collective/cluster-based solar irrigation विकसित करना (Component-B)। यह लेख दोनों को हरियाणा के संदर्भ में, फ़ाइनेंसिंग-मॉडल, सब्सिडी-भ्रम व व्यावहारिक कदमों सहित समझाता है।
 
 ## PACS के लिए यह मौका क्यों मायने रखता है
 
-एक बड़ी संख्या में PACS सालों से घाटे या कमज़ोर आय से जूझती रही हैं, क्योंकि उनकी कमाई मुख्यतः एक ही स्रोत — ऋण-ब्याज — पर टिकी थी। PM-KUSUM जैसी पहल इस तस्वीर को बदल सकती है: यह PACS को आय का एक बिल्कुल **नया, ऋण से स्वतंत्र स्रोत** (बिजली-बिक्री या ज़मीन-लीज़ आय) देती है, जो 25 साल तक स्थिर रह सकता है। साथ ही, सदस्यों के लिए solar irrigation से सिंचाई-लागत घटती है, जिससे समिति व सदस्य दोनों को लाभ। यानी यह सिर्फ़ एक सरकारी योजना नहीं, बल्कि एक कमज़ोर PACS को आत्मनिर्भर बनाने का एक संभावित रास्ता है — बशर्ते उसे पेशेवर योजना के साथ अपनाया जाए।
+कई PACS सालों से कमज़ोर आय से जूझती रही हैं, क्योंकि उनकी कमाई मुख्यतः एक ही स्रोत — ऋण-ब्याज — पर टिकी थी। PM-KUSUM जैसी पहल इस तस्वीर को बदल सकती है: यह आय का एक **नया, ऋण से अलग स्रोत** (बिजली-बिक्री या ज़मीन-लीज़ आय) दे सकती है — घटक-A में DISCOM के साथ PPA 25 साल का होता है। साथ ही, सदस्यों के लिए solar irrigation से सिंचाई-लागत घटती है, जिससे समिति व सदस्य दोनों को लाभ। यानी यह सिर्फ़ एक सरकारी योजना नहीं, बल्कि एक कमज़ोर PACS को आत्मनिर्भर बनाने का एक संभावित रास्ता है — बशर्ते उसे पेशेवर योजना के साथ अपनाया जाए।
 
 ## Component-A: PACS ख़ुद बन सकती है Renewable Power Generator
 
-MNRE (नवीन एवं नवीकरणीय ऊर्जा मंत्रालय) के फ़्रेमवर्क में individual farmers के साथ-साथ groups of farmers, cooperatives, Panchayats, FPOs और Water User Associations eligible हैं — और PM-KUSUM के आधिकारिक FAQs विशेष रूप से PACS को भी eligible entities में शामिल करते हैं। यानी कोई financially व technically सक्षम PACS चुने जाने पर solar plant स्थापित कर सकती है और DISCOM को बिजली बेच सकती है — traditional lending business से बिल्कुल अलग एक नया revenue vertical।
+MNRE की आधिकारिक साइट के अनुसार घटक-A के प्लांट individual farmers, किसानों के समूह, **cooperatives**, Panchayats, FPOs और Water User Associations लगा सकते हैं (इन्हें "Renewable Power Generator" कहा जाता है)। PACS एक सहकारी समिति है, इसलिए वह इस सूची में आती है। अगर ये संस्थाएँ ख़ुद पूँजी नहीं जुटा सकतीं, तो developer या स्थानीय DISCOM के ज़रिए भी प्लांट लगवा सकती हैं। यानी कोई सक्षम PACS चुने जाने पर solar plant लगाकर DISCOM को बिजली बेच सकती है — ऋण के कारोबार से अलग एक नया revenue vertical।
 
-हरियाणा में Component-A के plants **notified distribution substation के लगभग 5 km के भीतर** स्थापित करने होते हैं, ताकि evacuation infrastructure की लागत और transmission losses कम रहें। इसलिए सिर्फ़ ज़मीन होना काफ़ी नहीं — पहले यह देखना होगा:
+DISCOM हर substation पर कितनी अतिरिक्त क्षमता जुड़ सकती है, यह अधिसूचित करता है और आवेदन माँगता है। PIB के अनुसार प्लांट **प्राथमिकता से notified substation के 5 km के दायरे में** लगाए जाते हैं, ताकि लाइन की लागत और नुक़सान कम रहें। इसलिए सिर्फ़ ज़मीन होना काफ़ी नहीं — पहले यह देखना होगा:
 
 - जमीन किस notified substation के पास है
 - उस substation पर solar power injection के लिए spare capacity है या नहीं
@@ -32,13 +34,13 @@ MNRE (नवीन एवं नवीकरणीय ऊर्जा मंत�
 
 ## बिजली किसे और कितने समय के लिए बिकेगी
 
-Haryana Electricity Regulatory Commission (HERC) के रिकॉर्ड के अनुसार Component-A के लिए एक levelised tariff तय किया गया था (उदाहरण: पहले के दौर में ₹3.11 प्रति kWh), और Haryana Power Purchase Centre (HPPC) ने इसी तरह के tariff पर developers के साथ Power Purchase Agreement (PPA) किए — आमतौर पर Commercial Operation Date से **25 वर्ष** की अवधि के लिए।
+MNRE के अनुसार घटक-A की बिजली DISCOM राज्य बिजली नियामक आयोग (SERC) के तय feed-in tariff पर ख़रीदता है, और PIB के अनुसार चुने गए आवेदक को DISCOM के साथ **25 साल का PPA** करना होता है। हरियाणा में पहले दौर के लिए यह tariff **₹3.11 प्रति kWh** बताया जाता है — यह आँकड़ा हमें Punjab नियामक आयोग (PSERC) के एक आदेश में दिए हवाले और समाचार-रिपोर्टों में मिला; HERC का मूल आदेश हमने नहीं खोला, इसलिए इसे "मिलान बाक़ी" मानें।
 
 > ⚠️ किसी भी नए tariff आँकड़े को स्वतः लागू नहीं मानना चाहिए — हर नए EOI में notified tariff, bidding condition और HERC के नवीनतम applicable order को दोबारा verify करना ज़रूरी है।
 
 ## क्या PACS को 75% सब्सिडी मिलेगी? — यहाँ सबसे ज़्यादा भ्रम
 
-**नहीं, Component-A पर वह 75% सब्सिडी लागू नहीं होती जो solar pumps (Component-B) पर मिलती है।** Component-A में बिजली DISCOM द्वारा नियामक-स्वीकृत tariff पर ख़रीदी जाती है, और DISCOM को अलग से Performance Based Incentive (PBI) मिल सकता है — plant cost का 75% सरकार दे देगी, यह मानकर वित्तीय योजना बनाना ग़लत होगा।
+**नहीं, घटक-A पर वह 75% सब्सिडी लागू नहीं होती जो हरियाणा में solar pumps (घटक-B) पर मिलती है।** MNRE और PIB के अनुसार घटक-A में प्लांट लगाने वाले को कोई पूँजी-सब्सिडी नहीं है; बिजली DISCOM नियामक-तय tariff पर ख़रीदता है, और प्रोत्साहन **DISCOM** को मिलता है — 40 पैसे प्रति यूनिट या ₹6.6 लाख प्रति MW प्रति साल (जो कम हो), COD से 5 साल तक। Plant cost का 75% सरकार दे देगी, यह मानकर वित्तीय योजना बनाना ग़लत होगा।
 
 ## पैसा कहाँ से आए — तीन फ़ाइनेंसिंग मॉडल
 
@@ -48,17 +50,19 @@ Haryana Electricity Regulatory Commission (HERC) के रिकॉर्ड �
 | **PACS ज़मीन दे, डेवलपर plant लगाए** | पर्याप्त equity न हो — ज़मीन लीज़ पर देकर predictable rental income |
 | **सदस्यों के लिए collective solar irrigation (Component-B)** | सदस्य मुख्यतः छोटे किसान हों — उद्देश्य बिजली बेचना नहीं, irrigation cost घटाना |
 
-बैंकों ने PM-KUSUM Component-A आधारित projects के लिए financing frameworks रखे हैं, पर लोन अपने-आप नहीं मिलता — बैंक project viability, PPA, promoter contribution, ज़मीन, approvals और cash flow देखेगा। दूसरी ओर, ज़मीन लीज़ मॉडल में PACS पूरा capital risk लिए बिना lease income पा सकती है — MNRE के model lease framework में fixed per-acre rent या generation-linked rent जैसे विकल्प हैं।
+बैंकों ने PM-KUSUM Component-A आधारित projects के लिए financing frameworks रखे हैं, पर लोन अपने-आप नहीं मिलता — बैंक project viability, PPA, promoter contribution, ज़मीन, approvals और cash flow देखेगा। RBI ने इस घटक को priority sector lending में रखा है (PIB, 2021)। दूसरी ओर, ज़मीन लीज़ मॉडल में PACS पूरा capital risk लिए बिना lease income पा सकती है — PIB की 2021 की तथ्य-पत्रिका में अनुमान था कि developer को ज़मीन लीज़ पर देने पर ₹25,000 प्रति एकड़ प्रति साल तक, और ख़ुद प्लांट लगाने पर ₹65,000 प्रति एकड़ प्रति साल तक की कमाई हो सकती है। ये सरकारी अनुमान थे, गारंटी नहीं — असल लीज़-किराया developer से समझौते पर निर्भर है।
 
 ## Component-B: छोटे किसानों के लिए ज़्यादा सीधा रास्ता
 
-Haryana में standalone solar agriculture pumps पर सब्सिडी ढाँचा (केंद्र + राज्य हिस्सा मिलाकर बड़ा हिस्सा, शेष beneficiary contribution) उपलब्ध रहा है, और individual farmers के अलावा Water User Associations व community/cluster-based irrigation systems भी इसमें शामिल हैं। PACS, FPO या Water User Association के ज़रिए इस्तेमाल होने वाले पंप के लिए सामान्य individual सीमा से ज़्यादा क्षमता भी संभव हो सकती है — यानी एक PACS अपने 10-20 किसानों का irrigation cluster बनाकर shared solar pumping infrastructure explore कर सकती है।
+राष्ट्रीय ढाँचे में standalone solar पंप पर केंद्र की मदद (CFA) benchmark लागत की **30%** है, राज्य कम-से-कम 30% देता है, और किसान अधिकतम 40%। **हरियाणा में** HAREDA (नवीन एवं नवीकरणीय ऊर्जा विभाग) के अनुसार 3 से 10 HP के पंप पर **कुल 75% सब्सिडी** है — 30% केंद्र और 45% राज्य, यानी किसान का हिस्सा 25%।
+
+इस घटक में individual किसानों के अलावा Water User Associations और community/cluster-based सिंचाई भी शामिल है। MNRE के 2020 के संशोधन (PIB, 13.11.2020) के अनुसार **WUA, FPO या PACS** द्वारा लगाए और इस्तेमाल किए जाने वाले पंप, या cluster सिंचाई में, 7.5 HP से बड़े पंप पर भी केंद्र की मदद मिलती है — समूह के हर सदस्य के लिए 5 HP तक मानकर। यानी एक PACS अपने सदस्य-किसानों का irrigation cluster बनाकर साझा solar पंप पर विचार कर सकती है।
 
 > ⚠️ **किसी भी project पर ख़र्च से पहले** UHBVN/DHBVN/HAREDA से लिखित रूप में verify करना ज़रूरी है कि संबंधित component में मौजूदा समय में fresh allocation, EOI या application window खुली है या नहीं — scheme की समयसीमा, सब्सिडी पैटर्न और empanelled vendors समय के साथ बदलते रहते हैं।
 
 ## ज़मीनी अनुभव क्या सिखाता है
 
-पिछले EOI राउंड में कई bidders को Letters of Award जारी होने के बावजूद कुछ developers PPA साइनिंग तक नहीं पहुँचे — यह दिखाता है कि solar project सिर्फ़ पैनल ख़रीदकर लगाने का मामला नहीं। इसमें ज़मीन, grid connectivity, project finance, PPA, EPC execution, statutory approvals, metering, commissioning और O&M — सभी की पेशेवर योजना ज़रूरी है। इसलिए ownership model चुनने से पहले detailed project report (DPR) और techno-financial appraisal ज़रूर कराना चाहिए।
+पहले दौर के अनुभव बताते हैं कि मंज़ूरी से चालू होने तक का रास्ता लंबा है — समाचार-रिपोर्टों के अनुसार HERC ने 2026 में उन PPAs को मंज़ूरी दी जिनमें से कुछ 2020 में साइन हुए थे, और योजना की समय-सीमा बार-बार बढ़ानी पड़ी। यानी solar project सिर्फ़ पैनल ख़रीदकर लगाने का मामला नहीं। इसमें ज़मीन, grid connectivity, project finance, PPA, EPC execution, statutory approvals, metering, commissioning और O&M — सभी की पेशेवर योजना ज़रूरी है। इसलिए ownership model चुनने से पहले detailed project report (DPR) और techno-financial appraisal ज़रूर कराना चाहिए।
 
 ## किसी PACS को सबसे पहले क्या करना चाहिए
 
@@ -82,8 +86,9 @@ PM-KUSUM में eligibility मिल जाना अपने-आप PACS �
 
 ## अक्सर पूछे जाने वाले प्रश्न
 
-**क्या PM-KUSUM सिर्फ़ किसानों के लिए है?** — नहीं; PACS, FPO, cooperatives, Panchayats और Water User Associations भी कुछ components में eligible हैं।
-**क्या Component-A पर 75% सब्सिडी मिलती है?** — नहीं; यह सब्सिडी सिर्फ़ Component-B (standalone solar pumps) पर है। Component-A में DISCOM tariff पर बिजली ख़रीदता है।
+**क्या PM-KUSUM सिर्फ़ किसानों के लिए है?** — नहीं; घटक-A में cooperatives (PACS सहित), FPO, Panchayats और Water User Associations भी पात्र हैं, और घटक-B में PACS/FPO/WUA के पंपों का ख़ास प्रावधान है।
+**क्या Component-A पर 75% सब्सिडी मिलती है?** — नहीं; हरियाणा की 75% सब्सिडी (30% केंद्र + 45% राज्य) standalone solar पंपों (घटक-B) पर है। घटक-A में DISCOM tariff पर बिजली ख़रीदता है और प्रोत्साहन DISCOM को मिलता है।
+**क्या योजना अभी चालू है?** — MNRE की साइट पर अवधि 31.03.2026 तक लिखी है; समाचारों के अनुसार सिर्फ़ पहले से मंज़ूर प्रोजेक्ट 31.03.2027 तक पूरे हो सकते हैं और PM-KUSUM 2.0 पर काम चल रहा है। नया आवेदन खुला है या नहीं, DISCOM/HAREDA से लिखित में पूछें।
 **PACS को कितना जोखिम लेना पड़ेगा?** — यह चुनी गई मॉडल पर निर्भर है — ख़ुद plant लगाना ज़्यादा risk व ज़्यादा संभावित रिटर्न, ज़मीन लीज़ देना कम risk व स्थिर rental income।
 **शुरू करने से पहले सबसे पहला क़दम क्या है?** — DISCOM/HAREDA से लिखित रूप में मौजूदा scheme window और capacity की पुष्टि, और प्रबंध समिति का प्रारंभिक प्रस्ताव।
 **क्या eligibility मिलते ही PACS project लगा सकती है?** — नहीं; पहले अपने bye-laws, सहकारी अधिनियम, borrowing/investment limits व General Body/Board की शक्तियाँ भी जाँचनी होंगी।
@@ -95,18 +100,28 @@ PM-KUSUM में eligibility मिल जाना अपने-आप PACS �
 ## तीन बातें याद रखें
 
 - ⚡ PACS और CM-PACS अलग संस्थाएँ हैं — दोनों को मिलाकर न समझें; यह पहल PACS के लिए एक नया आय-स्रोत खोल सकती है।
-- 💰 75% सब्सिडी सिर्फ़ Component-B (solar pumps) पर है, Component-A (power plant) पर नहीं।
-- 📝 किसी भी ख़र्च से पहले DISCOM/HAREDA से मौजूदा scheme window लिखित में verify करें — शर्तें समय के साथ बदलती हैं।
+- 💰 हरियाणा की 75% सब्सिडी (30% केंद्र + 45% राज्य) solar पंपों (घटक-B) पर है, घटक-A (power plant) पर नहीं।
+- 📝 योजना की अवधि 31.03.2026 तक थी — किसी भी ख़र्च से पहले DISCOM/HAREDA से लिखित में पूछें कि नया आवेदन खुला है या नहीं।
 - 🧮 सही मॉडल (ख़ुद plant / ज़मीन लीज़ / Component-B) अपनी पूँजी, ज़मीन व सदस्य-प्रोफ़ाइल के अनुसार चुनें; DPR में तुलना कराएँ।
 
 ## आख़िर में
 
 PM-KUSUM एक PACS के लिए परंपरागत भूमिका से आगे बढ़ने का एक असली अवसर है — बिजली-उत्पादक बनकर, ज़मीन-लीज़ से, या सदस्यों की सिंचाई-लागत घटाकर। पर इस अवसर के साथ सावधानी भी उतनी ही ज़रूरी है: यह पैनल ख़रीदकर लगाने भर का काम नहीं, बल्कि ज़मीन, ग्रिड, वित्त, PPA व approvals की पेशेवर योजना का मामला है। इसलिए सही रास्ता है — पहले प्रबंध समिति का प्रस्ताव, फिर DISCOM/HAREDA से लिखित पुष्टि, फिर DPR व techno-financial appraisal — और उसके बाद ही निवेश। सबसे बड़ी सीख यही है: eligibility एक शुरुआत है, सफलता तैयारी में है, और हर आँकड़ा/window ख़र्च से पहले verify करना अनिवार्य है।
 
-> ✅ नई आय-धारा (solar/lease) का अलग, पारदर्शी हिसाब रखें — [SahakarLekha पर रजिस्टर करें](/register)।
+> ✅ नई आय-धारा (solar/lease) का अलग, पारदर्शी हिसाब रखें — [सहकार लेखा पर रजिस्टर करें](/register)।
 
 **जुड़ी पढ़ाई:** [CM-PACS क्या है](/blog/cm-pacs-kya-hai) · [CM-PACS हिसाब-किताब, ऑडिट व टैक्स गाइड](/blog/cm-pacs-accounting-tax-audit-guide) · [PACS गोदाम व अन्न-भंडारण योजना](/blog/pacs-godown-grain-storage-scheme-ami-aif-nabard) · [सहकारी कानून का ढाँचा](/blog/cooperative-law-framework)
 
 **जुड़े शब्द:** [PM-KUSUM](/glossary/pm-kusum) · [Component-A](/glossary/kusum-component-a) · [Component-B](/glossary/kusum-component-b) · [PPA](/glossary/ppa) · [DISCOM](/glossary/discom) · [HAREDA](/glossary/hareda)
 
-> 📘 नोट: यह जानकारी MNRE/PM-KUSUM फ़्रेमवर्क, HERC/HPPC रिकॉर्ड व सार्वजनिक स्रोतों पर आधारित है। tariff, सब्सिडी पैटर्न, EOI/window व पात्रता समय-समय पर बदलते हैं — किसी भी निर्णय/ख़र्च से पहले DISCOM (UHBVN/DHBVN), HAREDA व HERC के नवीनतम आदेश से पुष्टि करें। Evidence Level A (शैक्षिक)।
+## स्रोत
+
+1. [Pradhan Mantri Kisan Urja Suraksha evam Utthaan Mahabhiyaan (PM KUSUM) — नवीन एवं नवीकरणीय ऊर्जा मंत्रालय (MNRE)](https://mnre.gov.in/en/pradhan-mantri-kisan-urja-suraksha-evam-utthaan-mahabhiyaan-pm-kusum/): अवधि "31.03.2026 तक", तीनों घटकों के लक्ष्य, घटक-A 500 kW–2 MW और पात्र संस्थाएँ (cooperatives सहित), developer/DISCOM वाला रास्ता, SERC का feed-in tariff, DISCOM को PBI, घटक-B में 30% CFA। 18 अक्टूबर 2026 को पढ़ा।
+2. [Criteria to set up solar power generation plants — PIB, MNRE, 7 अगस्त 2024 (लोकसभा उत्तर)](https://www.pib.gov.in/PressReleseDetailm.aspx?PRID=2042620): घटक-A में PBI 40 पैसे/kWh या ₹6.60 लाख/MW/साल (5 साल), 5 km "preferably"; घटक-B का 30% CFA। 18 अक्टूबर 2026 को पढ़ा।
+3. [PM-KUSUM तथ्य-पत्रिका — PIB, 11 नवंबर 2021](https://www.pib.gov.in/FactsheetDetails.aspx?Id=148576&reg=48&lang=2): cooperatives पात्र, खेती वाली ज़मीन पर ऊँचे पैनल, 5 km "preferably", 25 साल का PPA, लीज़ पर ₹25,000/एकड़ और ख़ुद लगाने पर ₹65,000/एकड़ तक का अनुमान, RBI priority sector। 18 अक्टूबर 2026 को पढ़ा।
+4. [MNRE expands scope of PM-KUSUM — PIB, 13 नवंबर 2020](https://www.pib.gov.in/PressReleseDetailm.aspx?PRID=1672580&reg=48&lang=2): 500 kW से छोटे प्लांट राज्य की मर्ज़ी से; WUA/FPO/PACS के पंप 7.5 HP से बड़े, हर सदस्य के 5 HP तक। 18 अक्टूबर 2026 को पढ़ा।
+5. [Solar Water Pumping Programme — HAREDA, हरियाणा](https://hareda.gov.in/solar-water-pumping-programme/): 3-10 HP पंप पर कुल 75% सब्सिडी (30% केंद्र + 45% राज्य)। 18 अक्टूबर 2026 को पढ़ा।
+6. [Initiatives of the Ministry of Cooperation — सहकारिता मंत्रालय की पुस्तिका (20.11.2025, PDF)](https://www.cooperation.gov.in/sites/default/files/2025-11/Initiatives%20(Booklet)%20%20-%2020.11.2025(updated).pdf): पहल 17, "Convergence of PM-KUSUM at PACS level"। 18 अक्टूबर 2026 को पढ़ा।
+7. [PSERC का आदेश, Petition No. 23 of 2022 (PDF)](https://pserc.punjab.gov.in/pages/final%20order%20in%20Pt.%20No.%2023%20of%202022.pdf): इसमें हरियाणा का घटक-A tariff ₹3.11/kWh हवाले के रूप में लिखा है। 18 अक्टूबर 2026 को पढ़ा। **HERC के मूल आदेश से मिलान बाक़ी।**
+
+> 📘 **पद्धति नोट:** पुराने संस्करण में यह नहीं लिखा था कि MNRE के अनुसार योजना की अवधि 31.03.2026 तक थी — यह सबसे ज़रूरी बात ऊपर जोड़ी गई; उसके बाद की समय-सीमा (31.03.2027) और "PM-KUSUM 2.0" सिर्फ़ समाचार-रिपोर्टों में मिले, इसलिए "समाचार" लिखकर रखे गए। "PM-KUSUM के आधिकारिक FAQs PACS को विशेष रूप से पात्र बताते हैं" — यह FAQ हमने नहीं खोला; MNRE के पाठ में "cooperatives" पात्र हैं, इसलिए वही लिखा। मंत्रालय की पहल-पुस्तिका में यह पहल PACS से जुड़े **किसानों** के पंप और पैनल के बारे में है — यह साफ़ किया गया। "हरियाणा में 5 km के भीतर लगाना होता है" को PIB के शब्दों के मुताबिक़ "प्राथमिकता से" किया गया। ₹3.11 tariff को "मिलान बाक़ी" के साथ रखा गया। हरियाणा की 75% सब्सिडी का बँटवारा (30% + 45%) HAREDA से जोड़ा गया। "MNRE का model lease framework (प्रति एकड़ या उत्पादन-आधारित किराया)" का स्रोत नहीं मिला — उसकी जगह PIB का प्रति-एकड़ अनुमान लिखा। "पिछले EOI में LoA के बाद कई developers PPA तक नहीं पहुँचे" का स्रोत नहीं मिला — उसे समाचार-रिपोर्ट वाले तथ्य से बदला गया।
