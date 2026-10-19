@@ -184,7 +184,7 @@ interface DataContextType {
   // when a guard blocked it (FY-lock / period-lock / approved-under-maker-checker /
   // engine voucher / unbalanced) — the guard already showed the real reason, so callers
   // must NOT show a success toast on false (mirrors cancelVoucher's contract).
-  updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>) => boolean;
+  updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines' | 'costCentreId'>>) => boolean;
   cancelVoucher: (id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean }) => boolean;
   /** H: a domain context registers who owns its vouchers; returns the unregister fn. */
   registerVoucherOwner: (key: string, check: VoucherOwnerCheck) => () => void;
@@ -199,6 +199,9 @@ interface DataContextType {
    *  sale/purchase number is then issued by the server AFTER addSale/addPurchase returns — pages show the
    *  number from the list (restamped) and leave the success toast to DataContext. */
   usesPostingService: () => boolean;
+  /** True when an edit may change a voucher's activity tag (costCentreId): the posting service is off (the
+   *  client writes the column itself) or the server has migration 127. False → show the tag read-only. */
+  canEditVoucherActivity: () => boolean;
   clearVoucher: (id: string, clearedDate?: string) => void;
   unclearVoucher: (id: string) => void;
   /** true = approved; false = a guard blocked it (it already toasted why) — never toast success on false. */
@@ -413,6 +416,16 @@ function reportCascade(label: string, err: { message: string } | string): void {
 /** Undo an optimistic removal: put the row back unless it is already there. */
 function putBack<T extends { id: string }>(list: T[], row: T | undefined): T[] {
   return !row || list.some(x => x.id === row.id) ? list : [...list, row];
+}
+
+/** Migration 127 probe: true = edit_voucher/save_pending_voucher keep an edited activity tag; false = they
+ *  don't (voucher_edit_capabilities() absent → PostgREST PGRST202 / Postgres 42883); null = unknown (network). */
+async function probeActivityTagEditable(): Promise<boolean | null> {
+  try {
+    const { data, error } = await supabase.rpc('voucher_edit_capabilities');
+    if (error) return error.code === 'PGRST202' || error.code === '42883' ? false : null;
+    return (data as { activityTag?: boolean } | null)?.activityTag === true;
+  } catch { return null; }
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -689,6 +702,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // (post_voucher, migration 077) instead of the client's multi-call save. Read-only, fail-safe: any
   // read error / missing table leaves it false, i.e. today's path.
   const postingServiceRef = useRef(false);
+  // Migration 127: edit_voucher / save_pending_voucher keep an edited activity tag (costCentreId) only once
+  // the founder has run it. Probed at load via voucher_edit_capabilities() (absent before 127 → stays false),
+  // so the edit dialog never offers a tag change the server would silently drop (RULE 1).
+  const activityTagEditableRef = useRef(false);
   // True once the FULL journal has been paged into the ref (society load for a cut-over tenant, or
   // the on-demand diagnostic load). Until then the ref holds only this session's events, so a
   // sequence derived from it would be too low and collide with a not-yet-loaded genesis event on the
@@ -1214,6 +1231,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         postingServiceRef.current = false;
         supabase.from('society_flags').select('posting_service').eq('society_id', sid).maybeSingle()
           .then(({ data, error }) => { postingServiceRef.current = !error && data?.posting_service === true; }, () => { /* stays false */ });
+        activityTagEditableRef.current = false;
+        void probeActivityTagEditable().then(v => { activityTagEditableRef.current = v === true; });
         const loadResults = await Promise.all([
           fetchAllPaged<Voucher>('vouchers', ['createdAt', 'id']),
           fetchAllPaged<Member>('members'),
@@ -2343,7 +2362,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return v && v.id ? v : null;
   }, [suppliers, accounts, addVoucher, user?.name]);
 
-  const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines'>>): boolean => {
+  const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines' | 'costCentreId'>>): boolean => {
     if (guardPermission('update', 'वाउचर बदलने')) return false;   // ECR-06: role gate
     if (guardFYLocked()) return false;
     const current = vouchersRef.current.find(v => v.id === id);
@@ -2365,6 +2384,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return false;
     }
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
+    // Activity tag (costCentreId): '' clears it. Through the posting service it saves only once migration 127
+    // is live — before that the server would drop it and the tag would revert on refresh (RULE 1), so refuse.
+    const tagChanged = data.costCentreId !== undefined && (data.costCentreId || '') !== (current.costCentreId || '');
+    if (!tagChanged && 'costCentreId' in data) { data = { ...data }; delete data.costCentreId; }
+    if (tagChanged && postingServiceRef.current && !activityTagEditableRef.current) {
+      toastRef.current({
+        title: 'गतिविधि अभी नहीं बदल सकते / Activity not editable yet',
+        description: 'सर्वर पर migration 127 अभी नहीं चला है — गतिविधि बदली तो refresh पर पुरानी लौट आती। बाकी बदलाव गतिविधि बदले बिना save करें।',
+        variant: 'destructive', duration: 12000,
+      });
+      return false;
+    }
     // Final batch: a manual voucher cannot be edited INTO a member-tagged Share Capital entry (see addVoucher).
     if (current.origin === 'manual' && (data.memberId ?? current.memberId)
         && touchesShareCapital({ debitAccountId: data.debitAccountId ?? current.debitAccountId, creditAccountId: data.creditAccountId ?? current.creditAccountId, lines: data.lines ?? current.lines }, ACCOUNT_IDS.SHARE_CAP)
@@ -2480,7 +2511,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // voucher_entries (no stale entries) and appends the reversed/reposted pair it builds from the
     // journal itself. The server's events replace the optimistic ones. Failure → revert + toast (RULE 1).
     if (postingServiceRef.current && current.approvalStatus !== 'pending') {
-      const p = buildEditVoucherPayload(updatedVoucher);
+      const p = buildEditVoucherPayload(updatedVoucher, { withActivityTag: tagChanged });
       supabase.rpc('edit_voucher', { ...p, p_producer: userRef.current?.name ?? null }).then(({ data, error }) => {
         if (error) {
           reportError('voucher-edit-post-service', error.message, { voucherId: id });
@@ -2506,7 +2537,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         revertEdit();
         toastRef.current({ title: '❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', description: `${msg}. बदलाव वापस ले लिया गया — refresh करने पर पुराना data सुरक्षित है।`, variant: 'destructive', duration: 15000 });
       };
-      const p = buildEditVoucherPayload(updatedVoucher);
+      const p = buildEditVoucherPayload(updatedVoucher, { withActivityTag: tagChanged });
       supabase.rpc('save_pending_voucher', { p_voucher: p.p_voucher, p_lines: p.p_lines }).then(({ error }) => {
         if (error) undo(postVoucherMessage(postVoucherErrorCode(error.message), error.message), error.message);
       }, (rejection: unknown) => { const msg = rejection instanceof Error ? rejection.message : String(rejection); undo(`Network error — ${msg}`, msg); });
@@ -2893,6 +2924,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!userRef.current || !sid || document.visibilityState !== 'visible') return;   // J6: not when logged out
       supabase.from('society_flags').select('posting_service').eq('society_id', sid).maybeSingle()
         .then(({ data, error }) => { if (!error) postingServiceRef.current = data?.posting_service === true; }, () => { /* keep */ });
+      // 127 run (or rolled back) while this tab was open: picked up here, without a reload. A failed read keeps the value.
+      void probeActivityTagEditable().then(v => { if (v !== null) activityTagEditableRef.current = v; });
     };
     document.addEventListener('visibilitychange', refreshPostingFlag);
     const timer = setInterval(refreshPostingFlag, 5 * 60 * 1000);
@@ -2900,6 +2933,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const usesPostingService = useCallback((): boolean => postingServiceRef.current, []);
+  const canEditVoucherActivity = useCallback((): boolean => !postingServiceRef.current || activityTagEditableRef.current, []);
 
   const restoreVoucher = useCallback((_id: string): boolean => {
     toastRef.current({ title: 'रद्द वाउचर वापस नहीं आता', description: 'रद्द किया गया वाउचर restore नहीं होता — ज़रूरत हो तो नया वाउचर बनाएँ।', variant: 'destructive', duration: 10000 });
@@ -8125,7 +8159,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
-    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
+    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
@@ -8164,7 +8198,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
-    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
+    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,

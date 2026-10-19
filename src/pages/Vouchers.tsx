@@ -60,7 +60,7 @@ const Vouchers: React.FC = () => {
   // pages — byte-identical to the old hardcoded gate for all 4 legacy roles.
   const canEdit = can('update');    // create + edit + reverse (correction)
   const canDelete = can('delete');  // cancel — admin/societyAdmin/secretary only (restore is disabled)
-  const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, getTrialBalance, matchesActiveBranch } = useData();
+  const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, getTrialBalance, matchesActiveBranch, canEditVoucherActivity } = useData();
   const [submitForApproval, setSubmitForApproval] = useState(false);
   // CM-PACS activity-wise accounts: optional business-activity tag, stored in Voucher.costCentreId. Sticky
   // across entries (like the voucher type) so a run of shop vouchers needs one pick; shown next to Save.
@@ -248,9 +248,13 @@ const Vouchers: React.FC = () => {
   const [editAmount, setEditAmount] = useState('');
   const [editNarration, setEditNarration] = useState('');
   const [editMemberId, setEditMemberId] = useState('');
-  // Read-only in the edit dialog: the server's edit_voucher (mig 095) keeps only its editable fields and
-  // ignores costCentreId, so an edited tag would show here and silently revert on refresh (RULE 1).
+  // Editable only when canEditVoucherActivity(): the server's edit_voucher keeps an edited tag from migration
+  // 127 on — before that it would show here and silently revert on refresh (RULE 1), so it stays read-only.
+  // editActivityOrig: the tag as opened — the edit sends costCentreId only when it changed ('' clears it).
   const [editActivity, setEditActivity] = useState<Activity | ''>('');
+  const [editActivityOrig, setEditActivityOrig] = useState<Activity | ''>('');
+  const [editActivityLocked, setEditActivityLocked] = useState(true);
+  const editActivityField = editActivity !== editActivityOrig ? { costCentreId: editActivity ? activityTag(editActivity) : '' } : {};
   const activityLabel = (a: Activity) => { const d = ACTIVITY_CATALOG.find(x => x.code === a); return d ? (language === 'hi' ? d.labelHi : d.label) : a; };
   // Compound (>2-line) edit — populated by openEdit only for multi-line vouchers, else [].
   const [editLines, setEditLines] = useState<LineEntry[]>([]);
@@ -331,6 +335,9 @@ const Vouchers: React.FC = () => {
     setEditNarration(v.narration || '');
     setEditMemberId(v.memberId || '');
     setEditActivity(activityOfTag(v.costCentreId) ?? '');
+    setEditActivityOrig(activityOfTag(v.costCentreId) ?? '');
+    // A non-activity cost centre in the same column is never overwritten from this picker.
+    setEditActivityLocked(!canEditVoucherActivity() || (!!v.costCentreId && !activityOfTag(v.costCentreId)));
     // Multi-line (>2) voucher → edit its lines directly; a simple voucher clears this and uses the Dr/Cr/amount fields.
     const vLines = getVoucherLines(v);
     setEditLines(vLines.length > 2
@@ -360,6 +367,7 @@ const Vouchers: React.FC = () => {
         amount: editDrTotal,
         narration: editNarration,
         memberId: editMemberId || undefined,
+        ...editActivityField,
       });
       // A guard already surfaced the real reason on failure — don't mask it with a false success.
       if (!ok) return;
@@ -383,6 +391,7 @@ const Vouchers: React.FC = () => {
       amount: Number(editAmount),
       narration: editNarration,
       memberId: editMemberId || undefined,
+      ...editActivityField,
     });
     // A guard (FY-lock / period-lock / approved→use-reversal / unbalanced / no-permission)
     // already showed the real reason — don't paper over it with a false "success".
@@ -1486,13 +1495,16 @@ const Vouchers: React.FC = () => {
             <div className="space-y-1.5">
               <Label>{t('narration')}</Label>
               <Textarea value={editNarration} onChange={e => setEditNarration(e.target.value)} rows={2} placeholder={language === 'hi' ? 'विवरण...' : 'Narration...'} />
-              {editActivity && (
+              {editActivityLocked && editActivity && (
                 <p className="text-sm text-muted-foreground">
                   {language === 'hi' ? 'गतिविधि: ' : 'Activity: '}<span className="font-medium text-foreground">{activityLabel(editActivity)}</span>
-                  {language === 'hi' ? ' — वाउचर बनाते समय तय होती है, edit में नहीं बदलती।' : ' — set when the voucher is created; not editable.'}
+                  {language === 'hi' ? ' — अभी edit में नहीं बदलती (सर्वर अपडेट बाकी)।' : ' — not editable yet (server update pending).'}
                 </p>
               )}
             </div>
+            {!editActivityLocked && (
+              <ActivityTagSelect id="activityTagEdit" value={editActivity} onChange={setEditActivity} />
+            )}
             {members.length > 0 && (
               <div className="space-y-1.5">
                 <Label>{language === 'hi' ? 'सदस्य (वैकल्पिक)' : 'Member (Optional)'}</Label>

@@ -48,7 +48,7 @@ const upd = between('const updateVoucher = useCallback(', 'const cancelVoucher =
 const updRpc = upd.slice(upd.indexOf('// ── S3-d posting service'), upd.indexOf('// ── journal-first-write (slice 6)'));
 ok('updateVoucher: RPC branch sits before the journal-first and default paths', updRpc.length > 200);
 ok('updateVoucher: gated on the flag and a non-pending voucher', /if \(postingServiceRef\.current && current\.approvalStatus !== 'pending'\)/.test(updRpc));
-ok("updateVoucher: calls edit_voucher with the lib payload", /supabase\.rpc\('edit_voucher', \{ \.\.\.p, p_producer:/.test(updRpc) && /buildEditVoucherPayload\(updatedVoucher\)/.test(updRpc));
+ok("updateVoucher: calls edit_voucher with the lib payload", /supabase\.rpc\('edit_voucher', \{ \.\.\.p, p_producer:/.test(updRpc) && /buildEditVoucherPayload\(updatedVoucher[,)]/.test(updRpc));
 ok('updateVoucher: error AND network rejection → revertEdit + destructive toast + reportError', (updRpc.match(/revertEdit\(\)/g) || []).length >= 2 /* + S4-a pending branch (104) */ && /variant: 'destructive', duration: 15000/.test(updRpc) && /reportError\('voucher-edit-post-service'/.test(updRpc));
 ok("updateVoucher: the server's events replace the optimistic edit events", /mapLedgerEventRows\(/.test(updRpc) && /filter\(e => !editEvents\.some\(x => x\.eventId === e\.eventId\)\), \.\.\.serverEvents\]/.test(updRpc));
 ok('updateVoucher: RPC branch never calls persistVoucher / syncEntries / persistLedgerEvent', !/persistVoucher\(|syncEntries\(|persistLedgerEvent\(/.test(updRpc));
