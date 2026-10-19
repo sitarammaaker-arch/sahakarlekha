@@ -34,6 +34,7 @@ export interface VoucherEditSnapshot {
     creditAccountId?: string;
     amount?: number;
     narration?: string;
+    costCentreId?: string;
   };
 }
 
