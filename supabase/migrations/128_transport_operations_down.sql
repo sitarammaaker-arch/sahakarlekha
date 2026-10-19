@@ -5,4 +5,5 @@ begin;
 drop table if exists public.transport_vehicle_expenses;
 drop table if exists public.transport_trips;
 drop table if exists public.transport_vehicles;
+delete from public.app_migrations where version = '128';
 commit;

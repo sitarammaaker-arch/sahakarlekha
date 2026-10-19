@@ -101,6 +101,9 @@ begin
   end loop;
 end $$;
 
+insert into public.app_migrations (version, name) values ('128', 'transport_operations')
+  on conflict (version) do nothing;
+
 commit;
 
 -- ── Verify (run after) ──
