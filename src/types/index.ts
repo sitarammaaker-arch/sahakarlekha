@@ -1020,6 +1020,8 @@ export interface SocietySettings {
   financialYear: string;
   financialYearStart: string;
   societyType?: SocietyType;
+  /** Migration 126: a state preset's name for the society (e.g. 'cm_pacs' = Haryana CM-PACS) — never a legal type; see lib/societyPresets. */
+  societyVariant?: 'cm_pacs' | null;
   /** Stage C (migration 125): limited / unlimited liability — from the registration certificate or registered bye-laws. */
   liabilityType?: 'limited' | 'unlimited';
   liabilityEvidence?: string;

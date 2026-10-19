@@ -3616,3 +3616,7 @@ alter table society_settings add column if not exists "liabilityEvidence" text;
 alter table society_settings add column if not exists "producerSociety" boolean;
 alter table society_settings add column if not exists "producerEvidence" text;
 alter table members add column if not exists "statusDetails" jsonb;
+
+-- ── Society variant (migration 126, CM-PACS preset) ───────────────────────────────────────────────────────────────
+-- A state preset's name ('cm_pacs' = Haryana CM-PACS); societyType stays the legal type. See src/lib/societyPresets.ts.
+alter table society_settings add column if not exists "societyVariant" text;

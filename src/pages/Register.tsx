@@ -14,6 +14,7 @@ import { fullChartForType } from '@/lib/storage';
 import type { SocietyType } from '@/types';
 
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
+import { presetsForState, presetChoice, resolveTypeChoice, typeChoiceOf, type SocietyVariant } from '@/lib/societyPresets';
 const STATES = INDIAN_STATES;
 
 const Register: React.FC = () => {
@@ -56,6 +57,22 @@ const Register: React.FC = () => {
   })();
   // No pre-selection: the type picks the chart of accounts and the modules, so the user must choose it (usability audit P1-10).
   const [societyType, setSocietyType] = useState<SocietyType | ''>('');
+  // A state preset (e.g. Haryana CM-PACS): saved as its legal type + this name; see lib/societyPresets.
+  const [societyVariant, setSocietyVariant] = useState<SocietyVariant | null>(null);
+  const chooseType = (choice: string) => {
+    const r = resolveTypeChoice(choice);
+    setSocietyType(r.societyType);
+    setSocietyVariant(r.societyVariant);
+    if (r.state) setState(r.state);
+  };
+  // A preset belongs to one state: moving to another state drops it (the user picks the type again).
+  const chooseState = (next: string) => {
+    setState(next);
+    if (societyVariant && !presetsForState(next).some(p => p.variant === societyVariant)) {
+      setSocietyType('');
+      setSocietyVariant(null);
+    }
+  };
 
   // Admin fields
   const [adminName, setAdminName] = useState('');
@@ -131,6 +148,7 @@ const Register: React.FC = () => {
           email: adminEmail,
           pinCode: '',
           societyType: societyType,
+          ...(societyVariant ? { societyVariant } : {}),
           gstin: gstin || undefined,
         },
         p_accounts: templateAccounts.map(a => ({ ...a, society_id: newSocietyId })),
@@ -304,7 +322,7 @@ const Register: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>{L('राज्य', 'State')} <span className="text-destructive">*</span></Label>
-                    <Select value={state} onValueChange={setState}>
+                    <Select value={state} onValueChange={chooseState}>
                       <SelectTrigger>
                         <SelectValue placeholder={L('राज्य चुनें', 'Select state')} />
                       </SelectTrigger>
@@ -348,7 +366,7 @@ const Register: React.FC = () => {
 
                 <div className="space-y-2">
                   <Label>{L('समिति का प्रकार', 'Society Type')} <span className="text-destructive">*</span></Label>
-                  <Select value={societyType} onValueChange={v => setSocietyType(v as SocietyType)}>
+                  <Select value={typeChoiceOf(societyType, societyVariant)} onValueChange={chooseType}>
                     <SelectTrigger>
                       <SelectValue placeholder={L('समिति का प्रकार चुनें', 'Select society type')} />
                     </SelectTrigger>
@@ -357,6 +375,11 @@ const Register: React.FC = () => {
                         <SelectItem key={t.value} value={t.value}>
                           <span>{t.label}</span>
                           <span className="ml-1 text-xs text-muted-foreground">— {t.labelHi}</span>
+                        </SelectItem>
+                      ))}
+                      {presetsForState(state).map(p => (
+                        <SelectItem key={p.variant} value={presetChoice(p.variant)}>
+                          <span>{L(p.labelHi, p.label)}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
