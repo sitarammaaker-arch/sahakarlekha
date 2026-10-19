@@ -298,9 +298,9 @@ commit;
 
 notify pgrst, 'reload schema';
 
--- VERIFY (expect: t | t | t | t | 1):
---   select position('''costCentreId''' in pg_get_functiondef('public.edit_voucher(jsonb,jsonb,text)'::regprocedure)) > 0,
---          position('v_cur."costCentreId"' in pg_get_functiondef('public.edit_voucher(jsonb,jsonb,text)'::regprocedure)) = 0,
---          position('"costCentreId" = v_new."costCentreId"' in pg_get_functiondef('public.save_pending_voucher(jsonb,jsonb)'::regprocedure)) > 0,
---          to_regprocedure('public.voucher_edit_capabilities()') is not null,
---          (select count(*) from public.app_migrations where version = '127');
+-- VERIFY (expect: t | t | t | t | 1; named columns — the SQL editor collapses repeated "?column?" headers):
+--   select position('''costCentreId''' in pg_get_functiondef('public.edit_voucher(jsonb,jsonb,text)'::regprocedure)) > 0 as whitelist_ok,
+--          position('v_cur."costCentreId"' in pg_get_functiondef('public.edit_voucher(jsonb,jsonb,text)'::regprocedure)) = 0 as lines_from_new,
+--          position('"costCentreId" = v_new."costCentreId"' in pg_get_functiondef('public.save_pending_voucher(jsonb,jsonb)'::regprocedure)) > 0 as pending_ok,
+--          to_regprocedure('public.voucher_edit_capabilities()') is not null as probe_ok,
+--          (select count(*) from public.app_migrations where version = '127') as ledger;
