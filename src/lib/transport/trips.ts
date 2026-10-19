@@ -3,10 +3,9 @@
  * no React, no Supabase, no storage. TransportOpsContext turns these legs into ONE voucher per document via
  * useData().addVoucher; the voucher is the money authority, the document the vehicle tag.
  *
- * GST: OFF in slice 1. Whether GST on freight is charged by the society (forward charge) or paid by the
- * customer (reverse charge), and at which rate, depends on a GTA's option and the customer's category —
- * the app has no SOURCED rule for that yet (statutory values need the notification text, not a statement).
- * A trip therefore posts no GST line; the page says so.
+ * GST: tripLegs is the pre-tax trip. The GTA GST rule (who pays, which rate — read from the notification texts)
+ * lives in lib/transport/gtaGst; TransportOpsContext adds the Cr 2201 line for forward charge and only a note
+ * for reverse charge.
  */
 
 export const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;

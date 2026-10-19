@@ -2,7 +2,8 @@
  * ट्रिप / भाड़ा बिल (Trips) — a freight trip by one of the society's vehicles for a customer. Posting a trip
  * makes ONE journal voucher: Dr customer / Cr Freight Income (4501) [+ Loading 4503, Detention 4504]. Collection
  * is a receipt against the trip (partial allowed, TDS withheld by the customer → 3307). Deleting a trip cancels
- * its voucher and its receipts. GST is OFF in this slice (no sourced GTA rule yet) — the page says so.
+ * its voucher and its receipts. GST per trip (none / reverse charge / forward 5% / forward 18%) follows lib/transport/gtaGst,
+ * whose rates and conditions are read from the notification texts.
  */
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -22,12 +23,15 @@ import EntityExportButton from '@/components/export/EntityExportButton';
 import { resolveTransportAccounts } from '@/lib/transport/accounts';
 import { tripAmount } from '@/lib/transport/trips';
 import type { TransportTrip } from '@/types';
+import { gtaTax, gtaModeProblem, GTA_GST_SOURCES, RCM_RECIPIENT_CATEGORIES_HI, type GtaGstMode } from '@/lib/transport/gtaGst';
+import { societyStateCode, resolveStateCode, partyGstin } from '@/lib/gstStates';
+import { INDIAN_STATES } from '@/lib/constants';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Trips() {
   const { vehicles, trips, addTrip, recordTripCollection, deleteTrip } = useTransportOps();
-  const { customers, accounts } = useData();
+  const { customers, accounts, society } = useData();
   const { language } = useLanguage();
   const hi = language === 'hi';
   const money = (n: number) => `₹${(n || 0).toLocaleString('en-IN')}`;
@@ -50,9 +54,22 @@ export default function Trips() {
   const [loading, setLoading] = useState('');
   const [detention, setDetention] = useState('');
   const [narration, setNarration] = useState('');
+  const [gstMode, setGstMode] = useState<GtaGstMode>('none');
+  const [rcmOk, setRcmOk] = useState(false);
+  const [fcmOk, setFcmOk] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const total = tripAmount({ freight: Number(freight) || 0, loading: Number(loading) || 0, detention: Number(detention) || 0 });
+  const taxable = tripAmount({ freight: Number(freight) || 0, loading: Number(loading) || 0, detention: Number(detention) || 0 });
+  // Same inputs the context uses — the preview must match what gets posted (RULE 2).
+  const supplierCode = societyStateCode(society, INDIAN_STATES.find(st => st.value === society.state)?.label);
+  const cust = customers.find(c => c.id === customerId);
+  const custGstin = partyGstin(cust);
+  const recipientCode = cust ? resolveStateCode(custGstin, cust.placeOfSupply || cust.state) : '';
+  const tax = gtaTax(gstMode, date, taxable, !!supplierCode && !!recipientCode && recipientCode !== supplierCode);
+  const forward = (gstMode === 'fcm5' || gstMode === 'fcm18') && !!tax && tax.total > 0;
+  const total = forward && tax ? +(taxable + tax.total).toFixed(2) : taxable;
+  const gstProblem = gtaModeProblem({ mode: gstMode, date, societyGstin: society.gstin, societyStateCode: supplierCode, customerHasGstin: !!custGstin, rcmRecipientConfirmed: rcmOk, forwardOptionConfirmed: fcmOk });
+  const taxSplit = tax ? (tax.igst ? `IGST ${tax.ratePct}% ${money(tax.igst)}` : `CGST ${tax.ratePct / 2}% ${money(tax.cgst)} + SGST ${tax.ratePct / 2}% ${money(tax.sgst)}`) : '';
   const list = trips.filter(t => !t.isDeleted).sort((a, b) => (b.date + b.tripNo).localeCompare(a.date + a.tripNo));
   const outstandingOf = (t: TransportTrip) => +(t.amount - t.paidAmount).toFixed(2);
   const totalBilled = list.reduce((s, t) => s + t.amount, 0);
@@ -61,7 +78,7 @@ export default function Trips() {
   const save = () => {
     setSaving(true);
     const t = addTrip(
-      { date, vehicleId, customerId, fromPlace, toPlace, freight: Number(freight) || 0, loading: Number(loading) || 0, detention: Number(detention) || 0, narration: narration.trim() || undefined },
+      { date, vehicleId, customerId, fromPlace, toPlace, freight: Number(freight) || 0, loading: Number(loading) || 0, detention: Number(detention) || 0, narration: narration.trim() || undefined, gstMode, rcmRecipientConfirmed: rcmOk, forwardOptionConfirmed: fcmOk },
       { onSaved: () => { setFromPlace(''); setToPlace(''); setFreight(''); setLoading(''); setDetention(''); setNarration(''); setSaving(false); } },
     );
     if (!t.id) setSaving(false);
@@ -146,11 +163,45 @@ export default function Trips() {
             </div>
             <div className="space-y-2 sm:col-span-2"><Label>{hi ? 'विवरण (वैकल्पिक)' : 'Narration (optional)'}</Label><Input value={narration} onChange={e => setNarration(e.target.value)} placeholder={hi ? 'जैसे बिल्टी नं., माल' : 'e.g. LR no., goods'} /></div>
           </div>
+          <div className="space-y-2 rounded-md border p-3">
+            <Label>{hi ? 'GST (माल-ढुलाई / GTA)' : 'GST (goods transport / GTA)'}</Label>
+            <Select value={gstMode} onValueChange={v => setGstMode(v as GtaGstMode)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{hi ? 'GST नहीं' : 'No GST'}</SelectItem>
+                <SelectItem value="rcm">{hi ? 'Reverse charge — GST ग्राहक भरेगा (5%)' : 'Reverse charge — customer pays (5%)'}</SelectItem>
+                <SelectItem value="fcm5">{hi ? 'Forward charge 5% — समिति भरेगी, ITC नहीं' : 'Forward charge 5% — society pays, no ITC'}</SelectItem>
+                <SelectItem value="fcm18">{hi ? 'Forward charge 18% — समिति भरेगी, ITC के साथ' : 'Forward charge 18% — society pays, with ITC'}</SelectItem>
+              </SelectContent>
+            </Select>
+            {gstMode === 'rcm' && !custGstin && (
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="mt-1" checked={rcmOk} onChange={e => setRcmOk(e.target.checked)} />
+                <span>{hi ? 'ग्राहक इनमें से है: ' : 'The customer is one of: '}{RCM_RECIPIENT_CATEGORIES_HI.join(', ')}</span>
+              </label>
+            )}
+            {(gstMode === 'fcm5' || gstMode === 'fcm18') && (
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="mt-1" checked={fcmOk} onChange={e => setFcmOk(e.target.checked)} />
+                <span>{hi ? 'समिति GST में पंजीकृत है और उसने इस वित्त वर्ष के लिए Annexure V से forward charge का विकल्प चुना है (एक बार चुना विकल्प आगे के वर्षों में चलता रहता है, जब तक Annexure VI न भरें)।' : 'The society is GST-registered and has opted for forward charge for this FY by Annexure V (continues for later years unless Annexure VI is filed).'}</span>
+              </label>
+            )}
+            {gstProblem && <p className="text-xs text-destructive">{gstProblem}</p>}
+            <details className="text-xs text-muted-foreground">
+              <summary className="cursor-pointer">{hi ? 'स्रोत (अधिसूचनाएँ)' : 'Sources (notifications)'}</summary>
+              <ul className="list-disc pl-4 space-y-1 mt-1">
+                {GTA_GST_SOURCES.map(src => <li key={src.ref}><a href={src.url} target="_blank" rel="noreferrer" className="underline">{src.ref}</a> — {src.says}</li>)}
+              </ul>
+              <p className="mt-1">{hi ? 'कौन-सी ट्रिप GST से छूट में है, यह app तय नहीं करता — ऐसी ट्रिप पर "GST नहीं" चुनें और अपने CA से पुष्टि करें।' : 'The app does not decide exemptions — choose "No GST" for an exempt trip and confirm with your CA.'}</p>
+            </details>
+          </div>
           <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
             <p>{hi ? 'लेखा प्रविष्टि: नाम ग्राहक ' : 'Entry: Dr customer '}<span className="font-medium text-foreground">{money(total)}</span>{hi ? ' / जमा भाड़ा आय (4501)' : ' / Cr Freight Income (4501)'}{(Number(loading) || 0) > 0 ? (hi ? ', लदाई शुल्क (4503)' : ', Loading charges (4503)') : ''}{(Number(detention) || 0) > 0 ? (hi ? ', रुकाई शुल्क (4504)' : ', Detention (4504)') : ''}</p>
-            <p>{hi ? 'GST: इस ट्रिप पर GST नहीं जुड़ता। माल-ढुलाई (GTA) पर GST कौन भरेगा (समिति या ग्राहक — reverse charge) और किस दर से, यह आपके विकल्प और ग्राहक पर निर्भर है; इसका स्रोत-सहित नियम अभी app में नहीं है। अपने CA से पूछकर GST अलग वाउचर से दर्ज करें।' : 'GST: none is added to this trip. Who pays GST on goods transport (GTA) — the society or the customer under reverse charge — and at what rate depends on your option and the customer; the app has no sourced rule for it yet. Ask your CA and record GST by a separate voucher.'}</p>
+            {gstMode === 'fcm5' || gstMode === 'fcm18'
+              ? (tax && tax.total > 0 && <p>{hi ? 'साथ में जमा देय GST (2201): ' : 'plus Cr GST Payable (2201): '}{taxSplit}</p>)
+              : gstMode === 'rcm' && tax && <p>{hi ? 'GST समिति नहीं, ग्राहक reverse charge में भरेगा: ' : 'GST is paid by the customer under reverse charge: '}{taxSplit}{hi ? ' (वाउचर में दर्ज नहीं होता, सिर्फ़ विवरण में लिखा जाता है)' : ' (not posted; noted on the voucher)'}</p>}
           </div>
-          <Button onClick={save} className="w-full" disabled={saving || !ids.freight || activeVehicles.length === 0 || activeCustomers.length === 0}>{saving ? (hi ? 'सेव हो रहा है…' : 'Saving…') : (hi ? 'ट्रिप सेव करें' : 'Save trip')}</Button>
+          <Button onClick={save} className="w-full" disabled={saving || !ids.freight || activeVehicles.length === 0 || activeCustomers.length === 0 || !!gstProblem}>{saving ? (hi ? 'सेव हो रहा है…' : 'Saving…') : (hi ? 'ट्रिप सेव करें' : 'Save trip')}</Button>
         </CardContent>
       </Card>
 

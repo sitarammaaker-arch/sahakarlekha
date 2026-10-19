@@ -27,9 +27,16 @@ import { resolveTransportAccounts } from '@/lib/transport/accounts';
 import { tripLegs, tripAmount, validateTripCharges, collectionLegs, tripStatus, expenseLegs, nextDocNo, round2, tripCascadeVoucherIds } from '@/lib/transport/trips';
 import { TRIP_REF, TRIP_COLLECTION_REF, EXPENSE_REF } from '@/lib/transport/vehicleProfit';
 import type { TransportVehicle, TransportTrip, VehicleExpense, Voucher } from '@/types';
+import { gtaTax, gtaModeProblem, gtaNarration, type GtaGstMode } from '@/lib/transport/gtaGst';
+import { societyStateCode, resolveStateCode, partyGstin } from '@/lib/gstStates';
+import { INDIAN_STATES } from '@/lib/constants';
 
 export type NewVehicle = Omit<TransportVehicle, 'id' | 'createdAt' | 'isDeleted'>;
-export interface NewTrip { date: string; vehicleId: string; customerId: string; fromPlace: string; toPlace: string; freight: number; loading?: number; detention?: number; narration?: string }
+export interface NewTrip {
+  date: string; vehicleId: string; customerId: string; fromPlace: string; toPlace: string; freight: number; loading?: number; detention?: number; narration?: string;
+  /** GST on this GTA invoice (lib/transport/gtaGst — sourced). Default 'none' = no GST, as before. */
+  gstMode?: GtaGstMode; rcmRecipientConfirmed?: boolean; forwardOptionConfirmed?: boolean;
+}
 export interface NewVehicleExpense { date: string; vehicleId: string; accountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; narration?: string }
 
 interface TransportOpsContextValue {
@@ -192,8 +199,25 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
       toastRef.current({ title: 'भाड़ा आय खाता नहीं है', description: '"Freight Income" (4501) खाता chart में नहीं है — Ledger Hygiene में "डोमेन खाते बनाएँ" दबाएँ, फिर ट्रिप दर्ज करें।', variant: 'destructive', duration: 12000 });
       return sentinel;
     }
-    const legs = tripLegs(customer.accountId, data, { freight: ids.freight, loading: ids.loading, detention: ids.detention });
-    const amount = tripAmount(data);
+    // GST (GTA). Forward charge adds a Cr 2201 line (one line, split in the narration — same as sales);
+    // reverse charge posts nothing (the recipient pays) but says so on the voucher.
+    const gstMode: GtaGstMode = data.gstMode ?? 'none';
+    const supplierCode = societyStateCode(society, INDIAN_STATES.find(st => st.value === society.state)?.label);
+    const custGstin = partyGstin(customer);
+    const gstProblem = gtaModeProblem({ mode: gstMode, date: data.date, societyGstin: society.gstin, societyStateCode: supplierCode, customerHasGstin: !!custGstin, rcmRecipientConfirmed: data.rcmRecipientConfirmed, forwardOptionConfirmed: data.forwardOptionConfirmed });
+    if (gstProblem) { toastRef.current({ title: 'GST विकल्प जाँचें', description: gstProblem, variant: 'destructive', duration: 12000 }); return sentinel; }
+    const taxable = tripAmount(data);
+    const recipientCode = resolveStateCode(custGstin, customer.placeOfSupply || customer.state);
+    const tax = gtaTax(gstMode, data.date, taxable, !!supplierCode && !!recipientCode && recipientCode !== supplierCode);
+    const forward = (gstMode === 'fcm5' || gstMode === 'fcm18') && !!tax && tax.total > 0;
+    const gstAccountId = forward ? (accounts.find(a => a.id === '2201' && !a.isGroup)?.id ?? null) : null;
+    if (forward && !gstAccountId) { toastRef.current({ title: 'देय GST खाता नहीं है', description: '"GST Payable" (2201) खाता chart में नहीं है — पहले Ledger Heads में बनाएँ।', variant: 'destructive', duration: 12000 }); return sentinel; }
+    const baseLegs = tripLegs(customer.accountId, data, { freight: ids.freight, loading: ids.loading, detention: ids.detention });
+    const legs = forward && tax
+      ? [{ ...baseLegs[0], amount: round2(baseLegs[0].amount + tax.total) }, ...baseLegs.slice(1), { accountId: gstAccountId!, type: 'Cr' as const, amount: tax.total }]
+      : baseLegs;
+    const amount = forward && tax ? round2(taxable + tax.total) : taxable;
+    const gstNote = gtaNarration(gstMode, tax, society.financialYear);
     const id = crypto.randomUUID();
     const tripNo = nextDocNo('TRP', trips.map(t => t.tripNo));
     const route = `${data.fromPlace || '—'} → ${data.toPlace || '—'}`;
@@ -202,7 +226,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
     const voucher = addVoucher({
       type: 'journal', date: data.date,
       debitAccountId: customer.accountId, creditAccountId: ids.freight, amount,
-      narration: `ट्रिप भाड़ा — ${tripNo} · ${vehicle.regNo} · ${route} · ${customer.name}${data.narration ? ` · ${data.narration}` : ''}`,
+      narration: `ट्रिप भाड़ा — ${tripNo} · ${vehicle.regNo} · ${route} · ${customer.name}${data.narration ? ` · ${data.narration}` : ''}${gstNote ? ` · ${gstNote}` : ''}`,
       refType: TRIP_REF, refId: id,
       createdBy: actor(),
       lines: legs.map(l => ({ id: crypto.randomUUID(), ...l })),
