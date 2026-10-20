@@ -54,6 +54,13 @@ export function fyStartOf(financialYear: string): string {
 
 const money = (n: unknown) => Math.max(0, Number(n) || 0);
 
+/** THE old/new rule: joined before the current FY starts → old (historical) member. Used by the receipt plan AND the importer's preview. */
+export function isHistoricalJoin(joinDate: string | undefined, financialYear: string): boolean {
+  const fyStart = fyStartOf(financialYear);
+  const d = (joinDate || '').slice(0, 10);
+  return !!fyStart && !!d && d < fyStart;
+}
+
 export function planJoiningReceipts(
   member: JoiningMember,
   opts: { financialYear: string; today: string; bankAccountId?: string | null },
@@ -68,8 +75,7 @@ export function planJoiningReceipts(
 
   if (share === 0 && admission === 0) return { ...base, mode: 'none' };
 
-  const fyStart = fyStartOf(opts.financialYear);
-  if (fyStart && date < fyStart) {
+  if (isHistoricalJoin(date, opts.financialYear)) {
     return { ...base, mode: 'historical', historicalShare: share, historicalAdmission: admission, bankFallbackToCash: false };
   }
 
@@ -88,4 +94,18 @@ export function summariseJoiningPlans(plans: readonly JoiningReceiptPlan[]) {
     historicalAdmission: historical.reduce((s, p) => s + p.historicalAdmission, 0),
     postedMembers: plans.filter((p) => p.mode === 'post').length,
   };
+}
+
+/**
+ * One-line Hindi label for an import preview row — from the SAME plan the import posts, so the preview
+ * can never promise a receipt the import will not make (RULE 2).
+ */
+export function joiningKindLabel(plan: JoiningReceiptPlan, joinDate: string | undefined, financialYear: string): string {
+  const rs = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+  if (plan.mode === 'historical') return `पुराना — रसीद नहीं (${rs(plan.historicalShare + plan.historicalAdmission)} opening में)`;
+  if (plan.mode === 'post') {
+    const amt = plan.receipts.reduce((t, r) => t + r.amount, 0);
+    return `नया — रसीद ${rs(amt)} (${plan.debitAccountId === CASH_ACCOUNT ? 'नकद' : 'बैंक'})`;
+  }
+  return isHistoricalJoin(joinDate, financialYear) ? 'पुराना — राशि नहीं' : 'नया — राशि नहीं';
 }

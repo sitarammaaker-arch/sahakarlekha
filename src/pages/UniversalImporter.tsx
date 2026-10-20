@@ -14,10 +14,11 @@ import {
 } from 'lucide-react';
 import { LedgerAccount, Member, VoucherType } from '@/types';
 import { mapImportedOpenings, openingWarnings, accountImportOpeningCheck, type ImportedOpeningRow, type OpeningWarnings } from '@/lib/openingBalances';
-import { planJoiningReceipts, summariseJoiningPlans, type JoiningReceiptPlan } from '@/lib/members/joiningReceipts';
+import { fyStartFromLabel } from '@/lib/fyPeriod';
+import { planJoiningReceipts, summariseJoiningPlans, joiningKindLabel, type JoiningReceiptPlan } from '@/lib/members/joiningReceipts';
 import { getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
 import {
-  ACCOUNTS_TEMPLATE, MEMBERS_TEMPLATE, OPENING_BALANCES_TEMPLATE, vouchersTemplate, parseCSV,
+  ACCOUNTS_TEMPLATE, membersTemplate, OPENING_BALANCES_TEMPLATE, vouchersTemplate, parseCSV,
   validateAccountRow, resolveParentGroup, validateMemberRow, validateObRow, validateVoucherRow, type RowError,
 } from '@/lib/importTemplates';
 
@@ -82,6 +83,10 @@ function downloadExcelTemplate(filename: string, csvContent: string) {
 
 const UniversalImporter: React.FC = () => {
   const { accounts, members, vouchers, addAccount, addMember, addVoucher, updateAccount, society } = useData();
+  // FY start from the LABEL ('2026-27' → 2026-04-01) — the same source the old/new member rule uses. The stored
+  // financialYearStart is the word 'april' on 8 of 32 prod societies (2026-10-20): compared as a string it put
+  // every voucher row 'outside the FY' and printed '(april)' in the member rule.
+  const fyStartIso = fyStartFromLabel(society.financialYear) || (/^\d{4}-\d{2}-\d{2}$/.test(society.financialYearStart || '') ? society.financialYearStart : '');
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -231,7 +236,18 @@ const UniversalImporter: React.FC = () => {
         return;
       }
       const headers = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, ''));
-      setMemberPreview(buildPreviewFromParsed(parsed, headers, validateMemberRow));
+      // Old / new member per row — from the SAME plan handleMemberImport posts (RULE 2), so the preview
+      // never promises a receipt the import will not make.
+      const planOpts = { financialYear: society.financialYear, today: new Date().toISOString().split('T')[0], bankAccountId: defaultBankAccountId(accounts) || null };
+      setMemberPreview(buildPreviewFromParsed(parsed, headers, validateMemberRow).map(r => {
+        if (r.status !== 'ok') return r;
+        const plan = planJoiningReceipts({
+          name: r.data.name || '', joinDate: r.data.join_date,
+          shareCapital: parseFloat(r.data.share_capital) || 0, admissionFee: parseFloat(r.data.admission_fee) || 0,
+          paymentMode: (['cash', 'cheque', 'online'].includes((r.data.payment_mode || '').toLowerCase()) ? r.data.payment_mode.toLowerCase() : undefined) as 'cash' | 'cheque' | 'online' | undefined,
+        }, planOpts);
+        return { ...r, data: { ...r.data, join_kind: joiningKindLabel(plan, r.data.join_date, society.financialYear) } };
+      }));
     } catch { toast({ title: 'File parse error', description: 'Valid CSV या Excel file upload करें', variant: 'destructive' }); }
     e.target.value = '';
   }
@@ -420,7 +436,7 @@ const UniversalImporter: React.FC = () => {
         return;
       }
       const headers = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, ''));
-      const fyStart = society.financialYearStart;
+      const fyStart = fyStartIso;
       const fyEnd = `20${society.financialYear.split('-')[1]}-03-31`;
       setVoucherPreview(buildPreviewFromParsed(parsed, headers, (row, rowNum) => validateVoucherRow(row, accounts, fyStart, fyEnd, rowNum)));
     } catch { toast({ title: 'File parse error', description: 'Valid CSV या Excel file upload करें', variant: 'destructive' }); }
@@ -680,7 +696,8 @@ const UniversalImporter: React.FC = () => {
                 <p><span className="font-medium text-primary">account_type</span> — <span className="text-green-700">Asset</span> / <span className="text-orange-600">Liability</span> / <span className="text-purple-600">Equity</span> / <span className="text-blue-600">Income</span> / <span className="text-red-600">Expense</span></p>
                 <p><span className="font-medium text-primary">opening_balance</span> — शुरुआती राशि (सिर्फ numbers, जैसे: 50000)</p>
                 <p><span className="font-medium text-primary">balance_type</span> — <span className="text-green-700">Debit</span> (Asset/Expense) / <span className="text-orange-600">Credit</span> (Liability/Income)</p>
-                <p><span className="font-medium text-primary">parent_group</span> — (वैकल्पिक) किस समूह के नीचे खाता जाए — समूह का नाम या कोड (जैसे: Bank Accounts, Loans, Admin Expenses)। खाली छोड़ें तो प्रकार का सामान्य समूह लगेगा। समूह खाते के प्रकार का ही होना चाहिए।</p>
+                <p><span className="font-medium text-primary">parent_group</span> — (वैकल्पिक) किस समूह के नीचे खाता जाए — समूह का नाम या कोड (जैसे: Bank Accounts, 2300, Admin Expenses)। खाली छोड़ें तो प्रकार का सामान्य समूह लगेगा। समूह खाते के प्रकार का ही होना चाहिए।</p>
+                <p className="pl-4 text-amber-800">⚠️ बैंक खाता हमेशा <b>Bank Accounts</b> समूह में डालें — किसी और समूह (जैसे Current Assets) में डालने पर वह Bank Book, बैंक-चुनाव और Bank Reconciliation में नहीं दिखेगा। बैंक/संस्था से लिया ऋण <b>2300</b> (Loans / Borrowings) में डालें।</p>
               </div>
 
               {/* Step 2 */}
@@ -775,7 +792,7 @@ const UniversalImporter: React.FC = () => {
                     variant="outline"
                     size="sm"
                     className="gap-2"
-                    onClick={() => downloadExcelTemplate('members_template.xlsx', MEMBERS_TEMPLATE)}
+                    onClick={() => downloadExcelTemplate('members_template.xlsx', membersTemplate(fyStartIso))}
                   >
                     <Download className="h-4 w-4" />
                     Excel (.xlsx) Download करें
@@ -784,7 +801,7 @@ const UniversalImporter: React.FC = () => {
                     variant="outline"
                     size="sm"
                     className="gap-2 text-muted-foreground"
-                    onClick={() => downloadTemplate('members_template.csv', MEMBERS_TEMPLATE)}
+                    onClick={() => downloadTemplate('members_template.csv', membersTemplate(fyStartIso))}
                   >
                     <Download className="h-4 w-4" />
                     CSV Download करें
@@ -799,7 +816,10 @@ const UniversalImporter: React.FC = () => {
                 <p><span className="font-medium text-primary">name</span> — सदस्य का पूरा नाम</p>
                 <p><span className="font-medium text-primary">father_name</span> — पिता/पति का नाम</p>
                 <p><span className="font-medium text-primary">member_type</span> — <span className="text-green-700">member</span> / <span className="text-orange-600">nominal</span></p>
-                <p><span className="font-medium text-primary">join_date</span> — Format: YYYY-MM-DD (जैसे: 2022-04-01)</p>
+                <p><span className="font-medium text-primary">join_date</span> — ज़रूरी, Format: YYYY-MM-DD (जैसे: 2022-04-01)। <b>इसी से तय होता है कि सदस्य पुराना है या नया:</b></p>
+                <p className="pl-4">• वित्त वर्ष {society.financialYear} शुरू होने ({fyStartIso}) से <b>पहले</b> की तारीख़ = <b>पुराना सदस्य</b> — कोई रसीद नहीं बनती; उसकी शेयर पूँजी / प्रवेश शुल्क opening balance (शेयर पूँजी 1102) में डालें।</p>
+                <p className="pl-4">• इसी वित्त वर्ष की तारीख़ = <b>नया सदस्य</b> — शेयर पूँजी व प्रवेश शुल्क की रसीद बनती है (payment_mode cash → नकद, cheque/online → बैंक)।</p>
+                <p className="pl-4 text-muted-foreground">Template में M001, M002 पुराने और M003 नए सदस्य का उदाहरण है। Preview में हर row पर "पुराना / नया" दिखेगा।</p>
                 <p><span className="font-medium text-primary">status</span> — <span className="text-green-700">active</span> / <span className="text-orange-600">inactive</span></p>
                 <p><span className="font-medium text-primary">share_capital</span> — शेयर पूंजी (numbers only)</p>
                 <p className="text-muted-foreground mt-1">Optional — Personal: age, occupation, caste (General/Backward Class/Schedule Caste/Schedule Tribe)</p>
@@ -844,7 +864,7 @@ const UniversalImporter: React.FC = () => {
                   <div className="ml-7 space-y-3">
                     <PreviewTable
                       preview={memberPreview}
-                      columns={['member_id', 'name', 'father_name', 'age', 'caste', 'district', 'member_type', 'share_capital']}
+                      columns={['member_id', 'name', 'father_name', 'join_date', 'join_kind', 'member_type', 'share_capital']}
                       labels={{
                         member_id: 'Member ID',
                         name: 'नाम',
@@ -854,8 +874,19 @@ const UniversalImporter: React.FC = () => {
                         district: 'जिला',
                         member_type: 'Type',
                         share_capital: 'Share Capital',
+                        join_date: 'जुड़ने की तिथि',
+                        join_kind: 'पुराना / नया',
                       }}
                     />
+                    {(() => {
+                      const ok = memberPreview.filter(r => r.status === 'ok');
+                      const old = ok.filter(r => (r.data.join_kind || '').startsWith('पुराना')).length;
+                      return ok.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          {old} पुराने सदस्य (रसीद नहीं — शेयर opening balance में डालें) · {ok.length - old} नए सदस्य (रसीद बनेगी)
+                        </p>
+                      );
+                    })()}
                     <div className="flex gap-2">
                       <Button
                         size="sm"
@@ -1029,11 +1060,11 @@ const UniversalImporter: React.FC = () => {
                 </p>
                 <div className="ml-7 flex gap-2 flex-wrap">
                   <Button variant="outline" size="sm" className="gap-2"
-                    onClick={() => downloadExcelTemplate('vouchers_template.xlsx', vouchersTemplate(society.financialYearStart))}>
+                    onClick={() => downloadExcelTemplate('vouchers_template.xlsx', vouchersTemplate(fyStartIso))}>
                     <Download className="h-4 w-4" /> Excel (.xlsx) Download करें
                   </Button>
                   <Button variant="outline" size="sm" className="gap-2 text-muted-foreground"
-                    onClick={() => downloadTemplate('vouchers_template.csv', vouchersTemplate(society.financialYearStart))}>
+                    onClick={() => downloadTemplate('vouchers_template.csv', vouchersTemplate(fyStartIso))}>
                     <Download className="h-4 w-4" /> CSV Download करें
                   </Button>
                 </div>
