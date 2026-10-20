@@ -17,7 +17,7 @@
  * Deno runtime — not the app's TypeScript.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { buildInvoiceCalc } from '../_shared/invoice-core.mjs';
+import { issueInvoiceForOrder } from '../_shared/issue-invoice.mjs';
 
 // Seats per plan — mirrors src/lib/plans.ts / migration 058 (null = unlimited).
 const SEATS: Record<string, number | null> = { starter: 1, plus: 6, pro: null };
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
 
     // Trust OUR record for society_id + plan + the target period_end (not the payload).
     const { data: order } = await supa
-      .from('orders').select('society_id, plan, status, set_period_end, amount').eq('id', orderId).maybeSingle();
+      .from('orders').select('society_id, plan, status, set_period_end').eq('id', orderId).maybeSingle();
     if (!order) return new Response('unknown order', { status: 200 });
     if (order.status === 'paid') return new Response('already processed', { status: 200 }); // idempotent
 
@@ -95,22 +95,10 @@ Deno.serve(async (req) => {
     // (6) Tax invoice (migration 130). AFTER activation and never fatal: a missing seller row,
     // an unknown buyer state or any error leaves the order "invoice pending" (paid, no invoice
     // row) for the SuperAdmin retry — the plan the society paid for is already live.
+    // issueInvoiceForOrder never throws; the try is a second guard so nothing here can fail the webhook.
     try {
-      const { data: seller } = await supa.from('billing_seller').select('*').eq('id', true).maybeSingle();
-      // select('*'): society_settings.gstin may not exist as a column yet — never name it.
-      const { data: soc } = await supa.from('society_settings').select('*').eq('society_id', order.society_id).limit(1).maybeSingle();
-      const built = buildInvoiceCalc({
-        amountRupees: order.amount,
-        seller,
-        buyer: soc ? { name: soc.name, address: [soc.address, soc.district].filter(Boolean).join(', '), state: soc.state, gstin: soc.gstin } : null,
-      });
-      if (built.status !== 'ok') {
-        console.error(`invoice pending for ${orderId}: ${built.status}`);
-      } else {
-        const { data: res, error } = await supa.rpc('issue_invoice', { p_order_id: orderId, p_calc: built.calc });
-        if (error) console.error(`invoice pending for ${orderId}: ${error.message}`);
-        else if (res?.status !== 'issued' && res?.status !== 'already') console.error(`invoice pending for ${orderId}: ${res?.status}`);
-      }
+      const inv = await issueInvoiceForOrder(supa, orderId);
+      if (inv.status !== 'issued' && inv.status !== 'already') console.error(`invoice pending for ${orderId}: ${inv.status}${inv.error ? ` — ${inv.error}` : ''}`);
     } catch (e) {
       console.error(`invoice pending for ${orderId}: ${e instanceof Error ? e.message : String(e)}`);
     }

@@ -108,10 +108,11 @@ const SELLER = { state_code: '06', gst_rate_pct: 18 };
 // ── 6. Webhook wiring ────────────────────────────────────────────────────────
 {
   const wh = read('supabase/functions/razorpay-webhook/index.ts');
-  ok(/from '\.\.\/_shared\/invoice-core\.mjs'/.test(wh), 'webhook imports the tested core');
-  ok(/rpc\('issue_invoice'/.test(wh), 'webhook calls issue_invoice');
-  ok(wh.indexOf(".from('subscriptions').upsert(") < wh.indexOf("rpc('issue_invoice'"), 'subscription is activated BEFORE the invoice — an invoice problem never blocks the plan');
-  ok(/try \{[\s\S]*rpc\('issue_invoice'[\s\S]*\} catch/.test(wh), 'invoice issuance is wrapped so its failure cannot fail the webhook');
+  const issuer = read('supabase/functions/_shared/issue-invoice.mjs');
+  ok(/from '\.\.\/_shared\/issue-invoice\.mjs'/.test(wh) && /from '\.\/invoice-core\.mjs'/.test(issuer), 'webhook → shared issuer → the tested core');
+  ok(/rpc\('issue_invoice'/.test(issuer) && !/rpc\('issue_invoice'/.test(wh), 'only the shared issuer calls issue_invoice');
+  ok(wh.indexOf(".from('subscriptions').upsert(") < wh.indexOf('issueInvoiceForOrder(supa, orderId)'), 'subscription is activated BEFORE the invoice — an invoice problem never blocks the plan');
+  ok(/try \{[\s\S]*issueInvoiceForOrder\(supa, orderId\)[\s\S]*\} catch/.test(wh), 'invoice issuance is wrapped so its failure cannot fail the webhook');
 }
 
 console.log(`invoice-core: ${pass} passed, ${fail} failed`);
