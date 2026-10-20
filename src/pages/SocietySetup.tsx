@@ -32,6 +32,8 @@ import { fullChartForType } from '@/lib/storage';
 import { resolveCapabilities } from '@/lib/navigation';
 import type { SocietyType, VoucherType } from '@/types';
 import { accountCode } from '@/lib/accountCode';
+import { fyStartFromLabel, societyFyStart } from '@/lib/fyPeriod';
+import { fmtDate } from '@/lib/dateUtils';
 
 const SocietySetup: React.FC = () => {
   const { t, language } = useLanguage();
@@ -143,10 +145,13 @@ const SocietySetup: React.FC = () => {
   );
 
   // Financial year form state
+  // The FY start is never chosen separately: it is 1 April of the FY label (societyFyStart). The old
+  // "वर्ष प्रारंभ" select wrote the word 'april' / 'january' into financialYearStart, which broke every
+  // date compare against it; 'january' was never supported anywhere (labels are 'YYYY-YY', FY end is 31 March).
   const [fyForm, setFyForm] = useState({
     financialYear: society.financialYear,
-    financialYearStart: society.financialYearStart,
   });
+  const fyFormStart = societyFyStart({ financialYear: fyForm.financialYear, financialYearStart: society.financialYearStart });
 
   // Opening balances: one entry per account
   const [obForm, setObForm] = useState<Record<string, string>>({});
@@ -187,7 +192,12 @@ const SocietySetup: React.FC = () => {
   };
 
   const handleSaveFY = () => {
-    updateSociety(fyForm, { onSaved: () => toast({
+    const financialYearStart = fyStartFromLabel(fyForm.financialYear);
+    if (!financialYearStart) {
+      toast({ title: language === 'hi' ? 'वित्तीय वर्ष चुनें' : 'Choose the financial year', description: language === 'hi' ? 'वित्तीय वर्ष 2026-27 जैसा होना चाहिए।' : 'The financial year must look like 2026-27.', variant: 'destructive' });
+      return;
+    }
+    updateSociety({ financialYear: fyForm.financialYear, financialYearStart }, { onSaved: () => toast({
       title: language === 'hi' ? 'सहेजा गया' : 'Saved',
       description: language === 'hi' ? 'वित्तीय वर्ष अपडेट हो गया' : 'Financial year updated',
     }) });
@@ -879,16 +889,12 @@ const SocietySetup: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>{language === 'hi' ? 'वर्ष प्रारंभ' : 'Year Start'}</Label>
-                  <Select
-                    value={fyForm.financialYearStart}
-                    onValueChange={v => setFyForm(f => ({ ...f, financialYearStart: v }))}
-                  >
-                    <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="april">{language === 'hi' ? '1 अप्रैल' : '1st April'}</SelectItem>
-                      <SelectItem value="january">{language === 'hi' ? '1 जनवरी' : '1st January'}</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="h-11 px-3 flex items-center rounded-md border bg-muted text-sm" data-testid="fy-start-display">
+                    {fyFormStart ? fmtDate(fyFormStart) : '—'}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'hi' ? 'वित्तीय वर्ष हमेशा 1 अप्रैल से 31 मार्च तक — चुने गए वर्ष से अपने-आप।' : 'The financial year always runs 1 April – 31 March, taken from the year chosen.'}
+                  </p>
                 </div>
               </div>
 

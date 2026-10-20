@@ -27,6 +27,7 @@ import { Plus, Pencil, Trash2, AlertCircle, Scale } from 'lucide-react';
 import type { Recoverable, RecoverableCategory, RecoverableLegalStage } from '@/types';
 import { RECOVERABLE_CATEGORY_LABELS, RECOVERABLE_STAGE_LABELS } from '@/lib/annualReview/p2Calculator';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { fyStartOf, societyFyStart } from '@/lib/fyPeriod';
 
 const EMPTY_FORM = {
   partyName: '',
@@ -70,7 +71,7 @@ const RecoverablesRegister: React.FC = () => {
   // at the data layer).
   const canEdit = can('update');
 
-  const defaultFyStart = society.financialYearStart || new Date().toISOString().split('T')[0];
+  const defaultFyStart = societyFyStart(society) ?? fyStartOf(new Date().toISOString().split('T')[0]);
 
   const [fyFilter, setFyFilter] = useState<string>(defaultFyStart);
   const [search, setSearch] = useState('');

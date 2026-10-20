@@ -20,6 +20,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 import { fmtDate as fmtDateShort, fmtDateLong } from '@/lib/dateUtils';
 import { PrintButton, PrintHeader } from '@/components/ReportPrint';
+import { fyStartOf, societyFyStart } from '@/lib/fyPeriod';
 
 const DayBook: React.FC = () => {
   const { language } = useLanguage();
@@ -68,7 +69,7 @@ const DayBook: React.FC = () => {
   };
 
   const today = new Date().toISOString().split('T')[0];
-  const fyStart = society.financialYearStart || `${society.financialYear?.split('-')[0]}-04-01`;
+  const fyStart = societyFyStart(society) ?? fyStartOf(today);
 
   const [fromDate, setFromDate] = useState(fyStart);
   const [toDate, setToDate] = useState(today);

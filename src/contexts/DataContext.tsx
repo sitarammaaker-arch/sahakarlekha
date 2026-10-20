@@ -37,7 +37,7 @@ import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount 
 import { issueOfficialNumber } from '@/lib/numbering';
 import { buildPostVoucherPayload, buildEditVoucherPayload, buildStockDocumentPayload, buildPendingVoucherPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
 import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
-import { fyStartOf, fyStartFromLabel } from '@/lib/fyPeriod';
+import { fyStartOf, fyStartFromLabel, societyFyStart } from '@/lib/fyPeriod';
 import { canReadMemberPii, stripMemberPII, applyMemberIdentity, isMissingIdentityTable, identityRowFor, type IdentityRow } from '@/lib/memberIdentity';
 import { computeTrialBalance } from '@/lib/reports/trialBalance';
 import { computeTradingAccount, computeProfitLoss } from '@/lib/reports/tradingAndProfitLoss';
@@ -1957,7 +1957,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // P2-3: Warn if voucher date is outside the active FY range
     const fyEnd = `20${society.financialYear.split('-')[1]}-03-31`;
-    const fyStart = society.financialYearStart;
+    const fyStart = societyFyStart(society);
     if (data.date && fyStart && (data.date < fyStart || data.date > fyEnd)) {
       toastRef.current({
         title: 'तारीख़ चालू वित्त वर्ष से बाहर / Date Outside Financial Year',

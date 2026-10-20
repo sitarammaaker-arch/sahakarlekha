@@ -15,6 +15,7 @@ import { downloadCSV } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { fyStartOf, societyFyStart } from '@/lib/fyPeriod';
 
 const TODAY = () => new Date().toISOString().split('T')[0];
 const fmt = (amount: number) =>
@@ -27,7 +28,7 @@ const Patronage: React.FC = () => {
   const { patronageRuns, createPatronageRun, approvePatronageRun, recordPatronagePayment, deletePatronageRun } = useConsumerData();
   const { toast } = useToast();
 
-  const defaultFrom = (society as { financialYearStart?: string })?.financialYearStart || `${new Date().getFullYear()}-04-01`;
+  const defaultFrom = societyFyStart(society) ?? fyStartOf(TODAY());
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(TODAY());
   const [ratePct, setRatePct] = useState<number>(0);
