@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { downloadCSV } from '@/lib/exportUtils';
 import { Gift, Trash2, CheckCircle2, HandCoins, Download } from 'lucide-react';
 import type { DairyDistribution, DairyBonusBasis } from '@/types';
+import { societyFyStart } from '@/lib/fyPeriod';
 
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN')}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -119,7 +120,7 @@ export default function DairyDistribution() {
   const surplus = useMemo(() => { try { return getProfitLoss().netProfit || 0; } catch { return 0; } }, [getProfitLoss]);
 
   const [kind, setKind] = useState<'bonus' | 'dividend'>('bonus');
-  const [from, setFrom] = useState(society?.financialYearStart || today());
+  const [from, setFrom] = useState(societyFyStart(society) ?? today());
   // SocietySettings has no financialYearEnd — derive it from the FY label ("2024-25" → 2025-03-31).
   const [to, setTo] = useState(society?.financialYear ? `${parseInt(society.financialYear.split('-')[0], 10) + 1}-03-31` : today());
   const [basis, setBasis] = useState<DairyBonusBasis>('per_litre');

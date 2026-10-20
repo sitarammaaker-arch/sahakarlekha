@@ -29,6 +29,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
+import { fyStartOf, societyFyStart } from '@/lib/fyPeriod';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface AgingRow {
@@ -251,7 +252,7 @@ const AgingAnalysis: React.FC = () => {
   // ── Aging rows ─────────────────────────────────────────────────────────────
   const agingOpts = useMemo(() => ({
     asOf,
-    openingDate: society.financialYearStart || `${society.financialYear?.split('-')[0]}-04-01`,
+    openingDate: societyFyStart(society) ?? fyStartOf(asOf),
     inScope: matchesActiveBranch,
     openingsInScope: matchesActiveBranch(undefined),   // ECR-17: openings belong to the Head Office scope (as Ledger / TB)
   }), [asOf, society.financialYearStart, society.financialYear, matchesActiveBranch]);

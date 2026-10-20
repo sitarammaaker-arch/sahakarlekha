@@ -2,7 +2,7 @@
 // Phase-2 C · fyPeriod helpers. Run: node scripts/test-fy-period.mjs
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
-const { fyStartOf, fyStartFromLabel, netOpening } = await import(pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), '../src/lib/fyPeriod.ts')).href);
+const { fyStartOf, fyStartFromLabel, societyFyStart, netOpening } = await import(pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), '../src/lib/fyPeriod.ts')).href);
 let pass = 0, fail = 0;
 const ok = (n, c) => { if (c) { pass++; console.log(`  ✓ ${n}`); } else { fail++; console.log(`  ✗ ${n}`); } };
 ok('a June date → 1 April same year', fyStartOf('2026-06-15') === '2026-04-01');
@@ -11,6 +11,14 @@ ok('31 March → previous year', fyStartOf('2027-03-31') === '2026-04-01');
 ok('a January date → previous year', fyStartOf('2027-01-05') === '2026-04-01');
 ok('label 2026-27 → 2026-04-01', fyStartFromLabel('2026-27') === '2026-04-01');
 ok('bad label → undefined', fyStartFromLabel('april') === undefined && fyStartFromLabel(undefined) === undefined);
+// societyFyStart — the one source of a society's FY start (financialYearStart once held the word 'april').
+ok('label wins: 2026-27 + april → 2026-04-01', societyFyStart({ financialYear: '2026-27', financialYearStart: 'april' }) === '2026-04-01');
+ok('label wins over a stale ISO start', societyFyStart({ financialYear: '2026-27', financialYearStart: '2025-04-01' }) === '2026-04-01');
+ok('january word never leaks out', societyFyStart({ financialYear: '2025-26', financialYearStart: 'january' }) === '2025-04-01');
+ok('no label → ISO financialYearStart is the fallback', societyFyStart({ financialYear: '', financialYearStart: '2024-04-01' }) === '2024-04-01');
+ok('no label + a month word → undefined (never "april")', societyFyStart({ financialYearStart: 'april' }) === undefined);
+ok('null / empty society → undefined', societyFyStart(null) === undefined && societyFyStart({}) === undefined);
+ok('a date compare against the result is sane', '2026-05-01' >= societyFyStart({ financialYear: '2026-27', financialYearStart: 'april' }));
 ok('net opening Dr', JSON.stringify(netOpening(700, 200)) === JSON.stringify({ drMinor: 500, crMinor: 0 }));
 ok('net opening Cr', JSON.stringify(netOpening(100, 400)) === JSON.stringify({ drMinor: 0, crMinor: 300 }));
 console.log(`\nfy-period: ${pass} passed, ${fail} failed`);

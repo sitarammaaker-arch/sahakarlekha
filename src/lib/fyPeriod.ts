@@ -18,6 +18,24 @@ export function fyStartFromLabel(label?: string | null): string | undefined {
   return m ? `${m[1]}-04-01` : undefined;
 }
 
+/**
+ * THE start date ('YYYY-04-01') of a society's current financial year — every screen and check that
+ * needs "FY start" reads it from here, never from society.financialYearStart directly.
+ * That column has held two meanings: Register wrote an ISO date, but Society Setup's old "वर्ष प्रारंभ"
+ * select wrote the WORD 'april' (8 of 32 prod societies on 2026-10-20), and a string compare such as
+ * '2026-05-01' < 'april' then broke every date check on those societies. The FY label 'YYYY-YY' is the
+ * source of truth (migration 073 derives FY rows from it too); an ISO financialYearStart is only the
+ * fallback when the label is missing or malformed. A non-ISO value is ignored (undefined).
+ */
+export function societyFyStart(
+  society?: { financialYear?: string | null; financialYearStart?: string | null } | null,
+): string | undefined {
+  const fromLabel = fyStartFromLabel(society?.financialYear);
+  if (fromLabel) return fromLabel;
+  const raw = society?.financialYearStart || '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined;
+}
+
 /** A gross brought-forward (Dr and Cr sums, minor units) shown as ONE net opening figure. */
 export function netOpening(drMinor: number, crMinor: number): { drMinor: number; crMinor: number } {
   const n = drMinor - crMinor;

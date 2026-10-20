@@ -23,6 +23,7 @@ import { Plus, Pencil, Trash2, AlertCircle, Scale } from 'lucide-react';
 import type { KachiAaratEntry, KachiAaratCrop } from '@/types';
 import { KACHI_CROP_LABELS } from '@/lib/annualReview/p8Calculator';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { fyStartOf, societyFyStart } from '@/lib/fyPeriod';
 
 const EMPTY_FORM = {
   date: new Date().toISOString().split('T')[0],
@@ -57,7 +58,7 @@ const KachiAaratRegister: React.FC = () => {
   // at the data layer).
   const canEdit = can('update');
 
-  const defaultFy = society.financialYearStart || new Date().toISOString().split('T')[0];
+  const defaultFy = societyFyStart(society) ?? fyStartOf(new Date().toISOString().split('T')[0]);
   const [fyFilter, setFyFilter] = useState<string>(defaultFy);
   const [cropFilter, setCropFilter] = useState<'all' | KachiAaratCrop>('all');
   const [search, setSearch] = useState('');
