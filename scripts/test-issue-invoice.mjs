@@ -132,6 +132,39 @@ const issued = () => ({ data: { status: 'issued', invoice_no: 'SL/2026-27/0001' 
   ok(/values \('131', 'billing_invoices_admin'\)/.test(up) && /delete from public\.app_migrations where version = '131'/.test(down), '131 ledger insert / down delete');
 }
 
+// ── 3b. Migration 133 — never an invoice for a test-mode payment ────────────
+{
+  const m130 = read('supabase/migrations/130_billing_invoices.sql');
+  const up = read('supabase/migrations/133_orders_test_mode.sql');
+  const down = read('supabase/migrations/133_orders_test_mode_down.sql');
+  const fn = (sql) => { const a = sql.indexOf('create or replace function public.issue_invoice('); return a < 0 ? '' : sql.slice(a, sql.indexOf('$$;', a) + 3); };
+  const f130 = fn(m130), f133 = fn(up);
+  const anchor = "  if v_order.status <> 'paid' then return jsonb_build_object('status', 'order_not_paid'); end if;\n";
+  const guardStart = f133.indexOf(anchor) + anchor.length;
+  const guardEnd = f133.indexOf('\n  select invoice_no into v_existing'); // keep 130's blank line
+  const guard = f133.slice(guardStart, guardEnd);
+  ok(f133.slice(0, guardStart) + f133.slice(guardEnd) === f130, '133 issue_invoice = 130 body + the guard block, nothing else');
+  ok(/if v_order\.is_test is distinct from false then/.test(guard) && /'test_mode'/.test(guard) && /'mode_unknown'/.test(guard), 'guard: only is_test = false is invoiced (test and unknown refused)');
+  ok(f133.indexOf('is_test is distinct from false') < f133.indexOf('insert into public.invoice_counters'), 'guard runs before a number is taken');
+  ok(fn(down) === f130, '133 down restores the 130 issue_invoice byte-for-byte');
+  ok(/revoke execute on function public\.issue_invoice\(text, jsonb\) from public, anon, authenticated;/.test(code(up)), '133 keeps issue_invoice service-role only');
+  ok(/and o\.is_test is distinct from true/.test(up) && /invoice_tried_at timestamptz, is_test boolean/.test(up), 'pending list leaves test orders out and returns is_test');
+  ok(/drop function if exists public\.admin_list_pending_invoices\(\);\s*create function/.test(up), 'return type change done as drop + create');
+  ok(/add column if not exists is_test boolean/.test(up) && /drop column if exists is_test/.test(down), 'is_test added / dropped');
+  ok(/values \('133', 'orders_test_mode'\)/.test(up) && /delete from public\.app_migrations where version = '133'/.test(down), '133 ledger insert / down delete');
+
+  const co = read('supabase/functions/create-order/index.ts');
+  const ins = co.indexOf("const { error: insErr } = await supa.from('orders').insert({");
+  ok(!/is_test/.test(co.slice(ins, co.indexOf('});', ins))), 'is_test NOT in the base insert (checkout works before 133)');
+  ok(/keyId\.startsWith\('rzp_test_'\) \? true : keyId\.startsWith\('rzp_live_'\) \? false : null/.test(co), 'mode from the key prefix; anything else = unknown');
+  ok(co.indexOf(".update({ is_test: isTest })") > ins, 'mode written in its own update after the insert');
+}
+{
+  const c = fakeClient({ tables: { orders: [ORDER], billing_seller: [SELLER], society_settings: [SOC] }, rpc: () => ({ data: { status: 'test_mode' }, error: null }) });
+  const r = await issueInvoiceForOrder(c, 'order_1');
+  ok(r.status === 'test_mode' && c.calls.updates[0].patch.invoice_error === 'test_mode', 'server refusal for a test payment is reported + recorded, not treated as issued');
+}
+
 // ── 4. admin-retry-invoice ───────────────────────────────────────────────────
 {
   const fn = read('supabase/functions/admin-retry-invoice/index.ts');

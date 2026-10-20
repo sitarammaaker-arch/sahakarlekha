@@ -33,6 +33,8 @@ interface PendingRow {
   paid_at: string;
   invoice_error: string | null;
   invoice_tried_at: string | null;
+  /** 133: false = live payment; null = mode not recorded (cannot be invoiced). Test-mode rows never come back. */
+  is_test?: boolean | null;
 }
 
 /** Why an order has no invoice yet, in plain Hindi. */
@@ -40,6 +42,8 @@ function pendingReasonHi(reason: string | null): string {
   if (!reason) return 'अभी कोशिश दर्ज नहीं (migration 131 से पहले का भुगतान, या webhook ने invoice तक पहुँचा ही नहीं)';
   if (reason === 'seller_incomplete') return 'Seller की जानकारी अधूरी — billing_seller में नाम/GSTIN/पता/राज्य/SAC/दर भरें';
   if (reason === 'buyer_state_unknown') return 'समिति का राज्य/GSTIN नहीं मिला — समिति सेटअप में राज्य भरवाएँ';
+  if (reason === 'test_mode') return 'Test-mode payment — इस पर कभी invoice नहीं बनेगा';
+  if (reason === 'mode_unknown') return 'Payment test था या live, दर्ज नहीं — invoice नहीं बनेगा (Razorpay dashboard से जाँचकर orders.is_test भरें)';
   return `त्रुटि: ${reason}`;
 }
 
@@ -165,11 +169,11 @@ export default function SuperAdminInvoices() {
                       <TableCell className="text-right">{inr(p.amount)}</TableCell>
                       <TableCell className="text-xs">{fmtDateTime(p.paid_at)}</TableCell>
                       <TableCell className="text-xs max-w-xs">
-                        {pendingReasonHi(p.invoice_error)}
+                        {p.is_test === null ? pendingReasonHi('mode_unknown') : pendingReasonHi(p.invoice_error)}
                         {p.invoice_tried_at && <span className="block text-muted-foreground">आख़िरी कोशिश: {fmtDateTime(p.invoice_tried_at)}</span>}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button size="sm" variant="outline" className="gap-1" disabled={retrying === p.order_id} onClick={() => retry(p.order_id)}>
+                        <Button size="sm" variant="outline" className="gap-1" disabled={retrying === p.order_id || p.is_test === null} onClick={() => retry(p.order_id)}>
                           <RotateCcw className={`h-4 w-4 ${retrying === p.order_id ? 'animate-spin' : ''}`} /> फिर से
                         </Button>
                       </TableCell>

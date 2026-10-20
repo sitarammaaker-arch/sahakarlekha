@@ -149,6 +149,12 @@ Deno.serve(async (req) => {
       return json({ error: 'Order सेव नहीं हुआ — कोई पैसा नहीं कटा, थोड़ी देर बाद फिर कोशिश करें / Order could not be saved — nothing was charged, please try again' }, 500);
     }
 
+    // Migration 133: which Razorpay mode took this order. issue_invoice invoices ONLY is_test = false, so if this
+    // update fails (column missing) the order is merely "mode unknown" — never a real invoice for a test payment.
+    const isTest = keyId.startsWith('rzp_test_') ? true : keyId.startsWith('rzp_live_') ? false : null;
+    const { error: mErr } = await supa.from('orders').update({ is_test: isTest }).eq('id', order.id);
+    if (mErr) console.error(`payment mode not saved on ${order.id}: ${mErr.message}`);
+
     // Step 2 (migration 132): buyer columns in their own update, so checkout still works before 132 runs.
     // Not saved → the invoice uses society_settings; the client is told so it can say so.
     let buyerSaved = checkedBuyer == null;
