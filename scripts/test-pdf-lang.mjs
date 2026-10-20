@@ -112,7 +112,7 @@ delete globalThis.localStorage; setPdfLang('en');
 // ── RATCHET: every label a REPORT generator draws has a Hindi form ──
 // Per-document forms (invoice, voucher, salary slip, notices, application form, bills) are deliberately not
 // translated yet — they are legal documents with their own review. A NEW report label must get its Hindi here.
-const DOCUMENTS = ['MemberApplication', 'SaleInvoice', 'SalarySlip', 'DemandNotice', 'PurchaseRecord', 'MaintenanceBill', 'MaintenanceReceipt', 'Voucher'];
+const DOCUMENTS = ['MemberApplication', 'SaleInvoice', 'SubscriptionInvoice', 'SalarySlip', 'DemandNotice', 'PurchaseRecord', 'MaintenanceBill', 'MaintenanceReceipt', 'Voucher'];
 const src = fs.readFileSync(new URL('../src/lib/pdf.ts', import.meta.url), 'utf8');
 const fns = [...src.matchAll(/export function generate([A-Za-z]+)PDF\(/g)].map(m => ({ n: m[1], at: m.index }));
 const owner = (i) => { let o = 'helper'; for (const f of fns) if (f.at <= i) o = f.n; return o; };

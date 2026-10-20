@@ -225,6 +225,7 @@ const TermsConditions = lazyWithRetry(() => import("./pages/TermsConditions"));
 const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
 const SuperAdminDashboard = lazyWithRetry(() => import("./pages/SuperAdminDashboard"));
 const SuperAdminFeedback = lazyWithRetry(() => import("./pages/SuperAdminFeedback"));
+const SuperAdminInvoices = lazyWithRetry(() => import("./pages/SuperAdminInvoices"));
 import { SuperAdminRoute } from "@/components/SuperAdminRoute";
 
 import { staticSnapshotFor } from '@/lib/staticSnapshot';
@@ -484,6 +485,7 @@ const AppRoutes = () => {
       {/* Super Admin (Platform Owner) */}
       <Route path="/super-admin" element={<SuperAdminRoute><MainLayout><SuperAdminDashboard /></MainLayout></SuperAdminRoute>} />
       <Route path="/super-admin/feedback" element={<SuperAdminRoute><MainLayout><SuperAdminFeedback /></MainLayout></SuperAdminRoute>} />
+      <Route path="/super-admin/invoices" element={<SuperAdminRoute><MainLayout><SuperAdminInvoices /></MainLayout></SuperAdminRoute>} />
 
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />

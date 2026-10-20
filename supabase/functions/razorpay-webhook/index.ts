@@ -5,7 +5,8 @@
  * the RAW body with RAZORPAY_WEBHOOK_SECRET, (2) on payment.captured read the order_id,
  * (3) look up OUR `orders` row (created in create-order, holds society_id + plan — we
  * never trust amounts/plan from the payload), (4) mark the order paid, and (5) activate
- * the subscription (service-role upsert). The browser is never trusted for activation.
+ * the subscription (service-role upsert), then (6) issues the GST tax invoice via
+ * issue_invoice() (migration 130) — non-fatal. The browser is never trusted for activation.
  *
  * Secrets (owner sets in Supabase → Edge Functions → Secrets; never in repo/browser):
  *   RAZORPAY_WEBHOOK_SECRET
@@ -16,6 +17,7 @@
  * Deno runtime — not the app's TypeScript.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { issueInvoiceForOrder } from '../_shared/issue-invoice.mjs';
 
 // Seats per plan — mirrors src/lib/plans.ts / migration 058 (null = unlimited).
 const SEATS: Record<string, number | null> = { starter: 1, plus: 6, pro: null };
@@ -89,6 +91,17 @@ Deno.serve(async (req) => {
       activated_by: `razorpay:${payment.id}`,
       updated_at:   now.toISOString(),
     }, { onConflict: 'society_id' });
+
+    // (6) Tax invoice (migration 130). AFTER activation and never fatal: a missing seller row,
+    // an unknown buyer state or any error leaves the order "invoice pending" (paid, no invoice
+    // row) for the SuperAdmin retry — the plan the society paid for is already live.
+    // issueInvoiceForOrder never throws; the try is a second guard so nothing here can fail the webhook.
+    try {
+      const inv = await issueInvoiceForOrder(supa, orderId);
+      if (inv.status !== 'issued' && inv.status !== 'already') console.error(`invoice pending for ${orderId}: ${inv.status}${inv.error ? ` — ${inv.error}` : ''}`);
+    } catch (e) {
+      console.error(`invoice pending for ${orderId}: ${e instanceof Error ? e.message : String(e)}`);
+    }
 
     return new Response('ok', { status: 200 });
   } catch (e) {
