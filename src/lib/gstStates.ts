@@ -3,6 +3,8 @@
  * / recipient state code for an e-Way Bill: prefer the party's GSTIN prefix; fall
  * back to their state NAME when they're unregistered (URP).
  */
+import { INDIAN_STATES } from './constants.ts'; // relative + .ts: imported by plain-node tests (no @/ loader)
+
 export const GST_STATE_CODES: Record<string, string> = {
   'jammu and kashmir': '01', 'himachal pradesh': '02', 'punjab': '03',
   'chandigarh': '04', 'uttarakhand': '05', 'haryana': '06', 'delhi': '07',
@@ -24,9 +26,14 @@ export function stateCodeFromGstin(gstin?: string): string {
   return /^[0-3][0-9][A-Z0-9]{13}$/.test(g) ? g.slice(0, 2) : '';
 }
 
-/** State code from a state name (case-insensitive), or '' if unknown. */
+/** State code from a state name (case-insensitive; "Jammu & Kashmir" = "jammu and kashmir"), or '' if unknown. */
 export function stateCodeFromName(name?: string): string {
-  return GST_STATE_CODES[(name || '').trim().toLowerCase()] || '';
+  return GST_STATE_CODES[(name || '').trim().toLowerCase().replace(/\s*&\s*/g, ' and ')] || '';
+}
+
+/** State code for a Society Setup state value ('hr' — INDIAN_STATES.value), or '' if unknown. */
+export function stateCodeFromSetupValue(value?: string): string {
+  return stateCodeFromName(INDIAN_STATES.find((s) => s.value === value)?.label);
 }
 
 /**

@@ -6,7 +6,7 @@
  * Rules (founder 2026-10-20):
  *   • Prices are GST-INCLUSIVE: the invoice total is exactly the order amount; the taxable value
  *     is backed out of it.
- *   • Place of supply = the buyer's state — GSTIN prefix first, else the state name. Unknown →
+ *   • Place of supply = the buyer's state — GSTIN prefix first, else the state (Setup value / name). Unknown →
  *     NO invoice ('buyer_state_unknown'), never a guessed state.
  *   • Same state as the seller → CGST + SGST, always equal halves; otherwise IGST.
  *   • All money is integer paise; taxable + taxes = total, to the paisa.
@@ -29,6 +29,30 @@ export const GST_STATE_CODES = {
   'ladakh': '38',
 };
 
+// Society Setup stores the STATE as the short value of src/lib/constants.ts INDIAN_STATES ('hr', 'dl' …),
+// not its name. Short value → GST state code; scripts/test-invoice-core.mjs derives every entry from
+// INDIAN_STATES' label through GST_STATE_CODES and fails if one drifts.
+export const SETUP_STATE_CODES = {
+  ap: '37', ar: '12', as: '18', br: '10', ct: '22', ga: '30', gj: '24', hr: '06', hp: '02', jh: '20',
+  ka: '29', kl: '32', mp: '23', mh: '27', mn: '14', ml: '17', mz: '15', nl: '13', or: '21', pb: '03',
+  rj: '08', sk: '11', tn: '33', tg: '36', tr: '16', up: '09', ut: '05', wb: '19',
+  an: '35', ch: '04', dn: '26', dl: '07', jk: '01', la: '38', ld: '31', py: '34',
+};
+
+const VALID_CODES = new Set(Object.values(GST_STATE_CODES));
+
+/** A 2-digit GST state code that exists, else ''. */
+export function validStateCode(code) {
+  const c = String(code ?? '').trim();
+  return VALID_CODES.has(c) ? c : '';
+}
+
+/** GST state code from a Society Setup value ('hr'), a state name ('Haryana', 'Jammu & Kashmir') or a code ('06'). */
+export function stateCodeFromState(state) {
+  const s = String(state ?? '').trim().toLowerCase();
+  return SETUP_STATE_CODES[s] || GST_STATE_CODES[s.replace(/\s*&\s*/g, ' and ')] || validStateCode(s);
+}
+
 const GSTIN_RE = /^[0-3][0-9][A-Z0-9]{13}$/;
 
 /** The GSTIN upper-cased if it is plausibly one, else ''. */
@@ -37,11 +61,33 @@ export function cleanGstin(gstin) {
   return GSTIN_RE.test(g) ? g : '';
 }
 
-/** Buyer state code: GSTIN prefix, else the state name, else ''. */
-export function buyerStateCode(gstin, stateName) {
+/** Buyer state code: GSTIN prefix, else the state (Setup value, name or code), else ''. */
+export function buyerStateCode(gstin, state) {
   const g = cleanGstin(gstin);
   if (g) return g.slice(0, 2);
-  return GST_STATE_CODES[String(stateName ?? '').trim().toLowerCase()] || '';
+  return stateCodeFromState(state);
+}
+
+/**
+ * The buyer details from the checkout dialog, checked server-side by create-order. GSTIN is optional (an
+ * unregistered society); when given it must be well-formed and its first two digits must be the chosen
+ * state. The state is required and must be a real GST state code.
+ * @returns {{ ok: true, buyer: { buyer_name: string, buyer_gstin: string|null, buyer_state_code: string, buyer_address: string|null } }
+ *         | { ok: false, error: string }}
+ */
+export function validateBuyer(input) {
+  const name = String(input?.name ?? '').trim().slice(0, 200);
+  const address = String(input?.address ?? '').trim().slice(0, 500);
+  const rawGstin = String(input?.gstin ?? '').trim().toUpperCase();
+  const state = validStateCode(input?.stateCode);
+  if (!name) return { ok: false, error: 'खरीदार (समिति) का नाम भरें / Enter the buyer name' };
+  if (!state) return { ok: false, error: 'राज्य चुनें / Choose the state' };
+  if (rawGstin) {
+    const g = cleanGstin(rawGstin);
+    if (!g) return { ok: false, error: 'GSTIN सही नहीं — 15 अक्षर, जैसे 06AAAAA0000A1Z5 / GSTIN is not valid' };
+    if (g.slice(0, 2) !== state) return { ok: false, error: `GSTIN राज्य ${g.slice(0, 2)} का है, चुना राज्य ${state} है / GSTIN state does not match the chosen state` };
+  }
+  return { ok: true, buyer: { buyer_name: name, buyer_gstin: rawGstin || null, buyer_state_code: state, buyer_address: address || null } };
 }
 
 /**
@@ -79,12 +125,12 @@ export function buildInvoiceCalc({ amountRupees, seller, buyer }) {
   const rate = Number(seller.gst_rate_pct);
   const total = Math.round(Number(amountRupees) * 100);
   const s = splitInclusive(total, rate, pos === seller.state_code);
-  const addr = [buyer?.address, buyer?.state].map((x) => String(x ?? '').trim()).filter(Boolean).join(', ');
   return {
     status: 'ok',
     calc: {
       buyer_name: String(buyer?.name ?? '').trim(),
-      buyer_address: addr,
+      // The state is printed from buyer_state_code ("06 - Haryana"); a raw Setup value ('hr') never goes in the address.
+      buyer_address: String(buyer?.address ?? '').trim(),
       buyer_state_code: pos,
       buyer_gstin: gstin,
       place_of_supply: pos,

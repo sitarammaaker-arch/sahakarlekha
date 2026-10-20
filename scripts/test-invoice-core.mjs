@@ -3,7 +3,8 @@
 // is proven here before an invoice is issued.
 // Run: node scripts/test-invoice-core.mjs
 import { readFileSync } from 'node:fs';
-import { GST_STATE_CODES, cleanGstin, buyerStateCode, splitInclusive, buildInvoiceCalc } from '../supabase/functions/_shared/invoice-core.mjs';
+import { GST_STATE_CODES, SETUP_STATE_CODES, cleanGstin, buyerStateCode, stateCodeFromState, validStateCode, splitInclusive, buildInvoiceCalc } from '../supabase/functions/_shared/invoice-core.mjs';
+import { INDIAN_STATES } from '../src/lib/constants.ts';
 import { GST_STATE_CODES as APP_CODES } from '../src/lib/gstStates.ts';
 
 let pass = 0, fail = 0;
@@ -19,6 +20,17 @@ ok(cleanGstin(' 06abcde1234f1z5 ') === '06ABCDE1234F1Z5', 'GSTIN trimmed + upper
 ok(cleanGstin('99ABCDE1234F1Z5') === '' && cleanGstin('06ABC') === '' && cleanGstin(null) === '', 'implausible GSTIN → empty');
 ok(buyerStateCode('07ABCDE1234F1Z5', 'Haryana') === '07', 'GSTIN prefix beats the state name');
 ok(buyerStateCode('', ' haryana ') === '06', 'state name used when no GSTIN');
+ok(buyerStateCode('', 'hr') === '06' && buyerStateCode('', 'DL') === '07' && buyerStateCode('', 'Jammu & Kashmir') === '01' && buyerStateCode('', '09') === '09', 'Setup value, "&" names and bare codes resolve');
+ok(buyerStateCode('', '99') === '' && validStateCode('25') === '' && validStateCode('06') === '06', 'non-existent codes refused');
+{
+  // Every Society Setup state (INDIAN_STATES) maps — derived from its label through the app's GST table.
+  let bad = [];
+  for (const st of INDIAN_STATES) {
+    const want = APP_CODES[st.label.toLowerCase().replace(/\s*&\s*/g, ' and ')];
+    if (!want || SETUP_STATE_CODES[st.value] !== want || stateCodeFromState(st.value) !== want) bad.push(st.value);
+  }
+  ok(bad.length === 0 && Object.keys(SETUP_STATE_CODES).length === INDIAN_STATES.length, `SETUP_STATE_CODES matches INDIAN_STATES exactly (bad: ${bad.join(',') || 'none'})`);
+}
 ok(buyerStateCode('', 'Atlantis') === '' && buyerStateCode(undefined, undefined) === '', 'unknown state → empty, never guessed');
 
 // ── 2. The three plan prices at 18% ──────────────────────────────────────────
@@ -72,11 +84,13 @@ const SELLER = { state_code: '06', gst_rate_pct: 18 };
 
   const h = buildInvoiceCalc({ amountRupees: 1499, seller: SELLER, buyer: { name: ' Kisan PACS ', address: 'Assandh', state: 'Haryana', gstin: 'bad' } });
   ok(h.status === 'ok' && h.calc.place_of_supply === '06' && h.calc.cgst_paise === 11433 && h.calc.igst_paise === 0, 'Haryana buyer, Haryana seller → CGST + SGST');
-  ok(h.calc.buyer_gstin === '' && h.calc.buyer_name === 'Kisan PACS' && h.calc.buyer_address === 'Assandh, Haryana', 'invalid GSTIN dropped, name trimmed, address + state');
+  ok(h.calc.buyer_gstin === '' && h.calc.buyer_name === 'Kisan PACS' && h.calc.buyer_address === 'Assandh', 'invalid GSTIN dropped, name trimmed, address without the raw state');
   ok(h.calc.total_paise === 149900 && h.calc.gst_rate_pct === 18, 'total = order amount in paise; rate echoed for the server check');
 
   const d = buildInvoiceCalc({ amountRupees: 3999, seller: SELLER, buyer: { state: 'Haryana', gstin: '07ABCDE1234F1Z5' } });
   ok(d.status === 'ok' && d.calc.place_of_supply === '07' && d.calc.igst_paise > 0 && d.calc.cgst_paise === 0, 'Delhi GSTIN → IGST even if the state field says Haryana');
+  const hr = buildInvoiceCalc({ amountRupees: 1499, seller: SELLER, buyer: { name: 'X', state: 'hr' } });
+  ok(hr.status === 'ok' && hr.calc.place_of_supply === '06' && hr.calc.cgst_paise === 11433, "Society Setup's stored 'hr' → Haryana, CGST + SGST (not buyer_state_unknown)");
   const s = buildInvoiceCalc({ amountRupees: 1499, seller: { state_code: '06', gst_rate_pct: '18' }, buyer: { state: 'Haryana' } });
   ok(s.status === 'ok' && s.calc.gst_rate_pct === 18, 'numeric rate from PostgREST as a string is accepted');
 }

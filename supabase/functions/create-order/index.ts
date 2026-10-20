@@ -14,6 +14,7 @@
  * Deno runtime — not the app's TypeScript. Deploy: npx supabase functions deploy create-order
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { validateBuyer } from '../_shared/invoice-core.mjs';
 
 // SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
 // token; its payload is read only to refuse more (unreadable → pending).
@@ -45,8 +46,12 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   try {
-    const { plan, society_id } = await req.json().catch(() => ({}));
+    const { plan, society_id, buyer } = await req.json().catch(() => ({}));
     if (!PRICE_INR[plan] || !society_id) return json({ error: 'Invalid plan or society' }, 400);
+    // Buyer details for the tax invoice (checkout dialog). An older client sends none → the invoice
+    // falls back to society_settings. Sent but invalid → refused before any order exists.
+    const checkedBuyer = buyer == null ? null : validateBuyer(buyer);
+    if (checkedBuyer && !checkedBuyer.ok) return json({ error: checkedBuyer.error }, 400);
 
     const keyId = Deno.env.get('RAZORPAY_KEY_ID') ?? '';
     const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET') ?? '';
@@ -137,7 +142,16 @@ Deno.serve(async (req) => {
       set_period_end: setEnd.toISOString(),
     });
 
-    return json({ orderId: order.id, amount: rupees * 100, currency: 'INR', keyId, kind, rupees });
+    // Step 2 (migration 132): buyer columns in their own update, so checkout still works before 132 runs.
+    // Not saved → the invoice uses society_settings; the client is told so it can say so.
+    let buyerSaved = checkedBuyer == null;
+    if (checkedBuyer?.ok) {
+      const { error: bErr } = await supa.from('orders').update(checkedBuyer.buyer).eq('id', order.id);
+      buyerSaved = !bErr;
+      if (bErr) console.error(`buyer details not saved on ${order.id}: ${bErr.message}`);
+    }
+
+    return json({ orderId: order.id, amount: rupees * 100, currency: 'INR', keyId, kind, rupees, buyerSaved });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

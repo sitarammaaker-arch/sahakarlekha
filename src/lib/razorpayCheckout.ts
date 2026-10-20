@@ -42,10 +42,14 @@ function loadScript(): Promise<boolean> {
 export async function startCheckout(
   plan: string,
   societyId: string,
-  opts?: { name?: string; email?: string; onDone?: () => void },
-): Promise<{ ok: boolean; error?: string }> {
+  opts?: {
+    name?: string; email?: string; onDone?: () => void;
+    /** Tax-invoice buyer details (checkout dialog); create-order validates them. */
+    buyer?: { name: string; gstin: string; stateCode: string; address: string };
+  },
+): Promise<{ ok: boolean; error?: string; buyerSaved?: boolean }> {
   const { data, error } = await supabase.functions.invoke('create-order', {
-    body: { plan, society_id: societyId },
+    body: { plan, society_id: societyId, ...(opts?.buyer ? { buyer: opts.buyer } : {}) },
   });
   if (error || !data?.orderId) {
     let msg = data?.error || error?.message || 'Could not start payment';
@@ -75,5 +79,5 @@ export async function startCheckout(
     handler: () => opts?.onDone?.(),
   });
   rzp.open();
-  return { ok: true };
+  return { ok: true, buyerSaved: data.buyerSaved !== false };
 }

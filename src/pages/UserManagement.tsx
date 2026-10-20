@@ -5,6 +5,8 @@ import { useData } from '@/contexts/DataContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { startCheckout } from '@/lib/razorpayCheckout';
 import SubscriptionInvoices from '@/components/billing/SubscriptionInvoices';
+import CheckoutBuyerDialog from '@/components/billing/CheckoutBuyerDialog';
+import type { CheckoutBuyer } from '@/lib/billing/checkoutBuyer';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -105,7 +107,7 @@ export default function UserManagement() {
   // server guards (mig 047: is_society_user_manager + the role<>'admin' RLS/RPC checks).
   const isFullAdmin = currentUser?.role === 'admin';
   const { language } = useLanguage();
-  const { branches } = useData();
+  const { branches, society } = useData();
   const { plan, status, seatsLimit, periodEnd } = useSubscription(); // Phase 2a-2/5b: plan + seat cap
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -118,6 +120,9 @@ export default function UserManagement() {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState('');
+  // Checkout: the plan clicked (opens the buyer-details dialog) + whether create-order is in flight.
+  const [payFor, setPayFor] = useState<{ plan: string; action: string } | null>(null);
+  const [paying, setPaying] = useState(false);
 
   // Load users from Supabase (primary) with localStorage fallback
   const loadUsers = useCallback(async () => {
@@ -382,23 +387,38 @@ export default function UserManagement() {
   // Phase 2b — plan pricing/ranking for the checkout buttons (mirrors src/lib/plans.ts).
   const PLAN_PRICE: Record<string, string> = { starter: '₹1,499', plus: '₹3,999', pro: '₹9,999' };
   const PLAN_RANK: Record<string, number> = { starter: 1, plus: 2, pro: 3 };
-  const handlePay = async (targetPlan: string, action: string) => {
-    const label = targetPlan[0].toUpperCase() + targetPlan.slice(1);
-    const proNote = action === 'Upgrade'
-      ? (hi ? ' बचे दिनों का credit घटाकर सिर्फ़ अंतर लिया जाएगा।' : ' Only the prorated difference for your remaining period is charged.')
-      : '';
-    const ok = window.confirm(hi
-      ? `${action}: ${label} (${PLAN_PRICE[targetPlan]}/वर्ष)।${proNote} आगे बढ़ें?`
-      : `${action}: ${label} (${PLAN_PRICE[targetPlan]}/yr).${proNote} Proceed?`);
-    if (!ok) return;
-    const r = await startCheckout(targetPlan, currentUser?.societyId || '', {
+  // The plan click opens the buyer-details dialog (tax invoice); its confirm starts the checkout.
+  const handlePay = (targetPlan: string, action: string) => setPayFor({ plan: targetPlan, action });
+  const payTitle = payFor
+    ? `${payFor.action}: ${payFor.plan[0].toUpperCase() + payFor.plan.slice(1)} (${PLAN_PRICE[payFor.plan]}/${hi ? 'वर्ष' : 'yr'})`
+    : '';
+  const payNote = payFor?.action === 'Upgrade'
+    ? (hi ? 'बचे दिनों का credit घटाकर सिर्फ़ अंतर लिया जाएगा।' : 'Only the prorated difference for your remaining period is charged.')
+    : '';
+  const confirmPay = async (buyer: CheckoutBuyer) => {
+    if (!payFor) return;
+    setPaying(true);
+    const r = await startCheckout(payFor.plan, currentUser?.societyId || '', {
       name: currentUser?.name,
+      buyer,
       onDone: () => {
         toast({ title: hi ? 'भुगतान मिला' : 'Payment received', description: hi ? 'आपका plan activate हो रहा है…' : 'Activating your plan…' });
         setTimeout(() => window.location.reload(), 2500);
       },
     });
-    if (!r.ok) toast({ title: hi ? 'भुगतान त्रुटि' : 'Payment error', description: r.error, variant: 'destructive' });
+    setPaying(false);
+    if (!r.ok) {
+      toast({ title: hi ? 'भुगतान त्रुटि' : 'Payment error', description: r.error, variant: 'destructive' });
+      return; // keep the dialog open with what was typed
+    }
+    setPayFor(null);
+    if (r.buyerSaved === false) {
+      toast({
+        title: hi ? 'Invoice की जानकारी सेव नहीं हुई' : 'Invoice details not saved',
+        description: hi ? 'भुगतान जारी रखें — invoice पर Society Setup की जानकारी छपेगी।' : 'Continue paying — the invoice will use your Society Setup details.',
+        duration: 10000,
+      });
+    }
   };
 
   return (
@@ -462,6 +482,17 @@ export default function UserManagement() {
       </Card>
 
       <SubscriptionInvoices societyId={currentUser?.societyId || ''} hi={hi} />
+
+      <CheckoutBuyerDialog
+        open={!!payFor}
+        onOpenChange={(o) => { if (!o && !paying) setPayFor(null); }}
+        society={society}
+        hi={hi}
+        title={payTitle}
+        note={payNote}
+        busy={paying}
+        onConfirm={confirmPay}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

@@ -42,7 +42,7 @@ function fakeClient({ tables, rpc, failUpdate = false, throwOn = null }) {
 
 const ORDER = { id: 'order_1', society_id: 'SOC1', amount: 1499, status: 'paid' };
 const SELLER = { id: true, legal_name: 'S', gstin: '06ABCDE1234F1Z5', address: 'A', state_code: '06', sac: 'X', gst_rate_pct: 18 };
-const SOC = { society_id: 'SOC1', name: 'Kisan PACS', address: 'Assandh', district: 'Karnal', state: 'Haryana' };
+const SOC = { society_id: 'SOC1', name: 'Kisan PACS', address: 'Assandh', district: 'Karnal', state: 'hr' }; // Setup stores the short value
 const issued = () => ({ data: { status: 'issued', invoice_no: 'SL/2026-27/0001' }, error: null });
 
 // ── 1. Happy path ────────────────────────────────────────────────────────────
@@ -53,7 +53,7 @@ const issued = () => ({ data: { status: 'issued', invoice_no: 'SL/2026-27/0001' 
   const call = c.calls.rpc[0];
   ok(call?.name === 'issue_invoice' && call.args.p_order_id === 'order_1', 'calls issue_invoice for that order');
   ok(call.args.p_calc.total_paise === 149900 && call.args.p_calc.cgst_paise === 11433 && call.args.p_calc.place_of_supply === '06', 'p_calc carries the core split');
-  ok(call.args.p_calc.buyer_address === 'Assandh, Karnal, Haryana' && call.args.p_calc.buyer_name === 'Kisan PACS', 'buyer snapshot from society_settings');
+  ok(call.args.p_calc.buyer_address === 'Assandh, Karnal' && call.args.p_calc.buyer_name === 'Kisan PACS', 'buyer snapshot from society_settings');
   const u = c.calls.updates.find((x) => x.table === 'orders');
   ok(u && u.patch.invoice_error === null && typeof u.patch.invoice_tried_at === 'string', 'issued → pending reason CLEARED, tried_at stamped');
 }
@@ -61,6 +61,23 @@ const issued = () => ({ data: { status: 'issued', invoice_no: 'SL/2026-27/0001' 
   const c = fakeClient({ tables: { orders: [ORDER], billing_seller: [SELLER], society_settings: [SOC] }, rpc: () => ({ data: { status: 'already', invoice_no: 'SL/2026-27/0001' }, error: null }) });
   const r = await issueInvoiceForOrder(c, 'order_1');
   ok(r.status === 'already' && c.calls.updates[0].patch.invoice_error === null, 'retry of an invoiced order → already, reason cleared');
+}
+
+// ── 1b. The buyer confirmed at checkout (migration 132) wins over society_settings ──
+{
+  const order = { ...ORDER, buyer_name: 'Delhi Coop Ltd', buyer_gstin: '07ABCDE1234F1Z5', buyer_state_code: '07', buyer_address: null };
+  const c = fakeClient({ tables: { orders: [order], billing_seller: [SELLER], society_settings: [SOC] }, rpc: issued });
+  await issueInvoiceForOrder(c, 'order_1');
+  const p = c.calls.rpc[0].args.p_calc;
+  ok(p.buyer_name === 'Delhi Coop Ltd' && p.buyer_gstin === '07ABCDE1234F1Z5' && p.place_of_supply === '07' && p.igst_paise === 22866, 'checkout GSTIN (Delhi) → IGST, even though the society is in Haryana');
+  ok(p.buyer_address === 'Assandh, Karnal', 'blank checkout address falls back to the society address');
+}
+{
+  const order = { ...ORDER, buyer_name: '', buyer_gstin: null, buyer_state_code: '06', buyer_address: 'Ward 3' };
+  const c = fakeClient({ tables: { orders: [order], billing_seller: [SELLER], society_settings: [] }, rpc: issued });
+  const r = await issueInvoiceForOrder(c, 'order_1');
+  const p = c.calls.rpc[0].args.p_calc;
+  ok(r.status === 'issued' && p.place_of_supply === '06' && p.buyer_address === 'Ward 3' && p.buyer_gstin === '', 'checkout state alone is enough, even with no society_settings row');
 }
 
 // ── 2. Pending reasons are recorded, never thrown ────────────────────────────
