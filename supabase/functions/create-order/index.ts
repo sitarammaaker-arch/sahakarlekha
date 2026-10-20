@@ -131,7 +131,10 @@ Deno.serve(async (req) => {
       return json({ error: order?.error?.description ?? 'Razorpay order failed' }, 502);
     }
 
-    await supa.from('orders').insert({
+    // Our row is what the webhook activates from. If it is not saved, NEVER hand back the order id: the
+    // customer could pay a Razorpay order we cannot find, and the plan would never activate. The unpaid
+    // Razorpay order just expires on its own.
+    const { error: insErr } = await supa.from('orders').insert({
       id: order.id,
       society_id,
       plan,
@@ -141,6 +144,10 @@ Deno.serve(async (req) => {
       kind,
       set_period_end: setEnd.toISOString(),
     });
+    if (insErr) {
+      console.error(`order ${order.id} not saved: ${insErr.message}`);
+      return json({ error: 'Order सेव नहीं हुआ — कोई पैसा नहीं कटा, थोड़ी देर बाद फिर कोशिश करें / Order could not be saved — nothing was charged, please try again' }, 500);
+    }
 
     // Step 2 (migration 132): buyer columns in their own update, so checkout still works before 132 runs.
     // Not saved → the invoice uses society_settings; the client is told so it can say so.

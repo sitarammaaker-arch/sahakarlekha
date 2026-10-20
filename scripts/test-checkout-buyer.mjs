@@ -49,7 +49,10 @@ ok(stateCodeFromName('Andaman & Nicobar Islands') === '35' && stateCodeFromName(
   ok(/import \{ validateBuyer \} from '\.\.\/_shared\/invoice-core\.mjs'/.test(co), 'create-order validates with the shared core');
   ok(co.indexOf('validateBuyer(buyer)') < co.indexOf("fetch('https://api.razorpay.com/v1/orders'"), 'invalid buyer refused BEFORE a Razorpay order exists');
   ok(/if \(checkedBuyer && !checkedBuyer\.ok\) return json\(\{ error: checkedBuyer\.error \}, 400\)/.test(co), 'invalid buyer → 400 with the message');
-  const ins = co.indexOf("await supa.from('orders').insert({");
+  const ins = co.indexOf("const { error: insErr } = await supa.from('orders').insert({");
+  const insFail = co.indexOf('if (insErr) {');
+  ok(ins > 0 && insFail > ins && insFail < co.indexOf('return json({ orderId: order.id'), 'a failed orders insert returns BEFORE the order id reaches the browser (no payment without our row)');
+  ok(/if \(insErr\) \{[\s\S]*?return json\(\{ error: '[^']*कोई पैसा नहीं कटा[^']*' \}, 500\);/.test(co), 'the refusal says, in Hindi, that nothing was charged');
   const insBody = co.slice(ins, co.indexOf('});', ins));
   ok(ins > 0 && !/buyer/.test(insBody), 'base insert carries NO buyer column (works before 132)');
   ok(co.indexOf(".update(checkedBuyer.buyer)") > ins && /buyerSaved = !bErr/.test(co), 'buyer columns in a second update; failure reported as buyerSaved');
