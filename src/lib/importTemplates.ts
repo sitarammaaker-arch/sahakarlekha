@@ -53,18 +53,14 @@ const EXAMPLE = "(उदाहरण) ";
 export const ACCOUNTS_TEMPLATE = [
   'account_name,account_type,opening_balance,balance_type,parent_group',
   '(यहाँ Account का नाम लिखें),(Asset/Liability/Equity/Income/Expense),(शुरुआती राशि रुपये में),(Debit/Credit),(किस समूह के नीचे — समूह का नाम या कोड; खाली छोड़ें तो प्रकार का सामान्य समूह लगेगा)',
-  EXAMPLE + 'Bank - SBI,Asset,120000,Debit,Current Assets',
-  EXAMPLE + 'Loan from Bank,Liability,200000,Credit,Current Liabilities',
+  // A bank must sit under 3302 "Bank Accounts": getBankAccountIds() only treats 3302's children as banks, so a bank
+  // under "Current Assets" never reached the Bank Book, bank pickers or the BRS (2026-10-20).
+  EXAMPLE + 'Bank - SBI,Asset,120000,Debit,Bank Accounts',
+  // A borrowing sits under 2300 — named "Loans" in most charts but "Borrowings" in PACS, so the example uses the code.
+  EXAMPLE + 'Loan from Bank,Liability,200000,Credit,2300',
   EXAMPLE + 'Anniversary Fund,Equity,80000,Credit,Reserves & Surplus',
   EXAMPLE + 'Interest Received,Income,0,Credit,4400',
   EXAMPLE + 'Office Expense,Expense,0,Debit,Admin Expenses',
-].join('\n');
-
-export const MEMBERS_TEMPLATE = [
-  "member_id,name,father_name,age,occupation,caste,address,post_office,tehsil,district,state,pin_code,phone,share_capital,admission_fee,payment_mode,member_type,join_date,status,share_count,share_face_value,nominee_name,nominee_father_name,nominee_relation,nominee_age,nominee_occupation,nominee_address,nominee_shares,nominee_phone",
-  "(सदस्य क्रमांक),(पूरा नाम),(पिता/पति का नाम),(आयु),(व्यवसाय),(General/Backward Class/Schedule Caste/Schedule Tribe),(पता),(डाकघर),(तहसील),(जिला),(राज्य),(पिन कोड),(मोबाइल नं),(शेयर पूंजी रुपये),(प्रवेश शुल्क),(cash/cheque/online),(member/nominal),(YYYY-MM-DD),(active/inactive),(शेयर संख्या),(प्रति शेयर मूल्य),(नामिनी का नाम),(नामिनी के पिता),(संबंध),(नामिनी आयु),(नामिनी व्यवसाय),(नामिनी पता),(नामिनी शेयर),(नामिनी मोबाइल)",
-  "(उदाहरण) M001,राम कुमार शर्मा,श्री हरि शर्मा,35,किसान,General,ग्राम - रामपुर,रामपुर,राणिया,सिरसा,Haryana,125076,9876543210,5000,100,cash,member,2020-04-01,active,10,500,सीता देवी,श्री राम कुमार,पत्नी,30,गृहिणी,ग्राम - रामपुर,10,9876543211",
-  "(उदाहरण) M002,सुरेश यादव,श्री महेश यादव,28,व्यापारी,Backward Class,ग्राम - शिवपुर,शिवपुर,राणिया,सिरसा,Haryana,125076,9988776655,2500,100,cheque,member,2021-06-15,active,5,500,,,,,,,,,",
 ].join('\n');
 
 export const OPENING_BALANCES_TEMPLATE = [
@@ -76,6 +72,7 @@ export const OPENING_BALANCES_TEMPLATE = [
   EXAMPLE + 'Statutory Reserve Fund,80000,Credit',
 ].join('\n');
 
+const isRealDate = (iso: string): boolean => { const d = new Date(iso + 'T00:00:00Z'); return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso; };
 const isoDate = (s: string): string => (/^\d{4}-\d{2}-\d{2}$/.test(s) ? s : new Date().toISOString().slice(0, 10));
 const plusDays = (iso: string, n: number): string => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
@@ -87,6 +84,23 @@ export function vouchersTemplate(fyStart: string): string {
     "(YYYY-MM-DD),(receipt/payment/journal/contra/sale/purchase),(Debit खाता — system में exact नाम),(Credit खाता — exact नाम),(राशि रुपये),(विवरण),(बाहरी ref जैसे गेट-पास नं — दोबारा import पर duplicate रोकता है)",
     EXAMPLE + plusDays(start, 14) + ',receipt,Cash in Hand,Admission Fee,100,नया सदस्य प्रवेश शुल्क,RCPT-1001',
     EXAMPLE + plusDays(start, 19) + ',payment,Salary,Cash in Hand,15000,मासिक वेतन,PAY-1001',
+  ].join('\n');
+}
+
+/**
+ * Members import template. Old vs new member is decided by join_date against the current FY (the SAME rule
+ * the import uses — members/joiningReceipts.isHistoricalJoin): before the FY starts → OLD member, no receipt
+ * (share goes to the opening balances); in this FY → NEW member, a cash/bank receipt is posted. The examples
+ * show both: M001/M002 old, M003 new (dated the FY's first day).
+ */
+export function membersTemplate(fyStart: string): string {
+  const start = isoDate(fyStart);
+  return [
+    `member_id,name,father_name,age,occupation,caste,address,post_office,tehsil,district,state,pin_code,phone,share_capital,admission_fee,payment_mode,member_type,join_date,status,share_count,share_face_value,nominee_name,nominee_father_name,nominee_relation,nominee_age,nominee_occupation,nominee_address,nominee_shares,nominee_phone`,
+    `(सदस्य क्रमांक),(पूरा नाम),(पिता/पति का नाम),(आयु),(व्यवसाय),(General/Backward Class/Schedule Caste/Schedule Tribe),(पता),(डाकघर),(तहसील),(जिला),(राज्य),(पिन कोड),(मोबाइल नं),(शेयर पूंजी रुपये),(प्रवेश शुल्क),(cash/cheque/online),(member/nominal),(YYYY-MM-DD — वित्त वर्ष शुरू होने से पहले की तारीख़ = पुराना सदस्य: रसीद नहीं बनेगी / शेयर opening में; इसी वित्त वर्ष की = नया सदस्य: रसीद बनेगी),(active/inactive),(शेयर संख्या),(प्रति शेयर मूल्य),(नामिनी का नाम),(नामिनी के पिता),(संबंध),(नामिनी आयु),(नामिनी व्यवसाय),(नामिनी पता),(नामिनी शेयर),(नामिनी मोबाइल)`,
+    `(उदाहरण) M001,राम कुमार शर्मा,श्री हरि शर्मा,35,किसान,General,ग्राम - रामपुर,रामपुर,राणिया,सिरसा,Haryana,125076,9876543210,5000,100,cash,member,2020-04-01,active,10,500,सीता देवी,श्री राम कुमार,पत्नी,30,गृहिणी,ग्राम - रामपुर,10,9876543211`,
+    `(उदाहरण) M002,सुरेश यादव,श्री महेश यादव,28,व्यापारी,Backward Class,ग्राम - शिवपुर,शिवपुर,राणिया,सिरसा,Haryana,125076,9988776655,2500,100,cheque,member,2021-06-15,active,5,500,,,,,,,,`,
+    `(उदाहरण) M003,गीता देवी,श्री मोहन लाल,42,किसान,General,ग्राम - रामपुर,रामपुर,राणिया,सिरसा,Haryana,125076,9812345678,1000,100,cash,member,${start},active,2,500,,,,,,,,`,
   ].join('\n');
 }
 
@@ -190,7 +204,7 @@ export function validateAccountRow(row: Record<string, string>, rowNum: number, 
   return errors;
 }
 
-export function validateMemberRow(row: Record<string, string>, rowNum: number): RowError[] {
+export function validateMemberRow(row: Record<string, string>, rowNum: number, today: string = new Date().toISOString().slice(0, 10)): RowError[] {
   const errors: RowError[] = [];
   if (!row.member_id || row.member_id.startsWith('('))
     errors.push({ row: rowNum, field: 'member_id', message: `Row ${rowNum}: member_id खाली है या example row है` });
@@ -200,8 +214,13 @@ export function validateMemberRow(row: Record<string, string>, rowNum: number): 
     errors.push({ row: rowNum, field: 'father_name', message: `Row ${rowNum}: father_name खाली है` });
   if (!VALID_MEMBER_TYPES.includes((row.member_type || '').toLowerCase()))
     errors.push({ row: rowNum, field: 'member_type', message: `Row ${rowNum}: member_type "${row.member_type}" गलत है — member या nominal होना चाहिए` });
+  // join_date decides OLD vs NEW member (receipt or opening balance): mandatory, a real date, not in the future.
   if (!row.join_date || !/^\d{4}-\d{2}-\d{2}$/.test(row.join_date))
-    errors.push({ row: rowNum, field: 'join_date', message: `Row ${rowNum}: join_date "${row.join_date}" format YYYY-MM-DD होना चाहिए (जैसे 2022-04-01)` });
+    errors.push({ row: rowNum, field: 'join_date', message: `Row ${rowNum}: join_date "${row.join_date ?? ''}" ज़रूरी है, format YYYY-MM-DD (जैसे 2022-04-01) — इसी से तय होता है कि सदस्य पुराना है या नया` });
+  else if (!isRealDate(row.join_date))
+    errors.push({ row: rowNum, field: 'join_date', message: `Row ${rowNum}: join_date "${row.join_date}" कैलेंडर में नहीं है` });
+  else if (row.join_date > today)
+    errors.push({ row: rowNum, field: 'join_date', message: `Row ${rowNum}: join_date "${row.join_date}" भविष्य की तारीख़ है` });
   if (!VALID_STATUS.includes((row.status || '').toLowerCase()))
     errors.push({ row: rowNum, field: 'status', message: `Row ${rowNum}: status "${row.status}" गलत है — active या inactive होना चाहिए` });
   const sc = parseFloat(row.share_capital);

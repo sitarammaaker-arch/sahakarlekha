@@ -84,6 +84,7 @@
     "test:pay-esi": "node scripts/test-pay-esi.mjs",
     "test:pay-employer-share": "node scripts/test-pay-employer-share.mjs",
     "test:import-templates": "node scripts/test-import-templates.mjs",
+    "test:member-import-old-new": "node scripts/test-member-import-old-new.mjs",
     "test:voucher-template-availability": "node scripts/test-voucher-template-availability.mjs",
     "test:epf-esi-rules": "node scripts/test-epf-esi-rules.mjs",
     "test:pay-components-sync": "node scripts/test-pay-components-sync.mjs",
