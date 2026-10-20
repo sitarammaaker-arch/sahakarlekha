@@ -146,9 +146,18 @@ console.log('\n6. the account_type message names Equity, and the page uses the l
   const page = readFileSync(pathResolve(HERE, '..', 'src/pages/UniversalImporter.tsx'), 'utf8');
   ok(/from '@\/lib\/importTemplates'/.test(page), 'the page imports the templates and validators from the library');
   ok(!/const (ACCOUNTS|MEMBERS|OPENING_BALANCES|VOUCHERS)_TEMPLATE\b/.test(page) && !/function validate(Account|Member|Ob|Voucher)Row/.test(page) && !/function parseCSV/.test(page), 'no stale copy of a template, validator or CSV parser is left in the page');
-  ok((page.match(/vouchersTemplate\(society\.financialYearStart\)/g) || []).length === 2, 'both voucher-template downloads (CSV + Excel) are built from the society\'s own financial-year start');
+  ok((page.match(/vouchersTemplate\(fyStartIso\)/g) || []).length === 2, 'both voucher-template downloads (CSV + Excel) are built from the society\'s own financial-year start');
   ok(/<span className="text-purple-600">Equity<\/span>/.test(page), 'the on-screen column help lists Equity');
-  ok((page.match(/membersTemplate\(society\.financialYearStart\)/g) || []).length === 2, 'both member-template downloads (CSV + Excel) are built from the society\'s own financial-year start');
+  ok((page.match(/membersTemplate\(fyStartIso\)/g) || []).length === 2, 'both member-template downloads (CSV + Excel) are built from the society\'s own financial-year start');
+}
+
+console.log('\n(2026-10-20) the importer takes the FY start from the FY label — 8 of 32 prod societies store the word "april"');
+{
+  const page = readFileSync(pathResolve(HERE, '..', 'src/pages/UniversalImporter.tsx'), 'utf8');
+  ok(/const fyStartIso = fyStartFromLabel\(society\.financialYear\)/.test(page), 'fyStartIso is derived from the FY label');
+  ok(/const fyStart = fyStartIso;/.test(page), 'the voucher-import FY window uses fyStartIso');
+  ok(L.validateVoucherRow({ date: '2026-05-01', type: 'receipt', debit_account: 'x', credit_account: 'y', amount: '1' }, [], 'april', '2027-03-31', 3).some((e) => e.field === 'date'),
+    'why: a non-date FY start ("april") rejects every voucher date — the live bug');
 }
 
 console.log('\n(2026-10-20) the bank example lands under 3302 "Bank Accounts" — a real bank — and the loan under 2300, in EVERY chart');

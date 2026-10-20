@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { LedgerAccount, Member, VoucherType } from '@/types';
 import { mapImportedOpenings, openingWarnings, accountImportOpeningCheck, type ImportedOpeningRow, type OpeningWarnings } from '@/lib/openingBalances';
+import { fyStartFromLabel } from '@/lib/fyPeriod';
 import { planJoiningReceipts, summariseJoiningPlans, joiningKindLabel, type JoiningReceiptPlan } from '@/lib/members/joiningReceipts';
 import { getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
 import {
@@ -82,6 +83,10 @@ function downloadExcelTemplate(filename: string, csvContent: string) {
 
 const UniversalImporter: React.FC = () => {
   const { accounts, members, vouchers, addAccount, addMember, addVoucher, updateAccount, society } = useData();
+  // FY start from the LABEL ('2026-27' → 2026-04-01) — the same source the old/new member rule uses. The stored
+  // financialYearStart is the word 'april' on 8 of 32 prod societies (2026-10-20): compared as a string it put
+  // every voucher row 'outside the FY' and printed '(april)' in the member rule.
+  const fyStartIso = fyStartFromLabel(society.financialYear) || (/^\d{4}-\d{2}-\d{2}$/.test(society.financialYearStart || '') ? society.financialYearStart : '');
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -431,7 +436,7 @@ const UniversalImporter: React.FC = () => {
         return;
       }
       const headers = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, ''));
-      const fyStart = society.financialYearStart;
+      const fyStart = fyStartIso;
       const fyEnd = `20${society.financialYear.split('-')[1]}-03-31`;
       setVoucherPreview(buildPreviewFromParsed(parsed, headers, (row, rowNum) => validateVoucherRow(row, accounts, fyStart, fyEnd, rowNum)));
     } catch { toast({ title: 'File parse error', description: 'Valid CSV या Excel file upload करें', variant: 'destructive' }); }
@@ -787,7 +792,7 @@ const UniversalImporter: React.FC = () => {
                     variant="outline"
                     size="sm"
                     className="gap-2"
-                    onClick={() => downloadExcelTemplate('members_template.xlsx', membersTemplate(society.financialYearStart))}
+                    onClick={() => downloadExcelTemplate('members_template.xlsx', membersTemplate(fyStartIso))}
                   >
                     <Download className="h-4 w-4" />
                     Excel (.xlsx) Download करें
@@ -796,7 +801,7 @@ const UniversalImporter: React.FC = () => {
                     variant="outline"
                     size="sm"
                     className="gap-2 text-muted-foreground"
-                    onClick={() => downloadTemplate('members_template.csv', membersTemplate(society.financialYearStart))}
+                    onClick={() => downloadTemplate('members_template.csv', membersTemplate(fyStartIso))}
                   >
                     <Download className="h-4 w-4" />
                     CSV Download करें
@@ -812,7 +817,7 @@ const UniversalImporter: React.FC = () => {
                 <p><span className="font-medium text-primary">father_name</span> — पिता/पति का नाम</p>
                 <p><span className="font-medium text-primary">member_type</span> — <span className="text-green-700">member</span> / <span className="text-orange-600">nominal</span></p>
                 <p><span className="font-medium text-primary">join_date</span> — ज़रूरी, Format: YYYY-MM-DD (जैसे: 2022-04-01)। <b>इसी से तय होता है कि सदस्य पुराना है या नया:</b></p>
-                <p className="pl-4">• वित्त वर्ष {society.financialYear} शुरू होने ({society.financialYearStart}) से <b>पहले</b> की तारीख़ = <b>पुराना सदस्य</b> — कोई रसीद नहीं बनती; उसकी शेयर पूँजी / प्रवेश शुल्क opening balance (शेयर पूँजी 1102) में डालें।</p>
+                <p className="pl-4">• वित्त वर्ष {society.financialYear} शुरू होने ({fyStartIso}) से <b>पहले</b> की तारीख़ = <b>पुराना सदस्य</b> — कोई रसीद नहीं बनती; उसकी शेयर पूँजी / प्रवेश शुल्क opening balance (शेयर पूँजी 1102) में डालें।</p>
                 <p className="pl-4">• इसी वित्त वर्ष की तारीख़ = <b>नया सदस्य</b> — शेयर पूँजी व प्रवेश शुल्क की रसीद बनती है (payment_mode cash → नकद, cheque/online → बैंक)।</p>
                 <p className="pl-4 text-muted-foreground">Template में M001, M002 पुराने और M003 नए सदस्य का उदाहरण है। Preview में हर row पर "पुराना / नया" दिखेगा।</p>
                 <p><span className="font-medium text-primary">status</span> — <span className="text-green-700">active</span> / <span className="text-orange-600">inactive</span></p>
@@ -1055,11 +1060,11 @@ const UniversalImporter: React.FC = () => {
                 </p>
                 <div className="ml-7 flex gap-2 flex-wrap">
                   <Button variant="outline" size="sm" className="gap-2"
-                    onClick={() => downloadExcelTemplate('vouchers_template.xlsx', vouchersTemplate(society.financialYearStart))}>
+                    onClick={() => downloadExcelTemplate('vouchers_template.xlsx', vouchersTemplate(fyStartIso))}>
                     <Download className="h-4 w-4" /> Excel (.xlsx) Download करें
                   </Button>
                   <Button variant="outline" size="sm" className="gap-2 text-muted-foreground"
-                    onClick={() => downloadTemplate('vouchers_template.csv', vouchersTemplate(society.financialYearStart))}>
+                    onClick={() => downloadTemplate('vouchers_template.csv', vouchersTemplate(fyStartIso))}>
                     <Download className="h-4 w-4" /> CSV Download करें
                   </Button>
                 </div>
