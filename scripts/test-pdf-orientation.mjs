@@ -19,7 +19,7 @@ const PORTRAIT = [
   'CashBook', 'BankBook', 'Ledger', 'MemberPassbook',                    // books: Date | particulars | amount | balance
   'DemandNotice', 'MaintenanceBill', 'MaintenanceReceipt',               // notices / bills
   'SalarySlip', 'Voucher', 'MemberRefusalLetter', 'VotersList', 'DefaulterList',                                               // small per-document formats (A5)
-  'SaleInvoice', 'PurchaseRecord', 'MemberApplication',                  // per-document / forms
+  'SaleInvoice', 'SubscriptionInvoice', 'PurchaseRecord', 'MemberApplication',                  // per-document / forms
   'GstSummary', 'AuditSchedules',                                        // see note: GST Summary stays portrait for now
 ];
 // generateBlankFormatPDF takes its orientation from a spec on purpose.

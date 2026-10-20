@@ -28,6 +28,7 @@ import type { GroupSchedule } from '@/lib/reports/groupSchedule';
 import { memberStatusLabel } from '@/lib/memberLifecycle';
 import { appealLastDate, applicationReceivedOn, isHaryana } from '@/lib/members/admission';
 import type { BlankPdfSpec } from '@/content/downloads';
+import { invoiceView, stateLabel, type SubscriptionInvoice } from '@/lib/billing/invoiceView';
 
 // Hindi DATA (names, narrations) in any PDF table is drawn by the browser — labels stay English.
 installDevanagariCells();
@@ -3235,6 +3236,156 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
 // - Tally narrative ("Received with thanks from..." / "Paid to...")
 // - Single Original copy
 // - Signatures: Cashier | Accountant | Manager
+
+/**
+ * SahakarLekha's OWN tax invoice to a society for its subscription (migration 130). Drawn from the
+ * frozen invoice row only — seller, buyer, rate and every paisa come from what the server issued.
+ */
+export function generateSubscriptionInvoicePDF(inv: SubscriptionInvoice, opts: { save?: boolean } = {}): jsPDF {
+  const v = invoiceView(inv);
+  const doc = new jsPDF();
+  const font = setupFont(doc);
+  const pageW = doc.internal.pageSize.width;
+  const left = 12;
+  const right = pageW - 12;
+  const midX = pageW / 2;
+
+  doc.setFillColor(41, 82, 163);
+  doc.rect(left, 10, right - left, 9, 'F');
+  doc.setTextColor(255);
+  doc.setFont(font, 'bold');
+  doc.setFontSize(13);
+  doc.text('TAX INVOICE', midX, 16.5, { align: 'center' });
+  doc.setFontSize(7);
+  doc.text('Original for Recipient', right - 2, 14.5, { align: 'right' });
+  doc.setTextColor(0);
+
+  // Seller
+  let y = 25;
+  doc.setFontSize(12);
+  const sellerLines: string[] = doc.splitTextToSize(inv.seller_name, right - left - 4);
+  doc.text(sellerLines, midX, y, { align: 'center' });
+  y += sellerLines.length * 5;
+  doc.setFont(font, 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(70);
+  const sellerAddr: string[] = doc.splitTextToSize(`${inv.seller_address}  (State: ${stateLabel(inv.seller_state_code)})`, right - left - 4);
+  doc.text(sellerAddr, midX, y, { align: 'center' });
+  y += sellerAddr.length * 4;
+  doc.setTextColor(0);
+  doc.setFont(font, 'bold');
+  doc.text(`GSTIN: ${inv.seller_gstin}`, midX, y, { align: 'center' });
+  y += 4;
+  doc.setDrawColor(180);
+  doc.setLineWidth(0.3);
+  doc.line(left, y, right, y);
+  y += 6;
+
+  // Bill To (left) + invoice meta (right)
+  let leftY = y;
+  const leftMax = midX - left - 5;
+  doc.setFontSize(9);
+  doc.setTextColor(41, 82, 163);
+  doc.text('Bill To:', left, leftY);
+  doc.setTextColor(0);
+  leftY += 5;
+  doc.setFontSize(11);
+  const buyerLines: string[] = doc.splitTextToSize(inv.buyer_name, leftMax);
+  doc.text(buyerLines, left, leftY);
+  leftY += buyerLines.length * 5;
+  doc.setFont(font, 'normal');
+  doc.setFontSize(8);
+  if (inv.buyer_address) {
+    const addr: string[] = doc.splitTextToSize(inv.buyer_address, leftMax);
+    doc.text(addr, left, leftY);
+    leftY += addr.length * 4;
+  }
+  doc.text(`State: ${stateLabel(inv.buyer_state_code)}`, left, leftY);
+  leftY += 4;
+  if (inv.buyer_gstin) {
+    doc.setFont(font, 'bold');
+    doc.text(`GSTIN: ${inv.buyer_gstin}`, left, leftY);
+    doc.setFont(font, 'normal');
+    leftY += 4;
+  }
+
+  let rightY = y;
+  const rightStart = midX + 2;
+  doc.setFontSize(8.5);
+  const meta: [string, string][] = [
+    ['Invoice No.', inv.invoice_no],
+    ['Invoice Date', fmtDate(inv.invoice_date)],
+    ['Place of Supply', v.posLabel],
+    ['Payment', 'Online (Razorpay)'],
+  ];
+  if (inv.payment_id) meta.push(['Payment ID', inv.payment_id]);
+  for (const [k, val] of meta) {
+    doc.setFont(font, 'normal');
+    doc.setTextColor(80);
+    doc.text(k + ':', rightStart, rightY);
+    doc.setFont(font, 'bold');
+    doc.setTextColor(0);
+    doc.text(val, right, rightY, { align: 'right' });
+    rightY += 5;
+  }
+
+  autoTable(doc, {
+    startY: Math.max(leftY, rightY) + 3,
+    margin: { left, right: 12 },
+    head: [['#', 'Description', 'SAC', 'Taxable Value']],
+    body: [['1', v.description, inv.sac, fmt(v.taxable)]],
+    styles: { fontSize: 8.5, cellPadding: 2, font, lineColor: [200, 200, 200], lineWidth: 0.1 },
+    headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 8 },
+      1: { cellWidth: 'auto' },
+      2: { halign: 'center', cellWidth: 22 },
+      3: { halign: 'right', cellWidth: 32 },
+    },
+    didParseCell: rightAlignAmountColumns(3),
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let ty = (doc as any).lastAutoTable.finalY + 5;
+  const totalsLeft = right - 80;
+  const row = (label: string, value: string, fill = false) => {
+    if (fill) {
+      doc.setFillColor(41, 82, 163);
+      doc.rect(totalsLeft, ty - 4, 80, 6.5, 'F');
+      doc.setTextColor(255);
+    }
+    doc.setFont(font, fill ? 'bold' : 'normal');
+    doc.text(label, totalsLeft + 3, ty);
+    doc.text(value, right - 3, ty, { align: 'right' });
+    doc.setTextColor(0);
+    ty += 5.5;
+  };
+  doc.setFontSize(8.5);
+  row('Taxable Value', fmt(v.taxable));
+  if (v.intra) {
+    row(`CGST @ ${v.halfRate}%`, fmt(v.cgst));
+    row(`SGST @ ${v.halfRate}%`, fmt(v.sgst));
+  } else {
+    row(`IGST @ ${v.rate}%`, fmt(v.igst));
+  }
+  row('Total Tax', fmt(v.tax));
+  row('Invoice Total', fmt(v.total), true);
+  ty += 2;
+
+  doc.setFontSize(8);
+  doc.setFont(font, 'bold');
+  doc.text('Amount in Words:', left, ty);
+  doc.setFont(font, 'normal');
+  doc.text(_numToWordsIN(v.total), left + 32, ty, { maxWidth: right - left - 32 });
+  ty += 10;
+
+  doc.setFontSize(7.5);
+  doc.setTextColor(90);
+  doc.text('Prices are inclusive of GST. This is a computer-generated invoice.', left, ty);
+  doc.setTextColor(0);
+  if (opts.save !== false) doc.save(v.fileName);
+  return doc;
+}
 
 export interface VoucherPDFInput {
   voucher: {

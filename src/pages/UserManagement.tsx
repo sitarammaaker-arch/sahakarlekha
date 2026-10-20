@@ -4,6 +4,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { startCheckout } from '@/lib/razorpayCheckout';
+import SubscriptionInvoices from '@/components/billing/SubscriptionInvoices';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -459,6 +460,8 @@ export default function UserManagement() {
           </div>
         </CardContent>
       </Card>
+
+      <SubscriptionInvoices societyId={currentUser?.societyId || ''} hi={hi} />
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
