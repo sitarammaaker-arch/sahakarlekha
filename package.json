@@ -353,6 +353,7 @@
     "test:ledger-hygiene": "node scripts/test-ledger-hygiene.mjs",
     "test:domain-account-provisioning": "node scripts/test-domain-account-provisioning.mjs",
     "test:movement-archive": "node scripts/test-movement-archive.mjs",
+    "test:invoice-core": "node scripts/test-invoice-core.mjs",
     "test:notification-channels": "node scripts/test-notification-channels.mjs",
     "test:pigmy": "node scripts/test-pigmy.mjs",
     "test:report-comparative": "node scripts/test-report-comparative.mjs",

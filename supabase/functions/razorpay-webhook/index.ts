@@ -5,7 +5,8 @@
  * the RAW body with RAZORPAY_WEBHOOK_SECRET, (2) on payment.captured read the order_id,
  * (3) look up OUR `orders` row (created in create-order, holds society_id + plan — we
  * never trust amounts/plan from the payload), (4) mark the order paid, and (5) activate
- * the subscription (service-role upsert). The browser is never trusted for activation.
+ * the subscription (service-role upsert), then (6) issues the GST tax invoice via
+ * issue_invoice() (migration 130) — non-fatal. The browser is never trusted for activation.
  *
  * Secrets (owner sets in Supabase → Edge Functions → Secrets; never in repo/browser):
  *   RAZORPAY_WEBHOOK_SECRET
@@ -16,6 +17,7 @@
  * Deno runtime — not the app's TypeScript.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { buildInvoiceCalc } from '../_shared/invoice-core.mjs';
 
 // Seats per plan — mirrors src/lib/plans.ts / migration 058 (null = unlimited).
 const SEATS: Record<string, number | null> = { starter: 1, plus: 6, pro: null };
@@ -66,7 +68,7 @@ Deno.serve(async (req) => {
 
     // Trust OUR record for society_id + plan + the target period_end (not the payload).
     const { data: order } = await supa
-      .from('orders').select('society_id, plan, status, set_period_end').eq('id', orderId).maybeSingle();
+      .from('orders').select('society_id, plan, status, set_period_end, amount').eq('id', orderId).maybeSingle();
     if (!order) return new Response('unknown order', { status: 200 });
     if (order.status === 'paid') return new Response('already processed', { status: 200 }); // idempotent
 
@@ -89,6 +91,29 @@ Deno.serve(async (req) => {
       activated_by: `razorpay:${payment.id}`,
       updated_at:   now.toISOString(),
     }, { onConflict: 'society_id' });
+
+    // (6) Tax invoice (migration 130). AFTER activation and never fatal: a missing seller row,
+    // an unknown buyer state or any error leaves the order "invoice pending" (paid, no invoice
+    // row) for the SuperAdmin retry — the plan the society paid for is already live.
+    try {
+      const { data: seller } = await supa.from('billing_seller').select('*').eq('id', true).maybeSingle();
+      // select('*'): society_settings.gstin may not exist as a column yet — never name it.
+      const { data: soc } = await supa.from('society_settings').select('*').eq('society_id', order.society_id).limit(1).maybeSingle();
+      const built = buildInvoiceCalc({
+        amountRupees: order.amount,
+        seller,
+        buyer: soc ? { name: soc.name, address: [soc.address, soc.district].filter(Boolean).join(', '), state: soc.state, gstin: soc.gstin } : null,
+      });
+      if (built.status !== 'ok') {
+        console.error(`invoice pending for ${orderId}: ${built.status}`);
+      } else {
+        const { data: res, error } = await supa.rpc('issue_invoice', { p_order_id: orderId, p_calc: built.calc });
+        if (error) console.error(`invoice pending for ${orderId}: ${error.message}`);
+        else if (res?.status !== 'issued' && res?.status !== 'already') console.error(`invoice pending for ${orderId}: ${res?.status}`);
+      }
+    } catch (e) {
+      console.error(`invoice pending for ${orderId}: ${e instanceof Error ? e.message : String(e)}`);
+    }
 
     return new Response('ok', { status: 200 });
   } catch (e) {
