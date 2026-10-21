@@ -19,6 +19,13 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { issueInvoiceForOrder } from '../_shared/issue-invoice.mjs';
 
+/** Resend settings for the invoice email (Supabase function secrets). */
+const invoiceEmailConfig = () => ({
+  apiKey: Deno.env.get('RESEND_API_KEY') ?? '',
+  from:   Deno.env.get('RESEND_FROM') ?? '',
+  appUrl: Deno.env.get('APP_URL') ?? 'https://sahakarlekha.com',
+});
+
 // Seats per plan — mirrors src/lib/plans.ts / migration 058 (null = unlimited).
 const SEATS: Record<string, number | null> = { starter: 1, plus: 6, pro: null };
 const PERIOD_MONTHS = 12;
@@ -96,9 +103,12 @@ Deno.serve(async (req) => {
     // an unknown buyer state or any error leaves the order "invoice pending" (paid, no invoice
     // row) for the SuperAdmin retry — the plan the society paid for is already live.
     // issueInvoiceForOrder never throws; the try is a second guard so nothing here can fail the webhook.
+    // (7) Slice 4 (migration 134): the issued invoice is emailed to the payer — exactly once, never fatal.
+    // RESEND_API_KEY / RESEND_FROM unset → the invoice shows "email: not configured" in SuperAdmin.
     try {
-      const inv = await issueInvoiceForOrder(supa, orderId);
+      const inv = await issueInvoiceForOrder(supa, orderId, { email: invoiceEmailConfig() });
       if (inv.status !== 'issued' && inv.status !== 'already') console.error(`invoice pending for ${orderId}: ${inv.status}${inv.error ? ` — ${inv.error}` : ''}`);
+      else if (inv.email && inv.email.status !== 'sent') console.error(`invoice email not sent for ${orderId}: ${inv.email.status}${inv.email.error ? ` — ${inv.email.error}` : ''}`);
     } catch (e) {
       console.error(`invoice pending for ${orderId}: ${e instanceof Error ? e.message : String(e)}`);
     }

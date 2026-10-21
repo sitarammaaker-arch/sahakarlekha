@@ -29,6 +29,10 @@ export interface SubscriptionInvoice {
   sgst_paise: number;
   igst_paise: number;
   total_paise: number;
+  /** Migration 134 — the invoice email. Absent before 134; both null = never tried. */
+  emailed_at?: string | null;
+  emailed_to?: string | null;
+  email_error?: string | null;
 }
 
 const titleCase = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
