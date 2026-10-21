@@ -1289,6 +1289,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'जारी करने से पहले की चेकलिस्ट, नमूना प्रमाणपत्र, क्रमांक-रजिस्टर और पुनः जारी या रद्द करने का तरीका।',
     accent: 'emerald',
     tags: ['शेयर सर्टिफिकेट', 'शेयर प्रमाणपत्र', 'शेयर रजिस्टर', 'सचिव'],
+    image: '/blog/share-certificate-issue-sample-secretary-checklist.webp',
+    imageAlt: 'समिति के कार्यालय में सचिव शेयर प्रमाणपत्र पर दस्तख़त कर रहे हैं, अध्यक्ष अगला प्रमाणपत्र लिए प्रतीक्षा में हैं और नई सदस्य मुस्कुराकर अपना प्रमाणपत्र ले रही हैं',
   },
   {
     slug: 'share-refund-on-leaving-society-haryana-rules-accounting',
