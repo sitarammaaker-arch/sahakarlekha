@@ -1289,6 +1289,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'किस्त में मूलधन-ब्याज की अलग एंट्री, चूकी किस्त का बकाया और आंशिक भुगतान पर पहले क्या कटे, एक पूरे उदाहरण से।',
     accent: 'rose',
     tags: ['ऋण की किस्त', 'बकाया', 'मूलधन व ब्याज', 'सदस्य ऋण'],
+    image: '/blog/member-loan-installment-accounting-principal-interest-arrears.webp',
+    imageAlt: 'समिति के काउंटर पर लेखाकार ऋण खाता-बही में किस्त की प्रविष्टि कर रहे हैं, सामने किसान सदस्य नकद किस्त दे रहे हैं और महिला सचिव बकाया की सूची देख रही हैं',
   },
   {
     slug: 'loan-and-interest-accounting',
