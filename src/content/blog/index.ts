@@ -1290,6 +1290,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'पैरा-वार तथ्य, कार्रवाई, प्रमाण और तारीख़: कवरिंग पत्र और कार्रवाई रिपोर्ट का नमूना।',
     accent: 'rose',
     tags: ['ऑडिट आपत्ति', 'कार्रवाई रिपोर्ट', 'अनुपालन', 'सचिव'],
+    image: '/blog/audit-objection-reply-action-taken-report-secretary.webp',
+    imageAlt: 'समिति के कार्यालय में सचिव ऑडिट रिपोर्ट के हर पैरा के आगे जवाब लिख रहे हैं, लेखाकार सबूत के काग़ज़ दिखा रही हैं और अध्यक्ष पन्ने देख रहे हैं',
   },
   {
     slug: 'share-certificate-issue-sample-secretary-checklist',
