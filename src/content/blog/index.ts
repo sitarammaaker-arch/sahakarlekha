@@ -1290,6 +1290,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerpt: 'असीमित में वापसी, सीमित में हस्तांतरण या 5% तक कोष से वापसी, बकाया की कटौती और पूरा लेखा-उदाहरण।',
     accent: 'indigo',
     tags: ['शेयर वापसी', 'सदस्यता छोड़ना', 'नियम 18', 'सीमित दायित्व'],
+    image: '/blog/share-refund-on-leaving-society-haryana-rules-accounting.webp',
+    imageAlt: 'समिति के कार्यालय में महिला सचिव सदस्य रजिस्टर में समाप्ति की तारीख़ भर रही हैं, लेखाकार हिसाब जाँच रहा है और बुज़ुर्ग किसान सदस्य हाथ जोड़कर विदा ले रहे हैं',
   },
   {
     slug: 'member-loan-installment-accounting-principal-interest-arrears',
