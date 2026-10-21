@@ -6,7 +6,11 @@
  * run the same issuer the webhook uses (_shared/issue-invoice.mjs → issue_invoice, migration 130), which is
  * idempotent per order — a double click never issues two invoices or burns a number.
  *
- * Body: { order_id }  →  { status, invoice_no?, error? }
+ * Slice 4 (migration 134): an invoiced order is also emailed if it has not been yet (same claim as the webhook);
+ * resend_email: true sends it again even if it was sent ("Email फिर भेजें").
+ *
+ * Body: { order_id, resend_email? }  →  { status, invoice_no?, error?, email?: { status, to?, error? } }
+ * Secrets for the email: RESEND_API_KEY, RESEND_FROM (optional APP_URL). Unset → email status not_configured.
  * Auto-injected: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
  * Deno runtime — not the app's TypeScript. Deploy (JWT verification ON): npx supabase functions deploy admin-retry-invoice
  */
@@ -33,7 +37,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   try {
-    const { order_id } = await req.json().catch(() => ({}));
+    const { order_id, resend_email } = await req.json().catch(() => ({}));
     if (!order_id || typeof order_id !== 'string') return json({ error: 'order_id required' }, 400);
 
     const url = Deno.env.get('SUPABASE_URL') ?? '';
@@ -52,7 +56,14 @@ Deno.serve(async (req) => {
     if (adminErr || isAdmin !== true) return json({ error: 'Platform admin only' }, 403);
 
     const supa = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-    return json(await issueInvoiceForOrder(supa, order_id));
+    return json(await issueInvoiceForOrder(supa, order_id, {
+      email: {
+        apiKey: Deno.env.get('RESEND_API_KEY') ?? '',
+        from:   Deno.env.get('RESEND_FROM') ?? '',
+        appUrl: Deno.env.get('APP_URL') ?? 'https://sahakarlekha.com',
+        force:  resend_email === true,
+      },
+    }));
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

@@ -155,6 +155,11 @@ Deno.serve(async (req) => {
     const { error: mErr } = await supa.from('orders').update({ is_test: isTest }).eq('id', order.id);
     if (mErr) console.error(`payment mode not saved on ${order.id}: ${mErr.message}`);
 
+    // Migration 134: who paid — the verified caller — so the tax invoice is emailed to them. Own update after the
+    // insert: before 134 runs it fails here and the invoice email falls back to the society's admins.
+    const { error: pErr } = await supa.from('orders').update({ payer_email: callerEmail }).eq('id', order.id);
+    if (pErr) console.error(`payer email not saved on ${order.id}: ${pErr.message}`);
+
     // Step 2 (migration 132): buyer columns in their own update, so checkout still works before 132 runs.
     // Not saved → the invoice uses society_settings; the client is told so it can say so.
     let buyerSaved = checkedBuyer == null;

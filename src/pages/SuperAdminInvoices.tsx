@@ -6,6 +6,8 @@
  * Reads go through admin_list_invoices / admin_list_pending_invoices (SECURITY DEFINER, gated on
  * is_platform_admin). The retry runs the admin-retry-invoice Edge Function — the same issuer the payment
  * webhook uses, idempotent per order. Nothing here writes an invoice directly.
+ *   • Slice 4 (migration 134): each issued invoice shows whether its email went out, with "Email फिर भेजें"
+ *     (the same function with resend_email: true).
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -17,7 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Download, FileSpreadsheet, FileText, RefreshCw, RotateCcw, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Download, FileSpreadsheet, FileText, RefreshCw, RotateCcw, AlertTriangle, Mail } from 'lucide-react';
 import { invoiceView, type SubscriptionInvoice } from '@/lib/billing/invoiceView';
 import { buildGstr1Rows, GSTR1_HEADERS, gstr1FileStem } from '@/lib/billing/gstr1Csv';
 import { downloadCSV } from '@/lib/exportUtils';
@@ -47,6 +49,16 @@ function pendingReasonHi(reason: string | null): string {
   return `त्रुटि: ${reason}`;
 }
 
+/** The invoice email's state in plain Hindi (migration 134). */
+function emailReasonHi(reason: string | null | undefined): string {
+  if (!reason) return 'अभी भेजा नहीं गया';
+  if (reason === 'not_configured') return 'Email setup नहीं — Supabase secrets में RESEND_API_KEY और RESEND_FROM डालें';
+  if (reason === 'no_recipient') return 'भेजने के लिए email नहीं मिला — न payer का, न समिति के admin का';
+  if (reason === 'not_migrated') return 'Migration 134 अभी नहीं चली — email नहीं भेजा जाता';
+  if (reason === 'no_invoice') return 'Invoice नहीं मिला';
+  return `त्रुटि: ${reason}`;
+}
+
 const inr = (n: number) => '₹' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 const monthStart = () => today().slice(0, 8) + '01';
@@ -70,6 +82,7 @@ export default function SuperAdminInvoices() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [mailing, setMailing] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,9 +107,28 @@ export default function SuperAdminInvoices() {
       return;
     }
     if (data?.status === 'issued' || data?.status === 'already') {
-      toast({ title: 'Invoice बन गया', description: data.invoice_no });
+      const mail = data.email?.status === 'sent' ? ` · email भेजा: ${(data.email.to ?? []).join(', ')}`
+        : data.email && data.email.status !== 'already_sent' ? ` · email नहीं गया: ${emailReasonHi(data.email.error ? `${data.email.status}: ${data.email.error}` : data.email.status)}` : '';
+      toast({ title: 'Invoice बन गया', description: `${data.invoice_no}${mail}` });
     } else {
       toast({ title: 'Invoice अभी भी pending', description: pendingReasonHi(data?.error ? `${data.status}: ${data.error}` : data?.status ?? null), variant: 'destructive', duration: 10000 });
+    }
+    load();
+  };
+
+  const resendEmail = async (inv: SubscriptionInvoice) => {
+    setMailing(inv.order_id);
+    const { data, error: fnErr } = await supabase.functions.invoke('admin-retry-invoice', { body: { order_id: inv.order_id, resend_email: true } });
+    setMailing(null);
+    if (fnErr) {
+      toast({ title: 'Email नहीं गया', description: await functionError(fnErr, data), variant: 'destructive', duration: 10000 });
+      return;
+    }
+    const mail = data?.email;
+    if (mail?.status === 'sent') {
+      toast({ title: 'Email भेज दिया', description: `${inv.invoice_no} → ${(mail.to ?? []).join(', ')}` });
+    } else {
+      toast({ title: 'Email नहीं गया', description: emailReasonHi(mail?.error ? `${mail.status}: ${mail.error}` : mail?.status ?? data?.status), variant: 'destructive', duration: 10000 });
     }
     load();
   };
@@ -223,6 +255,7 @@ export default function SuperAdminInvoices() {
                     <TableHead>Place of Supply</TableHead>
                     <TableHead className="text-right">GST</TableHead>
                     <TableHead className="text-right">कुल</TableHead>
+                    <TableHead>Email</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
@@ -238,9 +271,23 @@ export default function SuperAdminInvoices() {
                         <TableCell className="text-xs">{v.posLabel}</TableCell>
                         <TableCell className="text-right">{inr(v.tax)}</TableCell>
                         <TableCell className="text-right font-semibold">{inr(v.total)}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-xs max-w-[14rem]">
+                          {inv.emailed_at && !inv.email_error ? (
+                            <span className="text-emerald-700" title={inv.emailed_to ?? undefined}>
+                              भेजा · {fmtDateTime(inv.emailed_at)}
+                              {inv.emailed_to && <span className="block text-muted-foreground break-all">{inv.emailed_to}</span>}
+                            </span>
+                          ) : (
+                            <span className={inv.email_error ? 'text-destructive' : 'text-muted-foreground'}>{emailReasonHi(inv.email_error)}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap space-x-1">
                           <Button size="sm" variant="outline" className="gap-1" onClick={() => pdf(inv)}>
                             <Download className="h-4 w-4" />PDF
+                          </Button>
+                          <Button size="sm" variant="outline" className="gap-1" disabled={mailing === inv.order_id}
+                            title={inv.emailed_at && !inv.email_error ? 'Email फिर भेजें' : 'Email भेजें'} onClick={() => resendEmail(inv)}>
+                            <Mail className={`h-4 w-4 ${mailing === inv.order_id ? 'animate-pulse' : ''}`} />{inv.emailed_at && !inv.email_error ? 'फिर भेजें' : 'भेजें'}
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -250,7 +297,7 @@ export default function SuperAdminInvoices() {
                     <TableCell colSpan={5}>कुल ({totals.n})</TableCell>
                     <TableCell className="text-right">{inr(totals.tax / 100)}</TableCell>
                     <TableCell className="text-right">{inr(totals.total / 100)}</TableCell>
-                    <TableCell />
+                    <TableCell colSpan={2} />
                   </TableRow>
                 </TableBody>
               </Table>

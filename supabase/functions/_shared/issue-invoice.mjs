@@ -10,11 +10,19 @@
  * orders.invoice_error / invoice_tried_at (migration 131) so SuperAdmin shows WHY an order is pending;
  * an issued (or already-issued) invoice clears the reason. That write is best-effort — before 131 runs
  * the columns do not exist, and that must not turn a good invoice into a failure.
+ *
+ * opts.email (slice 4, migration 134): once the order HAS an invoice (issued now or already), it is emailed
+ * via _shared/invoice-email.mjs — exactly once, claimed on the invoice row. Its outcome comes back as
+ * result.email and never changes result.status. Without opts.email nothing is sent.
  */
 import { buildInvoiceCalc } from './invoice-core.mjs';
+import { sendInvoiceEmail } from './invoice-email.mjs';
 
-/** @returns {Promise<{ status: string, invoice_no?: string, error?: string }>} */
-export async function issueInvoiceForOrder(supa, orderId) {
+/**
+ * @param {{ email?: { apiKey?: string, from?: string, appUrl?: string, force?: boolean, fetch?: typeof fetch } }} [opts]
+ * @returns {Promise<{ status: string, invoice_no?: string, error?: string, email?: { status: string, to?: string[], error?: string } }>}
+ */
+export async function issueInvoiceForOrder(supa, orderId, opts = {}) {
   let result;
   try {
     // select('*'): the buyer_* columns (migration 132) may not exist yet — never name them.
@@ -50,5 +58,13 @@ export async function issueInvoiceForOrder(supa, orderId) {
       invoice_tried_at: new Date().toISOString(),
     }).eq('id', orderId);
   } catch { /* best-effort — see header */ }
+
+  if (done && opts.email) {
+    try {
+      result.email = await sendInvoiceEmail(supa, orderId, opts.email);
+    } catch (e) {
+      result.email = { status: 'error', error: e instanceof Error ? e.message : String(e) };
+    }
+  }
   return result;
 }
