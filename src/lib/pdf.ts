@@ -3225,8 +3225,9 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
 
   // Save with descriptive filename
   const safeSaleNo = input.saleNo.replace(/[^a-zA-Z0-9]/g, '_');
-  const safeCustomer = (input.customer.legalName || input.customer.name || 'Customer').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-  const fileName = `Invoice_${safeSaleNo}_${safeCustomer}.pdf`;
+  // A Hindi-only name has no Latin letters left — drop it rather than ship "Invoice_S_45__________.pdf".
+  const safeCustomer = (input.customer.legalName || input.customer.name || 'Customer').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').substring(0, 30);
+  const fileName = safeCustomer ? `Invoice_${safeSaleNo}_${safeCustomer}.pdf` : `Invoice_${safeSaleNo}.pdf`;
   if (opts.output === 'file') return new File([doc.output('blob')], fileName, { type: 'application/pdf' });
   doc.save(fileName);
 }
