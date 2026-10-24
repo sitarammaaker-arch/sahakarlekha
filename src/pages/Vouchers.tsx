@@ -32,6 +32,9 @@ import { generateVoucherPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
+import { canShareReceipt, receiptHead, receiptMessage } from '@/lib/whatsappShare';
+import { allocBillNo, allocMethod } from '@/lib/billUtils';
 import type { Voucher, VoucherType, VoucherLine } from '@/types';
 import { Plus, Minus } from 'lucide-react';
 import { getNextVoucherNo, VOUCHER_TEMPLATES, ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
@@ -269,7 +272,50 @@ const Vouchers: React.FC = () => {
     setEditLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
 
   // ── Print voucher PDF (A5, Tally-style narrative) ──────────────────────────
-  const handlePrintVoucher = (voucherId: string) => {
+  // The customer behind a receipt: the cash sale's buyer, the bill-wise receipt's customer (refId), or the
+  // customer whose sub-ledger the receipt credits (a manual receipt). Null when none of these.
+  const linkedParty = (v: typeof vouchers[number]) => {
+    const fromCustomer = (c: typeof customers[number]) => ({ name: c.legalName || c.name, phone: c.mobile || c.phone });
+    if (v.refType === 'sale' && v.refId) {
+      const sale = sales.find(s => s.id === v.refId);
+      if (sale) {
+        const cust = sale.customerId ? customers.find(c => c.id === sale.customerId) : undefined;
+        return { name: cust?.legalName || cust?.name || sale.customerName, phone: cust?.mobile || cust?.phone || sale.customerPhone };
+      }
+    }
+    if (v.refType === 'bill-receipt' && v.refId) {
+      const cust = customers.find(c => c.id === v.refId);
+      if (cust) return fromCustomer(cust);
+    }
+    const crIds = new Set(getVoucherLines(v).filter(l => l.type === 'Cr').map(l => l.accountId));
+    const cust = customers.find(c => c.accountId && crIds.has(c.accountId));
+    return cust ? fromCustomer(cust) : null;
+  };
+
+  // WhatsApp share (receipts): to the member, else the linked customer. Phone may be blank — WhatsApp then asks for the contact.
+  const receiptShare = (v: typeof vouchers[number]) => {
+    const member = v.memberId ? members.find(m => m.id === v.memberId) : undefined;
+    const party = member ? { name: member.name, phone: member.phone } : linkedParty(v);
+    // A customer's own sub-ledger isn't a "head" — the greeting already names them.
+    const customerAccIds = new Set(customers.map(c => c.accountId).filter(Boolean));
+    const crNames = getVoucherLines(v).filter(l => l.type === 'Cr' && !customerAccIds.has(l.accountId)).map(l => {
+      const a = accounts.find(x => x.id === l.accountId);
+      return a?.nameHi || a?.name;
+    });
+    const againstBills = v.refType === 'sale'
+      ? [sales.find(s => s.id === v.refId)?.saleNo ?? '']
+      : (v.billAllocations ?? []).filter(a => allocMethod(a) === 'against').map(allocBillNo);
+    return {
+      phone: party?.phone,
+      message: receiptMessage({
+        partyName: party?.name, societyName: society.nameHi || society.name,
+        voucherNo: v.voucherNo, date: fmtDate(v.date), amount: v.amount,
+        head: receiptHead(crNames), againstBills,
+      }),
+    };
+  };
+
+  const handlePrintVoucher = (voucherId: string, output: 'save' | 'file' = 'save'): File | void => {
     const v = vouchers.find(x => x.id === voucherId);
     if (!v) return;
     // If this voucher is linked to a sale/purchase, prefer the customer/supplier
@@ -292,7 +338,7 @@ const Vouchers: React.FC = () => {
       }
     }
     try {
-      generateVoucherPDF({
+      const file = generateVoucherPDF({
         voucher: {
           id: v.id,
           voucherNo: v.voucherNo,
@@ -310,9 +356,11 @@ const Vouchers: React.FC = () => {
         members,
         partyName,
         partyAddress: partyAddress || undefined,
-      }, society);
+      }, society, { output });
+      if (output === 'file') return file;
       toast({ title: language === 'hi' ? `Voucher PDF: ${v.voucherNo}` : `Voucher PDF: ${v.voucherNo}` });
     } catch (err) {
+      if (output === 'file') throw err;
       toast({ title: language === 'hi' ? 'PDF नहीं बना' : 'PDF generation failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
     }
   };
@@ -1356,6 +1404,11 @@ const Vouchers: React.FC = () => {
                                 onClick={() => handlePrintVoucher(v.id)}>
                                 <Printer className="h-4 w-4" />
                               </Button>
+                              {canShareReceipt(v) && (() => {
+                                const share = receiptShare(v);
+                                return <WhatsAppShareButton kind="receipt" iconOnly hi={language === 'hi'} phone={share.phone} message={share.message}
+                                  getPdf={() => handlePrintVoucher(v.id, 'file')} />;
+                              })()}
                               {canEdit && !cancelled && !editLocked && (
                                 <Button variant="ghost" size="icon" className="h-9 w-9 text-primary hover:bg-primary/10"
                                   title={language === 'hi' ? 'संपादित करें' : 'Edit'}

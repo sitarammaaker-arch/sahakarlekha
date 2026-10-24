@@ -39,6 +39,9 @@ import { cashReceiptWarning, cashReceiptWarningText } from '@/lib/rules/cashRece
 import { sameDayCashFromCustomer } from '@/lib/directBills';
 import { toMinor, toRupees, mulMinor } from '@/lib/money';
 import { useToast } from '@/hooks/use-toast';
+import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
+import { saleBillMessage } from '@/lib/whatsappShare';
+import { getBillReceivedMap, getBillStatus } from '@/lib/billUtils';
 import type { SaleItem, PaymentMode } from '@/types';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 
@@ -71,7 +74,7 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const SaleManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { sales, stockItems, reconciledStockMovements, customers, accounts, addSale, updateSale, deleteSale, addStockItem, society, usesPostingService, matchesActiveBranch } = useData();
+  const { sales, vouchers, stockItems, reconciledStockMovements, customers, members, accounts, addSale, updateSale, deleteSale, addStockItem, society, usesPostingService, matchesActiveBranch } = useData();
   // Available qty is ALWAYS movement-based (RULE 2), reconciled to live docs (RULE 3). Never read
   // stockItem.currentStock here — that cache drifts when a purchase voucher is edited/deleted and
   // caused the "sale shows 120 but stock report shows 0" bug.
@@ -345,7 +348,28 @@ const SaleManagement: React.FC = () => {
   };
 
   // ── Download Invoice PDF ──────────────────────────────────────────────────
-  const handleDownloadInvoice = (sale: typeof sales[number]) => {
+  // Bill-wise receipts applied per sale — the same map Bills Outstanding reads (RULE 2).
+  const billSettled = useMemo(() => getBillReceivedMap(vouchers), [vouchers]);
+
+  // WhatsApp share: to the linked customer, else the walk-in phone, else the member buyer.
+  const saleShare = (sale: typeof sales[number]) => {
+    const customer = sale.customerId ? customers.find(c => c.id === sale.customerId) : undefined;
+    const member = sale.memberId ? members.find(m => m.id === sale.memberId) : undefined;
+    // A member's store-credit sale is recovered through Member Credit, not bill-wise — its balance isn't known here.
+    const balance = sale.paymentMode === 'credit' && !sale.memberId
+      ? getBillStatus(sale, billSettled[sale.id] || 0).balance : undefined;
+    return {
+      phone: customer?.mobile || customer?.phone || sale.customerPhone || member?.phone,
+      message: saleBillMessage({
+        customerName: customer?.legalName || customer?.name || sale.customerName || member?.name,
+        societyName: society.nameHi || society.name,
+        saleNo: sale.saleNo, date: fmtDate(sale.date), grandTotal: sale.grandTotal || sale.netAmount,
+        paymentMode: sale.paymentMode, itemCount: sale.items.length, balance,
+      }),
+    };
+  };
+
+  const handleDownloadInvoice = (sale: typeof sales[number], output: 'save' | 'file' = 'save'): File | void => {
     const customer = sale.customerId ? customers.find(c => c.id === sale.customerId) : undefined;
     // Build invoice input — fallback to embedded sale.customerName/Phone if no linked customer
     const invoiceCustomer = customer ? {
@@ -385,7 +409,7 @@ const SaleManagement: React.FC = () => {
       hsn: stockItems.find(s => s.id === it.itemId)?.hsnCode,
     }));
     try {
-      generateSaleInvoicePDF({
+      const file = generateSaleInvoicePDF({
         saleNo: sale.saleNo,
         date: sale.date,
         customer: invoiceCustomer,
@@ -404,9 +428,11 @@ const SaleManagement: React.FC = () => {
         grandTotal: sale.grandTotal || sale.netAmount,
         paymentMode: sale.paymentMode,
         narration: sale.narration,
-      }, society);
+      }, society, { output });
+      if (output === 'file') return file;
       toast({ title: language === 'hi' ? `Invoice download: ${sale.saleNo}` : `Invoice downloaded: ${sale.saleNo}` });
     } catch (err) {
+      if (output === 'file') throw err;
       toast({
         title: language === 'hi' ? 'PDF नहीं बना' : 'Could not generate PDF',
         description: err instanceof Error ? err.message : String(err),
@@ -974,6 +1000,11 @@ const SaleManagement: React.FC = () => {
                               >
                                 <Printer className="h-4 w-4 text-green-600" />
                               </Button>
+                              {(() => {
+                                const share = saleShare(sale);
+                                return <WhatsAppShareButton kind="sale" iconOnly hi={language === 'hi'} phone={share.phone} message={share.message}
+                                  getPdf={() => handleDownloadInvoice(sale, 'file')} />;
+                              })()}
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1126,6 +1157,11 @@ const SaleManagement: React.FC = () => {
                   <Printer className="h-4 w-4" />
                   {language === 'hi' ? 'Invoice PDF Download' : 'Download Invoice PDF'}
                 </Button>
+                {(() => {
+                  const share = saleShare(viewSale);
+                  return <WhatsAppShareButton kind="sale" hi={language === 'hi'} phone={share.phone} message={share.message}
+                    getPdf={() => handleDownloadInvoice(viewSale, 'file')} className="h-10 gap-2" />;
+                })()}
                 <Button
                   variant="outline"
                   onClick={() => { const s = viewSale; setViewSale(null); handleEdit(s); }}
