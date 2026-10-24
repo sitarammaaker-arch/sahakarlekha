@@ -112,5 +112,80 @@ for (const fn of ['generateVoucherPDF', 'generateSaleInvoicePDF']) {
   ok(new RegExp(`export function ${fn}\\([^)]*opts: \\{ output\\?: 'save' \\| 'file' \\} = \\{\\}\\): File \\| void`).test(pdf), `${fn} can return a File`);
 }
 
+// ══ Batch 2: reminders and notices (src/lib/whatsappReminders.ts) ══
+const rm = await import(pathToFileURL(resolve(ROOT, 'src/lib/whatsappReminders.ts')).href);
+
+// ── loan / KCC reminder ──
+const lr = rm.loanReminderMessage({ memberName: 'रामलाल', societyName: 'S', loanNo: 'L-7', kind: 'loan', label: 'अल्पकालीन', outstanding: 20000, interestDue: 450, dueDate: '31/03/2027' });
+ok(lr.includes('ऋण के भुगतान की याद') && lr.includes('ऋण नं.: L-7 (अल्पकालीन)'), 'loan reminder header + type');
+ok(lr.includes('मूलधन बकाया: ₹20,000.00') && lr.includes('ब्याज देय: ₹450.00') && lr.includes('कुल देय: ₹20,450.00'), 'principal + interest + total');
+ok(lr.includes('देय तिथि: 31/03/2027'), 'due date');
+const lrNoInt = rm.loanReminderMessage({ loanNo: 'L-8', kind: 'loan', outstanding: 100 });
+ok(!lrNoInt.includes('ब्याज देय') && !lrNoInt.includes('कुल देय'), 'no interest lines when none due');
+const kcc = rm.loanReminderMessage({ loanNo: 'KCC-1', kind: 'kcc', label: 'गेहूँ, रबी', outstanding: 50000, overdue: true });
+ok(kcc.includes('KCC ऋण की देय तिथि निकल चुकी है') && kcc.includes('(गेहूँ, रबी)'), 'overdue KCC wording + crop');
+
+// ── customer bills reminder ──
+const br = rm.billsReminderMessage({ partyName: 'सीता', asOf: '24/10/2026', bills: [{ no: 'S-1', date: '01/09/2026', balance: 500 }, { no: 'S-2', date: '01/10/2026', balance: 0 }, { no: 'S-3', date: '05/10/2026', balance: 250.5 }] });
+ok(br.includes('• S-1 (01/09/2026): ₹500.00') && br.includes('• S-3 (05/10/2026): ₹250.50'), 'open bills listed');
+ok(!br.includes('S-2'), 'settled bill left out');
+ok(br.includes('कुल बकाया: ₹750.50'), 'total of open bills');
+const many = rm.billsReminderMessage({ asOf: 'x', bills: Array.from({ length: 13 }, (_, i) => ({ no: `B${i}`, date: 'd', balance: 1 })) });
+ok(many.includes('• और 3 बिल') && many.includes('कुल बकाया: ₹13.00'), 'more than 10 bills counted, total still full');
+
+// ── milk slip ──
+const ms = rm.milkSlipMessage({ memberName: 'गीता', date: '24/10/2026', shift: 'evening', qty: 8.25, fat: 6.5, snf: 8.7, rate: 52, amount: 429, quality: 'accepted' });
+ok(ms.includes('(शाम)') && ms.includes('मात्रा: 8.3 लीटर') && ms.includes('फ़ैट: 6.5%') && ms.includes('SNF: 8.7%'), 'slip readings');
+ok(ms.includes('दर: ₹52.00 प्रति लीटर') && ms.includes('राशि: ₹429.00'), 'slip rate + amount');
+const rej = rm.milkSlipMessage({ date: 'd', shift: 'morning', qty: 5, rate: 50, amount: 250, quality: 'rejected' });
+ok(rej.includes('अस्वीकृत') && !rej.includes('राशि:') && rej.includes('(सुबह)'), 'rejected milk: no amount promised');
+ok(rm.milkSlipMessage({ date: 'd', shift: 'morning', qty: 5, rate: 50, amount: 240, quality: 'accepted_cut' }).includes('कटौती'), 'quality cut noted');
+
+// ── milk settlement ──
+const st = rm.milkSettlementMessage({ memberName: 'गीता', settlementNo: 'DS-3', from: '01/10/2026', to: '15/10/2026', gross: 6000, deductions: [{ type: 'Feed', amount: 800 }, { type: 'Loan', amount: 1000 }, { type: 'Other', amount: 0 }], netPayable: 4200, paid: 2000 });
+ok(st.includes('दूध की कुल राशि: ₹6,000.00') && st.includes('घटाया — पशु आहार: ₹800.00') && st.includes('घटाया — ऋण किस्त: ₹1,000.00'), 'gross + Hindi deduction labels');
+ok(!st.includes('अन्य'), 'zero deduction left out');
+ok(st.includes('नेट देय: ₹4,200.00') && st.includes('भुगतान हो चुका: ₹2,000.00') && st.includes('अभी मिलना बाकी: ₹2,200.00'), 'net, paid, remaining');
+ok(rm.milkSettlementMessage({ from: 'a', to: 'b', gross: 10, deductions: [], netPayable: 10, paid: 10 }).includes('पूरा भुगतान हो चुका'), 'fully paid settlement');
+
+// ── meeting notice ──
+const mn = rm.meetingNoticeMessage({ societyName: 'S', typeLabel: 'वार्षिक आम सभा (AGM)', meetingNo: 'AGM-2026-01', date: '15/11/2026', time: '11:00', venue: 'समिति भवन', agenda: '1. वार्षिक लेखा' });
+ok(mn.startsWith('सूचना — वार्षिक आम सभा (AGM)') && mn.includes('तारीख: 15/11/2026') && mn.includes('समय: 11:00') && mn.includes('स्थान: समिति भवन'), 'notice basics');
+ok(mn.includes('कार्यसूची:\n1. वार्षिक लेखा'), 'agenda included');
+const longAgenda = rm.meetingNoticeMessage({ typeLabel: 'x', date: 'd', agenda: 'क'.repeat(rm.AGENDA_MAX + 50) });
+ok(longAgenda.includes('पूरी कार्यसूची समिति कार्यालय में') && !longAgenda.includes('क'.repeat(rm.AGENDA_MAX + 1)), 'long agenda cut');
+ok(!/नमस्ते/.test(mn), 'notice is addressed to all members, not one name');
+
+// ── maintenance bill ──
+ok(rm.periodHi('2026-07') === 'जुलाई 2026' && rm.periodHi('bad') === 'bad', 'period in Hindi');
+const mb = rm.maintenanceBillMessage({ memberName: 'A', billNo: '2026-07/A-101', flatNo: 'A-101', period: '2026-07', amount: 2500, lines: [{ name: 'रखरखाव', amount: 2000 }, { name: 'पानी', amount: 500 }], paid: 1000 });
+ok(mb.includes('रखरखाव बिल — जुलाई 2026') && mb.includes('फ्लैट: A-101') && mb.includes('• पानी: ₹500.00'), 'bill heading, flat, lines');
+ok(mb.includes('बिल राशि: ₹2,500.00') && mb.includes('भुगतान हो चुका: ₹1,000.00') && mb.includes('अभी बाकी: ₹1,500.00'), 'amount, paid, due');
+const mbOne = rm.maintenanceBillMessage({ billNo: 'B', period: '2026-08', amount: 900, lines: [{ name: 'रखरखाव', amount: 900 }], paid: 900 });
+ok(!mbOne.includes('•') && mbOne.includes('पूरा भुगतान हो चुका'), 'single-head bill: no breakdown; paid bill says so');
+
+// ── static guards ──
+const lib2 = src('src/lib/whatsappReminders.ts');
+ok(!/narration|remarks|pin\b|aadhaar|pan\b|accountNo|ifsc/i.test(lib2.replace(/\/\*\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')), 'reminder builders never take narration / remarks / PIN / Aadhaar / PAN / bank details');
+const loanPage = src('src/pages/LoanRegister.tsx');
+ok(/outstanding > 0\.005 && \(\(\) => \{\s*const share = loanShare\(l\)/.test(loanPage), 'Loan Register: button only while something is outstanding');
+ok(/interestDue: dueOf\(l\.id\)\.receivable/.test(loanPage) && /overdue: statusOf\(l\) === 'overdue'/.test(loanPage), 'Loan Register: same interest-due + overdue rule as the row');
+const kccPage = src('src/pages/KccLoan.tsx');
+ok(/outstanding: kccOutstanding\(l\)/.test(kccPage) && /kind="kcc"/.test(kccPage), 'KCC: canonical outstanding');
+const billsPage = src('src/pages/BillsOutstanding.tsx');
+ok(/const showShare = tab === 'receivable'/.test(billsPage), 'Bills Outstanding: receivables only (no reminder to suppliers)');
+ok(/asOf: fmtDate\(todayStr\(\)\)/.test(billsPage), "Bills Outstanding: reminder dated today (balances are today's)");
+const milkPage = src('src/pages/MilkCollection.tsx');
+ok(/kind="milk-slip"/.test(milkPage), 'Milk Collection: slip button');
+ok(!/WhatsAppShareButton/.test(milkPage.slice(milkPage.indexOf('{/* Payout sheet */}'))), 'Milk Collection: no button on the gross payout sheet');
+const settlePage = src('src/pages/dairy/FarmerSettlement.tsx');
+ok(/\{!isDraft && <WhatsAppShareButton kind="milk-settlement"/.test(settlePage), 'Farmer Settlement: approved only');
+const meetPage = src('src/pages/MeetingRegister.tsx');
+ok(/m\.status === 'scheduled' && m\.date >= todayStr\(\)/.test(meetPage), 'Meeting Register: upcoming scheduled meetings only');
+ok(/<WhatsAppShareButton kind="meeting" iconOnly hi=\{hi\} message=/.test(meetPage), 'Meeting Register: no fixed recipient (group picked in WhatsApp)');
+const maintPage = src('src/pages/MaintenanceBilling.tsx');
+ok((maintPage.match(/\{shareButton\(b\)\}/g) || []).length === 2 && /getPdf=\{\(\) => printBill\(b, 'file'\)\}/.test(maintPage), 'Maintenance: month list + outstanding list, with PDF');
+ok(/export function generateMaintenanceBillPDF\([^)]*opts: \{ output\?: 'save' \| 'file' \} = \{\}\): File \| void/.test(pdf), 'generateMaintenanceBillPDF can return a File');
+
 console.log(`whatsapp-share: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

@@ -27,7 +27,9 @@ import { kccLoanSelect, kccLoanInsert, kccLoanUpdate } from '@/lib/supabaseServi
 import { interestIncomeAccountId, kccLoanAccountId } from '@/lib/loans/accounts';
 import { effectiveLoanStatus, kccAsAccruable } from '@/lib/loans/interestAccrual';
 import { kccOutstanding } from '@/lib/memberSnapshot';
-import { todayStr } from '@/lib/dateUtils';
+import { fmtDate, todayStr } from '@/lib/dateUtils';
+import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
+import { loanReminderMessage } from '@/lib/whatsappReminders';
 import {
   loanInterestDue, repaymentInterestSplit, REF_LOAN_REPAYMENT, REF_LOAN_INTEREST_RELEASE,
   ACC_INTEREST_RECEIVABLE, ACC_OVERDUE_INTEREST_RESERVE, type LoanInterestDue,
@@ -99,6 +101,20 @@ export default function KccLoan() {
     if (kccOutstanding(loan) <= 0.005) return 'repaid';
     const eff = effectiveLoanStatus(kccAsAccruable(loan), todayStr());
     return eff === 'cleared' ? 'repaid' : eff;
+  };
+
+  // WhatsApp reminder — the same outstanding / interest due / overdue rule this row shows.
+  const kccShare = (l: KccLoan & { status: KccLoan['status'] }) => {
+    const member = members.find(m => m.id === l.memberId);
+    return {
+      phone: member?.phone,
+      message: loanReminderMessage({
+        memberName: member?.name || l.memberName, societyName: society.nameHi || society.name, loanNo: l.loanNo, kind: 'kcc',
+        label: [l.cropName, seasonLabel[l.cropSeason]?.hi].filter(Boolean).join(', '),
+        outstanding: kccOutstanding(l), interestDue: dueOf(l.id).receivable,
+        dueDate: l.dueDate ? fmtDate(l.dueDate) : undefined, overdue: l.status === 'overdue',
+      }),
+    };
   };
 
   const enrichedLoans = useMemo(() =>
@@ -417,7 +433,13 @@ export default function KccLoan() {
                             {tab !== 'repaid' && (
                               <TableCell>
                                 {l.outstandingAmount > 0 && (
-                                  <RepayButton loan={l} hi={hi} due={dueOf(l.id)} onRepay={handleRepayment} />
+                                  <div className="flex items-center gap-1">
+                                    <RepayButton loan={l} hi={hi} due={dueOf(l.id)} onRepay={handleRepayment} />
+                                    {(() => {
+                                      const share = kccShare(l);
+                                      return <WhatsAppShareButton kind="kcc" iconOnly hi={hi} phone={share.phone} message={share.message} />;
+                                    })()}
+                                  </div>
                                 )}
                               </TableCell>
                             )}

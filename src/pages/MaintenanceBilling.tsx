@@ -15,6 +15,8 @@ import { computeBillLines, billTotal } from '@/lib/housing/billing';
 import { generateMaintenanceBillPDF, generateMaintenanceReceiptPDF } from '@/lib/pdf';
 import type { HousingFlat, MaintenanceBill } from '@/types';
 import { Receipt, Trash2, HandCoins, FileText } from 'lucide-react';
+import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
+import { maintenanceBillMessage } from '@/lib/whatsappReminders';
 
 const thisMonth = () => new Date().toISOString().slice(0, 7); // YYYY-MM
 const today = () => new Date().toISOString().split('T')[0];
@@ -100,8 +102,17 @@ export default function MaintenanceBilling() {
     }
   };
 
-  const printBill = (bill: MaintenanceBill) => {
-    generateMaintenanceBillPDF(bill, housingFlats.find(f => f.id === bill.flatId), members.find(m => m.id === bill.memberId), society);
+  const printBill = (bill: MaintenanceBill, output: 'save' | 'file' = 'save'): File | void =>
+    generateMaintenanceBillPDF(bill, housingFlats.find(f => f.id === bill.flatId), members.find(m => m.id === bill.memberId), society, { output });
+
+  // WhatsApp: the bill (with what is paid / still due) to the flat owner billed; on phones, with the bill PDF.
+  const shareButton = (b: MaintenanceBill) => {
+    const member = members.find(m => m.id === b.memberId);
+    const message = maintenanceBillMessage({
+      memberName: member?.name, societyName: society.nameHi || society.name, billNo: b.billNo, flatNo: b.flatNo,
+      period: b.period, amount: b.amount, lines: b.lines, paid: b.paidAmount,
+    });
+    return <WhatsAppShareButton kind="maintenance" iconOnly hi={hi} phone={member?.phone} message={message} getPdf={() => printBill(b, 'file')} />;
   };
 
   return (
@@ -163,6 +174,7 @@ export default function MaintenanceBilling() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <Button size="sm" variant="ghost" onClick={() => printBill(b)} title={hi ? 'बिल PDF' : 'Bill PDF'}><FileText className="h-4 w-4" /></Button>
+                  {shareButton(b)}
                   {outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openReceive(b.id, outstanding)} className="gap-1"><HandCoins className="h-4 w-4" />{hi ? 'भुगतान लें' : 'Receive'}</Button>}
                   <Button size="sm" variant="ghost" onClick={() => remove(b.id, b.billNo)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
@@ -190,7 +202,10 @@ export default function MaintenanceBilling() {
                   <div className="font-medium">{b.flatNo} · {memberLabel(b.memberId)} <Badge variant={b.status === 'partial' ? 'secondary' : 'outline'}>{b.status === 'partial' ? (hi ? 'आंशिक' : 'Partial') : (hi ? 'बकाया' : 'Unpaid')}</Badge></div>
                   <div className="text-muted-foreground">{b.billNo} · {hi ? 'बिल' : 'Bill'} {money(b.amount)}{(b.paidAmount || 0) > 0 ? ` · ${hi ? 'भुगतान' : 'Paid'} ${money(b.paidAmount)}` : ''} · {hi ? 'बकाया' : 'Outstanding'} {money(outstanding)}</div>
                 </div>
-                <Button size="sm" variant="outline" className="shrink-0 gap-1" onClick={() => openReceive(b.id, outstanding)}><HandCoins className="h-4 w-4" />{hi ? 'भुगतान लें' : 'Receive'}</Button>
+                <div className="flex items-center gap-1 shrink-0">
+                  {shareButton(b)}
+                  <Button size="sm" variant="outline" className="gap-1" onClick={() => openReceive(b.id, outstanding)}><HandCoins className="h-4 w-4" />{hi ? 'भुगतान लें' : 'Receive'}</Button>
+                </div>
               </div>
             );
           })}

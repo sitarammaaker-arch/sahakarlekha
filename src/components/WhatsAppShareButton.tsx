@@ -36,7 +36,7 @@ function canShareFiles(): boolean {
 
 interface Props {
   /** What is being shared — for the usage count only. */
-  kind: 'receipt' | 'sale' | 'member';
+  kind: 'receipt' | 'sale' | 'member' | 'loan' | 'kcc' | 'bills' | 'milk-slip' | 'milk-settlement' | 'meeting' | 'maintenance';
   phone?: string;
   message: string;
   hi: boolean;

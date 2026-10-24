@@ -14,7 +14,9 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Clock, Download, FileSpreadsheet } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { fmtDate } from '@/lib/dateUtils';
+import { fmtDate, todayStr } from '@/lib/dateUtils';
+import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
+import { billsReminderMessage } from '@/lib/whatsappReminders';
 import {
   getOpenBills, getOpenPurchaseBills, getPartyUnallocated, bucketByAge, ageInDays,
 } from '@/lib/billUtils';
@@ -22,7 +24,7 @@ import {
 const today = () => new Date().toISOString().split('T')[0];
 const fmt = (n: number) => 'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
-interface Row { party: string; no: string; date: string; balance: number; days: number; }
+interface Row { party: string; no: string; date: string; balance: number; days: number; partyId?: string; }
 
 const BillsOutstanding: React.FC = () => {
   const { language } = useLanguage();
@@ -37,7 +39,7 @@ const BillsOutstanding: React.FC = () => {
     const rows: Row[] = [];
     for (const c of customers) {
       for (const { sale, balance } of getOpenBills(sales, vouchers, c.id)) {
-        rows.push({ party: c.name, no: sale.saleNo, date: sale.date, balance, days: ageInDays(sale.date, asOf) });
+        rows.push({ party: c.name, no: sale.saleNo, date: sale.date, balance, days: ageInDays(sale.date, asOf), partyId: c.id });
       }
     }
     return rows.sort((a, b) => b.days - a.days);
@@ -61,6 +63,19 @@ const BillsOutstanding: React.FC = () => {
   }, [tab, customers, suppliers, vouchers]);
 
   const rows = tab === 'receivable' ? receivableRows : payableRows;
+  // WhatsApp reminder (receivables only): ALL of this customer's open bills in one message, oldest first.
+  // Balances are today's (getOpenBills does not cut at the as-of date), so the message is dated today.
+  const reminderFor = (partyId: string) => {
+    const c = customers.find(x => x.id === partyId);
+    const bills = receivableRows.filter(r => r.partyId === partyId).sort((a, b) => a.date.localeCompare(b.date))
+      .map(r => ({ no: r.no, date: fmtDate(r.date), balance: r.balance }));
+    return {
+      phone: c?.mobile || c?.phone,
+      message: billsReminderMessage({ partyName: c?.legalName || c?.name, societyName: society.nameHi || society.name, asOf: fmtDate(todayStr()), bills }),
+    };
+  };
+  const showShare = tab === 'receivable';
+
   const filtered = useMemo(
     () => rows.filter(r => !partyFilter || r.party.toLowerCase().includes(partyFilter.toLowerCase())),
     [rows, partyFilter],
@@ -155,6 +170,7 @@ const BillsOutstanding: React.FC = () => {
                     <TableHead className="text-right">{hi ? 'दिन' : 'Days'}</TableHead>
                     <TableHead className="text-center">{hi ? 'आयु-वर्ग' : 'Bucket'}</TableHead>
                     <TableHead className="text-right">{hi ? 'बकाया' : 'Balance'}</TableHead>
+                    {showShare && <TableHead className="w-10"><span className="sr-only">WhatsApp</span></TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -166,11 +182,20 @@ const BillsOutstanding: React.FC = () => {
                       <TableCell className="text-right tabular-nums">{r.days}</TableCell>
                       <TableCell className={`text-center text-xs font-medium ${bucketCls(r.days)}`}>{bucketLabel(r.days)}</TableCell>
                       <TableCell className="text-right tabular-nums font-semibold text-amber-700">{fmt(r.balance)}</TableCell>
+                      {showShare && (
+                        <TableCell className="p-1">
+                          {r.partyId && (() => {
+                            const share = reminderFor(r.partyId);
+                            return <WhatsAppShareButton kind="bills" iconOnly hi={hi} phone={share.phone} message={share.message} />;
+                          })()}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                   <TableRow className="bg-primary/10 font-bold">
                     <TableCell colSpan={5}>{hi ? 'कुल' : 'Total'}</TableCell>
                     <TableCell className="text-right">{fmt(buckets.total)}</TableCell>
+                    {showShare && <TableCell />}
                   </TableRow>
                 </TableBody>
               </Table>

@@ -11,13 +11,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { HandCoins, Trash2, CheckCircle2, Plus } from 'lucide-react';
 import type { DairySettlement } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
+import { milkSettlementMessage } from '@/lib/whatsappReminders';
+import { fmtDate } from '@/lib/dateUtils';
 
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN')}`;
 const today = () => new Date().toISOString().slice(0, 10);
 const out = (s: DairySettlement) => Math.max(0, +(s.netPayable - s.amountPaid).toFixed(2));
 
 function SettlementCard({ s }: { s: DairySettlement }) {
-  const { accounts } = useData();
+  const { accounts, members, society } = useData();
   const { addDairyDeduction, removeDairyDeduction, approveDairySettlement, recordDairySettlementPayment, deleteDairySettlement, getMemberInputBalance, memberInputReceivableAccountId } = useDairyData();
   const inputBal = getMemberInputBalance(s.memberId);
   const { language } = useLanguage();
@@ -40,6 +43,13 @@ function SettlementCard({ s }: { s: DairySettlement }) {
 
   const isDraft = s.status === 'draft';
   const outstanding = out(s);
+  // WhatsApp: only an approved settlement — a draft's deductions and net can still change.
+  const member = members.find(m => m.id === s.memberId);
+  const shareMessage = milkSettlementMessage({
+    memberName: member?.name || s.memberName, societyName: society.nameHi || society.name, settlementNo: s.settlementNo,
+    from: fmtDate(s.from), to: fmtDate(s.to), gross: s.gross,
+    deductions: s.deductionLines.map(l => ({ type: l.type, amount: l.amount })), netPayable: s.netPayable, paid: s.amountPaid,
+  });
 
   return (
     <div className="rounded-lg border p-3 space-y-3 text-sm">
@@ -52,7 +62,10 @@ function SettlementCard({ s }: { s: DairySettlement }) {
           </div>
           <div className="text-muted-foreground">{s.from} → {s.to}</div>
         </div>
-        <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { if (window.confirm(hi ? 'सेटलमेंट हटाएँ?' : 'Delete settlement?')) deleteDairySettlement(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+        <div className="flex items-center gap-1 shrink-0">
+          {!isDraft && <WhatsAppShareButton kind="milk-settlement" iconOnly hi={hi} phone={member?.phone} message={shareMessage} />}
+          <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(hi ? 'सेटलमेंट हटाएँ?' : 'Delete settlement?')) deleteDairySettlement(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
