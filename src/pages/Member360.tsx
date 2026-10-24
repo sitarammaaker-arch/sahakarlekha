@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowLeft, Printer, ContactRound, KeyRound } from 'lucide-react';
-import { fmtDate } from '@/lib/dateUtils';
+import { fmtDate, todayStr } from '@/lib/dateUtils';
 import { buildMember360 } from '@/lib/member360';
 import { MemberAccountView } from '@/components/member-portal/MemberAccountView';
 import type { SectionLinks } from '@/components/member-portal/SectionHeader';
@@ -93,7 +93,7 @@ export default function Member360() {
       milkEntries, dairySettlements: settlements, dairyInputIssues: inputIssues, dairyDistributions: distributions,
       maintenanceBills, housingFlats,
       sales, memberRecoveries, salesReturns, patronageRuns, distributionRuns, loanAccruals,
-    }, new Date().toISOString().slice(0, 10));
+    }, todayStr());
   }, [member, society.name, society.nameHi, vouchers, loans, depositAccounts, depositTransactions, kccLoans, accounts,
     milkEntries, settlements, inputIssues, distributions, maintenanceBills, housingFlats, sales, memberRecoveries, salesReturns, patronageRuns, distributionRuns, loanAccruals]);
 
@@ -130,10 +130,11 @@ export default function Member360() {
   // WhatsApp share — the same figures this page shows (RULE 2); the portal link only if the member has a live login.
   const shareMessage = memberAccountMessage({
     memberName: member.name, memberNo: member.memberId, societyName: society.nameHi || society.name,
-    asOf: fmtDate(new Date().toISOString().slice(0, 10)),
+    asOf: fmtDate(todayStr()),
     figures: {
       shareBalance: view.shareBalance, depositTotal: view.depositTotal,
       loanOutstanding: view.loanOutstandingTotal, kccOutstanding: view.kccOutstandingTotal, interestDue: view.interestDueTotal,
+      milkDue: verticals.dairy?.passbook.totalOutstanding,
       consumerOutstanding: verticals.consumer?.outstanding, housingOutstanding: verticals.housing?.statement.outstanding,
       dividendDue: verticals.dividend?.dueTotal,
     },
@@ -167,7 +168,7 @@ export default function Member360() {
                   : <Badge variant="outline">{hi ? 'नहीं दिया' : 'Not issued'}</Badge>}
             </Button>
           )}
-          <WhatsAppShareButton hi={hi} phone={member.phone} message={shareMessage} />
+          <WhatsAppShareButton kind="member" hi={hi} phone={member.phone} message={shareMessage} />
           <Button variant="outline" size="sm" className="gap-1" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />Print / PDF
           </Button>

@@ -41,6 +41,7 @@ import { toMinor, toRupees, mulMinor } from '@/lib/money';
 import { useToast } from '@/hooks/use-toast';
 import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
 import { saleBillMessage } from '@/lib/whatsappShare';
+import { getBillReceivedMap, getBillStatus } from '@/lib/billUtils';
 import type { SaleItem, PaymentMode } from '@/types';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 
@@ -73,7 +74,7 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const SaleManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { sales, stockItems, reconciledStockMovements, customers, members, accounts, addSale, updateSale, deleteSale, addStockItem, society, usesPostingService, matchesActiveBranch } = useData();
+  const { sales, vouchers, stockItems, reconciledStockMovements, customers, members, accounts, addSale, updateSale, deleteSale, addStockItem, society, usesPostingService, matchesActiveBranch } = useData();
   // Available qty is ALWAYS movement-based (RULE 2), reconciled to live docs (RULE 3). Never read
   // stockItem.currentStock here — that cache drifts when a purchase voucher is edited/deleted and
   // caused the "sale shows 120 but stock report shows 0" bug.
@@ -347,17 +348,23 @@ const SaleManagement: React.FC = () => {
   };
 
   // ── Download Invoice PDF ──────────────────────────────────────────────────
+  // Bill-wise receipts applied per sale — the same map Bills Outstanding reads (RULE 2).
+  const billSettled = useMemo(() => getBillReceivedMap(vouchers), [vouchers]);
+
   // WhatsApp share: to the linked customer, else the walk-in phone, else the member buyer.
   const saleShare = (sale: typeof sales[number]) => {
     const customer = sale.customerId ? customers.find(c => c.id === sale.customerId) : undefined;
     const member = sale.memberId ? members.find(m => m.id === sale.memberId) : undefined;
+    // A member's store-credit sale is recovered through Member Credit, not bill-wise — its balance isn't known here.
+    const balance = sale.paymentMode === 'credit' && !sale.memberId
+      ? getBillStatus(sale, billSettled[sale.id] || 0).balance : undefined;
     return {
       phone: customer?.mobile || customer?.phone || sale.customerPhone || member?.phone,
       message: saleBillMessage({
         customerName: customer?.legalName || customer?.name || sale.customerName || member?.name,
         societyName: society.nameHi || society.name,
         saleNo: sale.saleNo, date: fmtDate(sale.date), grandTotal: sale.grandTotal || sale.netAmount,
-        paymentMode: sale.paymentMode, itemCount: sale.items.length,
+        paymentMode: sale.paymentMode, itemCount: sale.items.length, balance,
       }),
     };
   };
@@ -995,7 +1002,7 @@ const SaleManagement: React.FC = () => {
                               </Button>
                               {(() => {
                                 const share = saleShare(sale);
-                                return <WhatsAppShareButton iconOnly hi={language === 'hi'} phone={share.phone} message={share.message}
+                                return <WhatsAppShareButton kind="sale" iconOnly hi={language === 'hi'} phone={share.phone} message={share.message}
                                   getPdf={() => handleDownloadInvoice(sale, 'file')} />;
                               })()}
                               <Button
@@ -1152,7 +1159,7 @@ const SaleManagement: React.FC = () => {
                 </Button>
                 {(() => {
                   const share = saleShare(viewSale);
-                  return <WhatsAppShareButton hi={language === 'hi'} phone={share.phone} message={share.message}
+                  return <WhatsAppShareButton kind="sale" hi={language === 'hi'} phone={share.phone} message={share.message}
                     getPdf={() => handleDownloadInvoice(viewSale, 'file')} className="h-10 gap-2" />;
                 })()}
                 <Button
