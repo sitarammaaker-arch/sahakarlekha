@@ -1310,7 +1310,8 @@ export function generateHousingShareNominationPDF(flats: HousingFlat[], members:
 }
 
 // ─── Housing maintenance bill (invoice) ──────────────────────────────────────
-export function generateMaintenanceBillPDF(bill: MaintenanceBill, flat: HousingFlat | undefined, member: Member | undefined, society: SocietySettings): void {
+/** `output: 'file'` returns the PDF as a File (for the WhatsApp share sheet) instead of downloading it. */
+export function generateMaintenanceBillPDF(bill: MaintenanceBill, flat: HousingFlat | undefined, member: Member | undefined, society: SocietySettings, opts: { output?: 'save' | 'file' } = {}): File | void {
   const doc = new jsPDF();
   const { startY, font } = addHeader(doc, 'MAINTENANCE BILL', society, `Period: ${bill.period}`, { reportCode: 'MB' });
   let y = startY + 4;
@@ -1347,6 +1348,10 @@ export function generateMaintenanceBillPDF(bill: MaintenanceBill, flat: HousingF
   doc.setTextColor(0);
   addSignatureBlock(doc, font, ['Secretary / Manager', 'Treasurer'], sy + 8);
   addPageNumbers(doc, font, society?.name);
+  // The shared file is named by the bill (what the member recognises); the download keeps the standard stem.
+  if (opts.output === 'file') {
+    return new File([doc.output('blob')], `MaintenanceBill_${bill.billNo.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')}.pdf`, { type: 'application/pdf' });
+  }
   doc.save(pdfFileName(`MaintenanceBill-${bill.billNo}`.replace(/[\\/]/g, '-'), society));
 }
 

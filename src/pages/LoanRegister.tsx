@@ -29,8 +29,10 @@ import {
 } from '@/lib/loans/interestAccrual';
 import { useLoanAccruals } from '@/hooks/useLoanAccruals';
 import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
-import { todayStr } from '@/lib/dateUtils';
+import { fmtDate, todayStr } from '@/lib/dateUtils';
 import type { Loan, LoanType, LoanStatus } from '@/types';
+import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
+import { loanReminderMessage } from '@/lib/whatsappReminders';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 import { canHoldShares } from '@/lib/members/shareRules';
 
@@ -332,6 +334,20 @@ const LoanRegister: React.FC = () => {
     return <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">{hi ? 'बकाया' : 'Overdue'}</Badge>;
   };
 
+  // WhatsApp reminder — the same outstanding / interest due / overdue rule this row shows.
+  const LOAN_TYPE_HI: Record<string, string> = { 'short-term': 'अल्पकालीन', 'medium-term': 'मध्यकालीन', 'long-term': 'दीर्घकालीन' };
+  const loanShare = (l: Loan) => {
+    const member = members.find(m => m.id === l.memberId);
+    return {
+      phone: member?.phone,
+      message: loanReminderMessage({
+        memberName: member?.name, societyName: society.nameHi || society.name, loanNo: l.loanNo, kind: 'loan',
+        label: LOAN_TYPE_HI[l.loanType], outstanding: loanOutstanding(l), interestDue: dueOf(l.id).receivable,
+        dueDate: l.dueDate ? fmtDate(l.dueDate) : undefined, overdue: statusOf(l) === 'overdue',
+      }),
+    };
+  };
+
   const loanTypeLabel = (t: LoanType) => {
     if (t === 'short-term') return hi ? 'अल्पकालीन' : 'Short-term';
     if (t === 'medium-term') return hi ? 'मध्यकालीन' : 'Medium-term';
@@ -494,6 +510,10 @@ const LoanRegister: React.FC = () => {
                       <TableCell>
                         <div className="flex gap-1 items-center">
                           {outstanding > 0.005 && <LoanRepayButton loan={l} hi={hi} due={dueOf(l.id)} onRepay={recordRepayment} />}
+                          {outstanding > 0.005 && (() => {
+                            const share = loanShare(l);
+                            return <WhatsAppShareButton kind="loan" iconOnly hi={hi} phone={share.phone} message={share.message} />;
+                          })()}
                           <Button variant="ghost" size="icon" title={hi ? 'ऋण खाता-बही' : 'Loan ledger'} onClick={() => setLedgerLoan(l)}><BookOpen className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon" onClick={() => openEdit(l)}><Edit className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setDeleteId(l.id)}><Trash2 className="h-4 w-4" /></Button>

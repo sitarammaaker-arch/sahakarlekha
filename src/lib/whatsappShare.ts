@@ -19,8 +19,8 @@ export function rupees(n: number): string {
   return `₹${v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-const greet = (name?: string) => (name?.trim() ? `नमस्ते ${name.trim()} जी,` : 'नमस्ते,');
-const signOff = (societyName?: string) => (societyName?.trim() ? [``, `— ${societyName.trim()}`] : []);
+export const greet = (name?: string) => (name?.trim() ? `नमस्ते ${name.trim()} जी,` : 'नमस्ते,');
+export const signOff = (societyName?: string) => (societyName?.trim() ? [``, `— ${societyName.trim()}`] : []);
 
 /** Only a real, posted receipt is worth telling anyone about: not cancelled, not pending/rejected approval. */
 export function canShareReceipt(v: { type?: string; isDeleted?: boolean; approvalStatus?: string }): boolean {

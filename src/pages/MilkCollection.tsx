@@ -23,6 +23,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Milk, Plus, Trash2, Printer } from 'lucide-react';
 import { printMilkSlip } from '@/lib/dairy/slip';
+import { fmtDate } from '@/lib/dateUtils';
+import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
+import { milkSlipMessage } from '@/lib/whatsappReminders';
 import type { MilkEntry, MilkShift, MilkQualityDecision } from '@/types';
 
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -38,6 +41,17 @@ const MilkCollection: React.FC = () => {
   const { language } = useLanguage();
   const hi = language === 'hi';
   const { toast } = useToast();
+  // WhatsApp: the same slip the printer gives, to the member's phone.
+  const slipShare = (e: MilkEntry) => {
+    const member = members.find((m) => m.id === e.memberId);
+    return {
+      phone: member?.phone,
+      message: milkSlipMessage({
+        memberName: member?.name || e.memberName, societyName: society?.nameHi || society?.name, date: fmtDate(e.date), shift: e.shift,
+        qty: e.qty, fat: e.fat, snf: e.snf, rate: e.rate, amount: e.amount, quality: e.qualityDecision,
+      }),
+    };
+  };
 
   const SHIFTS: { v: MilkShift; hi: string; en: string }[] = [
     { v: 'morning', hi: 'सुबह', en: 'Morning' },
@@ -222,6 +236,7 @@ const MilkCollection: React.FC = () => {
                   <TableCell className="text-right font-medium">{e.qualityDecision === 'rejected' ? '—' : inr(e.amount)}</TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Button variant="ghost" size="icon" onClick={() => printSlip(e)} aria-label={hi ? 'पर्ची' : 'Slip'}><Printer className="h-4 w-4 text-muted-foreground" /></Button>
+                    {(() => { const share = slipShare(e); return <WhatsAppShareButton kind="milk-slip" iconOnly hi={hi} phone={share.phone} message={share.message} />; })()}
                     <Button variant="ghost" size="icon" onClick={() => deleteMilkEntry(e.id)} aria-label={hi ? 'हटाएँ' : 'Delete'}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   </TableCell>
                 </TableRow>

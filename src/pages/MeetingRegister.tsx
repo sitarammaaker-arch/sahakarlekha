@@ -29,7 +29,9 @@ import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { fmtDate } from '@/lib/dateUtils';
+import { fmtDate, todayStr } from '@/lib/dateUtils';
+import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
+import { meetingNoticeMessage } from '@/lib/whatsappReminders';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName } from '@/lib/pdf';
 import { meetingSelect, meetingInsert, meetingUpdate, meetingDelete } from '@/lib/supabaseService';
 
@@ -112,6 +114,14 @@ const MeetingRegister: React.FC = () => {
       setMeetings(data as Meeting[]);
     });
   }, [societyId]);
+
+  // WhatsApp notice — only for a meeting still to come. No fixed recipient: WhatsApp asks for the
+  // contact, so the secretary can pick the members' group.
+  const canNotify = (m: Meeting) => m.status === 'scheduled' && m.date >= todayStr();
+  const noticeFor = (m: Meeting) => meetingNoticeMessage({
+    societyName: society.nameHi || society.name, typeLabel: TYPE_LABELS[m.type]?.hi ?? m.type, meetingNo: m.meetingNo,
+    date: fmtDate(m.date), time: m.time, venue: m.venue, agenda: m.agenda,
+  });
 
   const filtered = useMemo(() => {
     if (!search.trim()) return meetings;
@@ -341,6 +351,7 @@ const MeetingRegister: React.FC = () => {
                     <TableCell className="text-xs max-w-48 truncate">{m.resolutions || '—'}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
+                        {canNotify(m) && <WhatsAppShareButton kind="meeting" iconOnly hi={hi} message={noticeFor(m)} className="h-7 w-7" />}
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(m)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
