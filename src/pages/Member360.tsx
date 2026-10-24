@@ -27,7 +27,10 @@ import { buildMember360 } from '@/lib/member360';
 import { MemberAccountView } from '@/components/member-portal/MemberAccountView';
 import type { SectionLinks } from '@/components/member-portal/SectionHeader';
 import { MemberPortalDialog } from '@/components/members/MemberPortalDialog';
-import { callMemberPortalAdmin, portalPlanAllowed, type PortalLoginRow } from '@/lib/memberPortalAdmin';
+import { callMemberPortalAdmin, portalPlanAllowed, portalUrl, type PortalLoginRow } from '@/lib/memberPortalAdmin';
+import { memberPortalPath } from '@/lib/memberPortalLogin';
+import { memberAccountMessage } from '@/lib/whatsappShare';
+import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
 
 const STATUS_HI: Record<string, string> = { active: 'सक्रिय', inactive: 'निष्क्रिय', resigned: 'त्यागपत्र', expelled: 'निष्कासित', deceased: 'मृत' };
 
@@ -124,6 +127,18 @@ export default function Member360() {
   }
 
   const { snapshot, view, verticals } = m360;
+  // WhatsApp share — the same figures this page shows (RULE 2); the portal link only if the member has a live login.
+  const shareMessage = memberAccountMessage({
+    memberName: member.name, memberNo: member.memberId, societyName: society.nameHi || society.name,
+    asOf: fmtDate(new Date().toISOString().slice(0, 10)),
+    figures: {
+      shareBalance: view.shareBalance, depositTotal: view.depositTotal,
+      loanOutstanding: view.loanOutstandingTotal, kccOutstanding: view.kccOutstandingTotal, interestDue: view.interestDueTotal,
+      consumerOutstanding: verticals.consumer?.outstanding, housingOutstanding: verticals.housing?.statement.outstanding,
+      dividendDue: verticals.dividend?.dueTotal,
+    },
+    portalUrl: portalLogin?.is_active && user?.societyId ? portalUrl(window.location.origin, memberPortalPath(user.societyId)) : undefined,
+  });
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -152,6 +167,7 @@ export default function Member360() {
                   : <Badge variant="outline">{hi ? 'नहीं दिया' : 'Not issued'}</Badge>}
             </Button>
           )}
+          <WhatsAppShareButton hi={hi} phone={member.phone} message={shareMessage} />
           <Button variant="outline" size="sm" className="gap-1" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />Print / PDF
           </Button>

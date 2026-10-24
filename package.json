@@ -212,6 +212,7 @@
     "test:member-portal-sql-065": "node scripts/test-member-portal-sql-065.mjs",
     "test:member-portal-core": "node scripts/test-member-portal-core.mjs",
     "test:member-portal-handout": "node scripts/test-member-portal-handout.mjs",
+    "test:whatsapp-share": "node scripts/test-whatsapp-share.mjs",
     "test:member-portal-view": "node scripts/test-member-portal-view.mjs",
     "test:closing-stock-one-rule": "node scripts/test-closing-stock-one-rule.mjs",
     "test:member-portal-verticals": "node scripts/test-member-portal-verticals.mjs",
