@@ -36,7 +36,7 @@ import {
   AGENCY_RECEIPT_REF_TYPE, COMMISSION_RECEIPT_REF_TYPE, COMMISSION_ACCRUAL_REF_TYPE, type AgencyBalances,
 } from '@/lib/procurement/agentFlow';
 import type { Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
-import type { Transporter } from '@/lib/marketing/transport';
+import { HIRED_TRIP_REF_TYPE, HIRED_TRIP_PAYMENT_REF_TYPE, tripFreight, tripBalance, type Transporter, type HiredTrip } from '@/lib/marketing/transport';
 import type { BardanaMovement } from '@/lib/marketing/bardana';
 import { DISPATCH_SHORTAGE_REF_TYPE, AGENCY_BILL_REF_TYPE, dispatchTotals, shortageOf, billBase, billTotals, nextDocNo, matchReceiptsToBills, type ProcurementDispatch, type AgencyBill, type AgencyBillLine } from '@/lib/marketing/agencyBilling';
 import { findVoucherOwner } from '@/lib/voucherOwnership';
@@ -157,8 +157,14 @@ interface MarketingDataContextValue {
   schemeReceipts: Voucher[];
   // Transport — transporter master (T1)
   transporters: Transporter[];
-  addTransporter: (data: { name: string; nameHi?: string; vehicleNo?: string; phone?: string; ratePerQtl?: number }) => Transporter;
-  updateTransporter: (id: string, data: Partial<Pick<Transporter, 'name' | 'nameHi' | 'vehicleNo' | 'phone' | 'ratePerQtl'>>) => void;
+  addTransporter: (data: { name: string; nameHi?: string; vehicleNo?: string; phone?: string; ratePerQtl?: number; ledgerAccountId?: string }) => Transporter;
+  updateTransporter: (id: string, data: Partial<Pick<Transporter, 'name' | 'nameHi' | 'vehicleNo' | 'phone' | 'ratePerQtl' | 'ledgerAccountId'>>) => void;
+  // E2 — hired-truck trips (freight posted; payments derived)
+  hiredTrips: HiredTrip[];
+  addHiredTrip: (data: { date: string; transporterId: string; dispatchId?: string; vehicleNo?: string; fromPlace?: string; toPlace?: string; qty?: number; rate?: number; lump?: number; expenseAccountId: string; note?: string }) => void;
+  payHiredTrip: (tripId: string, data: { amount: number; date: string; mode: 'cash' | 'bank'; bankAccountId?: string; reference?: string }) => void;
+  deleteHiredTrip: (id: string) => Promise<void>;
+  tripPayments: Voucher[];
   deleteTransporter: (id: string) => void;
 
   // Procurement commission accrual (M3d) — Dr 3314 Commission Receivable / Cr 4206 Procurement Commission.
@@ -223,6 +229,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   const [agencyBills, setAgencyBillsState] = useState<AgencyBill[]>(() => storage.getProcurementAgencyBills());
   const [dealerLicences, setDealerLicencesState] = useState<DealerLicence[]>(() => storage.getDealerLicences());
   const [schemeClaims, setSchemeClaimsState] = useState<SchemeClaim[]>(() => storage.getSchemeClaims());
+  const [hiredTrips, setHiredTripsState] = useState<HiredTrip[]>(() => storage.getHiredTrips());
 
   // J5: these masters used to load in 10 separate effects — 10 React commits after login, each
   // re-rendering every consumer. applyLoadsTogether applies them in one commit; each table keeps its own
@@ -246,6 +253,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       setAgencyBillsState([]);
       setDealerLicencesState([]);
       setSchemeClaimsState([]);
+      setHiredTripsState([]);
       return;
     }
     applyLoadsTogether([
@@ -265,6 +273,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       [fetchAllPaged<AgencyBill>('procurement_agency_bills', sid), setAgencyBillsState, storage.getProcurementAgencyBills],
       [fetchAllPaged<DealerLicence>('marketing_dealer_licences', sid), setDealerLicencesState, storage.getDealerLicences],
       [fetchAllPaged<SchemeClaim>('marketing_scheme_claims', sid), setSchemeClaimsState, storage.getSchemeClaims],
+      [fetchAllPaged<HiredTrip>('marketing_hired_trips', sid), setHiredTripsState, storage.getHiredTrips],
     ], 'marketing masters');
   }, [user?.societyId]);
 
@@ -789,13 +798,25 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   }, [bardanaMovements, societyId]);
 
   // ── Transporter master CRUD (T1) ─────────────────────────────────────────────────
-  const addTransporter = useCallback((data: { name: string; nameHi?: string; vehicleNo?: string; phone?: string; ratePerQtl?: number }): Transporter => {
+  // E2 (migration 141): ledgerAccountId is a step-2 write (RULE 1) — the master saves before the migration.
+  const persistTransporterLedger = (t: Transporter) => {
+    if (t.ledgerAccountId === undefined) return;
+    supabase.from('marketing_transporters').update({ ledgerAccountId: t.ledgerAccountId || null }).eq('id', t.id).then(({ error }) => {
+      if (!error) return;
+      reportError('write-partial', error.message, { at: 'marketing_transporters.ledgerAccountId (migration 141)' });
+      toastRef.current({ title: 'ट्रांसपोर्टर सेव हुआ, खाता नहीं', description: `ट्रांसपोर्टर का खाता क्लाउड में सेव नहीं हुआ (migration 141 चलाएँ)। ${error.message}`, variant: 'default', duration: 12000 });
+    });
+  };
+  const transporterBase = (t: Transporter) => { const { ledgerAccountId: _l, ...b } = t; return b; };
+
+  const addTransporter = useCallback((data: { name: string; nameHi?: string; vehicleNo?: string; phone?: string; ratePerQtl?: number; ledgerAccountId?: string }): Transporter => {
     const now = new Date().toISOString();
     const rec: Transporter = { ...data, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
     if (guardFYLocked()) return { ...rec, id: '', createdAt: '', updatedAt: '' };
     setTransportersState(prev => { const u = [...prev, rec]; storage.setMarketingTransporters(u); return u; });
-    supabase.from('marketing_transporters').upsert(withSoc(rec)).then(({ error }) => {
-      if (error) {
+    supabase.from('marketing_transporters').upsert(withSoc(transporterBase(rec))).then(({ error }) => {
+      if (!error) { persistTransporterLedger(rec); return; }
+      {
         console.error('Transporter save error:', error.message); reportError('marketing-save', error.message);
         setTransportersState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setMarketingTransporters(r); return r; });
         toastRef.current({ title: 'ट्रांसपोर्टर सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का marketing_transporters block + RLS चलाएँ।)`, variant: 'destructive', duration: 12000 });
@@ -804,15 +825,16 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     return rec;
   }, [societyId]);
 
-  const updateTransporter = useCallback((id: string, data: Partial<Pick<Transporter, 'name' | 'nameHi' | 'vehicleNo' | 'phone' | 'ratePerQtl'>>) => {
+  const updateTransporter = useCallback((id: string, data: Partial<Pick<Transporter, 'name' | 'nameHi' | 'vehicleNo' | 'phone' | 'ratePerQtl' | 'ledgerAccountId'>>) => {
     if (guardFYLocked()) return;
     setTransportersState(prev => {
       const before = prev.find(t => t.id === id);
       const u = prev.map(t => t.id === id ? { ...t, ...data, updatedAt: new Date().toISOString() } : t);
       storage.setMarketingTransporters(u);
       const next = u.find(t => t.id === id);
-      if (next && before) supabase.from('marketing_transporters').upsert(withSoc(next)).then(({ error }) => {
-        if (error) {
+      if (next && before) supabase.from('marketing_transporters').upsert(withSoc(transporterBase(next))).then(({ error }) => {
+        if (!error) { persistTransporterLedger(next); return; }
+        {
           setTransportersState(p => { const r = p.map(t => t.id === id ? before : t); storage.setMarketingTransporters(r); return r; });
           toastRef.current({ title: 'ट्रांसपोर्टर अपडेट नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         }
@@ -825,6 +847,10 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return;
     const before = transporters.find(t => t.id === id);
     if (!before) return;
+    if (hiredTrips.some(t => !t.isDeleted && t.transporterId === id)) {
+      toastRef.current({ title: 'हटा नहीं सकते', description: 'इस ट्रांसपोर्टर की trips दर्ज हैं।', variant: 'destructive', duration: 9000 });
+      return;
+    }
     setTransportersState(prev => { const r = prev.filter(t => t.id !== id); storage.setMarketingTransporters(r); return r; });
     supabase.from('marketing_transporters').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
       if (error) {
@@ -832,7 +858,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
         toastRef.current({ title: 'ट्रांसपोर्टर हटा नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगा।`, variant: 'destructive', duration: 12000 });
       }
     });
-  }, [transporters, societyId]);
+  }, [transporters, hiredTrips, societyId]);
 
   // ── Agency receipts (M3c) + procurement commission (M3d) ──────────────────────────
   // Derived from vouchers (the voucher IS the record — no stored balance, mirrors farmer payments).
@@ -1246,6 +1272,79 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     }
   }, [schemeClaims, schemeReceipts, cancelVoucher, user, societyId]);
 
+  // ── E2: hired-truck trips — freight POSTED (Dr expense / Cr transporter), payments derived ───
+  const tripsRef = useRef(hiredTrips); tripsRef.current = hiredTrips;
+  useEffect(() => registerVoucherOwner('marketing-trips', id => findVoucherOwner([{ label: 'किराये की trip (भाड़ा)', docs: tripsRef.current }], id)), [registerVoucherOwner]);
+  const tripPayments = useMemo(() => vouchers.filter(v => !v.isDeleted && v.approvalStatus !== 'rejected' && v.refType === HIRED_TRIP_PAYMENT_REF_TYPE), [vouchers]);
+
+  const addHiredTrip = useCallback((data: { date: string; transporterId: string; dispatchId?: string; vehicleNo?: string; fromPlace?: string; toPlace?: string; qty?: number; rate?: number; lump?: number; expenseAccountId: string; note?: string }) => {
+    if (guardFYLocked()) return;
+    const refuse = (t: string) => toastRef.current({ title: 'trip दर्ज नहीं हुई', description: t, variant: 'destructive', duration: 10000 });
+    const tr = transporters.find(t => t.id === data.transporterId);
+    if (!tr) return refuse('ट्रांसपोर्टर चुनें।');
+    const payable = tr.ledgerAccountId && accounts.find(a => a.id === tr.ledgerAccountId && !a.isGroup && a.type === 'liability');
+    if (!payable) return refuse('पहले इस ट्रांसपोर्टर का खाता (देनदार ledger) चुनें या बनाएँ — ट्रांसपोर्टर संपादित करें।');
+    const exp = accounts.find(a => a.id === data.expenseAccountId && !a.isGroup && a.type === 'expense');
+    if (!exp) return refuse('भाड़े का खर्च खाता चुनें।');
+    const freight = tripFreight(data.qty, data.rate, data.lump);
+    if (!(freight > 0)) return refuse('मात्रा × दर, या कुल भाड़ा भरें।');
+    const now = new Date().toISOString();
+    const rec: HiredTrip = { id: crypto.randomUUID(), tripNo: nextDocNo('HTR', hiredTrips.map(t => t.tripNo)), date: data.date, transporterId: tr.id, dispatchId: data.dispatchId || undefined, vehicleNo: (data.vehicleNo || tr.vehicleNo || '').trim().toUpperCase() || undefined, fromPlace: data.fromPlace?.trim() || undefined, toPlace: data.toPlace?.trim() || undefined, qty: data.qty || undefined, rate: data.rate || undefined, freight, expenseAccountId: exp.id, payableAccountId: payable.id, note: data.note?.trim() || undefined, isDeleted: false, createdAt: now, updatedAt: now };
+    addVoucher({
+      type: 'journal', date: data.date,
+      debitAccountId: exp.id, creditAccountId: payable.id, amount: freight,
+      lines: [{ id: crypto.randomUUID(), accountId: exp.id, type: 'Dr', amount: freight }, { id: crypto.randomUUID(), accountId: payable.id, type: 'Cr', amount: freight }],
+      narration: `भाड़ा ${rec.tripNo} — ${tr.name}${rec.vehicleNo ? ` (${rec.vehicleNo})` : ''}${rec.fromPlace || rec.toPlace ? ` · ${rec.fromPlace || ''} → ${rec.toPlace || ''}` : ''}`,
+      refType: HIRED_TRIP_REF_TYPE, refId: rec.id,
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0], {
+      onSaved: (sv) => {
+        const row = { ...rec, voucherId: sv.id };
+        setHiredTripsState(prev => { const u = [...prev, row]; storage.setHiredTrips(u); return u; });
+        supabase.from('marketing_hired_trips').upsert(withSoc(row)).then(({ error }) => {
+          if (!error) { toastRef.current({ title: 'trip दर्ज', description: `${row.tripNo} · भाड़ा ₹${freight.toLocaleString('en-IN')}` }); return; }
+          reportError('marketing-save', error.message);
+          setHiredTripsState(prev => { const r = prev.filter(t => t.id !== row.id); storage.setHiredTrips(r); return r; });
+          cancelVoucher(sv.id, 'Hired trip row not saved (auto-rollback)', user?.name || 'System', { viaParent: true });
+          toastRef.current({ title: 'trip सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. भाड़े का वाउचर भी रद्द किया गया। (migration 141 चलाई है?)`, variant: 'destructive', duration: 12000 });
+        });
+      },
+      onFailed: () => refuse('भाड़े का वाउचर सेव नहीं हुआ — दोबारा करें।'),
+    });
+  }, [transporters, accounts, hiredTrips, addVoucher, cancelVoucher, user, societyId]);
+
+  const payHiredTrip = useCallback((tripId: string, data: { amount: number; date: string; mode: 'cash' | 'bank'; bankAccountId?: string; reference?: string }) => {
+    if (guardFYLocked()) return;
+    const t = hiredTrips.find(x => x.id === tripId && !x.isDeleted);
+    if (!t) return;
+    const amt = toRupees(toMinor(Number(data.amount) || 0));
+    const { outstanding } = tripBalance(t, tripPayments);
+    if (!(amt > 0) || amt > outstanding + 0.005) { toastRef.current({ title: 'राशि ठीक नहीं', description: `trip का बकाया भाड़ा ₹${outstanding.toLocaleString('en-IN')} है — उससे अधिक या शून्य भुगतान नहीं।`, variant: 'destructive', duration: 10000 }); return; }
+    const cr = data.mode === 'bank' ? (data.bankAccountId || storage.defaultBankAccountId(accounts)) : ACCOUNT_IDS_CASH;
+    addVoucher({
+      type: 'payment', date: data.date,
+      debitAccountId: t.payableAccountId, creditAccountId: cr, amount: amt,
+      lines: [{ id: crypto.randomUUID(), accountId: t.payableAccountId, type: 'Dr', amount: amt }, { id: crypto.randomUUID(), accountId: cr, type: 'Cr', amount: amt }],
+      narration: `भाड़ा भुगतान ${t.tripNo}${data.reference ? ` · Ref ${data.reference}` : ''}`,
+      refType: HIRED_TRIP_PAYMENT_REF_TYPE, refId: t.id,
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+  }, [hiredTrips, tripPayments, accounts, addVoucher, user]);
+
+  const deleteHiredTrip = useCallback(async (id: string) => {
+    if (guardFYLocked()) return;
+    const t = hiredTrips.find(x => x.id === id && !x.isDeleted);
+    if (!t) return;
+    if (tripBalance(t, tripPayments).paid > 0.005) { toastRef.current({ title: 'पहले भुगतान रद्द करें', description: 'इस trip का भाड़ा चुकाया जा चुका है — पहले वह भुगतान वाउचर रद्द करें।', variant: 'destructive', duration: 10000 }); return; }
+    const gone = { ...t, isDeleted: true, updatedAt: new Date().toISOString() };
+    const { error } = await supabase.from('marketing_hired_trips').upsert(withSoc(gone));
+    if (error) { toastRef.current({ title: 'trip हटी नहीं', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. कुछ नहीं बदला।`, variant: 'destructive', duration: 12000 }); return; }
+    setHiredTripsState(prev => { const u = prev.map(x => x.id === id ? gone : x); storage.setHiredTrips(u); return u; });
+    if (t.voucherId && !cancelVoucher(t.voucherId, `Hired trip ${t.tripNo} deleted`, user?.name || 'System', { viaParent: true })) {
+      toastRef.current({ title: '⚠ trip हटी, वाउचर नहीं', description: 'भाड़े का वाउचर रद्द नहीं हो सका — ऊपर की चेतावनी देखें।', variant: 'destructive', duration: 15000 });
+    }
+  }, [hiredTrips, tripPayments, cancelVoucher, user, societyId]);
+
   // ── Procurement commission accrual (M3d) ──────────────────────────────────────────
   const commissionAccruals = vouchers.filter(v => !v.isDeleted && v.refType === COMMISSION_ACCRUAL_REF_TYPE);
 
@@ -1361,6 +1460,11 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       recordSchemeReceipt,
       deleteSchemeClaim,
       schemeReceipts,
+      hiredTrips,
+      addHiredTrip,
+      payHiredTrip,
+      deleteHiredTrip,
+      tripPayments,
       transporters,
       addTransporter,
       updateTransporter,

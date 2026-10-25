@@ -308,7 +308,7 @@ const kachiAaratEntry: EntityDescriptor = {
   domain: 'compliance',
   label: 'Kachi Aarat Register',
   labelHi: 'कच्ची आढ़त रजिस्टर',
-  capability: 'haryana_compliance',
+  capability: 'procurement_msp',   // E2: opened beyond Haryana (as moduleCatalog gates its module)
   minRole: 'accountant',
   scope: 'society',
   nature: 'transaction',

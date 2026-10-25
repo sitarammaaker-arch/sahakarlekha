@@ -1731,6 +1731,48 @@ begin
   end loop;
 end $$;
 
+-- Marketing E2 (migration 141): hired-truck trips (freight voucher owned by the row) + the transporter's
+-- payable ledger. RLS: own society, role-split writes.
+alter table public.marketing_transporters add column if not exists "ledgerAccountId" text;
+
+create table if not exists marketing_hired_trips (
+  id                 text primary key,
+  society_id         text not null,
+  jurisdiction       text,
+  "tripNo"           text not null,
+  date               text not null,
+  "transporterId"    text not null,
+  "dispatchId"       text,
+  "vehicleNo"        text,
+  "fromPlace"        text,
+  "toPlace"          text,
+  qty                numeric,
+  rate               numeric,
+  freight            numeric not null default 0,
+  "expenseAccountId" text not null,
+  "payableAccountId" text not null,
+  "voucherId"        text,
+  note               text,
+  "isDeleted"        boolean not null default false,
+  "createdAt"        timestamptz not null default now(),
+  "updatedAt"        timestamptz not null default now()
+);
+create index if not exists idx_marketing_hired_trips_society on public.marketing_hired_trips (society_id);
+
+do $$
+declare t text := 'marketing_hired_trips';
+begin
+  execute format('alter table public.%I enable row level security', t);
+  execute format('drop policy if exists %I on public.%I', t || '_select', t);
+  execute format('drop policy if exists %I on public.%I', t || '_insert', t);
+  execute format('drop policy if exists %I on public.%I', t || '_update', t);
+  execute format('drop policy if exists %I on public.%I', t || '_delete', t);
+  execute format('create policy %I on public.%I for select to authenticated using (society_id::text in (select public.current_user_society_ids()))', t || '_select', t);
+  execute format('create policy %I on public.%I for insert to authenticated with check (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_write())', t || '_insert', t);
+  execute format('create policy %I on public.%I for update to authenticated using (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_write()) with check (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_write())', t || '_update', t);
+  execute format('create policy %I on public.%I for delete to authenticated using (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_delete())', t || '_delete', t);
+end $$;
+
 -- Transport operations slice 1 (migration 128): own vehicles, trips, vehicle expenses.
 -- The voucher (refType 'transport.trip' / 'transport.expense', refId = row id) is the money
 -- authority; the row is the vehicle tag. RLS: own society, writes jwt_can_write(), deletes jwt_can_delete().

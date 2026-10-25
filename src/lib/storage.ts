@@ -3,7 +3,7 @@ import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRec
 import type { BardanaMovement } from '@/lib/marketing/bardana';
 import type { ProcurementDispatch, AgencyBill } from '@/lib/marketing/agencyBilling';
 import type { DealerLicence, SchemeClaim } from '@/lib/marketing/dealerCompliance';
-import type { Transporter } from '@/lib/marketing/transport';
+import type { Transporter, HiredTrip } from '@/lib/marketing/transport';
 import { composeDocumentNumber, parseDocumentNumber } from './documentNumber';
 
 // ── Voucher Template ──────────────────────────────────────────────────────────
@@ -93,6 +93,7 @@ const KEYS = {
   procurementAgencyBills: 'sahayata_procurement_agency_bills',
   dealerLicences: 'sahayata_dealer_licences',
   schemeClaims: 'sahayata_scheme_claims',
+  hiredTrips: 'sahayata_hired_trips',
   transportVehicles: 'sahayata_transport_vehicles',
   transportTrips: 'sahayata_transport_trips',
   transportVehicleExpenses: 'sahayata_transport_vehicle_expenses',
@@ -990,6 +991,8 @@ export const getDealerLicences = (): DealerLicence[] => get(KEYS.dealerLicences,
 export const setDealerLicences = (l: DealerLicence[]): void => set(KEYS.dealerLicences, l);
 export const getSchemeClaims = (): SchemeClaim[] => get(KEYS.schemeClaims, []);
 export const setSchemeClaims = (c: SchemeClaim[]): void => set(KEYS.schemeClaims, c);
+export const getHiredTrips = (): HiredTrip[] => get(KEYS.hiredTrips, []);
+export const setHiredTrips = (t: HiredTrip[]): void => set(KEYS.hiredTrips, t);
 export const getProcurementLots = (): ProcurementLot[] => get(KEYS.procurementLots, []);
 export const setProcurementLots = (l: ProcurementLot[]): void => set(KEYS.procurementLots, l);
 export const getProcurementEvents = (): ProcurementEvent[] => get(KEYS.procurementEvents, []);

@@ -277,6 +277,7 @@ const transporter: EntityDescriptor = {
     c('vehicleNo', 'Vehicle No.', 'वाहन संख्या'),
     c('phone', 'Phone', 'फ़ोन', { piiClass: 'contact' }),
     num('ratePerQtl', 'Rate per Quintal', 'दर प्रति क्विंटल'),
+    internal('ledgerAccountId', 'Payable Ledger', 'देय खाता'),
     ...stamps(),
   ],
 };
@@ -472,10 +473,47 @@ const schemeClaim: EntityDescriptor = {
   ],
 };
 
+// ── E2 (migration 141): hired-truck trips (own their freight voucher; payments derive by refType) ──
+const hiredTrip: EntityDescriptor = {
+  key: 'marketing_hired_trip',
+  table: 'marketing_hired_trips',
+  domain: 'marketing',
+  label: 'Hired Truck Trips',
+  labelHi: 'किराये के ट्रक की trip',
+  capability: 'transport',
+  minRole: 'viewer',
+  scope: 'society',
+  nature: 'transaction',
+  dependsOn: ['society'],
+  naturalKey: ['id'],
+  formats: ['csv', 'xlsx', 'json'],
+  backupPolicy: 'full',
+  columns: [
+    c('id', 'ID', 'आईडी', { defaultVisible: false }),
+    c('tripNo', 'Trip No.', 'trip नं.'),
+    c('date', 'Date', 'तारीख', { type: 'date' }),
+    internal('transporterId', 'Transporter', 'परिवहनकर्ता'),
+    internal('dispatchId', 'Dispatch', 'डिस्पैच'),
+    c('vehicleNo', 'Vehicle No.', 'वाहन संख्या'),
+    c('fromPlace', 'From', 'से'),
+    c('toPlace', 'To', 'तक'),
+    num('qty', 'Qty (qtl)', 'मात्रा (क्विं)'),
+    num('rate', 'Rate', 'दर'),
+    num('freight', 'Freight', 'भाड़ा'),
+    internal('expenseAccountId', 'Expense Ledger', 'खर्च खाता'),
+    internal('payableAccountId', 'Payable Ledger', 'देय खाता'),
+    internal('voucherId', 'Voucher', 'वाउचर'),
+    c('note', 'Note', 'टिप्पणी'),
+    internal('isDeleted', 'Deleted', 'हटाया गया', { type: 'boolean' }),
+    ...stamps(),
+  ],
+};
+
 export const MARKETING_ENTITIES: EntityDescriptor[] = [
   crop, variety, season, agency, centre, mspRate,
   deductionRule, qualitySpec, bardanaType, transporter,
   arhtiya, bardanaMovement,
   dispatch, agencyBill,
   dealerLicence, schemeClaim,
+  hiredTrip,
 ];

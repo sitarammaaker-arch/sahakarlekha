@@ -37,6 +37,8 @@ const { buildProcurementRegister, buildCommoditySummary, settlementTotals, count
 const { bardanaBalances } = await import(abs('../src/lib/marketing/bardana.ts'));
 const AB = await import(abs('../src/lib/marketing/agencyBilling.ts'));
 const DC = await import(abs('../src/lib/marketing/dealerCompliance.ts'));
+const TR = await import(abs('../src/lib/marketing/transport.ts'));
+const KA = await import(abs('../src/lib/marketing/kachiAarat.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -210,6 +212,42 @@ const LOTS = [
   ok(reg.rows.every(r => r.status === `stage:${r.lotId}`), 'status column shows the lot stage, not the stored "created"');
   const late = buildProcurementRegister([{ ...LOTS[0], createdAt: '2026-03-31T20:00:00Z' }]);
   ok(late.rows[0].date === '2026-04-01', 'a lot entered 01:30 IST on 1 April is dated 1 April (was the UTC 31 March)');
+}
+
+// 14. E2 — hired-truck freight + Kachi Aarat dami reconciliation
+{
+  ok(TR.tripFreight(100, 12.5) === 1250, 'freight = qty × rate');
+  ok(TR.tripFreight(33.33, 3) === 99.99, 'qty × rate is paise-exact');
+  ok(TR.tripFreight(0, 12, 800) === 800 && TR.tripFreight(undefined, undefined, 650.5) === 650.5, 'no qty/rate → lump freight');
+  ok(TR.tripFreight(10, 0, 0) === 0, 'nothing given → 0');
+  const trip = { id: 'T1', freight: 1000 };
+  const b = TR.tripBalance(trip, [{ refId: 'T1', amount: 300.1 }, { refId: 'T1', amount: 199.9 }, { refId: 'T2', amount: 999 }]);
+  ok(b.paid === 500 && b.outstanding === 500, 'paid sums only this trip; outstanding = freight − paid');
+
+  ok(KA.fyEndOf('2025-04-01') === '2026-03-31', 'FY end of an April FY');
+  ok(KA.fyEndOf('2024-01-01') === '2024-12-31', 'FY end of a calendar FY');
+  const accts = [{ id: '4200', name: 'Commission', type: 'income', isGroup: true }, { id: '4201', name: 'Dami Income', type: 'income' }];
+  ok(KA.damiLedgerId(accts) === '4201', 'dami ledger = 4201');
+  ok(KA.damiLedgerId([{ id: 'X9', name: 'दामी आय', type: 'income' }]) === 'X9', 'no 4201 → found by name');
+  ok(KA.damiLedgerId([{ id: '4201', name: 'Dami', type: 'income', isGroup: true }]) === null, 'a GROUP 4201 is not the ledger');
+  const entries = [
+    { fyStartDate: '2025-04-01', damiEarned: 1200.5 }, { fyStartDate: '2025-04-01', damiEarned: 300 },
+    { fyStartDate: '2025-04-01', damiEarned: 999, isDeleted: true }, { fyStartDate: '2024-04-01', damiEarned: 50 },
+  ];
+  const V = (id, date, lines, extra = {}) => ({ id, date, lines, ...extra });
+  const vouchers = [
+    V('v1', '2025-05-01', [{ accountId: '3301', type: 'Dr', amount: 1000 }, { accountId: '4201', type: 'Cr', amount: 1000 }]),
+    V('v2', '2026-03-31', [{ accountId: '3301', type: 'Dr', amount: 600 }, { accountId: '4201', type: 'Cr', amount: 600 }]),
+    V('v3', '2025-06-01', [{ accountId: '4201', type: 'Dr', amount: 100 }, { accountId: '3301', type: 'Cr', amount: 100 }]),
+    V('v4', '2025-06-01', [{ accountId: '3301', type: 'Dr', amount: 5000 }, { accountId: '4201', type: 'Cr', amount: 5000 }], { isDeleted: true }),
+    V('v5', '2026-04-01', [{ accountId: '3301', type: 'Dr', amount: 7 }, { accountId: '4201', type: 'Cr', amount: 7 }]),
+    V('v6', '2025-07-01', [{ accountId: '3301', type: 'Dr', amount: 9 }, { accountId: '4201', type: 'Cr', amount: 9 }], { approvalStatus: 'rejected' }),
+  ];
+  const r = KA.reconcileDami(entries, vouchers, '4201', '2025-04-01');
+  ok(r.register === 1500.5, 'register dami: live entries of the FY only');
+  ok(r.ledger === 1500, 'ledger: net Cr in FY dates, live + non-rejected vouchers only');
+  ok(r.difference === 0.5, 'difference = register − ledger');
+  ok(KA.reconcileDami(entries, vouchers, null, '2025-04-01').ledger === 0, 'no ledger → 0 booked');
 }
 
 console.log(`[marketing-test] ${pass} passed, ${fail} failed`);

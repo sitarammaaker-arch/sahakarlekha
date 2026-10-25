@@ -2342,6 +2342,7 @@ var transporter = {
     c10("vehicleNo", "Vehicle No.", "\u0935\u093E\u0939\u0928 \u0938\u0902\u0916\u094D\u092F\u093E"),
     c10("phone", "Phone", "\u092B\u093C\u094B\u0928", { piiClass: "contact" }),
     num7("ratePerQtl", "Rate per Quintal", "\u0926\u0930 \u092A\u094D\u0930\u0924\u093F \u0915\u094D\u0935\u093F\u0902\u091F\u0932"),
+    internal10("ledgerAccountId", "Payable Ledger", "\u0926\u0947\u092F \u0916\u093E\u0924\u093E"),
     ...stamps()
   ]
 };
@@ -2527,6 +2528,40 @@ var schemeClaim = {
     ...stamps()
   ]
 };
+var hiredTrip = {
+  key: "marketing_hired_trip",
+  table: "marketing_hired_trips",
+  domain: "marketing",
+  label: "Hired Truck Trips",
+  labelHi: "\u0915\u093F\u0930\u093E\u092F\u0947 \u0915\u0947 \u091F\u094D\u0930\u0915 \u0915\u0940 trip",
+  capability: "transport",
+  minRole: "viewer",
+  scope: "society",
+  nature: "transaction",
+  dependsOn: ["society"],
+  naturalKey: ["id"],
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  columns: [
+    c10("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c10("tripNo", "Trip No.", "trip \u0928\u0902."),
+    c10("date", "Date", "\u0924\u093E\u0930\u0940\u0916", { type: "date" }),
+    internal10("transporterId", "Transporter", "\u092A\u0930\u093F\u0935\u0939\u0928\u0915\u0930\u094D\u0924\u093E"),
+    internal10("dispatchId", "Dispatch", "\u0921\u093F\u0938\u094D\u092A\u0948\u091A"),
+    c10("vehicleNo", "Vehicle No.", "\u0935\u093E\u0939\u0928 \u0938\u0902\u0916\u094D\u092F\u093E"),
+    c10("fromPlace", "From", "\u0938\u0947"),
+    c10("toPlace", "To", "\u0924\u0915"),
+    num7("qty", "Qty (qtl)", "\u092E\u093E\u0924\u094D\u0930\u093E (\u0915\u094D\u0935\u093F\u0902)"),
+    num7("rate", "Rate", "\u0926\u0930"),
+    num7("freight", "Freight", "\u092D\u093E\u0921\u093C\u093E"),
+    internal10("expenseAccountId", "Expense Ledger", "\u0916\u0930\u094D\u091A \u0916\u093E\u0924\u093E"),
+    internal10("payableAccountId", "Payable Ledger", "\u0926\u0947\u092F \u0916\u093E\u0924\u093E"),
+    internal10("voucherId", "Voucher", "\u0935\u093E\u0909\u091A\u0930"),
+    c10("note", "Note", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940"),
+    internal10("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean" }),
+    ...stamps()
+  ]
+};
 var MARKETING_ENTITIES = [
   crop,
   variety,
@@ -2543,7 +2578,8 @@ var MARKETING_ENTITIES = [
   dispatch2,
   agencyBill,
   dealerLicence,
-  schemeClaim
+  schemeClaim,
+  hiredTrip
 ];
 
 // src/lib/export/entities/consumer.ts
@@ -3009,7 +3045,8 @@ var kachiAaratEntry = {
   domain: "compliance",
   label: "Kachi Aarat Register",
   labelHi: "\u0915\u091A\u094D\u091A\u0940 \u0906\u0922\u093C\u0924 \u0930\u091C\u093F\u0938\u094D\u091F\u0930",
-  capability: "haryana_compliance",
+  capability: "procurement_msp",
+  // E2: opened beyond Haryana (as moduleCatalog gates its module)
   minRole: "accountant",
   scope: "society",
   nature: "transaction",
