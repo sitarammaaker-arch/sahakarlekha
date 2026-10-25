@@ -436,5 +436,21 @@ const MSP = new Set(['procurement_msp']);
   ok(/<LicenceExpiryBanner hi=\{hi\} \/>/.test(inv), 'Inventory shows the licence expiry banner');
 }
 
+// ── 19. E2 — source guards ───────────────────────────────────────────────────────────────────────
+{
+  const { readFileSync } = await import('node:fs');
+  const mk = readFileSync(pathResolve(SRC, 'contexts', 'MarketingDataContext.tsx'), 'utf8');
+  ok(/registerVoucherOwner\('marketing-trips'/.test(mk), 'hired trips own their freight voucher');
+  ok(/Hired trip row not saved \(auto-rollback\)/.test(mk), 'trip row failure cancels the freight voucher (RULE 1)');
+  ok(/const \{ outstanding \} = tripBalance\(t, tripPayments\)/.test(mk) && /amt > outstanding \+ 0\.005/.test(mk), 'trip payment capped at the outstanding freight');
+  ok(/HIRED_TRIP_PAYMENT_REF_TYPE/.test(mk), 'payments are derived by refType');
+  const cat = readFileSync(pathResolve(SRC, 'lib', 'navigation', 'moduleCatalog.ts'), 'utf8');
+  ok(/id: 'kachiAarat'[^\n]*requiredCapabilities: \['procurement_msp'\]/.test(cat), 'Kachi Aarat open to every procurement society (not Haryana-only)');
+  ok(/id: 'recoverables'[^\n]*haryana_compliance/.test(cat), 'recoverables stay Haryana');
+  const ka = readFileSync(pathResolve(SRC, 'pages', 'KachiAaratRegister.tsx'), 'utf8');
+  ok(/isHaryanaPack\s*\?\s*\(hi \? 'HAFED Proforma 8/.test(ka), 'HAFED Proforma 8 named only for the Haryana pack');
+  ok(/reconcileDami\(/.test(ka) && !/addVoucher/.test(ka), 'dami reconciliation shown, nothing posted from the page');
+}
+
 console.log(`[procurement-agent-flow] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

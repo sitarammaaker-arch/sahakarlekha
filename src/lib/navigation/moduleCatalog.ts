@@ -163,7 +163,9 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'nabardReport',       titleKey: 'nabardReport',       icon: Landmark,        route: '/nabard-report',        domain: 'reports', requiredCapabilities: ['lending'], order: 18 },
   { id: 'federationReport',   titleKey: 'federationReport',   icon: ScrollText,      route: '/federation-report',    domain: 'reports', requiredCapabilities: ['procurement_msp'], order: 19 },
   { id: 'recoverables',       titleKey: 'recoverables',       icon: ScrollText,      route: '/recoverables',         domain: 'reports', requiredCapabilities: ['haryana_compliance'], order: 20 },
-  { id: 'kachiAarat',         titleKey: 'kachiAarat',         icon: ScrollText,      route: '/kachi-aarat',          domain: 'reports', requiredCapabilities: ['haryana_compliance'], order: 21 },
+  // E2: kachi aarat (commission agency in the mandi) is not Haryana-only — every procurement society;
+  // the page names HAFED Proforma 8 only for a Haryana marketing society.
+  { id: 'kachiAarat',         titleKey: 'kachiAarat',         icon: ScrollText,      route: '/kachi-aarat',          domain: 'reports', requiredCapabilities: ['procurement_msp'], order: 21 },
 
   // ── registers (was registerNavItems) ──
   { id: 'shareRegister',        titleKey: 'shareRegister',        icon: BookMarked,   route: '/share-register',        domain: 'registers', requiredCapabilities: U, order: 0 },

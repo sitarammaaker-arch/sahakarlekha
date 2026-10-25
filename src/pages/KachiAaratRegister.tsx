@@ -1,5 +1,7 @@
 /**
- * Kachi Aarat Register — HAFED Proforma 8 source data.
+ * Kachi Aarat Register — the society as commission agent (kachi aarat) in the mandi. For a Haryana
+ * marketing society it is also the source data of HAFED Proforma 8 (that label shows only there —
+ * marketing E2 opened the register to every procurement society, any state).
  *
  * Captures each transaction where the society acted as Kachi Aarat
  * (commission agent) for a farmer in the mandi. Dami (commission) is
@@ -24,6 +26,8 @@ import type { KachiAaratEntry, KachiAaratCrop } from '@/types';
 import { KACHI_CROP_LABELS } from '@/lib/annualReview/p8Calculator';
 import EntityExportButton from '@/components/export/EntityExportButton';
 import { fyStartOf, societyFyStart } from '@/lib/fyPeriod';
+import { jurisdictionCapabilities } from '@/lib/navigation/capabilityResolver';
+import { damiLedgerId, reconcileDami } from '@/lib/marketing/kachiAarat';
 
 const EMPTY_FORM = {
   date: new Date().toISOString().split('T')[0],
@@ -47,7 +51,9 @@ const CROP_COLORS: Record<KachiAaratCrop, string> = {
 const fmt = (n: number) => new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
 const KachiAaratRegister: React.FC = () => {
-  const { kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry, society } = useData();
+  const { kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry, society, accounts, vouchers } = useData();
+  // E2: HAFED Proforma 8 is Haryana's annual-review format — named only for a Haryana marketing society.
+  const isHaryanaPack = jurisdictionCapabilities(society.societyType ?? 'other', society.state).includes('haryana_compliance');
   const { language } = useLanguage();
   const { can } = useAuth();
   const { toast } = useToast();
@@ -147,9 +153,9 @@ const KachiAaratRegister: React.FC = () => {
             {hi ? 'कच्ची आढ़त रजिस्टर (Kachi Aarat)' : 'Kachi Aarat Register'}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {hi
-              ? 'HAFED Proforma 8 — मंडी में किसान के लिए कमीशन एजेंट का विवरण'
-              : 'HAFED Proforma 8 — Society acting as commission agent (Kachi Aarat) for farmers'}
+            {isHaryanaPack
+              ? (hi ? 'HAFED Proforma 8 — मंडी में किसान के लिए कमीशन एजेंट का विवरण' : 'HAFED Proforma 8 — Society acting as commission agent (Kachi Aarat) for farmers')
+              : (hi ? 'मंडी में किसानों के लिए समिति का कमीशन एजेंट (कच्ची आढ़त) का काम और दामी' : 'Society acting as commission agent (kachi aarat) for farmers in the mandi, and the dami earned')}
           </p>
         </div>
         {canEdit && (
@@ -233,6 +239,22 @@ const KachiAaratRegister: React.FC = () => {
           <p className="text-lg font-bold text-green-700">{fmt(summary.dami)}</p>
         </CardContent></Card>
       </div>
+
+      {/* E2: register dami vs the dami ledger (4201) for the selected FY — a check, nothing is posted. */}
+      {fyFilter && (() => {
+        const ledgerId = damiLedgerId(accounts);
+        const r = reconcileDami(kachiAaratEntries, vouchers, ledgerId, fyFilter);
+        const ok = Math.abs(r.difference) < 0.005;
+        return (
+          <Card className={ok ? 'border-green-300' : 'border-amber-300'}><CardContent className="p-3 text-sm space-y-1">
+            <div className="font-medium">{hi ? 'बहीखाते से मिलान (दामी आय खाता)' : 'Ledger check (dami income ledger)'} {ledgerId ? `· ${accounts.find(a => a.id === ledgerId)?.name || ledgerId}` : ''}</div>
+            {!ledgerId ? <p className="text-amber-700">{hi ? 'चार्ट में दामी आय (4201) खाता नहीं मिला।' : 'No dami income (4201) ledger in the chart.'}</p> : (
+              <p>{hi ? 'रजिस्टर' : 'Register'} {fmt(r.register)} · {hi ? 'बहीखाता' : 'Ledger'} {fmt(r.ledger)} · <b className={ok ? 'text-green-700' : 'text-amber-700'}>{hi ? 'अंतर' : 'Difference'} {fmt(r.difference)}</b></p>
+            )}
+            {!ok && ledgerId && <p className="text-xs text-muted-foreground">{hi ? 'रजिस्टर की दामी और बहीखाते में दर्ज दामी आय बराबर होनी चाहिए — अंतर हो तो छूटा वाउचर या गलत एंट्री देखें। (यहाँ से कोई वाउचर नहीं बनता।)' : 'Register dami should equal the dami income booked — look for a missing voucher or a wrong entry. (Nothing is posted from here.)'}</p>}
+          </CardContent></Card>
+        );
+      })()}
 
       {/* Filters */}
       <Card>

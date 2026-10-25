@@ -387,6 +387,8 @@ const EXPECTED = [
   'procurement_dispatch', 'procurement_agency_bill',
   // Marketing E1 (migration 140)
   'marketing_dealer_licence', 'marketing_scheme_claim',
+  // Marketing E2 (migration 141)
+  'marketing_hired_trip',
   // T-11 consumer
   'consumer_price_list', 'consumer_patronage_run', 'consumer_purchase_order',
   // T-11 assets / compliance / governance
@@ -742,7 +744,9 @@ ok(realOrder.indexOf('voucher') < realOrder.indexOf('asset'), 'vouchers restore 
 
 // ── 11g. T-12: the three adopted tables ──────────────────────────────────────
 for (const k of ['recoverable', 'kachi_aarat_entry', 'p7_entry']) {
-  ok(byKey(k).capability === 'haryana_compliance', `${k} requires haryana_compliance (as moduleCatalog gates its module)`);
+  // Marketing E2: kachi aarat is opened to every procurement society (any state); the other two stay Haryana.
+  const want = k === 'kachi_aarat_entry' ? 'procurement_msp' : 'haryana_compliance';
+  ok(byKey(k).capability === want, `${k} requires ${want} (as moduleCatalog gates its module)`);
   ok(byKey(k).backupPolicy === 'full', `${k} is backed up`);
   // DataContext hard-deletes all three. Declaring softDeleteField would tell the exporter
   // to filter on a flag nothing ever sets. Pinned so nobody "fixes" it without fixing the
