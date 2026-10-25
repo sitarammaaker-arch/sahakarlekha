@@ -16,7 +16,13 @@ export interface Agency extends BaseEntity {
   code: string;
   kind: string;            // category: FCI | NAFED | NCCF | State Federation | State Civil Supplies | Other
   nameHi?: string;         // Hindi label; optional, additive
-  commissionRate?: number; // % of procurement value the society earns as commission (M3d); optional
+  commissionRate?: number; // % of procurement value (or ₹ per quintal, see commissionBasis) the society earns (M3d)
+  /** D1 (migration 136): the agency's own receivable ledger (e.g. "HSWC Sirsa"); unset = pooled 3308 MSP Receivable. */
+  ledgerAccountId?: string;
+  /** D1: how commissionRate applies — '%' of procurement value (default) or ₹ per quintal (dami). */
+  commissionBasis?: 'percent' | 'perQtl';
+  /** D1: income ledger for this agency's commission (e.g. 4205 Society Commission); unset = 4206. */
+  commissionIncomeAccountId?: string;
 }
 
 export interface ProcurementCentre extends BaseEntity {

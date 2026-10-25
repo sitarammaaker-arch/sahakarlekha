@@ -275,12 +275,15 @@ export const canRecordQuality = (x: { hasQualityTest: boolean; hasJForm: boolean
 // Only the agency receivable belongs here. Offering every asset (cash, stock, fixed assets) let a
 // payment bypass the receivable and broke the per-agency balance. Ledgers opened UNDER the receivable
 // (one per agency) are receivables too.
+// D1: an agency's OWN receivable ledger (e.g. "HSWC Sirsa") counts too — pass those ids as extra.
 export function agencyDirectAccounts<A extends Pick<LedgerAccount, 'id'> & { parentId?: string; isGroup?: boolean }>(
   accounts: ReadonlyArray<A>,
   agencyReceivableId: string | null | undefined,
+  agencyLedgerIds: ReadonlyArray<string | null | undefined> = [],
 ): A[] {
-  if (!agencyReceivableId) return [];
-  return accounts.filter(a => !a.isGroup && (a.id === agencyReceivableId || a.parentId === agencyReceivableId));
+  const own = new Set(agencyLedgerIds.filter((x): x is string => !!x));
+  if (!agencyReceivableId && own.size === 0) return [];
+  return accounts.filter(a => !a.isGroup && ((!!agencyReceivableId && (a.id === agencyReceivableId || a.parentId === agencyReceivableId)) || own.has(a.id)));
 }
 
 // ── 10. Lot cancellation (batch B) ───────────────────────────────────────────────────────────────
@@ -324,3 +327,43 @@ export const LOT_CANCEL_BLOCKER_TEXT: Record<LotCancelBlocker, string> = {
   agency_receipts: 'एजेंसी से इतनी रसीद आ चुकी है कि यह लॉट हटाने पर MSP प्राप्य शून्य से नीचे जाएगा — पहले "एजेंसी रसीद" पेज पर संबंधित रसीद रद्द करें।',
   commission_received: 'इस लॉट का कमीशन एजेंसी से मिल चुका है — पहले "एजेंसी रसीद" पेज पर कमीशन रसीद रद्द करें।',
 };
+
+// ── 11. Posting legs by NET per account (D1) ─────────────────────────────────────────────────────
+// With the 5116 route a lot's posting voucher carries four legs — Dr 5116 / Cr 2105 / Dr agency /
+// Cr 5116 — so its total is TWICE the procurement value and "the first Cr line" is no longer a safe
+// way to find the payable. Netting per account removes the pass-through (5116 nets to nil) and
+// leaves exactly: the receivable (net Dr), the farmer payable (net Cr), and the value.
+export function procurementLegsOf(v: Pick<Voucher, 'lines' | 'debitAccountId' | 'creditAccountId' | 'amount'>): { value: number; receivableAccountId?: string; payableAccountId?: string } {
+  const net = new Map<string, number>();
+  for (const l of getVoucherLines(v as Voucher)) {
+    net.set(l.accountId, addMinor(net.get(l.accountId) ?? 0, l.type === 'Dr' ? toMinor(Number(l.amount) || 0) : -toMinor(Number(l.amount) || 0)));
+  }
+  let value = 0, receivableAccountId: string | undefined, payableAccountId: string | undefined;
+  for (const [acc, m] of net) {
+    if (m > 0) { value = addMinor(value, m); receivableAccountId ??= acc; }
+    else if (m < 0) payableAccountId ??= acc;
+  }
+  return { value: toRupees(value), receivableAccountId, payableAccountId };
+}
+
+// ── 12. Agency commission (D1) ───────────────────────────────────────────────────────────────────
+/** Commission on one lot: rate % of the procurement value, or ₹ rate per quintal (dami). Paise-exact. */
+export function commissionAmount(agency: { commissionRate?: number; commissionBasis?: 'percent' | 'perQtl' }, lot: { quantity?: { value?: number } }, procurementValue: number): number {
+  const rate = Number(agency.commissionRate) || 0;
+  if (rate <= 0) return 0;
+  const raw = agency.commissionBasis === 'perQtl' ? rate * (Number(lot.quantity?.value) || 0) : (rate / 100) * procurementValue;
+  return toRupees(toMinor(raw));
+}
+
+// ── 13. Quality spec — moisture limit (D1) ─────────────────────────────────────────────────────────
+// The Quality Spec master (crop × season × parameter × max) is the society's own config — no state's
+// limit is hard-coded. A moisture reading above the limit cannot be plainly "accepted".
+const MOISTURE_PARAM = /moist|नमी/i;
+export function moistureLimitFor(specs: ReadonlyArray<{ cropId: string; seasonId: string; parameter: string; maxLimit: number }>, cropId: string, seasonId: string): number | null {
+  const s = specs.find(x => x.cropId === cropId && x.seasonId === seasonId && MOISTURE_PARAM.test(x.parameter || ''))
+    ?? specs.find(x => x.cropId === cropId && MOISTURE_PARAM.test(x.parameter || ''));
+  return s && Number.isFinite(Number(s.maxLimit)) ? Number(s.maxLimit) : null;
+}
+/** A moisture above the limit may be "accepted with cut" or "rejected" — never plainly "accepted". */
+export const qualityResultAllowed = (result: string, moisture: number, limit: number | null): boolean =>
+  !(limit != null && moisture > limit && result === 'accepted');

@@ -314,5 +314,56 @@ const MSP = new Set(['procurement_msp']);
   for (const col of ['lotDate', 'cancelledAt', 'cancelledBy', 'cancelReason']) ok(sql.includes(`add column if not exists "${col}"`), `migration 135 adds ${col}`);
 }
 
+// ── 13. D1 — agency ledger, 5116 route, commission basis, quality spec ─────────────────────────────
+{
+  const chart = [{ id: '3308', name: 'MSP Receivable' }, { id: '2105', name: 'MSP Payable to Farmers' }, { id: '5116', name: 'Govt Procurement Purchase' }, { id: 'HSWC', name: 'HSWC Sirsa' }];
+  const amt = { amount: 1641725, currency: 'INR' };
+  const plain = resolvePostingLegs('RecogniseProcurement', amt, 'agency', { 'agency.receivable': 'HSWC', 'farmer.payable': '2105' }, chart);
+  ok(plain.length === 2 && plain[0].resolvedAccountId === 'HSWC' && plain[1].resolvedAccountId === '2105', 'agency ledger replaces 3308 (Dr HSWC / Cr 2105)');
+  const via = resolvePostingLegs('RecogniseProcurement', amt, 'agency', { 'agency.receivable': 'HSWC', 'farmer.payable': '2105', 'procurement.via': '5116' }, chart, { via: true });
+  ok(via.map(l => `${l.side} ${l.resolvedAccountId}`).join(',') === 'Dr 5116,Cr 2105,Dr HSWC,Cr 5116', '5116 route = Bacher\'s books (Dr 5116/Cr 2105 + Dr HSWC/Cr 5116)');
+  ok(resolvePostingLegs('RecogniseProcurement', amt, 'agency', { 'agency.receivable': 'HSWC', 'farmer.payable': '2105' }, chart, { via: true }).length === 0, 'via asked but 5116 unbound → refuse ([])');
+  const lines = (legs) => ({ amount: legs.filter(l => l.side === 'Dr').reduce((t, l) => t + l.amount.amount, 0), debitAccountId: '', creditAccountId: '', lines: legs.map((l, i) => ({ id: 'x' + i, accountId: l.resolvedAccountId, type: l.side, amount: l.amount.amount })) });
+  const pv = F.procurementLegsOf(lines(via));
+  ok(pv.value === 1641725 && pv.receivableAccountId === 'HSWC' && pv.payableAccountId === '2105', 'net legs: value = procurement value (not the doubled total), receivable HSWC, payable 2105');
+  const pp = F.procurementLegsOf(lines(plain));
+  ok(pp.value === 1641725 && pp.receivableAccountId === 'HSWC', 'net legs on a plain posting');
+  // Commission
+  ok(F.commissionAmount({ commissionRate: 55, commissionBasis: 'perQtl' }, { quantity: { value: 677 } }, 1641725) === 37235, 'dami ₹55/qtl × 677 qtl = 37,235');
+  ok(F.commissionAmount({ commissionRate: 2.5 }, { quantity: { value: 677 } }, 1641725) === 41043.13, '2.5% of 16,41,725 = 41,043.13 (paise-rounded)');
+  ok(F.commissionAmount({ commissionRate: 0 }, { quantity: { value: 1 } }, 100) === 0 && F.commissionAmount({}, {}, 100) === 0, 'no rate → no commission');
+  // Quality spec
+  const specs = [{ cropId: 'wheat', seasonId: 'rabi', parameter: 'Moisture', maxLimit: 12 }, { cropId: 'paddy', seasonId: 'x', parameter: 'नमी', maxLimit: 17 }, { cropId: 'wheat', seasonId: 'rabi', parameter: 'Foreign matter', maxLimit: 0.75 }];
+  ok(F.moistureLimitFor(specs, 'wheat', 'rabi') === 12, 'moisture limit by crop + season');
+  ok(F.moistureLimitFor(specs, 'paddy', 'other') === 17, 'falls back to any season of the crop (Hindi "नमी" matched)');
+  ok(F.moistureLimitFor(specs, 'gram', 'rabi') === null, 'no spec → no limit');
+  ok(F.qualityResultAllowed('accepted', 13, 12) === false, 'above the limit: plain "accepted" refused');
+  ok(F.qualityResultAllowed('accepted_with_cut', 13, 12) && F.qualityResultAllowed('rejected', 13, 12), 'above the limit: with-cut / rejected allowed');
+  ok(F.qualityResultAllowed('accepted', 13, null) && F.qualityResultAllowed('accepted', 11, 12), 'no limit, or within it → accepted ok');
+  // Agency-direct payment accounts include agencies' own ledgers
+  const accs = [{ id: '3308' }, { id: 'HSWC' }, { id: '3301' }];
+  ok(F.agencyDirectAccounts(accs, '3308', ['HSWC', undefined]).map(a => a.id).join() === '3308,HSWC', 'own agency ledger offered, cash not');
+}
+
+// ── 14. D1 — source guards ───────────────────────────────────────────────────────────────────────
+{
+  const { readFileSync } = await import('node:fs');
+  const rd = (...p) => readFileSync(pathResolve(SRC, ...p), 'utf8');
+  const dc = rd('contexts', 'DataContext.tsx');
+  const body = (name) => { const i = dc.indexOf(`const ${name} = useCallback(`); return i < 0 ? '' : dc.slice(i, dc.indexOf('\n  }, [', i)); };
+  ok(/procurementQualityTests\.some\(q => q\.lotId === data\.lotId\)/.test(body('generateJForm')), 'J-Form refused without a quality test');
+  ok(/binding\['agency\.receivable'\] = own\.id/.test(body('generatePostingRuleResult')) && /binding\['procurement\.via'\] = viaAcc\.id/.test(body('generatePostingRuleResult')), 'rule result binds the agency ledger and the 5116 route');
+  ok(/onSaved: opts\.onSaved/.test(body('generateEngineVoucher')), 'engine voucher exposes onSaved');
+  ok(/procurementLegsOf\(ev\)\.value/.test(body('createFarmerSettlement')), 'settlement gross = procurement value (net legs)');
+  ok((body('approveFarmerSettlement') + body('recordFarmerPayment')).match(/procurementLegsOf\(ev\)\.payableAccountId/g)?.length === 2, 'payable found by net legs in approve + pay');
+  const page = rd('pages', 'ProcurementLots.tsx');
+  ok(/generateEngineVoucher\(\{ postingRuleResultId: rrId \}, \{ onSaved: autoCommission \}\)/.test(page), 'commission accrued automatically after the posting voucher saves');
+  ok(/qualityResultAllowed\(qualityResult, m, qualityLimit\)/.test(page), 'quality dialog enforces the spec limit');
+  const mk = rd('contexts', 'MarketingDataContext.tsx');
+  ok(/upsert\(withSoc\(agencyBase\(agency\)\)\)/.test(mk) && /persistAgencyExtras\(agency\)/.test(mk), 'agency D1 columns are a step-2 write (RULE 1)');
+  const sql = readFileSync(pathResolve(SRC, '..', 'supabase', 'migrations', '136_procurement_agency_ledger.sql'), 'utf8');
+  for (const col of ['ledgerAccountId', 'commissionBasis', 'commissionIncomeAccountId', 'procurementVia5116']) ok(sql.includes(`"${col}"`), `migration 136 adds ${col}`);
+}
+
 console.log(`[procurement-agent-flow] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

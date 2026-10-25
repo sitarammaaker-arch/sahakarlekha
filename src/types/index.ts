@@ -1140,6 +1140,8 @@ export interface SocietySettings {
   approvalThresholdAmount?: number;  // ECR-11: manual vouchers with amount ≥ this need approval (matrix). Undefined/0 = no threshold rule.
   approvalVoucherTypes?: VoucherType[];  // ECR-11: voucher types that ALWAYS need approval regardless of amount (e.g. journal/contra). Undefined/[] = no type rule.
   interestDayCount?: '365' | 'actual' | '360';  // NABARD RFP §16.1.2: year basis for interest (loans, KCC, SB). Undefined = '365' (unchanged behaviour).
+  /** Migration 136 (Marketing D1): post each MSP lot through 5116 Govt Procurement Purchase (Dr 5116 / Cr 2105 + Dr agency / Cr 5116). */
+  procurementVia5116?: boolean;
   storageLossNormPct?: number;  // ECR-20: permitted godown storage-loss (driage/shrinkage) % — items above this are flagged. Undefined/0 = no norm.
   // Board & Signing Authority
   boardType?: BoardType;       // 'bod' (elected) or 'boa' (appointed by Registrar)
