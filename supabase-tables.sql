@@ -1544,6 +1544,62 @@ drop policy if exists "society_rw" on public.marketing_transporters;
 create policy "society_rw" on public.marketing_transporters for all to authenticated
   using (society_id::text in (select public.current_user_society_ids()))
   with check (society_id::text in (select public.current_user_society_ids()));
+-- Marketing D2a (migration 137): arhtiya master, bardana count register, lot weighment + bags,
+-- per-unit deduction rules. Registers only (no ledger posting). RLS: own society, role-split writes.
+create table if not exists procurement_arhtiyas (
+  id            text primary key,
+  society_id    text not null,
+  jurisdiction  text,
+  name          text not null,
+  "nameHi"      text,
+  "licenceNo"   text,
+  mobile        text,
+  "damiRate"    numeric,
+  "damiBasis"   text check ("damiBasis" is null or "damiBasis" in ('percent', 'perQtl')),
+  "createdAt"   timestamptz not null default now(),
+  "updatedAt"   timestamptz not null default now()
+);
+create index if not exists idx_procurement_arhtiyas_society on public.procurement_arhtiyas (society_id);
+
+create table if not exists procurement_bardana_movements (
+  id              text primary key,
+  society_id      text not null,
+  jurisdiction    text,
+  date            text not null,
+  "bardanaTypeId" text,
+  direction       text not null check (direction in ('in', 'out')),
+  "partyType"     text not null check ("partyType" in ('agency', 'farmer', 'arhtiya', 'other')),
+  "partyId"       text,
+  "partyName"     text,
+  "lotId"         text,
+  bags            integer not null check (bags > 0),
+  note            text,
+  "createdAt"     timestamptz not null default now(),
+  "updatedAt"     timestamptz not null default now()
+);
+create index if not exists idx_procurement_bardana_movements_society on public.procurement_bardana_movements (society_id);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['procurement_arhtiyas', 'procurement_bardana_movements'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists %I on public.%I', t || '_select', t);
+    execute format('drop policy if exists %I on public.%I', t || '_insert', t);
+    execute format('drop policy if exists %I on public.%I', t || '_update', t);
+    execute format('drop policy if exists %I on public.%I', t || '_delete', t);
+    execute format('create policy %I on public.%I for select to authenticated using (society_id::text in (select public.current_user_society_ids()))', t || '_select', t);
+    execute format('create policy %I on public.%I for insert to authenticated with check (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_write())', t || '_insert', t);
+    execute format('create policy %I on public.%I for update to authenticated using (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_write()) with check (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_write())', t || '_update', t);
+    execute format('create policy %I on public.%I for delete to authenticated using (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_delete())', t || '_delete', t);
+  end loop;
+end $$;
+
+alter table public.procurement_lots add column if not exists "grossWeight" numeric;
+alter table public.procurement_lots add column if not exists "tareWeight" numeric;
+alter table public.procurement_lots add column if not exists bags integer;
+alter table public.procurement_deduction_rules add column if not exists "basisUnit" text;
+
 -- Transport operations slice 1 (migration 128): own vehicles, trips, vehicle expenses.
 -- The voucher (refType 'transport.trip' / 'transport.expense', refId = row id) is the money
 -- authority; the row is the vehicle tag. RLS: own society, writes jwt_can_write(), deletes jwt_can_delete().

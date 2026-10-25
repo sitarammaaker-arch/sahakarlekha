@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
 import { resolveProcurementAccountId, missingProcurementRoles, PROCUREMENT_ROLE_LABEL_HI } from '@/lib/procurement/accounts';
-import { deriveLotStage, LOT_STAGE_LABEL, isRejectedQuality, suggestDeductionAccountId, deductionAccountWarning, DEDUCTION_WARNING_TEXT, canRecordQuality, agencyDirectAccounts, procurementLegsOf, commissionAmount, moistureLimitFor, qualityResultAllowed } from '@/lib/procurement/agentFlow';
+import { deriveLotStage, LOT_STAGE_LABEL, isRejectedQuality, suggestDeductionAccountId, deductionAccountWarning, DEDUCTION_WARNING_TEXT, canRecordQuality, agencyDirectAccounts, procurementLegsOf, commissionAmount, moistureLimitFor, qualityResultAllowed, deductionRuleAmount, deductionRuleLabel, netWeight } from '@/lib/procurement/agentFlow';
 import { Wheat, Plus, AlertTriangle } from 'lucide-react';
 import type { Voucher } from '@/types';
 
@@ -49,7 +49,7 @@ const DEDUCTION_TYPES = [
 
 export default function ProcurementLots() {
   const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment, cancelProcurementLot } = useData();
-  const { crops, varieties, seasons, agencies, centres, resolveMspRate, deductionRules, qualitySpecs, accrueProcurementCommission, commissionAccruals, deleteCommissionAccrual } = useMarketingData();
+  const { crops, varieties, seasons, agencies, centres, resolveMspRate, deductionRules, qualitySpecs, arhtiyas, accrueProcurementCommission, commissionAccruals, deleteCommissionAccrual } = useMarketingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -61,6 +61,13 @@ export default function ProcurementLots() {
   const [seasonId, setSeasonId] = useState('');
   const [centreId, setCentreId] = useState('');
   const [qty, setQty] = useState('');
+  // D2a: arhtiya (register only) + weighment slip. When gross and tare are both filled, the net weight
+  // becomes the lot quantity.
+  const [arhtiyaId, setArhtiyaId] = useState('');
+  const [grossW, setGrossW] = useState('');
+  const [tareW, setTareW] = useState('');
+  const [bags, setBags] = useState('');
+  const onWeight = (g: string, t: string) => { setGrossW(g); setTareW(t); const n = netWeight(Number(g), Number(t)); if (n != null) setQty(String(n)); };
   const [rate, setRate] = useState('');
   // Batch B: the business date of the purchase (back-dating allowed within the open FY/period). Sticky.
   const [lotDate, setLotDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -259,16 +266,21 @@ export default function ProcurementLots() {
     addSettlementDeductionLine({ settlementId: setlId, deductionType: t ? (hi ? t.hi : t.en) : dedType, accountId: dedAccId, amount: amt, reference: dedRef.trim() || undefined, remarks: dedRemarks.trim() || undefined });
     setDedType(''); setDedAccId(''); setDedAmount(''); setDedRef(''); setDedRemarks('');
   };
-  // M3b: one-click deduction from a rule — amount = rate% × gross, posted to the rule's dedicated account.
-  const ruleAmount = (ratePct: number, gross: number) => Math.round((ratePct / 100 * gross + Number.EPSILON) * 100) / 100;
+  // M3b/D2a: one-click deduction from a rule — % of gross, ₹ per quintal or ₹ per bag (the lot's own
+  // quantity / bag count), posted to the rule's dedicated account.
+  const lotOfSettlement = (st?: { engineVoucherId: string }) => st ? procurementLots.find(l => lotEngineVoucher(l.id)?.id === st.engineVoucherId) : undefined;
+  const ruleAmountFor = (rule: (typeof deductionRules)[number], st: { gross: { amount: number }; engineVoucherId: string }) => {
+    const l = lotOfSettlement(st);
+    return deductionRuleAmount(rule, { gross: st.gross.amount, qty: l?.quantity?.value, bags: l?.bags });
+  };
   const addRuleDeduction = (ruleId: string) => {
     const rule = deductionRules.find(r => r.id === ruleId);
     const s = procurementSettlements.find(x => x.id === setlId && !x.isDeleted);
     if (!rule || !s) return;
     if (!rule.accountId) { toast({ title: hi ? 'नियम में खाता नहीं' : 'Rule has no account', description: hi ? 'प्रोक्योरमेंट मास्टर → नियम में खाता जोड़ें।' : 'Add an account to the rule in Procurement Masters.', variant: 'destructive' }); return; }
-    const amt = ruleAmount(rule.rate.value, s.gross.amount);
-    if (!(amt > 0)) { toast({ title: hi ? 'राशि शून्य' : 'Amount is zero', variant: 'destructive' }); return; }
-    addSettlementDeductionLine({ settlementId: setlId, deductionType: (hi && rule.nameHi ? rule.nameHi : (rule.name || rule.code)), accountId: rule.accountId, amount: amt, reference: `${rule.rate.value}%` });
+    const amt = ruleAmountFor(rule, s);
+    if (!(amt > 0)) { toast({ title: hi ? 'राशि शून्य' : 'Amount is zero', description: rule.basisUnit === 'perBag' ? (hi ? 'इस लॉट में बोरी संख्या दर्ज नहीं है।' : 'This lot has no bag count.') : undefined, variant: 'destructive' }); return; }
+    addSettlementDeductionLine({ settlementId: setlId, deductionType: (hi && rule.nameHi ? rule.nameHi : (rule.name || rule.code)), accountId: rule.accountId, amount: amt, reference: deductionRuleLabel(rule) });
   };
   const approveSettlement = () => { if (setlId) approveFarmerSettlement({ settlementId: setlId }); };
   const openPay = (lotId: string) => {
@@ -310,11 +322,13 @@ export default function ProcurementLots() {
     if (!cropId) { toast({ title: hi ? 'फसल चुनें' : 'Select a crop', variant: 'destructive' }); return; }
     if (!(q > 0)) { toast({ title: hi ? 'मात्रा दर्ज करें' : 'Enter a valid quantity', variant: 'destructive' }); return; }
     if (!(r > 0)) { toast({ title: hi ? 'MSP दर दर्ज करें' : 'Enter a valid MSP rate', variant: 'destructive' }); return; }
-    const lot = addProcurementLot({ farmerId, cropId, varietyId: varietyId || undefined, seasonId: seasonId || undefined, centreId: centreId || undefined, quantity: { value: q, unit: 'qtl' }, mspRate: { amount: r, currency: 'INR' }, lotDate: lotDate || undefined });
+    if ((grossW || tareW) && netWeight(Number(grossW), Number(tareW)) == null) { toast({ title: hi ? 'तौल ठीक करें' : 'Check the weighment', description: hi ? 'कुल वज़न खाली-बोरी (tare) से अधिक होना चाहिए।' : 'Gross must exceed tare.', variant: 'destructive' }); return; }
+    const lot = addProcurementLot({ farmerId, cropId, varietyId: varietyId || undefined, seasonId: seasonId || undefined, centreId: centreId || undefined, quantity: { value: q, unit: 'qtl' }, mspRate: { amount: r, currency: 'INR' }, lotDate: lotDate || undefined,
+      arhtiyaId: arhtiyaId || undefined, grossWeight: grossW ? Number(grossW) : undefined, tareWeight: tareW ? Number(tareW) : undefined, bags: bags ? Number(bags) : undefined });
     if (lot.id) {
       toast({ title: hi ? 'प्रोक्योरमेंट लॉट बना' : 'Procurement Lot created', description: `${farmerLabel(farmerId)} · ${cropName(cropId)} · ${q} qtl` });
       // Hot-path: keep season + centre sticky (same for the day's procurement at a centre); reset the rest.
-      setFarmerId(''); setCropId(''); setVarietyId(''); setQty(''); setRate(''); setMspAuto(false);
+      setFarmerId(''); setCropId(''); setVarietyId(''); setQty(''); setRate(''); setMspAuto(false); setGrossW(''); setTareW(''); setBags('');
     }
   };
 
@@ -428,6 +442,25 @@ export default function ProcurementLots() {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label>{hi ? 'आढ़ती (वैकल्पिक)' : 'Arhtiya (optional)'}</Label>
+              <Select value={arhtiyaId || '__none__'} onValueChange={v => setArhtiyaId(v === '__none__' ? '' : v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{hi ? '— सीधे किसान से —' : '— direct from farmer —'}</SelectItem>
+                  {arhtiyas.map(a => <SelectItem key={a.id} value={a.id}>{hi && a.nameHi ? a.nameHi : a.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>{hi ? 'तौल पर्ची (क्विंटल) · बोरी' : 'Weighment (qtl) · bags'}</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <Input type="number" min={0} step="0.001" value={grossW} onChange={e => onWeight(e.target.value, tareW)} placeholder={hi ? 'कुल' : 'Gross'} />
+                <Input type="number" min={0} step="0.001" value={tareW} onChange={e => onWeight(grossW, e.target.value)} placeholder={hi ? 'खाली बोरी' : 'Tare'} />
+                <Input type="number" min={0} step="1" value={bags} onChange={e => setBags(e.target.value)} placeholder={hi ? 'बोरी' : 'Bags'} />
+              </div>
+              <p className="text-[11px] text-muted-foreground">{hi ? 'कुल और खाली-बोरी भरने पर शुद्ध वज़न अपने-आप मात्रा में आ जाएगा।' : 'Gross − tare fills the quantity.'}</p>
+            </div>
+            <div className="space-y-2">
               <Label>{hi ? 'मात्रा (क्विंटल)' : 'Quantity (qtl)'}</Label>
               <Input type="number" min={0} value={qty} onChange={e => setQty(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveLot(); }} placeholder="0" />
             </div>
@@ -459,7 +492,7 @@ export default function ProcurementLots() {
                   </div>
                 )}
                 <div className="text-muted-foreground">
-                  {l.lotDate ? `${l.lotDate} · ` : ''}{l.quantity?.value ?? 0} {l.quantity?.unit ?? 'qtl'} · ₹{l.mspRate?.amount ?? 0}/{hi ? 'क्विंटल' : 'qtl'}
+                  {l.lotDate ? `${l.lotDate} · ` : ''}{l.quantity?.value ?? 0} {l.quantity?.unit ?? 'qtl'}{l.bags ? ` (${l.bags} ${hi ? 'बोरी' : 'bags'})` : ''} · ₹{l.mspRate?.amount ?? 0}/{hi ? 'क्विंटल' : 'qtl'}{l.arhtiyaId ? ` · ${hi ? 'आढ़ती' : 'arhtiya'}: ${(arhtiyas.find(a => a.id === l.arhtiyaId)?.name) || '—'}` : ''}
                 </div>
                 {l.cancelledAt && (
                   <div className="text-xs text-red-600 mt-0.5">
@@ -693,7 +726,7 @@ export default function ProcurementLots() {
                   <div className="flex flex-wrap gap-1.5">
                     {deductionRules.map(r => (
                       <Button key={r.id} size="sm" variant="secondary" className="h-7 gap-1 text-xs font-normal" onClick={() => addRuleDeduction(r.id)}>
-                        <Plus className="h-3 w-3" />{hi && r.nameHi ? r.nameHi : (r.name || r.code)} {r.rate.value}% · {money(ruleAmount(r.rate.value, currentSettlement.gross.amount))}
+                        <Plus className="h-3 w-3" />{hi && r.nameHi ? r.nameHi : (r.name || r.code)} {deductionRuleLabel(r)} · {money(ruleAmountFor(r, currentSettlement))}
                         {ruleWarning(r) && <AlertTriangle className="h-3 w-3 text-amber-600" />}
                       </Button>
                     ))}

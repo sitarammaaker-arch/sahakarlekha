@@ -381,6 +381,8 @@ const EXPECTED = [
   'procurement_crop', 'procurement_variety', 'procurement_season', 'procurement_agency',
   'procurement_centre', 'procurement_msp_rate', 'procurement_deduction_rule',
   'procurement_quality_spec', 'procurement_bardana_type', 'marketing_transporter',
+  // Marketing D2a (migration 137)
+  'procurement_arhtiya', 'procurement_bardana_movement',
   // T-11 consumer
   'consumer_price_list', 'consumer_patronage_run', 'consumer_purchase_order',
   // T-11 assets / compliance / governance

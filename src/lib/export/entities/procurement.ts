@@ -99,6 +99,10 @@ const lot: EntityDescriptor = {
     c('reconciliationStatus', 'Reconciliation Status', 'समाधान स्थिति', { type: 'enum' }),
     // Migration 135 (marketing batch B): business date + cancellation — a restore must keep a cancelled lot cancelled.
     c('lotDate', 'Purchase Date', 'खरीद की तारीख', { type: 'date' }),
+    // Migration 137 (D2a): weighment slip + bags.
+    c('grossWeight', 'Gross Weight (qtl)', 'कुल वज़न (क्विं)', { type: 'number' }),
+    c('tareWeight', 'Tare (qtl)', 'खाली बोरी वज़न (क्विं)', { type: 'number' }),
+    c('bags', 'Bags', 'बोरी', { type: 'number' }),
     c('cancelledAt', 'Cancelled At', 'रद्द समय', { type: 'date' }),
     c('cancelledBy', 'Cancelled By', 'रद्द करने वाले'),
     c('cancelReason', 'Cancel Reason', 'रद्द करने का कारण'),

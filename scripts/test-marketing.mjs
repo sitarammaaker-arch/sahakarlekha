@@ -33,7 +33,8 @@ register(
 );
 
 const { pickEffectiveMspRate } = await import(abs('../src/lib/marketing/msp.ts'));
-const { buildProcurementRegister, buildCommoditySummary, settlementTotals, countableLots } = await import(abs('../src/lib/marketing/registers.ts'));
+const { buildProcurementRegister, buildCommoditySummary, settlementTotals, countableLots, buildArhtiyaRegister } = await import(abs('../src/lib/marketing/registers.ts'));
+const { bardanaBalances } = await import(abs('../src/lib/marketing/bardana.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -123,6 +124,26 @@ const LOTS = [
   ok(c.length === 1 && c[0].id === 'A', 'cancelled lot dropped from the registers');
   const reg = buildProcurementRegister([{ ...LOTS[0], lotDate: '2026-01-15' }]);
   ok(reg.rows[0].date === '2026-01-15', 'register uses lotDate when set');
+}
+
+// 11. D2a — arhtiya register (dami computed, not posted) and bardana count balances
+{
+  const lots = [
+    { ...LOTS[0], arhtiyaId: 'A1' },                       // 20 qtl × 2425
+    { ...LOTS[1], arhtiyaId: 'A1' },                       // 30 qtl × 2425
+    { ...LOTS[2], arhtiyaId: 'A2' },                       // 10 qtl × 5650
+    { ...LOTS[0], id: 'L9' },                              // no arhtiya
+  ];
+  const reg = buildArhtiyaRegister(lots, [{ id: 'A1', damiRate: 2.5 }, { id: 'A2', damiRate: 46, damiBasis: 'perQtl' }]);
+  const a1 = reg.find(r => r.arhtiyaId === 'A1'), a2 = reg.find(r => r.arhtiyaId === 'A2');
+  ok(reg.length === 2 && a1.lots === 2 && a1.qty === 50 && a1.value === 121250, 'arhtiya A1: 2 lots, 50 qtl, ₹1,21,250 (lot without arhtiya skipped)');
+  ok(a1.dami === 3031.25 && a2.dami === 460, 'dami: 2.5% of 1,21,250 = 3,031.25; ₹46/qtl × 10 = 460');
+  const mv = (direction, partyType, partyId, bags) => ({ id: Math.random() + '', date: '2026-04-01', direction, partyType, partyId, bags, createdAt: '', updatedAt: '' });
+  const b = bardanaBalances([mv('in', 'agency', 'AG', 1000), mv('out', 'farmer', 'F1', 300), mv('in', 'farmer', 'F1', 40), mv('out', 'agency', 'AG', 200), mv('out', 'farmer', 'F2', 0)]);
+  ok(b.inHand === 540, 'in hand = 1000 − 300 + 40 − 200 = 540');
+  ok(b.parties.find(p => p.partyId === 'F1').balance === 260, 'farmer still holds 300 − 40 = 260 bags');
+  ok(b.parties.find(p => p.partyId === 'AG').balance === 800, 'society owes the agency 1000 − 200 = 800 bags');
+  ok(!b.parties.some(p => p.partyId === 'F2'), 'a 0-bag entry is ignored');
 }
 
 // 9. Batch A — registers count only posted, non-rejected lots; status label; local (IST) date

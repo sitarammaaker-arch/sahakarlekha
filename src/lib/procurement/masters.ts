@@ -61,7 +61,9 @@ export interface QualitySpec extends BaseEntity {
 export interface DeductionRule extends BaseEntity {
   code: string;
   basis: string;           // e.g. market_fee | hrdf | labour | shortage | commission | other
-  rate: Percentage;        // % of gross
+  rate: Percentage;        // % of gross — or ₹ per quintal / per bag when basisUnit says so (D2a)
+  /** D2a (migration 137): how `rate` applies — '%' of gross (default), ₹ per quintal, or ₹ per bag. */
+  basisUnit?: 'percent' | 'perQtl' | 'perBag';
   accountId?: string;      // dedicated ledger the deduction CREDITS at settlement (M3b); optional
   name?: string;           // friendly label; optional, additive
   nameHi?: string;         // Hindi label; optional, additive

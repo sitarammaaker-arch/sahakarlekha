@@ -203,6 +203,7 @@ const deductionRule: EntityDescriptor = {
     c('nameHi', 'Name (Hindi)', 'नाम (हिन्दी)'),
     c('basis', 'Basis', 'आधार', { type: 'enum' }),
     internal('rate', 'Rate', 'दर', { type: 'json' }),
+    c('basisUnit', 'Rate Unit', 'दर की इकाई', { type: 'enum' }),   // D2a (migration 137)
     internal('accountId', 'Ledger Account', 'बही खाता'),
     ...stamps(),
   ],
@@ -280,7 +281,64 @@ const transporter: EntityDescriptor = {
   ],
 };
 
+// ── D2a (migration 137): arhtiya master + bardana count register ──
+const arhtiya: EntityDescriptor = {
+  key: 'procurement_arhtiya',
+  table: 'procurement_arhtiyas',
+  domain: 'marketing',
+  label: 'Arhtiyas',
+  labelHi: 'आढ़ती',
+  capability: CAP,
+  minRole: 'viewer',
+  scope: 'society',
+  nature: 'master',
+  dependsOn: ['society'],
+  naturalKey: ['id'],
+  formats: ['csv', 'xlsx', 'json'],
+  backupPolicy: 'full',
+  columns: [
+    c('id', 'ID', 'आईडी', { defaultVisible: false }),
+    c('name', 'Arhtiya Name', 'आढ़ती नाम'),
+    c('nameHi', 'Name (Hindi)', 'नाम (हिन्दी)'),
+    c('licenceNo', 'Licence No.', 'लाइसेंस नं.'),
+    c('mobile', 'Mobile', 'मोबाइल', { piiClass: 'contact' }),
+    num('damiRate', 'Dami Rate', 'दामी दर'),
+    c('damiBasis', 'Dami Basis', 'दामी का आधार', { type: 'enum' }),
+    ...stamps(),
+  ],
+};
+
+const bardanaMovement: EntityDescriptor = {
+  key: 'procurement_bardana_movement',
+  table: 'procurement_bardana_movements',
+  domain: 'marketing',
+  label: 'Bardana Register',
+  labelHi: 'बारदाना रजिस्टर',
+  capability: CAP,
+  minRole: 'viewer',
+  scope: 'society',
+  nature: 'transaction',
+  dependsOn: ['society'],
+  naturalKey: ['id'],
+  formats: ['csv', 'xlsx', 'json'],
+  backupPolicy: 'full',
+  columns: [
+    c('id', 'ID', 'आईडी', { defaultVisible: false }),
+    c('date', 'Date', 'तारीख', { type: 'date' }),
+    c('direction', 'In / Out', 'आई / गई', { type: 'enum' }),
+    c('partyType', 'Party Type', 'पक्ष प्रकार', { type: 'enum' }),
+    c('partyId', 'Party', 'पक्ष'),
+    c('partyName', 'Party Name', 'पक्ष का नाम'),
+    c('bardanaTypeId', 'Bardana Type', 'बारदाना प्रकार'),
+    c('lotId', 'Lot', 'लॉट'),
+    num('bags', 'Bags', 'बोरी'),
+    c('note', 'Note', 'टिप्पणी'),
+    ...stamps(),
+  ],
+};
+
 export const MARKETING_ENTITIES: EntityDescriptor[] = [
   crop, variety, season, agency, centre, mspRate,
   deductionRule, qualitySpec, bardanaType, transporter,
+  arhtiya, bardanaMovement,
 ];

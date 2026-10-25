@@ -19,7 +19,15 @@ export type ReconciliationStatus =
 
 // ── Stakeholders ──
 export interface Farmer extends BaseEntity { farmerCode: string; farmerName: string; fatherName?: string; mobile?: string; }
-export interface Arhtiya extends BaseEntity { name: string; licenceNo: string; }
+export interface Arhtiya extends BaseEntity {
+  name: string;
+  licenceNo: string;
+  /** D2a (migration 137): master fields — dami is a REGISTER figure (no ledger posting, founder 2026-10-25). */
+  nameHi?: string;
+  mobile?: string;
+  damiRate?: number;
+  damiBasis?: 'percent' | 'perQtl';
+}
 export interface Labour extends BaseEntity { name: string; }
 export interface Transporter extends BaseEntity { name: string; vehicleNo?: string; }
 
@@ -94,6 +102,10 @@ export interface ProcurementLot extends BaseEntity {
   operationalStatus: OperationalStatus;
   financialStatus: FinancialStatus;
   reconciliationStatus: ReconciliationStatus;
+  /** D2a (migration 137): weighment slip — gross / tare in quintals (net = quantity) and the bag count. */
+  grossWeight?: number;
+  tareWeight?: number;
+  bags?: number;
   /** Migration 135: the business day the produce was bought (YYYY-MM-DD); postings are dated with it. */
   lotDate?: string;
   /** Migration 135: set when the lot was cancelled (its postings reversed). A cancelled lot is read-only. */

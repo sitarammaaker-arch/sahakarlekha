@@ -367,3 +367,25 @@ export function moistureLimitFor(specs: ReadonlyArray<{ cropId: string; seasonId
 /** A moisture above the limit may be "accepted with cut" or "rejected" — never plainly "accepted". */
 export const qualityResultAllowed = (result: string, moisture: number, limit: number | null): boolean =>
   !(limit != null && moisture > limit && result === 'accepted');
+
+// ── 14. Deduction rule amount by unit (D2a) ─────────────────────────────────────────────────────────
+// Labour, weighment and bardana are charged per quintal or per bag in practice, not as % of gross.
+// The rate and unit are the society's own master values — none hard-coded.
+export function deductionRuleAmount(rule: { rate: { value: number }; basisUnit?: 'percent' | 'perQtl' | 'perBag' }, x: { gross: number; qty?: number; bags?: number }): number {
+  const r = Number(rule.rate?.value) || 0;
+  if (r <= 0) return 0;
+  const raw = rule.basisUnit === 'perQtl' ? r * (Number(x.qty) || 0)
+    : rule.basisUnit === 'perBag' ? r * (Number(x.bags) || 0)
+      : (r / 100) * (Number(x.gross) || 0);
+  return toRupees(toMinor(raw));
+}
+export const deductionRuleLabel = (rule: { rate: { value: number }; basisUnit?: string }): string =>
+  rule.basisUnit === 'perQtl' ? `₹${rule.rate.value}/qtl` : rule.basisUnit === 'perBag' ? `₹${rule.rate.value}/bag` : `${rule.rate.value}%`;
+
+// ── 15. Weighment slip (D2a) ────────────────────────────────────────────────────────────────────────
+/** Net = gross − tare (quintals, 3-decimals). null when either is missing or tare ≥ gross. */
+export function netWeight(gross?: number | null, tare?: number | null): number | null {
+  const g = Number(gross), t = Number(tare);
+  if (!Number.isFinite(g) || !Number.isFinite(t) || g <= 0 || t < 0 || t >= g) return null;
+  return Math.round((g - t) * 1000) / 1000;
+}

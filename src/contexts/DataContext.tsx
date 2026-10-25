@@ -146,7 +146,7 @@ interface DataContextType {
   procurementLots: ProcurementLot[];
   procurementEvents: ProcurementEvent[];
   addFarmer: (data: { farmerName: string; fatherName?: string; mobile?: string }) => Promise<Farmer>;
-  addProcurementLot: (data: { farmerId: string; cropId: string; varietyId?: string; seasonId?: string; centreId?: string; quantity: Quantity; mspRate: Money; lotDate?: string }) => ProcurementLot;
+  addProcurementLot: (data: { farmerId: string; cropId: string; varietyId?: string; seasonId?: string; centreId?: string; quantity: Quantity; mspRate: Money; lotDate?: string; arhtiyaId?: string; grossWeight?: number; tareWeight?: number; bags?: number }) => ProcurementLot;
   procurementQualityTests: QualityTest[];
   procurementMoistureRecords: MoistureRecord[];
   recordQualityInspection: (data: { lotId: string; result: string; moisture: number; inspectedBy?: string }) => QualityTest;
@@ -5110,7 +5110,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   // Create a ProcurementLot + exactly ONE immutable 'lot.created' event (append-only). No voucher.
-  const addProcurementLot = useCallback((data: { farmerId: string; cropId: string; varietyId?: string; seasonId?: string; centreId?: string; quantity: Quantity; mspRate: Money; lotDate?: string }): ProcurementLot => {
+  const addProcurementLot = useCallback((data: { farmerId: string; cropId: string; varietyId?: string; seasonId?: string; centreId?: string; quantity: Quantity; mspRate: Money; lotDate?: string; arhtiyaId?: string; grossWeight?: number; tareWeight?: number; bags?: number }): ProcurementLot => {
     const sentinel: ProcurementLot = { id: '', centreId: '', seasonId: '', cropId: '', farmerId: '', operationalStatus: 'created', financialStatus: 'unbilled', reconciliationStatus: 'pending', createdAt: '', updatedAt: '' };
     if (guardFYLocked()) return sentinel;
     // Batch B: the business date may be back-dated, but never into the future, a locked period or
@@ -5135,6 +5135,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       financialStatus: 'unbilled',
       reconciliationStatus: 'pending',
       lotDate: data.lotDate || undefined,
+      // D2a: arhtiyaId is written by the commit RPC itself; the weighment slip is a step-2 write below.
+      arhtiyaId: data.arhtiyaId || undefined,
+      grossWeight: data.grossWeight || undefined,
+      tareWeight: data.tareWeight ?? undefined,
+      bags: data.bags ? Math.trunc(data.bags) : undefined,
       createdAt: now,
       updatedAt: now,
     };
@@ -5160,12 +5165,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toastRef.current({ title: 'लॉट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
         return;
       }
-      // Step 2 (RULE 1): lotDate is a migration-135 column the frozen RPC does not write. The lot is
-      // saved; a miss here only loses the back-date (postings then use the J-Form / entry day).
-      if (lot.lotDate) supabase.from('procurement_lots').update({ lotDate: lot.lotDate }).eq('id', lot.id).then(({ error: e2 }) => {
+      // Step 2 (RULE 1): lotDate (migration 135) and the weighment slip (migration 137) are columns the
+      // frozen RPC does not write. The lot is saved; a miss here only loses those details (postings then
+      // use the J-Form / entry day).
+      const extras: Record<string, unknown> = {};
+      if (lot.lotDate) extras.lotDate = lot.lotDate;
+      if (lot.grossWeight != null) extras.grossWeight = lot.grossWeight;
+      if (lot.tareWeight != null) extras.tareWeight = lot.tareWeight;
+      if (lot.bags != null) extras.bags = lot.bags;
+      if (Object.keys(extras).length) supabase.from('procurement_lots').update(extras).eq('id', lot.id).then(({ error: e2 }) => {
         if (!e2) return;
-        reportError('write-partial', e2.message, { at: 'procurement_lots.lotDate (migration 135)' });
-        toastRef.current({ title: 'लॉट सेव हुआ, तारीख नहीं', description: `लॉट की तारीख क्लाउड में सेव नहीं हुई (migration 135 चलाएँ) — पोस्टिंग J-Form के दिन की होगी। ${e2.message}`, variant: 'default', duration: 10000 });
+        reportError('write-partial', e2.message, { at: 'procurement_lots step-2 (migrations 135/137)' });
+        toastRef.current({ title: 'लॉट सेव हुआ, कुछ विवरण नहीं', description: `लॉट की तारीख / तौल / बोरी क्लाउड में सेव नहीं हुई (migration 135 व 137 चलाएँ) — पोस्टिंग J-Form के दिन की होगी। ${e2.message}`, variant: 'default', duration: 10000 });
       });
     });
     return lot;

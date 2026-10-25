@@ -37,9 +37,14 @@ import {
 } from '@/lib/procurement/agentFlow';
 import type { Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
 import type { Transporter } from '@/lib/marketing/transport';
+import type { BardanaMovement } from '@/lib/marketing/bardana';
+import type { Arhtiya } from '@/lib/procurement';
 import type { Voucher } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { toMinor, toRupees, addMinor } from '@/lib/money';
+
+/** D2a: arhtiya master input. */
+export type ArhtiyaInput = { name: string; nameHi?: string; licenceNo?: string; mobile?: string; damiRate?: number; damiBasis?: 'percent' | 'perQtl' };
 
 /** Agency master input (D1 adds the own ledger + commission basis / income ledger). */
 export type AgencyInput = { name: string; code: string; kind: string; nameHi?: string; commissionRate?: number; ledgerAccountId?: string; commissionBasis?: 'percent' | 'perQtl'; commissionIncomeAccountId?: string };
@@ -91,8 +96,8 @@ interface MarketingDataContextValue {
 
   // Deduction rules / Quality specs / Bardana types (M1d) — config consumed by quality (M2) & settlement (M3)
   deductionRules: DeductionRule[];
-  addDeductionRule: (data: { code: string; basis: string; rate: number; accountId?: string; name?: string; nameHi?: string }) => DeductionRule;
-  updateDeductionRule: (id: string, data: Partial<Pick<DeductionRule, 'code' | 'basis' | 'accountId' | 'name' | 'nameHi'>> & { rate?: number }) => void;
+  addDeductionRule: (data: { code: string; basis: string; rate: number; accountId?: string; name?: string; nameHi?: string; basisUnit?: DeductionRule['basisUnit'] }) => DeductionRule;
+  updateDeductionRule: (id: string, data: Partial<Pick<DeductionRule, 'code' | 'basis' | 'accountId' | 'name' | 'nameHi' | 'basisUnit'>> & { rate?: number }) => void;
   deleteDeductionRule: (id: string) => void;
   qualitySpecs: QualitySpec[];
   addQualitySpec: (data: { cropId: string; seasonId: string; parameter: string; maxLimit: number }) => QualitySpec;
@@ -115,6 +120,14 @@ interface MarketingDataContextValue {
   recordAgencyReceipt: (data: { amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string; agencyId?: string; against?: 'msp' | 'commission' }) => Voucher;
   deleteAgencyReceipt: (voucherId: string) => void;
 
+  // D2a — arhtiya master + bardana count register (registers only, no ledger posting)
+  arhtiyas: Arhtiya[];
+  addArhtiya: (data: ArhtiyaInput) => Arhtiya;
+  updateArhtiya: (id: string, data: Partial<ArhtiyaInput>) => void;
+  deleteArhtiya: (id: string) => void;
+  bardanaMovements: BardanaMovement[];
+  addBardanaMovement: (data: Omit<BardanaMovement, 'id' | 'createdAt' | 'updatedAt'>) => BardanaMovement;
+  deleteBardanaMovement: (id: string) => void;
   // Transport — transporter master (T1)
   transporters: Transporter[];
   addTransporter: (data: { name: string; nameHi?: string; vehicleNo?: string; phone?: string; ratePerQtl?: number }) => Transporter;
@@ -177,6 +190,8 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   const [qualitySpecs, setQualitySpecsState] = useState<QualitySpec[]>(() => storage.getProcurementQualitySpecs());
   const [bardanaTypes, setBardanaTypesState] = useState<BardanaType[]>(() => storage.getProcurementBardanaTypes());
   const [transporters, setTransportersState] = useState<Transporter[]>(() => storage.getMarketingTransporters());
+  const [arhtiyas, setArhtiyasState] = useState<Arhtiya[]>(() => storage.getProcurementArhtiyas());
+  const [bardanaMovements, setBardanaMovementsState] = useState<BardanaMovement[]>(() => storage.getProcurementBardanaMovements());
 
   // J5: these masters used to load in 10 separate effects — 10 React commits after login, each
   // re-rendering every consumer. applyLoadsTogether applies them in one commit; each table keeps its own
@@ -194,6 +209,8 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       setQualitySpecsState([]);
       setBardanaTypesState([]);
       setTransportersState([]);
+      setArhtiyasState([]);
+      setBardanaMovementsState([]);
       return;
     }
     applyLoadsTogether([
@@ -207,6 +224,8 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       [fetchAllPaged<QualitySpec>('procurement_quality_specs', sid), setQualitySpecsState, storage.getProcurementQualitySpecs],
       [fetchAllPaged<BardanaType>('procurement_bardana_types', sid), setBardanaTypesState, storage.getProcurementBardanaTypes],
       [fetchAllPaged<Transporter>('marketing_transporters', sid), setTransportersState, storage.getMarketingTransporters],
+      [fetchAllPaged<Arhtiya>('procurement_arhtiyas', sid), setArhtiyasState, storage.getProcurementArhtiyas],
+      [fetchAllPaged<BardanaMovement>('procurement_bardana_movements', sid), setBardanaMovementsState, storage.getProcurementBardanaMovements],
     ], 'marketing masters');
   }, [user?.societyId]);
 
@@ -538,13 +557,27 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   );
 
   // ── Deduction-rule CRUD ────────────────────────────────────────────────────────
-  const addDeductionRule = useCallback((data: { code: string; basis: string; rate: number; accountId?: string; name?: string; nameHi?: string }): DeductionRule => {
+  // D2a (migration 137): basisUnit is a step-2 write. A per-quintal / per-bag rule whose unit did NOT
+  // save would read back as a PERCENT rule (₹10/qtl → 10% of gross) — so that case rolls the rule back
+  // (destructive toast); a plain % rule needs no step 2.
+  const persistRuleUnit = (r: DeductionRule, rollback: () => void, prevUnit?: DeductionRule['basisUnit']) => {
+    if (!r.basisUnit && !prevUnit) return;
+    supabase.from('procurement_deduction_rules').update({ basisUnit: r.basisUnit ?? null }).eq('id', r.id).then(({ error }) => {
+      if (!error) return;
+      reportError('write-partial', error.message, { at: 'procurement_deduction_rules.basisUnit (migration 137)' });
+      rollback();
+      toastRef.current({ title: 'कटौती नियम सेव नहीं हुआ', description: `प्रति क्विंटल / प्रति बोरी इकाई क्लाउड में सेव नहीं हुई (migration 137 चलाएँ) — गलत % कटौती से बचाने के लिए नियम वापस लिया गया। ${error.message}`, variant: 'destructive', duration: 15000 });
+    });
+  };
+  const addDeductionRule = useCallback((data: { code: string; basis: string; rate: number; accountId?: string; name?: string; nameHi?: string; basisUnit?: DeductionRule['basisUnit'] }): DeductionRule => {
     const now = new Date().toISOString();
-    const rec: DeductionRule = { id: crypto.randomUUID(), code: data.code, basis: data.basis, rate: { value: data.rate }, accountId: data.accountId, name: data.name, nameHi: data.nameHi, createdAt: now, updatedAt: now };
+    const rec: DeductionRule = { id: crypto.randomUUID(), code: data.code, basis: data.basis, rate: { value: data.rate }, accountId: data.accountId, name: data.name, nameHi: data.nameHi, basisUnit: data.basisUnit && data.basisUnit !== 'percent' ? data.basisUnit : undefined, createdAt: now, updatedAt: now };
     if (guardFYLocked()) return { ...rec, id: '', createdAt: '', updatedAt: '' };
     setDeductionRulesState(prev => { const u = [...prev, rec]; storage.setProcurementDeductionRules(u); return u; });
-    supabase.from('procurement_deduction_rules').upsert(withSoc(rec)).then(({ error }) => {
-      if (error) {
+    const { basisUnit: _unit, ...recBase } = rec;
+    supabase.from('procurement_deduction_rules').upsert(withSoc(recBase)).then(({ error }) => {
+      if (!error) { persistRuleUnit(rec, () => setDeductionRulesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementDeductionRules(r); return r; })); return; }
+      {
         console.error('Deduction rule save error:', error.message); reportError('marketing-save', error.message);
         setDeductionRulesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementDeductionRules(r); return r; });
         toastRef.current({ title: 'कटौती नियम सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का procurement_deduction_rules block + RLS चलाएँ।)`, variant: 'destructive', duration: 12000 });
@@ -553,15 +586,16 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     return rec;
   }, [societyId]);
 
-  const updateDeductionRule = useCallback((id: string, data: Partial<Pick<DeductionRule, 'code' | 'basis' | 'accountId' | 'name' | 'nameHi'>> & { rate?: number }) => {
+  const updateDeductionRule = useCallback((id: string, data: Partial<Pick<DeductionRule, 'code' | 'basis' | 'accountId' | 'name' | 'nameHi' | 'basisUnit'>> & { rate?: number }) => {
     if (guardFYLocked()) return;
     setDeductionRulesState(prev => {
       const before = prev.find(r => r.id === id);
       const u = prev.map(r => r.id === id ? { ...r, ...data, rate: data.rate != null ? { value: data.rate } : r.rate, updatedAt: new Date().toISOString() } : r);
       storage.setProcurementDeductionRules(u);
       const next = u.find(r => r.id === id);
-      if (next && before) supabase.from('procurement_deduction_rules').upsert(withSoc(next)).then(({ error }) => {
-        if (error) {
+      if (next && before) supabase.from('procurement_deduction_rules').upsert(withSoc((({ basisUnit: _u, ...b }) => b)(next))).then(({ error }) => {
+        if (!error) { persistRuleUnit(next, () => setDeductionRulesState(p => { const r = p.map(x => x.id === id ? before : x); storage.setProcurementDeductionRules(r); return r; }), before.basisUnit); return; }
+        {
           setDeductionRulesState(p => { const r = p.map(x => x.id === id ? before : x); storage.setProcurementDeductionRules(r); return r; });
           toastRef.current({ title: 'कटौती नियम अपडेट नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         }
@@ -640,6 +674,80 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       }
     });
   }, [bardanaTypes, societyId]);
+
+  // ── D2a: Arhtiya master CRUD (register only) ────────────────────────────────────────
+  const addArhtiya = useCallback((data: ArhtiyaInput): Arhtiya => {
+    const now = new Date().toISOString();
+    const rec: Arhtiya = { licenceNo: '', ...data, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
+    if (guardFYLocked()) return { ...rec, id: '' };
+    if (!data.name?.trim()) { toastRef.current({ title: 'आढ़ती का नाम आवश्यक', variant: 'destructive' }); return { ...rec, id: '' }; }
+    setArhtiyasState(prev => { const u = [...prev, rec]; storage.setProcurementArhtiyas(u); return u; });
+    supabase.from('procurement_arhtiyas').upsert(withSoc(rec)).then(({ error }) => {
+      if (!error) return;
+      console.error('Arhtiya save error:', error.message); reportError('marketing-save', error.message);
+      setArhtiyasState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementArhtiyas(r); return r; });
+      toastRef.current({ title: 'आढ़ती सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (migration 137 चलाई है?)`, variant: 'destructive', duration: 12000 });
+    });
+    return rec;
+  }, [societyId]);
+
+  const updateArhtiya = useCallback((id: string, data: Partial<ArhtiyaInput>) => {
+    if (guardFYLocked()) return;
+    const before = arhtiyas.find(a => a.id === id);
+    if (!before) return;
+    const next: Arhtiya = { ...before, ...data, updatedAt: new Date().toISOString() };
+    setArhtiyasState(prev => { const u = prev.map(a => a.id === id ? next : a); storage.setProcurementArhtiyas(u); return u; });
+    supabase.from('procurement_arhtiyas').upsert(withSoc(next)).then(({ error }) => {
+      if (!error) return;
+      setArhtiyasState(p => { const r = p.map(a => a.id === id ? before : a); storage.setProcurementArhtiyas(r); return r; });
+      toastRef.current({ title: 'आढ़ती अपडेट नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+    });
+  }, [arhtiyas, societyId]);
+
+  const deleteArhtiya = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    if (procurementLots.some(l => l.arhtiyaId === id) || bardanaMovements.some(m => m.partyType === 'arhtiya' && m.partyId === id)) {
+      toastRef.current({ title: 'हटा नहीं सकते', description: 'इस आढ़ती के लॉट या बारदाना एंट्री मौजूद हैं।', variant: 'destructive', duration: 9000 });
+      return;
+    }
+    const before = arhtiyas.find(a => a.id === id);
+    if (!before) return;
+    setArhtiyasState(prev => { const r = prev.filter(a => a.id !== id); storage.setProcurementArhtiyas(r); return r; });
+    supabase.from('procurement_arhtiyas').delete().eq('id', id).eq('society_id', societyId).select('id').then(({ data, error }) => {
+      if (!error && data?.length) return;
+      setArhtiyasState(prev => { const u = [...prev, before]; storage.setProcurementArhtiyas(u); return u; });
+      toastRef.current({ title: 'आढ़ती हटा नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error?.message || 'अनुमति नहीं'}. Refresh करने पर वापस दिखेगा।`, variant: 'destructive', duration: 12000 });
+    });
+  }, [arhtiyas, procurementLots, bardanaMovements, societyId]);
+
+  // ── D2a: Bardana count register ─────────────────────────────────────────────────────
+  const addBardanaMovement = useCallback((data: Omit<BardanaMovement, 'id' | 'createdAt' | 'updatedAt'>): BardanaMovement => {
+    const now = new Date().toISOString();
+    const rec: BardanaMovement = { ...data, bags: Math.trunc(Number(data.bags) || 0), id: crypto.randomUUID(), createdAt: now, updatedAt: now };
+    if (guardFYLocked()) return { ...rec, id: '' };
+    if (!(rec.bags > 0)) { toastRef.current({ title: 'बोरी संख्या डालें', description: 'बोरियों की संख्या 0 से अधिक होनी चाहिए।', variant: 'destructive' }); return { ...rec, id: '' }; }
+    if (!rec.date) { toastRef.current({ title: 'तारीख डालें', variant: 'destructive' }); return { ...rec, id: '' }; }
+    setBardanaMovementsState(prev => { const u = [...prev, rec]; storage.setProcurementBardanaMovements(u); return u; });
+    supabase.from('procurement_bardana_movements').upsert(withSoc(rec)).then(({ error }) => {
+      if (!error) return;
+      console.error('Bardana save error:', error.message); reportError('marketing-save', error.message);
+      setBardanaMovementsState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementBardanaMovements(r); return r; });
+      toastRef.current({ title: 'बारदाना एंट्री सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (migration 137 चलाई है?)`, variant: 'destructive', duration: 12000 });
+    });
+    return rec;
+  }, [societyId]);
+
+  const deleteBardanaMovement = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const before = bardanaMovements.find(m => m.id === id);
+    if (!before) return;
+    setBardanaMovementsState(prev => { const r = prev.filter(m => m.id !== id); storage.setProcurementBardanaMovements(r); return r; });
+    supabase.from('procurement_bardana_movements').delete().eq('id', id).eq('society_id', societyId).select('id').then(({ data, error }) => {
+      if (!error && data?.length) return;
+      setBardanaMovementsState(prev => { const u = [...prev, before]; storage.setProcurementBardanaMovements(u); return u; });
+      toastRef.current({ title: 'एंट्री हटी नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error?.message || 'अनुमति नहीं'}. Refresh करने पर वापस दिखेगी।`, variant: 'destructive', duration: 12000 });
+    });
+  }, [bardanaMovements, societyId]);
 
   // ── Transporter master CRUD (T1) ─────────────────────────────────────────────────
   const addTransporter = useCallback((data: { name: string; nameHi?: string; vehicleNo?: string; phone?: string; ratePerQtl?: number }): Transporter => {
@@ -857,6 +965,13 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       bardanaTypes,
       addBardanaType,
       deleteBardanaType,
+      arhtiyas,
+      addArhtiya,
+      updateArhtiya,
+      deleteArhtiya,
+      bardanaMovements,
+      addBardanaMovement,
+      deleteBardanaMovement,
       transporters,
       addTransporter,
       updateTransporter,
