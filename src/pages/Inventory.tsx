@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { isRoutableItemAccount } from '@/lib/itemAccountRouting';
+import { LicenceExpiryBanner } from '@/components/marketing/LicenceExpiryBanner';
 import { Link } from 'react-router-dom';
 import { toUqc, unitLabel, unitOptions } from '@/lib/units';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -928,6 +929,8 @@ const Inventory: React.FC = () => {
           {hi ? 'स्टॉक वस्तुओं और आवाजाही का प्रबंधन' : 'Manage stock items and movements / माल भंडार'}
         </p>
       </div>
+      {/* E1: FCO authorisation / Form O expiring or lapsed — selling then contravenes the Order. */}
+      <LicenceExpiryBanner hi={hi} />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

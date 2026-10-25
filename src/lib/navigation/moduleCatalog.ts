@@ -65,6 +65,11 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'salesReturn',    titleKey: 'salesReturn',    icon: Undo2,           route: '/sales-return',    domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant'], order: 4.5 },
   { id: 'purchases',      titleKey: 'purchases',      icon: PackagePlus,     route: '/purchases',       domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 6 },
   { id: 'purchaseReturn', titleKey: 'purchaseReturn', icon: Undo2,           route: '/purchase-return', domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant'], order: 6.5 },
+  // Marketing E1: the Purchase Order (+ GRN) is generic buying — any society that buys / sells stock
+  // (marketing buying fertiliser from IFFCO / KRIBHCO, PACS, consumer) — so inventory_sales, not pos_billing.
+  { id: 'purchaseOrders', titleKey: 'purchaseOrders', icon: ClipboardList,   route: '/purchase-orders', domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant'], order: 6.2 },
+  // E1: FCO 1985 dealer authorisation / Form O validity + the general scheme-claim register.
+  { id: 'dealerCompliance', titleKey: 'dealerCompliance', icon: ShieldCheck, route: '/dealer-compliance', domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant', 'viewer'], order: 6.8 },
   { id: 'salary',         titleKey: 'salary',         icon: BadgeDollarSign, route: '/salary',          domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 8 },
   { id: 'payroll',        titleKey: 'payroll',        icon: Wallet,          route: '/payroll',         domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 8.5 },
   { id: 'milkCollection', titleKey: 'milkCollection', icon: Milk,            route: '/milk-collection', domain: 'dairy', requiredCapabilities: ['dairy_collection'], order: 0 },  // C4: dairy-only
@@ -81,7 +86,6 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'priceLists',    titleKey: 'priceLists',    icon: Tags,              route: '/price-lists',    domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 1 },
   { id: 'memberCredit',  titleKey: 'memberCredit',  icon: HandCoins,         route: '/member-credit',  domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2 },
   { id: 'expiryDamage',  titleKey: 'expiryDamage',  icon: PackageX,          route: '/expiry-damage',  domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2.5 },
-  { id: 'purchaseOrders', titleKey: 'purchaseOrders', icon: ClipboardList,   route: '/purchase-orders', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2.7 },
   { id: 'barcodeLabels', titleKey: 'barcodeLabels', icon: ScanBarcode,       route: '/barcode-labels', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 2.8 },
   { id: 'patronage',     titleKey: 'patronage',     icon: Coins,             route: '/patronage',      domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 3 },
   { id: 'consumerDividend', titleKey: 'consumerDividend', icon: Landmark, route: '/consumer-dividend', domain: 'consumer', requiredCapabilities: ['pos_billing'], requiredRoles: ['admin', 'accountant'], order: 4 },

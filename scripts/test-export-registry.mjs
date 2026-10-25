@@ -385,6 +385,8 @@ const EXPECTED = [
   'procurement_arhtiya', 'procurement_bardana_movement',
   // Marketing D3 (migration 139)
   'procurement_dispatch', 'procurement_agency_bill',
+  // Marketing E1 (migration 140)
+  'marketing_dealer_licence', 'marketing_scheme_claim',
   // T-11 consumer
   'consumer_price_list', 'consumer_patronage_run', 'consumer_purchase_order',
   // T-11 assets / compliance / governance

@@ -34,11 +34,12 @@ export const HUBS: HubDef[] = [
     { hi: 'ग्राहक', en: 'Customers', moduleIds: ['customers'] },
   ] },
   { id: 'purchases', hi: 'खरीद', en: 'Purchases', icon: PackagePlus, sections: [
-    { hi: 'खरीद', en: 'Purchases', moduleIds: ['purchases', 'purchaseReturn', 'purchaseRegister', 'procurementMatch'] },
+    { hi: 'खरीद', en: 'Purchases', moduleIds: ['purchaseOrders', 'purchases', 'purchaseReturn', 'purchaseRegister', 'procurementMatch'] },
     { hi: 'सप्लायर', en: 'Suppliers', moduleIds: ['suppliers'] },
   ] },
   { id: 'stock', hi: 'स्टॉक', en: 'Stock', icon: Boxes, sections: [
     { hi: 'माल', en: 'Items', moduleIds: ['inventory', 'hsnMaster', 'godowns'] },
+    { hi: 'लाइसेंस व योजना', en: 'Licences & schemes', moduleIds: ['dealerCompliance'] },
     { hi: 'स्टॉक रिपोर्ट', en: 'Stock reports', moduleIds: ['closingStockReport', 'stockValuation'] },
   ] },
   { id: 'members', hi: 'सदस्य व ऋण', en: 'Members & loans', icon: Users, sections: [

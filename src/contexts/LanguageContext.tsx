@@ -122,6 +122,7 @@ export const translations: Translations = {
   procurementMasters: { hi: 'प्रोक्योरमेंट मास्टर', en: 'Procurement Masters' },
   agencyReceipts: { hi: 'एजेंसी रसीद', en: 'Agency Receipt' },
   procurementRegisters: { hi: 'प्रोक्योरमेंट रजिस्टर', en: 'Procurement Registers' },
+  dealerCompliance: { hi: 'खाद लाइसेंस व योजना दावे', en: 'Dealer Licences & Scheme Claims' },
   transport: { hi: 'परिवहन', en: 'Transport' },
   transportVehicles: { hi: 'वाहन', en: 'Vehicles' },
   transportTrips: { hi: 'ट्रिप / भाड़ा बिल', en: 'Trips / Freight Bills' },

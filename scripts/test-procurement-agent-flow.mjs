@@ -422,5 +422,19 @@ const MSP = new Set(['procurement_msp']);
   ok(/const disp = dispatches\.find\(d => !d\.isDeleted && d\.lotIds\.includes\(lotId\)\)/.test(page), 'a dispatched lot is not cancelled directly');
 }
 
+// ── 18. E1 — source guards ───────────────────────────────────────────────────────────────────────
+{
+  const { readFileSync } = await import('node:fs');
+  const mk = readFileSync(pathResolve(SRC, 'contexts', 'MarketingDataContext.tsx'), 'utf8');
+  ok(/registerVoucherOwner\('marketing-scheme'/.test(mk), 'scheme claim owns its claim voucher');
+  ok(/refType: SCHEME_CLAIM_REF_TYPE, refId: rec\.id/.test(mk) && /cancelVoucher\(sv\.id, 'Scheme claim row not saved \(auto-rollback\)'/.test(mk), 'claim voucher first; a row that fails cancels it');
+  ok(/amt > outstanding \+ 0\.005/.test(mk), 'a receipt larger than the claim outstanding is refused');
+  const cat = readFileSync(pathResolve(SRC, 'lib', 'navigation', 'moduleCatalog.ts'), 'utf8');
+  ok(/id: 'purchaseOrders'[^\n]*requiredCapabilities: \['inventory_sales'\]/.test(cat), 'Purchase Order open to every buying-selling society (not only pos_billing)');
+  ok(/id: 'dealerCompliance'[^\n]*route: '\/dealer-compliance'/.test(cat), 'dealer compliance module registered');
+  const inv = readFileSync(pathResolve(SRC, 'pages', 'Inventory.tsx'), 'utf8');
+  ok(/<LicenceExpiryBanner hi=\{hi\} \/>/.test(inv), 'Inventory shows the licence expiry banner');
+}
+
 console.log(`[procurement-agent-flow] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
