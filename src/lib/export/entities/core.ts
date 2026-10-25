@@ -72,6 +72,7 @@ const society: EntityDescriptor = {
     internal('fyUnlockRequestedAt', 'FY Unlock Requested At', 'अनलॉक अनुरोध समय', { type: 'date' }),
     internal('fyUnlockRequestedBy', 'FY Unlock Requested By', 'अनलॉक अनुरोध द्वारा'),
     internal('storageLossNormPct', 'Storage Loss Norm %', 'भंडारण हानि मानक %', { type: 'number' }),
+    internal('procurementVia5116', 'MSP via 5116', 'MSP 5116 से होकर', { type: 'boolean' }),
     internal('maxSharePremiumPercent', 'Max Share Premium %', 'अधिकतम शेयर प्रीमियम %', { type: 'number' }),
     // Stage C (migration 125): liability type + producer status, each with its proof.
     internal('liabilityType', 'Liability Type', 'दायित्व का प्रकार', { type: 'enum' }),

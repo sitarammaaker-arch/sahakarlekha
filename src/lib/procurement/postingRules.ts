@@ -44,15 +44,24 @@ export function resolvePostingLegs(
   profile: AccountingProfile,
   binding: Record<string, string>,
   accounts: ReadonlyArray<{ id: string; name: string }>,
+  opts?: { via?: boolean },
 ): PostingLeg[] {
   // PROCUREMENT BUSINESS RULE (stays in this domain): which raw legs this request posts.
+  // D1 (opts.via): the society books each purchase THROUGH 'procurement.via' (5116 Govt Procurement
+  // Purchase) — Dr via / Cr payable, then the hand-over Dr receivable / Cr via. The via account nets
+  // to nil (turnover visible), so the effect is unchanged: Dr agency receivable / Cr farmer payable.
+  const agent: RawPostingLeg[] = [
+    { side: 'Dr', accountSelector: 'agency.receivable' },
+    { side: 'Cr', accountSelector: 'farmer.payable' },
+  ];
+  const viaLegs: RawPostingLeg[] = [
+    { side: 'Dr', accountSelector: 'procurement.via' },
+    { side: 'Cr', accountSelector: 'farmer.payable' },
+    { side: 'Dr', accountSelector: 'agency.receivable' },
+    { side: 'Cr', accountSelector: 'procurement.via' },
+  ];
   const raw: RawPostingLeg[] =
-    requestType === 'RecogniseProcurement' && profile === 'agency'
-      ? [
-          { side: 'Dr', accountSelector: 'agency.receivable' },
-          { side: 'Cr', accountSelector: 'farmer.payable' },
-        ]
-      : [];
+    requestType === 'RecogniseProcurement' && profile === 'agency' ? (opts?.via ? viaLegs : agent) : [];
   // GENERIC INFRASTRUCTURE (shared posting core): freeze the raw legs against the chart.
   return freezePostingLegs(raw, amount, binding, accounts);
 }

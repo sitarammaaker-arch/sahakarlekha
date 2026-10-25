@@ -43,6 +43,7 @@ var society = {
     internal("fyUnlockRequestedAt", "FY Unlock Requested At", "\u0905\u0928\u0932\u0949\u0915 \u0905\u0928\u0941\u0930\u094B\u0927 \u0938\u092E\u092F", { type: "date" }),
     internal("fyUnlockRequestedBy", "FY Unlock Requested By", "\u0905\u0928\u0932\u0949\u0915 \u0905\u0928\u0941\u0930\u094B\u0927 \u0926\u094D\u0935\u093E\u0930\u093E"),
     internal("storageLossNormPct", "Storage Loss Norm %", "\u092D\u0902\u0921\u093E\u0930\u0923 \u0939\u093E\u0928\u093F \u092E\u093E\u0928\u0915 %", { type: "number" }),
+    internal("procurementVia5116", "MSP via 5116", "MSP 5116 \u0938\u0947 \u0939\u094B\u0915\u0930", { type: "boolean" }),
     internal("maxSharePremiumPercent", "Max Share Premium %", "\u0905\u0927\u093F\u0915\u0924\u092E \u0936\u0947\u092F\u0930 \u092A\u094D\u0930\u0940\u092E\u093F\u092F\u092E %", { type: "number" }),
     // Stage C (migration 125): liability type + producer status, each with its proof.
     internal("liabilityType", "Liability Type", "\u0926\u093E\u092F\u093F\u0924\u094D\u0935 \u0915\u093E \u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
@@ -2184,7 +2185,11 @@ var agency = {
     c10("name", "Agency Name", "\u090F\u091C\u0947\u0902\u0938\u0940 \u0928\u093E\u092E"),
     c10("nameHi", "Name (Hindi)", "\u0928\u093E\u092E (\u0939\u093F\u0928\u094D\u0926\u0940)"),
     c10("kind", "Kind", "\u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
-    num7("commissionRate", "Commission Rate %", "\u0915\u092E\u0940\u0936\u0928 \u0926\u0930 %"),
+    num7("commissionRate", "Commission Rate", "\u0915\u092E\u0940\u0936\u0928 \u0926\u0930"),
+    // Migration 136 (D1): own receivable ledger + commission basis / income ledger.
+    c10("ledgerAccountId", "Receivable Ledger", "\u092A\u094D\u0930\u093E\u092A\u094D\u092F \u0916\u093E\u0924\u093E"),
+    c10("commissionBasis", "Commission Basis", "\u0915\u092E\u0940\u0936\u0928 \u0915\u093E \u0906\u0927\u093E\u0930", { type: "enum" }),
+    c10("commissionIncomeAccountId", "Commission Income Ledger", "\u0915\u092E\u0940\u0936\u0928 \u0906\u092F \u0916\u093E\u0924\u093E"),
     ...stamps()
   ]
 };

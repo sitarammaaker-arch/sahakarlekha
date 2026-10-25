@@ -13,8 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
 import { resolveProcurementAccountId, missingProcurementRoles, PROCUREMENT_ROLE_LABEL_HI } from '@/lib/procurement/accounts';
-import { deriveLotStage, LOT_STAGE_LABEL, isRejectedQuality, suggestDeductionAccountId, deductionAccountWarning, DEDUCTION_WARNING_TEXT, canRecordQuality, agencyDirectAccounts } from '@/lib/procurement/agentFlow';
+import { deriveLotStage, LOT_STAGE_LABEL, isRejectedQuality, suggestDeductionAccountId, deductionAccountWarning, DEDUCTION_WARNING_TEXT, canRecordQuality, agencyDirectAccounts, procurementLegsOf, commissionAmount, moistureLimitFor, qualityResultAllowed } from '@/lib/procurement/agentFlow';
 import { Wheat, Plus, AlertTriangle } from 'lucide-react';
+import type { Voucher } from '@/types';
 
 // Legacy crop ids (used before the M1a Crop master). Kept only so lots created earlier still
 // render a readable crop name; new lots pick from the Crop master (useMarketingData().crops).
@@ -48,7 +49,7 @@ const DEDUCTION_TYPES = [
 
 export default function ProcurementLots() {
   const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment, cancelProcurementLot } = useData();
-  const { crops, varieties, seasons, agencies, centres, resolveMspRate, deductionRules, accrueProcurementCommission, commissionAccruals, deleteCommissionAccrual } = useMarketingData();
+  const { crops, varieties, seasons, agencies, centres, resolveMspRate, deductionRules, qualitySpecs, accrueProcurementCommission, commissionAccruals, deleteCommissionAccrual } = useMarketingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -133,10 +134,17 @@ export default function ProcurementLots() {
   const lotMoisture = (lotId: string) => procurementMoistureRecords.find(m => m.lotId === lotId);
   const resultLabel = (id: string) => { const r = QUALITY_RESULTS.find(x => x.id === id); return r ? (hi ? r.hi : r.en) : id; };
   const openQuality = (lotId: string) => { setQualityLotId(lotId); setQualityResult(''); setMoistureValue(''); setInspector(''); setQualityOpen(true); };
+  const qualityLot = procurementLots.find(l => l.id === qualityLotId);
+  const qualityLimit = qualityLot ? moistureLimitFor(qualitySpecs, qualityLot.cropId, qualityLot.seasonId) : null;
   const saveQuality = () => {
     const m = Number(moistureValue);
     if (!qualityResult) { toast({ title: hi ? 'परिणाम चुनें' : 'Select a result', variant: 'destructive' }); return; }
     if (moistureValue === '' || !(m >= 0)) { toast({ title: hi ? 'नमी मान दर्ज करें' : 'Enter a valid moisture value', variant: 'destructive' }); return; }
+    // D1: the society's own Quality Spec (no state's limit is hard-coded) — above it, not plain "accepted".
+    if (!qualityResultAllowed(qualityResult, m, qualityLimit)) {
+      toast({ title: hi ? 'नमी सीमा से अधिक' : 'Moisture above the limit', description: hi ? `नमी ${m}% है, सीमा ${qualityLimit}% — "कटौती सहित स्वीकृत" या "अस्वीकृत" चुनें।` : `Moisture ${m}% exceeds ${qualityLimit}% — choose "accepted with cut" or "rejected".`, variant: 'destructive', duration: 10000 });
+      return;
+    }
     const qt = recordQualityInspection({ lotId: qualityLotId, result: qualityResult, moisture: m, inspectedBy: inspector.trim() || undefined });
     if (qt.id) { toast({ title: hi ? 'क्वालिटी दर्ज हुई' : 'Quality recorded', description: `${resultLabel(qualityResult)} · ${m}%` }); setQualityOpen(false); }
   };
@@ -164,11 +172,21 @@ export default function ProcurementLots() {
     if (!jf || postingLotId === lotId) return;
     setPostingLotId(lotId);
     const done = () => setPostingLotId(null);
-    const post = (rrId: string) => { if (!lotEngineVoucher(lotId)) generateEngineVoucher({ postingRuleResultId: rrId }); done(); };
+    // D1 (founder): commission is accrued AUTOMATICALLY once the posting voucher is durably saved.
+    const autoCommission = (ev: Voucher) => {
+      const l = procurementLots.find(x => x.id === lotId);
+      const ag = l ? lotAgency(l) : undefined;
+      if (!l || !ag || !(Number(ag.commissionRate) > 0)) return;
+      const amt = commissionAmount(ag, l, procurementLegsOf(ev).value);
+      if (amt > 0) accrueProcurementCommission({ lotId, amount: amt, note: `${ag.commissionBasis === 'perQtl' ? `₹${ag.commissionRate}/qtl` : `${ag.commissionRate}%`} · ${ag.name}`, date: ev.date, agencyId: ag.id, quiet: true });
+    };
+    const post = (rrId: string) => { if (!lotEngineVoucher(lotId)) generateEngineVoucher({ postingRuleResultId: rrId }, { onSaved: autoCommission }); done(); };
+    const lotRow = procurementLots.find(x => x.id === lotId);
+    const receivableAccountId = (lotRow && lotAgency(lotRow)?.ledgerAccountId) || undefined;
     const resolve = (reqId: string) => {
       const rr = lotRuleResult(lotId);
       if (rr) return post(rr.id);
-      if (!generatePostingRuleResult({ postingRequestId: reqId }, { onCommitted: r => post(r.id), onFailed: done })?.id) done();
+      if (!generatePostingRuleResult({ postingRequestId: reqId }, { onCommitted: r => post(r.id), onFailed: done, receivableAccountId })?.id) done();
     };
     const request = (intentId: string) => {
       const pr = lotPostingRequest(lotId);
@@ -186,7 +204,7 @@ export default function ProcurementLots() {
   // "Agency paid directly" credits ONLY the agency receivable (3308, or a ledger opened under it) —
   // any other asset (cash, stock) bypassed the receivable and broke the per-agency balance.
   const mspReceivableId = resolveProcurementAccountId(accounts, 'agencyReceivable');
-  const agencyAccounts = agencyDirectAccounts(accounts, mspReceivableId);
+  const agencyAccounts = agencyDirectAccounts(accounts, mspReceivableId, agencies.map(a => a.ledgerAccountId));
   // MSP ledgers missing (PACS / sugar charts) → tell the operator where to create them, up front.
   const missingMsp = missingProcurementRoles(accounts, ['agencyReceivable', 'farmerPayable']);
   // Settlement is the SOURCE OF TRUTH — gross/deductions/net/paid read STORED fields, never vouchers.
@@ -196,7 +214,8 @@ export default function ProcurementLots() {
     const ev = lotEngineVoucher(lotId);
     if (!ev) return null;
     const s = procurementSettlements.find(x => !x.isDeleted && x.engineVoucherId === ev.id);
-    if (!s) return { ev, settlement: null, gross: ev.amount, totalDeductions: 0, netPayable: ev.amount, paid: 0, outstanding: ev.amount, payStatus: 'unpaid' as const };
+    const value = procurementLegsOf(ev).value;
+    if (!s) return { ev, settlement: null, gross: value, totalDeductions: 0, netPayable: value, paid: 0, outstanding: value, payStatus: 'unpaid' as const };
     const gross = s.gross.amount;
     const totalDeductions = +s.deductionLines.reduce((a, l) => a + l.amount.amount, 0).toFixed(2);
     const netPayable = s.netPayable.amount;
@@ -213,9 +232,10 @@ export default function ProcurementLots() {
     const ev = lotEngineVoucher(l.id);
     const ag = lotAgency(l);
     if (!ev || !ag || ag.commissionRate == null || !(ag.commissionRate > 0)) return null;
-    const amount = Math.round((ag.commissionRate / 100 * ev.amount + Number.EPSILON) * 100) / 100;
-    return { agency: ag, rate: ag.commissionRate, amount };
+    const amount = commissionAmount(ag, l, procurementLegsOf(ev).value);
+    return { agency: ag, rate: ag.commissionRate, perQtl: ag.commissionBasis === 'perQtl', amount };
   };
+  const commissionNote = (ci: NonNullable<ReturnType<typeof lotCommissionInfo>>) => `${ci.perQtl ? `₹${ci.rate}/qtl` : `${ci.rate}%`} · ${ci.agency.name}`;
   const openSettlement = (lotId: string) => {
     const s = settlementForLot(lotId);
     if (!s) return;
@@ -498,7 +518,7 @@ export default function ProcurementLots() {
                 })()}
                 {!l.cancelledAt && canRecordQuality({ hasQualityTest: !!lotQuality(l.id), hasJForm: !!lotJForm(l.id) }) && <Button size="sm" variant="outline" onClick={() => openQuality(l.id)}>{hi ? 'क्वालिटी' : 'Quality'}</Button>}
                 {!lotRejected(l.id) && !l.cancelledAt && <>
-                {!lotJForm(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateJForm(l.id)}>J-Form</Button>}
+                {!lotJForm(l.id) && lotQuality(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateJForm(l.id)}>J-Form</Button>}
                 {lotJForm(l.id) && !lotEngineVoucher(l.id) && <Button size="sm" disabled={postingLotId === l.id} onClick={() => handlePostToLedger(l.id)}>{postingLotId === l.id ? (hi ? 'पोस्ट हो रहा है…' : 'Posting…') : (hi ? 'बहीखाता में पोस्ट' : 'Post to Ledger')}</Button>}
                 {lotEngineVoucher(l.id) && !settlementForLot(l.id) && <Button size="sm" variant="outline" onClick={() => handleCreateSettlement(l.id)}>{hi ? 'निपटान बनाएँ' : 'Create Settlement'}</Button>}
                 {settlementForLot(l.id)?.status === 'draft' && <Button size="sm" variant="outline" onClick={() => openSettlement(l.id)}>{hi ? 'निपटान प्रबंधन' : 'Manage Settlement'}</Button>}
@@ -509,7 +529,7 @@ export default function ProcurementLots() {
                 {!lotRejected(l.id) && !l.cancelledAt && lotEngineVoucher(l.id) && !commissionForLot(l.id) && lotCommissionInfo(l) && (
                   // Manual click by design (founder decision pending: automate on posting?). Dated with
                   // the lot's posting (J-Form) day, not today.
-                  <Button size="sm" variant="outline" onClick={() => { const ci = lotCommissionInfo(l); const ev = lotEngineVoucher(l.id); if (ci) accrueProcurementCommission({ lotId: l.id, amount: ci.amount, note: `${ci.rate}% · ${ci.agency.name}`, date: ev?.date }); }}>
+                  <Button size="sm" variant="outline" onClick={() => { const ci = lotCommissionInfo(l); const ev = lotEngineVoucher(l.id); if (ci) accrueProcurementCommission({ lotId: l.id, amount: ci.amount, note: commissionNote(ci), date: ev?.date, agencyId: ci.agency.id }); }}>
                     {hi ? 'कमीशन' : 'Commission'} {money(lotCommissionInfo(l)!.amount)}
                   </Button>
                 )}
@@ -562,8 +582,9 @@ export default function ProcurementLots() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>{hi ? 'नमी (%)' : 'Moisture (%)'} *</Label>
+              <Label>{hi ? 'नमी (%)' : 'Moisture (%)'} *{qualityLimit != null ? <span className="font-normal text-muted-foreground"> · {hi ? 'सीमा' : 'limit'} {qualityLimit}%</span> : null}</Label>
               <Input type="number" min={0} value={moistureValue} onChange={e => setMoistureValue(e.target.value)} placeholder="0" />
+              {qualityLimit != null && Number(moistureValue) > qualityLimit && <p className="text-xs text-red-600">{hi ? 'नमी सीमा से अधिक — "कटौती सहित स्वीकृत" या "अस्वीकृत" चुनें।' : 'Above the limit — choose "accepted with cut" or "rejected".'}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>{hi ? 'निरीक्षक' : 'Inspector'}</Label>

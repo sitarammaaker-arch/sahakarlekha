@@ -813,6 +813,8 @@ alter table society_settings add column if not exists "approvalVoucherTypes" jso
 -- ── ECR-20: godown storage-loss norm on society_settings ─────────────────────
 -- Permitted storage-loss (driage/shrinkage) %; items above it are flagged. NULL = no norm.
 alter table society_settings add column if not exists "storageLossNormPct" numeric;
+-- Migration 136 (Marketing D1): post each procurement lot through 5116 Govt Procurement Purchase.
+alter table society_settings add column if not exists "procurementVia5116" boolean default false;
 -- NABARD RFP §16.1.2: interest year basis ('365' | 'actual' | '360'); null = '365'. Migration 071.
 alter table society_settings add column if not exists "interestDayCount" text;
 
@@ -1411,6 +1413,10 @@ create table if not exists procurement_agencies (
 create index if not exists idx_procurement_agencies_society on procurement_agencies(society_id);
 -- M3d: per-agency commission % (for the already-shipped table).
 alter table procurement_agencies add column if not exists "commissionRate" numeric;
+-- Migration 136 (Marketing D1): agency's own receivable ledger, commission basis + income ledger.
+alter table procurement_agencies add column if not exists "ledgerAccountId" text;
+alter table procurement_agencies add column if not exists "commissionBasis" text;
+alter table procurement_agencies add column if not exists "commissionIncomeAccountId" text;
 create table if not exists procurement_centres (
   id text primary key,
   society_id text not null default 'SOC001',

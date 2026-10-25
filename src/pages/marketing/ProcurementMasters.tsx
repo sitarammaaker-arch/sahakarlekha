@@ -34,7 +34,7 @@ export default function ProcurementMasters() {
     qualitySpecs, addQualitySpec, deleteQualitySpec,
     bardanaTypes, addBardanaType, deleteBardanaType,
   } = useMarketingData();
-  const { accounts } = useData();
+  const { accounts, society, updateSociety } = useData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -101,12 +101,26 @@ export default function ProcurementMasters() {
   const [aCode, setACode] = useState('');
   const [aKind, setAKind] = useState('');
   const [aCommission, setACommission] = useState('');
-  const openAddAgency = () => { setEditAgId(null); setAName(''); setANameHi(''); setACode(''); setAKind(''); setACommission(''); setAgOpen(true); };
-  const openEditAgency = (id: string) => { const a = agencies.find(x => x.id === id); if (!a) return; setEditAgId(id); setAName(a.name); setANameHi(a.nameHi || ''); setACode(a.code); setAKind(a.kind); setACommission(a.commissionRate != null ? String(a.commissionRate) : ''); setAgOpen(true); };
+  // D1: the agency's own receivable ledger + commission basis / income ledger.
+  const [aLedgerId, setALedgerId] = useState('');
+  const [aBasis, setABasis] = useState<'percent' | 'perQtl'>('percent');
+  const [aIncomeId, setAIncomeId] = useState('');
+  const openAddAgency = () => { setEditAgId(null); setAName(''); setANameHi(''); setACode(''); setAKind(''); setACommission(''); setALedgerId(''); setABasis('percent'); setAIncomeId(''); setAgOpen(true); };
+  const openEditAgency = (id: string) => { const a = agencies.find(x => x.id === id); if (!a) return; setEditAgId(id); setAName(a.name); setANameHi(a.nameHi || ''); setACode(a.code); setAKind(a.kind); setACommission(a.commissionRate != null ? String(a.commissionRate) : ''); setALedgerId(a.ledgerAccountId || ''); setABasis(a.commissionBasis || 'percent'); setAIncomeId(a.commissionIncomeAccountId || ''); setAgOpen(true); };
+  const assetLeaves = accounts.filter(a => !a.isGroup && a.type === 'asset');
+  const incomeLeaves = accounts.filter(a => !a.isGroup && a.type === 'income');
+  const accLabel = (a: (typeof accounts)[number]) => `${a.id.length <= 6 ? `${a.id} · ` : ''}${hi && a.nameHi ? a.nameHi : a.name}`;
+  // D1 society setting: post every lot through 5116 Govt Procurement Purchase (turnover visible, nets to nil).
+  const toggleVia5116 = (on: boolean) => updateSociety({ procurementVia5116: on }, {
+    onSaved: (dropped) => toast(dropped.includes('procurementVia5116')
+      ? { title: hi ? 'सेव नहीं हुआ' : 'Not saved', description: hi ? 'migration 136 चलाएँ, फिर दोबारा चालू करें।' : 'Run migration 136, then switch it on again.', variant: 'destructive' }
+      : { title: on ? (hi ? '5116 से होकर पोस्टिंग चालू' : 'Posting via 5116 on') : (hi ? '5116 पोस्टिंग बंद' : 'Posting via 5116 off') }),
+  });
   const saveAgency = () => {
     if (!aName.trim()) { toast({ title: hi ? 'एजेंसी का नाम आवश्यक' : 'Agency name required', variant: 'destructive' }); return; }
     const commission = aCommission.trim() ? Number(aCommission) : undefined;
-    const payload = { name: aName.trim(), nameHi: aNameHi.trim() || undefined, code: aCode.trim().toUpperCase(), kind: aKind || 'state', commissionRate: commission };
+    const payload = { name: aName.trim(), nameHi: aNameHi.trim() || undefined, code: aCode.trim().toUpperCase(), kind: aKind || 'state', commissionRate: commission,
+      ledgerAccountId: aLedgerId || undefined, commissionBasis: aBasis, commissionIncomeAccountId: aIncomeId || undefined };
     if (editAgId) updateAgency(editAgId, payload);
     else addAgency(payload);
     setAgOpen(false);
@@ -302,6 +316,15 @@ export default function ProcurementMasters() {
 
         {/* ── Agencies & Centres ── */}
         <TabsContent value="agencies">
+          <Card className="mb-3">
+            <CardContent className="pt-4 flex items-start gap-3">
+              <input id="via5116" type="checkbox" className="mt-1 h-4 w-4" checked={!!society.procurementVia5116} onChange={e => toggleVia5116(e.target.checked)} />
+              <label htmlFor="via5116" className="text-sm">
+                <span className="font-medium">{hi ? 'हर लॉट 5116 (सरकारी खरीद) से होकर पोस्ट करें' : 'Post every lot through 5116 (Govt Procurement Purchase)'}</span>
+                <span className="block text-xs text-muted-foreground">{hi ? 'चालू होने पर पोस्टिंग: Dr 5116 / Cr किसान देय, और Dr एजेंसी / Cr 5116 — 5116 शून्य रहता है पर खरीद-बिक्री का आँकड़ा बहीखाते में दिखता है। सिर्फ़ नए लॉट पर लागू।' : 'When on: Dr 5116 / Cr farmer payable and Dr agency / Cr 5116 — 5116 nets to nil but the turnover shows. New lots only.'}</span>
+              </label>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <CardTitle className="text-base">{hi ? 'एजेंसियाँ' : 'Agencies'} ({agencies.length})</CardTitle>
@@ -315,7 +338,7 @@ export default function ProcurementMasters() {
                   <div key={a.id} className="rounded-lg border p-3 space-y-2">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="font-medium">{hi && a.nameHi ? (a.nameHi || a.name) : a.name} <Badge variant="outline" className="ml-1 font-mono">{a.code}</Badge> <Badge variant="secondary" className="ml-1">{a.kind}</Badge>{a.commissionRate != null ? <Badge variant="outline" className="ml-1">{a.commissionRate}% {hi ? 'कमीशन' : 'comm.'}</Badge> : null}</div>
+                        <div className="font-medium">{hi && a.nameHi ? (a.nameHi || a.name) : a.name} <Badge variant="outline" className="ml-1 font-mono">{a.code}</Badge> <Badge variant="secondary" className="ml-1">{a.kind}</Badge>{a.commissionRate != null ? <Badge variant="outline" className="ml-1">{a.commissionBasis === 'perQtl' ? `₹${a.commissionRate}/${hi ? 'क्विं' : 'qtl'}` : `${a.commissionRate}%`} {hi ? 'कमीशन' : 'comm.'}</Badge> : null}{a.ledgerAccountId ? <Badge variant="outline" className="ml-1">{hi ? 'खाता' : 'ledger'}: {accounts.find(x => x.id === a.ledgerAccountId)?.name || a.ledgerAccountId}</Badge> : null}</div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEditAgency(a.id)} aria-label="edit"><Pencil className="h-4 w-4" /></Button>
@@ -498,9 +521,42 @@ export default function ProcurementMasters() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>{hi ? 'कमीशन दर (% खरीद मूल्य का)' : 'Commission rate (% of procurement value)'}</Label>
-              <Input type="number" min={0} step="0.01" value={aCommission} onChange={e => setACommission(e.target.value)} placeholder="2.5" />
-              <p className="text-[11px] text-muted-foreground">{hi ? 'लॉट बहीखाते में पोस्ट होने के बाद लॉट पर "कमीशन ₹…" बटन दबाने पर इसी दर से खरीद कमीशन (Dr प्राप्य कमीशन / Cr खरीद कमीशन) दर्ज होता है — यह अपने-आप नहीं होता।' : 'After a lot is posted, click its "Commission ₹…" button to accrue procurement commission at this rate (Dr Commission Receivable / Cr Procurement Commission) — it is not automatic.'}</p>
+              <Label>{hi ? 'एजेंसी का प्राप्य खाता' : 'Agency receivable ledger'}</Label>
+              <Select value={aLedgerId || '__pool__'} onValueChange={v => setALedgerId(v === '__pool__' ? '' : v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__pool__">{hi ? '— साझा 3308 MSP प्राप्य —' : '— pooled 3308 MSP Receivable —'}</SelectItem>
+                  {assetLeaves.map(a => <SelectItem key={a.id} value={a.id}>{accLabel(a)}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">{hi ? 'जैसे "HSWC Sirsa" — इस एजेंसी के लॉट की MSP और कमीशन इसी खाते में आएँगे, रसीद भी इसी से घटेगी।' : 'E.g. "HSWC Sirsa" — this agency\'s MSP and commission post here; its receipts reduce it.'}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label>{hi ? 'कमीशन का आधार' : 'Commission basis'}</Label>
+                <Select value={aBasis} onValueChange={v => setABasis(v as 'percent' | 'perQtl')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percent">{hi ? '% खरीद मूल्य का' : '% of value'}</SelectItem>
+                    <SelectItem value="perQtl">{hi ? '₹ प्रति क्विंटल (दामी)' : '₹ per quintal (dami)'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>{aBasis === 'perQtl' ? (hi ? 'दर (₹/क्विंटल)' : 'Rate (₹/qtl)') : (hi ? 'दर (%)' : 'Rate (%)')}</Label>
+                <Input type="number" min={0} step="0.01" value={aCommission} onChange={e => setACommission(e.target.value)} placeholder={aBasis === 'perQtl' ? '55' : '2.5'} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'कमीशन आय खाता' : 'Commission income ledger'}</Label>
+              <Select value={aIncomeId || '__default__'} onValueChange={v => setAIncomeId(v === '__default__' ? '' : v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__default__">{hi ? '— 4206 खरीद कमीशन —' : '— 4206 Procurement Commission —'}</SelectItem>
+                  {incomeLeaves.map(a => <SelectItem key={a.id} value={a.id}>{accLabel(a)}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">{hi ? 'लॉट बहीखाते में पोस्ट होते ही कमीशन अपने-आप दर्ज होता है (दर भरी हो तो)।' : 'Commission is accrued automatically when a lot is posted (when a rate is set).'}</p>
             </div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setAgOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button><Button onClick={saveAgency}>{hi ? 'सेव करें' : 'Save'}</Button></DialogFooter>

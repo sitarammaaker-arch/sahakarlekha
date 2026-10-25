@@ -125,7 +125,11 @@ const agency: EntityDescriptor = {
     c('name', 'Agency Name', 'एजेंसी नाम'),
     c('nameHi', 'Name (Hindi)', 'नाम (हिन्दी)'),
     c('kind', 'Kind', 'प्रकार', { type: 'enum' }),
-    num('commissionRate', 'Commission Rate %', 'कमीशन दर %'),
+    num('commissionRate', 'Commission Rate', 'कमीशन दर'),
+    // Migration 136 (D1): own receivable ledger + commission basis / income ledger.
+    c('ledgerAccountId', 'Receivable Ledger', 'प्राप्य खाता'),
+    c('commissionBasis', 'Commission Basis', 'कमीशन का आधार', { type: 'enum' }),
+    c('commissionIncomeAccountId', 'Commission Income Ledger', 'कमीशन आय खाता'),
     ...stamps(),
   ],
 };

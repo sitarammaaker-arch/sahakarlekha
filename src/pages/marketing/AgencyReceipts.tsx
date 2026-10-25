@@ -47,8 +47,10 @@ export default function AgencyReceipts() {
   const [note, setNote] = useState('');
 
   const selAgency = agencyId === NO_AGENCY ? undefined : agencyId;
+  // D1: an agency with its own ledger carries MSP and commission in ONE balance — no "against" choice.
+  const ownLedger = selAgency ? agencies.find(a => a.id === selAgency)?.ledgerAccountId : undefined;
   const balances = against === 'commission' ? commissionBalances : mspBalances;
-  const cap = receiptCap(balances, selAgency);
+  const cap = ownLedger ? Math.max(0, mspBalances.byAgency[selAgency!] ?? 0) : receiptCap(balances, selAgency);
 
   const save = () => {
     const amt = Number(amount);
@@ -114,13 +116,14 @@ export default function AgencyReceipts() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>{hi ? 'किस बात की प्राप्ति' : 'Received against'} *</Label>
-              <Select value={against} onValueChange={v => setAgainst(v as 'msp' | 'commission')}>
+              <Select value={against} onValueChange={v => setAgainst(v as 'msp' | 'commission')} disabled={!!ownLedger}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="msp">{hi ? 'MSP प्रतिपूर्ति' : 'MSP reimbursement'}</SelectItem>
                   <SelectItem value="commission">{hi ? 'कमीशन' : 'Commission'}</SelectItem>
                 </SelectContent>
               </Select>
+              {ownLedger && <p className="text-[11px] text-muted-foreground">{hi ? 'इस एजेंसी का अपना खाता है — MSP और कमीशन दोनों उसी से घटेंगे।' : 'This agency has its own ledger — MSP and commission both reduce it.'}</p>}
             </div>
             <div className="space-y-2">
               <Label>{hi ? 'एजेंसी' : 'Agency'}{agencies.length > 0 ? ' *' : ''}</Label>

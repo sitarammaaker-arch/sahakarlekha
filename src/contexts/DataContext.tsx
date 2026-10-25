@@ -93,7 +93,7 @@ import { buildShareRefundApproval, buildShareRefundPayment, shareRefundOutstandi
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, buildEngineVoucherLines } from '@/lib/procurement';
 import { procurementPostingBinding, missingProcurementRoles, PROCUREMENT_ROLE_LABEL_HI, resolveProcurementAccountId } from '@/lib/procurement/accounts';
-import { isRejectedQuality, procurementBusinessDate, allocateFarmerCode, canRecordQuality, farmerPaidByEngineVoucher, withDerivedAmountPaid, FARMER_PAYMENT_REF_TYPE, agencyDirectAccounts, isLotCancelled, lotCancelBlockers, LOT_CANCEL_BLOCKER_TEXT, ENGINE_REVERSAL_REF_TYPE, COMMISSION_ACCRUAL_REF_TYPE } from '@/lib/procurement/agentFlow';
+import { isRejectedQuality, procurementBusinessDate, allocateFarmerCode, canRecordQuality, farmerPaidByEngineVoucher, withDerivedAmountPaid, FARMER_PAYMENT_REF_TYPE, agencyDirectAccounts, isLotCancelled, lotCancelBlockers, LOT_CANCEL_BLOCKER_TEXT, ENGINE_REVERSAL_REF_TYPE, COMMISSION_ACCRUAL_REF_TYPE, procurementLegsOf } from '@/lib/procurement/agentFlow';
 import { todayStr } from '@/lib/dateUtils';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, nextFY } from '@/lib/depreciation';
 import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
@@ -158,8 +158,10 @@ interface DataContextType {
   procurementPostingRequests: PostingRequest[];
   generatePostingRequest: (data: { financialIntentId: string }, opts?: { onCommitted?: (pr: PostingRequest) => void; onFailed?: () => void }) => PostingRequest;
   procurementPostingRuleResults: PostingRuleResult[];
-  generatePostingRuleResult: (data: { postingRequestId: string }, opts?: { onCommitted?: (r: PostingRuleResult) => void; onFailed?: () => void }) => PostingRuleResult;
-  generateEngineVoucher: (data: { postingRuleResultId: string }) => Voucher;
+  /** D1: opts.receivableAccountId = the lot's agency ledger (else 3308); the society's 5116-route setting adds the pass-through legs. */
+  generatePostingRuleResult: (data: { postingRequestId: string }, opts?: { onCommitted?: (r: PostingRuleResult) => void; onFailed?: () => void; receivableAccountId?: string }) => PostingRuleResult;
+  /** D1: opts.onSaved fires once the engine voucher is durably saved (auto-commission hangs off it). */
+  generateEngineVoucher: (data: { postingRuleResultId: string }, opts?: { onSaved?: (v: Voucher) => void }) => Voucher;
   // Farmer Settlement — the authoritative business document. Deductions live ONLY here (draft lines);
   // approval is the single accounting trigger; payments settle the approved settlement's Net Payable.
   procurementSettlements: FarmerSettlement[];
@@ -5240,6 +5242,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return sentinel;
     }
     if (lotBlocked(data.lotId)) return sentinel;
+    // D1 (founder 2026-10-25): quality is REQUIRED before the J-Form.
+    if (!procurementQualityTests.some(q => q.lotId === data.lotId)) {
+      toastRef.current({ title: 'पहले क्वालिटी जाँच', description: 'J-Form से पहले इस लॉट की क्वालिटी (परिणाम + नमी) दर्ज करें।', variant: 'destructive', duration: 9000 });
+      return sentinel;
+    }
     const lot = procurementLots.find(l => l.id === data.lotId);
     const cur = lot?.mspRate?.currency || 'INR';
     // Rounded to paise (e.g. 12.345 qtl × ₹2,425 gave a 3-decimal voucher amount).
@@ -5376,7 +5383,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Consumes ONE PostingRequest → resolves balanced legs via the pure resolver → persists ONE
   // immutable PostingRuleResult + one immutable 'posting.rule.resolved' event, committed atomically
   // via the frozen contract. The legs are data (symbolic selectors); no voucher / journal / ledger.
-  const generatePostingRuleResult = useCallback((data: { postingRequestId: string }, opts?: { onCommitted?: (r: PostingRuleResult) => void; onFailed?: () => void }): PostingRuleResult => {
+  const generatePostingRuleResult = useCallback((data: { postingRequestId: string }, opts?: { onCommitted?: (r: PostingRuleResult) => void; onFailed?: () => void; receivableAccountId?: string }): PostingRuleResult => {
     const sentinel: PostingRuleResult = { id: '', postingRequestId: data.postingRequestId, lotId: '', jformId: '', financialIntentId: '', requestType: 'RecogniseProcurement', profile: 'agency', legs: [], createdAt: '', updatedAt: '' };
     if (guardFYLocked()) return sentinel;
     // 2. PostingRequest exists?
@@ -5395,7 +5402,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Resolution + account snapshot are FROZEN here (binding + live chart). Engine never re-resolves.
     // Binding is resolved against THIS society's chart (template id or name), so a PACS / sugar
     // society whose MSP ledgers were created via Ledger Hygiene posts exactly like a CMS society.
-    const legs = resolvePostingLegs(request.requestType, request.amount, profile, procurementPostingBinding(accounts), accounts);
+    // D1: the lot's agency may keep its OWN receivable ledger (e.g. "HSWC Sirsa") — an asset leaf.
+    const binding = { ...procurementPostingBinding(accounts) };
+    if (opts?.receivableAccountId) {
+      const own = accounts.find(a => a.id === opts.receivableAccountId);
+      if (!own || own.isGroup || own.type !== 'asset') {
+        toastRef.current({ title: 'एजेंसी का खाता ठीक नहीं', description: 'एजेंसी master में चुना गया प्राप्य खाता नहीं मिला या asset ledger नहीं है — Procurement Masters → एजेंसी में ठीक करें।', variant: 'destructive', duration: 12000 });
+        opts?.onFailed?.();
+        return sentinel;
+      }
+      binding['agency.receivable'] = own.id;
+    }
+    // D1: society setting — pass each purchase through 5116 Govt Procurement Purchase.
+    const via = !!societyRef.current?.procurementVia5116;
+    if (via) {
+      const viaAcc = accounts.find(a => a.id === '5116' && !a.isGroup) ?? accounts.find(a => !a.isGroup && a.type === 'expense' && /govt\.? procurement purchase|सरकारी खरीद/i.test(`${a.name} ${a.nameHi || ''}`));
+      if (!viaAcc) {
+        toastRef.current({ title: '5116 खाता नहीं है', description: '"5116 से होकर पोस्ट" चालू है पर चार्ट में Govt Procurement Purchase (5116) खाता नहीं है — खाता बनाएँ या setting बंद करें।', variant: 'destructive', duration: 12000 });
+        opts?.onFailed?.();
+        return sentinel;
+      }
+      binding['procurement.via'] = viaAcc.id;
+    }
+    const legs = resolvePostingLegs(request.requestType, request.amount, profile, binding, accounts, { via });
     if (legs.length === 0) {
       const missing = missingProcurementRoles(accounts, ['agencyReceivable', 'farmerPayable']);
       toastRef.current(missing.length > 0
@@ -5436,7 +5465,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // The Voucher (Accounting subsystem) is the SINGLE authoritative record; the procurement
   // 'engine.voucher.created' event is a best-effort audit log. No link table, no compensation, no
   // selector lookup — the engine maps ONLY the frozen resolvedAccountId on each leg.
-  const generateEngineVoucher = useCallback((data: { postingRuleResultId: string }): Voucher => {
+  const generateEngineVoucher = useCallback((data: { postingRuleResultId: string }, opts?: { onSaved?: (v: Voucher) => void }): Voucher => {
     const sentinel = { id: '', voucherNo: '', type: 'journal', date: '', debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     // 2. PostingRuleResult exists?
@@ -5470,7 +5499,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       narration: `MSP खरीद (एजेंट) — J-Form ${jf?.documentNo || result.jformId}`,
       createdBy: user?.name || 'Engine',
       origin: 'engine', refType: 'posting.rule.result', refId: result.id,
-    });
+    }, opts?.onSaved ? { onSaved: opts.onSaved } : undefined);
     if (!voucher.id) return sentinel;   // addVoucher's own FY/balance guard already toasted
     // 6. Best-effort immutable audit event (procurement-owned; NEVER affects the voucher).
     const now = new Date().toISOString();
@@ -5508,7 +5537,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return blank;
     }
     const now = new Date().toISOString();
-    const gross: Money = { amount: ev.amount, currency: 'INR' };
+    // D1: the procurement value from the NET legs — with the 5116 route the voucher total is twice it.
+    const gross: Money = { amount: procurementLegsOf(ev).value, currency: 'INR' };
     const stl: FarmerSettlement = { id: crypto.randomUUID(), engineVoucherId: ev.id, status: 'draft', gross, deductionLines: [], netPayable: { ...gross }, amountPaid: { amount: 0, currency: 'INR' }, createdBy: user?.name || 'System', isDeleted: false, createdAt: now, updatedAt: now };
     setProcurementSettlementsState(prev => { const u = [...prev, stl]; storage.setProcurementSettlements(u); return u; });
     supabase.from('procurement_settlements').upsert(withSoc(stl)).then(({ error }) => {
@@ -5587,7 +5617,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (lotBlocked(lotIdOfEngineVoucher(ev))) return blank;
     const totalDed = toRupees(sumMinor(stl.deductionLines.map(l => toMinor(l.amount.amount))));
     const netPayable: Money = { amount: toRupees(subMinor(toMinor(stl.gross.amount), toMinor(totalDed))), currency: stl.gross.currency };
-    const payableAcc = ev.lines?.find(l => l.type === 'Cr')?.accountId || ev.creditAccountId;
+    const payableAcc = procurementLegsOf(ev).payableAccountId || ev.creditAccountId;
     const now = new Date().toISOString();
 
     // Batch A (P0-2): the approval is committed only AFTER its deduction voucher is durably saved. Before,
@@ -5683,13 +5713,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'राशि बकाया से अधिक', description: `भुगतान ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकता। (Cannot exceed outstanding)`, variant: 'destructive', duration: 9000 });
       return sentinel;
     }
-    const payableAcc = ev.lines?.find(l => l.type === 'Cr')?.accountId || ev.creditAccountId;
+    const payableAcc = procurementLegsOf(ev).payableAccountId || ev.creditAccountId;
     // ECR: credit side by mode. 'agency' = the agency (Hafed) paid the farmers directly, so
     // the society's cash/bank are untouched — we Cr the agency receivable instead (crediting
     // cash/bank there wrongly drove those balances negative).
     const bankFallback = data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK;
     const creditAcc = resolveFarmerPaymentCredit(data.mode, { cash: ACCOUNT_IDS.CASH, bank: bankFallback, agency: data.agencyAccountId });
-    if (data.mode === 'agency' && (!creditAcc || !agencyDirectAccounts(accounts, resolveProcurementAccountId(accounts, 'agencyReceivable')).some(a => a.id === creditAcc))) {
+    if (data.mode === 'agency' && (!creditAcc || !agencyDirectAccounts(accounts, resolveProcurementAccountId(accounts, 'agencyReceivable'), [procurementLegsOf(ev).receivableAccountId]).some(a => a.id === creditAcc))) {
       toastRef.current({ title: 'एजेंसी खाता चुनें', description: 'सीधे-एजेंसी भुगतान के लिए एजेंसी प्राप्य (MSP Receivable) खाता चुनें।', variant: 'destructive', duration: 9000 });
       return sentinel;
     }
@@ -5746,16 +5776,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       for (const v of vs) for (const l of getVoucherLines(v)) if (l.accountId === accountId) m = addMinor(m, l.type === 'Dr' ? toMinor(Number(l.amount) || 0) : -toMinor(Number(l.amount) || 0));
       return toRupees(m);
     };
-    const mspId = resolveProcurementAccountId(accounts, 'agencyReceivable');
-    const comId = resolveProcurementAccountId(accounts, 'commissionReceivable');
+    // D1: the receivable the lot ACTUALLY debited (3308 or the agency's own ledger) and the account the
+    // commission accrual debited (3314 or that same agency ledger).
+    const mspId = (ev && procurementLegsOf(ev).receivableAccountId) || resolveProcurementAccountId(accounts, 'agencyReceivable');
     const accrual = live.find(v => v.refType === COMMISSION_ACCRUAL_REF_TYPE && v.refId === lot.id);
+    const comId = (accrual && procurementLegsOf(accrual).receivableAccountId) || resolveProcurementAccountId(accounts, 'commissionReceivable');
+    const sameLedger = !!accrual && comId === mspId;
     const stl = ev ? procurementSettlementsRef.current.find(x => !x.isDeleted && x.engineVoucherId === ev.id) : undefined;
     const dedVoucher = stl?.settlementVoucherId ? live.find(v => v.id === stl.settlementVoucherId) : undefined;
     const blockers = lotCancelBlockers({
       cancelled: isLotCancelled(lot), reason,
       farmerPaid: ev ? (farmerPaidByEngineVoucher(vouchersRef.current).get(ev.id) ?? 0) : 0,
-      postedAmount: ev ? netOn(mspId, [ev]) : 0, mspReceivable: netOn(mspId, live),
-      commissionAccrued: accrual ? netOn(comId, [accrual]) : 0, commissionReceivable: netOn(comId, live),
+      // One agency ledger carrying BOTH MSP and commission: the commission leaves with the lot too.
+      postedAmount: ev ? netOn(mspId, [ev]) + (sameLedger ? netOn(comId, [accrual!]) : 0) : 0, mspReceivable: netOn(mspId, live),
+      commissionAccrued: accrual && !sameLedger ? netOn(comId, [accrual]) : 0, commissionReceivable: netOn(comId, live),
     });
     if (blockers.length) {
       toastRef.current({ title: 'लॉट रद्द नहीं हुआ', description: blockers.map(b => LOT_CANCEL_BLOCKER_TEXT[b]).join(' '), variant: 'destructive', duration: 15000 });

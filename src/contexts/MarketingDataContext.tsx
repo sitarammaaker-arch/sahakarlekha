@@ -38,6 +38,19 @@ import {
 import type { Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
 import type { Transporter } from '@/lib/marketing/transport';
 import type { Voucher } from '@/types';
+import { getVoucherLines } from '@/lib/voucherUtils';
+import { toMinor, toRupees, addMinor } from '@/lib/money';
+
+/** Agency master input (D1 adds the own ledger + commission basis / income ledger). */
+export type AgencyInput = { name: string; code: string; kind: string; nameHi?: string; commissionRate?: number; ledgerAccountId?: string; commissionBasis?: 'percent' | 'perQtl'; commissionIncomeAccountId?: string };
+
+const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+/** Net Dr − Cr on one ledger across the given vouchers (rupees, paise-exact). */
+function ledgerNet(vs: ReadonlyArray<Voucher>, accountId: string): number {
+  let m = 0;
+  for (const v of vs) for (const l of getVoucherLines(v)) if (l.accountId === accountId) m = addMinor(m, l.type === 'Dr' ? toMinor(Number(l.amount) || 0) : -toMinor(Number(l.amount) || 0));
+  return toRupees(m);
+}
 
 interface MarketingDataContextValue {
   marketingReady: boolean;
@@ -61,8 +74,8 @@ interface MarketingDataContextValue {
   updateSeason: (id: string, data: Partial<Pick<Season, 'name' | 'cropYear' | 'startDate' | 'endDate' | 'nameHi'>>) => void;
   deleteSeason: (id: string) => void;
   agencies: Agency[];
-  addAgency: (data: { name: string; code: string; kind: string; nameHi?: string; commissionRate?: number }) => Agency;
-  updateAgency: (id: string, data: Partial<Pick<Agency, 'name' | 'code' | 'kind' | 'nameHi' | 'commissionRate'>>) => void;
+  addAgency: (data: AgencyInput) => Agency;
+  updateAgency: (id: string, data: Partial<AgencyInput>) => void;
   deleteAgency: (id: string) => void;
   centres: ProcurementCentre[];
   addCentre: (data: { name: string; code: string; agencyId: string; nameHi?: string }) => ProcurementCentre;
@@ -111,7 +124,8 @@ interface MarketingDataContextValue {
   // Procurement commission accrual (M3d) — Dr 3314 Commission Receivable / Cr 4206 Procurement Commission.
   commissionAccruals: Voucher[];
   /** Accrue commission for a lot (one per lot). amount = agency rate% × procurement value (caller computes); date = the lot's posting (J-Form) date. */
-  accrueProcurementCommission: (data: { lotId: string; amount: number; note?: string; date?: string }) => Voucher;
+  /** D1: agencyId routes the accrual — Dr the agency's own ledger (else 3314), Cr its commission income ledger (else 4206). */
+  accrueProcurementCommission: (data: { lotId: string; amount: number; note?: string; date?: string; agencyId?: string; quiet?: boolean }) => Voucher;
   deleteCommissionAccrual: (voucherId: string) => void;
 }
 
@@ -372,14 +386,28 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   }, [seasons, procurementLots, societyId]);
 
   // ── Agency CRUD ────────────────────────────────────────────────────────────────
-  const addAgency = useCallback((data: { name: string; code: string; kind: string; nameHi?: string }): Agency => {
+  // D1 (migration 136): ledgerAccountId / commissionBasis / commissionIncomeAccountId are written in a
+  // step-2 update (RULE 1) — the base row saves before the migration; a miss is a mild warning.
+  const persistAgencyExtras = (a: Agency) => {
+    const extras = { ledgerAccountId: a.ledgerAccountId ?? null, commissionBasis: a.commissionBasis ?? null, commissionIncomeAccountId: a.commissionIncomeAccountId ?? null };
+    if (!a.ledgerAccountId && !a.commissionBasis && !a.commissionIncomeAccountId) return;
+    supabase.from('procurement_agencies').update(extras).eq('id', a.id).then(({ error }) => {
+      if (!error) return;
+      reportError('write-partial', error.message, { at: 'procurement_agencies D1 columns (migration 136)' });
+      toastRef.current({ title: 'एजेंसी सेव हुई, खाता-सेटिंग नहीं', description: `एजेंसी का अपना खाता / कमीशन-आधार क्लाउड में सेव नहीं हुआ (migration 136 चलाएँ)। ${error.message}`, variant: 'default', duration: 12000 });
+    });
+  };
+  const agencyBase = (a: Agency) => { const { ledgerAccountId: _l, commissionBasis: _b, commissionIncomeAccountId: _c, ...base } = a; return base; };
+
+  const addAgency = useCallback((data: AgencyInput): Agency => {
     const now = new Date().toISOString();
     const empty = { ...data, id: '', createdAt: '', updatedAt: '' } as Agency;
     if (guardFYLocked()) return empty;
     const agency: Agency = { ...data, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
     setAgenciesState(prev => { const u = [...prev, agency]; storage.setProcurementAgencies(u); return u; });
-    supabase.from('procurement_agencies').upsert(withSoc(agency)).then(({ error }) => {
-      if (error) {
+    supabase.from('procurement_agencies').upsert(withSoc(agencyBase(agency))).then(({ error }) => {
+      if (!error) { persistAgencyExtras(agency); return; }
+      {
         console.error('Agency save error:', error.message); reportError('marketing-save', error.message);
         setAgenciesState(prev => { const r = prev.filter(a => a.id !== agency.id); storage.setProcurementAgencies(r); return r; });
         toastRef.current({ title: 'एजेंसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का procurement_agencies block चलाएँ।)`, variant: 'destructive', duration: 12000 });
@@ -388,15 +416,16 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     return agency;
   }, [societyId]);
 
-  const updateAgency = useCallback((id: string, data: Partial<Pick<Agency, 'name' | 'code' | 'kind' | 'nameHi'>>) => {
+  const updateAgency = useCallback((id: string, data: Partial<AgencyInput>) => {
     if (guardFYLocked()) return;
     setAgenciesState(prev => {
       const before = prev.find(a => a.id === id);
       const u = prev.map(a => a.id === id ? { ...a, ...data, updatedAt: new Date().toISOString() } : a);
       storage.setProcurementAgencies(u);
       const next = u.find(a => a.id === id);
-      if (next && before) supabase.from('procurement_agencies').upsert(withSoc(next)).then(({ error }) => {
-        if (error) {
+      if (next && before) supabase.from('procurement_agencies').upsert(withSoc(agencyBase(next))).then(({ error }) => {
+        if (!error) { persistAgencyExtras(next); return; }
+        {
           setAgenciesState(p => { const r = p.map(a => a.id === id ? before : a); storage.setProcurementAgencies(r); return r; });
           toastRef.current({ title: 'एजेंसी अपडेट नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
         }
@@ -671,8 +700,21 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     const balancesFor = (accountId: string | null): AgencyBalances => accountId
       ? agencyBalances({ vouchers, accountId, postingRuleResults: procurementPostingRuleResults, settlements: procurementSettlements, lots: procurementLots, centres, agencyIds })
       : { total: 0, byAgency: {}, unallocated: 0 };
-    return [balancesFor(mspReceivableId), balancesFor(commissionReceivableId)];
+    const msp = balancesFor(mspReceivableId), com = balancesFor(commissionReceivableId);
+    // D1: an agency with its OWN receivable ledger (MSP and commission both post there) is owed that
+    // ledger's net balance. Anything still traced to it on the pooled 3308/3314 (posted before the
+    // ledger was set) stays receivable as "unallocated" — a receipt without an agency clears it.
+    const live = vouchers.filter(v => !v.isDeleted && v.approvalStatus !== 'rejected');
+    for (const a of agencies) {
+      if (!a.ledgerAccountId) continue;
+      const own = ledgerNet(live, a.ledgerAccountId);
+      msp.unallocated = r2(msp.unallocated + (msp.byAgency[a.id] ?? 0)); msp.byAgency[a.id] = own; msp.total = r2(msp.total + own);
+      com.unallocated = r2(com.unallocated + (com.byAgency[a.id] ?? 0)); delete com.byAgency[a.id];
+    }
+    return [msp, com];
   }, [vouchers, agencies, centres, procurementLots, procurementPostingRuleResults, procurementSettlements, mspReceivableId, commissionReceivableId]);
+  // The pooled 3308 / 3314 alone (receipts without an own-ledger agency credit these).
+  const pooledNet = (accountId: string | null) => accountId ? ledgerNet(vouchers.filter(v => !v.isDeleted && v.approvalStatus !== 'rejected'), accountId) : 0;
   const agencyReceivableOutstanding = mspBalances.total;
 
   const recordAgencyReceipt = useCallback((data: { amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string; agencyId?: string; against?: 'msp' | 'commission' }): Voucher => {
@@ -681,7 +723,9 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     const amt = +Number(data.amount).toFixed(2);
     if (!(amt > 0)) { toastRef.current({ title: 'राशि डालें', description: 'प्राप्त राशि 0 से अधिक होनी चाहिए।', variant: 'destructive' }); return sentinel; }
     const isCommission = data.against === 'commission';
-    const crAcc = isCommission ? commissionReceivableId : mspReceivableId;
+    const agencyRow = data.agencyId ? agencies.find(a => a.id === data.agencyId) : undefined;
+    // D1: an agency with its own ledger is credited there for MSP AND commission alike.
+    const crAcc = agencyRow?.ledgerAccountId || (isCommission ? commissionReceivableId : mspReceivableId);
     if (!crAcc) {
       toastRef.current({ title: isCommission ? 'प्राप्य कमीशन खाता नहीं' : 'प्राप्य MSP खाता नहीं', description: 'इस समिति के चार्ट में यह खाता नहीं है। "लेजर स्वच्छता" पेज पर "डोमेन खाते बनाएँ" दबाएँ।', variant: 'destructive', duration: 12000 });
       return sentinel;
@@ -689,7 +733,11 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     const agency = data.agencyId ? agencies.find(a => a.id === data.agencyId) : undefined;
     if (data.agencyId && !agency) { toastRef.current({ title: 'एजेंसी नहीं मिली', description: 'एजेंसी दोबारा चुनें।', variant: 'destructive' }); return sentinel; }
     // Over-receipt guard: never more than what is owed (that agency's share, capped by the total).
-    const cap = receiptCap(isCommission ? commissionBalances : mspBalances, data.agencyId);
+    const cap = agency?.ledgerAccountId
+      ? Math.max(0, mspBalances.byAgency[agency.id] ?? 0)
+      : data.agencyId
+        ? receiptCap(isCommission ? commissionBalances : mspBalances, data.agencyId)
+        : Math.max(0, pooledNet(isCommission ? commissionReceivableId : mspReceivableId));
     if (amt > cap) {
       toastRef.current({
         title: 'बकाया से अधिक राशि',
@@ -722,7 +770,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   // ── Procurement commission accrual (M3d) ──────────────────────────────────────────
   const commissionAccruals = vouchers.filter(v => !v.isDeleted && v.refType === COMMISSION_ACCRUAL_REF_TYPE);
 
-  const accrueProcurementCommission = useCallback((data: { lotId: string; amount: number; note?: string; date?: string }): Voucher => {
+  const accrueProcurementCommission = useCallback((data: { lotId: string; amount: number; note?: string; date?: string; agencyId?: string; quiet?: boolean }): Voucher => {
     const sentinel = { id: '', voucherNo: '', type: 'journal', date: '', debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     const amt = +Number(data.amount).toFixed(2);
@@ -737,34 +785,38 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     if (vouchers.some(v => !v.isDeleted && v.refType === COMMISSION_ACCRUAL_REF_TYPE && v.refId === data.lotId)) {
       toastRef.current({ title: 'कमीशन पहले से', description: 'इस लॉट का commission पहले ही दर्ज है।', variant: 'destructive' }); return sentinel;
     }
-    if (!commissionReceivableId || !commissionIncomeId) {
+    const ag = data.agencyId ? agencies.find(a => a.id === data.agencyId) : undefined;
+    const drAcc = ag?.ledgerAccountId || commissionReceivableId;
+    const crAcc = (ag?.commissionIncomeAccountId && accounts.some(a => a.id === ag.commissionIncomeAccountId && !a.isGroup)) ? ag.commissionIncomeAccountId : commissionIncomeId;
+    if (!drAcc || !crAcc) {
       toastRef.current({ title: 'कमीशन खाता नहीं', description: 'चार्ट में "प्राप्य कमीशन" या "खरीद कमीशन" खाता नहीं मिला। "लेजर स्वच्छता" पेज पर "डोमेन खाते बनाएँ" दबाएँ।', variant: 'destructive', duration: 12000 }); return sentinel;
     }
     const voucher = addVoucher({
       // Commission is earned on the purchase — dated with the lot's posting (J-Form) day.
       type: 'journal', date: data.date || todayStr(),
-      debitAccountId: commissionReceivableId, creditAccountId: commissionIncomeId, amount: amt,
-      lines: [{ id: crypto.randomUUID(), accountId: commissionReceivableId, type: 'Dr', amount: amt }, { id: crypto.randomUUID(), accountId: commissionIncomeId, type: 'Cr', amount: amt }],
+      debitAccountId: drAcc, creditAccountId: crAcc, amount: amt,
+      lines: [{ id: crypto.randomUUID(), accountId: drAcc, type: 'Dr', amount: amt }, { id: crypto.randomUUID(), accountId: crAcc, type: 'Cr', amount: amt }],
       narration: `खरीद कमीशन${data.note ? ` — ${data.note}` : ''}`,
       refType: COMMISSION_ACCRUAL_REF_TYPE, refId: data.lotId,
       createdBy: user?.name || 'admin',
     } as Parameters<typeof addVoucher>[0]);
     if (!voucher?.id) return sentinel;
-    toastRef.current({ title: '✅ कमीशन दर्ज', description: `₹${amt.toLocaleString('en-IN')} · ${voucher.date}` });
+    toastRef.current({ title: data.quiet ? 'कमीशन अपने-आप दर्ज' : '✅ कमीशन दर्ज', description: `₹${amt.toLocaleString('en-IN')} · ${voucher.date}` });
     return voucher;
-  }, [vouchers, procurementLots, procurementQualityTests, commissionReceivableId, commissionIncomeId, addVoucher, user]);
+  }, [vouchers, agencies, accounts, procurementLots, procurementQualityTests, commissionReceivableId, commissionIncomeId, addVoucher, user]);
 
   const deleteCommissionAccrual = useCallback((voucherId: string) => {
     if (guardFYLocked()) return;
     // Commission already received from the agency cannot be un-earned here: reversing the accrual would
     // leave Commission Receivable in credit. Cancel the commission receipt first.
     const acc = vouchers.find(v => v.id === voucherId && !v.isDeleted);
-    if (acc && commissionBalances.total - (acc.amount || 0) < -0.005) {
+    const drAccount = acc ? (acc.lines?.find(l => l.type === 'Dr')?.accountId || acc.debitAccountId) : undefined;
+    if (acc && drAccount && pooledNet(drAccount) - (acc.amount || 0) < -0.005) {
       toastRef.current({ title: 'पहले कमीशन रसीद रद्द करें', description: 'इस कमीशन के बदले एजेंसी से राशि आ चुकी है। "एजेंसी रसीद" पेज पर वह रसीद पहले रद्द करें, फिर कमीशन रद्द करें।', variant: 'destructive', duration: 12000 });
       return;
     }
     cancelVoucher(voucherId, 'Commission accrual reversed', user?.name || 'System', { viaParent: true });
-  }, [cancelVoucher, user, vouchers, commissionBalances]);
+  }, [cancelVoucher, user, vouchers]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <MarketingDataContext.Provider value={{
