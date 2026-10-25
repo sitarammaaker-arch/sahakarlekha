@@ -1219,6 +1219,12 @@ var farmer = {
     c7("farmerName", "Farmer Name", "\u0915\u093F\u0938\u093E\u0928 \u0915\u093E \u0928\u093E\u092E"),
     c7("fatherName", "Father Name", "\u092A\u093F\u0924\u093E \u0915\u093E \u0928\u093E\u092E"),
     c7("mobile", "Mobile", "\u092E\u094B\u092C\u093E\u0907\u0932", { piiClass: "contact" }),
+    // Migration 138 (D2b): village, payment details, state-portal registration.
+    c7("village", "Village", "\u0917\u093E\u0901\u0935"),
+    c7("bankName", "Bank", "\u092C\u0948\u0902\u0915"),
+    c7("bankAccountNo", "Bank Account No.", "\u092C\u0948\u0902\u0915 \u0916\u093E\u0924\u093E \u0928\u0902.", { piiClass: "financial" }),
+    c7("ifsc", "IFSC", "IFSC"),
+    c7("portalId", "Portal ID", "\u092A\u094B\u0930\u094D\u091F\u0932 ID", { piiClass: "identity" }),
     internal7("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" }),
     internal7("updatedAt", "Updated At", "\u0905\u0926\u094D\u092F\u0924\u0928 \u0938\u092E\u092F", { type: "date" })
   ]

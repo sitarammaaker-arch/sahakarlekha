@@ -18,7 +18,11 @@ export type ReconciliationStatus =
   | 'matched' | 'variance' | 'disputed' | 'resolved';
 
 // ── Stakeholders ──
-export interface Farmer extends BaseEntity { farmerCode: string; farmerName: string; fatherName?: string; mobile?: string; }
+export interface Farmer extends BaseEntity {
+  farmerCode: string; farmerName: string; fatherName?: string; mobile?: string;
+  /** D2b (migration 138): payment + identification details (step-2 columns). */
+  village?: string; bankName?: string; bankAccountNo?: string; ifsc?: string; portalId?: string;
+}
 export interface Arhtiya extends BaseEntity {
   name: string;
   licenceNo: string;

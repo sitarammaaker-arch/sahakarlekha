@@ -90,10 +90,11 @@ import { shareOpPosting, validateShareOp, applyShareOp, withShareCapital, type S
 import { resolveDepositLiabilityAccount, depositPosting, applyDepositTxn, validateDepositTxn } from '@/lib/depositEngine';
 import { professionalTaxAccountId, shareRefundPayableAccountId, MISSING_HEAD_TOAST, missingDepositHeadToast } from '@/lib/accounting/headResolve';
 import { buildShareRefundApproval, buildShareRefundPayment, shareRefundOutstanding, SHARE_REFUND_APPROVE_REF, SHARE_REFUND_PAY_REF, SHARE_REFUND_MESSAGE } from '@/lib/shares/refundPayable';
+import type { FarmerInput } from '@/lib/procurement/agentFlow';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, buildEngineVoucherLines } from '@/lib/procurement';
 import { procurementPostingBinding, missingProcurementRoles, PROCUREMENT_ROLE_LABEL_HI, resolveProcurementAccountId } from '@/lib/procurement/accounts';
-import { isRejectedQuality, procurementBusinessDate, allocateFarmerCode, canRecordQuality, farmerPaidByEngineVoucher, withDerivedAmountPaid, FARMER_PAYMENT_REF_TYPE, agencyDirectAccounts, isLotCancelled, lotCancelBlockers, LOT_CANCEL_BLOCKER_TEXT, ENGINE_REVERSAL_REF_TYPE, COMMISSION_ACCRUAL_REF_TYPE, procurementLegsOf } from '@/lib/procurement/agentFlow';
+import { isRejectedQuality, procurementBusinessDate, allocateFarmerCode, canRecordQuality, farmerPaidByEngineVoucher, withDerivedAmountPaid, FARMER_PAYMENT_REF_TYPE, agencyDirectAccounts, isLotCancelled, lotCancelBlockers, LOT_CANCEL_BLOCKER_TEXT, ENGINE_REVERSAL_REF_TYPE, COMMISSION_ACCRUAL_REF_TYPE, procurementLegsOf, isValidIfsc, isValidBankAccount } from '@/lib/procurement/agentFlow';
 import { todayStr } from '@/lib/dateUtils';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, nextFY } from '@/lib/depreciation';
 import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
@@ -145,7 +146,9 @@ interface DataContextType {
   procurementFarmers: Farmer[];
   procurementLots: ProcurementLot[];
   procurementEvents: ProcurementEvent[];
-  addFarmer: (data: { farmerName: string; fatherName?: string; mobile?: string }) => Promise<Farmer>;
+  addFarmer: (data: FarmerInput) => Promise<Farmer>;
+  /** D2b: edit a farmer (name / father / mobile + bank, village, portal id). */
+  updateFarmer: (id: string, data: Partial<FarmerInput>) => void;
   addProcurementLot: (data: { farmerId: string; cropId: string; varietyId?: string; seasonId?: string; centreId?: string; quantity: Quantity; mspRate: Money; lotDate?: string; arhtiyaId?: string; grossWeight?: number; tareWeight?: number; bags?: number }) => ProcurementLot;
   procurementQualityTests: QualityTest[];
   procurementMoistureRecords: MoistureRecord[];
@@ -5076,9 +5079,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // The code comes from the server's atomic per-society counter (next_document_number, book
   // 'procurement.farmer') — the old "local count + 1" gave two devices the same code. Codes an older
   // client already issued (read fresh from the cloud) are skipped. No counter -> no farmer (RULE 1).
-  const addFarmer = useCallback(async (data: { farmerName: string; fatherName?: string; mobile?: string }): Promise<Farmer> => {
+  // D2b (migration 138): village / bank / IFSC / portal id are step-2 columns (RULE 1) — the farmer row
+  // saves before the migration; a miss is a mild warning (payment then needs the details re-entered).
+  const FARMER_EXTRA_KEYS = ['village', 'bankName', 'bankAccountNo', 'ifsc', 'portalId'] as const;
+  const farmerBase = (f: Farmer) => { const b: Record<string, unknown> = { ...f }; for (const k of FARMER_EXTRA_KEYS) delete b[k]; return b; };
+  const persistFarmerExtras = (f: Farmer, force = false) => {
+    const extras: Record<string, unknown> = {};
+    for (const k of FARMER_EXTRA_KEYS) if (f[k] !== undefined) extras[k] = f[k] || null;
+    if (!force && Object.keys(extras).length === 0) return;
+    supabase.from('procurement_farmers').update(extras).eq('id', f.id).then(({ error }) => {
+      if (!error) return;
+      reportError('write-partial', error.message, { at: 'procurement_farmers bank columns (migration 138)' });
+      toastRef.current({ title: 'किसान सेव हुआ, बैंक विवरण नहीं', description: `गाँव / बैंक / IFSC / पोर्टल ID क्लाउड में सेव नहीं हुए (migration 138 चलाएँ)। ${error.message}`, variant: 'default', duration: 12000 });
+    });
+  };
+  const validFarmerBank = (d: Partial<FarmerInput>): boolean => {
+    if (!isValidIfsc(d.ifsc)) { toastRef.current({ title: 'IFSC ठीक नहीं', description: 'IFSC 11 अक्षर का होता है — 4 अक्षर, फिर 0, फिर 6 अक्षर/अंक (जैसे SBIN0001234)।', variant: 'destructive', duration: 9000 }); return false; }
+    if (!isValidBankAccount(d.bankAccountNo)) { toastRef.current({ title: 'खाता नंबर ठीक नहीं', description: 'बैंक खाता नंबर 6 से 18 अंकों का होना चाहिए।', variant: 'destructive', duration: 9000 }); return false; }
+    return true;
+  };
+  const cleanFarmerInput = <T extends Partial<FarmerInput>>(d: T): T => ({ ...d, ifsc: d.ifsc ? d.ifsc.trim().toUpperCase() : d.ifsc, bankAccountNo: d.bankAccountNo ? d.bankAccountNo.trim() : d.bankAccountNo });
+
+  const addFarmer = useCallback(async (input: FarmerInput): Promise<Farmer> => {
+    const data = cleanFarmerInput(input);
     const blank: Farmer = { id: '', farmerCode: '', farmerName: data.farmerName, createdAt: '', updatedAt: '' };
     if (guardFYLocked()) return blank;
+    if (!validFarmerBank(data)) return blank;
     const sid = societyIdRef.current;
     // Paged read: PostgREST silently stops at 1000 rows, which would hide issued codes.
     const { data: codeRows, error: codeErr } = await fetchAllPagedFor<Farmer>('procurement_farmers', sid);
@@ -5095,18 +5121,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       farmerName: data.farmerName,
       fatherName: data.fatherName || undefined,
       mobile: data.mobile || undefined,
+      village: data.village || undefined, bankName: data.bankName || undefined, bankAccountNo: data.bankAccountNo || undefined,
+      ifsc: data.ifsc || undefined, portalId: data.portalId || undefined,
       createdAt: now,
       updatedAt: now,
     };
     setProcurementFarmersState(prev => { const u = [...prev, newFarmer]; storage.setProcurementFarmers(u); return u; });
-    supabase.from('procurement_farmers').upsert(withSoc(newFarmer)).then(({ error }) => {
-      if (error) {
+    supabase.from('procurement_farmers').upsert(withSoc(farmerBase(newFarmer))).then(({ error }) => {
+      if (!error) { persistFarmerExtras(newFarmer); return; }
+      {
         console.error('Farmer sync error:', error.message);
         setProcurementFarmersState(prev => { const r = prev.filter(f => f.id !== newFarmer.id); storage.setProcurementFarmers(r); return r; });
         toastRef.current({ title: 'किसान सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
       }
     });
     return newFarmer;
+  }, []);
+
+  const updateFarmer = useCallback((id: string, input: Partial<FarmerInput>) => {
+    if (guardFYLocked()) return;
+    const data = cleanFarmerInput(input);
+    if (data.farmerName !== undefined && !data.farmerName.trim()) { toastRef.current({ title: 'किसान का नाम आवश्यक है', variant: 'destructive' }); return; }
+    if (!validFarmerBank(data)) return;
+    const before = procurementFarmersRef.current.find(f => f.id === id);
+    if (!before) return;
+    const next: Farmer = { ...before, ...data, updatedAt: new Date().toISOString() };
+    setProcurementFarmersState(prev => { const u = prev.map(f => f.id === id ? next : f); storage.setProcurementFarmers(u); return u; });
+    supabase.from('procurement_farmers').upsert(withSoc(farmerBase(next))).then(({ error }) => {
+      if (!error) { persistFarmerExtras(next, true); return; }
+      setProcurementFarmersState(prev => { const u = prev.map(f => f.id === id ? before : f); storage.setProcurementFarmers(u); return u; });
+      toastRef.current({ title: 'किसान अपडेट नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+    });
   }, []);
 
   // Create a ProcurementLot + exactly ONE immutable 'lot.created' event (append-only). No voucher.
@@ -8418,7 +8463,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,
     stockItems, stockMovements, reconciledStockMovements, sales, purchases, employees, salaryRecords,
     suppliers, customers, kccLoans, societyCapabilities, societyActivities, setCapabilityHidden,
-    procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
+    procurementFarmers, procurementLots, procurementEvents, addFarmer, updateFarmer, addProcurementLot,
     procurementQualityTests, procurementMoistureRecords, recordQualityInspection,
     procurementJForms, generateJForm,
     procurementFinancialIntents, generateFinancialIntent,
@@ -8457,7 +8502,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     markComplianceFiled, unmarkComplianceFiled, getComplianceFiledIds,
     stockItems, stockMovements, reconciledStockMovements, sales, purchases, employees, salaryRecords,
     suppliers, customers, kccLoans, societyCapabilities, societyActivities, setCapabilityHidden,
-    procurementFarmers, procurementLots, procurementEvents, addFarmer, addProcurementLot,
+    procurementFarmers, procurementLots, procurementEvents, addFarmer, updateFarmer, addProcurementLot,
     procurementQualityTests, procurementMoistureRecords, recordQualityInspection,
     procurementJForms, generateJForm,
     procurementFinancialIntents, generateFinancialIntent,

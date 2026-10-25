@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
 import { resolveProcurementAccountId, missingProcurementRoles, PROCUREMENT_ROLE_LABEL_HI } from '@/lib/procurement/accounts';
-import { deriveLotStage, LOT_STAGE_LABEL, isRejectedQuality, suggestDeductionAccountId, deductionAccountWarning, DEDUCTION_WARNING_TEXT, canRecordQuality, agencyDirectAccounts, procurementLegsOf, commissionAmount, moistureLimitFor, qualityResultAllowed, deductionRuleAmount, deductionRuleLabel, netWeight } from '@/lib/procurement/agentFlow';
+import { deriveLotStage, LOT_STAGE_LABEL, isRejectedQuality, suggestDeductionAccountId, deductionAccountWarning, DEDUCTION_WARNING_TEXT, canRecordQuality, agencyDirectAccounts, procurementLegsOf, commissionAmount, moistureLimitFor, qualityResultAllowed, deductionRuleAmount, deductionRuleLabel, netWeight, maskAccount, planBulkPayment, bulkBatchRef, FARMER_PAYMENT_REF_TYPE } from '@/lib/procurement/agentFlow';
+import { jformSlipHTML, paymentSlipHTML, openPrint, type SlipParty } from '@/lib/procurement/print';
 import { Wheat, Plus, AlertTriangle } from 'lucide-react';
 import type { Voucher } from '@/types';
 
@@ -48,7 +49,7 @@ const DEDUCTION_TYPES = [
 ];
 
 export default function ProcurementLots() {
-  const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment, cancelProcurementLot } = useData();
+  const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment, cancelProcurementLot, updateFarmer, society } = useData();
   const { crops, varieties, seasons, agencies, centres, resolveMspRate, deductionRules, qualitySpecs, arhtiyas, accrueProcurementCommission, commissionAccruals, deleteCommissionAccrual } = useMarketingData();
   const { language } = useLanguage();
   const { toast } = useToast();
@@ -86,6 +87,18 @@ export default function ProcurementLots() {
   const [farmerName, setFarmerName] = useState('');
   const [fatherName, setFatherName] = useState('');
   const [mobile, setMobile] = useState('');
+  // D2b: edit an existing farmer + bank / village / portal id.
+  const [editFarmerId, setEditFarmerId] = useState<string | null>(null);
+  const [fVillage, setFVillage] = useState('');
+  const [fBankName, setFBankName] = useState('');
+  const [fAccount, setFAccount] = useState('');
+  const [fIfsc, setFIfsc] = useState('');
+  const [fPortal, setFPortal] = useState('');
+  const openAddFarmer = () => { setEditFarmerId(null); setFarmerName(''); setFatherName(''); setMobile(''); setFVillage(''); setFBankName(''); setFAccount(''); setFIfsc(''); setFPortal(''); setFarmerOpen(true); };
+  const openEditFarmer = (id: string) => {
+    const f = procurementFarmers.find(x => x.id === id); if (!f) return;
+    setEditFarmerId(id); setFarmerName(f.farmerName); setFatherName(f.fatherName || ''); setMobile(f.mobile || ''); setFVillage(f.village || ''); setFBankName(f.bankName || ''); setFAccount(f.bankAccountNo || ''); setFIfsc(f.ifsc || ''); setFPortal(f.portalId || ''); setFarmerOpen(true);
+  };
 
   // Quality dialog
   const [qualityOpen, setQualityOpen] = useState(false);
@@ -303,10 +316,16 @@ export default function ProcurementLots() {
   const saveFarmer = async () => {
     if (!farmerName.trim()) { toast({ title: hi ? 'किसान का नाम आवश्यक है' : 'Farmer name is required', variant: 'destructive' }); return; }
     if (farmerSaving) return;
+    const extra = { village: fVillage.trim() || undefined, bankName: fBankName.trim() || undefined, bankAccountNo: fAccount.trim() || undefined, ifsc: fIfsc.trim() || undefined, portalId: fPortal.trim() || undefined };
+    if (editFarmerId) {
+      updateFarmer(editFarmerId, { farmerName: farmerName.trim(), fatherName: fatherName.trim() || undefined, mobile: mobile.trim() || undefined, ...extra });
+      setFarmerOpen(false);
+      return;
+    }
     setFarmerSaving(true);
     try {
       // The farmer code is issued by the server (unique across devices), so this waits for it.
-      const f = await addFarmer({ farmerName: farmerName.trim(), fatherName: fatherName.trim() || undefined, mobile: mobile.trim() || undefined });
+      const f = await addFarmer({ farmerName: farmerName.trim(), fatherName: fatherName.trim() || undefined, mobile: mobile.trim() || undefined, ...extra });
       if (!f.id) return;   // addFarmer already showed why (FY lock / no code) — keep the dialog open
       setFarmerId(f.id);
       toast({ title: hi ? 'किसान जोड़ा गया' : 'Farmer added', description: `${f.farmerName} (${f.farmerCode})` });
@@ -343,6 +362,67 @@ export default function ProcurementLots() {
     if (reason == null) return;
     setCancellingLotId(lotId);
     try { await cancelProcurementLot({ lotId, reason }); } finally { setCancellingLotId(null); }
+  };
+
+  // ── D2b: prints ──
+  const slipParty = (farmerId2: string): SlipParty => {
+    const f = procurementFarmers.find(x => x.id === farmerId2);
+    return f ? { name: f.farmerName, code: f.farmerCode, fatherName: f.fatherName, village: f.village, mobile: f.mobile, bankName: f.bankName, bankAccountMasked: maskAccount(f.bankAccountNo), ifsc: f.ifsc, portalId: f.portalId } : { name: farmerId2 };
+  };
+  const popupBlocked = () => toast({ title: hi ? 'प्रिंट विंडो नहीं खुली' : 'Print window blocked', description: hi ? 'ब्राउज़र में इस साइट के pop-up की अनुमति दें।' : 'Allow pop-ups for this site.', variant: 'destructive' });
+  const printJForm = (lotId: string) => {
+    const l = procurementLots.find(x => x.id === lotId); const jf = lotJForm(lotId); if (!l || !jf) return;
+    const ev = lotEngineVoucher(lotId); const q = lotQuality(lotId); const ag = lotAgency(l);
+    const ok = openPrint(jformSlipHTML({
+      hi, societyName: (hi && society.nameHi) ? society.nameHi : society.name, documentNo: jf.documentNo, date: l.lotDate || ev?.date || jf.createdAt.slice(0, 10),
+      farmer: slipParty(l.farmerId), crop: cropName(l.cropId), variety: l.varietyId ? varietyLabel(l.varietyId) : undefined,
+      season: seasonLabel(l.seasonId) || undefined, centre: centreLabel(l.centreId) || undefined, agency: ag ? (hi && ag.nameHi ? ag.nameHi : ag.name) : undefined,
+      arhtiya: l.arhtiyaId ? arhtiyas.find(a => a.id === l.arhtiyaId)?.name : undefined,
+      grossWeight: l.grossWeight, tareWeight: l.tareWeight, bags: l.bags, quantity: l.quantity?.value || 0, rate: l.mspRate?.amount || 0, value: jf.net.amount,
+      moisture: lotMoisture(lotId)?.moisture.value, quality: q ? resultLabel(q.result) : undefined,
+    }));
+    if (!ok) popupBlocked();
+  };
+  const printPaymentSlip = (lotId: string) => {
+    const l = procurementLots.find(x => x.id === lotId); const info = payInfo(lotId); if (!l || !info?.settlement) return;
+    const s2 = info.settlement;
+    const pays = vouchers.filter(v => !v.isDeleted && v.approvalStatus !== 'rejected' && v.refType === FARMER_PAYMENT_REF_TYPE && v.refId === info.ev.id)
+      .map(v => ({ date: v.date, voucherNo: v.voucherNo, amount: v.amount, mode: accounts.find(a => a.id === (v.lines?.find(x => x.type === 'Cr')?.accountId || v.creditAccountId))?.name, reference: (v.narration.match(/Ref ([^·]+)/)?.[1] || '').trim() || undefined }));
+    const ok = openPrint(paymentSlipHTML({
+      hi, societyName: (hi && society.nameHi) ? society.nameHi : society.name, farmer: slipParty(l.farmerId), settlementNo: s2.settlementNo, jformNo: lotJForm(lotId)?.documentNo,
+      gross: s2.gross.amount, deductions: s2.deductionLines.map(d => ({ label: d.deductionType, amount: d.amount.amount })), netPayable: s2.netPayable.amount,
+      payments: pays, outstanding: info.outstanding,
+    }));
+    if (!ok) popupBlocked();
+  };
+
+  // ── D2b: bulk payment — one payment voucher PER farmer, one shared batch reference (founder) ──
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkSel, setBulkSel] = useState<Record<string, boolean>>({});
+  const [bulkMode, setBulkMode] = useState<'bank' | 'cash' | 'agency'>('bank');
+  const [bulkBank, setBulkBank] = useState('');
+  const [bulkDate, setBulkDate] = useState('');
+  const [bulkRef, setBulkRef] = useState('');
+  const payableLots = procurementLots.filter(l => !l.cancelledAt && settlementForLot(l.id)?.status === 'approved' && (payInfo(l.id)?.outstanding ?? 0) > 0.005);
+  const openBulk = () => {
+    const sel: Record<string, boolean> = {}; for (const l of payableLots) sel[l.id] = true;
+    setBulkSel(sel); setBulkMode('bank'); setBulkBank(bankAccounts[0]?.id || ''); setBulkDate(new Date().toISOString().slice(0, 10)); setBulkRef(bulkBatchRef()); setBulkOpen(true);
+  };
+  const bulkRows = payableLots.filter(l => bulkSel[l.id]).map(l => ({ lotId: l.id, engineVoucherId: payInfo(l.id)!.ev.id, outstanding: payInfo(l.id)!.outstanding }));
+  const bulkPlan = planBulkPayment(bulkRows);
+  const runBulk = () => {
+    if (!bulkRef.trim()) { toast({ title: hi ? 'batch संदर्भ डालें' : 'Enter a batch reference', variant: 'destructive' }); return; }
+    if (bulkMode === 'bank' && !bulkBank) { toast({ title: hi ? 'बैंक खाता चुनें' : 'Select a bank account', variant: 'destructive' }); return; }
+    if (bulkMode === 'agency' && !agencyAccounts[0]) { toast({ title: hi ? 'एजेंसी प्राप्य खाता नहीं' : 'No agency receivable', variant: 'destructive' }); return; }
+    let done = 0;
+    for (const r of bulkPlan.pay) {
+      const lot = procurementLots.find(x => x.id === (bulkRows.find(b => b.engineVoucherId === r.engineVoucherId)?.lotId));
+      const agencyAcc = lot ? (lotAgency(lot)?.ledgerAccountId || agencyAccounts[0]?.id) : agencyAccounts[0]?.id;
+      const v = recordFarmerPayment({ engineVoucherId: r.engineVoucherId, amount: r.outstanding, mode: bulkMode, bankAccountId: bulkMode === 'bank' ? bulkBank : undefined, agencyAccountId: bulkMode === 'agency' ? agencyAcc : undefined, paymentDate: bulkDate, reference: bulkRef.trim(), remarks: hi ? 'एक साथ भुगतान' : 'Bulk payment' });
+      if (v.id) done++;
+    }
+    toast({ title: hi ? `${done} किसानों का भुगतान दर्ज` : `${done} farmer payments recorded`, description: `${bulkRef.trim()} · ${money(bulkPlan.total)}${done < bulkPlan.pay.length ? (hi ? ` — ${bulkPlan.pay.length - done} नहीं हुए (ऊपर की चेतावनी देखें)` : ` — ${bulkPlan.pay.length - done} failed (see warnings)`) : ''}` });
+    setBulkOpen(false);
   };
 
   const lots = [...procurementLots].reverse();
@@ -383,7 +463,8 @@ export default function ProcurementLots() {
                   {procurementFarmers.map(f => <SelectItem key={f.id} value={f.id}>{f.farmerName} ({f.farmerCode})</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Button variant="outline" onClick={() => setFarmerOpen(true)} className="gap-1"><Plus className="h-4 w-4" />{hi ? 'किसान जोड़ें' : 'Add Farmer'}</Button>
+              {farmerId && <Button variant="outline" onClick={() => openEditFarmer(farmerId)}>{hi ? 'संपादित' : 'Edit'}</Button>}
+              <Button variant="outline" onClick={openAddFarmer} className="gap-1"><Plus className="h-4 w-4" />{hi ? 'किसान जोड़ें' : 'Add Farmer'}</Button>
             </div>
           </div>
 
@@ -479,7 +560,10 @@ export default function ProcurementLots() {
 
       {/* Lot list */}
       <Card>
-        <CardHeader><CardTitle className="text-base">{hi ? 'बने हुए लॉट' : 'Created Lots'} ({lots.length})</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle className="text-base">{hi ? 'बने हुए लॉट' : 'Created Lots'} ({lots.length})</CardTitle>
+          {payableLots.length > 0 && <Button size="sm" variant="outline" onClick={openBulk}>{hi ? `एक साथ भुगतान (${payableLots.length})` : `Bulk payment (${payableLots.length})`}</Button>}
+        </CardHeader>
         <CardContent className="space-y-2">
           {lots.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'अभी तक कोई लॉट नहीं।' : 'No lots yet.'}</p>}
           {lots.map(l => (
@@ -558,6 +642,8 @@ export default function ProcurementLots() {
                 {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="ghost" onClick={() => openSettlement(l.id)}>{hi ? 'देखें' : 'View'}</Button>}
                 {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openPay(l.id)}>{hi ? 'किसान को भुगतान' : 'Pay Farmer'}</Button>}
                 {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding <= 0 && <span className="text-xs text-green-600 font-medium">{hi ? '✓ पूर्ण भुगतान' : '✓ Fully Paid'}</span>}
+                {lotJForm(l.id) && <Button size="sm" variant="ghost" onClick={() => printJForm(l.id)}>{hi ? 'J-Form प्रिंट' : 'Print J-Form'}</Button>}
+                {settlementForLot(l.id)?.status === 'approved' && <Button size="sm" variant="ghost" onClick={() => printPaymentSlip(l.id)}>{hi ? 'भुगतान पर्ची' : 'Payment slip'}</Button>}
                 </>}
                 {!lotRejected(l.id) && !l.cancelledAt && lotEngineVoucher(l.id) && !commissionForLot(l.id) && lotCommissionInfo(l) && (
                   // Manual click by design (founder decision pending: automate on posting?). Dated with
@@ -577,10 +663,41 @@ export default function ProcurementLots() {
         </CardContent>
       </Card>
 
+      {/* D2b: bulk payment dialog */}
+      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>{hi ? 'एक साथ भुगतान' : 'Bulk Payment'}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="max-h-60 overflow-y-auto rounded border divide-y">
+              {payableLots.map(l => (
+                <label key={l.id} className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
+                  <span className="flex items-center gap-2"><input type="checkbox" checked={!!bulkSel[l.id]} onChange={e => setBulkSel(p => ({ ...p, [l.id]: e.target.checked }))} />{farmerLabel(l.farmerId)}{procurementFarmers.find(f => f.id === l.farmerId)?.bankAccountNo ? '' : <span className="text-xs text-amber-600">{hi ? ' · बैंक विवरण नहीं' : ' · no bank details'}</span>}</span>
+                  <span className="tabular-nums">{money(payInfo(l.id)!.outstanding)}</span>
+                </label>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1"><Label>{hi ? 'माध्यम' : 'Mode'}</Label>
+                <Select value={bulkMode} onValueChange={v => setBulkMode(v as 'bank' | 'cash' | 'agency')}><SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="bank">{hi ? 'बैंक' : 'Bank'}</SelectItem><SelectItem value="cash">{hi ? 'नकद' : 'Cash'}</SelectItem><SelectItem value="agency">{hi ? 'एजेंसी ने सीधे भुगतान किया' : 'Agency paid directly'}</SelectItem></SelectContent></Select></div>
+              <div className="space-y-1"><Label>{hi ? 'तारीख' : 'Date'}</Label><Input type="date" value={bulkDate} onChange={e => setBulkDate(e.target.value)} /></div>
+              {bulkMode === 'bank' && <div className="space-y-1 col-span-2"><Label>{hi ? 'बैंक खाता' : 'Bank account'}</Label>
+                <Select value={bulkBank} onValueChange={setBulkBank}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent></Select></div>}
+              <div className="space-y-1 col-span-2"><Label>{hi ? 'batch संदर्भ / UTR' : 'Batch ref / UTR'}</Label><Input value={bulkRef} onChange={e => setBulkRef(e.target.value)} /></div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">{hi ? 'हर किसान का अलग भुगतान वाउचर बनेगा (उसके निपटान से जुड़ा), सब पर यही batch संदर्भ — बैंक मिलान में इसी से जोड़ें।' : "One payment voucher per farmer (linked to their settlement), all with this batch reference — match the bank line with it."}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
+            <Button onClick={runBulk} disabled={bulkPlan.pay.length === 0}>{hi ? `${bulkPlan.pay.length} किसान · ${money(bulkPlan.total)} भुगतान करें` : `Pay ${bulkPlan.pay.length} · ${money(bulkPlan.total)}`}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Add-farmer dialog */}
       <Dialog open={farmerOpen} onOpenChange={setFarmerOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{hi ? 'नया किसान' : 'Add Farmer'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editFarmerId ? (hi ? 'किसान संपादित करें' : 'Edit Farmer') : (hi ? 'नया किसान' : 'Add Farmer')}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label>{hi ? 'किसान का नाम' : 'Farmer Name'} *</Label>
@@ -594,10 +711,19 @@ export default function ProcurementLots() {
               <Label>{hi ? 'मोबाइल' : 'Mobile'}</Label>
               <Input value={mobile} onChange={e => setMobile(e.target.value)} maxLength={10} />
             </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5"><Label>{hi ? 'गाँव' : 'Village'}</Label><Input value={fVillage} onChange={e => setFVillage(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>{hi ? 'पोर्टल पंजीकरण ID' : 'Portal registration ID'}</Label><Input value={fPortal} onChange={e => setFPortal(e.target.value)} /></div>
+            </div>
+            <div className="space-y-1.5"><Label>{hi ? 'बैंक का नाम' : 'Bank name'}</Label><Input value={fBankName} onChange={e => setFBankName(e.target.value)} /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5"><Label>{hi ? 'खाता नंबर' : 'Account no.'}</Label><Input inputMode="numeric" value={fAccount} onChange={e => setFAccount(e.target.value.replace(/\D/g, ''))} maxLength={18} /></div>
+              <div className="space-y-1.5"><Label>IFSC</Label><Input value={fIfsc} onChange={e => setFIfsc(e.target.value.toUpperCase())} maxLength={11} placeholder="SBIN0001234" /></div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFarmerOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
-            <Button onClick={saveFarmer} disabled={farmerSaving}>{farmerSaving ? (hi ? 'जोड़ रहे हैं…' : 'Adding…') : (hi ? 'जोड़ें' : 'Add')}</Button>
+            <Button onClick={saveFarmer} disabled={farmerSaving}>{farmerSaving ? (hi ? 'जोड़ रहे हैं…' : 'Adding…') : editFarmerId ? (hi ? 'सेव करें' : 'Save') : (hi ? 'जोड़ें' : 'Add')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

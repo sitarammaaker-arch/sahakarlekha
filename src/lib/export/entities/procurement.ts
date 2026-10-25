@@ -64,6 +64,12 @@ const farmer: EntityDescriptor = {
     c('farmerName', 'Farmer Name', 'किसान का नाम'),
     c('fatherName', 'Father Name', 'पिता का नाम'),
     c('mobile', 'Mobile', 'मोबाइल', { piiClass: 'contact' }),
+    // Migration 138 (D2b): village, payment details, state-portal registration.
+    c('village', 'Village', 'गाँव'),
+    c('bankName', 'Bank', 'बैंक'),
+    c('bankAccountNo', 'Bank Account No.', 'बैंक खाता नं.', { piiClass: 'financial' }),
+    c('ifsc', 'IFSC', 'IFSC'),
+    c('portalId', 'Portal ID', 'पोर्टल ID', { piiClass: 'identity' }),
     internal('createdAt', 'Created At', 'निर्माण समय', { type: 'date' }),
     internal('updatedAt', 'Updated At', 'अद्यतन समय', { type: 'date' }),
   ],

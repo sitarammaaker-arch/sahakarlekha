@@ -389,3 +389,25 @@ export function netWeight(gross?: number | null, tare?: number | null): number |
   if (!Number.isFinite(g) || !Number.isFinite(t) || g <= 0 || t < 0 || t >= g) return null;
   return Math.round((g - t) * 1000) / 1000;
 }
+
+// ── 16. Farmer bank details + bulk payment (D2b) ────────────────────────────────────────────────────
+export type FarmerInput = { farmerName: string; fatherName?: string; mobile?: string; village?: string; bankName?: string; bankAccountNo?: string; ifsc?: string; portalId?: string };
+/** IFSC = 4 letters, a zero, 6 letters/digits (RBI format). Empty is allowed (no bank details yet). */
+export const isValidIfsc = (s?: string | null): boolean => !s || /^[A-Z]{4}0[A-Z0-9]{6}$/.test(s.trim().toUpperCase());
+/** Bank account: 6–18 digits. Empty is allowed. */
+export const isValidBankAccount = (s?: string | null): boolean => !s || /^\d{6,18}$/.test(s.trim());
+/** Show only the last 4 digits on screens / slips. */
+export const maskAccount = (s?: string | null): string => (s && s.length > 4 ? `XXXX${s.slice(-4)}` : (s || ''));
+
+export interface BulkPayRow { engineVoucherId: string; outstanding: number }
+/**
+ * Founder D2b: a bulk (batch RTGS / NEFT) payment books ONE payment voucher PER farmer, all carrying
+ * the same batch reference — each farmer's outstanding and slip stay his own; the bank line is matched
+ * through the batch reference. Rows with nothing outstanding are skipped. Paise-exact total.
+ */
+export function planBulkPayment(rows: ReadonlyArray<BulkPayRow>): { pay: BulkPayRow[]; total: number } {
+  const pay = rows.filter(r => Number(r.outstanding) > 0.005);
+  return { pay, total: toRupees(pay.reduce((m, r) => addMinor(m, toMinor(r.outstanding)), 0)) };
+}
+export const bulkBatchRef = (d: Date = new Date()): string =>
+  `BULK-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;

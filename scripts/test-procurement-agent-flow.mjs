@@ -382,5 +382,30 @@ const MSP = new Set(['procurement_msp']);
   ok(/if \(lot\.bags != null\) extras\.bags = lot\.bags;/.test(dc), 'weighment / bags are step-2 lot columns');
 }
 
+// ── 16. D2b — farmer bank details, bulk payment, prints ──────────────────────────────────────────
+{
+  ok(F.isValidIfsc('SBIN0001234') && F.isValidIfsc('sbin0001234') && F.isValidIfsc('') && F.isValidIfsc(undefined), 'IFSC valid (case-insensitive; empty allowed)');
+  ok(!F.isValidIfsc('SBIN1001234') && !F.isValidIfsc('SBI0001234') && !F.isValidIfsc('SBIN000123'), 'IFSC: 5th char must be 0, 11 chars');
+  ok(F.isValidBankAccount('123456') && F.isValidBankAccount('123456789012345678') && !F.isValidBankAccount('12345') && !F.isValidBankAccount('12A456'), 'account 6–18 digits');
+  ok(F.maskAccount('30123456789') === 'XXXX6789' && F.maskAccount('') === '', 'account masked to last 4');
+  const plan = F.planBulkPayment([{ engineVoucherId: 'A', outstanding: 1000.10 }, { engineVoucherId: 'B', outstanding: 0 }, { engineVoucherId: 'C', outstanding: 2500.20 }]);
+  ok(plan.pay.length === 2 && plan.total === 3500.3, 'bulk: settled rows skipped, paise-exact total 3,500.30');
+  ok(/^BULK-\d{8}-\d{4}$/.test(F.bulkBatchRef(new Date(2026, 9, 25, 9, 5))) && F.bulkBatchRef(new Date(2026, 9, 25, 9, 5)) === 'BULK-20261025-0905', 'batch reference format');
+  const P = await import(abs('../src/lib/procurement/print.ts'));
+  const farmer = { name: 'राम <b>', code: 'F0001', bankName: 'SBI', bankAccountMasked: 'XXXX6789', ifsc: 'SBIN0001234' };
+  const jf = P.jformSlipHTML({ hi: true, societyName: 'Test Society', documentNo: 'J0007', date: '2026-04-15', farmer, crop: 'गेहूँ', quantity: 100, rate: 2425, value: 242500, bags: 200, grossWeight: 101, tareWeight: 1 });
+  ok(jf.includes('J0007') && jf.includes('₹2,42,500.00') && jf.includes('XXXX6789') && jf.includes('200'), 'J-Form slip carries number, value, masked account, bags');
+  ok(!jf.includes('राम <b>') && jf.includes('राम &lt;b&gt;'), 'J-Form slip escapes HTML');
+  ok(/राज्य पोर्टल का निर्धारित J-Form/.test(jf), 'J-Form slip says it is the society\'s own slip, not the prescribed form');
+  const ps = P.paymentSlipHTML({ hi: false, societyName: 'S', farmer, settlementNo: 'STL000003', gross: 242500, deductions: [{ label: 'Market fee', amount: 4850 }], netPayable: 237650, payments: [{ date: '2026-04-20', voucherNo: 'PV/9', amount: 200000, reference: 'BULK-1' }], outstanding: 37650 });
+  ok(ps.includes('STL000003') && ps.includes('₹2,37,650.00') && ps.includes('BULK-1') && ps.includes('₹37,650.00'), 'payment slip: net, payment with batch ref, outstanding');
+  const { readFileSync } = await import('node:fs');
+  const dc = readFileSync(pathResolve(SRC, 'contexts', 'DataContext.tsx'), 'utf8');
+  ok(/upsert\(withSoc\(farmerBase\(newFarmer\)\)\)/.test(dc) && /persistFarmerExtras\(newFarmer\)/.test(dc), 'farmer bank columns are a step-2 write');
+  ok(/const updateFarmer = useCallback/.test(dc) && /setProcurementFarmersState\(prev => \{ const u = prev\.map\(f => f\.id === id \? before : f\)/.test(dc), 'farmer edit rolls back on a failed save');
+  const page = readFileSync(pathResolve(SRC, 'pages', 'ProcurementLots.tsx'), 'utf8');
+  ok(/for \(const r of bulkPlan\.pay\)[\s\S]{0,400}recordFarmerPayment\(\{ engineVoucherId: r\.engineVoucherId/.test(page) && /reference: bulkRef\.trim\(\)/.test(page), 'bulk = one recordFarmerPayment per farmer with the shared batch ref');
+}
+
 console.log(`[procurement-agent-flow] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
