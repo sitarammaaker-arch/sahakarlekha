@@ -11,8 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { suggestDeductionAccountId, deductionAccountWarning, DEDUCTION_WARNING_TEXT } from '@/lib/procurement/agentFlow';
-import { Wheat, Plus, Sprout, Pencil, Trash2, CalendarDays, Building2, IndianRupee, Percent, AlertTriangle } from 'lucide-react';
+import { suggestDeductionAccountId, deductionAccountWarning, DEDUCTION_WARNING_TEXT, deductionRuleLabel } from '@/lib/procurement/agentFlow';
+import { Wheat, Plus, Sprout, Pencil, Trash2, CalendarDays, Building2, IndianRupee, Percent, AlertTriangle, Users } from 'lucide-react';
 
 // Generic, national categories (every state has its own apex marketing federation);
 // the society enters its specific agency NAME and picks a category here.
@@ -33,6 +33,7 @@ export default function ProcurementMasters() {
     deductionRules, addDeductionRule, deleteDeductionRule,
     qualitySpecs, addQualitySpec, deleteQualitySpec,
     bardanaTypes, addBardanaType, deleteBardanaType,
+    arhtiyas, addArhtiya, updateArhtiya, deleteArhtiya,
   } = useMarketingData();
   const { accounts, society, updateSociety } = useData();
   const { language } = useLanguage();
@@ -168,6 +169,7 @@ export default function ProcurementMasters() {
   const [dNameHi, setDNameHi] = useState('');
   const [dBasis, setDBasis] = useState('');
   const [dRate, setDRate] = useState('');
+  const [dUnit, setDUnit] = useState<'percent' | 'perQtl' | 'perBag'>('percent');   // D2a
   const [dAccountId, setDAccountId] = useState('');
   const DED_BASES = [
     { id: 'market_fee', en: 'Market Fee', hi: 'मंडी शुल्क' },
@@ -177,15 +179,32 @@ export default function ProcurementMasters() {
     { id: 'shortage', en: 'Shortage', hi: 'घटती' },
     { id: 'other', en: 'Other', hi: 'अन्य' },
   ];
-  const openAddDed = () => { setDName(''); setDNameHi(''); setDBasis(''); setDRate(''); setDAccountId(''); setDedOpen(true); };
+  const openAddDed = () => { setDName(''); setDNameHi(''); setDBasis(''); setDRate(''); setDUnit('percent'); setDAccountId(''); setDedOpen(true); };
   const saveDed = () => {
     const r = Number(dRate);
     if (!dName.trim()) { toast({ title: hi ? 'नाम आवश्यक' : 'Name required', variant: 'destructive' }); return; }
     if (!dBasis) { toast({ title: hi ? 'आधार चुनें' : 'Select basis', variant: 'destructive' }); return; }
     if (!(r >= 0)) { toast({ title: hi ? 'दर दर्ज करें' : 'Enter a rate', variant: 'destructive' }); return; }
     if (!dAccountId) { toast({ title: hi ? 'खाता चुनें' : 'Select an account', variant: 'destructive' }); return; }
-    addDeductionRule({ code: dName.trim().toUpperCase().replace(/\s+/g, '_'), basis: dBasis, rate: r, accountId: dAccountId, name: dName.trim(), nameHi: dNameHi.trim() || undefined });
+    addDeductionRule({ code: dName.trim().toUpperCase().replace(/\s+/g, '_'), basis: dBasis, rate: r, accountId: dAccountId, name: dName.trim(), nameHi: dNameHi.trim() || undefined, basisUnit: dUnit });
     setDedOpen(false);
+  };
+  // ── D2a: arhtiya dialog ──
+  const [arhOpen, setArhOpen] = useState(false);
+  const [editArhId, setEditArhId] = useState<string | null>(null);
+  const [hName, setHName] = useState('');
+  const [hNameHi, setHNameHi] = useState('');
+  const [hLicence, setHLicence] = useState('');
+  const [hMobile, setHMobile] = useState('');
+  const [hRate, setHRate] = useState('');
+  const [hBasis, setHBasis] = useState<'percent' | 'perQtl'>('percent');
+  const openAddArh = () => { setEditArhId(null); setHName(''); setHNameHi(''); setHLicence(''); setHMobile(''); setHRate(''); setHBasis('percent'); setArhOpen(true); };
+  const openEditArh = (id: string) => { const a = arhtiyas.find(x => x.id === id); if (!a) return; setEditArhId(id); setHName(a.name); setHNameHi(a.nameHi || ''); setHLicence(a.licenceNo || ''); setHMobile(a.mobile || ''); setHRate(a.damiRate != null ? String(a.damiRate) : ''); setHBasis(a.damiBasis || 'percent'); setArhOpen(true); };
+  const saveArh = () => {
+    if (!hName.trim()) { toast({ title: hi ? 'नाम आवश्यक' : 'Name required', variant: 'destructive' }); return; }
+    const payload = { name: hName.trim(), nameHi: hNameHi.trim() || undefined, licenceNo: hLicence.trim(), mobile: hMobile.trim() || undefined, damiRate: hRate.trim() ? Number(hRate) : undefined, damiBasis: hBasis };
+    if (editArhId) updateArhtiya(editArhId, payload); else addArhtiya(payload);
+    setArhOpen(false);
   };
   const basisLabel = (id: string) => { const b = DED_BASES.find(x => x.id === id); return b ? (hi ? b.hi : b.en) : id; };
   // Picking a basis pre-selects a PAYABLE for third-party deductions (only if none chosen yet) — a
@@ -244,6 +263,7 @@ export default function ProcurementMasters() {
           <TabsTrigger value="agencies" className="flex-1 gap-1"><Building2 className="h-4 w-4" />{hi ? 'एजेंसी व केंद्र' : 'Agencies'}</TabsTrigger>
           <TabsTrigger value="msp" className="flex-1 gap-1"><IndianRupee className="h-4 w-4" />{hi ? 'MSP दर' : 'MSP'}</TabsTrigger>
           <TabsTrigger value="rules" className="flex-1 gap-1"><Percent className="h-4 w-4" />{hi ? 'नियम' : 'Rules'}</TabsTrigger>
+          <TabsTrigger value="arhtiyas" className="flex-1 gap-1"><Users className="h-4 w-4" />{hi ? 'आढ़ती' : 'Arhtiyas'}</TabsTrigger>
         </TabsList>
 
         {/* ── Crops & Varieties ── */}
@@ -402,7 +422,7 @@ export default function ProcurementMasters() {
                 <div key={r.id} className="flex items-center justify-between rounded-lg border p-3 gap-3">
                   <div className="min-w-0">
                     <div className="font-medium">{hi && r.nameHi ? r.nameHi : (r.name || r.code)} <Badge variant="secondary" className="ml-1">{basisLabel(r.basis)}</Badge></div>
-                    <div className="text-xs text-muted-foreground">{r.rate.value}% {hi ? 'सकल का' : 'of gross'}{r.accountId ? ` → ${r.accountId} ${accountName(r.accountId)}` : ''}</div>
+                    <div className="text-xs text-muted-foreground">{deductionRuleLabel(r)}{(!r.basisUnit || r.basisUnit === 'percent') ? ` ${hi ? 'सकल का' : 'of gross'}` : ''}{r.accountId ? ` → ${r.accountId} ${accountName(r.accountId)}` : ''}</div>
                     {ruleWarning(r) && (
                       <div className="text-[11px] text-amber-700 flex items-start gap-1 mt-0.5">
                         <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
@@ -452,7 +472,62 @@ export default function ProcurementMasters() {
             </CardContent>
           </Card>
         </TabsContent>
+        {/* ── D2a: Arhtiyas (register only — dami is computed in the Arhtiya register, never posted) ── */}
+        <TabsContent value="arhtiyas">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle className="text-base">{hi ? 'आढ़ती' : 'Arhtiyas'} ({arhtiyas.length})</CardTitle>
+              <Button size="sm" className="gap-1" onClick={openAddArh}><Plus className="h-4 w-4" />{hi ? 'आढ़ती' : 'Arhtiya'}</Button>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {arhtiyas.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'अभी कोई आढ़ती नहीं। जो लॉट किसी आढ़ती के ज़रिए आते हैं, उनके लिए आढ़ती जोड़ें — दामी "प्रोक्योरमेंट रजिस्टर" में गिनी जाएगी (बहीखाते में entry नहीं)।' : 'No arhtiyas yet. Dami is computed in the Procurement Registers (no ledger entry).'}</p>}
+              {arhtiyas.map(a => (
+                <div key={a.id} className="flex items-center justify-between rounded-lg border p-3 gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium">{hi && a.nameHi ? a.nameHi : a.name}{a.licenceNo ? <Badge variant="outline" className="ml-2 font-mono">{a.licenceNo}</Badge> : null}</div>
+                    <div className="text-xs text-muted-foreground">{a.mobile || ''}{a.damiRate ? `${a.mobile ? ' · ' : ''}${hi ? 'दामी' : 'dami'} ${a.damiBasis === 'perQtl' ? `₹${a.damiRate}/${hi ? 'क्विं' : 'qtl'}` : `${a.damiRate}%`}` : ''}</div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEditArh(a.id)} aria-label="edit"><Pencil className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => { if (window.confirm(hi ? 'यह आढ़ती हटाएँ?' : 'Delete this arhtiya?')) deleteArhtiya(a.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      <Dialog open={arhOpen} onOpenChange={setArhOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{editArhId ? (hi ? 'आढ़ती संपादित करें' : 'Edit Arhtiya') : (hi ? 'नया आढ़ती' : 'Add Arhtiya')}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5"><Label>{hi ? 'नाम' : 'Name'} *</Label><Input value={hName} onChange={e => setHName(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>{hi ? 'नाम (हिन्दी)' : 'Name (Hindi)'}</Label><Input value={hNameHi} onChange={e => setHNameHi(e.target.value)} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5"><Label>{hi ? 'लाइसेंस नं.' : 'Licence No.'}</Label><Input value={hLicence} onChange={e => setHLicence(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>{hi ? 'मोबाइल' : 'Mobile'}</Label><Input value={hMobile} onChange={e => setHMobile(e.target.value)} maxLength={10} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label>{hi ? 'दामी का आधार' : 'Dami basis'}</Label>
+                <Select value={hBasis} onValueChange={v => setHBasis(v as 'percent' | 'perQtl')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percent">{hi ? '% मूल्य का' : '% of value'}</SelectItem>
+                    <SelectItem value="perQtl">{hi ? '₹ प्रति क्विंटल' : '₹ per quintal'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label>{hi ? 'दामी दर' : 'Dami rate'}</Label><Input type="number" min={0} step="0.01" value={hRate} onChange={e => setHRate(e.target.value)} /></div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">{hi ? 'दामी सिर्फ़ रजिस्टर में गिनी जाती है — बहीखाते में कोई entry नहीं बनती।' : 'Dami is a register figure only — no ledger entry is made.'}</p>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setArhOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button><Button onClick={saveArh}>{hi ? 'सेव करें' : 'Save'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Crop dialog */}
       <Dialog open={cropOpen} onOpenChange={setCropOpen}>
@@ -627,7 +702,19 @@ export default function ProcurementMasters() {
                   <SelectContent>{DED_BASES.map(b => <SelectItem key={b.id} value={b.id}>{hi ? b.hi : b.en}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5"><Label>{hi ? 'दर (% सकल का)' : 'Rate (% of gross)'} *</Label><Input type="number" min={0} step="0.01" value={dRate} onChange={e => setDRate(e.target.value)} placeholder="2" /></div>
+              <div className="space-y-1.5"><Label>{dUnit === 'perQtl' ? (hi ? 'दर (₹/क्विंटल)' : 'Rate (₹/qtl)') : dUnit === 'perBag' ? (hi ? 'दर (₹/बोरी)' : 'Rate (₹/bag)') : (hi ? 'दर (% सकल का)' : 'Rate (% of gross)')} *</Label><Input type="number" min={0} step="0.01" value={dRate} onChange={e => setDRate(e.target.value)} placeholder="2" /></div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{hi ? 'दर किस पर' : 'Rate applies to'}</Label>
+              <Select value={dUnit} onValueChange={v => setDUnit(v as 'percent' | 'perQtl' | 'perBag')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="percent">{hi ? '% सकल मूल्य का' : '% of gross value'}</SelectItem>
+                  <SelectItem value="perQtl">{hi ? '₹ प्रति क्विंटल' : '₹ per quintal'}</SelectItem>
+                  <SelectItem value="perBag">{hi ? '₹ प्रति बोरी' : '₹ per bag'}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">{hi ? 'हमाली / तौल / बारदाना आम तौर पर प्रति क्विंटल या प्रति बोरी कटते हैं। दर आपकी समिति की अपनी है।' : 'Labour / weighment / bardana are usually per quintal or per bag. The rate is your society\'s own.'}</p>
             </div>
             <div className="space-y-1.5">
               <Label>{hi ? 'खाता (कटौती किसमें जाए)' : 'Account (deduction credits)'} *</Label>

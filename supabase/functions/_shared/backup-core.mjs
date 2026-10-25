@@ -1252,6 +1252,10 @@ var lot = {
     c7("reconciliationStatus", "Reconciliation Status", "\u0938\u092E\u093E\u0927\u093E\u0928 \u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
     // Migration 135 (marketing batch B): business date + cancellation — a restore must keep a cancelled lot cancelled.
     c7("lotDate", "Purchase Date", "\u0916\u0930\u0940\u0926 \u0915\u0940 \u0924\u093E\u0930\u0940\u0916", { type: "date" }),
+    // Migration 137 (D2a): weighment slip + bags.
+    c7("grossWeight", "Gross Weight (qtl)", "\u0915\u0941\u0932 \u0935\u091C\u093C\u0928 (\u0915\u094D\u0935\u093F\u0902)", { type: "number" }),
+    c7("tareWeight", "Tare (qtl)", "\u0916\u093E\u0932\u0940 \u092C\u094B\u0930\u0940 \u0935\u091C\u093C\u0928 (\u0915\u094D\u0935\u093F\u0902)", { type: "number" }),
+    c7("bags", "Bags", "\u092C\u094B\u0930\u0940", { type: "number" }),
     c7("cancelledAt", "Cancelled At", "\u0930\u0926\u094D\u0926 \u0938\u092E\u092F", { type: "date" }),
     c7("cancelledBy", "Cancelled By", "\u0930\u0926\u094D\u0926 \u0915\u0930\u0928\u0947 \u0935\u093E\u0932\u0947"),
     c7("cancelReason", "Cancel Reason", "\u0930\u0926\u094D\u0926 \u0915\u0930\u0928\u0947 \u0915\u093E \u0915\u093E\u0930\u0923"),
@@ -2260,6 +2264,8 @@ var deductionRule = {
     c10("nameHi", "Name (Hindi)", "\u0928\u093E\u092E (\u0939\u093F\u0928\u094D\u0926\u0940)"),
     c10("basis", "Basis", "\u0906\u0927\u093E\u0930", { type: "enum" }),
     internal10("rate", "Rate", "\u0926\u0930", { type: "json" }),
+    c10("basisUnit", "Rate Unit", "\u0926\u0930 \u0915\u0940 \u0907\u0915\u093E\u0908", { type: "enum" }),
+    // D2a (migration 137)
     internal10("accountId", "Ledger Account", "\u092C\u0939\u0940 \u0916\u093E\u0924\u093E"),
     ...stamps()
   ]
@@ -2333,6 +2339,59 @@ var transporter = {
     ...stamps()
   ]
 };
+var arhtiya = {
+  key: "procurement_arhtiya",
+  table: "procurement_arhtiyas",
+  domain: "marketing",
+  label: "Arhtiyas",
+  labelHi: "\u0906\u0922\u093C\u0924\u0940",
+  capability: CAP4,
+  minRole: "viewer",
+  scope: "society",
+  nature: "master",
+  dependsOn: ["society"],
+  naturalKey: ["id"],
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  columns: [
+    c10("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c10("name", "Arhtiya Name", "\u0906\u0922\u093C\u0924\u0940 \u0928\u093E\u092E"),
+    c10("nameHi", "Name (Hindi)", "\u0928\u093E\u092E (\u0939\u093F\u0928\u094D\u0926\u0940)"),
+    c10("licenceNo", "Licence No.", "\u0932\u093E\u0907\u0938\u0947\u0902\u0938 \u0928\u0902."),
+    c10("mobile", "Mobile", "\u092E\u094B\u092C\u093E\u0907\u0932", { piiClass: "contact" }),
+    num7("damiRate", "Dami Rate", "\u0926\u093E\u092E\u0940 \u0926\u0930"),
+    c10("damiBasis", "Dami Basis", "\u0926\u093E\u092E\u0940 \u0915\u093E \u0906\u0927\u093E\u0930", { type: "enum" }),
+    ...stamps()
+  ]
+};
+var bardanaMovement = {
+  key: "procurement_bardana_movement",
+  table: "procurement_bardana_movements",
+  domain: "marketing",
+  label: "Bardana Register",
+  labelHi: "\u092C\u093E\u0930\u0926\u093E\u0928\u093E \u0930\u091C\u093F\u0938\u094D\u091F\u0930",
+  capability: CAP4,
+  minRole: "viewer",
+  scope: "society",
+  nature: "transaction",
+  dependsOn: ["society"],
+  naturalKey: ["id"],
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  columns: [
+    c10("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c10("date", "Date", "\u0924\u093E\u0930\u0940\u0916", { type: "date" }),
+    c10("direction", "In / Out", "\u0906\u0908 / \u0917\u0908", { type: "enum" }),
+    c10("partyType", "Party Type", "\u092A\u0915\u094D\u0937 \u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
+    c10("partyId", "Party", "\u092A\u0915\u094D\u0937"),
+    c10("partyName", "Party Name", "\u092A\u0915\u094D\u0937 \u0915\u093E \u0928\u093E\u092E"),
+    c10("bardanaTypeId", "Bardana Type", "\u092C\u093E\u0930\u0926\u093E\u0928\u093E \u092A\u094D\u0930\u0915\u093E\u0930"),
+    c10("lotId", "Lot", "\u0932\u0949\u091F"),
+    num7("bags", "Bags", "\u092C\u094B\u0930\u0940"),
+    c10("note", "Note", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940"),
+    ...stamps()
+  ]
+};
 var MARKETING_ENTITIES = [
   crop,
   variety,
@@ -2343,7 +2402,9 @@ var MARKETING_ENTITIES = [
   deductionRule,
   qualitySpec,
   bardanaType,
-  transporter
+  transporter,
+  arhtiya,
+  bardanaMovement
 ];
 
 // src/lib/export/entities/consumer.ts

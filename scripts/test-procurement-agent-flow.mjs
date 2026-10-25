@@ -308,7 +308,7 @@ const MSP = new Set(['procurement_msp']);
   ok(/isEngineVoucher\(current\) && !opts\?\.engine/.test(dc), 'reverseVoucher still blocks engine vouchers without the engine option');
   ok(!/reverseVoucher: \(id: string, reason: string, opts/.test(dc), 'the engine option is NOT exposed to pages');
   ok((dc.match(/if \(lotBlocked\(/g) || []).length >= 7, 'every chain step refuses a cancelled / rejected lot');
-  ok(/update\(\{ lotDate: lot\.lotDate \}\)/.test(dc), 'lotDate written as a step-2 update (frozen RPC unchanged)');
+  ok(/if \(lot\.lotDate\) extras\.lotDate = lot\.lotDate;/.test(dc) && /from\('procurement_lots'\)\.update\(extras\)/.test(dc), 'lotDate written as a step-2 update (frozen RPC unchanged)');
   ok(/procurementBusinessDate\(jf\?\.createdAt, lot\?\.createdAt, todayStr\(\), lot\?\.lotDate\)/.test(dc), 'engine voucher dated with the lot date');
   const sql = readFileSync(pathResolve(SRC, '..', 'supabase', 'migrations', '135_procurement_lot_date_cancel.sql'), 'utf8');
   for (const col of ['lotDate', 'cancelledAt', 'cancelledBy', 'cancelReason']) ok(sql.includes(`add column if not exists "${col}"`), `migration 135 adds ${col}`);
@@ -363,6 +363,23 @@ const MSP = new Set(['procurement_msp']);
   ok(/upsert\(withSoc\(agencyBase\(agency\)\)\)/.test(mk) && /persistAgencyExtras\(agency\)/.test(mk), 'agency D1 columns are a step-2 write (RULE 1)');
   const sql = readFileSync(pathResolve(SRC, '..', 'supabase', 'migrations', '136_procurement_agency_ledger.sql'), 'utf8');
   for (const col of ['ledgerAccountId', 'commissionBasis', 'commissionIncomeAccountId', 'procurementVia5116']) ok(sql.includes(`"${col}"`), `migration 136 adds ${col}`);
+}
+
+// ── 15. D2a — deductions by unit, weighment, source guards ────────────────────────────────────────
+{
+  const x = { gross: 242500, qty: 100, bags: 200 };
+  ok(F.deductionRuleAmount({ rate: { value: 2 } }, x) === 4850, '% rule: 2% of 2,42,500 = 4,850');
+  ok(F.deductionRuleAmount({ rate: { value: 10.5 }, basisUnit: 'perQtl' }, x) === 1050, '₹10.50/qtl × 100 qtl = 1,050 (hamali)');
+  ok(F.deductionRuleAmount({ rate: { value: 3.333 }, basisUnit: 'perBag' }, x) === 666.6, '₹3.333/bag × 200 bags = 666.60 (paise-rounded)');
+  ok(F.deductionRuleAmount({ rate: { value: 5 }, basisUnit: 'perBag' }, { gross: 1000 }) === 0, 'per-bag rule on a lot with no bag count → 0 (page refuses)');
+  ok(F.deductionRuleLabel({ rate: { value: 10 }, basisUnit: 'perQtl' }) === '₹10/qtl' && F.deductionRuleLabel({ rate: { value: 2 } }) === '2%', 'labels');
+  ok(F.netWeight(101.25, 1.25) === 100 && F.netWeight(10, 10) === null && F.netWeight(null, 1) === null && F.netWeight(5, -1) === null, 'net = gross − tare; invalid → null');
+  const { readFileSync } = await import('node:fs');
+  const mk = readFileSync(pathResolve(SRC, 'contexts', 'MarketingDataContext.tsx'), 'utf8');
+  ok(/const \{ basisUnit: _unit, \.\.\.recBase \} = rec;/.test(mk) && /persistRuleUnit\(rec, /.test(mk), 'deduction unit is a step-2 write');
+  ok(/rollback\(\);\s*\n\s*toastRef\.current\(\{ title: 'कटौती नियम सेव नहीं हुआ'/.test(mk), 'a per-unit rule whose unit did not save is rolled back (never read as %)');
+  const dc = readFileSync(pathResolve(SRC, 'contexts', 'DataContext.tsx'), 'utf8');
+  ok(/if \(lot\.bags != null\) extras\.bags = lot\.bags;/.test(dc), 'weighment / bags are step-2 lot columns');
 }
 
 console.log(`[procurement-agent-flow] ${pass} passed, ${fail} failed`);

@@ -83,3 +83,25 @@ export function settlementTotals(settlements: ReadonlyArray<FarmerSettlement>): 
   const paid = r2(live.reduce((s, x) => s + (x.amountPaid?.amount || 0), 0));
   return { gross, deductions, net, paid, outstanding: r2(net - paid), count: live.length };
 }
+
+// ── D2a: arhtiya register (founder: a REGISTER only — dami is computed, never posted) ────────────
+export interface ArhtiyaRow { arhtiyaId: string; lots: number; qty: number; value: number; dami: number }
+/** Per-arhtiya lots / quantity / value and the dami at its own rate (% of value or ₹ per quintal). */
+export function buildArhtiyaRegister(
+  lots: ReadonlyArray<ProcurementLot>,
+  arhtiyas: ReadonlyArray<{ id: string; damiRate?: number; damiBasis?: 'percent' | 'perQtl' }>,
+): ArhtiyaRow[] {
+  const map = new Map<string, ArhtiyaRow>();
+  for (const l of lots) {
+    if (!l.arhtiyaId) continue;
+    const row = map.get(l.arhtiyaId) ?? { arhtiyaId: l.arhtiyaId, lots: 0, qty: 0, value: 0, dami: 0 };
+    row.lots += 1; row.qty = r2(row.qty + (l.quantity?.value || 0)); row.value = r2(row.value + lotValue(l));
+    map.set(l.arhtiyaId, row);
+  }
+  for (const row of map.values()) {
+    const a = arhtiyas.find(x => x.id === row.arhtiyaId);
+    const rate = Number(a?.damiRate) || 0;
+    row.dami = rate > 0 ? r2(a?.damiBasis === 'perQtl' ? rate * row.qty : (rate / 100) * row.value) : 0;
+  }
+  return [...map.values()].sort((a, b) => b.value - a.value);
+}
