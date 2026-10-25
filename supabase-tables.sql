@@ -1606,6 +1606,74 @@ alter table public.procurement_lots add column if not exists "tareWeight" numeri
 alter table public.procurement_lots add column if not exists bags integer;
 alter table public.procurement_deduction_rules add column if not exists "basisUnit" text;
 
+-- Marketing D3 (migration 139): agency dispatch + shortage, agency bills. Their vouchers are owned by
+-- these rows (shortage / bill-incidentals). RLS: own society, role-split writes.
+create table if not exists procurement_dispatches (
+  id                  text primary key,
+  society_id          text not null,
+  jurisdiction        text,
+  "dispatchNo"        text not null,
+  date                text not null,
+  "agencyId"          text not null,
+  "lotIds"            jsonb not null default '[]',
+  "vehicleNo"         text,
+  "transporterId"     text,
+  destination         text,
+  "dispatchedQty"     numeric not null default 0,
+  "dispatchedValue"   numeric not null default 0,
+  bags                integer,
+  "acceptedQty"       numeric,
+  "acceptedDate"      text,
+  "shortageQty"       numeric,
+  "shortageValue"     numeric,
+  "shortageAccountId" text,
+  "shortageVoucherId" text,
+  status              text not null default 'dispatched' check (status in ('dispatched', 'accepted')),
+  note                text,
+  "isDeleted"         boolean not null default false,
+  "createdAt"         timestamptz not null default now(),
+  "updatedAt"         timestamptz not null default now()
+);
+create index if not exists idx_procurement_dispatches_society on public.procurement_dispatches (society_id);
+
+create table if not exists procurement_agency_bills (
+  id                 text primary key,
+  society_id         text not null,
+  jurisdiction       text,
+  "billNo"           text not null,
+  date               text not null,
+  "agencyId"         text not null,
+  "dispatchIds"      jsonb not null default '[]',
+  qty                numeric not null default 0,
+  "mspValue"         numeric not null default 0,
+  lines              jsonb not null default '[]',
+  "incidentalTotal"  numeric not null default 0,
+  total              numeric not null default 0,
+  "voucherId"        text,
+  status             text not null default 'draft' check (status in ('draft', 'approved')),
+  note               text,
+  "isDeleted"        boolean not null default false,
+  "createdAt"        timestamptz not null default now(),
+  "updatedAt"        timestamptz not null default now()
+);
+create index if not exists idx_procurement_agency_bills_society on public.procurement_agency_bills (society_id);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['procurement_dispatches', 'procurement_agency_bills'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists %I on public.%I', t || '_select', t);
+    execute format('drop policy if exists %I on public.%I', t || '_insert', t);
+    execute format('drop policy if exists %I on public.%I', t || '_update', t);
+    execute format('drop policy if exists %I on public.%I', t || '_delete', t);
+    execute format('create policy %I on public.%I for select to authenticated using (society_id::text in (select public.current_user_society_ids()))', t || '_select', t);
+    execute format('create policy %I on public.%I for insert to authenticated with check (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_write())', t || '_insert', t);
+    execute format('create policy %I on public.%I for update to authenticated using (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_write()) with check (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_write())', t || '_update', t);
+    execute format('create policy %I on public.%I for delete to authenticated using (society_id::text in (select public.current_user_society_ids()) and public.jwt_can_delete())', t || '_delete', t);
+  end loop;
+end $$;
+
 -- Transport operations slice 1 (migration 128): own vehicles, trips, vehicle expenses.
 -- The voucher (refType 'transport.trip' / 'transport.expense', refId = row id) is the money
 -- authority; the row is the vehicle tag. RLS: own society, writes jwt_can_write(), deletes jwt_can_delete().

@@ -142,3 +142,36 @@ export function openPrint(html: string): boolean {
   w.document.close();
   return true;
 }
+
+// ── D3: the bill to the agency ──────────────────────────────────────────────────────────────────────
+export interface AgencyBillPrintData {
+  hi: boolean;
+  societyName: string;
+  agencyName: string;
+  billNo: string;
+  date: string;
+  dispatches: { no: string; date: string; acceptedQty: number; value: number }[];
+  qty: number;
+  mspValue: number;
+  lines: { label: string; basis: string; amount: number }[];
+  total: number;
+}
+
+/** PURE — the agency bill HTML (MSP on accepted quantity + the society's incidental lines). */
+export function agencyBillHTML(d: AgencyBillPrintData): string {
+  const hi = d.hi;
+  const ds = d.dispatches.map(x => `<tr><td>${esc(x.no)}</td><td>${esc(x.date)}</td><td class="r">${x.acceptedQty}</td><td class="r">${money(x.value)}</td></tr>`).join('');
+  const ls = d.lines.map(l => `<tr><td>${esc(l.label)}</td><td>${esc(l.basis)}</td><td class="r">${money(l.amount)}</td></tr>`).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${t(hi, 'एजेंसी बिल', 'Agency Bill')} ${esc(d.billNo)}</title><style>${STYLE}</style></head><body>
+  <div class="society">${esc(d.societyName)}</div>
+  <div class="title">${t(hi, 'एजेंसी बिल (MSP खरीद)', 'Bill to Agency (MSP procurement)')}</div>
+  <div class="meta"><span>${t(hi, 'बिल', 'Bill')} <b>${esc(d.billNo)}</b></span><span>${t(hi, 'तारीख', 'Date')} <b>${esc(d.date)}</b></span></div>
+  <div class="meta"><span>${t(hi, 'प्रति', 'To')}: <b>${esc(d.agencyName)}</b></span></div>
+  <table class="grid"><tr><th>${t(hi, 'डिस्पैच', 'Dispatch')}</th><th>${t(hi, 'तारीख', 'Date')}</th><th class="r">${t(hi, 'स्वीकृत (क्विंटल)', 'Accepted (qtl)')}</th><th class="r">${t(hi, 'MSP मूल्य', 'MSP value')}</th></tr>${ds}
+    <tr class="tot"><td colspan="2">${t(hi, 'कुल', 'Total')}</td><td class="r">${d.qty}</td><td class="r">${money(d.mspValue)}</td></tr></table>
+  ${ls ? `<table class="grid" style="margin-top:8px"><tr><th>${t(hi, 'खर्च (incidentals)', 'Incidentals')}</th><th>${t(hi, 'आधार', 'Basis')}</th><th class="r">${t(hi, 'राशि', 'Amount')}</th></tr>${ls}</table>` : ''}
+  <table class="grid" style="margin-top:8px"><tr class="tot"><td>${t(hi, 'कुल देय (MSP + खर्च)', 'Total due (MSP + incidentals)')}</td><td class="r">${money(d.total)}</td></tr></table>
+  <div class="sign"><span>${t(hi, 'लेखाकार', 'Accountant')}</span><span>${t(hi, 'सचिव / प्रबंधक', 'Secretary / Manager')}</span></div>
+  <script>window.onload=function(){window.focus();window.print();};<\/script>
+</body></html>`;
+}

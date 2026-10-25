@@ -2398,6 +2398,76 @@ var bardanaMovement = {
     ...stamps()
   ]
 };
+var dispatch2 = {
+  key: "procurement_dispatch",
+  table: "procurement_dispatches",
+  domain: "marketing",
+  label: "Agency Dispatches",
+  labelHi: "\u090F\u091C\u0947\u0902\u0938\u0940 \u0921\u093F\u0938\u094D\u092A\u0948\u091A",
+  capability: CAP4,
+  minRole: "viewer",
+  scope: "society",
+  nature: "transaction",
+  dependsOn: ["society"],
+  naturalKey: ["id"],
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  columns: [
+    c10("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c10("dispatchNo", "Dispatch No.", "\u0921\u093F\u0938\u094D\u092A\u0948\u091A \u0928\u0902."),
+    c10("date", "Date", "\u0924\u093E\u0930\u0940\u0916", { type: "date" }),
+    c10("agencyId", "Agency", "\u090F\u091C\u0947\u0902\u0938\u0940"),
+    internal10("lotIds", "Lots", "\u0932\u0949\u091F", { type: "json" }),
+    c10("vehicleNo", "Vehicle No.", "\u0935\u093E\u0939\u0928 \u0928\u0902."),
+    c10("transporterId", "Transporter", "\u091F\u094D\u0930\u093E\u0902\u0938\u092A\u094B\u0930\u094D\u091F\u0930"),
+    c10("destination", "Destination", "\u0917\u0902\u0924\u0935\u094D\u092F"),
+    num7("dispatchedQty", "Dispatched (qtl)", "\u092D\u0947\u091C\u093E (\u0915\u094D\u0935\u093F\u0902)"),
+    num7("dispatchedValue", "Dispatched Value", "\u092D\u0947\u091C\u093E \u092E\u0942\u0932\u094D\u092F"),
+    num7("bags", "Bags", "\u092C\u094B\u0930\u0940"),
+    num7("acceptedQty", "Accepted (qtl)", "\u0938\u094D\u0935\u0940\u0915\u0943\u0924 (\u0915\u094D\u0935\u093F\u0902)"),
+    c10("acceptedDate", "Accepted On", "\u0938\u094D\u0935\u0940\u0915\u0943\u0924\u093F \u0924\u093E\u0930\u0940\u0916", { type: "date" }),
+    num7("shortageQty", "Shortage (qtl)", "\u0915\u092E\u0940 (\u0915\u094D\u0935\u093F\u0902)"),
+    num7("shortageValue", "Shortage Value", "\u0915\u092E\u0940 \u092E\u0942\u0932\u094D\u092F"),
+    internal10("shortageAccountId", "Shortage Ledger", "\u0915\u092E\u0940 \u0916\u093E\u0924\u093E"),
+    internal10("shortageVoucherId", "Shortage Voucher", "\u0915\u092E\u0940 \u0935\u093E\u0909\u091A\u0930"),
+    c10("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    c10("note", "Note", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940"),
+    internal10("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean" }),
+    ...stamps()
+  ]
+};
+var agencyBill = {
+  key: "procurement_agency_bill",
+  table: "procurement_agency_bills",
+  domain: "marketing",
+  label: "Agency Bills",
+  labelHi: "\u090F\u091C\u0947\u0902\u0938\u0940 \u092C\u093F\u0932",
+  capability: CAP4,
+  minRole: "viewer",
+  scope: "society",
+  nature: "transaction",
+  dependsOn: ["society"],
+  naturalKey: ["id"],
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  columns: [
+    c10("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c10("billNo", "Bill No.", "\u092C\u093F\u0932 \u0928\u0902."),
+    c10("date", "Date", "\u0924\u093E\u0930\u0940\u0916", { type: "date" }),
+    c10("agencyId", "Agency", "\u090F\u091C\u0947\u0902\u0938\u0940"),
+    internal10("dispatchIds", "Dispatches", "\u0921\u093F\u0938\u094D\u092A\u0948\u091A", { type: "json" }),
+    num7("qty", "Quantity (qtl)", "\u092E\u093E\u0924\u094D\u0930\u093E (\u0915\u094D\u0935\u093F\u0902)"),
+    num7("mspValue", "MSP Value", "MSP \u092E\u0942\u0932\u094D\u092F"),
+    internal10("lines", "Incidental Lines", "\u0916\u0930\u094D\u091A \u092A\u0902\u0915\u094D\u0924\u093F\u092F\u093E\u0901", { type: "json" }),
+    num7("incidentalTotal", "Incidentals", "\u0916\u0930\u094D\u091A"),
+    num7("total", "Total", "\u0915\u0941\u0932"),
+    internal10("voucherId", "Voucher", "\u0935\u093E\u0909\u091A\u0930"),
+    c10("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    c10("note", "Note", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940"),
+    internal10("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean" }),
+    ...stamps()
+  ]
+};
 var MARKETING_ENTITIES = [
   crop,
   variety,
@@ -2410,7 +2480,9 @@ var MARKETING_ENTITIES = [
   bardanaType,
   transporter,
   arhtiya,
-  bardanaMovement
+  bardanaMovement,
+  dispatch2,
+  agencyBill
 ];
 
 // src/lib/export/entities/consumer.ts

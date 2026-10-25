@@ -171,7 +171,8 @@ export function agencyBalances(input: AgencyBalanceInput): AgencyBalances {
     return ev && ev.refType === 'posting.rule.result' && ev.refId ? resultLot.get(ev.refId) : undefined;
   };
   const agencyOf = (v: BalVoucher): string | undefined => {
-    if ((v.refType === AGENCY_RECEIPT_REF_TYPE || v.refType === COMMISSION_RECEIPT_REF_TYPE) && v.refId && input.agencyIds.has(v.refId)) return v.refId;
+    // D3: shortage and agency-bill vouchers name their agency in refId, like receipts.
+    if ((v.refType === AGENCY_RECEIPT_REF_TYPE || v.refType === COMMISSION_RECEIPT_REF_TYPE || v.refType === 'procurement.dispatch.shortage' || v.refType === 'procurement.agency.bill') && v.refId && input.agencyIds.has(v.refId)) return v.refId;
     let lotId: string | undefined;
     if ((v.refType === 'posting.rule.result' || v.refType === ENGINE_REVERSAL_REF_TYPE) && v.refId) lotId = resultLot.get(v.refId);
     else if (v.refType === 'farmer.payment') lotId = lotOfEngineVoucher(v.refId);

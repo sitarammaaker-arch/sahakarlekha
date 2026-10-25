@@ -13,6 +13,7 @@ import { FileSpreadsheet, Download } from 'lucide-react';
 import { downloadCSV } from '@/lib/exportUtils';
 import { buildProcurementRegister, buildCommoditySummary, settlementTotals, countableLots, buildArhtiyaRegister } from '@/lib/marketing/registers';
 import { bardanaBalances, type BardanaParty } from '@/lib/marketing/bardana';
+import { seasonReconciliation } from '@/lib/marketing/agencyBilling';
 import { Trash2 } from 'lucide-react';
 import { deriveLotStage, isRejectedQuality, LOT_STAGE_LABEL } from '@/lib/procurement/agentFlow';
 import { isEngineVoucher } from '@/lib/accounting/voucherImmutability';
@@ -24,7 +25,7 @@ const LEGACY_CROPS: Record<string, { name: string; nameHi: string }> = {
 
 export default function ProcurementRegisters() {
   const { procurementLots: allLots, procurementFarmers, procurementSettlements, procurementPostingRuleResults, procurementQualityTests, vouchers } = useData();
-  const { crops, seasons, centres, agencies, arhtiyas, bardanaTypes, bardanaMovements, addBardanaMovement, deleteBardanaMovement } = useMarketingData();
+  const { crops, seasons, centres, agencies, arhtiyas, bardanaTypes, bardanaMovements, addBardanaMovement, deleteBardanaMovement, dispatches, agencyBills, lotValue } = useMarketingData();
   const { language } = useLanguage();
   const hi = language === 'hi';
 
@@ -140,6 +141,14 @@ export default function ProcurementRegisters() {
   const PARTY_LABEL: Record<BardanaParty, string> = { agency: hi ? 'एजेंसी' : 'Agency', farmer: hi ? 'किसान' : 'Farmer', arhtiya: hi ? 'आढ़ती' : 'Arhtiya', other: hi ? 'अन्य' : 'Other' };
   const typeName = (id?: string) => { const t = bardanaTypes.find(x => x.id === id); return t ? (hi && t.nameHi ? t.nameHi : t.name) : ''; };
 
+  // ── D3: season-end reconciliation — posted lots vs dispatched / accepted / shortage / billed ──
+  const recon = useMemo(() => seasonReconciliation(procurementLots.map(l => ({ id: l.id, seasonId: l.seasonId, quantity: l.quantity, value: lotValue(l.id) })), dispatches, agencyBills), [procurementLots, dispatches, agencyBills, lotValue]);
+  const exportRecon = () => downloadCSV(
+    [hi ? 'सीज़न' : 'Season', hi ? 'लॉट' : 'Lots', hi ? 'खरीद (क्विं)' : 'Bought (qtl)', hi ? 'मूल्य' : 'Value', hi ? 'भेजा' : 'Dispatched', hi ? 'स्वीकृत' : 'Accepted', hi ? 'कमी' : 'Shortage', hi ? 'कमी ₹' : 'Shortage ₹', hi ? 'नहीं भेजा' : 'Not dispatched', hi ? 'बिल हुआ ₹' : 'Billed ₹', hi ? 'बिल बाकी ₹' : 'Unbilled ₹', hi ? 'खर्च ₹' : 'Incidentals ₹'],
+    recon.map(r => [seasonName(r.seasonId) || r.seasonId, r.lots, r.qty, r.value, r.dispatchedQty, r.acceptedQty, r.shortageQty, r.shortageValue, r.undispatchedQty, r.billedValue, r.unbilledValue, r.incidentals]),
+    'season-reconciliation',
+  );
+
   const th = 'text-left font-medium text-muted-foreground px-2 py-1.5';
   const td = 'px-2 py-1.5';
 
@@ -163,6 +172,7 @@ export default function ProcurementRegisters() {
           <TabsTrigger value="commodity" className="flex-1">{hi ? 'जिंस' : 'Commodity'}</TabsTrigger>
           <TabsTrigger value="arhtiya" className="flex-1">{hi ? 'आढ़ती' : 'Arhtiya'}</TabsTrigger>
           <TabsTrigger value="bardana" className="flex-1">{hi ? 'बारदाना' : 'Bardana'}</TabsTrigger>
+          <TabsTrigger value="recon" className="flex-1">{hi ? 'सीज़न मिलान' : 'Season'}</TabsTrigger>
         </TabsList>
 
         {/* Procurement Register */}
@@ -280,6 +290,33 @@ export default function ProcurementRegisters() {
             </CardContent>
           </Card>
         </TabsContent>
+        {/* ── D3: season-end reconciliation ── */}
+        <TabsContent value="recon">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle className="text-base">{hi ? 'सीज़न-अंत मिलान' : 'Season-end Reconciliation'}</CardTitle>
+              <Button size="sm" variant="outline" className="gap-1 h-8" onClick={exportRecon} disabled={recon.length === 0}><Download className="h-4 w-4" />CSV</Button>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <p className="text-xs text-muted-foreground mb-2">{hi ? 'हर सीज़न: पोस्ट हुई खरीद बनाम एजेंसी को भेजा, स्वीकृत, कमी और बिल। "नहीं भेजा" या "बिल बाकी" शून्य न हो तो सीज़न बंद करने से पहले देखें।' : 'Per season: posted purchases vs dispatched, accepted, shortage and billed. Look into any "not dispatched" or "unbilled" before closing the season.'}</p>
+              {recon.length === 0 ? <p className="text-sm text-muted-foreground">{hi ? 'कोई पोस्ट हुआ लॉट नहीं।' : 'No posted lots.'}</p> : (
+                <table className="w-full text-sm min-w-[860px]">
+                  <thead><tr className="border-b">
+                    <th className={th}>{hi ? 'सीज़न' : 'Season'}</th><th className={`${th} text-right`}>{hi ? 'खरीद क्विं' : 'Bought'}</th><th className={`${th} text-right`}>{hi ? 'मूल्य' : 'Value'}</th><th className={`${th} text-right`}>{hi ? 'भेजा' : 'Sent'}</th><th className={`${th} text-right`}>{hi ? 'स्वीकृत' : 'Accepted'}</th><th className={`${th} text-right`}>{hi ? 'कमी' : 'Shortage'}</th><th className={`${th} text-right`}>{hi ? 'नहीं भेजा' : 'Not sent'}</th><th className={`${th} text-right`}>{hi ? 'बिल हुआ' : 'Billed'}</th><th className={`${th} text-right`}>{hi ? 'बिल बाकी' : 'Unbilled'}</th><th className={`${th} text-right`}>{hi ? 'खर्च' : 'Incid.'}</th>
+                  </tr></thead>
+                  <tbody>{recon.map(r => (
+                    <tr key={r.seasonId} className="border-b last:border-0">
+                      <td className={td}>{seasonName(r.seasonId) || r.seasonId} <span className="text-xs text-muted-foreground">({r.lots})</span></td><td className={`${td} text-right`}>{r.qty}</td><td className={`${td} text-right`}>{money(r.value)}</td><td className={`${td} text-right`}>{r.dispatchedQty}</td><td className={`${td} text-right`}>{r.acceptedQty}</td>
+                      <td className={`${td} text-right ${r.shortageQty > 0 ? 'text-red-600' : ''}`}>{r.shortageQty}{r.shortageValue ? ` · ${money(r.shortageValue)}` : ''}</td><td className={`${td} text-right ${r.undispatchedQty > 0 ? 'text-amber-600' : ''}`}>{r.undispatchedQty}</td>
+                      <td className={`${td} text-right`}>{money(r.billedValue)}</td><td className={`${td} text-right ${r.unbilledValue > 0 ? 'text-amber-600' : ''}`}>{money(r.unbilledValue)}</td><td className={`${td} text-right`}>{money(r.incidentals)}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* ── D2a: Arhtiya register ── */}
         <TabsContent value="arhtiya">
           <Card>
