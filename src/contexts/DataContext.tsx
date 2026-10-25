@@ -28,7 +28,7 @@ import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode'
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
 import { salaryAccrualLines, salaryAccrualChanged } from '@/lib/payroll/accrualLines';
 import { CORE_PARTS, setLoadFailures, refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
-import type { VoucherOwnerCheck } from '@/lib/voucherOwnership';
+import { findVoucherOwner, type VoucherOwnerCheck } from '@/lib/voucherOwnership';
 import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
 import { syncPrimaryNominee } from '@/lib/nomineeUtils';
@@ -90,8 +90,8 @@ import { professionalTaxAccountId, shareRefundPayableAccountId, MISSING_HEAD_TOA
 import { buildShareRefundApproval, buildShareRefundPayment, shareRefundOutstanding, SHARE_REFUND_APPROVE_REF, SHARE_REFUND_PAY_REF, SHARE_REFUND_MESSAGE } from '@/lib/shares/refundPayable';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, buildEngineVoucherLines } from '@/lib/procurement';
-import { procurementPostingBinding, missingProcurementRoles, PROCUREMENT_ROLE_LABEL_HI } from '@/lib/procurement/accounts';
-import { isRejectedQuality, procurementBusinessDate, allocateFarmerCode } from '@/lib/procurement/agentFlow';
+import { procurementPostingBinding, missingProcurementRoles, PROCUREMENT_ROLE_LABEL_HI, resolveProcurementAccountId } from '@/lib/procurement/accounts';
+import { isRejectedQuality, procurementBusinessDate, allocateFarmerCode, canRecordQuality, farmerPaidByEngineVoucher, withDerivedAmountPaid, FARMER_PAYMENT_REF_TYPE, agencyDirectAccounts } from '@/lib/procurement/agentFlow';
 import { todayStr } from '@/lib/dateUtils';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, nextFY } from '@/lib/depreciation';
 import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
@@ -151,11 +151,12 @@ interface DataContextType {
   procurementJForms: JForm[];
   generateJForm: (data: { lotId: string }) => JForm;
   procurementFinancialIntents: FinancialIntentRecord[];
-  generateFinancialIntent: (data: { jformId: string }) => FinancialIntentRecord;
+  /** opts.onCommitted fires once the server committed it — chain the next posting step there. */
+  generateFinancialIntent: (data: { jformId: string }, opts?: { onCommitted?: (fi: FinancialIntentRecord) => void; onFailed?: () => void }) => FinancialIntentRecord;
   procurementPostingRequests: PostingRequest[];
-  generatePostingRequest: (data: { financialIntentId: string }) => PostingRequest;
+  generatePostingRequest: (data: { financialIntentId: string }, opts?: { onCommitted?: (pr: PostingRequest) => void; onFailed?: () => void }) => PostingRequest;
   procurementPostingRuleResults: PostingRuleResult[];
-  generatePostingRuleResult: (data: { postingRequestId: string }) => PostingRuleResult;
+  generatePostingRuleResult: (data: { postingRequestId: string }, opts?: { onCommitted?: (r: PostingRuleResult) => void; onFailed?: () => void }) => PostingRuleResult;
   generateEngineVoucher: (data: { postingRuleResultId: string }) => Voucher;
   // Farmer Settlement — the authoritative business document. Deductions live ONLY here (draft lines);
   // approval is the single accounting trigger; payments settle the approved settlement's Net Payable.
@@ -1114,6 +1115,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => { musterEntriesRef.current = musterEntries; }, [musterEntries]);
   const procurementFarmersRef = useRef<Farmer[]>(procurementFarmers);
   useEffect(() => { procurementFarmersRef.current = procurementFarmers; }, [procurementFarmers]);
+  // Batch A (P1-1): synchronous mirrors of the posting chain. "Post to Ledger" runs the next step in the
+  // same tick the previous one added its object, before React re-renders — the generators look their
+  // inputs up HERE (the add/rollback points update these refs immediately), not in render-time state.
+  const procurementJFormsRef = useRef<JForm[]>(procurementJForms);
+  useEffect(() => { procurementJFormsRef.current = procurementJForms; }, [procurementJForms]);
+  const procurementIntentsRef = useRef<FinancialIntentRecord[]>(procurementFinancialIntents);
+  useEffect(() => { procurementIntentsRef.current = procurementFinancialIntents; }, [procurementFinancialIntents]);
+  const procurementRequestsRef = useRef<PostingRequest[]>(procurementPostingRequests);
+  useEffect(() => { procurementRequestsRef.current = procurementPostingRequests; }, [procurementPostingRequests]);
+  const procurementRuleResultsRef = useRef<PostingRuleResult[]>(procurementPostingRuleResults);
+  useEffect(() => { procurementRuleResultsRef.current = procurementPostingRuleResults; }, [procurementPostingRuleResults]);
+  const procurementSettlementsRef = useRef<FarmerSettlement[]>(procurementSettlements);
+  useEffect(() => { procurementSettlementsRef.current = procurementSettlements; }, [procurementSettlements]);
   const loansRef = useRef<Loan[]>(loans);
   useEffect(() => { loansRef.current = loans; }, [loans]);
   const depositAccountsRef = useRef<DepositAccount[]>(depositAccounts);
@@ -2602,6 +2616,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     voucherOwnersRef.current.set(key, check);
     return () => { if (voucherOwnersRef.current.get(key) === check) voucherOwnersRef.current.delete(key); };
   }, []);
+
+  // Batch A (P1-4 / RULE 3): an approved MSP settlement owns its deduction voucher. Cancelling that voucher
+  // alone reversed the deductions in the ledger while the settlement kept its locked Net Payable. Payments,
+  // agency receipts and commission vouchers stay cancellable: every procurement balance is derived from
+  // the live vouchers, so cancelling one of them keeps the screens and the ledger in step.
+  useEffect(() => registerVoucherOwner('procurement', id => findVoucherOwner([{ label: 'किसान निपटान (MSP)', docs: procurementSettlementsRef.current }], id)), [registerVoucherOwner]);
 
   const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean }): boolean => {
     if (guardFYLocked()) return false;
@@ -5134,6 +5154,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'पहले से दर्ज', description: 'इस लॉट की क्वालिटी जाँच पहले से मौजूद है। (Quality already recorded for this lot)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
+    // Batch A (P1-3): quality is the gate BEFORE the J-Form — recording (or rejecting) it afterwards
+    // stranded a posted lot (no settlement / payment, its 3308/2105 entry still booked).
+    if (!canRecordQuality({ hasQualityTest: false, hasJForm: procurementJFormsRef.current.some(j => j.lotId === data.lotId) })) {
+      toastRef.current({ title: 'J-Form बन चुका है', description: 'इस लॉट का J-Form जारी हो चुका है — अब क्वालिटी जाँच दर्ज नहीं हो सकती। क्वालिटी J-Form से पहले दर्ज करें।', variant: 'destructive', duration: 10000 });
+      return sentinel;
+    }
     const now = new Date().toISOString();
     const by = data.inspectedBy?.trim() || user?.name || 'System';
     const qt: QualityTest = { id: crypto.randomUUID(), lotId: data.lotId, result: data.result, inspectedBy: by, createdAt: now, updatedAt: now };
@@ -5179,7 +5205,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (lotIsRejected(data.lotId)) { toastRejectedLot(); return sentinel; }
     const lot = procurementLots.find(l => l.id === data.lotId);
     const cur = lot?.mspRate?.currency || 'INR';
-    const grossAmount = (lot?.quantity?.value || 0) * (lot?.mspRate?.amount || 0);
+    // Rounded to paise (e.g. 12.345 qtl × ₹2,425 gave a 3-decimal voucher amount).
+    const grossAmount = toRupees(toMinor((lot?.quantity?.value || 0) * (lot?.mspRate?.amount || 0)));
     const now = new Date().toISOString();
     // documentNo is DB-owned (single source of truth). The client sends a placeholder and receives the
     // authoritative number in the RPC response — it never computes J000n here.
@@ -5192,11 +5219,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: data.lotId, name: 'jform.generated', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { jformId: jf.id, documentNo: '', net: jf.net } };
     setProcurementJFormsState(prev => { const u = [...prev, jf]; storage.setProcurementJForms(u); return u; });
+    procurementJFormsRef.current = [...procurementJFormsRef.current, jf];
     setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
     supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'jform.generate', transactionId: crypto.randomUUID(), transactionVersion: 1, jforms: [withSoc(jf)], events: [withSoc(event)] } }).then(({ data: res, error }) => {
       if (error) {
         console.error('J-Form commit error:', error.message);
         setProcurementJFormsState(prev => { const r = prev.filter(x => x.id !== jf.id); storage.setProcurementJForms(r); return r; });
+        procurementJFormsRef.current = procurementJFormsRef.current.filter(x => x.id !== jf.id);
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
         toastRef.current({ title: 'J-Form सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
         return;
@@ -5215,18 +5244,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Phase 3.0 — Financial Intent (business object only; NOT accounting). Generates ONE immutable
   // FinancialIntentRecord from a generated J-Form + one immutable 'financial.intent.created' event,
   // committed atomically via the frozen contract. No posting / engine / voucher / ledger.
-  const generateFinancialIntent = useCallback((data: { jformId: string }): FinancialIntentRecord => {
+  const generateFinancialIntent = useCallback((data: { jformId: string }, opts?: { onCommitted?: (fi: FinancialIntentRecord) => void; onFailed?: () => void }): FinancialIntentRecord => {
     const sentinel: FinancialIntentRecord = { id: '', lotId: '', jformId: data.jformId, intentType: 'RecogniseProcurement', amount: { amount: 0, currency: 'INR' }, createdAt: '', updatedAt: '' };
     if (guardFYLocked()) return sentinel;
     // 2. J-Form exists?
-    const jform = procurementJForms.find(j => j.id === data.jformId);
+    const jform = procurementJFormsRef.current.find(j => j.id === data.jformId);
     if (!jform) {
       toastRef.current({ title: 'J-Form नहीं मिला', description: 'पहले इस लॉट का J-Form बनाएं। (Generate the J-Form first)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     if (lotIsRejected(jform.lotId)) { toastRejectedLot(); return sentinel; }
     // 3. Existing Financial Intent? (early validation; the DB unique index on jformId is the guarantee). One per J-Form.
-    if (procurementFinancialIntents.some(i => i.jformId === data.jformId)) {
+    if (procurementIntentsRef.current.some(i => i.jformId === data.jformId)) {
       toastRef.current({ title: 'पहले से बना', description: 'इस J-Form का Financial Intent पहले से मौजूद है। (Financial Intent already exists for this J-Form)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
@@ -5240,17 +5269,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 5. Build the immutable 'financial.intent.created' event (correlationId = lot id).
     const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: jform.lotId, name: 'financial.intent.created', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { intentId: fi.id, jformId: fi.jformId, amount: fi.amount } };
     setProcurementFinancialIntentsState(prev => { const u = [...prev, fi]; storage.setProcurementFinancialIntents(u); return u; });
+    procurementIntentsRef.current = [...procurementIntentsRef.current, fi];
     setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
     // 6. Commit through the frozen transaction contract.
     supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'financial.intent.create', transactionId: crypto.randomUUID(), transactionVersion: 1, financialIntents: [withSoc(fi)], events: [withSoc(event)] } }).then(({ error }) => {
       if (error) {
         console.error('Financial Intent commit error:', error.message);
         setProcurementFinancialIntentsState(prev => { const r = prev.filter(x => x.id !== fi.id); storage.setProcurementFinancialIntents(r); return r; });
+        procurementIntentsRef.current = procurementIntentsRef.current.filter(x => x.id !== fi.id);
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
         toastRef.current({ title: 'Financial Intent सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
+        opts?.onFailed?.();
         return;
       }
       toastRef.current({ title: 'खरीद दर्ज (1/4)', description: `₹${fi.amount.amount}`, duration: 4000 });
+      opts?.onCommitted?.(fi);
     });
     return fi;
   }, [user, procurementJForms, procurementFinancialIntents, procurementQualityTests]);
@@ -5259,17 +5292,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Generates ONE immutable PostingRequest from a Financial Intent + one immutable
   // 'posting.request.created' event, committed atomically via the frozen contract. requestType and
   // amount are copied from the source intent (no recalculation).
-  const generatePostingRequest = useCallback((data: { financialIntentId: string }): PostingRequest => {
+  const generatePostingRequest = useCallback((data: { financialIntentId: string }, opts?: { onCommitted?: (pr: PostingRequest) => void; onFailed?: () => void }): PostingRequest => {
     const sentinel: PostingRequest = { id: '', lotId: '', jformId: '', financialIntentId: data.financialIntentId, requestType: 'RecogniseProcurement', amount: { amount: 0, currency: 'INR' }, createdAt: '', updatedAt: '' };
     if (guardFYLocked()) return sentinel;
     // 2. Financial Intent exists?
-    const intent = procurementFinancialIntents.find(i => i.id === data.financialIntentId);
+    const intent = procurementIntentsRef.current.find(i => i.id === data.financialIntentId);
     if (!intent) {
       toastRef.current({ title: 'Financial Intent नहीं मिला', description: 'पहले इस लॉट का Financial Intent बनाएं। (Generate the Financial Intent first)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     // 3. Posting Request already exists? (early validation; the DB unique index on financialIntentId is the guarantee). One per intent.
-    if (procurementPostingRequests.some(p => p.financialIntentId === data.financialIntentId)) {
+    if (procurementRequestsRef.current.some(p => p.financialIntentId === data.financialIntentId)) {
       toastRef.current({ title: 'पहले से बना', description: 'इस Financial Intent का Posting Request पहले से मौजूद है। (Posting Request already exists for this Financial Intent)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
@@ -5283,17 +5316,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 5. Build the immutable 'posting.request.created' event (correlationId = lot id).
     const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: intent.lotId, name: 'posting.request.created', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { postingRequestId: pr.id, financialIntentId: pr.financialIntentId, amount: pr.amount } };
     setProcurementPostingRequestsState(prev => { const u = [...prev, pr]; storage.setProcurementPostingRequests(u); return u; });
+    procurementRequestsRef.current = [...procurementRequestsRef.current, pr];
     setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
     // 6. Commit through the frozen transaction contract.
     supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'posting.request.create', transactionId: crypto.randomUUID(), transactionVersion: 1, postingRequests: [withSoc(pr)], events: [withSoc(event)] } }).then(({ error }) => {
       if (error) {
         console.error('Posting Request commit error:', error.message);
         setProcurementPostingRequestsState(prev => { const r = prev.filter(x => x.id !== pr.id); storage.setProcurementPostingRequests(r); return r; });
+        procurementRequestsRef.current = procurementRequestsRef.current.filter(x => x.id !== pr.id);
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
         toastRef.current({ title: 'Posting Request सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
+        opts?.onFailed?.();
         return;
       }
       toastRef.current({ title: 'पोस्टिंग अनुरोध बना (2/4)', description: `₹${pr.amount.amount}`, duration: 4000 });
+      opts?.onCommitted?.(pr);
     });
     return pr;
   }, [user, procurementFinancialIntents, procurementPostingRequests]);
@@ -5302,17 +5339,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Consumes ONE PostingRequest → resolves balanced legs via the pure resolver → persists ONE
   // immutable PostingRuleResult + one immutable 'posting.rule.resolved' event, committed atomically
   // via the frozen contract. The legs are data (symbolic selectors); no voucher / journal / ledger.
-  const generatePostingRuleResult = useCallback((data: { postingRequestId: string }): PostingRuleResult => {
+  const generatePostingRuleResult = useCallback((data: { postingRequestId: string }, opts?: { onCommitted?: (r: PostingRuleResult) => void; onFailed?: () => void }): PostingRuleResult => {
     const sentinel: PostingRuleResult = { id: '', postingRequestId: data.postingRequestId, lotId: '', jformId: '', financialIntentId: '', requestType: 'RecogniseProcurement', profile: 'agency', legs: [], createdAt: '', updatedAt: '' };
     if (guardFYLocked()) return sentinel;
     // 2. PostingRequest exists?
-    const request = procurementPostingRequests.find(p => p.id === data.postingRequestId);
+    const request = procurementRequestsRef.current.find(p => p.id === data.postingRequestId);
     if (!request) {
       toastRef.current({ title: 'Posting Request नहीं मिला', description: 'पहले Posting Request बनाएं। (Generate the Posting Request first)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     // 3. PostingRuleResult already exists? (early validation; the DB unique index on postingRequestId is the guarantee). One per request.
-    if (procurementPostingRuleResults.some(r => r.postingRequestId === data.postingRequestId)) {
+    if (procurementRuleResultsRef.current.some(r => r.postingRequestId === data.postingRequestId)) {
       toastRef.current({ title: 'पहले से बना', description: 'इस Posting Request का result पहले से मौजूद है। (Already resolved for this Posting Request)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
@@ -5338,17 +5375,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 5. Build the immutable 'posting.rule.resolved' event (correlationId = lot id).
     const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: request.lotId, name: 'posting.rule.resolved', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { postingRuleResultId: result.id, postingRequestId: result.postingRequestId, legCount: legs.length } };
     setProcurementPostingRuleResultsState(prev => { const u = [...prev, result]; storage.setProcurementPostingRuleResults(u); return u; });
+    procurementRuleResultsRef.current = [...procurementRuleResultsRef.current, result];
     setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
     // 6. Commit through the frozen transaction contract.
     supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'posting.rule.resolve', transactionId: crypto.randomUUID(), transactionVersion: 1, postingRuleResults: [withSoc(result)], events: [withSoc(event)] } }).then(({ error }) => {
       if (error) {
         console.error('Posting Rule resolve error:', error.message);
         setProcurementPostingRuleResultsState(prev => { const r = prev.filter(x => x.id !== result.id); storage.setProcurementPostingRuleResults(r); return r; });
+        procurementRuleResultsRef.current = procurementRuleResultsRef.current.filter(x => x.id !== result.id);
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
         toastRef.current({ title: 'Posting Rule result सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        opts?.onFailed?.();
         return;
       }
       toastRef.current({ title: 'खाते तय हुए (3/4)', description: `${legs.length} प्रविष्टियाँ`, duration: 4000 });
+      opts?.onCommitted?.(result);
     });
     return result;
   }, [user, procurementPostingRequests, procurementPostingRuleResults, accounts]);
@@ -5362,7 +5403,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const sentinel = { id: '', voucherNo: '', type: 'journal', date: '', debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     // 2. PostingRuleResult exists?
-    const result = procurementPostingRuleResults.find(r => r.id === data.postingRuleResultId);
+    const result = procurementRuleResultsRef.current.find(r => r.id === data.postingRuleResultId);
     if (!result) {
       toastRef.current({ title: 'Posting Rule result नहीं मिला', description: 'पहले Resolve करें। (Resolve the Posting Request first)', variant: 'destructive', duration: 8000 });
       return sentinel;
@@ -5384,7 +5425,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const drTotal = specs.filter(s => s.type === 'Dr').reduce((sum, s) => sum + s.amount, 0);
     // 5. Create the immutable engine voucher via the EXISTING accounting path (authoritative record).
     //    Dated the J-Form day (the purchase), not the click day — period / FY correctness.
-    const jf = procurementJForms.find(j => j.id === result.jformId);
+    const jf = procurementJFormsRef.current.find(j => j.id === result.jformId);
     const lot = procurementLots.find(l => l.id === result.lotId);
     const voucher = addVoucher({
       type: 'journal', date: procurementBusinessDate(jf?.createdAt, lot?.createdAt, todayStr()),
@@ -5512,8 +5553,38 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const payableAcc = ev.lines?.find(l => l.type === 'Cr')?.accountId || ev.creditAccountId;
     const now = new Date().toISOString();
 
-    // 1. Accounting consequence — ONE compound deduction voucher (only if there are deductions).
+    // Batch A (P0-2): the approval is committed only AFTER its deduction voucher is durably saved. Before,
+    // the RPC ran at once — a voucher whose save then failed (and was rolled back) left the settlement
+    // "approved" on the server, pointing at a voucher that does not exist, so 2105 and the settlement
+    // disagreed. Now: voucher saved → commit the approval; voucher failed → settlement back to draft.
+    const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: ev.id, name: 'settlement.approved', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { settlementId: stl.id, settlementNo: '', engineVoucherId: ev.id, netPayable } };
+    let approved: FarmerSettlement = { ...stl, status: 'approved', netPayable, amountPaid: { amount: 0, currency: netPayable.currency }, approvedAt: now, approvedBy: user?.name || 'System', updatedAt: now };
     let settlementVoucherId: string | undefined;
+    const revertLocal = () => {
+      setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? stl : x); storage.setProcurementSettlements(u); return u; });
+      setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
+    };
+    const commitApproval = () => {
+      supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'settlement.approve', transactionId: crypto.randomUUID(), transactionVersion: 1, settlements: [withSoc(approved)], events: [withSoc({ ...event, payload: { ...(event.payload as Record<string, unknown>), settlementVoucherId } })] } }).then(({ data: res, error }) => {
+        if (error) {
+          console.error('Settlement approve commit error:', error.message);
+          // RULE 1 — revert to draft AND cancel the accounting consequence so re-approval can't double-post.
+          // viaParent: this module owns the voucher (the owner check would otherwise refuse it).
+          revertLocal();
+          if (settlementVoucherId) cancelVoucher(settlementVoucherId, 'Settlement approval failed (auto-rollback)', user?.name || 'System', { viaParent: true });
+          toastRef.current({ title: 'निपटान स्वीकृत नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा approve करें।`, variant: 'destructive', duration: 12000 });
+          return;
+        }
+        const gen = (res as { settlements?: Array<{ id: string; settlementNo: string }> } | null)?.settlements?.find(s => s.id === stl.id);
+        if (gen?.settlementNo) {
+          setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? { ...x, settlementNo: gen.settlementNo } : x); storage.setProcurementSettlements(u); return u; });
+          setProcurementEventsState(prev => { const u = prev.map(e => e.id === event.id ? { ...e, payload: { ...(e.payload as Record<string, unknown>), settlementNo: gen.settlementNo } } : e); storage.setProcurementEvents(u); return u; });
+          toastRef.current({ title: 'निपटान स्वीकृत', description: `${gen.settlementNo} · निवल देय ₹${netPayable.amount}`, duration: 6000 });
+        }
+      });
+    };
+
+    // 1. Accounting consequence — ONE compound deduction voucher (only if there are deductions).
     if (totalDed > 0) {
       const lid = () => crypto.randomUUID();
       // Deductions are part of the J-Form, so they carry the posting voucher's (J-Form) date.
@@ -5527,40 +5598,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           { id: lid(), accountId: payableAcc, type: 'Dr', amount: totalDed },
           ...stl.deductionLines.map(l => ({ id: lid(), accountId: l.accountId, type: 'Cr' as const, amount: l.amount.amount })),
         ],
+      }, {
+        onSaved: () => commitApproval(),
+        onFailed: () => {
+          revertLocal();
+          toastRef.current({ title: 'निपटान स्वीकृत नहीं हुआ', description: 'कटौती वाउचर क्लाउड में सेव नहीं हुआ, इसलिए निपटान फिर से ड्राफ्ट है — दोबारा approve करें।', variant: 'destructive', duration: 12000 });
+        },
       });
       if (!v.id) { toastRef.current({ title: 'कटौती वाउचर नहीं बना', description: 'निपटान स्वीकृत नहीं हुआ — ऊपर की चेतावनी देखें।', variant: 'destructive', duration: 9000 }); return blank; }
       settlementVoucherId = v.id;
+      approved = { ...approved, settlementVoucherId };
     }
 
-    // 2. The approved Settlement Transaction (settlementNo assigned by the RPC). Optimistic local update.
-    const approved: FarmerSettlement = { ...stl, status: 'approved', netPayable, amountPaid: { amount: 0, currency: netPayable.currency }, settlementVoucherId, approvedAt: now, approvedBy: user?.name || 'System', updatedAt: now };
-    const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: ev.id, name: 'settlement.approved', occurredAt: now, recordedAt: now, actor: user?.name || 'System', payload: { settlementId: stl.id, settlementNo: '', engineVoucherId: ev.id, netPayable, settlementVoucherId } };
+    // 2. Optimistic local update (a second click now sees "approved"); the server commit follows the
+    //    voucher's save, or runs now when there is no deduction voucher.
     setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? approved : x); storage.setProcurementSettlements(u); return u; });
     setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
-    supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'settlement.approve', transactionId: crypto.randomUUID(), transactionVersion: 1, settlements: [withSoc(approved)], events: [withSoc(event)] } }).then(({ data: res, error }) => {
-      if (error) {
-        console.error('Settlement approve commit error:', error.message);
-        // RULE 1 — revert to draft AND cancel the accounting consequence so re-approval can't double-post.
-        setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? stl : x); storage.setProcurementSettlements(u); return u; });
-        setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
-        if (settlementVoucherId) cancelVoucher(settlementVoucherId, 'Settlement approval failed (auto-rollback)', user?.name || 'System');
-        toastRef.current({ title: 'निपटान स्वीकृत नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा approve करें।`, variant: 'destructive', duration: 12000 });
-        return;
-      }
-      const gen = (res as { settlements?: Array<{ id: string; settlementNo: string }> } | null)?.settlements?.find(s => s.id === stl.id);
-      if (gen?.settlementNo) {
-        setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? { ...x, settlementNo: gen.settlementNo } : x); storage.setProcurementSettlements(u); return u; });
-        setProcurementEventsState(prev => { const u = prev.map(e => e.id === event.id ? { ...e, payload: { ...(e.payload as Record<string, unknown>), settlementNo: gen.settlementNo } } : e); storage.setProcurementEvents(u); return u; });
-        toastRef.current({ title: 'निपटान स्वीकृत', description: `${gen.settlementNo} · निवल देय ₹${netPayable.amount}`, duration: 6000 });
-      }
-    });
+    if (!settlementVoucherId) commitApproval();
     return approved;
   }, [user, procurementSettlements, procurementQualityTests, procurementPostingRuleResults, addVoucher, cancelVoucher]);
 
   // Farmer Payment — settles the APPROVED settlement's Net Payable. Dr = the Engine Voucher's payable
-  // account (its Cr leg); Cr = Cash / selected Bank. Outstanding reads the STORED settlement (SoT):
-  // netPayable − amountPaid. The payment voucher is the authoritative base; advancing amountPaid is the
-  // extra (RULE-1 step-2 — mild warning on failure, since amountPaid is reconcilable from payments).
+  // account (its Cr leg); Cr = Cash / selected Bank. Outstanding = netPayable − Σ live farmer.payment
+  // vouchers (P0-1: the stored amountPaid is only a cache; trusting it let a failed cache write pay the
+  // farmer twice after F5). The cache is refreshed once the voucher is durably saved.
   const recordFarmerPayment = useCallback((data: { engineVoucherId: string; amount: number; mode: 'cash' | 'bank' | 'agency'; bankAccountId?: string; agencyAccountId?: string; paymentDate: string; reference?: string; remarks?: string }): Voucher => {
     const sentinel = { id: '', voucherNo: '', type: 'payment', date: data.paymentDate, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
@@ -5575,7 +5636,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'पहले निपटान स्वीकृत करें', description: 'भुगतान से पहले निपटान बनाकर स्वीकृत करें। (Approve the settlement before paying)', variant: 'destructive', duration: 9000 });
       return sentinel;
     }
-    const outstanding = toRupees(subMinor(toMinor(stl.netPayable.amount), toMinor(stl.amountPaid.amount)));
+    const paidSoFar = farmerPaidByEngineVoucher(vouchersRef.current).get(ev.id) ?? 0;
+    const outstanding = toRupees(subMinor(toMinor(stl.netPayable.amount), toMinor(paidSoFar)));
     if (!(data.amount > 0)) {
       toastRef.current({ title: 'राशि डालें', description: 'भुगतान राशि 0 से अधिक होनी चाहिए। (Amount must be greater than 0)', variant: 'destructive', duration: 8000 });
       return sentinel;
@@ -5590,8 +5652,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // cash/bank there wrongly drove those balances negative).
     const bankFallback = data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK;
     const creditAcc = resolveFarmerPaymentCredit(data.mode, { cash: ACCOUNT_IDS.CASH, bank: bankFallback, agency: data.agencyAccountId });
-    if (data.mode === 'agency' && (!creditAcc || !accounts.some(a => a.id === creditAcc && !a.isGroup))) {
-      toastRef.current({ title: 'एजेंसी खाता चुनें', description: 'सीधे-एजेंसी भुगतान के लिए एक वैध एजेंसी प्राप्य खाता (जैसे Hafed Control) चुनें।', variant: 'destructive', duration: 9000 });
+    if (data.mode === 'agency' && (!creditAcc || !agencyDirectAccounts(accounts, resolveProcurementAccountId(accounts, 'agencyReceivable')).some(a => a.id === creditAcc))) {
+      toastRef.current({ title: 'एजेंसी खाता चुनें', description: 'सीधे-एजेंसी भुगतान के लिए एजेंसी प्राप्य (MSP Receivable) खाता चुनें।', variant: 'destructive', duration: 9000 });
       return sentinel;
     }
     if (!creditAcc) return sentinel;
@@ -5599,29 +5661,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
     const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
     const modeNote = data.mode === 'agency' ? ' · एजेंसी द्वारा सीधे भुगतान' : '';
-    // Authoritative base: the payment voucher (addVoucher self-manages RULE-1).
+    // Authoritative base: the payment voucher (addVoucher self-manages RULE-1 — a failed save removes it,
+    // and the derived outstanding comes straight back). The settlement's amountPaid cache is refreshed
+    // only after the voucher is durably saved, from the vouchers themselves.
+    const refreshPaidCache = () => {
+      const paid = farmerPaidByEngineVoucher(vouchersRef.current).get(ev.id) ?? 0;
+      const cur = procurementSettlementsRef.current.find(x => x.id === stl.id) ?? stl;
+      const next: FarmerSettlement = { ...cur, amountPaid: { amount: paid, currency: stl.netPayable.currency }, updatedAt: new Date().toISOString() };
+      setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? next : x); storage.setProcurementSettlements(u); return u; });
+      supabase.from('procurement_settlements').upsert(withSoc(next)).then(({ error }) => {
+        // Only the cache is stale — every screen reads the payment vouchers — so nothing to roll back.
+        if (error) { console.warn('Settlement amountPaid cache update failed:', error.message); reportError('write-partial', error.message, { at: 'procurement_settlements.amountPaid cache' }); }
+      });
+    };
     const voucher = addVoucher({
       type: 'payment', date: data.paymentDate,
       debitAccountId: payableAcc, creditAccountId: creditAcc, amount: data.amount,
       narration: `किसान को भुगतान — ${ev.voucherNo}${ref}${rem}${modeNote}`,
-      refType: 'farmer.payment', refId: ev.id,
+      refType: FARMER_PAYMENT_REF_TYPE, refId: ev.id,
       createdBy: user?.name || 'System',
       lines: [
         { id: lid(), accountId: payableAcc, type: 'Dr', amount: data.amount },
         { id: lid(), accountId: creditAcc, type: 'Cr', amount: data.amount },
       ],
-    });
+    }, { onSaved: refreshPaidCache });
     if (!voucher.id) return sentinel;
-    // Extra: advance the settlement's stored payment progress (amountPaid). Reconcilable from payment
-    // vouchers, so a cloud-save miss here is a MILD warning (no rollback of the saved payment).
-    const next: FarmerSettlement = { ...stl, amountPaid: { amount: toRupees(addMinor(toMinor(stl.amountPaid.amount), toMinor(data.amount))), currency: stl.netPayable.currency }, updatedAt: new Date().toISOString() };
-    setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? next : x); storage.setProcurementSettlements(u); return u; });
-    supabase.from('procurement_settlements').upsert(withSoc(next)).then(({ error }) => {
-      if (error) {
-        console.warn('Settlement amountPaid update failed:', error.message);
-        toastRef.current({ title: 'भुगतान दर्ज हुआ', description: 'निपटान प्रगति cloud पर अभी update नहीं हुई — refresh पर ठीक हो जाएगी। (Payment saved; settlement progress will sync.)', variant: 'default', duration: 9000 });
-      }
-    });
     return voucher;
   }, [user, accounts, addVoucher, procurementSettlements, procurementQualityTests, procurementPostingRuleResults]);
 
@@ -8146,6 +8210,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     [vouchers, members, sales, purchases],
   );
 
+  // Batch A (P0-1): pages and registers see amountPaid DERIVED from the live payment vouchers — the
+  // stored column is only a cache that a failed second write could leave behind.
+  const procurementSettlementsView = useMemo(
+    () => withDerivedAmountPaid(procurementSettlements, farmerPaidByEngineVoucher(vouchers)),
+    [procurementSettlements, vouchers],
+  );
+
   const contextValue = useMemo<DataContextType>(() => ({
     branches, activeBranchId, setActiveBranch, addBranch, updateBranch, deleteBranch, transferBetweenBranches, matchesActiveBranch, isBranchRestricted,
     godowns, activeGodownId, setActiveGodown, addGodown, updateGodown, deleteGodown,
@@ -8160,7 +8231,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementFinancialIntents, generateFinancialIntent,
     procurementPostingRequests, generatePostingRequest,
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
-    procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
+    procurementSettlements: procurementSettlementsView, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
     addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
@@ -8199,7 +8270,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementFinancialIntents, generateFinancialIntent,
     procurementPostingRequests, generatePostingRequest,
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
-    procurementSettlements, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
+    procurementSettlementsView, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment,
     addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,

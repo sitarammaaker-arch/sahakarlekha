@@ -359,7 +359,7 @@ export default function ProcurementMasters() {
                     <div className="font-medium">{cropLabel(crops.find(c => c.id === r.cropId) || { name: r.cropId })} · {seasonName(r.seasonId)}</div>
                     <div className="text-xs text-muted-foreground">₹{r.rate.amount.toLocaleString('en-IN')}/{hi ? 'क्विंटल' : 'qtl'} · {hi ? 'प्रभावी' : 'w.e.f.'} {r.effectiveFrom}</div>
                   </div>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => deleteMspRate(r.id)} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => { if (window.confirm(hi ? 'यह MSP दर हटाएँ?' : 'Delete this MSP rate?')) deleteMspRate(r.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
                 </div>
               ))}
             </CardContent>

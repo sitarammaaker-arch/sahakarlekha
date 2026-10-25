@@ -3,6 +3,7 @@
  * Aggregations only; label resolution + the farmer↔settlement chain join stay in the page.
  */
 import type { ProcurementLot, FarmerSettlement } from '@/lib/procurement';
+import { localDateOf } from '@/lib/procurement/agentFlow';
 
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const lotValue = (l: ProcurementLot) => r2((l.quantity?.value || 0) * (l.mspRate?.amount || 0));
@@ -27,17 +28,26 @@ export interface ProcurementRegister {
   count: number;
 }
 
-/** All lots in [from,to] (inclusive, by createdAt date), newest first, with per-lot value + totals. */
-export function buildProcurementRegister(lots: ReadonlyArray<ProcurementLot>, from?: string, to?: string): ProcurementRegister {
+/**
+ * Batch A: the lots a register COUNTS — posted to the ledger and not rejected at quality. A lot that was
+ * only entered (or was rejected) is not a procurement yet; counting it overstated quantity and value.
+ */
+export function countableLots<L extends Pick<ProcurementLot, 'id'>>(lots: ReadonlyArray<L>, postedLotIds: ReadonlySet<string>, rejectedLotIds: ReadonlySet<string>): L[] {
+  return lots.filter(l => postedLotIds.has(l.id) && !rejectedLotIds.has(l.id));
+}
+
+/** All lots in [from,to] (inclusive, by LOCAL createdAt date), newest first, with per-lot value + totals.
+ *  statusOf labels each row (the lot's stage); without it the stored operationalStatus is shown. */
+export function buildProcurementRegister(lots: ReadonlyArray<ProcurementLot>, from?: string, to?: string, statusOf?: (l: ProcurementLot) => string): ProcurementRegister {
   const rows: ProcRegRow[] = lots
-    .map(l => ({ l, date: (l.createdAt || '').slice(0, 10) }))
+    .map(l => ({ l, date: localDateOf(l.createdAt) || '' }))
     .filter(({ date }) => (!from || date >= from) && (!to || date <= to))
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
     .map(({ l, date }) => ({
       lotId: l.id, date, farmerId: l.farmerId, cropId: l.cropId, varietyId: l.varietyId,
       seasonId: l.seasonId, centreId: l.centreId,
       qty: l.quantity?.value || 0, rate: l.mspRate?.amount || 0, value: lotValue(l),
-      status: l.operationalStatus,
+      status: statusOf ? statusOf(l) : l.operationalStatus,
     }));
   return {
     rows,
@@ -62,9 +72,10 @@ export function buildCommoditySummary(lots: ReadonlyArray<ProcurementLot>): Comm
 }
 
 export interface SettlementTotals { gross: number; deductions: number; net: number; paid: number; outstanding: number; count: number; }
-/** Sum gross / deductions / net / paid / outstanding across a list of (live) settlements. */
+/** Sum gross / deductions / net / paid / outstanding across APPROVED, live settlements — a draft's Net
+ *  Payable is not owed yet, so counting it inflated the outstanding. */
 export function settlementTotals(settlements: ReadonlyArray<FarmerSettlement>): SettlementTotals {
-  const live = settlements.filter(s => !s.isDeleted);
+  const live = settlements.filter(s => !s.isDeleted && s.status === 'approved');
   const gross = r2(live.reduce((s, x) => s + (x.gross?.amount || 0), 0));
   const deductions = r2(live.reduce((s, x) => s + (x.deductionLines || []).reduce((a, l) => a + (l.amount?.amount || 0), 0), 0));
   const net = r2(live.reduce((s, x) => s + (x.netPayable?.amount || 0), 0));

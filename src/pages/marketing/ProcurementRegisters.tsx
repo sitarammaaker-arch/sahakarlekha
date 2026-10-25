@@ -11,7 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { FileSpreadsheet, Download } from 'lucide-react';
 import { downloadCSV } from '@/lib/exportUtils';
-import { buildProcurementRegister, buildCommoditySummary, settlementTotals } from '@/lib/marketing/registers';
+import { buildProcurementRegister, buildCommoditySummary, settlementTotals, countableLots } from '@/lib/marketing/registers';
+import { deriveLotStage, isRejectedQuality, LOT_STAGE_LABEL } from '@/lib/procurement/agentFlow';
+import { isEngineVoucher } from '@/lib/accounting/voucherImmutability';
 
 const LEGACY_CROPS: Record<string, { name: string; nameHi: string }> = {
   wheat: { name: 'Wheat', nameHi: 'गेहूँ' }, paddy: { name: 'Paddy', nameHi: 'धान' },
@@ -19,7 +21,7 @@ const LEGACY_CROPS: Record<string, { name: string; nameHi: string }> = {
 };
 
 export default function ProcurementRegisters() {
-  const { procurementLots, procurementFarmers, procurementSettlements, procurementPostingRuleResults, vouchers } = useData();
+  const { procurementLots: allLots, procurementFarmers, procurementSettlements, procurementPostingRuleResults, procurementQualityTests, vouchers } = useData();
   const { crops, seasons, centres } = useMarketingData();
   const { language } = useLanguage();
   const hi = language === 'hi';
@@ -29,6 +31,27 @@ export default function ProcurementRegisters() {
   const cropName = (id: string) => { const c = crops.find(x => x.id === id); if (c) return hi && c.nameHi ? (c.nameHi || c.name) : c.name; const l = LEGACY_CROPS[id]; return l ? (hi ? (l.nameHi || l.name) : l.name) : id; };
   const seasonName = (id?: string) => { const s = seasons.find(x => x.id === id); return s ? (hi && s.nameHi ? (s.nameHi || s.name) : s.name) : ''; };
   const centreName = (id?: string) => { const c = centres.find(x => x.id === id); return c ? (hi && c.nameHi ? (c.nameHi || c.name) : c.name) : ''; };
+
+  // Batch A: registers count only lots POSTED to the ledger (live engine voucher) and not rejected at
+  // quality — an entered-only or rejected lot is not a procurement and overstated qty/value.
+  const lotSettlement = useMemo(() => {
+    const evLot = new Map<string, string>();
+    for (const v of vouchers) {
+      if (v.isDeleted || !isEngineVoucher(v) || v.refType !== 'posting.rule.result') continue;
+      const rr = procurementPostingRuleResults.find(r => r.id === v.refId);
+      if (rr) evLot.set(v.id, rr.lotId);
+    }
+    const bySettle = new Map<string, (typeof procurementSettlements)[number]>();
+    for (const s of procurementSettlements) { const lotId = evLot.get(s.engineVoucherId); if (lotId && !s.isDeleted) bySettle.set(lotId, s); }
+    return { posted: new Set(evLot.values()), bySettle };
+  }, [vouchers, procurementPostingRuleResults, procurementSettlements]);
+  const rejectedLots = useMemo(() => new Set(procurementQualityTests.filter(q => isRejectedQuality(q.result)).map(q => q.lotId)), [procurementQualityTests]);
+  const procurementLots = useMemo(() => countableLots(allLots, lotSettlement.posted, rejectedLots), [allLots, lotSettlement, rejectedLots]);
+  const stageLabel = (lotId: string) => {
+    const s = lotSettlement.bySettle.get(lotId);
+    const st = deriveLotStage({ hasJForm: true, hasPosting: true, settlementStatus: s?.status, outstanding: s ? (s.netPayable?.amount || 0) - (s.amountPaid?.amount || 0) : null });
+    return hi ? LOT_STAGE_LABEL[st].hi : LOT_STAGE_LABEL[st].en;
+  };
 
   // Settlement → farmer (via engine voucher → posting rule result → lot).
   const farmerBySettlement = useMemo(() => {
@@ -45,7 +68,7 @@ export default function ProcurementRegisters() {
   // ── Procurement Register (date window) ──
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const procReg = useMemo(() => buildProcurementRegister(procurementLots, from || undefined, to || undefined), [procurementLots, from, to]);
+  const procReg = useMemo(() => buildProcurementRegister(procurementLots, from || undefined, to || undefined, l => stageLabel(l.id)), [procurementLots, from, to, lotSettlement, hi]);
   const exportProc = () => downloadCSV(
     [hi ? 'तिथि' : 'Date', hi ? 'किसान' : 'Farmer', hi ? 'फसल' : 'Crop', hi ? 'सीज़न' : 'Season', hi ? 'केंद्र' : 'Centre', hi ? 'मात्रा' : 'Qty', hi ? 'दर' : 'Rate', hi ? 'मूल्य' : 'Value', hi ? 'स्थिति' : 'Status'],
     procReg.rows.map(r => [r.date, farmerName(r.farmerId), cropName(r.cropId), seasonName(r.seasonId), centreName(r.centreId), r.qty, r.rate, r.value, r.status]),
@@ -53,7 +76,9 @@ export default function ProcurementRegisters() {
   );
 
   // ── Settlement Register ──
-  const liveSettlements = useMemo(() => procurementSettlements.filter(s => !s.isDeleted), [procurementSettlements]);
+  // Only APPROVED settlements are owed; drafts are counted separately so the totals row ties to the rows.
+  const liveSettlements = useMemo(() => procurementSettlements.filter(s => !s.isDeleted && s.status === 'approved'), [procurementSettlements]);
+  const draftCount = procurementSettlements.filter(s => !s.isDeleted && s.status === 'draft').length;
   const stotals = useMemo(() => settlementTotals(procurementSettlements), [procurementSettlements]);
   const settleRow = (s: typeof liveSettlements[number]) => {
     const deductions = (s.deductionLines || []).reduce((a, l) => a + (l.amount?.amount || 0), 0);
@@ -139,7 +164,10 @@ export default function ProcurementRegisters() {
         <TabsContent value="settlement">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2">
-              <CardTitle className="text-base">{hi ? 'निपटान रजिस्टर' : 'Settlement Register'} ({stotals.count})</CardTitle>
+              <div>
+                <CardTitle className="text-base">{hi ? 'निपटान रजिस्टर' : 'Settlement Register'} ({stotals.count})</CardTitle>
+                {draftCount > 0 && <p className="text-xs text-muted-foreground mt-1">{hi ? `${draftCount} ड्राफ्ट निपटान स्वीकृत नहीं हैं — कुल में नहीं जुड़े।` : `${draftCount} draft settlement(s) not approved — not in the totals.`}</p>}
+              </div>
               <Button size="sm" variant="outline" className="gap-1 h-8" onClick={exportSettle} disabled={stotals.count === 0}><Download className="h-4 w-4" />CSV</Button>
             </CardHeader>
             <CardContent className="overflow-x-auto">
