@@ -1364,6 +1364,12 @@ create table if not exists procurement_farmers (
   "createdAt" timestamptz default now(),
   "updatedAt" timestamptz default now()
 );
+-- Migration 138 (Marketing D2b): farmer bank details, village, state-portal id (step-2 writes).
+alter table procurement_farmers add column if not exists village text;
+alter table procurement_farmers add column if not exists "bankName" text;
+alter table procurement_farmers add column if not exists "bankAccountNo" text;
+alter table procurement_farmers add column if not exists ifsc text;
+alter table procurement_farmers add column if not exists "portalId" text;
 -- Procurement CONFIG masters (Marketing M1a). Owned by MarketingDataContext (config, not the
 -- event-sourced chain). Additive; safe to re-run.
 create table if not exists procurement_crops (
