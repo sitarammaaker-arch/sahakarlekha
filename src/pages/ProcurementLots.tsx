@@ -50,7 +50,7 @@ const DEDUCTION_TYPES = [
 
 export default function ProcurementLots() {
   const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment, cancelProcurementLot, updateFarmer, society } = useData();
-  const { crops, varieties, seasons, agencies, centres, resolveMspRate, deductionRules, qualitySpecs, arhtiyas, accrueProcurementCommission, commissionAccruals, deleteCommissionAccrual } = useMarketingData();
+  const { crops, varieties, seasons, agencies, centres, resolveMspRate, deductionRules, qualitySpecs, arhtiyas, dispatches, accrueProcurementCommission, commissionAccruals, deleteCommissionAccrual } = useMarketingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -355,6 +355,9 @@ export default function ProcurementLots() {
   // money has moved (farmer paid, agency or commission money received); the toast says what to undo.
   const [cancellingLotId, setCancellingLotId] = useState<string | null>(null);
   const handleCancelLot = async (lotId: string) => {
+    // D3: a lot already sent to the agency is cancelled through its dispatch first (the agency holds it).
+    const disp = dispatches.find(d => !d.isDeleted && d.lotIds.includes(lotId));
+    if (disp) { toast({ title: hi ? 'लॉट डिस्पैच में है' : 'Lot is in a dispatch', description: hi ? `यह लॉट डिस्पैच ${disp.dispatchNo} में एजेंसी को भेजा जा चुका है — पहले "एजेंसी रसीद" पेज पर वह डिस्पैच हटाएँ।` : `Delete dispatch ${disp.dispatchNo} on the Agency Receipt page first.`, variant: 'destructive', duration: 12000 }); return; }
     const posted = !!lotEngineVoucher(lotId);
     const reason = window.prompt(hi
       ? `यह लॉट रद्द करें?${posted ? ' इसकी बहीखाता पोस्टिंग का उल्टा (reversal) वाउचर बनेगा, और निपटान व कमीशन रद्द होंगे।' : ''}\nकारण लिखें:`

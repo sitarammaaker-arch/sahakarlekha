@@ -407,5 +407,20 @@ const MSP = new Set(['procurement_msp']);
   ok(/for \(const r of bulkPlan\.pay\)[\s\S]{0,400}recordFarmerPayment\(\{ engineVoucherId: r\.engineVoucherId/.test(page) && /reference: bulkRef\.trim\(\)/.test(page), 'bulk = one recordFarmerPayment per farmer with the shared batch ref');
 }
 
+// ── 17. D3 — source guards (shortage / bill vouchers owned + rolled back) ──────────────────────────
+{
+  const { readFileSync } = await import('node:fs');
+  const mk = readFileSync(pathResolve(SRC, 'contexts', 'MarketingDataContext.tsx'), 'utf8');
+  ok(/registerVoucherOwner\('marketing-agency'/.test(mk), 'dispatch / bill own their vouchers (no stray cancel from the Vouchers page)');
+  ok(/refType: DISPATCH_SHORTAGE_REF_TYPE, refId: d\.agencyId/.test(mk) && /onSaved: \(sv\) => saveRow\(\{ \.\.\.next, shortageVoucherId: sv\.id \}, \(\) => cancelVoucher\(sv\.id/.test(mk), 'shortage voucher first; a row that fails cancels it');
+  ok(/refType: AGENCY_BILL_REF_TYPE, refId: b\.agencyId/.test(mk) && /onSaved: \(sv\) => saveApproved\(sv\.id, \(\) => cancelVoucher\(sv\.id/.test(mk), 'bill incidentals voucher first; a row that fails cancels it');
+  ok(/if \(agencyBills\.some\(b => !b\.isDeleted && b\.dispatchIds\.includes\(id\)\)\)/.test(mk), 'a billed dispatch cannot be deleted');
+  ok(/billMatching\.byBill\[b\.id\]\?\.received \?\? 0\) > 0\.005/.test(mk), 'a bill with receipts applied cannot be deleted');
+  const flow = readFileSync(pathResolve(SRC, 'lib', 'procurement', 'agentFlow.ts'), 'utf8');
+  ok(/'procurement\.dispatch\.shortage' \|\| v\.refType === 'procurement\.agency\.bill'/.test(flow), 'shortage / bill vouchers traced to their agency in balances');
+  const page = readFileSync(pathResolve(SRC, 'pages', 'ProcurementLots.tsx'), 'utf8');
+  ok(/const disp = dispatches\.find\(d => !d\.isDeleted && d\.lotIds\.includes\(lotId\)\)/.test(page), 'a dispatched lot is not cancelled directly');
+}
+
 console.log(`[procurement-agent-flow] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

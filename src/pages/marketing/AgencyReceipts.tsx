@@ -13,6 +13,7 @@ import { getBankAccountIds } from '@/lib/storage';
 import { receiptCap, COMMISSION_RECEIPT_REF_TYPE } from '@/lib/procurement/agentFlow';
 import { todayStr } from '@/lib/dateUtils';
 import { Landmark, Trash2 } from 'lucide-react';
+import AgencyOps from './AgencyOps';
 
 /**
  * Agency Receipt (Marketing M3c) — money received from the procurement agency (FCI / NAFED / the
@@ -69,7 +70,7 @@ export default function AgencyReceipts() {
   const hasUnallocated = mspBalances.unallocated !== 0 || commissionBalances.unallocated !== 0;
 
   return (
-    <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-6">
+    <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center gap-3">
         <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
           <Landmark className="h-6 w-6 text-primary" />
@@ -191,6 +192,8 @@ export default function AgencyReceipts() {
           ))}
         </CardContent>
       </Card>
+      {/* D3: dispatch (lifting) + shortage, agency bills, receipt-bill matching */}
+      <AgencyOps hi={hi} />
     </div>
   );
 }

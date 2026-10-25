@@ -38,6 +38,9 @@ import {
 import type { Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType } from '@/lib/procurement';
 import type { Transporter } from '@/lib/marketing/transport';
 import type { BardanaMovement } from '@/lib/marketing/bardana';
+import { DISPATCH_SHORTAGE_REF_TYPE, AGENCY_BILL_REF_TYPE, dispatchTotals, shortageOf, billBase, billTotals, nextDocNo, matchReceiptsToBills, type ProcurementDispatch, type AgencyBill, type AgencyBillLine } from '@/lib/marketing/agencyBilling';
+import { findVoucherOwner } from '@/lib/voucherOwnership';
+import { procurementLegsOf, FARMER_PAYMENT_REF_TYPE } from '@/lib/procurement/agentFlow';
 import type { Arhtiya } from '@/lib/procurement';
 import type { Voucher } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
@@ -128,6 +131,19 @@ interface MarketingDataContextValue {
   bardanaMovements: BardanaMovement[];
   addBardanaMovement: (data: Omit<BardanaMovement, 'id' | 'createdAt' | 'updatedAt'>) => BardanaMovement;
   deleteBardanaMovement: (id: string) => void;
+  // D3 — agency dispatch (+ posted shortage) and agency bills (+ posted incidentals)
+  dispatches: ProcurementDispatch[];
+  addDispatch: (data: { date: string; agencyId: string; lotIds: string[]; vehicleNo?: string; transporterId?: string; destination?: string; note?: string }) => ProcurementDispatch;
+  acceptDispatch: (id: string, data: { acceptedQty: number; acceptedDate: string; shortageAccountId?: string }) => void;
+  deleteDispatch: (id: string) => Promise<void>;
+  agencyBills: AgencyBill[];
+  addAgencyBill: (data: { date: string; agencyId: string; dispatchIds: string[]; lines: AgencyBillLine[]; note?: string }) => AgencyBill;
+  approveAgencyBill: (id: string) => void;
+  deleteAgencyBill: (id: string) => Promise<void>;
+  /** Receipts per agency for bill matching: agency receipts (MSP) + payments the agency made to farmers directly. */
+  billMatching: ReturnType<typeof matchReceiptsToBills>;
+  /** Procurement value of a posted lot (net legs of its posting voucher); 0 when not posted. */
+  lotValue: (lotId: string) => number;
   // Transport — transporter master (T1)
   transporters: Transporter[];
   addTransporter: (data: { name: string; nameHi?: string; vehicleNo?: string; phone?: string; ratePerQtl?: number }) => Transporter;
@@ -153,7 +169,7 @@ const STANDARD_CROPS: Array<{ name: string; code: string; nameHi: string }> = [
 ];
 
 export function MarketingProvider({ children }: { children: ReactNode }) {
-  const { society, procurementLots, procurementPostingRuleResults, procurementSettlements, procurementQualityTests, accounts, vouchers, addVoucher, cancelVoucher } = useData();
+  const { society, procurementLots, procurementPostingRuleResults, procurementSettlements, procurementQualityTests, accounts, vouchers, addVoucher, cancelVoucher, registerVoucherOwner } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -192,6 +208,8 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   const [transporters, setTransportersState] = useState<Transporter[]>(() => storage.getMarketingTransporters());
   const [arhtiyas, setArhtiyasState] = useState<Arhtiya[]>(() => storage.getProcurementArhtiyas());
   const [bardanaMovements, setBardanaMovementsState] = useState<BardanaMovement[]>(() => storage.getProcurementBardanaMovements());
+  const [dispatches, setDispatchesState] = useState<ProcurementDispatch[]>(() => storage.getProcurementDispatches());
+  const [agencyBills, setAgencyBillsState] = useState<AgencyBill[]>(() => storage.getProcurementAgencyBills());
 
   // J5: these masters used to load in 10 separate effects — 10 React commits after login, each
   // re-rendering every consumer. applyLoadsTogether applies them in one commit; each table keeps its own
@@ -211,6 +229,8 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       setTransportersState([]);
       setArhtiyasState([]);
       setBardanaMovementsState([]);
+      setDispatchesState([]);
+      setAgencyBillsState([]);
       return;
     }
     applyLoadsTogether([
@@ -226,6 +246,8 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       [fetchAllPaged<Transporter>('marketing_transporters', sid), setTransportersState, storage.getMarketingTransporters],
       [fetchAllPaged<Arhtiya>('procurement_arhtiyas', sid), setArhtiyasState, storage.getProcurementArhtiyas],
       [fetchAllPaged<BardanaMovement>('procurement_bardana_movements', sid), setBardanaMovementsState, storage.getProcurementBardanaMovements],
+      [fetchAllPaged<ProcurementDispatch>('procurement_dispatches', sid), setDispatchesState, storage.getProcurementDispatches],
+      [fetchAllPaged<AgencyBill>('procurement_agency_bills', sid), setAgencyBillsState, storage.getProcurementAgencyBills],
     ], 'marketing masters');
   }, [user?.societyId]);
 
@@ -875,6 +897,229 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     cancelVoucher(voucherId, 'Agency receipt reversed', user?.name || 'System', { viaParent: true });
   }, [cancelVoucher, user]);
 
+  // ── D3: agency dispatch + shortage, agency bills ───────────────────────────────────────
+  // Founder 2026-10-25: shortage is POSTED (Dr shortage ledger / Cr agency receivable) and a bill's
+  // incidentals are POSTED on approval (Dr agency receivable / Cr each line's ledger). Each voucher
+  // is owned by its dispatch / bill (cancel only through it); the voucher is saved FIRST and the row
+  // follows its onSaved — a row that then fails cancels the voucher again (RULE 1).
+  const dispatchesRef = useRef(dispatches); dispatchesRef.current = dispatches;
+  const billsRef = useRef(agencyBills); billsRef.current = agencyBills;
+  useEffect(() => registerVoucherOwner('marketing-agency', id => findVoucherOwner([
+    { label: 'एजेंसी डिस्पैच (कमी)', docs: dispatchesRef.current },
+    { label: 'एजेंसी बिल', docs: billsRef.current },
+  ], id)), [registerVoucherOwner]);
+
+  const liveVouchers = useMemo(() => vouchers.filter(v => !v.isDeleted && v.approvalStatus !== 'rejected'), [vouchers]);
+  const lotValue = useCallback((lotId: string): number => {
+    const rr = procurementPostingRuleResults.find(r => r.lotId === lotId);
+    const ev = rr ? liveVouchers.find(v => v.origin === 'engine' && v.refType === 'posting.rule.result' && v.refId === rr.id && !v.reversedBy) : undefined;
+    return ev ? procurementLegsOf(ev).value : 0;
+  }, [procurementPostingRuleResults, liveVouchers]);
+  const agencyOfLot = useCallback((lotId: string) => {
+    const l = procurementLots.find(x => x.id === lotId);
+    return l ? centres.find(c => c.id === l.centreId)?.agencyId : undefined;
+  }, [procurementLots, centres]);
+  const receivableOf = (agencyId: string) => agencies.find(a => a.id === agencyId)?.ledgerAccountId || mspReceivableId;
+  const persistRow = <T extends object>(table: string, row: T) => supabase.from(table).upsert(withSoc(row));
+
+  const addDispatch = useCallback((data: { date: string; agencyId: string; lotIds: string[]; vehicleNo?: string; transporterId?: string; destination?: string; note?: string }): ProcurementDispatch => {
+    const now = new Date().toISOString();
+    const blank = { id: '', dispatchNo: '', date: data.date, agencyId: data.agencyId, lotIds: [], dispatchedQty: 0, dispatchedValue: 0, status: 'dispatched', createdAt: '', updatedAt: '' } as ProcurementDispatch;
+    if (guardFYLocked()) return blank;
+    const refuse = (d: string) => { toastRef.current({ title: 'डिस्पैच नहीं बना', description: d, variant: 'destructive', duration: 10000 }); return blank; };
+    if (!data.agencyId || !agencies.some(a => a.id === data.agencyId)) return refuse('एजेंसी चुनें।');
+    if (!data.lotIds.length) return refuse('कम से कम एक लॉट चुनें।');
+    const inLive = new Set(dispatches.filter(d => !d.isDeleted).flatMap(d => d.lotIds));
+    const lots = data.lotIds.map(id => procurementLots.find(l => l.id === id));
+    for (const l of lots) {
+      if (!l) return refuse('कोई लॉट नहीं मिला — पेज refresh करें।');
+      if (l.cancelledAt) return refuse('रद्द लॉट डिस्पैच नहीं हो सकता।');
+      if (procurementQualityTests.some(q => q.lotId === l.id && isRejectedQuality(q.result))) return refuse('अस्वीकृत लॉट डिस्पैच नहीं हो सकता।');
+      if (!(lotValue(l.id) > 0)) return refuse('केवल बहीखाते में पोस्ट हुए लॉट डिस्पैच हो सकते हैं।');
+      if (inLive.has(l.id)) return refuse('एक लॉट पहले से किसी डिस्पैच में है।');
+      const ag = agencyOfLot(l.id);
+      if (ag && ag !== data.agencyId) return refuse('चुने गए लॉट किसी दूसरी एजेंसी के केंद्र के हैं।');
+    }
+    const tot = dispatchTotals(lots.map(l => ({ quantity: l!.quantity, value: lotValue(l!.id), bags: l!.bags })));
+    const rec: ProcurementDispatch = {
+      id: crypto.randomUUID(), dispatchNo: nextDocNo('DSP', dispatches.map(d => d.dispatchNo)), date: data.date, agencyId: data.agencyId, lotIds: [...data.lotIds],
+      vehicleNo: data.vehicleNo?.trim() || undefined, transporterId: data.transporterId || undefined, destination: data.destination?.trim() || undefined,
+      dispatchedQty: tot.qty, dispatchedValue: tot.value, bags: tot.bags || undefined, status: 'dispatched', note: data.note?.trim() || undefined, isDeleted: false, createdAt: now, updatedAt: now,
+    };
+    setDispatchesState(prev => { const u = [...prev, rec]; storage.setProcurementDispatches(u); return u; });
+    persistRow('procurement_dispatches', rec).then(({ error }) => {
+      if (!error) return;
+      reportError('marketing-save', error.message);
+      setDispatchesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementDispatches(r); return r; });
+      toastRef.current({ title: 'डिस्पैच सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (migration 139 चलाई है?)`, variant: 'destructive', duration: 12000 });
+    });
+    toastRef.current({ title: 'डिस्पैच दर्ज', description: `${rec.dispatchNo} · ${rec.dispatchedQty} क्विंटल` });
+    return rec;
+  }, [agencies, dispatches, procurementLots, procurementQualityTests, lotValue, agencyOfLot, societyId]);
+
+  const acceptDispatch = useCallback((id: string, data: { acceptedQty: number; acceptedDate: string; shortageAccountId?: string }) => {
+    if (guardFYLocked()) return;
+    const d = dispatches.find(x => x.id === id && !x.isDeleted);
+    if (!d || d.status !== 'dispatched') return;
+    const sh = shortageOf(d.dispatchedQty, d.dispatchedValue, data.acceptedQty);
+    if (!sh) { toastRef.current({ title: 'मात्रा ठीक नहीं', description: 'स्वीकृत मात्रा 0 से कम या भेजी मात्रा से अधिक नहीं हो सकती।', variant: 'destructive', duration: 9000 }); return; }
+    if (!data.acceptedDate) { toastRef.current({ title: 'तारीख डालें', variant: 'destructive' }); return; }
+    const recv = receivableOf(d.agencyId);
+    const now = new Date().toISOString();
+    const next: ProcurementDispatch = { ...d, acceptedQty: data.acceptedQty, acceptedDate: data.acceptedDate, shortageQty: sh.qty, shortageValue: sh.value, shortageAccountId: sh.value > 0 ? data.shortageAccountId : undefined, status: 'accepted', updatedAt: now };
+    const saveRow = (row: ProcurementDispatch, onFail?: () => void) => {
+      setDispatchesState(prev => { const u = prev.map(x => x.id === id ? row : x); storage.setProcurementDispatches(u); return u; });
+      persistRow('procurement_dispatches', row).then(({ error }) => {
+        if (!error) return;
+        reportError('marketing-save', error.message);
+        setDispatchesState(prev => { const u = prev.map(x => x.id === id ? d : x); storage.setProcurementDispatches(u); return u; });
+        onFail?.();
+        toastRef.current({ title: 'स्वीकृति सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.${onFail ? ' कमी का वाउचर भी रद्द किया गया।' : ''}`, variant: 'destructive', duration: 12000 });
+      });
+    };
+    if (!(sh.value > 0)) { saveRow(next); toastRef.current({ title: 'एजेंसी स्वीकृति दर्ज', description: `${d.dispatchNo} · कोई कमी नहीं` }); return; }
+    const shortAcc = data.shortageAccountId && accounts.find(a => a.id === data.shortageAccountId && !a.isGroup && a.type === 'expense');
+    if (!shortAcc) { toastRef.current({ title: 'कमी का खाता चुनें', description: 'कमी (shortage) के लिए एक खर्च खाता चुनें, जैसे "Shortage A/c"।', variant: 'destructive', duration: 10000 }); return; }
+    if (!recv) { toastRef.current({ title: 'एजेंसी प्राप्य खाता नहीं', description: '"लेजर स्वच्छता" पर "डोमेन खाते बनाएँ" दबाएँ या एजेंसी का खाता चुनें।', variant: 'destructive', duration: 12000 }); return; }
+    const v = addVoucher({
+      type: 'journal', date: data.acceptedDate,
+      debitAccountId: shortAcc.id, creditAccountId: recv, amount: sh.value,
+      lines: [{ id: crypto.randomUUID(), accountId: shortAcc.id, type: 'Dr', amount: sh.value }, { id: crypto.randomUUID(), accountId: recv, type: 'Cr', amount: sh.value }],
+      narration: `डिस्पैच ${d.dispatchNo} में कमी — ${sh.qty} क्विंटल`,
+      refType: DISPATCH_SHORTAGE_REF_TYPE, refId: d.agencyId,
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0], {
+      onSaved: (sv) => saveRow({ ...next, shortageVoucherId: sv.id }, () => cancelVoucher(sv.id, 'Dispatch acceptance not saved (auto-rollback)', user?.name || 'System', { viaParent: true })),
+      onFailed: () => toastRef.current({ title: 'स्वीकृति दर्ज नहीं हुई', description: 'कमी का वाउचर सेव नहीं हुआ, इसलिए डिस्पैच अभी "भेजा गया" ही है — दोबारा करें।', variant: 'destructive', duration: 12000 }),
+    });
+    if (v?.id) toastRef.current({ title: 'एजेंसी स्वीकृति दर्ज', description: `${d.dispatchNo} · कमी ${sh.qty} क्विंटल · ₹${sh.value.toLocaleString('en-IN')}` });
+  }, [dispatches, agencies, accounts, mspReceivableId, addVoucher, cancelVoucher, user, societyId]);
+
+  const deleteDispatch = useCallback(async (id: string) => {
+    if (guardFYLocked()) return;
+    const d = dispatches.find(x => x.id === id && !x.isDeleted);
+    if (!d) return;
+    if (agencyBills.some(b => !b.isDeleted && b.dispatchIds.includes(id))) {
+      toastRef.current({ title: 'पहले बिल हटाएँ', description: 'यह डिस्पैच एक एजेंसी बिल में है — पहले वह बिल हटाएँ।', variant: 'destructive', duration: 10000 });
+      return;
+    }
+    const gone: ProcurementDispatch = { ...d, isDeleted: true, updatedAt: new Date().toISOString() };
+    const { error } = await persistRow('procurement_dispatches', gone);
+    if (error) { toastRef.current({ title: 'डिस्पैच हटा नहीं', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. कुछ नहीं बदला।`, variant: 'destructive', duration: 12000 }); return; }
+    setDispatchesState(prev => { const u = prev.map(x => x.id === id ? gone : x); storage.setProcurementDispatches(u); return u; });
+    if (d.shortageVoucherId && !cancelVoucher(d.shortageVoucherId, `Dispatch ${d.dispatchNo} deleted`, user?.name || 'System', { viaParent: true })) {
+      toastRef.current({ title: '⚠ डिस्पैच हटा, कमी का वाउचर नहीं', description: 'कमी का वाउचर रद्द नहीं हो सका — ऊपर की चेतावनी देखें।', variant: 'destructive', duration: 15000 });
+    }
+  }, [dispatches, agencyBills, cancelVoucher, user, societyId]);
+
+  const addAgencyBill = useCallback((data: { date: string; agencyId: string; dispatchIds: string[]; lines: AgencyBillLine[]; note?: string }): AgencyBill => {
+    const now = new Date().toISOString();
+    const blank = { id: '', billNo: '', date: data.date, agencyId: data.agencyId, dispatchIds: [], qty: 0, mspValue: 0, lines: [], incidentalTotal: 0, total: 0, status: 'draft', createdAt: '', updatedAt: '' } as AgencyBill;
+    if (guardFYLocked()) return blank;
+    const refuse = (t: string) => { toastRef.current({ title: 'बिल नहीं बना', description: t, variant: 'destructive', duration: 10000 }); return blank; };
+    const billed = new Set(agencyBills.filter(b => !b.isDeleted).flatMap(b => b.dispatchIds));
+    const ds = data.dispatchIds.map(id => dispatches.find(d => d.id === id && !d.isDeleted));
+    if (!ds.length) return refuse('कम से कम एक स्वीकृत डिस्पैच चुनें।');
+    for (const d of ds) {
+      if (!d) return refuse('कोई डिस्पैच नहीं मिला — पेज refresh करें।');
+      if (d.agencyId !== data.agencyId) return refuse('सारे डिस्पैच उसी एजेंसी के हों।');
+      if (d.status !== 'accepted') return refuse('पहले एजेंसी की स्वीकृति (मात्रा) दर्ज करें।');
+      if (billed.has(d.id)) return refuse('एक डिस्पैच पहले से किसी बिल में है।');
+    }
+    for (const l of data.lines) {
+      if (!l.label.trim() || !(l.amount > 0)) return refuse('हर पंक्ति में नाम और राशि हो।');
+      if (!accounts.some(a => a.id === l.accountId && !a.isGroup)) return refuse(`"${l.label}" के लिए खाता चुनें।`);
+    }
+    const base = billBase(ds as ProcurementDispatch[]);
+    const tot = billTotals(base.value, data.lines);
+    const rec: AgencyBill = {
+      id: crypto.randomUUID(), billNo: nextDocNo('ABL', agencyBills.map(b => b.billNo)), date: data.date, agencyId: data.agencyId, dispatchIds: [...data.dispatchIds],
+      qty: base.qty, mspValue: base.value, lines: data.lines.map(l => ({ ...l, label: l.label.trim() })), incidentalTotal: tot.incidentalTotal, total: tot.total,
+      status: 'draft', note: data.note?.trim() || undefined, isDeleted: false, createdAt: now, updatedAt: now,
+    };
+    setAgencyBillsState(prev => { const u = [...prev, rec]; storage.setProcurementAgencyBills(u); return u; });
+    persistRow('procurement_agency_bills', rec).then(({ error }) => {
+      if (!error) return;
+      reportError('marketing-save', error.message);
+      setAgencyBillsState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setProcurementAgencyBills(r); return r; });
+      toastRef.current({ title: 'बिल सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (migration 139 चलाई है?)`, variant: 'destructive', duration: 12000 });
+    });
+    toastRef.current({ title: 'बिल ड्राफ्ट बना', description: `${rec.billNo} · ₹${rec.total.toLocaleString('en-IN')}` });
+    return rec;
+  }, [agencyBills, dispatches, accounts, societyId]);
+
+  const approveAgencyBill = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const b = agencyBills.find(x => x.id === id && !x.isDeleted);
+    if (!b || b.status !== 'draft') return;
+    const recv = receivableOf(b.agencyId);
+    const now = new Date().toISOString();
+    const saveApproved = (voucherId?: string, onFail?: () => void) => {
+      const next: AgencyBill = { ...b, status: 'approved', voucherId, updatedAt: now };
+      setAgencyBillsState(prev => { const u = prev.map(x => x.id === id ? next : x); storage.setProcurementAgencyBills(u); return u; });
+      persistRow('procurement_agency_bills', next).then(({ error }) => {
+        if (!error) return;
+        reportError('marketing-save', error.message);
+        setAgencyBillsState(prev => { const u = prev.map(x => x.id === id ? b : x); storage.setProcurementAgencyBills(u); return u; });
+        onFail?.();
+        toastRef.current({ title: 'बिल स्वीकृत नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.${onFail ? ' उसका वाउचर भी रद्द किया गया।' : ''}`, variant: 'destructive', duration: 12000 });
+      });
+    };
+    if (!(b.incidentalTotal > 0)) { saveApproved(); toastRef.current({ title: 'बिल स्वीकृत', description: `${b.billNo} · ₹${b.total.toLocaleString('en-IN')}` }); return; }
+    if (!recv) { toastRef.current({ title: 'एजेंसी प्राप्य खाता नहीं', description: '"लेजर स्वच्छता" पर "डोमेन खाते बनाएँ" दबाएँ या एजेंसी का खाता चुनें।', variant: 'destructive', duration: 12000 }); return; }
+    const v = addVoucher({
+      type: 'journal', date: b.date,
+      debitAccountId: recv, creditAccountId: b.lines[0].accountId, amount: b.incidentalTotal,
+      lines: [
+        { id: crypto.randomUUID(), accountId: recv, type: 'Dr', amount: b.incidentalTotal },
+        ...b.lines.map(l => ({ id: crypto.randomUUID(), accountId: l.accountId, type: 'Cr' as const, amount: l.amount })),
+      ],
+      narration: `एजेंसी बिल ${b.billNo} — खर्च (incidentals)`,
+      refType: AGENCY_BILL_REF_TYPE, refId: b.agencyId,
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0], {
+      onSaved: (sv) => saveApproved(sv.id, () => cancelVoucher(sv.id, 'Agency bill approval not saved (auto-rollback)', user?.name || 'System', { viaParent: true })),
+      onFailed: () => toastRef.current({ title: 'बिल स्वीकृत नहीं हुआ', description: 'बिल का वाउचर सेव नहीं हुआ, इसलिए बिल अभी ड्राफ्ट है — दोबारा करें।', variant: 'destructive', duration: 12000 }),
+    });
+    if (v?.id) toastRef.current({ title: 'बिल स्वीकृत', description: `${b.billNo} · खर्च ₹${b.incidentalTotal.toLocaleString('en-IN')} एजेंसी प्राप्य में` });
+  }, [agencyBills, agencies, mspReceivableId, addVoucher, cancelVoucher, user, societyId]);
+
+  // Receipts per agency for matching: agency receipts (refId = agency) + farmer payments the agency made
+  // DIRECTLY (a farmer.payment voucher that credits an agency receivable), traced to the lot's agency.
+  const billMatching = useMemo(() => {
+    const ledgerAgency = new Map(agencies.filter(a => a.ledgerAccountId).map(a => [a.ledgerAccountId!, a.id]));
+    const receivables = new Set([mspReceivableId, ...ledgerAgency.keys()].filter(Boolean) as string[]);
+    const rows: { agencyId?: string; amount: number }[] = [];
+    for (const v of liveVouchers) {
+      if (v.refType === AGENCY_RECEIPT_REF_TYPE && v.refId) rows.push({ agencyId: v.refId, amount: v.amount });
+      else if (v.refType === FARMER_PAYMENT_REF_TYPE) {
+        const cr = v.lines?.find(l => l.type === 'Cr')?.accountId || v.creditAccountId;
+        if (!receivables.has(cr)) continue;
+        const ev = liveVouchers.find(x => x.id === v.refId);
+        const rr = ev ? procurementPostingRuleResults.find(r => r.id === ev.refId) : undefined;
+        rows.push({ agencyId: ledgerAgency.get(cr) || (rr ? agencyOfLot(rr.lotId) : undefined), amount: v.amount });
+      }
+    }
+    return matchReceiptsToBills(agencyBills, rows);
+  }, [liveVouchers, agencies, agencyBills, mspReceivableId, procurementPostingRuleResults, agencyOfLot]);
+
+  const deleteAgencyBill = useCallback(async (id: string) => {
+    if (guardFYLocked()) return;
+    const b = agencyBills.find(x => x.id === id && !x.isDeleted);
+    if (!b) return;
+    if (b.status === 'approved' && (billMatching.byBill[b.id]?.received ?? 0) > 0.005) {
+      toastRef.current({ title: 'पहले रसीद देखें', description: 'इस बिल के बदले एजेंसी से राशि आ चुकी है — बिल हटाने से पहले संबंधित रसीद रद्द करें।', variant: 'destructive', duration: 12000 });
+      return;
+    }
+    const gone: AgencyBill = { ...b, isDeleted: true, updatedAt: new Date().toISOString() };
+    const { error } = await persistRow('procurement_agency_bills', gone);
+    if (error) { toastRef.current({ title: 'बिल हटा नहीं', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. कुछ नहीं बदला।`, variant: 'destructive', duration: 12000 }); return; }
+    setAgencyBillsState(prev => { const u = prev.map(x => x.id === id ? gone : x); storage.setProcurementAgencyBills(u); return u; });
+    if (b.voucherId && !cancelVoucher(b.voucherId, `Agency bill ${b.billNo} deleted`, user?.name || 'System', { viaParent: true })) {
+      toastRef.current({ title: '⚠ बिल हटा, उसका वाउचर नहीं', description: 'बिल का वाउचर रद्द नहीं हो सका — ऊपर की चेतावनी देखें।', variant: 'destructive', duration: 15000 });
+    }
+  }, [agencyBills, billMatching, cancelVoucher, user, societyId]);
+
   // ── Procurement commission accrual (M3d) ──────────────────────────────────────────
   const commissionAccruals = vouchers.filter(v => !v.isDeleted && v.refType === COMMISSION_ACCRUAL_REF_TYPE);
 
@@ -972,6 +1217,16 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       bardanaMovements,
       addBardanaMovement,
       deleteBardanaMovement,
+      dispatches,
+      addDispatch,
+      acceptDispatch,
+      deleteDispatch,
+      agencyBills,
+      addAgencyBill,
+      approveAgencyBill,
+      deleteAgencyBill,
+      billMatching,
+      lotValue,
       transporters,
       addTransporter,
       updateTransporter,

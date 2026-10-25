@@ -35,6 +35,7 @@ register(
 const { pickEffectiveMspRate } = await import(abs('../src/lib/marketing/msp.ts'));
 const { buildProcurementRegister, buildCommoditySummary, settlementTotals, countableLots, buildArhtiyaRegister } = await import(abs('../src/lib/marketing/registers.ts'));
 const { bardanaBalances } = await import(abs('../src/lib/marketing/bardana.ts'));
+const AB = await import(abs('../src/lib/marketing/agencyBilling.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -144,6 +145,40 @@ const LOTS = [
   ok(b.parties.find(p => p.partyId === 'F1').balance === 260, 'farmer still holds 300 − 40 = 260 bags');
   ok(b.parties.find(p => p.partyId === 'AG').balance === 800, 'society owes the agency 1000 − 200 = 800 bags');
   ok(!b.parties.some(p => p.partyId === 'F2'), 'a 0-bag entry is ignored');
+}
+
+// 12. D3 — dispatch, shortage, agency bill, matching, season reconciliation
+{
+  const t = AB.dispatchTotals([{ quantity: { value: 60 }, value: 145500, bags: 120 }, { quantity: { value: 40 }, value: 97000, bags: 80 }]);
+  ok(t.qty === 100 && t.value === 242500 && t.bags === 200 && t.rate === 2425, 'dispatch totals: 100 qtl, ₹2,42,500, 200 bags, avg ₹2,425');
+  const sh = AB.shortageOf(100, 242500, 99.5);
+  ok(sh.qty === 0.5 && sh.value === 1212.5, 'shortage 0.5 qtl at avg MSP = ₹1,212.50');
+  ok(AB.shortageOf(100, 242500, 100).value === 0 && AB.shortageOf(100, 242500, 101) === null && AB.shortageOf(100, 242500, -1) === null, 'no shortage / over-acceptance and negative refused');
+  const base = AB.billBase([{ dispatchedQty: 100, dispatchedValue: 242500, acceptedQty: 99.5, shortageValue: 1212.5 }]);
+  ok(base.qty === 99.5 && base.value === 241287.5, 'bill covers the ACCEPTED qty / value (shortage removed)');
+  ok(AB.incidentalAmount('perQtl', 46, base) === 4577 && AB.incidentalAmount('percent', 2, base) === 4825.75 && AB.incidentalAmount('fixed', 500, base) === 500, 'incidentals: ₹/qtl, % of MSP, fixed');
+  const tot = AB.billTotals(base.value, [{ amount: 4577 }, { amount: 500 }]);
+  ok(tot.incidentalTotal === 5077 && tot.total === 246364.5, 'bill total = MSP + incidentals');
+  const bills = [
+    { id: 'B2', agencyId: 'AG', date: '2026-05-10', billNo: 'ABL/0002', total: 1000, status: 'approved' },
+    { id: 'B1', agencyId: 'AG', date: '2026-05-01', billNo: 'ABL/0001', total: 3000, status: 'approved' },
+    { id: 'BD', agencyId: 'AG', date: '2026-05-02', billNo: 'ABL/0003', total: 9999, status: 'draft' },
+    { id: 'BX', agencyId: 'AG', date: '2026-05-03', billNo: 'ABL/0004', total: 9999, status: 'approved', isDeleted: true },
+  ];
+  const m = AB.matchReceiptsToBills(bills, [{ agencyId: 'AG', amount: 2500 }, { agencyId: 'AG', amount: 1200 }, { agencyId: 'OTHER', amount: 50 }]);
+  ok(m.byBill.B1.received === 3000 && m.byBill.B1.outstanding === 0, 'FIFO: oldest bill B1 covered first');
+  ok(m.byBill.B2.received === 700 && m.byBill.B2.outstanding === 300, 'then B2 partly (3,700 − 3,000)');
+  ok(!m.byBill.BD && !m.byBill.BX, 'draft and deleted bills not matched');
+  ok(m.unapplied.AG === 0 && m.unapplied.OTHER === 50, 'unapplied per agency');
+  ok(AB.nextDocNo('DSP', ['DSP/0003', 'DSP/0010', 'X/0099', undefined]) === 'DSP/0011' && AB.nextDocNo('ABL', []) === 'ABL/0001', 'document numbers');
+  const lots = [{ id: 'L1', seasonId: 'R', quantity: { value: 60 }, value: 145500 }, { id: 'L2', seasonId: 'R', quantity: { value: 40 }, value: 97000 }, { id: 'L3', seasonId: 'R', quantity: { value: 10 }, value: 24250 }];
+  const ds = [{ id: 'D1', lotIds: ['L1', 'L2'], dispatchedQty: 100, dispatchedValue: 242500, acceptedQty: 99.5, shortageQty: 0.5, shortageValue: 1212.5, status: 'accepted' }];
+  const rec = AB.seasonReconciliation(lots, ds, [{ id: 'B', dispatchIds: ['D1'], status: 'approved', incidentalTotal: 5077 }]);
+  const r = rec[0];
+  ok(r.lots === 3 && r.qty === 110 && r.dispatchedQty === 100 && r.acceptedQty === 99.5 && r.undispatchedQty === 10, 'recon: bought 110, sent 100, accepted 99.5, not sent 10');
+  ok(r.shortageValue === 1212.5 && r.billedValue === 241287.5 && r.unbilledValue === 0 && r.incidentals === 5077, 'recon: shortage, billed, incidentals');
+  const rec2 = AB.seasonReconciliation(lots, ds, []);
+  ok(rec2[0].billedValue === 0 && rec2[0].unbilledValue === 241287.5, 'recon: accepted but unbilled shows as unbilled');
 }
 
 // 9. Batch A — registers count only posted, non-rejected lots; status label; local (IST) date

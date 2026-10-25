@@ -1,6 +1,7 @@
 import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, Loan, Asset, AuditObjection, StockItem, StockMovement, Sale, Purchase, Employee, SalaryRecord, VoucherType, Supplier, Customer, HousingFlat, MaintenanceBill, HousingChargeHead, HousingFundInvestment, HousingComplaint, HousingParking, HousingTransfer, HousingInsurance, HousingAmc, HousingDocument, HousingBuilding, DairyRateChart, MilkEntry, DairySettlement, DairyDispatch, DairyInputIssue, DairyDistribution, WorkOrder, MusterEntry, Worker, Department, DepartmentBill, WorkerAdvance, PfEsiRun, ConsumerPrice, PatronageRun, PurchaseOrder, SalesReturn, PurchaseReturn, BankReconciliationRecord, TdsEntry, TdsChallan, TdsChallanLink, TransportVehicle, TransportTrip, VehicleExpense } from '@/types';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType, Arhtiya } from '@/lib/procurement';
 import type { BardanaMovement } from '@/lib/marketing/bardana';
+import type { ProcurementDispatch, AgencyBill } from '@/lib/marketing/agencyBilling';
 import type { Transporter } from '@/lib/marketing/transport';
 import { composeDocumentNumber, parseDocumentNumber } from './documentNumber';
 
@@ -87,6 +88,8 @@ const KEYS = {
   marketingTransporters: 'sahayata_marketing_transporters',
   procurementArhtiyas: 'sahayata_procurement_arhtiyas',
   procurementBardanaMovements: 'sahayata_procurement_bardana_movements',
+  procurementDispatches: 'sahayata_procurement_dispatches',
+  procurementAgencyBills: 'sahayata_procurement_agency_bills',
   transportVehicles: 'sahayata_transport_vehicles',
   transportTrips: 'sahayata_transport_trips',
   transportVehicleExpenses: 'sahayata_transport_vehicle_expenses',
@@ -976,6 +979,10 @@ export const getProcurementArhtiyas = (): Arhtiya[] => get(KEYS.procurementArhti
 export const setProcurementArhtiyas = (a: Arhtiya[]): void => set(KEYS.procurementArhtiyas, a);
 export const getProcurementBardanaMovements = (): BardanaMovement[] => get(KEYS.procurementBardanaMovements, []);
 export const setProcurementBardanaMovements = (m: BardanaMovement[]): void => set(KEYS.procurementBardanaMovements, m);
+export const getProcurementDispatches = (): ProcurementDispatch[] => get(KEYS.procurementDispatches, []);
+export const setProcurementDispatches = (d: ProcurementDispatch[]): void => set(KEYS.procurementDispatches, d);
+export const getProcurementAgencyBills = (): AgencyBill[] => get(KEYS.procurementAgencyBills, []);
+export const setProcurementAgencyBills = (b: AgencyBill[]): void => set(KEYS.procurementAgencyBills, b);
 export const getProcurementLots = (): ProcurementLot[] => get(KEYS.procurementLots, []);
 export const setProcurementLots = (l: ProcurementLot[]): void => set(KEYS.procurementLots, l);
 export const getProcurementEvents = (): ProcurementEvent[] => get(KEYS.procurementEvents, []);
