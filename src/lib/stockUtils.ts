@@ -19,8 +19,9 @@ import type { StockItem, StockMovement, Sale, Purchase } from '@/types';
  * healthy societies get a byte-identical quantity. Only drifted data is corrected. Feed the
  * result into computeStock / computeStockMap / computeStockValue exactly as before.
  *
- * NOTE: synthesised movements carry no godownId, so per-godown views (computeGodownStock)
- * still read the raw movements — society-wide stock is what this fixes.
+ * Batch C: a synthesised movement carries the godownId of its raw movement (same type + document
+ * number + item) when there is one, so the per-godown views can read THIS list too and agree with
+ * the society-wide stock (RULE 2). No match → no godownId (the "unassigned" bucket).
  */
 export function reconcileMovements(
   movements: StockMovement[],
@@ -29,17 +30,24 @@ export function reconcileMovements(
 ): StockMovement[] {
   // Everything that is NOT a purchase/sale keeps its real movement (returns are `adjustment`).
   const kept = movements.filter(m => m.type !== 'purchase' && m.type !== 'sale');
+  const godownOf = new Map<string, string>();
+  for (const m of movements) {
+    if ((m.type !== 'purchase' && m.type !== 'sale') || !m.godownId || (m as { isDeleted?: boolean }).isDeleted) continue;
+    const k = `${m.type}|${m.referenceNo}|${m.itemId}`;
+    if (!godownOf.has(k)) godownOf.set(k, m.godownId);
+  }
+  const g = (type: string, ref: string, itemId: string) => { const id = godownOf.get(`${type}|${ref}|${itemId}`); return id ? { godownId: id } : {}; };
   const synth: StockMovement[] = [];
   for (const p of purchases) {
     if ((p as { isDeleted?: boolean }).isDeleted) continue;
     for (const it of p.items) {
-      synth.push({ id: `syn:${p.purchaseNo}:${it.itemId}`, date: p.date, itemId: it.itemId, type: 'purchase', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: p.purchaseNo, narration: '', createdAt: p.date });
+      synth.push({ id: `syn:${p.purchaseNo}:${it.itemId}`, date: p.date, itemId: it.itemId, type: 'purchase', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: p.purchaseNo, narration: '', createdAt: p.date, ...g('purchase', p.purchaseNo, it.itemId) });
     }
   }
   for (const s of sales) {
     if ((s as { isDeleted?: boolean }).isDeleted) continue;
     for (const it of s.items) {
-      synth.push({ id: `syn:${s.saleNo}:${it.itemId}`, date: s.date, itemId: it.itemId, type: 'sale', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: s.saleNo, narration: '', createdAt: s.date });
+      synth.push({ id: `syn:${s.saleNo}:${it.itemId}`, date: s.date, itemId: it.itemId, type: 'sale', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: s.saleNo, narration: '', createdAt: s.date, ...g('sale', s.saleNo, it.itemId) });
     }
   }
   return [...synth, ...kept];

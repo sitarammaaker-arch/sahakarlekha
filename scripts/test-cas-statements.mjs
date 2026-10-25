@@ -191,7 +191,9 @@ ok(/\.has\('inventory_sales'\)/.test(cs) && /society\.state, declaredActivities\
 ok(/loanInterestDue\(id, accruals, vouchers\)/.test(cs), 'overdue interest receivable from the same loanInterestDue as the repay dialogs');
 ok(/casBalanceSheetTies\(bs, data\.leaves\)/.test(cs) && /near\(pl\.netProfit, data\.appNet\)/.test(cs) && /near\(trading\.grossProfit, data\.appGross\)/.test(cs), 'screen shows a tie check for all three statements');
 ok(/procuredToStock: tr\.procuredToStock, purchaseGrossUp: tr\.legacyPurchaseGrossUp/.test(cs), 'CAS Trading takes the procured-to-stock and legacy gross-up figures from getTradingAccount (RULE 2)');
-ok(/buildCasTrialBalance\(getTrialBalance\(m\.to\), getTrialBalance\(dayBefore\(m\.from\)\), \{ hasTrading \}\)/.test(cs), 'Annexure I built from month-end vs day-before-month trial balances');
+ok(/buildCasTrialBalance\(tbOf\(m\.to\), tbOf\(dayBefore\(m\.from\)\), \{ hasTrading \}\)/.test(cs), 'Annexure I built from month-end vs day-before-month trial balances');
+// Marketing batch C: every CAS trial balance goes through the app's Trading-head rule (RULE 2).
+ok(/const tbOf = \(date: string\) => hasTrading \? withTradingParents\(getTrialBalance\(date\), accounts\) : getTrialBalance\(date\);/.test(cs), 'CAS trial balances use the same nested Trading-head rule as getTradingAccount / getProfitLoss');
 
 console.log(`CAS statements: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

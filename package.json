@@ -285,6 +285,7 @@
     "test:analytics-metrics": "node scripts/test-analytics-metrics.mjs",
     "test:godown-capacity": "node scripts/test-godown-capacity.mjs",
     "test:godown-stock": "node scripts/test-godown-stock.mjs",
+    "test:item-account-routing": "node scripts/test-item-account-routing.mjs",
     "test:godown-transfer": "node scripts/test-godown-transfer.mjs",
     "test:gst-export": "node scripts/test-gst-export.mjs",
     "test:gstr9": "node scripts/test-gstr9.mjs",

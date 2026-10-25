@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { isRoutableItemAccount } from '@/lib/itemAccountRouting';
 import { Link } from 'react-router-dom';
 import { toUqc, unitLabel, unitOptions } from '@/lib/units';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -527,7 +528,8 @@ const Inventory: React.FC = () => {
     const out: typeof accounts = [];
     const walk = (pid: string) => {
       accounts.filter(a => (a.parentId || '') === pid).forEach(a => {
-        if (a.isGroup) walk(a.id); else out.push(a);
+        // Batch C: never offer 5150 "Closing Stock (Trading A/c)" — cost routed there left both statements.
+        if (a.isGroup) walk(a.id); else if (isRoutableItemAccount(a)) out.push(a);
       });
     };
     walk(rootId);

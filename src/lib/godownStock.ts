@@ -35,6 +35,25 @@ export function qtyDelta(type: string, qty: number): number {
   return -Math.abs(qty);
 }
 
+/**
+ * Batch C (RULE 2): the movements every per-godown view reads — the item OPENING stock (as an
+ * 'opening' inward into the unassigned bucket, at the item's purchase rate) followed by the
+ * movements ALREADY reconciled against live purchase/sale records (reconcileMovements). Before, the
+ * godown views read raw movements and never added opening stock, so godown totals did not match the
+ * Inventory / Trading A/c closing stock and opening stock could never be transferred ("0 available").
+ * The 'opening' rows are for the godown views only — never feed them to computeStock (which treats
+ * any non-purchase type as outward).
+ */
+export function godownMovementsWithOpening<M extends GodownMovement>(
+  items: ReadonlyArray<{ id: string; openingStock?: number; purchaseRate?: number }>,
+  reconciled: ReadonlyArray<M>,
+): Array<GodownMovement & { referenceNo?: string }> {
+  const openings = items
+    .filter(i => (i.openingStock || 0) > 0)
+    .map(i => ({ itemId: i.id, type: 'opening', qty: i.openingStock || 0, rate: i.purchaseRate || 0, godownId: UNASSIGNED_GODOWN, date: '', referenceNo: 'OPENING' }));
+  return [...openings, ...reconciled];
+}
+
 /** On-hand stock per (item, godown): net qty (floored at 0) + value at weighted-avg inward cost. */
 export function computeGodownStock(movements: GodownMovement[], asOf?: string): GodownStockRow[] {
   const map = new Map<string, { itemId: string; godownId: string; qty: number; inQty: number; inValue: number }>();
