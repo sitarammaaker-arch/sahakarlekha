@@ -410,9 +410,72 @@ const agencyBill: EntityDescriptor = {
   ],
 };
 
+// ── E1 (migration 140): dealer licences + scheme claims ──
+const dealerLicence: EntityDescriptor = {
+  key: 'marketing_dealer_licence',
+  table: 'marketing_dealer_licences',
+  domain: 'marketing',
+  label: 'Dealer Licences',
+  labelHi: 'डीलर लाइसेंस',
+  capability: 'inventory_sales',
+  minRole: 'viewer',
+  scope: 'society',
+  nature: 'master',
+  dependsOn: ['society'],
+  naturalKey: ['id'],
+  formats: ['csv', 'xlsx', 'json'],
+  backupPolicy: 'full',
+  columns: [
+    c('id', 'ID', 'आईडी', { defaultVisible: false }),
+    c('kind', 'Type', 'प्रकार', { type: 'enum' }),
+    c('productGroup', 'Product', 'वस्तु'),
+    c('licenceNo', 'Number', 'नंबर'),
+    c('authority', 'Issued By', 'जारीकर्ता'),
+    c('issuedOn', 'Issued On', 'जारी तारीख', { type: 'date' }),
+    c('validUpto', 'Valid Up To', 'वैध तक', { type: 'date' }),
+    c('supplierId', 'Supplier', 'सप्लायर'),
+    c('sourceName', 'Source', 'स्रोत'),
+    c('note', 'Note', 'टिप्पणी'),
+    internal('isDeleted', 'Deleted', 'हटाया गया', { type: 'boolean' }),
+    ...stamps(),
+  ],
+};
+
+const schemeClaim: EntityDescriptor = {
+  key: 'marketing_scheme_claim',
+  table: 'marketing_scheme_claims',
+  domain: 'marketing',
+  label: 'Scheme Claims',
+  labelHi: 'योजना दावे',
+  capability: 'inventory_sales',
+  minRole: 'viewer',
+  scope: 'society',
+  nature: 'transaction',
+  dependsOn: ['society'],
+  naturalKey: ['id'],
+  formats: ['csv', 'xlsx', 'json'],
+  backupPolicy: 'full',
+  columns: [
+    c('id', 'ID', 'आईडी', { defaultVisible: false }),
+    c('claimNo', 'Claim No.', 'दावा नं.'),
+    c('date', 'Date', 'तारीख', { type: 'date' }),
+    c('schemeName', 'Scheme', 'योजना'),
+    c('authority', 'Department', 'विभाग'),
+    c('period', 'Period', 'अवधि'),
+    num('amount', 'Amount', 'राशि'),
+    internal('creditAccountId', 'Credit Ledger', 'जमा खाता'),
+    internal('receivableAccountId', 'Receivable Ledger', 'प्राप्य खाता'),
+    internal('voucherId', 'Voucher', 'वाउचर'),
+    c('note', 'Note', 'टिप्पणी'),
+    internal('isDeleted', 'Deleted', 'हटाया गया', { type: 'boolean' }),
+    ...stamps(),
+  ],
+};
+
 export const MARKETING_ENTITIES: EntityDescriptor[] = [
   crop, variety, season, agency, centre, mspRate,
   deductionRule, qualitySpec, bardanaType, transporter,
   arhtiya, bardanaMovement,
   dispatch, agencyBill,
+  dealerLicence, schemeClaim,
 ];

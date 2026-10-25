@@ -2,6 +2,7 @@ import type { Voucher, Member, LedgerAccount, SocietySettings, VoucherCounters, 
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, FarmerSettlement, Crop, Variety, Season, Agency, ProcurementCentre, MSPRate, DeductionRule, QualitySpec, BardanaType, Arhtiya } from '@/lib/procurement';
 import type { BardanaMovement } from '@/lib/marketing/bardana';
 import type { ProcurementDispatch, AgencyBill } from '@/lib/marketing/agencyBilling';
+import type { DealerLicence, SchemeClaim } from '@/lib/marketing/dealerCompliance';
 import type { Transporter } from '@/lib/marketing/transport';
 import { composeDocumentNumber, parseDocumentNumber } from './documentNumber';
 
@@ -90,6 +91,8 @@ const KEYS = {
   procurementBardanaMovements: 'sahayata_procurement_bardana_movements',
   procurementDispatches: 'sahayata_procurement_dispatches',
   procurementAgencyBills: 'sahayata_procurement_agency_bills',
+  dealerLicences: 'sahayata_dealer_licences',
+  schemeClaims: 'sahayata_scheme_claims',
   transportVehicles: 'sahayata_transport_vehicles',
   transportTrips: 'sahayata_transport_trips',
   transportVehicleExpenses: 'sahayata_transport_vehicle_expenses',
@@ -983,6 +986,10 @@ export const getProcurementDispatches = (): ProcurementDispatch[] => get(KEYS.pr
 export const setProcurementDispatches = (d: ProcurementDispatch[]): void => set(KEYS.procurementDispatches, d);
 export const getProcurementAgencyBills = (): AgencyBill[] => get(KEYS.procurementAgencyBills, []);
 export const setProcurementAgencyBills = (b: AgencyBill[]): void => set(KEYS.procurementAgencyBills, b);
+export const getDealerLicences = (): DealerLicence[] => get(KEYS.dealerLicences, []);
+export const setDealerLicences = (l: DealerLicence[]): void => set(KEYS.dealerLicences, l);
+export const getSchemeClaims = (): SchemeClaim[] => get(KEYS.schemeClaims, []);
+export const setSchemeClaims = (c: SchemeClaim[]): void => set(KEYS.schemeClaims, c);
 export const getProcurementLots = (): ProcurementLot[] => get(KEYS.procurementLots, []);
 export const setProcurementLots = (l: ProcurementLot[]): void => set(KEYS.procurementLots, l);
 export const getProcurementEvents = (): ProcurementEvent[] => get(KEYS.procurementEvents, []);

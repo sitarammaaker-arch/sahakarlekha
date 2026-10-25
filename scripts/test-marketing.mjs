@@ -36,6 +36,7 @@ const { pickEffectiveMspRate } = await import(abs('../src/lib/marketing/msp.ts')
 const { buildProcurementRegister, buildCommoditySummary, settlementTotals, countableLots, buildArhtiyaRegister } = await import(abs('../src/lib/marketing/registers.ts'));
 const { bardanaBalances } = await import(abs('../src/lib/marketing/bardana.ts'));
 const AB = await import(abs('../src/lib/marketing/agencyBilling.ts'));
+const DC = await import(abs('../src/lib/marketing/dealerCompliance.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -179,6 +180,23 @@ const LOTS = [
   ok(r.shortageValue === 1212.5 && r.billedValue === 241287.5 && r.unbilledValue === 0 && r.incidentals === 5077, 'recon: shortage, billed, incidentals');
   const rec2 = AB.seasonReconciliation(lots, ds, []);
   ok(rec2[0].billedValue === 0 && rec2[0].unbilledValue === 241287.5, 'recon: accepted but unbilled shows as unbilled');
+}
+
+// 13. E1 — FCO 1985 licence validity (cl. 10 / 11) and the scheme-claim balance
+{
+  ok(DC.suggestedValidUpto('2024-04-15') === '2027-04-14', 'cl. 10: three years from issue (last valid day 14 Apr 2027)');
+  ok(DC.suggestedValidUpto('2024-02-29') === '2027-02-28' && DC.suggestedValidUpto('') === undefined, 'leap-day issue; empty → none');
+  ok(DC.oneMonthAfter('2027-01-31') === '2027-02-28' && DC.oneMonthAfter('2027-04-14') === '2027-05-14', 'one month after (month-end clamped)');
+  ok(DC.licenceStatus('2027-04-14', '2027-01-01') === 'valid', 'valid well before expiry');
+  ok(DC.licenceStatus('2027-04-14', '2027-03-20') === 'expiring' && DC.licenceStatus('2027-04-14', '2027-04-14') === 'expiring', 'within 30 days / on the last day → renew now');
+  ok(DC.licenceStatus('2027-04-14', '2027-04-15') === 'grace' && DC.licenceStatus('2027-04-14', '2027-05-14') === 'grace', 'cl. 11(3): one-month grace with additional fee');
+  ok(DC.licenceStatus('2027-04-14', '2027-05-15') === 'lapsed', 'cl. 11(5): lapsed after one month');
+  ok(DC.licenceStatus(undefined, '2027-01-01') === 'unknown', 'no date → unknown');
+  const lic = (id, validUpto, isDeleted) => ({ id, kind: 'authorisation', validUpto, isDeleted, createdAt: '', updatedAt: '' });
+  const al = DC.licenceAlerts([lic('A', '2027-12-31'), lic('B', '2027-04-20'), lic('C', '2027-01-01'), lic('D', '2027-03-25'), lic('E', '2026-01-01', true)], '2027-04-10');
+  ok(al.map(x => x.licence.id).join() === 'C,D,B' && al[0].status === 'lapsed' && al[1].status === 'grace', 'alerts: lapsed, grace, expiring — valid and deleted left out');
+  const b = DC.schemeClaimBalance({ id: 'S1', amount: 10000 }, [{ refId: 'S1', amount: 2500.25 }, { refId: 'S2', amount: 999 }, { refId: 'S1', amount: 1000 }]);
+  ok(b.received === 3500.25 && b.outstanding === 6499.75, 'claim: received / outstanding from its receipt vouchers');
 }
 
 // 9. Batch A — registers count only posted, non-rejected lots; status label; local (IST) date

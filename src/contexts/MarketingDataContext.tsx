@@ -40,6 +40,7 @@ import type { Transporter } from '@/lib/marketing/transport';
 import type { BardanaMovement } from '@/lib/marketing/bardana';
 import { DISPATCH_SHORTAGE_REF_TYPE, AGENCY_BILL_REF_TYPE, dispatchTotals, shortageOf, billBase, billTotals, nextDocNo, matchReceiptsToBills, type ProcurementDispatch, type AgencyBill, type AgencyBillLine } from '@/lib/marketing/agencyBilling';
 import { findVoucherOwner } from '@/lib/voucherOwnership';
+import { SCHEME_CLAIM_REF_TYPE, SCHEME_RECEIPT_REF_TYPE, schemeClaimBalance, type DealerLicence, type SchemeClaim } from '@/lib/marketing/dealerCompliance';
 import { procurementLegsOf, FARMER_PAYMENT_REF_TYPE } from '@/lib/procurement/agentFlow';
 import type { Arhtiya } from '@/lib/procurement';
 import type { Voucher } from '@/types';
@@ -53,6 +54,7 @@ export type ArhtiyaInput = { name: string; nameHi?: string; licenceNo?: string; 
 export type AgencyInput = { name: string; code: string; kind: string; nameHi?: string; commissionRate?: number; ledgerAccountId?: string; commissionBasis?: 'percent' | 'perQtl'; commissionIncomeAccountId?: string };
 
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+const ACCOUNT_IDS_CASH = '3301';   // Cash in Hand (template id; same default the agency receipt uses)
 /** Net Dr − Cr on one ledger across the given vouchers (rupees, paise-exact). */
 function ledgerNet(vs: ReadonlyArray<Voucher>, accountId: string): number {
   let m = 0;
@@ -144,6 +146,15 @@ interface MarketingDataContextValue {
   billMatching: ReturnType<typeof matchReceiptsToBills>;
   /** Procurement value of a posted lot (net legs of its posting voucher); 0 when not posted. */
   lotValue: (lotId: string) => number;
+  // E1 — FCO dealer licences (authorisation + Form O) and the general scheme-claim register
+  dealerLicences: DealerLicence[];
+  saveDealerLicence: (data: Omit<DealerLicence, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => void;
+  deleteDealerLicence: (id: string) => void;
+  schemeClaims: SchemeClaim[];
+  addSchemeClaim: (data: { date: string; schemeName: string; authority?: string; period?: string; amount: number; creditAccountId: string; receivableAccountId: string; note?: string }) => void;
+  recordSchemeReceipt: (claimId: string, data: { amount: number; date: string; mode: 'cash' | 'bank'; bankAccountId?: string; reference?: string }) => void;
+  deleteSchemeClaim: (id: string) => Promise<void>;
+  schemeReceipts: Voucher[];
   // Transport — transporter master (T1)
   transporters: Transporter[];
   addTransporter: (data: { name: string; nameHi?: string; vehicleNo?: string; phone?: string; ratePerQtl?: number }) => Transporter;
@@ -210,6 +221,8 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   const [bardanaMovements, setBardanaMovementsState] = useState<BardanaMovement[]>(() => storage.getProcurementBardanaMovements());
   const [dispatches, setDispatchesState] = useState<ProcurementDispatch[]>(() => storage.getProcurementDispatches());
   const [agencyBills, setAgencyBillsState] = useState<AgencyBill[]>(() => storage.getProcurementAgencyBills());
+  const [dealerLicences, setDealerLicencesState] = useState<DealerLicence[]>(() => storage.getDealerLicences());
+  const [schemeClaims, setSchemeClaimsState] = useState<SchemeClaim[]>(() => storage.getSchemeClaims());
 
   // J5: these masters used to load in 10 separate effects — 10 React commits after login, each
   // re-rendering every consumer. applyLoadsTogether applies them in one commit; each table keeps its own
@@ -231,6 +244,8 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       setBardanaMovementsState([]);
       setDispatchesState([]);
       setAgencyBillsState([]);
+      setDealerLicencesState([]);
+      setSchemeClaimsState([]);
       return;
     }
     applyLoadsTogether([
@@ -248,6 +263,8 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       [fetchAllPaged<BardanaMovement>('procurement_bardana_movements', sid), setBardanaMovementsState, storage.getProcurementBardanaMovements],
       [fetchAllPaged<ProcurementDispatch>('procurement_dispatches', sid), setDispatchesState, storage.getProcurementDispatches],
       [fetchAllPaged<AgencyBill>('procurement_agency_bills', sid), setAgencyBillsState, storage.getProcurementAgencyBills],
+      [fetchAllPaged<DealerLicence>('marketing_dealer_licences', sid), setDealerLicencesState, storage.getDealerLicences],
+      [fetchAllPaged<SchemeClaim>('marketing_scheme_claims', sid), setSchemeClaimsState, storage.getSchemeClaims],
     ], 'marketing masters');
   }, [user?.societyId]);
 
@@ -1120,6 +1137,115 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     }
   }, [agencyBills, billMatching, cancelVoucher, user, societyId]);
 
+  // ── E1: FCO dealer licences (register only) ────────────────────────────────────────
+  const saveDealerLicence = useCallback((data: Omit<DealerLicence, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
+    if (guardFYLocked()) return;
+    if (!data.licenceNo?.trim() && data.kind === 'authorisation') { toastRef.current({ title: 'लाइसेंस नंबर डालें', variant: 'destructive' }); return; }
+    if (data.kind === 'sourceCertificate' && !data.sourceName?.trim() && !data.supplierId) { toastRef.current({ title: 'स्रोत डालें', description: 'Form O किस स्रोत (कंपनी / पूल एजेंसी / थोक विक्रेता) का है?', variant: 'destructive' }); return; }
+    if (data.issuedOn && data.validUpto && data.validUpto < data.issuedOn) { toastRef.current({ title: 'तारीख ठीक नहीं', description: 'वैधता की तारीख जारी होने की तारीख से पहले नहीं हो सकती।', variant: 'destructive' }); return; }
+    const now = new Date().toISOString();
+    const before = data.id ? dealerLicences.find(l => l.id === data.id) : undefined;
+    const rec: DealerLicence = { ...(before || {}), ...data, id: data.id || crypto.randomUUID(), isDeleted: false, createdAt: before?.createdAt || now, updatedAt: now } as DealerLicence;
+    setDealerLicencesState(prev => { const u = before ? prev.map(l => l.id === rec.id ? rec : l) : [...prev, rec]; storage.setDealerLicences(u); return u; });
+    supabase.from('marketing_dealer_licences').upsert(withSoc(rec)).then(({ error }) => {
+      if (!error) return;
+      reportError('marketing-save', error.message);
+      setDealerLicencesState(prev => { const u = before ? prev.map(l => l.id === rec.id ? before : l) : prev.filter(l => l.id !== rec.id); storage.setDealerLicences(u); return u; });
+      toastRef.current({ title: 'लाइसेंस सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (migration 140 चलाई है?)`, variant: 'destructive', duration: 12000 });
+    });
+  }, [dealerLicences, societyId]);
+
+  const deleteDealerLicence = useCallback((id: string) => {
+    if (guardFYLocked()) return;
+    const before = dealerLicences.find(l => l.id === id);
+    if (!before) return;
+    const gone = { ...before, isDeleted: true, updatedAt: new Date().toISOString() };
+    setDealerLicencesState(prev => { const u = prev.map(l => l.id === id ? gone : l); storage.setDealerLicences(u); return u; });
+    supabase.from('marketing_dealer_licences').upsert(withSoc(gone)).then(({ error }) => {
+      if (!error) return;
+      setDealerLicencesState(prev => { const u = prev.map(l => l.id === id ? before : l); storage.setDealerLicences(u); return u; });
+      toastRef.current({ title: 'लाइसेंस हटा नहीं', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+    });
+  }, [dealerLicences, societyId]);
+
+  // ── E1: general scheme-claim register (claim POSTED; receipts derived from vouchers) ──────
+  // Claim: Dr receivable (3305 Subsidy Receivable by default) / Cr the society's chosen ledger — voucher
+  // first, row on onSaved (a row that fails cancels it). The row owns the claim voucher. Receipts are
+  // plain vouchers (refType scheme.claim.receipt, refId = claim) — received / outstanding are derived.
+  const schemeRef = useRef(schemeClaims); schemeRef.current = schemeClaims;
+  useEffect(() => registerVoucherOwner('marketing-scheme', id => findVoucherOwner([{ label: 'योजना दावा (Scheme claim)', docs: schemeRef.current }], id)), [registerVoucherOwner]);
+  const schemeReceipts = useMemo(() => vouchers.filter(v => !v.isDeleted && v.approvalStatus !== 'rejected' && v.refType === SCHEME_RECEIPT_REF_TYPE), [vouchers]);
+
+  const addSchemeClaim = useCallback((data: { date: string; schemeName: string; authority?: string; period?: string; amount: number; creditAccountId: string; receivableAccountId: string; note?: string }) => {
+    if (guardFYLocked()) return;
+    const refuse = (t: string) => toastRef.current({ title: 'दावा दर्ज नहीं हुआ', description: t, variant: 'destructive', duration: 10000 });
+    const amt = toRupees(toMinor(Number(data.amount) || 0));
+    if (!data.schemeName.trim()) return refuse('योजना का नाम डालें।');
+    if (!(amt > 0)) return refuse('राशि 0 से अधिक हो।');
+    const recv = accounts.find(a => a.id === data.receivableAccountId && !a.isGroup && a.type === 'asset');
+    const cr = accounts.find(a => a.id === data.creditAccountId && !a.isGroup);
+    if (!recv) return refuse('प्राप्य (asset) खाता चुनें — जैसे 3305 सब्सिडी प्राप्य।');
+    if (!cr) return refuse('जिस खाते में दावा जमा (Cr) हो, वह चुनें।');
+    const now = new Date().toISOString();
+    const rec: SchemeClaim = { id: crypto.randomUUID(), claimNo: nextDocNo('SCL', schemeClaims.map(c => c.claimNo)), date: data.date, schemeName: data.schemeName.trim(), authority: data.authority?.trim() || undefined, period: data.period?.trim() || undefined, amount: amt, creditAccountId: cr.id, receivableAccountId: recv.id, note: data.note?.trim() || undefined, isDeleted: false, createdAt: now, updatedAt: now };
+    addVoucher({
+      type: 'journal', date: data.date,
+      debitAccountId: recv.id, creditAccountId: cr.id, amount: amt,
+      lines: [{ id: crypto.randomUUID(), accountId: recv.id, type: 'Dr', amount: amt }, { id: crypto.randomUUID(), accountId: cr.id, type: 'Cr', amount: amt }],
+      narration: `योजना दावा ${rec.claimNo} — ${rec.schemeName}${rec.period ? ` (${rec.period})` : ''}`,
+      refType: SCHEME_CLAIM_REF_TYPE, refId: rec.id,
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0], {
+      onSaved: (sv) => {
+        const row = { ...rec, voucherId: sv.id };
+        setSchemeClaimsState(prev => { const u = [...prev, row]; storage.setSchemeClaims(u); return u; });
+        supabase.from('marketing_scheme_claims').upsert(withSoc(row)).then(({ error }) => {
+          if (!error) { toastRef.current({ title: 'योजना दावा दर्ज', description: `${row.claimNo} · ₹${amt.toLocaleString('en-IN')}` }); return; }
+          reportError('marketing-save', error.message);
+          setSchemeClaimsState(prev => { const r = prev.filter(c => c.id !== row.id); storage.setSchemeClaims(r); return r; });
+          cancelVoucher(sv.id, 'Scheme claim row not saved (auto-rollback)', user?.name || 'System', { viaParent: true });
+          toastRef.current({ title: 'दावा सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. उसका वाउचर भी रद्द किया गया। (migration 140 चलाई है?)`, variant: 'destructive', duration: 12000 });
+        });
+      },
+      onFailed: () => refuse('दावे का वाउचर सेव नहीं हुआ — दोबारा करें।'),
+    });
+  }, [accounts, schemeClaims, addVoucher, cancelVoucher, user, societyId]);
+
+  const recordSchemeReceipt = useCallback((claimId: string, data: { amount: number; date: string; mode: 'cash' | 'bank'; bankAccountId?: string; reference?: string }) => {
+    if (guardFYLocked()) return;
+    const c = schemeClaims.find(x => x.id === claimId && !x.isDeleted);
+    if (!c) return;
+    const amt = toRupees(toMinor(Number(data.amount) || 0));
+    const { outstanding } = schemeClaimBalance(c, schemeReceipts);
+    if (!(amt > 0) || amt > outstanding + 0.005) { toastRef.current({ title: 'राशि ठीक नहीं', description: `दावे का बकाया ₹${outstanding.toLocaleString('en-IN')} है — उससे अधिक या शून्य की रसीद नहीं बन सकती।`, variant: 'destructive', duration: 10000 }); return; }
+    const dr = data.mode === 'bank' ? (data.bankAccountId || storage.defaultBankAccountId(accounts)) : ACCOUNT_IDS_CASH;
+    addVoucher({
+      type: 'receipt', date: data.date,
+      debitAccountId: dr, creditAccountId: c.receivableAccountId, amount: amt,
+      lines: [{ id: crypto.randomUUID(), accountId: dr, type: 'Dr', amount: amt }, { id: crypto.randomUUID(), accountId: c.receivableAccountId, type: 'Cr', amount: amt }],
+      narration: `योजना दावा ${c.claimNo} की प्राप्ति — ${c.schemeName}${data.reference ? ` · Ref ${data.reference}` : ''}`,
+      refType: SCHEME_RECEIPT_REF_TYPE, refId: c.id,
+      createdBy: user?.name || 'admin',
+    } as Parameters<typeof addVoucher>[0]);
+  }, [schemeClaims, schemeReceipts, accounts, addVoucher, user]);
+
+  const deleteSchemeClaim = useCallback(async (id: string) => {
+    if (guardFYLocked()) return;
+    const c = schemeClaims.find(x => x.id === id && !x.isDeleted);
+    if (!c) return;
+    if (schemeClaimBalance(c, schemeReceipts).received > 0.005) {
+      toastRef.current({ title: 'पहले रसीद रद्द करें', description: 'इस दावे की राशि आ चुकी है — पहले उसकी रसीद (वाउचर) रद्द करें।', variant: 'destructive', duration: 10000 });
+      return;
+    }
+    const gone = { ...c, isDeleted: true, updatedAt: new Date().toISOString() };
+    const { error } = await supabase.from('marketing_scheme_claims').upsert(withSoc(gone));
+    if (error) { toastRef.current({ title: 'दावा हटा नहीं', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. कुछ नहीं बदला।`, variant: 'destructive', duration: 12000 }); return; }
+    setSchemeClaimsState(prev => { const u = prev.map(x => x.id === id ? gone : x); storage.setSchemeClaims(u); return u; });
+    if (c.voucherId && !cancelVoucher(c.voucherId, `Scheme claim ${c.claimNo} deleted`, user?.name || 'System', { viaParent: true })) {
+      toastRef.current({ title: '⚠ दावा हटा, वाउचर नहीं', description: 'दावे का वाउचर रद्द नहीं हो सका — ऊपर की चेतावनी देखें।', variant: 'destructive', duration: 15000 });
+    }
+  }, [schemeClaims, schemeReceipts, cancelVoucher, user, societyId]);
+
   // ── Procurement commission accrual (M3d) ──────────────────────────────────────────
   const commissionAccruals = vouchers.filter(v => !v.isDeleted && v.refType === COMMISSION_ACCRUAL_REF_TYPE);
 
@@ -1227,6 +1353,14 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       deleteAgencyBill,
       billMatching,
       lotValue,
+      dealerLicences,
+      saveDealerLicence,
+      deleteDealerLicence,
+      schemeClaims,
+      addSchemeClaim,
+      recordSchemeReceipt,
+      deleteSchemeClaim,
+      schemeReceipts,
       transporters,
       addTransporter,
       updateTransporter,

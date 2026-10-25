@@ -2468,6 +2468,65 @@ var agencyBill = {
     ...stamps()
   ]
 };
+var dealerLicence = {
+  key: "marketing_dealer_licence",
+  table: "marketing_dealer_licences",
+  domain: "marketing",
+  label: "Dealer Licences",
+  labelHi: "\u0921\u0940\u0932\u0930 \u0932\u093E\u0907\u0938\u0947\u0902\u0938",
+  capability: "inventory_sales",
+  minRole: "viewer",
+  scope: "society",
+  nature: "master",
+  dependsOn: ["society"],
+  naturalKey: ["id"],
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  columns: [
+    c10("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c10("kind", "Type", "\u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
+    c10("productGroup", "Product", "\u0935\u0938\u094D\u0924\u0941"),
+    c10("licenceNo", "Number", "\u0928\u0902\u092C\u0930"),
+    c10("authority", "Issued By", "\u091C\u093E\u0930\u0940\u0915\u0930\u094D\u0924\u093E"),
+    c10("issuedOn", "Issued On", "\u091C\u093E\u0930\u0940 \u0924\u093E\u0930\u0940\u0916", { type: "date" }),
+    c10("validUpto", "Valid Up To", "\u0935\u0948\u0927 \u0924\u0915", { type: "date" }),
+    c10("supplierId", "Supplier", "\u0938\u092A\u094D\u0932\u093E\u092F\u0930"),
+    c10("sourceName", "Source", "\u0938\u094D\u0930\u094B\u0924"),
+    c10("note", "Note", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940"),
+    internal10("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean" }),
+    ...stamps()
+  ]
+};
+var schemeClaim = {
+  key: "marketing_scheme_claim",
+  table: "marketing_scheme_claims",
+  domain: "marketing",
+  label: "Scheme Claims",
+  labelHi: "\u092F\u094B\u091C\u0928\u093E \u0926\u093E\u0935\u0947",
+  capability: "inventory_sales",
+  minRole: "viewer",
+  scope: "society",
+  nature: "transaction",
+  dependsOn: ["society"],
+  naturalKey: ["id"],
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  columns: [
+    c10("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c10("claimNo", "Claim No.", "\u0926\u093E\u0935\u093E \u0928\u0902."),
+    c10("date", "Date", "\u0924\u093E\u0930\u0940\u0916", { type: "date" }),
+    c10("schemeName", "Scheme", "\u092F\u094B\u091C\u0928\u093E"),
+    c10("authority", "Department", "\u0935\u093F\u092D\u093E\u0917"),
+    c10("period", "Period", "\u0905\u0935\u0927\u093F"),
+    num7("amount", "Amount", "\u0930\u093E\u0936\u093F"),
+    internal10("creditAccountId", "Credit Ledger", "\u091C\u092E\u093E \u0916\u093E\u0924\u093E"),
+    internal10("receivableAccountId", "Receivable Ledger", "\u092A\u094D\u0930\u093E\u092A\u094D\u092F \u0916\u093E\u0924\u093E"),
+    internal10("voucherId", "Voucher", "\u0935\u093E\u0909\u091A\u0930"),
+    c10("note", "Note", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940"),
+    internal10("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean" }),
+    ...stamps()
+  ]
+};
 var MARKETING_ENTITIES = [
   crop,
   variety,
@@ -2482,7 +2541,9 @@ var MARKETING_ENTITIES = [
   arhtiya,
   bardanaMovement,
   dispatch2,
-  agencyBill
+  agencyBill,
+  dealerLicence,
+  schemeClaim
 ];
 
 // src/lib/export/entities/consumer.ts

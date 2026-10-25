@@ -152,6 +152,7 @@ const ProcurementLots = lazyWithRetry(() => import("./pages/ProcurementLots"));
 const ProcurementMasters = lazyWithRetry(() => import("./pages/marketing/ProcurementMasters"));
 const AgencyReceipts = lazyWithRetry(() => import("./pages/marketing/AgencyReceipts"));
 const ProcurementRegisters = lazyWithRetry(() => import("./pages/marketing/ProcurementRegisters"));
+const DealerCompliance = lazyWithRetry(() => import("./pages/marketing/DealerCompliance"));
 const Transport = lazyWithRetry(() => import("./pages/marketing/Transport"));
 const TransportVehicles = lazyWithRetry(() => import("./pages/transport/Vehicles"));
 const TransportTrips = lazyWithRetry(() => import("./pages/transport/Trips"));
@@ -419,6 +420,7 @@ const AppRoutes = () => {
       <Route path="/procurement-masters" element={<ProtectedRoute><ProcurementMasters /></ProtectedRoute>} />
       <Route path="/agency-receipts" element={<ProtectedRoute><AgencyReceipts /></ProtectedRoute>} />
       <Route path="/procurement-registers" element={<ProtectedRoute><ProcurementRegisters /></ProtectedRoute>} />
+      <Route path="/dealer-compliance" element={<ProtectedRoute><DealerCompliance /></ProtectedRoute>} />
       <Route path="/transport" element={<ProtectedRoute><Transport /></ProtectedRoute>} />
       <Route path="/transport-vehicles" element={<ProtectedRoute><TransportVehicles /></ProtectedRoute>} />
       <Route path="/transport-trips" element={<ProtectedRoute><TransportTrips /></ProtectedRoute>} />
