@@ -195,5 +195,76 @@ const MSP = new Set(['procurement_msp']);
   ok(d1 && d2 && d1 !== d2, 'two devices never get the same code');
 }
 
+// ── 7. Batch A (P0-1) — farmer amount paid is DERIVED from the payment vouchers ────────────────────
+{
+  const pay = (id, ev, amount, extra = {}) => ({ id, refType: F.FARMER_PAYMENT_REF_TYPE, refId: ev, amount, ...extra });
+  const vs = [
+    pay('P1', 'EV-1', 1000.10), pay('P2', 'EV-1', 500.20),
+    pay('P3', 'EV-1', 999, { isDeleted: true }),                 // cancelled → not paid
+    pay('P4', 'EV-1', 777, { approvalStatus: 'rejected' }),     // rejected → not paid
+    pay('P5', 'EV-1', 100, { approvalStatus: 'pending' }),      // held → counts (blocks a second payment)
+    pay('P6', 'EV-2', 250),
+    { id: 'X', refType: 'farmer.settlement', refId: 'EV-1', amount: 50 },   // not a payment
+  ];
+  const m = F.farmerPaidByEngineVoucher(vs);
+  ok(m.get('EV-1') === 1600.3, 'paid = Σ live payments, paise-exact (1000.10 + 500.20 + 100 pending)');
+  ok(m.get('EV-2') === 250 && !m.has('EV-3'), 'per engine voucher; none → absent');
+  // The F5 double-payment case: the stored cache never advanced (its write failed) but the voucher exists.
+  const stale = [{ id: 'S1', engineVoucherId: 'EV-1', netPayable: { amount: 1600.3, currency: 'INR' }, amountPaid: { amount: 0, currency: 'INR' } }];
+  const view = F.withDerivedAmountPaid(stale, m);
+  ok(view[0].amountPaid.amount === 1600.3, 'stale cache 0 → derived 1600.30: outstanding is 0, no second payment');
+  const same = [{ id: 'S2', engineVoucherId: 'EV-2', amountPaid: { amount: 250, currency: 'INR' } }];
+  ok(F.withDerivedAmountPaid(same, m)[0] === same[0], 'cache already right → same object (no re-render churn)');
+  ok(F.withDerivedAmountPaid([{ id: 'S3', engineVoucherId: 'EV-9', amountPaid: { amount: 40, currency: 'INR' } }], m)[0].amountPaid.amount === 0, 'payment voucher cancelled → paid drops back to 0');
+}
+
+// ── 8. Batch A (P1-3) — quality only BEFORE the J-Form ───────────────────────────────────────────
+{
+  ok(F.canRecordQuality({ hasQualityTest: false, hasJForm: false }) === true, 'new lot → quality allowed');
+  ok(F.canRecordQuality({ hasQualityTest: false, hasJForm: true }) === false, 'J-Form issued → quality locked (no stranded posted lot)');
+  ok(F.canRecordQuality({ hasQualityTest: true, hasJForm: false }) === false, 'already tested → no second test');
+}
+
+// ── 9. Batch A — "agency paid directly" credits only the agency receivable ──────────────────────────
+{
+  const accs = [
+    { id: '3301', type: 'asset' }, { id: '3403', type: 'asset' }, { id: '3101', type: 'asset' },
+    { id: '3308', type: 'asset' }, { id: 'AG-HSWC', type: 'asset', parentId: '3308' },
+    { id: 'GRP', type: 'asset', parentId: '3308', isGroup: true },
+  ];
+  const ids = F.agencyDirectAccounts(accs, '3308').map(a => a.id);
+  ok(ids.join(',') === '3308,AG-HSWC', 'receivable + ledgers under it only (no cash / stock / fixed asset / group)');
+  ok(F.agencyDirectAccounts(accs, null).length === 0, 'no receivable in the chart → nothing to pick');
+}
+
+// ── 10. Batch A — source guards on DataContext (no runnable harness for the context) ──────────────
+{
+  const { readFileSync } = await import('node:fs');
+  const dc = readFileSync(pathResolve(SRC, 'contexts', 'DataContext.tsx'), 'utf8');
+  const body = (name) => { const i = dc.indexOf(`const ${name} = useCallback(`); return i < 0 ? '' : dc.slice(i, dc.indexOf('\n  }, [', i)); };
+  // P1-1: each posting step looks its input up in the synchronous ref, never in render-time state.
+  ok(/procurementIntentsRef\.current\.find\(/.test(body('generatePostingRequest')), 'Posting Request reads the intent from the ref');
+  ok(/procurementRequestsRef\.current\.find\(/.test(body('generatePostingRuleResult')), 'Rule Result reads the request from the ref');
+  ok(/procurementRuleResultsRef\.current\.find\(/.test(body('generateEngineVoucher')), 'Engine Voucher reads the result from the ref');
+  ok(!/procurementFinancialIntents\.find\(/.test(body('generatePostingRequest')), 'no stale-state lookup left in generatePostingRequest');
+  for (const g of ['generateFinancialIntent', 'generatePostingRequest', 'generatePostingRuleResult']) {
+    ok(/opts\?\.onCommitted\?\.\(/.test(body(g)) && /opts\?\.onFailed\?\.\(/.test(body(g)), `${g} reports commit / failure to the chain`);
+  }
+  // P0-1: outstanding before a payment comes from the vouchers, not the stored cache.
+  const pay = body('recordFarmerPayment');
+  ok(/farmerPaidByEngineVoucher\(vouchersRef\.current\)/.test(pay), 'payment outstanding derived from the payment vouchers');
+  ok(!/toMinor\(stl\.amountPaid\.amount\)/.test(pay), 'payment never trusts the stored amountPaid');
+  // P0-2: approval is committed only after its deduction voucher saved; a failed voucher reverts to draft.
+  const appr = body('approveFarmerSettlement');
+  ok(/onSaved: \(\) => commitApproval\(\)/.test(appr) && /onFailed: \(\) => \{\s*revertLocal\(\)/.test(appr), 'approval waits for the voucher save; failure reverts to draft');
+  ok(/cancelVoucher\(settlementVoucherId, .*\{ viaParent: true \}\)/.test(appr), 'auto-rollback cancel passes the owner check');
+  // P1-4: the approved settlement owns its deduction voucher.
+  ok(/registerVoucherOwner\('procurement'/.test(dc), 'procurement voucher owner registered');
+  // P1-3: quality refused once the J-Form exists.
+  ok(/canRecordQuality\(/.test(body('recordQualityInspection')), 'quality inspection checks the J-Form gate');
+  // Context hands pages the voucher-derived settlements.
+  ok(/procurementSettlements: procurementSettlementsView/.test(dc), 'context exposes the derived settlement view');
+}
+
 console.log(`[procurement-agent-flow] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

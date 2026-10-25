@@ -753,8 +753,15 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
 
   const deleteCommissionAccrual = useCallback((voucherId: string) => {
     if (guardFYLocked()) return;
+    // Commission already received from the agency cannot be un-earned here: reversing the accrual would
+    // leave Commission Receivable in credit. Cancel the commission receipt first.
+    const acc = vouchers.find(v => v.id === voucherId && !v.isDeleted);
+    if (acc && commissionBalances.total - (acc.amount || 0) < -0.005) {
+      toastRef.current({ title: 'पहले कमीशन रसीद रद्द करें', description: 'इस कमीशन के बदले एजेंसी से राशि आ चुकी है। "एजेंसी रसीद" पेज पर वह रसीद पहले रद्द करें, फिर कमीशन रद्द करें।', variant: 'destructive', duration: 12000 });
+      return;
+    }
     cancelVoucher(voucherId, 'Commission accrual reversed', user?.name || 'System', { viaParent: true });
-  }, [cancelVoucher, user]);
+  }, [cancelVoucher, user, vouchers, commissionBalances]);
 
   return (
     <MarketingDataContext.Provider value={{

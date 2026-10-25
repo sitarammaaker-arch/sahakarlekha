@@ -1,17 +1,39 @@
-// Unit tests for Marketing M1c — the effective-dated MSP rate resolver
-// (src/lib/marketing/msp.ts). Faithful JS mirror of the pure TS logic; tsc guarantees the TS
-// compiles, this pins the behaviour.
+// Unit tests for Marketing — the effective-dated MSP rate resolver (src/lib/marketing/msp.ts) and the
+// procurement register builders (src/lib/marketing/registers.ts). Imports the REAL TS modules via the
+// '@/' loader (the earlier hand-written JS copies could drift from the source).
 // Run: node scripts/test-marketing.mjs   (exit 1 on any failure)
+process.env.TZ = 'Asia/Kolkata';   // register dates are the IST day
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
 
-// ── Mirror: src/lib/marketing/msp.ts ──
-function pickEffectiveMspRate(rates, args) {
-  if (!args.cropId || !args.seasonId) return null;
-  const eligible = rates
-    .filter(r => r.cropId === args.cropId && r.seasonId === args.seasonId && (!r.effectiveFrom || r.effectiveFrom <= args.date))
-    .sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : a.effectiveFrom > b.effectiveFrom ? -1 : 0));
-  const top = eligible[0];
-  return top && typeof top.rate?.amount === 'number' && isFinite(top.rate.amount) ? top.rate.amount : null;
-}
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const { pickEffectiveMspRate } = await import(abs('../src/lib/marketing/msp.ts'));
+const { buildProcurementRegister, buildCommoditySummary, settlementTotals, countableLots } = await import(abs('../src/lib/marketing/registers.ts'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -53,35 +75,7 @@ const RATES = [
   ok(pickEffectiveMspRate([{ id: 'x', cropId: 'wheat', seasonId: 'rabi2526', rate: money(NaN), effectiveFrom: '2025-10-01' }], { cropId: 'wheat', seasonId: 'rabi2526', date: '2026-02-15' }) === null, 'NaN rate → null');
 }
 
-// ── Mirror: src/lib/marketing/registers.ts ──
 const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
-const lotValue = (l) => r2((l.quantity?.value || 0) * (l.mspRate?.amount || 0));
-function buildProcurementRegister(lots, from, to) {
-  const rows = lots
-    .map(l => ({ l, date: (l.createdAt || '').slice(0, 10) }))
-    .filter(({ date }) => (!from || date >= from) && (!to || date <= to))
-    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
-    .map(({ l, date }) => ({ lotId: l.id, date, farmerId: l.farmerId, cropId: l.cropId, qty: l.quantity?.value || 0, rate: l.mspRate?.amount || 0, value: lotValue(l), status: l.operationalStatus }));
-  return { rows, totalQty: r2(rows.reduce((s, x) => s + x.qty, 0)), totalValue: r2(rows.reduce((s, x) => s + x.value, 0)), count: rows.length };
-}
-function buildCommoditySummary(lots) {
-  const map = new Map();
-  for (const l of lots) {
-    const cur = map.get(l.cropId) || { cropId: l.cropId, qty: 0, value: 0, lots: 0 };
-    cur.qty = r2(cur.qty + (l.quantity?.value || 0)); cur.value = r2(cur.value + lotValue(l)); cur.lots += 1;
-    map.set(l.cropId, cur);
-  }
-  return [...map.values()].sort((a, b) => b.value - a.value);
-}
-function settlementTotals(settlements) {
-  const live = settlements.filter(s => !s.isDeleted);
-  const gross = r2(live.reduce((s, x) => s + (x.gross?.amount || 0), 0));
-  const deductions = r2(live.reduce((s, x) => s + (x.deductionLines || []).reduce((a, l) => a + (l.amount?.amount || 0), 0), 0));
-  const net = r2(live.reduce((s, x) => s + (x.netPayable?.amount || 0), 0));
-  const paid = r2(live.reduce((s, x) => s + (x.amountPaid?.amount || 0), 0));
-  return { gross, deductions, net, paid, outstanding: r2(net - paid), count: live.length };
-}
-
 const qtl = (v) => ({ value: v, unit: 'qtl' });
 const rate = (n) => ({ amount: n, currency: 'INR' });
 const LOTS = [
@@ -112,14 +106,28 @@ const LOTS = [
 // 8. Settlement totals: gross/deductions/net/paid/outstanding; soft-deleted excluded
 {
   const S = [
-    { gross: rate(48500), deductionLines: [{ amount: rate(970) }], netPayable: rate(47530), amountPaid: rate(47530) },
-    { gross: rate(72750), deductionLines: [{ amount: rate(1455) }, { amount: rate(500) }], netPayable: rate(70795), amountPaid: rate(30000) },
-    { gross: rate(1000), deductionLines: [], netPayable: rate(1000), amountPaid: rate(0), isDeleted: true },
+    { status: 'approved', gross: rate(48500), deductionLines: [{ amount: rate(970) }], netPayable: rate(47530), amountPaid: rate(47530) },
+    { status: 'approved', gross: rate(72750), deductionLines: [{ amount: rate(1455) }, { amount: rate(500) }], netPayable: rate(70795), amountPaid: rate(30000) },
+    { status: 'approved', gross: rate(1000), deductionLines: [], netPayable: rate(1000), amountPaid: rate(0), isDeleted: true },
+    { status: 'draft', gross: rate(9000), deductionLines: [], netPayable: rate(9000), amountPaid: rate(0) },
   ];
   const t = settlementTotals(S);
-  ok(t.count === 2, 'settlement totals: soft-deleted excluded (2 of 3)');
+  ok(t.count === 2, 'settlement totals: soft-deleted AND draft excluded (2 of 4) — a draft is not owed yet');
   ok(t.gross === 121250 && t.deductions === 2925, 'settlement totals: gross 121250, deductions 2925');
   ok(t.net === 118325 && t.paid === 77530 && t.outstanding === r2(118325 - 77530), 'settlement totals: net/paid/outstanding tie out');
+}
+
+// 9. Batch A — registers count only posted, non-rejected lots; status label; local (IST) date
+{
+  const lots = [...LOTS, { id: 'L4', farmerId: 'F3', cropId: 'wheat', quantity: qtl(99), mspRate: rate(2425), operationalStatus: 'created', createdAt: '2026-02-20T09:00:00Z' }];
+  const c = countableLots(lots, new Set(['L1', 'L2', 'L3', 'L4']), new Set(['L3']));
+  ok(c.map(l => l.id).join(',') === 'L1,L2,L4', 'rejected lot (L3) dropped');
+  const c2 = countableLots(lots, new Set(['L1', 'L2']), new Set());
+  ok(c2.length === 2 && buildCommoditySummary(c2)[0].qty === 50, 'unposted lots (L3, L4) not counted in qty/value');
+  const reg = buildProcurementRegister(c2, undefined, undefined, l => `stage:${l.id}`);
+  ok(reg.rows.every(r => r.status === `stage:${r.lotId}`), 'status column shows the lot stage, not the stored "created"');
+  const late = buildProcurementRegister([{ ...LOTS[0], createdAt: '2026-03-31T20:00:00Z' }]);
+  ok(late.rows[0].date === '2026-04-01', 'a lot entered 01:30 IST on 1 April is dated 1 April (was the UTC 31 March)');
 }
 
 console.log(`[marketing-test] ${pass} passed, ${fail} failed`);

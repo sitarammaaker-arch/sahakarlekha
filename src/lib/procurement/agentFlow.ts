@@ -228,3 +228,52 @@ export async function allocateFarmerCode(
   }
   return null;
 }
+
+// ── 7. Farmer amount paid — DERIVED from the payment vouchers ───────────────────────────────────
+// The settlement row also stores amountPaid, but that is a second write after the payment voucher
+// and could fail on its own: the outstanding then reverted on F5 and "Pay Farmer" paid the farmer
+// AGAIN (2105 went debit). The payment vouchers are the record; amountPaid is only a cache of them.
+// A held (pending) payment counts — it is already committed money, so it must block a second payment.
+export const FARMER_PAYMENT_REF_TYPE = 'farmer.payment';
+
+type PayVoucher = Pick<Voucher, 'isDeleted' | 'refType' | 'refId' | 'amount' | 'approvalStatus'>;
+
+/** Engine-voucher id → total paid (rupees) across live farmer.payment vouchers. */
+export function farmerPaidByEngineVoucher(vouchers: ReadonlyArray<PayVoucher>): Map<string, number> {
+  const minor = new Map<string, number>();
+  for (const v of vouchers) {
+    if (v.isDeleted || v.approvalStatus === 'rejected' || v.refType !== FARMER_PAYMENT_REF_TYPE || !v.refId) continue;
+    minor.set(v.refId, addMinor(minor.get(v.refId) ?? 0, toMinor(Number(v.amount) || 0)));
+  }
+  const out = new Map<string, number>();
+  for (const [k, m] of minor) out.set(k, toRupees(m));
+  return out;
+}
+
+/** The settlements with amountPaid replaced by the voucher-derived figure (same object when it already matches). */
+export function withDerivedAmountPaid<S extends { engineVoucherId: string; amountPaid: { amount: number; currency: string } }>(
+  settlements: ReadonlyArray<S>,
+  paid: ReadonlyMap<string, number>,
+): S[] {
+  return settlements.map(s => {
+    const p = paid.get(s.engineVoucherId) ?? 0;
+    return (s.amountPaid?.amount ?? 0) === p ? s : { ...s, amountPaid: { amount: p, currency: s.amountPaid?.currency || 'INR' } };
+  });
+}
+
+// ── 8. Quality after the J-Form ──────────────────────────────────────────────────────────────────
+// Quality is the gate BEFORE the J-Form. Recording (or rejecting) it after the J-Form stranded the
+// lot: a rejected posted lot could not be settled or paid, while its 3308/2105 entry stayed booked.
+export const canRecordQuality = (x: { hasQualityTest: boolean; hasJForm: boolean }): boolean => !x.hasQualityTest && !x.hasJForm;
+
+// ── 9. "Agency paid the farmer directly" — which account is credited ────────────────────────────────
+// Only the agency receivable belongs here. Offering every asset (cash, stock, fixed assets) let a
+// payment bypass the receivable and broke the per-agency balance. Ledgers opened UNDER the receivable
+// (one per agency) are receivables too.
+export function agencyDirectAccounts<A extends Pick<LedgerAccount, 'id'> & { parentId?: string; isGroup?: boolean }>(
+  accounts: ReadonlyArray<A>,
+  agencyReceivableId: string | null | undefined,
+): A[] {
+  if (!agencyReceivableId) return [];
+  return accounts.filter(a => !a.isGroup && (a.id === agencyReceivableId || a.parentId === agencyReceivableId));
+}

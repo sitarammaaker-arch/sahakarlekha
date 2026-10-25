@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
 import { resolveProcurementAccountId, missingProcurementRoles, PROCUREMENT_ROLE_LABEL_HI } from '@/lib/procurement/accounts';
-import { deriveLotStage, LOT_STAGE_LABEL, isRejectedQuality, suggestDeductionAccountId, deductionAccountWarning, DEDUCTION_WARNING_TEXT } from '@/lib/procurement/agentFlow';
+import { deriveLotStage, LOT_STAGE_LABEL, isRejectedQuality, suggestDeductionAccountId, deductionAccountWarning, DEDUCTION_WARNING_TEXT, canRecordQuality, agencyDirectAccounts } from '@/lib/procurement/agentFlow';
 import { Wheat, Plus, AlertTriangle } from 'lucide-react';
 
 // Legacy crop ids (used before the M1a Crop master). Kept only so lots created earlier still
@@ -48,7 +48,7 @@ const DEDUCTION_TYPES = [
 
 export default function ProcurementLots() {
   const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment } = useData();
-  const { crops, varieties, seasons, agencies, centres, resolveMspRate, deductionRules, accrueProcurementCommission, commissionAccruals } = useMarketingData();
+  const { crops, varieties, seasons, agencies, centres, resolveMspRate, deductionRules, accrueProcurementCommission, commissionAccruals, deleteCommissionAccrual } = useMarketingData();
   const { language } = useLanguage();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -92,7 +92,7 @@ export default function ProcurementLots() {
   const [payDate, setPayDate] = useState('');
   const [payMode, setPayMode] = useState<'cash' | 'bank' | 'agency'>('cash');
   const [payBankId, setPayBankId] = useState('');
-  const [payAgencyId, setPayAgencyId] = useState('');   // agency receivable (Hafed Control) when the agency paid farmers directly
+  const [payAgencyId, setPayAgencyId] = useState('');   // agency receivable (MSP Receivable) when the agency paid farmers directly
   const [payRef, setPayRef] = useState('');
   const [payRemarks, setPayRemarks] = useState('');
 
@@ -153,32 +153,38 @@ export default function ProcurementLots() {
     return rr ? vouchers.find(v => !v.isDeleted && v.origin === 'engine' && v.refType === 'posting.rule.result' && v.refId === rr.id) : undefined;
   };
   // M2 hot-path: ONE click runs the whole financial pipeline Intent→PostingRequest→Resolve→Post.
-  // Each generator persists its own immutable business object; we chain on the RETURNED ids (React
-  // state doesn't refresh mid-handler). Resume-safe: reuse any step already done. Each generator
+  // Each step starts only once the server committed the previous one (onCommitted), so a later step
+  // never references a row the server refused. Resume-safe: reuse any step already done. Each generator
   // toasts on failure and bails (empty id) — so a broken step stops the chain cleanly.
+  const [postingLotId, setPostingLotId] = useState<string | null>(null);
   const handlePostToLedger = (lotId: string) => {
     const jf = lotJForm(lotId);
-    if (!jf) return;
-    let intentId = lotIntent(lotId)?.id;
-    if (!intentId) intentId = generateFinancialIntent({ jformId: jf.id })?.id;
-    if (!intentId) return;
-    let reqId = lotPostingRequest(lotId)?.id;
-    if (!reqId) reqId = generatePostingRequest({ financialIntentId: intentId })?.id;
-    if (!reqId) return;
-    let rrId = lotRuleResult(lotId)?.id;
-    if (!rrId) rrId = generatePostingRuleResult({ postingRequestId: reqId })?.id;
-    if (!rrId) return;
-    if (!lotEngineVoucher(lotId)) generateEngineVoucher({ postingRuleResultId: rrId });
+    if (!jf || postingLotId === lotId) return;
+    setPostingLotId(lotId);
+    const done = () => setPostingLotId(null);
+    const post = (rrId: string) => { if (!lotEngineVoucher(lotId)) generateEngineVoucher({ postingRuleResultId: rrId }); done(); };
+    const resolve = (reqId: string) => {
+      const rr = lotRuleResult(lotId);
+      if (rr) return post(rr.id);
+      if (!generatePostingRuleResult({ postingRequestId: reqId }, { onCommitted: r => post(r.id), onFailed: done })?.id) done();
+    };
+    const request = (intentId: string) => {
+      const pr = lotPostingRequest(lotId);
+      if (pr) return resolve(pr.id);
+      if (!generatePostingRequest({ financialIntentId: intentId }, { onCommitted: p => resolve(p.id), onFailed: done })?.id) done();
+    };
+    const fi = lotIntent(lotId);
+    if (fi) return request(fi.id);
+    if (!generateFinancialIntent({ jformId: jf.id }, { onCommitted: i => request(i.id), onFailed: done })?.id) done();
   };
   // Farmer Payment — Payable/Paid/Outstanding are DERIVED from vouchers (no stored balance).
   const money = (n: number) => `₹${(n || 0).toLocaleString('en-IN')}`;
   const bankIds = getBankAccountIds(accounts);
   const bankAccounts = accounts.filter(a => bankIds.includes(a.id));
-  // Agency-receivable candidates for "agency paid directly" mode: non-group asset accounts
-  // (the society's Hafed / agency control account lives here). MSP Receivable (3308) first.
+  // "Agency paid directly" credits ONLY the agency receivable (3308, or a ledger opened under it) —
+  // any other asset (cash, stock) bypassed the receivable and broke the per-agency balance.
   const mspReceivableId = resolveProcurementAccountId(accounts, 'agencyReceivable');
-  const agencyAccounts = accounts.filter(a => a.type === 'asset' && !a.isGroup)
-    .sort((a, b) => (a.id === mspReceivableId ? -1 : b.id === mspReceivableId ? 1 : 0));
+  const agencyAccounts = agencyDirectAccounts(accounts, mspReceivableId);
   // MSP ledgers missing (PACS / sugar charts) → tell the operator where to create them, up front.
   const missingMsp = missingProcurementRoles(accounts, ['agencyReceivable', 'farmerPayable']);
   // Settlement is the SOURCE OF TRUTH — gross/deductions/net/paid read STORED fields, never vouchers.
@@ -434,6 +440,8 @@ export default function ProcurementLots() {
                 {commissionForLot(l.id) && (
                   <div className="text-xs text-emerald-600 mt-0.5">
                     {hi ? 'कमीशन' : 'Commission'}: {money(commissionForLot(l.id)!.amount)} · {commissionForLot(l.id)!.voucherNo}
+                    {' · '}
+                    <button type="button" className="underline text-destructive" onClick={() => { const c = commissionForLot(l.id)!; if (window.confirm(hi ? `कमीशन ${c.voucherNo} (${money(c.amount)}) रद्द करें?` : `Cancel commission ${c.voucherNo} (${money(c.amount)})?`)) deleteCommissionAccrual(c.id); }}>{hi ? 'रद्द करें' : 'Cancel'}</button>
                   </div>
                 )}
                 {lotRejected(l.id) && (
@@ -463,10 +471,10 @@ export default function ProcurementLots() {
                   const st = deriveLotStage({ qualityResult: lotQuality(l.id)?.result, hasJForm: !!lotJForm(l.id), hasPosting: !!lotEngineVoucher(l.id), settlementStatus: settlementForLot(l.id)?.status, outstanding: payInfo(l.id)?.outstanding });
                   return <Badge variant={st === 'rejected' ? 'destructive' : 'secondary'}>{hi ? LOT_STAGE_LABEL[st].hi : LOT_STAGE_LABEL[st].en}</Badge>;
                 })()}
-                {!lotQuality(l.id) && <Button size="sm" variant="outline" onClick={() => openQuality(l.id)}>{hi ? 'क्वालिटी' : 'Quality'}</Button>}
+                {canRecordQuality({ hasQualityTest: !!lotQuality(l.id), hasJForm: !!lotJForm(l.id) }) && <Button size="sm" variant="outline" onClick={() => openQuality(l.id)}>{hi ? 'क्वालिटी' : 'Quality'}</Button>}
                 {!lotRejected(l.id) && <>
                 {!lotJForm(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateJForm(l.id)}>J-Form</Button>}
-                {lotJForm(l.id) && !lotEngineVoucher(l.id) && <Button size="sm" onClick={() => handlePostToLedger(l.id)}>{hi ? 'बहीखाता में पोस्ट' : 'Post to Ledger'}</Button>}
+                {lotJForm(l.id) && !lotEngineVoucher(l.id) && <Button size="sm" disabled={postingLotId === l.id} onClick={() => handlePostToLedger(l.id)}>{postingLotId === l.id ? (hi ? 'पोस्ट हो रहा है…' : 'Posting…') : (hi ? 'बहीखाता में पोस्ट' : 'Post to Ledger')}</Button>}
                 {lotEngineVoucher(l.id) && !settlementForLot(l.id) && <Button size="sm" variant="outline" onClick={() => handleCreateSettlement(l.id)}>{hi ? 'निपटान बनाएँ' : 'Create Settlement'}</Button>}
                 {settlementForLot(l.id)?.status === 'draft' && <Button size="sm" variant="outline" onClick={() => openSettlement(l.id)}>{hi ? 'निपटान प्रबंधन' : 'Manage Settlement'}</Button>}
                 {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="ghost" onClick={() => openSettlement(l.id)}>{hi ? 'देखें' : 'View'}</Button>}
@@ -574,7 +582,7 @@ export default function ProcurementLots() {
             )}
             {payMode === 'agency' && (
               <div className="space-y-1.5">
-                <Label>{hi ? 'एजेंसी प्राप्य खाता (जैसे Hafed Control)' : 'Agency receivable (e.g. Hafed Control)'}</Label>
+                <Label>{hi ? 'एजेंसी प्राप्य खाता (MSP Receivable)' : 'Agency receivable (MSP Receivable)'}</Label>
                 <Select value={payAgencyId} onValueChange={setPayAgencyId}>
                   <SelectTrigger><SelectValue placeholder={hi ? 'खाता चुनें' : 'Select account'} /></SelectTrigger>
                   <SelectContent>{agencyAccounts.map(a => <SelectItem key={a.id} value={a.id}>{hi ? (a.nameHi || a.name) : a.name}</SelectItem>)}</SelectContent>
