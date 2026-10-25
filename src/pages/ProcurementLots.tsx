@@ -47,7 +47,7 @@ const DEDUCTION_TYPES = [
 ];
 
 export default function ProcurementLots() {
-  const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment } = useData();
+  const { vouchers, accounts, procurementFarmers, procurementLots, procurementQualityTests, procurementMoistureRecords, procurementJForms, procurementFinancialIntents, procurementPostingRequests, procurementPostingRuleResults, procurementSettlements, addFarmer, addProcurementLot, recordQualityInspection, generateJForm, generateFinancialIntent, generatePostingRequest, generatePostingRuleResult, generateEngineVoucher, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement, recordFarmerPayment, cancelProcurementLot } = useData();
   const { crops, varieties, seasons, agencies, centres, resolveMspRate, deductionRules, accrueProcurementCommission, commissionAccruals, deleteCommissionAccrual } = useMarketingData();
   const { language } = useLanguage();
   const { toast } = useToast();
@@ -61,15 +61,17 @@ export default function ProcurementLots() {
   const [centreId, setCentreId] = useState('');
   const [qty, setQty] = useState('');
   const [rate, setRate] = useState('');
+  // Batch B: the business date of the purchase (back-dating allowed within the open FY/period). Sticky.
+  const [lotDate, setLotDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [mspAuto, setMspAuto] = useState(false);
 
   // Auto-fill the MSP rate from the effective rate master when crop + season are both chosen.
   // The operator can still edit the rate afterwards (manual override clears the "auto" hint).
   useEffect(() => {
     if (!cropId || !seasonId) { setMspAuto(false); return; }
-    const r = resolveMspRate({ cropId, seasonId });
+    const r = resolveMspRate({ cropId, seasonId, date: lotDate || undefined });
     if (r != null) { setRate(String(r)); setMspAuto(true); } else { setMspAuto(false); }
-  }, [cropId, seasonId, resolveMspRate]);
+  }, [cropId, seasonId, lotDate, resolveMspRate]);
 
   // Add-farmer dialog
   const [farmerOpen, setFarmerOpen] = useState(false);
@@ -288,12 +290,25 @@ export default function ProcurementLots() {
     if (!cropId) { toast({ title: hi ? 'फसल चुनें' : 'Select a crop', variant: 'destructive' }); return; }
     if (!(q > 0)) { toast({ title: hi ? 'मात्रा दर्ज करें' : 'Enter a valid quantity', variant: 'destructive' }); return; }
     if (!(r > 0)) { toast({ title: hi ? 'MSP दर दर्ज करें' : 'Enter a valid MSP rate', variant: 'destructive' }); return; }
-    const lot = addProcurementLot({ farmerId, cropId, varietyId: varietyId || undefined, seasonId: seasonId || undefined, centreId: centreId || undefined, quantity: { value: q, unit: 'qtl' }, mspRate: { amount: r, currency: 'INR' } });
+    const lot = addProcurementLot({ farmerId, cropId, varietyId: varietyId || undefined, seasonId: seasonId || undefined, centreId: centreId || undefined, quantity: { value: q, unit: 'qtl' }, mspRate: { amount: r, currency: 'INR' }, lotDate: lotDate || undefined });
     if (lot.id) {
       toast({ title: hi ? 'प्रोक्योरमेंट लॉट बना' : 'Procurement Lot created', description: `${farmerLabel(farmerId)} · ${cropName(cropId)} · ${q} qtl` });
       // Hot-path: keep season + centre sticky (same for the day's procurement at a centre); reset the rest.
       setFarmerId(''); setCropId(''); setVarietyId(''); setQty(''); setRate(''); setMspAuto(false);
     }
+  };
+
+  // Batch B: cancel a lot — reverses its posting and cancels its settlement / commission. Refused while
+  // money has moved (farmer paid, agency or commission money received); the toast says what to undo.
+  const [cancellingLotId, setCancellingLotId] = useState<string | null>(null);
+  const handleCancelLot = async (lotId: string) => {
+    const posted = !!lotEngineVoucher(lotId);
+    const reason = window.prompt(hi
+      ? `यह लॉट रद्द करें?${posted ? ' इसकी बहीखाता पोस्टिंग का उल्टा (reversal) वाउचर बनेगा, और निपटान व कमीशन रद्द होंगे।' : ''}\nकारण लिखें:`
+      : `Cancel this lot?${posted ? ' Its posting is reversed and its settlement / commission cancelled.' : ''}\nReason:`);
+    if (reason == null) return;
+    setCancellingLotId(lotId);
+    try { await cancelProcurementLot({ lotId, reason }); } finally { setCancellingLotId(null); }
   };
 
   const lots = [...procurementLots].reverse();
@@ -363,6 +378,11 @@ export default function ProcurementLots() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
+              <Label>{hi ? 'खरीद की तारीख' : 'Purchase date'}</Label>
+              <Input type="date" value={lotDate} max={new Date().toISOString().slice(0, 10)} onChange={e => setLotDate(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground">{hi ? 'J-Form और बहीखाते की पोस्टिंग इसी तारीख की होगी।' : 'The J-Form posting is dated with this day.'}</p>
+            </div>
+            <div className="space-y-2">
               <Label>{hi ? 'फसल' : 'Crop'}</Label>
               <Select value={cropId} onValueChange={v => { setCropId(v); setVarietyId(''); }}>
                 <SelectTrigger><SelectValue placeholder={hi ? 'फसल चुनें' : 'Select crop'} /></SelectTrigger>
@@ -419,8 +439,13 @@ export default function ProcurementLots() {
                   </div>
                 )}
                 <div className="text-muted-foreground">
-                  {l.quantity?.value ?? 0} {l.quantity?.unit ?? 'qtl'} · ₹{l.mspRate?.amount ?? 0}/{hi ? 'क्विंटल' : 'qtl'}
+                  {l.lotDate ? `${l.lotDate} · ` : ''}{l.quantity?.value ?? 0} {l.quantity?.unit ?? 'qtl'} · ₹{l.mspRate?.amount ?? 0}/{hi ? 'क्विंटल' : 'qtl'}
                 </div>
+                {l.cancelledAt && (
+                  <div className="text-xs text-red-600 mt-0.5">
+                    {hi ? 'रद्द' : 'Cancelled'}: {l.cancelledAt.slice(0, 10)}{l.cancelledBy ? ` · ${l.cancelledBy}` : ''}{l.cancelReason ? ` · ${l.cancelReason}` : ''}
+                  </div>
+                )}
                 {lotQuality(l.id) && (
                   <div className="text-xs text-muted-foreground mt-0.5">
                     {hi ? 'क्वालिटी' : 'Quality'}: {resultLabel(lotQuality(l.id)!.result)}
@@ -468,11 +493,11 @@ export default function ProcurementLots() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {(() => {
-                  const st = deriveLotStage({ qualityResult: lotQuality(l.id)?.result, hasJForm: !!lotJForm(l.id), hasPosting: !!lotEngineVoucher(l.id), settlementStatus: settlementForLot(l.id)?.status, outstanding: payInfo(l.id)?.outstanding });
-                  return <Badge variant={st === 'rejected' ? 'destructive' : 'secondary'}>{hi ? LOT_STAGE_LABEL[st].hi : LOT_STAGE_LABEL[st].en}</Badge>;
+                  const st = deriveLotStage({ cancelled: !!l.cancelledAt, qualityResult: lotQuality(l.id)?.result, hasJForm: !!lotJForm(l.id), hasPosting: !!lotEngineVoucher(l.id), settlementStatus: settlementForLot(l.id)?.status, outstanding: payInfo(l.id)?.outstanding });
+                  return <Badge variant={st === 'rejected' || st === 'cancelled' ? 'destructive' : 'secondary'}>{hi ? LOT_STAGE_LABEL[st].hi : LOT_STAGE_LABEL[st].en}</Badge>;
                 })()}
-                {canRecordQuality({ hasQualityTest: !!lotQuality(l.id), hasJForm: !!lotJForm(l.id) }) && <Button size="sm" variant="outline" onClick={() => openQuality(l.id)}>{hi ? 'क्वालिटी' : 'Quality'}</Button>}
-                {!lotRejected(l.id) && <>
+                {!l.cancelledAt && canRecordQuality({ hasQualityTest: !!lotQuality(l.id), hasJForm: !!lotJForm(l.id) }) && <Button size="sm" variant="outline" onClick={() => openQuality(l.id)}>{hi ? 'क्वालिटी' : 'Quality'}</Button>}
+                {!lotRejected(l.id) && !l.cancelledAt && <>
                 {!lotJForm(l.id) && <Button size="sm" variant="outline" onClick={() => handleGenerateJForm(l.id)}>J-Form</Button>}
                 {lotJForm(l.id) && !lotEngineVoucher(l.id) && <Button size="sm" disabled={postingLotId === l.id} onClick={() => handlePostToLedger(l.id)}>{postingLotId === l.id ? (hi ? 'पोस्ट हो रहा है…' : 'Posting…') : (hi ? 'बहीखाता में पोस्ट' : 'Post to Ledger')}</Button>}
                 {lotEngineVoucher(l.id) && !settlementForLot(l.id) && <Button size="sm" variant="outline" onClick={() => handleCreateSettlement(l.id)}>{hi ? 'निपटान बनाएँ' : 'Create Settlement'}</Button>}
@@ -481,11 +506,16 @@ export default function ProcurementLots() {
                 {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding > 0 && <Button size="sm" variant="outline" onClick={() => openPay(l.id)}>{hi ? 'किसान को भुगतान' : 'Pay Farmer'}</Button>}
                 {settlementForLot(l.id)?.status === 'approved' && payInfo(l.id)!.outstanding <= 0 && <span className="text-xs text-green-600 font-medium">{hi ? '✓ पूर्ण भुगतान' : '✓ Fully Paid'}</span>}
                 </>}
-                {!lotRejected(l.id) && lotEngineVoucher(l.id) && !commissionForLot(l.id) && lotCommissionInfo(l) && (
+                {!lotRejected(l.id) && !l.cancelledAt && lotEngineVoucher(l.id) && !commissionForLot(l.id) && lotCommissionInfo(l) && (
                   // Manual click by design (founder decision pending: automate on posting?). Dated with
                   // the lot's posting (J-Form) day, not today.
                   <Button size="sm" variant="outline" onClick={() => { const ci = lotCommissionInfo(l); const ev = lotEngineVoucher(l.id); if (ci) accrueProcurementCommission({ lotId: l.id, amount: ci.amount, note: `${ci.rate}% · ${ci.agency.name}`, date: ev?.date }); }}>
                     {hi ? 'कमीशन' : 'Commission'} {money(lotCommissionInfo(l)!.amount)}
+                  </Button>
+                )}
+                {!l.cancelledAt && (
+                  <Button size="sm" variant="ghost" className="text-destructive" disabled={cancellingLotId === l.id} onClick={() => handleCancelLot(l.id)}>
+                    {cancellingLotId === l.id ? (hi ? 'रद्द हो रहा है…' : 'Cancelling…') : (hi ? 'रद्द करें' : 'Cancel lot')}
                   </Button>
                 )}
               </div>

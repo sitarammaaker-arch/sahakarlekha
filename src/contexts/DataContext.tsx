@@ -93,7 +93,7 @@ import { buildShareRefundApproval, buildShareRefundPayment, shareRefundOutstandi
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, buildEngineVoucherLines } from '@/lib/procurement';
 import { procurementPostingBinding, missingProcurementRoles, PROCUREMENT_ROLE_LABEL_HI, resolveProcurementAccountId } from '@/lib/procurement/accounts';
-import { isRejectedQuality, procurementBusinessDate, allocateFarmerCode, canRecordQuality, farmerPaidByEngineVoucher, withDerivedAmountPaid, FARMER_PAYMENT_REF_TYPE, agencyDirectAccounts } from '@/lib/procurement/agentFlow';
+import { isRejectedQuality, procurementBusinessDate, allocateFarmerCode, canRecordQuality, farmerPaidByEngineVoucher, withDerivedAmountPaid, FARMER_PAYMENT_REF_TYPE, agencyDirectAccounts, isLotCancelled, lotCancelBlockers, LOT_CANCEL_BLOCKER_TEXT, ENGINE_REVERSAL_REF_TYPE, COMMISSION_ACCRUAL_REF_TYPE } from '@/lib/procurement/agentFlow';
 import { todayStr } from '@/lib/dateUtils';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, nextFY } from '@/lib/depreciation';
 import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
@@ -146,7 +146,7 @@ interface DataContextType {
   procurementLots: ProcurementLot[];
   procurementEvents: ProcurementEvent[];
   addFarmer: (data: { farmerName: string; fatherName?: string; mobile?: string }) => Promise<Farmer>;
-  addProcurementLot: (data: { farmerId: string; cropId: string; varietyId?: string; seasonId?: string; centreId?: string; quantity: Quantity; mspRate: Money }) => ProcurementLot;
+  addProcurementLot: (data: { farmerId: string; cropId: string; varietyId?: string; seasonId?: string; centreId?: string; quantity: Quantity; mspRate: Money; lotDate?: string }) => ProcurementLot;
   procurementQualityTests: QualityTest[];
   procurementMoistureRecords: MoistureRecord[];
   recordQualityInspection: (data: { lotId: string; result: string; moisture: number; inspectedBy?: string }) => QualityTest;
@@ -167,6 +167,8 @@ interface DataContextType {
   addSettlementDeductionLine: (data: { settlementId: string; deductionType: string; accountId: string; amount: number; reference?: string; remarks?: string }) => void;
   removeSettlementDeductionLine: (data: { settlementId: string; lineId: string }) => void;
   approveFarmerSettlement: (data: { settlementId: string }) => FarmerSettlement;
+  /** Batch B: cancel a lot and reverse its postings (engine reversal + settlement + commission). Refused while money has moved. */
+  cancelProcurementLot: (data: { lotId: string; reason: string }) => Promise<boolean>;
   recordFarmerPayment: (data: { engineVoucherId: string; amount: number; mode: 'cash' | 'bank' | 'agency'; bankAccountId?: string; agencyAccountId?: string; paymentDate: string; reference?: string; remarks?: string }) => Voucher;
   loans: Loan[];
   depositAccounts: DepositAccount[];
@@ -1120,6 +1122,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Batch A (P1-1): synchronous mirrors of the posting chain. "Post to Ledger" runs the next step in the
   // same tick the previous one added its object, before React re-renders — the generators look their
   // inputs up HERE (the add/rollback points update these refs immediately), not in render-time state.
+  const procurementLotsRef = useRef<ProcurementLot[]>(procurementLots);
+  useEffect(() => { procurementLotsRef.current = procurementLots; }, [procurementLots]);
   const procurementJFormsRef = useRef<JForm[]>(procurementJForms);
   useEffect(() => { procurementJFormsRef.current = procurementJForms; }, [procurementJForms]);
   const procurementIntentsRef = useRef<FinancialIntentRecord[]>(procurementFinancialIntents);
@@ -2878,14 +2882,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // audit-visible — unlike a soft-delete. The reversal is dated today (must be in an open
   // period). Reversal linkage (reversalOf / reversedBy) is persisted via targeted best-effort
   // .update() so the base upserts stay safe before the migration runs.
-  const reverseVoucher = useCallback((id: string, reason: string): Voucher | null => {
+  // opts.engine (batch B): ONLY the procurement lot-cancel path may reverse an engine voucher — the
+  // immutable-boundary rule allows exactly one correction, an engine-generated reversal. The reversal
+  // is itself an engine voucher (origin 'engine') carrying the caller's refType/refId.
+  const reverseVoucher = useCallback((id: string, reason: string, opts?: { engine?: { refType: string; refId?: string } }): Voucher | null => {
     if (guardFYLocked()) return null;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return null;
     if (current.isDeleted) { toastRef.current({ title: 'रद्द वाउचर', description: 'रद्द किया हुआ वाउचर reverse नहीं होता।', variant: 'destructive' }); return null; }
     if (current.reversedBy) { toastRef.current({ title: 'पहले से reversed', description: `यह वाउचर पहले ही reverse हो चुका है।`, variant: 'destructive' }); return null; }
     if (current.reversalOf) { toastRef.current({ title: 'यह स्वयं reversal है', description: 'Reversal entry को दोबारा reverse नहीं किया जाता।', variant: 'destructive' }); return null; }
-    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return null; }
+    if (isEngineVoucher(current) && !opts?.engine) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return null; }
     const revDate = new Date().toISOString().split('T')[0];
     if (guardPeriodLock(revDate)) return null; // reversal must post into an open period
 
@@ -2913,6 +2920,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       memberId: current.memberId,
       lines: revLines,
       createdBy: user?.name ?? 'System', // every other addVoucher call sets this; the reversal was left without a creator
+      ...(opts?.engine ? { origin: 'engine' as const, refType: opts.engine.refType, refId: opts.engine.refId } : {}),
     }, viaServer ? { onPersisted: linkOnServer } : undefined);
     if (!reversal?.id) return null; // addVoucher blocked (FY-lock / unbalanced / etc.)
 
@@ -5100,9 +5108,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   // Create a ProcurementLot + exactly ONE immutable 'lot.created' event (append-only). No voucher.
-  const addProcurementLot = useCallback((data: { farmerId: string; cropId: string; varietyId?: string; seasonId?: string; centreId?: string; quantity: Quantity; mspRate: Money }): ProcurementLot => {
+  const addProcurementLot = useCallback((data: { farmerId: string; cropId: string; varietyId?: string; seasonId?: string; centreId?: string; quantity: Quantity; mspRate: Money; lotDate?: string }): ProcurementLot => {
     const sentinel: ProcurementLot = { id: '', centreId: '', seasonId: '', cropId: '', farmerId: '', operationalStatus: 'created', financialStatus: 'unbilled', reconciliationStatus: 'pending', createdAt: '', updatedAt: '' };
     if (guardFYLocked()) return sentinel;
+    // Batch B: the business date may be back-dated, but never into the future, a locked period or
+    // another financial year — the posting voucher will carry it (same refusals as any voucher).
+    if (data.lotDate) {
+      if (data.lotDate > todayStr()) { toastRef.current({ title: 'भविष्य की तारीख', description: 'लॉट की तारीख आज के बाद की नहीं हो सकती।', variant: 'destructive', duration: 8000 }); return sentinel; }
+      if (guardVoucherPostable(data.lotDate)) return sentinel;
+    }
     const now = new Date().toISOString();
     const lot: ProcurementLot = {
       id: crypto.randomUUID(),
@@ -5118,6 +5132,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       operationalStatus: 'created',
       financialStatus: 'unbilled',
       reconciliationStatus: 'pending',
+      lotDate: data.lotDate || undefined,
       createdAt: now,
       updatedAt: now,
     };
@@ -5141,7 +5156,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementLotsState(prev => { const r = prev.filter(l => l.id !== lot.id); storage.setProcurementLots(r); return r; });
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
         toastRef.current({ title: 'लॉट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
+        return;
       }
+      // Step 2 (RULE 1): lotDate is a migration-135 column the frozen RPC does not write. The lot is
+      // saved; a miss here only loses the back-date (postings then use the J-Form / entry day).
+      if (lot.lotDate) supabase.from('procurement_lots').update({ lotDate: lot.lotDate }).eq('id', lot.id).then(({ error: e2 }) => {
+        if (!e2) return;
+        reportError('write-partial', e2.message, { at: 'procurement_lots.lotDate (migration 135)' });
+        toastRef.current({ title: 'लॉट सेव हुआ, तारीख नहीं', description: `लॉट की तारीख क्लाउड में सेव नहीं हुई (migration 135 चलाएँ) — पोस्टिंग J-Form के दिन की होगी। ${e2.message}`, variant: 'default', duration: 10000 });
+      });
     });
     return lot;
   }, [user]);
@@ -5158,6 +5181,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'पहले से दर्ज', description: 'इस लॉट की क्वालिटी जाँच पहले से मौजूद है। (Quality already recorded for this lot)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
+    if (lotBlocked(data.lotId)) return sentinel;
     // Batch A (P1-3): quality is the gate BEFORE the J-Form — recording (or rejecting) it afterwards
     // stranded a posted lot (no settlement / payment, its 3308/2105 entry still booked).
     if (!canRecordQuality({ hasQualityTest: false, hasJForm: procurementJFormsRef.current.some(j => j.lotId === data.lotId) })) {
@@ -5193,6 +5217,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     ev && ev.refType === 'posting.rule.result' ? procurementPostingRuleResults.find(r => r.id === ev.refId)?.lotId : undefined;
   const toastRejectedLot = () =>
     toastRef.current({ title: 'लॉट अस्वीकृत है', description: 'क्वालिटी जाँच में यह लॉट अस्वीकृत हुआ था — इसका J-Form, पोस्टिंग, निपटान या भुगतान नहीं हो सकता।', variant: 'destructive', duration: 10000 });
+  // Batch B: a CANCELLED lot is read-only as well — no J-Form, posting, settlement, payment or quality.
+  const lotBlocked = (lotId?: string): boolean => {
+    if (lotId && isLotCancelled(procurementLotsRef.current.find(l => l.id === lotId))) {
+      toastRef.current({ title: 'लॉट रद्द है', description: 'यह लॉट रद्द किया जा चुका है — इस पर अब कोई कार्रवाई नहीं हो सकती।', variant: 'destructive', duration: 10000 });
+      return true;
+    }
+    if (lotIsRejected(lotId)) { toastRejectedLot(); return true; }
+    return false;
+  };
 
   // Phase 2.2 — J-Form generation (business DOCUMENT only; NOT an accounting event). Generates
   // ONE J-Form per lot + one immutable 'jform.generated' event, committed atomically via the frozen
@@ -5206,7 +5239,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'पहले से जारी', description: 'इस लॉट का J-Form पहले से बना है। (J-Form already generated for this lot)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
-    if (lotIsRejected(data.lotId)) { toastRejectedLot(); return sentinel; }
+    if (lotBlocked(data.lotId)) return sentinel;
     const lot = procurementLots.find(l => l.id === data.lotId);
     const cur = lot?.mspRate?.currency || 'INR';
     // Rounded to paise (e.g. 12.345 qtl × ₹2,425 gave a 3-decimal voucher amount).
@@ -5257,7 +5290,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'J-Form नहीं मिला', description: 'पहले इस लॉट का J-Form बनाएं। (Generate the J-Form first)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
-    if (lotIsRejected(jform.lotId)) { toastRejectedLot(); return sentinel; }
+    if (lotBlocked(jform.lotId)) return sentinel;
     // 3. Existing Financial Intent? (early validation; the DB unique index on jformId is the guarantee). One per J-Form.
     if (procurementIntentsRef.current.some(i => i.jformId === data.jformId)) {
       toastRef.current({ title: 'पहले से बना', description: 'इस J-Form का Financial Intent पहले से मौजूद है। (Financial Intent already exists for this J-Form)', variant: 'destructive', duration: 8000 });
@@ -5424,15 +5457,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'Legs resolved नहीं', description: 'इस result के legs में resolvedAccountId नहीं है — दोबारा Resolve करें। (Legs are not account-resolved)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
-    if (lotIsRejected(result.lotId)) { toastRejectedLot(); return sentinel; }
+    if (lotBlocked(result.lotId)) return sentinel;
     const lines: VoucherLine[] = specs.map(s => ({ id: crypto.randomUUID(), accountId: s.accountId, type: s.type, amount: s.amount }));
     const drTotal = specs.filter(s => s.type === 'Dr').reduce((sum, s) => sum + s.amount, 0);
     // 5. Create the immutable engine voucher via the EXISTING accounting path (authoritative record).
     //    Dated the J-Form day (the purchase), not the click day — period / FY correctness.
     const jf = procurementJFormsRef.current.find(j => j.id === result.jformId);
-    const lot = procurementLots.find(l => l.id === result.lotId);
+    const lot = procurementLotsRef.current.find(l => l.id === result.lotId);
     const voucher = addVoucher({
-      type: 'journal', date: procurementBusinessDate(jf?.createdAt, lot?.createdAt, todayStr()),
+      type: 'journal', date: procurementBusinessDate(jf?.createdAt, lot?.createdAt, todayStr(), lot?.lotDate),
       debitAccountId: '', creditAccountId: '', amount: drTotal, lines,
       narration: `MSP खरीद (एजेंट) — J-Form ${jf?.documentNo || result.jformId}`,
       createdBy: user?.name || 'Engine',
@@ -5469,7 +5502,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'Engine Voucher नहीं मिला', description: 'पहले Post करें। (Post the engine voucher first)', variant: 'destructive', duration: 8000 });
       return blank;
     }
-    if (lotIsRejected(lotIdOfEngineVoucher(ev))) { toastRejectedLot(); return blank; }
+    if (lotBlocked(lotIdOfEngineVoucher(ev))) return blank;
     if (procurementSettlements.some(s => !s.isDeleted && s.engineVoucherId === ev.id)) {
       toastRef.current({ title: 'पहले से बना', description: 'इस वाउचर का निपटान पहले से मौजूद है। (Settlement already exists)', variant: 'destructive', duration: 8000 });
       return blank;
@@ -5551,7 +5584,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (stl.status !== 'draft') { toastRef.current({ title: 'पहले से स्वीकृत', description: 'यह निपटान पहले ही स्वीकृत है। (Already approved)', variant: 'destructive', duration: 8000 }); return blank; }
     const ev = vouchersRef.current.find(v => v.id === stl.engineVoucherId && !v.isDeleted && isEngineVoucher(v));
     if (!ev) { toastRef.current({ title: 'पोस्टिंग वाउचर नहीं मिला', description: 'पहले लॉट को "बहीखाता में पोस्ट" करें।', variant: 'destructive', duration: 8000 }); return blank; }
-    if (lotIsRejected(lotIdOfEngineVoucher(ev))) { toastRejectedLot(); return blank; }
+    if (lotBlocked(lotIdOfEngineVoucher(ev))) return blank;
     const totalDed = toRupees(sumMinor(stl.deductionLines.map(l => toMinor(l.amount.amount))));
     const netPayable: Money = { amount: toRupees(subMinor(toMinor(stl.gross.amount), toMinor(totalDed))), currency: stl.gross.currency };
     const payableAcc = ev.lines?.find(l => l.type === 'Cr')?.accountId || ev.creditAccountId;
@@ -5634,7 +5667,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'Engine Voucher नहीं मिला', description: 'पहले Post करें। (Post the engine voucher first)', variant: 'destructive', duration: 8000 });
       return sentinel;
     }
-    if (lotIsRejected(lotIdOfEngineVoucher(ev))) { toastRejectedLot(); return sentinel; }
+    if (lotBlocked(lotIdOfEngineVoucher(ev))) return sentinel;
     const stl = procurementSettlements.find(s => !s.isDeleted && s.engineVoucherId === ev.id);
     if (!stl || stl.status !== 'approved') {
       toastRef.current({ title: 'पहले निपटान स्वीकृत करें', description: 'भुगतान से पहले निपटान बनाकर स्वीकृत करें। (Approve the settlement before paying)', variant: 'destructive', duration: 9000 });
@@ -5692,6 +5725,85 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!voucher.id) return sentinel;
     return voucher;
   }, [user, accounts, addVoucher, procurementSettlements, procurementQualityTests, procurementPostingRuleResults]);
+
+  // ── Batch B: cancel a procurement lot (RULE 3 cascade) ──────────────────────────────────────────
+  // Order: refuse while money has MOVED (farmer paid, agency / commission money received beyond what
+  // would stay) → write the cancel on the lot row FIRST (the authority; if that fails nothing else
+  // happens) → settlement + its deduction voucher → commission accrual → engine REVERSAL of the
+  // posting voucher (the only correction an engine voucher allows) → 'lot.cancelled' event.
+  const cancelProcurementLot = useCallback(async (data: { lotId: string; reason: string }): Promise<boolean> => {
+    if (guardFYLocked()) return false;
+    if (guardPermission('delete', 'लॉट रद्द करने')) return false;
+    const lot = procurementLotsRef.current.find(l => l.id === data.lotId);
+    if (!lot) { toastRef.current({ title: 'लॉट नहीं मिला', description: 'पेज refresh करें।', variant: 'destructive' }); return false; }
+    const reason = (data.reason || '').trim();
+    const live = vouchersRef.current.filter(v => !v.isDeleted && v.approvalStatus !== 'rejected');
+    const rr = procurementRuleResultsRef.current.find(r => r.lotId === lot.id);
+    const ev = rr ? live.find(v => isEngineVoucher(v) && v.refType === 'posting.rule.result' && v.refId === rr.id && !v.reversedBy) : undefined;
+    const netOn = (accountId: string | null | undefined, vs: Voucher[]) => {
+      if (!accountId) return 0;
+      let m = 0;
+      for (const v of vs) for (const l of getVoucherLines(v)) if (l.accountId === accountId) m = addMinor(m, l.type === 'Dr' ? toMinor(Number(l.amount) || 0) : -toMinor(Number(l.amount) || 0));
+      return toRupees(m);
+    };
+    const mspId = resolveProcurementAccountId(accounts, 'agencyReceivable');
+    const comId = resolveProcurementAccountId(accounts, 'commissionReceivable');
+    const accrual = live.find(v => v.refType === COMMISSION_ACCRUAL_REF_TYPE && v.refId === lot.id);
+    const stl = ev ? procurementSettlementsRef.current.find(x => !x.isDeleted && x.engineVoucherId === ev.id) : undefined;
+    const dedVoucher = stl?.settlementVoucherId ? live.find(v => v.id === stl.settlementVoucherId) : undefined;
+    const blockers = lotCancelBlockers({
+      cancelled: isLotCancelled(lot), reason,
+      farmerPaid: ev ? (farmerPaidByEngineVoucher(vouchersRef.current).get(ev.id) ?? 0) : 0,
+      postedAmount: ev ? netOn(mspId, [ev]) : 0, mspReceivable: netOn(mspId, live),
+      commissionAccrued: accrual ? netOn(comId, [accrual]) : 0, commissionReceivable: netOn(comId, live),
+    });
+    if (blockers.length) {
+      toastRef.current({ title: 'लॉट रद्द नहीं हुआ', description: blockers.map(b => LOT_CANCEL_BLOCKER_TEXT[b]).join(' '), variant: 'destructive', duration: 15000 });
+      return false;
+    }
+    // The vouchers this cascade cancels must sit in an open period (the reversal posts today).
+    if (guardPeriodLock(todayStr(), dedVoucher?.date, accrual?.date)) return false;
+
+    // 1. The authority: the lot row (migration 135 columns). Nothing else moves unless this saved.
+    const by = user?.name || 'System';
+    const at = new Date().toISOString();
+    const { data: saved, error } = await supabase.from('procurement_lots')
+      .update({ cancelledAt: at, cancelledBy: by, cancelReason: reason, updatedAt: at }).eq('id', lot.id).select('id');
+    if (error || !saved?.length) {
+      toastRef.current({ title: 'लॉट रद्द नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error?.message || 'लॉट नहीं मिला / अनुमति नहीं'}. (Migration 135 चलाई है?) कुछ भी बदला नहीं गया।`, variant: 'destructive', duration: 15000 });
+      return false;
+    }
+    const cancelledLot: ProcurementLot = { ...lot, cancelledAt: at, cancelledBy: by, cancelReason: reason, updatedAt: at };
+    procurementLotsRef.current = procurementLotsRef.current.map(l => l.id === lot.id ? cancelledLot : l);
+    setProcurementLotsState(prev => { const u = prev.map(l => l.id === lot.id ? cancelledLot : l); storage.setProcurementLots(u); return u; });
+
+    const left: string[] = [];
+    // 2. Settlement (draft or approved) + its deduction voucher.
+    if (stl) {
+      if (dedVoucher && !cancelVoucher(dedVoucher.id, `Lot cancelled — ${reason}`, by, { viaParent: true })) left.push(`कटौती वाउचर ${dedVoucher.voucherNo}`);
+      const gone: FarmerSettlement = { ...stl, isDeleted: true, updatedAt: at };
+      setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? gone : x); storage.setProcurementSettlements(u); return u; });
+      const { error: se } = await supabase.from('procurement_settlements').upsert(withSoc(gone));
+      if (se) { reportError('write-partial', se.message, { at: 'cancelProcurementLot settlement' }); left.push(`निपटान ${stl.settlementNo || ''} (${se.message})`); }
+    }
+    // 3. Commission accrual.
+    if (accrual && !cancelVoucher(accrual.id, `Lot cancelled — ${reason}`, by, { viaParent: true })) left.push(`कमीशन वाउचर ${accrual.voucherNo}`);
+    // 4. The posting voucher: an engine reversal (equal and opposite), dated today.
+    if (ev && rr && !reverseVoucher(ev.id, `Lot cancelled — ${reason}`, { engine: { refType: ENGINE_REVERSAL_REF_TYPE, refId: rr.id } })) left.push(`पोस्टिंग वाउचर ${ev.voucherNo} का reversal`);
+    // 5. Immutable audit event (best-effort; the lot row is the record).
+    const event: ProcurementEvent = { id: crypto.randomUUID(), correlationId: lot.id, name: 'lot.cancelled', occurredAt: at, recordedAt: at, actor: by, payload: { lotId: lot.id, reason, engineVoucherId: ev?.id, settlementId: stl?.id, commissionVoucherId: accrual?.id } };
+    setProcurementEventsState(prev => { const u = [...prev, event]; storage.setProcurementEvents(u); return u; });
+    supabase.rpc('procurement_commit_transaction', { p_payload: { transactionType: 'lot.cancel', transactionId: crypto.randomUUID(), transactionVersion: 1, events: [withSoc(event)] } }).then(({ error: ee }) => {
+      if (ee) reportError('write-partial', ee.message, { at: 'lot.cancelled event' });
+    });
+
+    if (left.length) {
+      toastRef.current({ title: '⚠ लॉट रद्द हुआ, पर कुछ बाकी है', description: `लॉट रद्द दर्ज है, लेकिन ये नहीं हो पाए: ${left.join(', ')}। ऊपर की चेतावनी देखें और इन्हें हाथ से ठीक करें (या admin को बताएँ)।`, variant: 'destructive', duration: 20000 });
+    } else {
+      toastRef.current({ title: 'लॉट रद्द हुआ', description: ev ? `पोस्टिंग ${ev.voucherNo} का reversal बना${stl ? ', निपटान रद्द' : ''}${accrual ? ', कमीशन रद्द' : ''}।` : 'लॉट रद्द दर्ज हुआ।', duration: 8000 });
+    }
+    return true;
+  }, [user, accounts, cancelVoucher, reverseVoucher, guardPeriodLock]);
 
   // Only active vouchers for all financial calculations. A voucher counts iff:
   //  • not soft-deleted, AND
@@ -8268,7 +8380,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRequests, generatePostingRequest,
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlements: procurementSettlementsView, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
-    recordFarmerPayment,
+    recordFarmerPayment, cancelProcurementLot,
     addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
@@ -8307,7 +8419,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRequests, generatePostingRequest,
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlementsView, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
-    recordFarmerPayment,
+    recordFarmerPayment, cancelProcurementLot,
     addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,

@@ -23,9 +23,9 @@ export function localDateOf(iso?: string | null): string | null {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** J-Form date, else the lot's date, else `today`. */
-export function procurementBusinessDate(jformCreatedAt: string | null | undefined, lotCreatedAt: string | null | undefined, today: string): string {
-  return localDateOf(jformCreatedAt) || localDateOf(lotCreatedAt) || today;
+/** The lot's business date (batch B, migration 135) when set, else the J-Form date, else the lot's entry day, else `today`. */
+export function procurementBusinessDate(jformCreatedAt: string | null | undefined, lotCreatedAt: string | null | undefined, today: string, lotDate?: string | null): string {
+  return (lotDate && /^\d{4}-\d{2}-\d{2}$/.test(lotDate) ? lotDate : null) || localDateOf(jformCreatedAt) || localDateOf(lotCreatedAt) || today;
 }
 
 // ── 2. Quality gate ─────────────────────────────────────────────────────────────────────────────
@@ -33,15 +33,17 @@ export function procurementBusinessDate(jformCreatedAt: string | null | undefine
 export const isRejectedQuality = (result?: string | null): boolean => result === 'rejected';
 
 // ── 3. Lot stage (what the badge shows instead of the raw "created" status) ────────────────────────
-export type LotStage = 'new' | 'rejected' | 'inspected' | 'jform' | 'posted' | 'settlementDraft' | 'approved' | 'paid';
+export type LotStage = 'new' | 'rejected' | 'inspected' | 'jform' | 'posted' | 'settlementDraft' | 'approved' | 'paid' | 'cancelled';
 
 export function deriveLotStage(x: {
+  cancelled?: boolean;
   qualityResult?: string | null;
   hasJForm: boolean;
   hasPosting: boolean;
   settlementStatus?: 'draft' | 'approved' | null;
   outstanding?: number | null;
 }): LotStage {
+  if (x.cancelled) return 'cancelled';
   if (isRejectedQuality(x.qualityResult)) return 'rejected';
   if (x.settlementStatus === 'approved') return (x.outstanding ?? 0) <= 0 ? 'paid' : 'approved';
   if (x.settlementStatus === 'draft') return 'settlementDraft';
@@ -60,6 +62,7 @@ export const LOT_STAGE_LABEL: Record<LotStage, { hi: string; en: string }> = {
   settlementDraft: { hi: 'निपटान ड्राफ्ट', en: 'Settlement draft' },
   approved: { hi: 'भुगतान बाकी', en: 'Payment due' },
   paid: { hi: 'भुगतान पूरा', en: 'Paid' },
+  cancelled: { hi: 'रद्द', en: 'Cancelled' },
 };
 
 // ── 4. Deduction accounts ───────────────────────────────────────────────────────────────────────
@@ -133,6 +136,8 @@ export const DEDUCTION_WARNING_TEXT: Record<DeductionAccountWarning, { hi: strin
 export const AGENCY_RECEIPT_REF_TYPE = 'procurement.agency.receipt';
 export const COMMISSION_RECEIPT_REF_TYPE = 'procurement.commission.receipt';
 export const COMMISSION_ACCRUAL_REF_TYPE = 'procurement.commission';
+/** Batch B: the engine reversal of a lot's posting voucher (refId = the same PostingRuleResult). */
+export const ENGINE_REVERSAL_REF_TYPE = 'posting.rule.result.reversal';
 
 type BalVoucher = Pick<Voucher, 'id' | 'isDeleted' | 'refType' | 'refId' | 'lines' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'approvalStatus'>;
 
@@ -168,7 +173,7 @@ export function agencyBalances(input: AgencyBalanceInput): AgencyBalances {
   const agencyOf = (v: BalVoucher): string | undefined => {
     if ((v.refType === AGENCY_RECEIPT_REF_TYPE || v.refType === COMMISSION_RECEIPT_REF_TYPE) && v.refId && input.agencyIds.has(v.refId)) return v.refId;
     let lotId: string | undefined;
-    if (v.refType === 'posting.rule.result' && v.refId) lotId = resultLot.get(v.refId);
+    if ((v.refType === 'posting.rule.result' || v.refType === ENGINE_REVERSAL_REF_TYPE) && v.refId) lotId = resultLot.get(v.refId);
     else if (v.refType === 'farmer.payment') lotId = lotOfEngineVoucher(v.refId);
     else if (v.refType === 'farmer.settlement' && v.refId) lotId = lotOfEngineVoucher(settlementEv.get(v.refId));
     else if (v.refType === COMMISSION_ACCRUAL_REF_TYPE) lotId = v.refId;
@@ -277,3 +282,45 @@ export function agencyDirectAccounts<A extends Pick<LedgerAccount, 'id'> & { par
   if (!agencyReceivableId) return [];
   return accounts.filter(a => !a.isGroup && (a.id === agencyReceivableId || a.parentId === agencyReceivableId));
 }
+
+// ── 10. Lot cancellation (batch B) ───────────────────────────────────────────────────────────────
+// A posted lot can be cancelled: its posting (engine) voucher is reversed by an engine reversal, its
+// settlement (draft or approved, with the deduction voucher) and its commission accrual are cancelled.
+// Money that has actually MOVED is never reversed silently — the operator cancels it first:
+//  • a farmer payment (cash / bank / agency-direct) on the lot,
+//  • agency receipts that would leave the MSP receivable below zero once this lot's amount leaves it,
+//  • commission already received (the commission receivable would go below zero).
+export const isLotCancelled = (lot?: { cancelledAt?: string | null } | null): boolean => !!lot?.cancelledAt;
+
+export type LotCancelBlocker = 'already_cancelled' | 'farmer_paid' | 'agency_receipts' | 'commission_received' | 'no_reason';
+
+export function lotCancelBlockers(x: {
+  cancelled: boolean;
+  reason: string;
+  /** Σ live farmer.payment vouchers on the lot's engine voucher (rupees). */
+  farmerPaid: number;
+  /** The lot's engine-voucher amount that will leave the MSP receivable (0 when not posted). */
+  postedAmount: number;
+  /** Current MSP receivable balance (society-wide, Dr − Cr). */
+  mspReceivable: number;
+  /** The lot's live commission accrual (0 when none). */
+  commissionAccrued: number;
+  /** Current commission receivable balance (Dr − Cr). */
+  commissionReceivable: number;
+}): LotCancelBlocker[] {
+  const out: LotCancelBlocker[] = [];
+  if (x.cancelled) return ['already_cancelled'];
+  if (!x.reason.trim()) out.push('no_reason');
+  if (x.farmerPaid > 0.005) out.push('farmer_paid');
+  if (x.postedAmount > 0.005 && x.mspReceivable - x.postedAmount < -0.005) out.push('agency_receipts');
+  if (x.commissionAccrued > 0.005 && x.commissionReceivable - x.commissionAccrued < -0.005) out.push('commission_received');
+  return out;
+}
+
+export const LOT_CANCEL_BLOCKER_TEXT: Record<LotCancelBlocker, string> = {
+  already_cancelled: 'यह लॉट पहले ही रद्द है।',
+  no_reason: 'रद्द करने का कारण लिखें।',
+  farmer_paid: 'इस लॉट पर किसान को भुगतान हो चुका है — पहले वह भुगतान वाउचर (Vouchers पेज से) रद्द करें, फिर लॉट रद्द करें।',
+  agency_receipts: 'एजेंसी से इतनी रसीद आ चुकी है कि यह लॉट हटाने पर MSP प्राप्य शून्य से नीचे जाएगा — पहले "एजेंसी रसीद" पेज पर संबंधित रसीद रद्द करें।',
+  commission_received: 'इस लॉट का कमीशन एजेंसी से मिल चुका है — पहले "एजेंसी रसीद" पेज पर कमीशन रसीद रद्द करें।',
+};

@@ -1249,6 +1249,11 @@ var lot = {
     c7("operationalStatus", "Operational Status", "\u092A\u0930\u093F\u091A\u093E\u0932\u0928 \u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
     c7("financialStatus", "Financial Status", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
     c7("reconciliationStatus", "Reconciliation Status", "\u0938\u092E\u093E\u0927\u093E\u0928 \u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    // Migration 135 (marketing batch B): business date + cancellation — a restore must keep a cancelled lot cancelled.
+    c7("lotDate", "Purchase Date", "\u0916\u0930\u0940\u0926 \u0915\u0940 \u0924\u093E\u0930\u0940\u0916", { type: "date" }),
+    c7("cancelledAt", "Cancelled At", "\u0930\u0926\u094D\u0926 \u0938\u092E\u092F", { type: "date" }),
+    c7("cancelledBy", "Cancelled By", "\u0930\u0926\u094D\u0926 \u0915\u0930\u0928\u0947 \u0935\u093E\u0932\u0947"),
+    c7("cancelReason", "Cancel Reason", "\u0930\u0926\u094D\u0926 \u0915\u0930\u0928\u0947 \u0915\u093E \u0915\u093E\u0930\u0923"),
     internal7("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" }),
     internal7("updatedAt", "Updated At", "\u0905\u0926\u094D\u092F\u0924\u0928 \u0938\u092E\u092F", { type: "date" })
   ]

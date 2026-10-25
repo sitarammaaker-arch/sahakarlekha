@@ -727,6 +727,9 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return sentinel;
     const amt = +Number(data.amount).toFixed(2);
     if (!(amt > 0)) { toastRef.current({ title: 'कमीशन शून्य', description: 'एजेंसी की commission दर 0 है या procurement value शून्य।', variant: 'destructive' }); return sentinel; }
+    if (procurementLots.find(l => l.id === data.lotId)?.cancelledAt) {
+      toastRef.current({ title: 'लॉट रद्द है', description: 'रद्द लॉट पर कमीशन दर्ज नहीं हो सकता।', variant: 'destructive', duration: 10000 }); return sentinel;
+    }
     if (procurementQualityTests.some(q => q.lotId === data.lotId && isRejectedQuality(q.result))) {
       toastRef.current({ title: 'लॉट अस्वीकृत है', description: 'अस्वीकृत लॉट पर कमीशन दर्ज नहीं हो सकता।', variant: 'destructive', duration: 10000 }); return sentinel;
     }
@@ -749,7 +752,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     if (!voucher?.id) return sentinel;
     toastRef.current({ title: '✅ कमीशन दर्ज', description: `₹${amt.toLocaleString('en-IN')} · ${voucher.date}` });
     return voucher;
-  }, [vouchers, procurementQualityTests, commissionReceivableId, commissionIncomeId, addVoucher, user]);
+  }, [vouchers, procurementLots, procurementQualityTests, commissionReceivableId, commissionIncomeId, addVoucher, user]);
 
   const deleteCommissionAccrual = useCallback((voucherId: string) => {
     if (guardFYLocked()) return;

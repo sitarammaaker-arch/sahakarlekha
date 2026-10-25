@@ -94,4 +94,10 @@ export interface ProcurementLot extends BaseEntity {
   operationalStatus: OperationalStatus;
   financialStatus: FinancialStatus;
   reconciliationStatus: ReconciliationStatus;
+  /** Migration 135: the business day the produce was bought (YYYY-MM-DD); postings are dated with it. */
+  lotDate?: string;
+  /** Migration 135: set when the lot was cancelled (its postings reversed). A cancelled lot is read-only. */
+  cancelledAt?: string;
+  cancelledBy?: string;
+  cancelReason?: string;
 }
