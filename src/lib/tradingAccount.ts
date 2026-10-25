@@ -99,3 +99,42 @@ export function closingStock(leaves: readonly StockLedgerLeaf[], physicalClosing
   }
   return { items, total: r2(items.reduce((t, i) => t + i.amount, 0)), replacesLedger: true };
 }
+
+// ── Trading heads at any depth (marketing audit 2026-10-25, batch C) ─────────────────────────────
+// The statements decide "is this a Trading A/c line?" by parentId === '4100' (Sales) / '5100'
+// (Purchases + direct expenses). A society may open a SUB-GROUP under 4100/5100 (the Inventory
+// "+ new account" dialog allows it — e.g. Assandh's "WOOD PURCHASE" group) and post to ledgers
+// inside it; those fell out of the Trading A/c into the P&L as indirect items, so Gross Profit was
+// wrong (Net Surplus still tied). The Trading A/c, P&L and CAS builders all read the parentId, so
+// the fix is ONE rule applied before them: a leaf whose ancestor chain reaches 4100/5100 is
+// presented with that head as its parentId. Only income/expense leaves are touched.
+export const TRADING_HEADS: ReadonlySet<string> = new Set(['4100', '5100']);
+
+/** The trading head ('4100' | '5100') above this account at any depth, or undefined. */
+export function tradingHeadOf(
+  account: { id: string; parentId?: string },
+  parentOf: ReadonlyMap<string, string | undefined>,
+): string | undefined {
+  const seen = new Set<string>();
+  let p = account.parentId;
+  while (p && !seen.has(p)) {
+    if (TRADING_HEADS.has(p)) return p;
+    seen.add(p);
+    p = parentOf.get(p);
+  }
+  return undefined;
+}
+
+/** The trial balance with every nested trading leaf re-parented to its trading head (same object when nothing nested). */
+export function withTradingParents<B extends { account: { id: string; parentId?: string; type?: string } }>(
+  tb: ReadonlyArray<B>,
+  accounts: ReadonlyArray<{ id: string; parentId?: string }>,
+): B[] {
+  const parentOf = new Map(accounts.map(a => [a.id, a.parentId]));
+  return tb.map(b => {
+    const a = b.account;
+    if ((a.type !== 'income' && a.type !== 'expense') || !a.parentId || TRADING_HEADS.has(a.parentId)) return b;
+    const head = tradingHeadOf(a, parentOf);
+    return head ? { ...b, account: { ...a, parentId: head } } : b;
+  });
+}

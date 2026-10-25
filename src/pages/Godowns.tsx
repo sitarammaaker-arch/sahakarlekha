@@ -16,14 +16,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import { Warehouse, Plus, Edit2, Trash2, Package, ClipboardList, ArrowLeftRight, Printer } from 'lucide-react';
 import type { Godown } from '@/types';
-import { computeGodownStock, godownTotals, UNASSIGNED_GODOWN } from '@/lib/godownStock';
+import { computeGodownStock, godownTotals, godownMovementsWithOpening, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { buildStackCard } from '@/lib/stackCard';
 import { capacityUtilisation } from '@/lib/godownCapacity';
 import { computeStorageLoss } from '@/lib/storageLoss';
 import { buildWarehouseDoc } from '@/lib/warehouseDoc';
 
 const Godowns: React.FC = () => {
-  const { godowns, addGodown, updateGodown, deleteGodown, branches, stockMovements, stockItems, transferStock, society } = useData();
+  const { godowns, addGodown, updateGodown, deleteGodown, branches, reconciledStockMovements, stockItems, transferStock, society } = useData();
+  // Batch C (RULE 2): every godown view reads opening stock + movements reconciled against live
+  // purchase/sale records — the same basis as Inventory and the Trading A/c closing stock.
+  const stockMovements = useMemo(() => godownMovementsWithOpening(stockItems, reconciledStockMovements), [stockItems, reconciledStockMovements]);
   const { can, user } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();

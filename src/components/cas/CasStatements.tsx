@@ -6,6 +6,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { withTradingParents } from '@/lib/tradingAccount';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -114,11 +115,14 @@ export function CasStatements({ hi }: { hi: boolean }) {
   const [tbMonth, setTbMonth] = useState(() => (months.filter((m) => m.from <= today).pop() ?? months[months.length - 1])?.key ?? '');
 
   const data = useMemo(() => {
-    const tb = getTrialBalance(fyEnd);
-    const appPL = getProfitLoss(fyEnd);
-    const tr = getTradingAccount(fyEnd);
     // Same "trading society?" decision as DataContext.getProfitLoss (RULE 2).
     const hasTrading = navigationService.resolveCapabilities(society.societyType ?? 'other', societyCapabilities, society.state, declaredActivities(societyActivities), society.activitiesCutoverEnabled).has('inventory_sales');
+    // Batch C (RULE 2): the CAS Trading / P&L / TB read the SAME Trading-head rule as the app's own
+    // statements — a ledger inside a sub-group under 4100/5100 is a Trading line.
+    const tbOf = (date: string) => hasTrading ? withTradingParents(getTrialBalance(date), accounts) : getTrialBalance(date);
+    const tb = tbOf(fyEnd);
+    const appPL = getProfitLoss(fyEnd);
+    const tr = getTradingAccount(fyEnd);
     const leaves = balanceSheetLeaves(tb, { closingStockPosted: tr.closingStockPosted, physicalClosingStock: tr.physicalClosingStock, netProfit: appPL.netProfit });
     // Overdue part of each loan's open accrued interest — the same loanInterestDue as the repay dialogs.
     const overdue = [...loans.map((l) => l.id), ...kccLoans.map((k) => k.id)]
@@ -144,7 +148,7 @@ export function CasStatements({ hi }: { hi: boolean }) {
     ];
     const depBooks = depositAccounts.map((d) => ({ memberId: d.memberId, rows: depositLedger(getDepositTransactions(d.id)).rows }));
     const fyBefore = months.length ? dayBefore(months[0].from) : null;
-    const plAt = (date: string) => plFlows(buildCasProfitLoss(getTrialBalance(date), { hasTrading, grossProfit: getTradingAccount(date).grossProfit }));
+    const plAt = (date: string) => plFlows(buildCasProfitLoss(tbOf(date), { hasTrading, grossProfit: getTradingAccount(date).grossProfit }));
     const avgAssets = (xs: { bs: { totalAssets: number } }[]) => (xs.length ? Math.round((xs.reduce((t, x) => t + x.bs.totalAssets, 0) / xs.length) * 100) / 100 : null);
     const pointAt = (date: string, after: string | null, sheet: typeof bs, flows: ReturnType<typeof plFlows>, monthsIn: typeof monthBs): XviPoint => {
       const lf = loanBooks.reduce((t, b) => { const f = loanFlowsBetween(b.rows, after, date); return { issued: t.issued + f.issued, recovered: t.recovered + f.recovered }; }, { issued: 0, recovered: 0 });
@@ -174,7 +178,7 @@ export function CasStatements({ hi }: { hi: boolean }) {
     };
     const trading = hasTrading ? buildCasTrading(tb, { openingStock: tr.totalOpeningStock, closingStock: tr.totalClosingStock, procuredToStock: tr.procuredToStock, purchaseGrossUp: tr.legacyPurchaseGrossUp }) : null;
     const m = months.find((x) => x.key === tbMonth);
-    const tbCas = m ? buildCasTrialBalance(getTrialBalance(m.to), getTrialBalance(dayBefore(m.from)), { hasTrading }) : null;
+    const tbCas = m ? buildCasTrialBalance(tbOf(m.to), tbOf(dayBefore(m.from)), { hasTrading }) : null;
     return { bs, pl, trading, appNet: appPL.netProfit, appGross: tr.grossProfit, leaves, tbCas, tbLabel: m?.label ?? '', mis };
   }, [months, tbMonth, today, getTrialBalance, getProfitLoss, getTradingAccount, fyEnd, society.societyType, society.state, society.activitiesCutoverEnabled, societyCapabilities, societyActivities, loans, kccLoans, accruals, vouchers, members, accounts, depositAccounts, getDepositTransactions]);
 

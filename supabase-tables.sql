@@ -3368,11 +3368,10 @@ create table if not exists recoverables (
   "createdAt" timestamptz default now()
 );
 alter table recoverables enable row level security;
-do $$ begin
-  if not exists (select 1 from pg_policies where tablename='recoverables' and policyname='allow_all') then
-    create policy "allow_all" on recoverables for all using (true) with check (true);
-  end if;
-end $$;
+-- Marketing batch C: NO policy here on purpose. The tenant policy comes from migration 007 (dynamic
+-- society_id isolation) and its write/delete role split from 030. The permissive "allow_all" that
+-- used to be created here would, if this block were re-run, be OR-ed with them and re-open the table
+-- to every tenant (prod has no allow_all policy as of 2026-10-25).
 create index if not exists idx_recoverables_society on recoverables(society_id);
 
 create table if not exists kachi_aarat_entries (
@@ -3389,11 +3388,10 @@ create table if not exists kachi_aarat_entries (
   "createdAt" timestamptz default now()
 );
 alter table kachi_aarat_entries enable row level security;
-do $$ begin
-  if not exists (select 1 from pg_policies where tablename='kachi_aarat_entries' and policyname='allow_all') then
-    create policy "allow_all" on kachi_aarat_entries for all using (true) with check (true);
-  end if;
-end $$;
+-- Marketing batch C: NO policy here on purpose. The tenant policy comes from migration 007 (dynamic
+-- society_id isolation) and its write/delete role split from 030. The permissive "allow_all" that
+-- used to be created here would, if this block were re-run, be OR-ed with them and re-open the table
+-- to every tenant (prod has no allow_all policy as of 2026-10-25).
 create index if not exists idx_kachi_aarat_entries_society on kachi_aarat_entries(society_id);
 
 create table if not exists p7_entries (

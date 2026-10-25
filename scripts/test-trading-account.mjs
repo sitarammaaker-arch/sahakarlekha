@@ -29,7 +29,8 @@ register(
     `),
 );
 
-const { inventoryProcurementCost, tradingGrossProfit } = await import(abs('../src/lib/tradingAccount.ts'));
+const { inventoryProcurementCost, tradingGrossProfit, tradingHeadOf, withTradingParents } = await import(abs('../src/lib/tradingAccount.ts'));
+const { computeTradingAccount, computeProfitLoss } = await import(abs('../src/lib/reports/tradingAndProfitLoss.ts'));
 
 // Pure fixture helper the assertions use for rounding.
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -76,6 +77,41 @@ ok(r2(gpNew + 2325) === 26447.40, 'Rania Net Surplus after fix = 26,447.40 (BS t
 // 6. Partly sold: procure 100 to stock, closing stock 60 (40 sold via COGS 40 direct exp).
 //    GP = Sales − COGS. Sales 70, closing 60, purchases(procured) 100, directExp COGS 40.
 ok(tradingGrossProfit({ sales: 70, closingStock: 60, openingStock: 0, purchases: 100, directExp: 40 }) === -10, 'partly-sold nets: GP = 70+60−100−40 = −10');
+
+// 7. Batch C — ledgers inside a SUB-GROUP under 4100/5100 are Trading lines (Assandh "WOOD PURCHASE").
+{
+  const accounts = [
+    { id: '4100', parentId: '4000' }, { id: '5100', parentId: '5000' }, { id: '5200', parentId: '5000' },
+    { id: 'WP', parentId: '5100' },            // sub-group "WOOD PURCHASE"
+    { id: 'WCM', parentId: 'WP' },             // "WOODEN CRATES MANUFACTURING A/C"
+    { id: 'DEEP-G', parentId: 'WP' }, { id: 'DEEP', parentId: 'DEEP-G' },
+    { id: 'LOOP-A', parentId: 'LOOP-B' }, { id: 'LOOP-B', parentId: 'LOOP-A' },
+  ];
+  const parentOf = new Map(accounts.map(a => [a.id, a.parentId]));
+  ok(tradingHeadOf({ id: 'WCM', parentId: 'WP' }, parentOf) === '5100', 'nested ledger → 5100');
+  ok(tradingHeadOf({ id: 'DEEP', parentId: 'DEEP-G' }, parentOf) === '5100', 'two levels deep → 5100');
+  ok(tradingHeadOf({ id: 'X', parentId: '5200' }, parentOf) === undefined, 'establishment expense is not trading');
+  ok(tradingHeadOf({ id: 'L', parentId: 'LOOP-A' }, parentOf) === undefined, 'a parent cycle terminates');
+
+  const acc = (id, parentId, type) => ({ id, parentId, type, name: id, nameHi: id, isGroup: false });
+  const bal = (a, nb) => ({ account: a, netBalance: nb, openingDebit: 0, openingCredit: 0, debit: 0, credit: 0 });
+  const tb = [
+    bal(acc('4101', '4100', 'income'), -500000),          // sales
+    bal(acc('WCM', 'WP', 'expense'), 21914152),           // nested manufacturing cost
+    bal(acc('5201', '5200', 'expense'), 100000),          // salary (indirect)
+    bal(acc('4401', '4400', 'income'), -22000000),         // other income
+  ];
+  const n = withTradingParents(tb, accounts);
+  ok(n[1].account.parentId === '5100' && n[1] !== tb[1], 'nested leaf re-parented to 5100');
+  ok(n[0] === tb[0] && n[2] === tb[2], 'direct trading / non-trading rows are the same objects');
+  const tr = computeTradingAccount({ tb: n, fy: '2026-27', effDate: '2027-03-31', vouchers: [], stockItems: [], movements: [], openingsInScope: true });
+  ok(tr.grossProfit === 500000 - 21914152, 'nested cost is on the Trading Dr side (GP = sales − 2,19,14,152)');
+  const plNew = computeProfitLoss({ tb: n, hasTrading: true, tradingGrossProfit: () => tr.grossProfit });
+  const trOld = computeTradingAccount({ tb, fy: '2026-27', effDate: '2027-03-31', vouchers: [], stockItems: [], movements: [], openingsInScope: true });
+  const plOld = computeProfitLoss({ tb, hasTrading: true, tradingGrossProfit: () => trOld.grossProfit });
+  ok(!plNew.expenseItems.some(i => i.accountId === 'WCM'), 'nested cost no longer an indirect P&L expense');
+  ok(Math.abs(plNew.netProfit - plOld.netProfit) < 0.005, 'Net Surplus unchanged (only GP vs indirect moves)');
+}
 
 console.log(`\nTrading account (pure): ${pass} passed, ${fail} failed`);
 process.exitCode = fail > 0 ? 1 : 0;

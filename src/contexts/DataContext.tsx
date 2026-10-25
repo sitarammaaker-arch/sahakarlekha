@@ -47,7 +47,7 @@ import { computeEntityLinks, type MemberDomainLinkSources } from '@/lib/entityLi
 import { fetchSubscriptionRow } from '@/lib/subscriptionRow';
 import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate, reconcileMovements } from '@/lib/stockUtils';
-import { computeGodownStock, UNASSIGNED_GODOWN } from '@/lib/godownStock';
+import { computeGodownStock, godownMovementsWithOpening, UNASSIGNED_GODOWN } from '@/lib/godownStock';
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, defaultBankAccountId, defaultDebtorsAccountId, defaultCreditorsAccountId } from '@/lib/storage';
@@ -58,6 +58,8 @@ import type { SocietyCapabilityRow, Capability, SocietyActivityRow } from '@/lib
 import { navigationService, declaredActivities } from '@/lib/navigation';
 import { clearedKeysAsNull } from '@/lib/settingsPayload';
 import { isEngineVoucher, ENGINE_VOUCHER_BLOCK } from '@/lib/accounting/voucherImmutability';
+import { unknownItemLines, UNKNOWN_ITEM_MESSAGE, CLOSING_STOCK_CONTRA_ID } from '@/lib/itemAccountRouting';
+import { withTradingParents } from '@/lib/tradingAccount';
 import { logAudit, type AuditInput } from '@/lib/auditLog';
 import { resolveJurisdiction, stampTenant } from '@/lib/jurisdiction';
 import { isPeriodLocked as isDateInLockedPeriod } from '@/lib/periodLock';
@@ -1150,6 +1152,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const p7EntriesRef = useRef<P7Entry[]>(p7Entries);
   useEffect(() => { p7EntriesRef.current = p7Entries; }, [p7Entries]);
   const [stockItems, setStockItemsState] = useState<StockItem[]>([]);
+  const stockItemsRef = useRef<StockItem[]>(stockItems);
+  useEffect(() => { stockItemsRef.current = stockItems; }, [stockItems]);
   const [stockMovements, setStockMovementsState] = useState<StockMovement[]>([]);
   const stockMovementsRef = useRef<StockMovement[]>(stockMovements);
   useEffect(() => { stockMovementsRef.current = stockMovements; }, [stockMovements]);
@@ -6352,7 +6356,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const fyEnd = `20${society.financialYear.split('-')[1]}-03-31`;
     const effDate = asOnDate ?? fyEnd;
     // M15: Pass effDate to underlying TB so historical Trading A/c is consistent.
-    const tb = getTrialBalance(effDate);
+    // Batch C: ledgers inside a sub-group under 4100/5100 are Trading heads too (withTradingParents).
+    const tb = withTradingParents(getTrialBalance(effDate), accounts);
     const fy = society.financialYear;
     // K2: the statement itself is a pure module (lib/reports/tradingAndProfitLoss) — same formula, testable alone.
     // RULE 2/3: movements are reconciled against live purchase/sale records first.
@@ -6360,7 +6365,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       tb, fy, effDate, vouchers: activeVouchers, stockItems, openingsInScope,
       movements: reconcileMovements(stockMovementsRef.current, salesRef.current, purchasesRef.current),
     });
-  }, [getTrialBalance, stockItems, stockMovements, sales, purchases, activeVouchers, society.financialYear, openingsInScope]);
+  }, [getTrialBalance, accounts, stockItems, stockMovements, sales, purchases, activeVouchers, society.financialYear, openingsInScope]);
 
   const postClosingStock = useCallback((fy?: string): { posted: boolean; amount: number; alreadyPosted: boolean } => {
     if (guardFYLocked()) return { posted: false, amount: 0, alreadyPosted: false };
@@ -6410,8 +6415,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const hasTrading = navigationService.resolveCapabilities(society.societyType ?? 'other', societyCapabilities, society.state, declaredActivities(societyActivities), society.activitiesCutoverEnabled).has('inventory_sales');
 
     // K2: the statement itself is a pure module (lib/reports/tradingAndProfitLoss) — same formula, testable alone.
-    return computeProfitLoss({ tb, hasTrading, tradingGrossProfit: () => getTradingAccount(effDate).grossProfit });
-  }, [getTrialBalance, getTradingAccount, society.financialYear, society.societyType, societyCapabilities]);
+    // Batch C: same Trading-head rule as getTradingAccount (RULE 2) — nested 4100/5100 ledgers leave the P&L.
+    return computeProfitLoss({ tb: hasTrading ? withTradingParents(tb, accounts) : tb, hasTrading, tradingGrossProfit: () => getTradingAccount(effDate).grossProfit });
+  }, [getTrialBalance, getTradingAccount, accounts, society.financialYear, society.societyType, societyCapabilities]);
 
   // ── T-20 · Statutory appropriation posting (UCAS CM-1) ───────────────────────
   // Post the year-end appropriation of net surplus as ONE balanced voucher (Dr Net Surplus / Cr each
@@ -6521,8 +6527,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
+  // Batch C (RULE 4): 5150 is the closing-stock contra, excluded from the Trading A/c and the P&L —
+  // an item routed there made its purchase cost disappear from both. The dropdown no longer offers it;
+  // this also stops an import / older client.
+  const refuseClosingStockRouting = (d: { salesAccountId?: string; purchaseAccountId?: string }): boolean => {
+    if (d.salesAccountId !== CLOSING_STOCK_CONTRA_ID && d.purchaseAccountId !== CLOSING_STOCK_CONTRA_ID) return false;
+    toastRef.current({ title: 'यह खाता नहीं चुन सकते', description: '5150 "समापन माल (व्यापार खाता)" वस्तु का खरीद/बिक्री खाता नहीं हो सकता — कोई खरीद (51xx) या बिक्री (41xx) खाता चुनें।', variant: 'destructive', duration: 10000 });
+    return true;
+  };
+
   const addStockItem = useCallback((data: Omit<StockItem, 'id' | 'itemCode'>, opts?: { onSaved?: (i: StockItem) => void; onFailed?: () => void }): StockItem => {
     if (guardFYLocked()) { opts?.onFailed?.(); return { ...data, id: '' } as unknown as StockItem; }
+    if (refuseClosingStockRouting(data)) { opts?.onFailed?.(); return { ...data, id: '' } as unknown as StockItem; }
     // Derive next item code from existing items (not localStorage counter) to prevent duplicates
     let newItem: StockItem;
     setStockItemsState(prev => {
@@ -6548,6 +6564,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const updateStockItem = useCallback((id: string, data: Partial<StockItem>) => {
     if (guardFYLocked()) return;
+    if (refuseClosingStockRouting(data)) return;
     setStockItemsState(prev => {
       const before = prev.find(i => i.id === id);
       const updated = prev.map(i => {
@@ -6662,7 +6679,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const transferStock = useCallback((input: { itemId: string; fromGodownId: string; toGodownId: string; qty: number; date?: string }): boolean => {
     if (guardFYLocked()) return false;
     const movs = stockMovementsRef.current;
-    const rows = computeGodownStock(movs as unknown as Parameters<typeof computeGodownStock>[0]);
+    // Batch C (RULE 2): availability from the SAME movements the godown report shows — opening stock
+    // + movements reconciled against live purchase/sale records (raw movements missed the opening).
+    const rows = computeGodownStock(godownMovementsWithOpening(stockItemsRef.current, reconcileMovements(movs, salesRef.current, purchasesRef.current)));
     const srcRow = rows.find(r => r.itemId === input.itemId && r.godownId === input.fromGodownId);
     const availableQty = srcRow?.qty ?? 0;
     const v = validateTransfer({ fromGodownId: input.fromGodownId, toGodownId: input.toGodownId, qty: input.qty, availableQty });
@@ -6718,6 +6737,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         `इन वस्तुओं को पहले बिक्री खाता (group) असाइन करें: ${unmappedNames.join(', ')} — फिर बिक्री पोस्ट होगी। (Assign a Sales A/c to: ${unmappedNames.join(', ')})`
       );
     }
+    // Batch C: a line whose item is not in the stock list has no routing at all — it used to fall to
+    // '4101' (in the marketing chart that is "Fertilizer Sales"). Refuse it instead.
+    const unknownSale = unknownItemLines(data.items, stockItems);
+    if (unknownSale.length > 0) throw new Error(UNKNOWN_ITEM_MESSAGE('sale', unknownSale));
 
     const fy = society.financialYear;
     const maxSaleNum = salesRef.current.filter(s => s.saleNo?.includes(fy)).reduce((max, s) => {
@@ -6941,6 +6964,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
       return null;
     }
+    const unknownSaleU = unknownItemLines(data.items, stockItems);
+    if (unknownSaleU.length > 0) {
+      toastRef.current({ title: 'वस्तु नहीं मिली', description: UNKNOWN_ITEM_MESSAGE('sale', unknownSaleU), variant: 'destructive', duration: 10000 });
+      return null;
+    }
     const original = salesRef.current.find(s => s.id === id);
     if (!original) {
       toastRef.current({ title: 'बिक्री नहीं मिली', description: 'Refresh करके दोबारा देखें। (Sale not found.)', variant: 'destructive' });
@@ -7125,6 +7153,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         `इन वस्तुओं को पहले खरीद खाता (group) असाइन करें: ${unmappedNames.join(', ')} — फिर खरीद पोस्ट होगी। (Assign a Purchase A/c to: ${unmappedNames.join(', ')})`
       );
     }
+    // Batch C: an item not in the stock list has no routing — it used to fall to '5101'. Refuse it.
+    const unknownPurchase = unknownItemLines(data.items, stockItems);
+    if (unknownPurchase.length > 0) throw new Error(UNKNOWN_ITEM_MESSAGE('purchase', unknownPurchase));
 
     const fy = society.financialYear;
     const maxPurNum = purchasesRef.current.filter(p => p.purchaseNo?.includes(fy)).reduce((max, p) => {
@@ -7342,6 +7373,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         variant: 'destructive',
         duration: 10000,
       });
+      return null;
+    }
+    const unknownPurchaseU = unknownItemLines(data.items, stockItems);
+    if (unknownPurchaseU.length > 0) {
+      toastRef.current({ title: 'वस्तु नहीं मिली', description: UNKNOWN_ITEM_MESSAGE('purchase', unknownPurchaseU), variant: 'destructive', duration: 10000 });
       return null;
     }
     const original = purchasesRef.current.find(p => p.id === id);
