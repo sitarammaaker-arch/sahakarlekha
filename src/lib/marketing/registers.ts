@@ -32,15 +32,16 @@ export interface ProcurementRegister {
  * Batch A: the lots a register COUNTS — posted to the ledger and not rejected at quality. A lot that was
  * only entered (or was rejected) is not a procurement yet; counting it overstated quantity and value.
  */
-export function countableLots<L extends Pick<ProcurementLot, 'id'>>(lots: ReadonlyArray<L>, postedLotIds: ReadonlySet<string>, rejectedLotIds: ReadonlySet<string>): L[] {
-  return lots.filter(l => postedLotIds.has(l.id) && !rejectedLotIds.has(l.id));
+export function countableLots<L extends Pick<ProcurementLot, 'id' | 'cancelledAt'>>(lots: ReadonlyArray<L>, postedLotIds: ReadonlySet<string>, rejectedLotIds: ReadonlySet<string>): L[] {
+  // Batch B: a cancelled lot's posting is reversed — it is not a procurement either.
+  return lots.filter(l => postedLotIds.has(l.id) && !rejectedLotIds.has(l.id) && !l.cancelledAt);
 }
 
 /** All lots in [from,to] (inclusive, by LOCAL createdAt date), newest first, with per-lot value + totals.
  *  statusOf labels each row (the lot's stage); without it the stored operationalStatus is shown. */
 export function buildProcurementRegister(lots: ReadonlyArray<ProcurementLot>, from?: string, to?: string, statusOf?: (l: ProcurementLot) => string): ProcurementRegister {
   const rows: ProcRegRow[] = lots
-    .map(l => ({ l, date: localDateOf(l.createdAt) || '' }))
+    .map(l => ({ l, date: l.lotDate || localDateOf(l.createdAt) || '' }))   // batch B: the business date when set
     .filter(({ date }) => (!from || date >= from) && (!to || date <= to))
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
     .map(({ l, date }) => ({

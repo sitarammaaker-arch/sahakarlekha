@@ -1631,6 +1631,12 @@ create table if not exists procurement_lots (
   "createdAt" timestamptz default now(),
   "updatedAt" timestamptz default now()
 );
+-- Migration 135 (Marketing batch B): lot business date + cancellation. Written by the app in step-2
+-- updates (the frozen commit RPC's lot insert is unchanged).
+alter table procurement_lots add column if not exists "lotDate" date;
+alter table procurement_lots add column if not exists "cancelledAt" timestamptz;
+alter table procurement_lots add column if not exists "cancelledBy" text;
+alter table procurement_lots add column if not exists "cancelReason" text;
 create table if not exists procurement_events (
   id text primary key,
   society_id text not null default 'SOC001',

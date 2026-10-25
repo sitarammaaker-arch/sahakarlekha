@@ -117,6 +117,14 @@ const LOTS = [
   ok(t.net === 118325 && t.paid === 77530 && t.outstanding === r2(118325 - 77530), 'settlement totals: net/paid/outstanding tie out');
 }
 
+// 10. Batch B — cancelled lots are not counted; the business date leads the register
+{
+  const c = countableLots([{ id: 'A' }, { id: 'B', cancelledAt: '2026-10-25T10:00:00Z' }], new Set(['A', 'B']), new Set());
+  ok(c.length === 1 && c[0].id === 'A', 'cancelled lot dropped from the registers');
+  const reg = buildProcurementRegister([{ ...LOTS[0], lotDate: '2026-01-15' }]);
+  ok(reg.rows[0].date === '2026-01-15', 'register uses lotDate when set');
+}
+
 // 9. Batch A — registers count only posted, non-rejected lots; status label; local (IST) date
 {
   const lots = [...LOTS, { id: 'L4', farmerId: 'F3', cropId: 'wheat', quantity: qtl(99), mspRate: rate(2425), operationalStatus: 'created', createdAt: '2026-02-20T09:00:00Z' }];

@@ -97,6 +97,11 @@ const lot: EntityDescriptor = {
     c('operationalStatus', 'Operational Status', 'परिचालन स्थिति', { type: 'enum' }),
     c('financialStatus', 'Financial Status', 'वित्तीय स्थिति', { type: 'enum' }),
     c('reconciliationStatus', 'Reconciliation Status', 'समाधान स्थिति', { type: 'enum' }),
+    // Migration 135 (marketing batch B): business date + cancellation — a restore must keep a cancelled lot cancelled.
+    c('lotDate', 'Purchase Date', 'खरीद की तारीख', { type: 'date' }),
+    c('cancelledAt', 'Cancelled At', 'रद्द समय', { type: 'date' }),
+    c('cancelledBy', 'Cancelled By', 'रद्द करने वाले'),
+    c('cancelReason', 'Cancel Reason', 'रद्द करने का कारण'),
     internal('createdAt', 'Created At', 'निर्माण समय', { type: 'date' }),
     internal('updatedAt', 'Updated At', 'अद्यतन समय', { type: 'date' }),
   ],

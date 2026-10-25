@@ -266,5 +266,53 @@ const MSP = new Set(['procurement_msp']);
   ok(/procurementSettlements: procurementSettlementsView/.test(dc), 'context exposes the derived settlement view');
 }
 
+// ── 11. Batch B — lot business date + lot cancellation ────────────────────────────────────────────
+{
+  ok(F.procurementBusinessDate('2026-04-10T05:00:00Z', '2026-04-09T05:00:00Z', '2026-05-01', '2026-03-28') === '2026-03-28', 'lotDate wins (back-dated purchase)');
+  ok(F.procurementBusinessDate('2026-04-10T05:00:00Z', null, '2026-05-01', null) === '2026-04-10', 'no lotDate → J-Form day (unchanged)');
+  ok(F.procurementBusinessDate(null, null, '2026-05-01', 'garbage') === '2026-05-01', 'malformed lotDate ignored');
+  ok(F.deriveLotStage({ cancelled: true, qualityResult: 'accepted', hasJForm: true, hasPosting: true, settlementStatus: 'approved', outstanding: 0 }) === 'cancelled', 'cancelled stage wins over every other');
+  ok(F.isLotCancelled({ cancelledAt: '2026-10-25T10:00:00Z' }) && !F.isLotCancelled({}) && !F.isLotCancelled(null), 'isLotCancelled');
+  const base = { cancelled: false, reason: 'गलत मात्रा', farmerPaid: 0, postedAmount: 48500, mspReceivable: 48500, commissionAccrued: 970, commissionReceivable: 970 };
+  ok(F.lotCancelBlockers(base).length === 0, 'nothing moved → cancel allowed');
+  ok(F.lotCancelBlockers({ ...base, reason: '  ' }).includes('no_reason'), 'reason required');
+  ok(F.lotCancelBlockers({ ...base, farmerPaid: 100 }).includes('farmer_paid'), 'farmer already paid → blocked');
+  ok(F.lotCancelBlockers({ ...base, mspReceivable: 10000 }).includes('agency_receipts'), 'agency money received beyond what stays → blocked');
+  ok(F.lotCancelBlockers({ ...base, mspReceivable: 60000 }).length === 0, 'receivable still covers the lot → allowed');
+  ok(F.lotCancelBlockers({ ...base, commissionReceivable: 0 }).includes('commission_received'), 'commission already received → blocked');
+  ok(F.lotCancelBlockers({ ...base, postedAmount: 0, mspReceivable: 0, commissionAccrued: 0, commissionReceivable: 0 }).length === 0, 'unposted lot → allowed');
+  ok(F.lotCancelBlockers({ ...base, cancelled: true }).join() === 'already_cancelled', 'already cancelled');
+  for (const k of ['already_cancelled', 'no_reason', 'farmer_paid', 'agency_receipts', 'commission_received']) ok(!!F.LOT_CANCEL_BLOCKER_TEXT[k], `Hindi text for ${k}`);
+  // The engine reversal is traced to the lot's agency, so the per-agency balance nets to zero.
+  const vv = (id, refType, refId, acc, type, amt) => ({ id, refType, refId, amount: amt, lines: [{ id: id + 'l', accountId: acc, type, amount: amt }] });
+  const b = F.agencyBalances({
+    vouchers: [vv('EV', 'posting.rule.result', 'R1', '3308', 'Dr', 48500), vv('REV', F.ENGINE_REVERSAL_REF_TYPE, 'R1', '3308', 'Cr', 48500)],
+    accountId: '3308', postingRuleResults: [{ id: 'R1', lotId: 'L1' }], lots: [{ id: 'L1', centreId: 'C1' }], centres: [{ id: 'C1', agencyId: 'AG' }], agencyIds: new Set(['AG']),
+  });
+  ok(b.total === 0 && (b.byAgency.AG ?? 0) === 0 && b.unallocated === 0, 'reversal nets the agency to 0 (not "unallocated")');
+}
+
+// ── 12. Batch B — source guards on the cancel cascade ─────────────────────────────────────────────
+{
+  const { readFileSync } = await import('node:fs');
+  const dc = readFileSync(pathResolve(SRC, 'contexts', 'DataContext.tsx'), 'utf8');
+  const i = dc.indexOf('const cancelProcurementLot = useCallback(');
+  const cancel = dc.slice(i, dc.indexOf('\n  }, [', i));
+  const at = (re) => cancel.search(re);
+  ok(i > 0 && /guardFYLocked\(\)/.test(cancel) && /guardPermission\('delete'/.test(cancel), 'cancel: FY lock + delete permission');
+  ok(at(/lotCancelBlockers\(/) < at(/from\('procurement_lots'\)/), 'blockers checked before anything is written');
+  const lotWrite = at(/from\('procurement_lots'\)/);
+  ok(lotWrite > 0 && lotWrite < at(/cancelVoucher\(/) && lotWrite < at(/reverseVoucher\(/), 'lot row (the authority) written BEFORE the cascade');
+  ok(/\.select\('id'\)/.test(cancel) && /!saved\?\.length/.test(cancel), 'a 0-row lot update (RLS / missing) is treated as failure');
+  ok(/reverseVoucher\(ev\.id, [^\n]*\{ engine: \{ refType: ENGINE_REVERSAL_REF_TYPE, refId: rr\.id \} \}\)/.test(cancel), 'engine voucher corrected only by an engine reversal');
+  ok(/isEngineVoucher\(current\) && !opts\?\.engine/.test(dc), 'reverseVoucher still blocks engine vouchers without the engine option');
+  ok(!/reverseVoucher: \(id: string, reason: string, opts/.test(dc), 'the engine option is NOT exposed to pages');
+  ok((dc.match(/if \(lotBlocked\(/g) || []).length >= 7, 'every chain step refuses a cancelled / rejected lot');
+  ok(/update\(\{ lotDate: lot\.lotDate \}\)/.test(dc), 'lotDate written as a step-2 update (frozen RPC unchanged)');
+  ok(/procurementBusinessDate\(jf\?\.createdAt, lot\?\.createdAt, todayStr\(\), lot\?\.lotDate\)/.test(dc), 'engine voucher dated with the lot date');
+  const sql = readFileSync(pathResolve(SRC, '..', 'supabase', 'migrations', '135_procurement_lot_date_cancel.sql'), 'utf8');
+  for (const col of ['lotDate', 'cancelledAt', 'cancelledBy', 'cancelReason']) ok(sql.includes(`add column if not exists "${col}"`), `migration 135 adds ${col}`);
+}
+
 console.log(`[procurement-agent-flow] ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
