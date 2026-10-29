@@ -570,7 +570,9 @@ export default function ProcurementLots() {
         <CardContent className="space-y-2">
           {lots.length === 0 && <p className="text-sm text-muted-foreground">{hi ? 'अभी तक कोई लॉट नहीं।' : 'No lots yet.'}</p>}
           {lots.map(l => (
-            <div key={l.id} className="flex items-center justify-between rounded-lg border p-3 text-sm gap-3">
+            // Actions sit below the details at every width: the page is capped at max-w-3xl, and a shrink-0
+            // action row beside them squeezed the details to one word per line (tablet) or ~280px (desktop).
+            <div key={l.id} className="flex flex-col gap-3 rounded-lg border p-3 text-sm">
               <div className="min-w-0">
                 <div className="font-medium">{farmerLabel(l.farmerId)} · {cropName(l.cropId)}{l.varietyId ? ` (${varietyLabel(l.varietyId)})` : ''}</div>
                 {(seasonLabel(l.seasonId) || centreLabel(l.centreId)) && (
@@ -631,7 +633,7 @@ export default function ProcurementLots() {
                   );
                 })()}
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 border-t pt-2">
                 {(() => {
                   const st = deriveLotStage({ cancelled: !!l.cancelledAt, qualityResult: lotQuality(l.id)?.result, hasJForm: !!lotJForm(l.id), hasPosting: !!lotEngineVoucher(l.id), settlementStatus: settlementForLot(l.id)?.status, outstanding: payInfo(l.id)?.outstanding });
                   return <Badge variant={st === 'rejected' || st === 'cancelled' ? 'destructive' : 'secondary'}>{hi ? LOT_STAGE_LABEL[st].hi : LOT_STAGE_LABEL[st].en}</Badge>;

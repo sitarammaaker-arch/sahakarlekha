@@ -223,6 +223,9 @@ const LOTS = [
   const trip = { id: 'T1', freight: 1000 };
   const b = TR.tripBalance(trip, [{ refId: 'T1', amount: 300.1 }, { refId: 'T1', amount: 199.9 }, { refId: 'T2', amount: 999 }]);
   ok(b.paid === 500 && b.outstanding === 500, 'paid sums only this trip; outstanding = freight − paid');
+  const pf = TR.tripPrefillFromDispatch({ dispatchedQty: 50, destination: ' HAFED Godown ', vehicleNo: 'HR01AB1234', transporterId: 'T9' });
+  ok(pf.qty === '50' && pf.toPlace === 'HAFED Godown' && pf.vehicleNo === 'HR01AB1234' && pf.transporterId === 'T9', 'dispatch prefills qty carried, destination, vehicle, transporter');
+  ok(JSON.stringify(TR.tripPrefillFromDispatch({ dispatchedQty: 0, destination: '  ' })) === '{}', 'missing dispatch fields leave typed values alone');
 
   ok(KA.fyEndOf('2025-04-01') === '2026-03-31', 'FY end of an April FY');
   ok(KA.fyEndOf('2024-01-01') === '2024-12-31', 'FY end of a calendar FY');

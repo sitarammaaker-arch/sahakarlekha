@@ -3,7 +3,7 @@ import { useData } from '@/contexts/DataContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getBankAccountIds } from '@/lib/storage';
 import { todayStr } from '@/lib/dateUtils';
-import { tripFreight, tripBalance } from '@/lib/marketing/transport';
+import { tripFreight, tripBalance, tripPrefillFromDispatch } from '@/lib/marketing/transport';
 import { useMarketingData } from '@/contexts/MarketingDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -130,7 +130,13 @@ export default function Transport() {
               <Select value={tf.transporterId} onValueChange={v => setTf(p => ({ ...p, transporterId: v }))}><SelectTrigger><SelectValue placeholder={hi ? 'चुनें' : 'Select'} /></SelectTrigger>
                 <SelectContent>{transporters.map(t => <SelectItem key={t.id} value={t.id}>{trName(t.id)}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1"><Label>{hi ? 'डिस्पैच (वैकल्पिक)' : 'Dispatch (optional)'}</Label>
-              <Select value={tf.dispatchId || '__none__'} onValueChange={v => setTf(p => ({ ...p, dispatchId: v === '__none__' ? '' : v }))}><SelectTrigger><SelectValue /></SelectTrigger>
+              <Select value={tf.dispatchId || '__none__'} onValueChange={v => {
+                // Picking a dispatch fills what it already knows (qty carried, destination, vehicle, transporter).
+                const d = v === '__none__' ? undefined : dispatches.find(x => x.id === v);
+                const fill = d ? tripPrefillFromDispatch(d) : {};
+                if (fill.transporterId && !transporters.some(t => t.id === fill.transporterId)) delete fill.transporterId;
+                setTf(p => ({ ...p, ...fill, dispatchId: d ? d.id : '' }));
+              }}><SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="__none__">—</SelectItem>{dispatches.filter(d => !d.isDeleted).map(d => <SelectItem key={d.id} value={d.id}>{d.dispatchNo} · {d.date}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1"><Label>{hi ? 'कहाँ से' : 'From'}</Label><Input value={tf.fromPlace} onChange={e => setTf(p => ({ ...p, fromPlace: e.target.value }))} /></div>
             <div className="space-y-1"><Label>{hi ? 'कहाँ तक' : 'To'}</Label><Input value={tf.toPlace} onChange={e => setTf(p => ({ ...p, toPlace: e.target.value }))} /></div>
