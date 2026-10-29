@@ -48,6 +48,20 @@ export function tripFreight(qty: number | undefined, rate: number | undefined, l
   return toRupees(toMinor(Number(lump) || 0));
 }
 
+/**
+ * Trip-form fields a chosen D3 dispatch supplies: the quantity carried (dispatched, not the agency's
+ * accepted qty — freight is paid on what the truck moved), its destination, vehicle and transporter.
+ * Only fields the dispatch actually has are returned, so anything typed by hand survives.
+ */
+export function tripPrefillFromDispatch(d: { dispatchedQty?: number; destination?: string; vehicleNo?: string; transporterId?: string }): { qty?: string; toPlace?: string; vehicleNo?: string; transporterId?: string } {
+  const out: { qty?: string; toPlace?: string; vehicleNo?: string; transporterId?: string } = {};
+  if (Number(d.dispatchedQty) > 0) out.qty = String(d.dispatchedQty);
+  if (d.destination?.trim()) out.toPlace = d.destination.trim();
+  if (d.vehicleNo?.trim()) out.vehicleNo = d.vehicleNo.trim();
+  if (d.transporterId) out.transporterId = d.transporterId;
+  return out;
+}
+
 /** Paid / outstanding for one trip from its payment vouchers. */
 export function tripBalance(trip: Pick<HiredTrip, 'id' | 'freight'>, payments: ReadonlyArray<{ refId?: string; amount: number }>): { paid: number; outstanding: number } {
   const paid = payments.filter(p => p.refId === trip.id).reduce((m, p) => addMinor(m, toMinor(Number(p.amount) || 0)), 0);
