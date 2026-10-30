@@ -116,7 +116,7 @@ const completes = (c) => c.calls.filter((x) => x.name === 'complete_outbox').map
   const en = renderRow(ROW({ locale: 'en' }), { appUrl: '' });
   ok(en.subject === 'Verify your email — SahakarLekha' && !/[ऀ-ॿ]/.test(en.text), 'locale en → English only');
   ok(en.html.includes(`https://sahakarlekha.com/verify-email?token=${TOKEN}`), 'default app URL');
-  ok(Object.keys(TEMPLATES).sort().join() === 'compliance_due,email_verify,fy_unlock_requested,fy_unlocked,role_changed,user_invite', 'template set (slices 1–2, 4)');
+  ok(Object.keys(TEMPLATES).sort().join() === 'compliance_due,email_verify,fy_unlock_requested,fy_unlocked,role_changed,user_invite,weekly_digest', 'template set (slices 1–2, 4, 5)');
   let threw = false; try { renderRow(ROW({ payload: {} })); } catch { threw = true; }
   ok(threw, 'missing token throws');
 }
