@@ -232,6 +232,60 @@ const completes = (c) => c.calls.filter((x) => x.name === 'complete_outbox').map
   ok(read('src/pages/UserManagement.tsx').includes("currentUser?.role === 'admin' && <SocietyEmailLog"), 'society email log only for admins');
 }
 
+// ── 7e. Digest opt-out + unsubscribe (migration 147) ────────────────────────
+{
+  const UT = 'b'.repeat(48);
+  const P = { name: 'A', society_name: 'S', week: '2026-W45', period_from: '2026-10-26', period_to: '2026-11-01',
+    pending_approval: 1, vouchers_week: 2, days_since_last: 0, compliance_due: 0, unverified_users: 0 };
+  const dg = (payload, locale = 'hi') => ({ id: 'd1', template_key: 'weekly_digest', locale, recipient: 'a@x.in', payload, idempotency_key: 'wd:1' });
+  const m = renderRow(dg({ ...P, unsubscribe_token: UT }), { appUrl: 'https://app.example/' });
+  const link = `https://app.example/email-unsubscribe?t=${UT}`;
+  ok(m.html.includes(link) && m.text.includes(link), 'digest carries the unsubscribe link (html + text)');
+  ok(m.html.includes('साप्ताहिक सारांश बंद करें') && m.headers?.['List-Unsubscribe'] === `<${link}>`, 'Hindi label + List-Unsubscribe header');
+  const old = renderRow(dg(P), { appUrl: 'https://app.example' });
+  ok(!old.html.includes('email-unsubscribe') && !old.headers, 'a row queued before 147 (no token) renders without a link, never a broken one');
+  let bad = false; try { renderRow(dg({ ...P, unsubscribe_token: 'xyz' })); } catch { bad = true; }
+  ok(bad, 'malformed unsubscribe token → render fails');
+  ok(!renderRow(ROW()).headers, 'other templates send no List-Unsubscribe header');
+
+  const c = fakeClient([{ ...dg({ ...P, unsubscribe_token: UT }), status: 'sending', attempts: 1 }]);
+  const r = fakeFetch();
+  await runOutbox(c, CFG(r.f));
+  ok(r.calls[0].body.headers?.['List-Unsubscribe'] === `<https://app.example/email-unsubscribe?t=${UT}>`, 'worker passes the header to Resend');
+  const c2 = fakeClient([ROW({ status: 'sending' })]);
+  const r2 = fakeFetch();
+  await runOutbox(c2, CFG(r2.f));
+  ok(!('headers' in r2.calls[0].body), 'no headers key when the template has none');
+
+  const sql = read('supabase/migrations/147_email_preferences.sql');
+  const code = sql.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
+  ok(!/create policy/i.test(code) && /alter table public\.email_preferences enable row level security/.test(code), 'email_preferences: RLS on, no client policy');
+  ok(/and not exists \(select 1 from public\.email_preferences ep\s+where ep\.email = lower\(su\.email\) and not ep\.weekly_digest\)/.test(code), 'digest skips admins who opted out');
+  ok(/'unsubscribe_token', public\.email_unsubscribe_token\(v_admin\.email\)/.test(code), 'digest payload carries the token');
+  ok(/'weekly_digest:' \|\| p_society_id \|\| ':' \|\| v_admin\.email \|\| ':' \|\| v_week/.test(code), 'idempotency key unchanged from 146');
+  ok(/revoke execute on function public\.email_unsubscribe_token\(text\) from public, anon, authenticated;/.test(code)
+    && !/grant execute on function public\.email_unsubscribe_token/.test(code), 'token helper is internal');
+  ok(/grant execute on function public\.enqueue_weekly_digest\(text, date, integer\) to service_role;/.test(code), 'enqueue stays service-role');
+  ok(/grant execute on function public\.unsubscribe_by_token\(text\) to anon, authenticated;/.test(code)
+    && /anon-exec: unsubscribe_by_token/.test(sql), 'unsubscribe_by_token: anon, with the anon-exec reason');
+  ok(/set weekly_digest = false/.test(code) && !/set weekly_digest = true/.test(code.split('unsubscribe_by_token')[1].split('my_email_preferences')[0]),
+    'the token can only turn the digest OFF');
+  ok(/v_email text := lower\(trim\(coalesce\(auth\.jwt\(\) ->> 'email', ''\)\)\)/.test(code.split('set_my_weekly_digest')[1] ?? ''), 'set_my_weekly_digest: own JWT address only');
+  ok(/values \('147', 'email_preferences'\)/.test(code), 'migration 147 registered');
+  const down = read('supabase/migrations/147_email_preferences_down.sql');
+  ok(/drop table if exists public\.email_preferences/.test(down) && down.includes('create or replace function public.enqueue_weekly_digest')
+    && !down.includes('email_preferences ep'), 'down restores 146 enqueue (no opt-out) and drops the table');
+
+  ok(/path="\/email-unsubscribe" element=\{<EmailUnsubscribe \/>\}/.test(read('src/App.tsx')), '/email-unsubscribe is a public route');
+  const page = read('src/pages/EmailUnsubscribe.tsx');
+  ok(page.includes("rpc('unsubscribe_by_token'") && !/useEffect/.test(page), 'unsubscribe needs a button press — nothing runs on page load (mail scanners)');
+  const banner = read('src/components/EmailVerifyBanner.tsx');
+  ok(banner.includes("rpc('my_email_verification')") && /try \{ return Number\(localStorage/.test(banner) && /catch \{ \/\* per-session only \*\/ \}/.test(banner), 'banner: server status, storage wrapped in try/catch');
+  ok(read('src/components/layout/MainLayout.tsx').includes('<EmailVerifyBanner />'), 'banner mounted in MainLayout');
+  const dlg = read('src/components/security/EmailVerifyDialog.tsx');
+  ok(dlg.includes("rpc('set_my_weekly_digest'") && dlg.includes("user?.role === 'admin'"), 'dialog: digest switch for admins');
+}
+
 // ── 8. Static guards: worker + UI ───────────────────────────────────────────
 {
   const w = read('supabase/functions/send-worker/index.ts');

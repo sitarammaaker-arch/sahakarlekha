@@ -29,7 +29,7 @@ const roleLabel = (r, en) => (en || !ROLE_HI[r] ? String(r ?? '') : `${ROLE_HI[r
  * One notice email: a greeting, Hindi + English lines (or English only), optional button, optional footnote.
  * `lines` = [[hi, en], …]; values are escaped here.
  */
-function notice(row, { subjectHi, subjectEn, lines, button, foot }) {
+function notice(row, { subjectHi, subjectEn, lines, button, foot, unsubscribe }) {
   const en = row.locale === 'en';
   const name = row.payload?.name ? String(row.payload.name) : '';
   const hello = en ? `Hello${name ? ` ${esc(name)}` : ''},` : `नमस्ते${name ? ` ${esc(name)}` : ''},`;
@@ -38,17 +38,24 @@ function notice(row, { subjectHi, subjectEn, lines, button, foot }) {
     : `<p>${esc(hi)}<br><span style="color:#475569">${esc(eng)}</span></p>`)).join('\n    ');
   const btn = button ? `<p style="margin:20px 0"><a href="${esc(button.href)}" style="background:#0F7B5A;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">${esc(en ? button.en : button.hi)}</a></p>` : '';
   const footHtml = foot ? `<p style="color:#475569;font-size:12px">${esc(en ? foot[1] : `${foot[0]} / ${foot[1]}`)}</p>` : '';
+  const unsubLabel = unsubscribe ? (en ? unsubscribe.en : `${unsubscribe.hi} / ${unsubscribe.en}`) : '';
+  const unsubHtml = unsubscribe ? `<p style="color:#475569;font-size:12px"><a href="${esc(unsubscribe.href)}" style="color:#475569">${esc(unsubLabel)}</a></p>` : '';
   const html = shell(`<p>${hello}</p>
     ${paras}
     ${btn}
-    ${footHtml}`);
+    ${footHtml}
+    ${unsubHtml}`);
   const text = [
     en ? `Hello${name ? ` ${name}` : ''},` : `नमस्ते${name ? ` ${name}` : ''},`, '',
     ...lines.flatMap(([hi, eng]) => (en ? [eng] : [hi, eng])),
     ...(button ? ['', button.href] : []),
     ...(foot ? ['', en ? foot[1] : `${foot[0]} / ${foot[1]}`] : []),
+    ...(unsubscribe ? ['', `${unsubLabel}: ${unsubscribe.href}`] : []),
   ].join('\n');
-  return { subject: en ? subjectEn : `${subjectHi} / ${subjectEn}`, html, text };
+  const out = { subject: en ? subjectEn : `${subjectHi} / ${subjectEn}`, html, text };
+  // RFC 2369: lets Gmail/Outlook show their own "Unsubscribe" next to the sender.
+  if (unsubscribe) out.headers = { 'List-Unsubscribe': `<${unsubscribe.href}>` };
+  return out;
 }
 
 const SECURITY_FOOT = ['अगर यह बदलाव आपकी जानकारी में नहीं है, तो तुरंत अपनी समिति के एडमिन से संपर्क करें।',
@@ -227,6 +234,9 @@ export const TEMPLATES = {
     const from = dmy(p.period_from), to = dmy(p.period_to);
     const range = from && to ? ` (${from} – ${to})` : '';
     const soc = String(p.society_name ?? '');
+    // 147: rows queued before migration 147 carry no token → no unsubscribe link (never a broken one).
+    const tok = p.unsubscribe_token === undefined || p.unsubscribe_token === null ? '' : String(p.unsubscribe_token);
+    if (tok && !/^[0-9a-f]{48}$/.test(tok)) throw new Error('weekly_digest: bad unsubscribe_token');
     const lines = [
       [`"${soc}" — पिछले 7 दिनों${range} का सारांश:`, `"${soc}" — summary of the last 7 days${range}:`],
       [`• इस हफ़्ते दर्ज वाउचर: ${week}`, `• Vouchers entered this week: ${week}`],
@@ -246,13 +256,16 @@ export const TEMPLATES = {
       button: { href: `${base(appUrl)}/dashboard`, hi: 'डैशबोर्ड खोलें', en: 'Open dashboard' },
       foot: ['यह सारांश हर सोमवार सुबह एडमिन को आता है। इसमें सिर्फ़ गिनती है, कोई रकम नहीं।',
         'This summary reaches admins every Monday morning. It carries counts only, never an amount.'],
+      unsubscribe: tok
+        ? { href: `${base(appUrl)}/email-unsubscribe?t=${tok}`, hi: 'साप्ताहिक सारांश बंद करें', en: 'Stop the weekly summary' }
+        : null,
     });
   },
 };
 
 /** The only fields a weekly_digest payload may carry (migration 146 builds exactly these). */
 const DIGEST_KEYS = new Set(['name', 'society_name', 'week', 'period_from', 'period_to', 'pending_approval',
-  'vouchers_week', 'days_since_last', 'compliance_due', 'unverified_users']);
+  'vouchers_week', 'days_since_last', 'compliance_due', 'unverified_users', 'unsubscribe_token']);
 
 /** Render one outbox row. Throws on an unknown template or a bad payload (the caller marks it failed). */
 export function renderRow(row, opts = {}) {
@@ -301,7 +314,8 @@ export async function runOutbox(supa, cfg = {}) {
             'Content-Type': 'application/json',
             'Idempotency-Key': row.idempotency_key,
           },
-          body: JSON.stringify({ from: cfg.from, to: [row.recipient], subject: msg.subject, html: msg.html, text: msg.text }),
+          body: JSON.stringify({ from: cfg.from, to: [row.recipient], subject: msg.subject, html: msg.html, text: msg.text,
+            ...(msg.headers ? { headers: msg.headers } : {}) }),
         });
         if (res.ok) {
           const body = await res.json().catch(() => ({}));
