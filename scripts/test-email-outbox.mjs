@@ -3,6 +3,7 @@
 // Run: node scripts/test-email-outbox.mjs   (npm run test:email-outbox)
 import { readFileSync } from 'node:fs';
 import { runOutbox, renderRow, TEMPLATES } from '../supabase/functions/_shared/email-outbox.mjs';
+import { verifySvix, signSvix, handleResendEvent } from '../supabase/functions/_shared/resend-webhook.mjs';
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -182,6 +183,53 @@ const completes = (c) => c.calls.filter((x) => x.name === 'complete_outbox').map
   ok(/insert into public\.app_migrations \(version, name\) values \('143', 'notification_triggers'\)/.test(sqlOnly), 'migration 143 registered');
   const down = read('supabase/migrations/143_notification_triggers_down.sql');
   ok(/drop trigger if exists trg_notify_fy_unlock/.test(down) && /template_key <> 'email_verify'/.test(down), 'down drops triggers and restores the 142 claim');
+}
+
+// ── 7c. Resend webhook core (slice 3) ───────────────────────────────────────
+{
+  const secret = 'whsec_' + Buffer.from('a-test-signing-key-32-bytes-long!').toString('base64');
+  const body = JSON.stringify({ type: 'email.bounced', data: { email_id: 'em_1', to: ['Bad@Example.com'], bounce: { type: 'Permanent', subType: 'General', message: 'no such user' } } });
+  const now = 1_800_000_000;
+  const sig = await signSvix(secret, 'msg_1', String(now), body);
+  ok((await verifySvix(secret, { id: 'msg_1', timestamp: String(now), signature: sig }, body, now)).ok, 'valid Svix signature accepted');
+  ok((await verifySvix(secret, { id: 'msg_1', timestamp: String(now), signature: `v1,bogus ${sig}` }, body, now)).ok, 'any one valid v1 signature in the list is enough');
+  ok((await verifySvix(secret, { id: 'msg_1', timestamp: String(now), signature: sig }, body + ' ', now)).reason === 'bad_signature', 'changed body → bad_signature');
+  ok((await verifySvix(secret, { id: 'msg_2', timestamp: String(now), signature: sig }, body, now)).reason === 'bad_signature', 'other svix-id → bad_signature');
+  ok((await verifySvix(secret, { id: 'msg_1', timestamp: String(now), signature: sig }, body, now + 301)).reason === 'stale_timestamp', 'older than 5 min → stale_timestamp');
+  ok((await verifySvix(secret, { id: 'msg_1', timestamp: String(now) }, body, now)).reason === 'missing_headers', 'missing signature header');
+  ok((await verifySvix('', { id: 'msg_1', timestamp: String(now), signature: sig }, body, now)).reason === 'secret_not_configured', 'no secret → refused');
+  ok((await verifySvix(secret, { id: 'msg_1', timestamp: String(now), signature: sig.replace('v1,', 'v2,') }, body, now)).reason === 'bad_signature', 'only v1 signatures count');
+
+  const calls = [];
+  const supa = { rpc: async (n, a) => { calls.push({ n, a }); return { data: { status: 'recorded', matched: 1, suppressed: 1 }, error: null }; } };
+  const out = await handleResendEvent(supa, JSON.parse(body));
+  ok(out.status === 'recorded' && out.suppressed === 1, 'bounce recorded');
+  ok(calls[0].n === 'record_email_event' && calls[0].a.p_provider_id === 'em_1' && calls[0].a.p_type === 'email.bounced', 'record_email_event(provider id, type)');
+  ok(calls[0].a.p_recipients[0] === 'Bad@Example.com' && calls[0].a.p_detail === 'Permanent · General · no such user', 'recipients + bounce detail passed');
+  ok((await handleResendEvent(supa, { type: 'email.opened', data: {} })).status === 'ignored' && calls.length === 1, 'opens/clicks ignored (no tracking stored)');
+  await handleResendEvent(supa, { type: 'email.complained', data: { email_id: 'em_2', to: 'x@y.in' } });
+  ok(calls[1].a.p_detail === 'spam complaint' && calls[1].a.p_recipients[0] === 'x@y.in', 'complaint: string to → array');
+  const bad = await handleResendEvent({ rpc: async () => ({ data: null, error: { message: 'db down' } }) }, { type: 'email.delivered', data: { email_id: 'e' } });
+  ok(bad.status === 'error' && bad.error === 'db down', 'db error surfaced (function answers 500 → Resend retries)');
+}
+
+// ── 7d. Static guards: migration 144 + webhook function ─────────────────────
+{
+  const m = read('supabase/migrations/144_email_events_and_log.sql');
+  const sqlOnly = m.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
+  ok(/revoke execute on function public\.record_email_event\(text, text, text\[\], text\) from public, anon, authenticated;/.test(sqlOnly)
+    && /grant execute on function public\.record_email_event\(text, text, text\[\], text\) to service_role;/.test(sqlOnly), 'record_email_event is service-role only');
+  ok((sqlOnly.match(/if not public\.is_platform_admin\(\) then/g) ?? []).length === 3, 'three admin RPCs gated on is_platform_admin');
+  ok(/not public\.is_society_admin\(v_society\)/.test(sqlOnly) && /where o\.society_id = v_society/.test(sqlOnly), 'society log: admin of, and only, the caller society');
+  ok(!/o\.payload/.test(sqlOnly), 'no log RPC returns the payload (tokens)');
+  ok(/case when v_status = 'bounced' then 'bounce' else 'complaint' end/.test(sqlOnly), 'bounce/complaint → suppression');
+  ok(/insert into public\.app_migrations \(version, name\) values \('144', 'email_events_and_log'\)/.test(sqlOnly), 'migration 144 registered');
+  const w = read('supabase/functions/resend-webhook/index.ts');
+  ok(/await req\.text\(\)/.test(w) && w.indexOf('verifySvix(') < w.indexOf('JSON.parse(raw)'), 'webhook verifies the RAW body before parsing');
+  ok(/RESEND_WEBHOOK_SECRET/.test(w) && /--no-verify-jwt/.test(w), 'webhook secret + deploy note');
+  const app = read('src/App.tsx');
+  ok(/path="\/super-admin\/emails" element=\{<SuperAdminRoute>/.test(app), '/super-admin/emails behind SuperAdminRoute');
+  ok(read('src/pages/UserManagement.tsx').includes("currentUser?.role === 'admin' && <SocietyEmailLog"), 'society email log only for admins');
 }
 
 // ── 8. Static guards: worker + UI ───────────────────────────────────────────

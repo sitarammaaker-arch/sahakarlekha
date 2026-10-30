@@ -44,6 +44,26 @@ Run every command from the repo root (`D:\Website\sahakarlekha`).
    );
    ```
 
+6. **Migration 144** (SQL Editor, new query) — `144_email_events_and_log.sql` → **Run**, then its VERIFY
+   (expect `2 | 5 | 1`).
+7. **Bounce / complaint webhook** — deploy, then register it in Resend:
+   ```bash
+   npx supabase functions deploy resend-webhook --no-verify-jwt
+   ```
+   Resend → **Webhooks → Add endpoint** → URL `https://<project-ref>.functions.supabase.co/resend-webhook`,
+   events: `email.delivered`, `email.delivery_delayed`, `email.bounced`, `email.complained`. Copy the
+   **Signing secret** (starts with `whsec_`) and set it:
+   ```bash
+   npx supabase secrets set RESEND_WEBHOOK_SECRET=whsec_xxxx
+   ```
+   Smoke test: a POST with no `svix-*` headers must answer `{"ok":false,"error":"missing_headers"}` (401).
+   Resend → Webhooks also has a **Send test event** button; it should show 200.
+
+## Where to see it
+
+- SuperAdmin → **Emails** (`/super-admin/emails`): every society's log + the block (suppression) list.
+- A society admin: **User Management** → **ईमेल लॉग** card (their own society only).
+
 ## Check it works
 
 In the app: user menu → **ईमेल सत्यापन** → **लिंक भेजें**. Within a minute:
