@@ -97,11 +97,20 @@ function dueReminders(asOf, app, filedIds = []) {
   const pendingCount = allowed.filter((it) => it.daysLeft >= 0 && it.daysLeft <= 7).length;
   return { items, pendingCount };
 }
+function dueWithinCount(asOf, app, filedIds = [], days = 14) {
+  return buildComplianceCalendar(asOf, app, { filedIds }).filter((it) => {
+    const src = COMPLIANCE_SOURCES[ruleKeyOf(it.id)];
+    if (!src || it.status === "filed") return false;
+    if (src.state === "hr" && !isHaryana(app.state)) return false;
+    return it.daysLeft >= 0 && it.daysLeft <= days;
+  }).length;
+}
 export {
   COMPLIANCE_SOURCES,
   REMINDER_OFFSETS,
   buildComplianceCalendar,
   dueReminders,
+  dueWithinCount,
   istDate,
   ruleKeyOf
 };

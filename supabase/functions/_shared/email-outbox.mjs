@@ -207,7 +207,52 @@ export const TEMPLATES = {
         'Dates are taken from the rule text; confirm with your CA / the portal.'],
     });
   },
+
+  /**
+   * Monday summary for admins (migration 146, weekly-digest fn). COUNTS ONLY: the payload is checked against a
+   * fixed key list, so an amount / balance field can never be rendered — the row fails instead.
+   */
+  weekly_digest(row, { appUrl }) {
+    const p = row.payload ?? {};
+    const extra = Object.keys(p).filter((k) => !DIGEST_KEYS.has(k));
+    if (extra.length) throw new Error(`weekly_digest: unexpected payload field ${extra.join(',')}`);
+    const n = (k) => {
+      const v = Number(p[k]);
+      if (p[k] === null || p[k] === '' || !Number.isInteger(v) || v < 0) throw new Error(`weekly_digest: bad ${k}`);
+      return v;
+    };
+    const week = n('vouchers_week'), pending = n('pending_approval'), due = n('compliance_due'), unver = n('unverified_users');
+    const since = p.days_since_last === null || p.days_since_last === undefined ? null : n('days_since_last');
+    const dmy = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(String(s ?? '')) ? String(s).split('-').reverse().join('/') : '');
+    const from = dmy(p.period_from), to = dmy(p.period_to);
+    const range = from && to ? ` (${from} – ${to})` : '';
+    const soc = String(p.society_name ?? '');
+    const lines = [
+      [`"${soc}" — पिछले 7 दिनों${range} का सारांश:`, `"${soc}" — summary of the last 7 days${range}:`],
+      [`• इस हफ़्ते दर्ज वाउचर: ${week}`, `• Vouchers entered this week: ${week}`],
+      [since === null ? '• अभी तक कोई वाउचर दर्ज नहीं हुआ' : since === 0 ? '• आख़िरी वाउचर: आज' : `• आख़िरी वाउचर: ${since} दिन पहले`,
+        since === null ? '• No voucher entered yet' : since === 0 ? '• Last voucher: today' : `• Last voucher: ${since} day${since === 1 ? '' : 's'} ago`],
+      [`• मंज़ूरी के लिए बाकी वाउचर: ${pending}`, `• Vouchers waiting for approval: ${pending}`],
+      [`• अगले 14 दिनों में अनुपालन की अंतिम तारीख़ें: ${due}`, `• Compliance items due in the next 14 days: ${due}`],
+    ];
+    if (unver > 0) {
+      lines.push([`• ${unver} यूज़र का ईमेल सत्यापित नहीं है — उन्हें कोई सूचना नहीं जाती। हर यूज़र अपने मेन्यू में "ईमेल सत्यापन" से पुष्टि कर सकता है।`,
+        `• ${unver} user${unver === 1 ? ' has' : 's have'} not verified their email and get no notifications. Each user can verify from "Email verification" in their menu.`]);
+    }
+    return notice(row, {
+      subjectHi: `साप्ताहिक सारांश — ${soc}`,
+      subjectEn: 'Weekly summary',
+      lines,
+      button: { href: `${base(appUrl)}/dashboard`, hi: 'डैशबोर्ड खोलें', en: 'Open dashboard' },
+      foot: ['यह सारांश हर सोमवार सुबह एडमिन को आता है। इसमें सिर्फ़ गिनती है, कोई रकम नहीं।',
+        'This summary reaches admins every Monday morning. It carries counts only, never an amount.'],
+    });
+  },
 };
+
+/** The only fields a weekly_digest payload may carry (migration 146 builds exactly these). */
+const DIGEST_KEYS = new Set(['name', 'society_name', 'week', 'period_from', 'period_to', 'pending_approval',
+  'vouchers_week', 'days_since_last', 'compliance_due', 'unverified_users']);
 
 /** Render one outbox row. Throws on an unknown template or a bad payload (the caller marks it failed). */
 export function renderRow(row, opts = {}) {

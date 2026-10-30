@@ -96,3 +96,21 @@ export function dueReminders(
   const pendingCount = allowed.filter(it => it.daysLeft >= 0 && it.daysLeft <= 7).length;
   return { items, pendingCount };
 }
+
+/**
+ * Weekly digest (email slice 5): how many sourced, unfiled items fall due in the next `days` days (today
+ * included). Same gates as dueReminders — an unsourced date is never counted in an email either.
+ */
+export function dueWithinCount(
+  asOf: string,
+  app: ComplianceApplicability & { state?: string | null },
+  filedIds: string[] = [],
+  days = 14,
+): number {
+  return buildComplianceCalendar(asOf, app, { filedIds }).filter((it: ComplianceItem) => {
+    const src = COMPLIANCE_SOURCES[ruleKeyOf(it.id)];
+    if (!src || it.status === 'filed') return false;
+    if (src.state === 'hr' && !isHaryana(app.state)) return false;
+    return it.daysLeft >= 0 && it.daysLeft <= days;
+  }).length;
+}

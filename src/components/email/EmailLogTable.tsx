@@ -22,6 +22,8 @@ export const TEMPLATE_HI: Record<string, string> = {
   role_changed: 'भूमिका बदली',
   fy_unlock_requested: 'FY अनलॉक अनुरोध',
   fy_unlocked: 'FY अनलॉक हुआ',
+  compliance_due: 'अनुपालन याद-दहानी',
+  weekly_digest: 'साप्ताहिक सारांश',
 };
 
 /** status + delivery_status → one Hindi label and a badge tone. Delivery (what happened after Resend) wins. */

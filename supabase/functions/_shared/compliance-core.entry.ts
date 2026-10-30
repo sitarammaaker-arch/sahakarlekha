@@ -1,5 +1,5 @@
 /**
- * Bundle entry for the compliance reminder core (email slice 4).
+ * Bundle entry for the compliance reminder core (email slice 4; dueWithinCount for the slice-5 weekly digest).
  *
  * Re-exports the EXACT engine the in-app Compliance Calendar uses, plus the sourced reminder filter, so the
  * compliance-reminders Edge Function computes the same due dates as the app (RULE 2 — one rule, never a
@@ -10,4 +10,4 @@
  *   npm run build:compliance-core
  */
 export { buildComplianceCalendar } from '../../../src/lib/complianceCalendar';
-export { COMPLIANCE_SOURCES, REMINDER_OFFSETS, dueReminders, istDate, ruleKeyOf } from '../../../src/lib/complianceReminders';
+export { COMPLIANCE_SOURCES, REMINDER_OFFSETS, dueReminders, dueWithinCount, istDate, ruleKeyOf } from '../../../src/lib/complianceReminders';

@@ -360,6 +360,7 @@
     "test:invoice-email": "node scripts/test-invoice-email.mjs",
     "test:email-outbox": "node scripts/test-email-outbox.mjs",
     "test:compliance-reminders": "node scripts/test-compliance-reminders.mjs",
+    "test:weekly-digest": "node scripts/test-weekly-digest.mjs",
     "test:gstr1-csv": "node scripts/test-gstr1-csv.mjs",
     "test:checkout-buyer": "node scripts/test-checkout-buyer.mjs",
     "test:invoice-core": "node scripts/test-invoice-core.mjs",
