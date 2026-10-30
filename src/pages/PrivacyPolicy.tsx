@@ -2,6 +2,8 @@
  * Privacy Policy — SahakarLekha
  * Binding policy text — every statement must match the live system. Factual corrections of
  * 2 Oct 2026 (owner-approved) are evidenced in docs/audits/PUBLIC-CLAIMS-AUDIT-2026-10.md.
+ * 30 Oct 2026: Resend added as a subprocessor — it already sent the newsletter welcome (api/subscribe.ts)
+ * and now sends the notification outbox + invoice emails (migrations 134/142–144, live 30 Oct).
  * Re-verify region, fields collected, analytics and subprocessors before changing anything.
  * Bilingual Hindi + English
  */
@@ -108,6 +110,7 @@ const SECTIONS = [
           <li><strong>Supabase</strong> — Database, authentication, file storage and backups (Tokyo, Japan region)</li>
           <li><strong>Vercel</strong> — Application hosting and deployment</li>
           <li><strong>Razorpay</strong> — Online payment of subscription fees (payment details are entered on Razorpay, not stored by us)</li>
+          <li><strong>Resend</strong> — Sending service emails (email verification, new-user welcome, role-change and financial-year unlock alerts, subscription invoices, newsletter sign-up). Resend receives the recipient's email address and the email's content (e.g. name, society name, role, invoice amounts). Invoice PDFs and accounting reports are not attached — the email links to the app instead. Role-change and financial-year alerts go only to addresses whose owner has verified them; the welcome email carries that verification link, and an invoice goes to the user who paid (or the society's admins)</li>
           <li><strong>Google Fonts</strong> — Typography; your browser requests the fonts from Google, which receives your IP address and browser details</li>
           <li><strong>Google Analytics (GA4)</strong> — Usage analytics as described in section 4</li>
         </ul>
@@ -228,7 +231,7 @@ const PrivacyPolicy: React.FC = () => {
             Privacy Policy
           </p>
           <p className="mt-4 text-sm text-muted-foreground">
-            अंतिम अपडेट / Last Updated: 2 अक्टूबर 2026 / 2 October 2026
+            अंतिम अपडेट / Last Updated: 30 अक्टूबर 2026 / 30 October 2026
           </p>
         </div>
       </section>
