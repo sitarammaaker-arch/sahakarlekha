@@ -115,9 +115,34 @@ const completes = (c) => c.calls.filter((x) => x.name === 'complete_outbox').map
   const en = renderRow(ROW({ locale: 'en' }), { appUrl: '' });
   ok(en.subject === 'Verify your email — SahakarLekha' && !/[ऀ-ॿ]/.test(en.text), 'locale en → English only');
   ok(en.html.includes(`https://sahakarlekha.com/verify-email?token=${TOKEN}`), 'default app URL');
-  ok(Object.keys(TEMPLATES).join() === 'email_verify', 'slice 1 ships exactly one template');
+  ok(Object.keys(TEMPLATES).sort().join() === 'email_verify,fy_unlock_requested,fy_unlocked,role_changed,user_invite', 'template set (slices 1–2)');
   let threw = false; try { renderRow(ROW({ payload: {} })); } catch { threw = true; }
   ok(threw, 'missing token throws');
+}
+
+// ── 6b. Slice 2 templates (migration 143 payloads) ──────────────────────────
+{
+  const soc = 'किसान <PACS>';
+  const inv = renderRow(ROW({ template_key: 'user_invite', payload: { token: TOKEN, name: 'Sita', role: 'accountant', society_name: soc, by: 'admin@x.in' } }), { appUrl: 'https://app.example' });
+  ok(inv.html.includes(`https://app.example/verify-email?token=${TOKEN}`) && inv.text.includes(`/verify-email?token=${TOKEN}`), 'invite with token → verify link');
+  ok(inv.html.includes('लेखाकार (accountant)') && inv.html.includes('किसान &lt;PACS&gt;') && !inv.html.includes('<PACS>'), 'invite: Hindi role label, society escaped');
+  ok(inv.subject.startsWith('किसान <PACS> — सहकार लेखा में आपका स्वागत है'), 'invite subject names the society');
+  const inv2 = renderRow(ROW({ template_key: 'user_invite', payload: { name: 'Sita', role: 'storeKeeper', society_name: 'S', by: 'system' } }), { appUrl: 'https://app.example' });
+  ok(inv2.html.includes('https://app.example/login') && !inv2.html.includes('verify-email'), 'invite to a verified address → login link, no token');
+  let bad = false; try { renderRow(ROW({ template_key: 'user_invite', payload: { token: 'zz' } })); } catch { bad = true; }
+  ok(bad, 'invite with a malformed token throws');
+
+  const rc = renderRow(ROW({ template_key: 'role_changed', payload: { name: 'Sita', old_role: 'viewer', new_role: 'admin', society_name: 'S', by: 'a@x.in' } }), {});
+  ok(rc.html.includes('व्यूअर (viewer)') && rc.html.includes('एडमिन (admin)') && rc.html.includes('a@x.in'), 'role change: old → new + actor');
+  ok(rc.text.includes('If you did not expect this change'), 'role change carries the security footnote');
+  const rcEn = renderRow(ROW({ template_key: 'role_changed', locale: 'en', payload: { old_role: 'viewer', new_role: 'mystery', society_name: 'S', by: 'b' } }), {});
+  ok(rcEn.subject === 'Your role was changed — SahakarLekha' && rcEn.html.includes('from viewer to mystery') && !/[ऀ-ॿ]/.test(rcEn.text), 'role change en: raw roles, no Hindi');
+
+  const req = renderRow(ROW({ template_key: 'fy_unlock_requested', payload: { name: 'B', society_name: 'S', by: 'a@x.in', financial_year: '2025-26' } }), { appUrl: 'https://app.example' });
+  ok(req.html.includes('(2025-26)') && req.html.includes('https://app.example/society-setup') && req.subject.includes('मंज़ूरी'), 'unlock request: FY, approve link');
+  const unl = renderRow(ROW({ template_key: 'fy_unlocked', payload: { society_name: 'S', by: 'system' } }), {});
+  ok(unl.html.includes('अनलॉक करने वाले: system') && !unl.html.includes('()'), 'unlocked: actor, no empty FY brackets');
+  ok([inv, rc, req, unl].every((m) => !/undefined|null/.test(m.text)), 'no "undefined"/"null" leaks into any text');
 }
 
 // ── 7. Static guards: migration 142 ─────────────────────────────────────────
@@ -141,6 +166,22 @@ const completes = (c) => c.calls.filter((x) => x.name === 'complete_outbox').map
   ok(/insert into public\.app_migrations \(version, name\) values \('142', 'notification_outbox'\)/.test(sqlOnly), 'migration registered');
   const down = read('supabase/migrations/142_notification_outbox_down.sql');
   ok(/drop table if exists public\.notification_outbox/.test(down) && /delete from public\.app_migrations where version = '142'/.test(down), 'down file undoes it');
+}
+
+// ── 7b. Static guards: migration 143 (triggers) ─────────────────────────────
+{
+  const m = read('supabase/migrations/143_notification_triggers.sql');
+  const sqlOnly = m.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
+  ok(/template_key not in \('email_verify', 'user_invite'\)/.test(sqlOnly), 'claim exempts only email_verify + user_invite from the verified gate');
+  ok(/after insert on public\.society_users/.test(sqlOnly) && /after update of role on public\.society_users/.test(sqlOnly), 'user triggers: insert + role update');
+  ok(/after update on public\.society_settings/.test(sqlOnly), 'FY trigger on society_settings');
+  ok((sqlOnly.match(/exception when others then\s+raise warning/g) ?? []).length === 2, 'both trigger bodies swallow errors (a save never fails on a notification)');
+  ok(!/net\.http_post|http_request/.test(sqlOnly), 'triggers never call HTTP');
+  ok(/lower\(su\.email\) <> lower\(new\."fyUnlockRequestedBy"\)/.test(sqlOnly), 'requester is not told about their own unlock request');
+  ok(/su\.role = 'admin' and su\.is_active/.test(sqlOnly), 'FY notices go to active admins only');
+  ok(/insert into public\.app_migrations \(version, name\) values \('143', 'notification_triggers'\)/.test(sqlOnly), 'migration 143 registered');
+  const down = read('supabase/migrations/143_notification_triggers_down.sql');
+  ok(/drop trigger if exists trg_notify_fy_unlock/.test(down) && /template_key <> 'email_verify'/.test(down), 'down drops triggers and restores the 142 claim');
 }
 
 // ── 8. Static guards: worker + UI ───────────────────────────────────────────

@@ -16,6 +16,44 @@ const shell = (body) => `<div style="font-family:Arial,'Noto Sans Devanagari',sa
     <p style="color:#475569">— टीम सहकार लेखा · <a href="https://sahakarlekha.com" style="color:#0F7B5A">sahakarlekha.com</a></p>
   </div>`;
 
+/** Role keys (society_users.role) → Hindi label; unknown roles show as stored. */
+const ROLE_HI = {
+  admin: 'एडमिन', accountant: 'लेखाकार', viewer: 'व्यूअर', auditor: 'ऑडिटर', manager: 'प्रबंधक',
+  secretary: 'सचिव', cashier: 'कैशियर', storeKeeper: 'भंडारपाल', procurementOfficer: 'खरीद अधिकारी',
+  salesOperator: 'बिक्री संचालक', internalAuditor: 'आंतरिक ऑडिटर', externalCA: 'बाहरी CA',
+  boardMember: 'बोर्ड सदस्य', chairman: 'अध्यक्ष', employee: 'कर्मचारी', dataEntry: 'डेटा एंट्री',
+};
+const roleLabel = (r, en) => (en || !ROLE_HI[r] ? String(r ?? '') : `${ROLE_HI[r]} (${r})`);
+
+/**
+ * One notice email: a greeting, Hindi + English lines (or English only), optional button, optional footnote.
+ * `lines` = [[hi, en], …]; values are escaped here.
+ */
+function notice(row, { subjectHi, subjectEn, lines, button, foot }) {
+  const en = row.locale === 'en';
+  const name = row.payload?.name ? String(row.payload.name) : '';
+  const hello = en ? `Hello${name ? ` ${esc(name)}` : ''},` : `नमस्ते${name ? ` ${esc(name)}` : ''},`;
+  const paras = lines.map(([hi, eng]) => (en
+    ? `<p>${esc(eng)}</p>`
+    : `<p>${esc(hi)}<br><span style="color:#475569">${esc(eng)}</span></p>`)).join('\n    ');
+  const btn = button ? `<p style="margin:20px 0"><a href="${esc(button.href)}" style="background:#0F7B5A;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">${esc(en ? button.en : button.hi)}</a></p>` : '';
+  const footHtml = foot ? `<p style="color:#475569;font-size:12px">${esc(en ? foot[1] : `${foot[0]} / ${foot[1]}`)}</p>` : '';
+  const html = shell(`<p>${hello}</p>
+    ${paras}
+    ${btn}
+    ${footHtml}`);
+  const text = [
+    en ? `Hello${name ? ` ${name}` : ''},` : `नमस्ते${name ? ` ${name}` : ''},`, '',
+    ...lines.flatMap(([hi, eng]) => (en ? [eng] : [hi, eng])),
+    ...(button ? ['', button.href] : []),
+    ...(foot ? ['', en ? foot[1] : `${foot[0]} / ${foot[1]}`] : []),
+  ].join('\n');
+  return { subject: en ? subjectEn : `${subjectHi} / ${subjectEn}`, html, text };
+}
+
+const SECURITY_FOOT = ['अगर यह बदलाव आपकी जानकारी में नहीं है, तो तुरंत अपनी समिति के एडमिन से संपर्क करें।',
+  'If you did not expect this change, contact your society admin at once.'];
+
 /**
  * Template registry: key → (row, { appUrl }) → { subject, html, text }. Hindi first with an English line
  * (house style, as the invoice email); locale 'en' drops the Hindi.
@@ -45,6 +83,91 @@ export const TEMPLATES = {
       : [`नमस्ते${name ? ` ${name}` : ''},`, '', 'कृपया पुष्टि करें कि यह ईमेल आपका है:', link, '',
          'लिंक 48 घंटे तक चलेगा। / The link works for 48 hours.']).join('\n');
     return { subject, html, text };
+  },
+
+  /** society_users INSERT (migration 143). Carries a verify token unless the address was already verified. */
+  user_invite(row, { appUrl }) {
+    const p = row.payload ?? {};
+    const token = p.token ? String(p.token) : '';
+    if (token && !/^[0-9a-f]{48}$/.test(token)) throw new Error('user_invite: bad token');
+    const en = row.locale === 'en';
+    const soc = String(p.society_name ?? '');
+    const role = roleLabel(p.role, en);
+    const lines = [
+      [`आपको सहकार लेखा पर "${soc}" में ${role} के रूप में जोड़ा गया है (जोड़ने वाले: ${p.by}).`,
+        `You have been added to "${soc}" on SahakarLekha as ${role} (added by ${p.by}).`],
+      ['लॉगिन के लिए यही ईमेल और एडमिन से मिला पासवर्ड इस्तेमाल करें।',
+        'Sign in with this email and the password your admin gives you.'],
+    ];
+    if (token) lines.push(['नीचे बटन दबाकर पुष्टि करें कि यह ईमेल आपका है — तभी आगे की सूचनाएँ यहाँ आएँगी।',
+      'Click below to confirm this email is yours — only then will notifications reach it.']);
+    return notice(row, {
+      subjectHi: `${soc} — सहकार लेखा में आपका स्वागत है`,
+      subjectEn: 'Welcome to SahakarLekha',
+      lines,
+      button: token
+        ? { href: `${base(appUrl)}/verify-email?token=${token}`, hi: 'ईमेल सत्यापित करें', en: 'Verify email' }
+        : { href: `${base(appUrl)}/login`, hi: 'लॉगिन करें', en: 'Sign in' },
+      foot: token
+        ? ['पुष्टि का लिंक 48 घंटे चलेगा। अगर आप इस समिति से जुड़े नहीं हैं, तो इस ईमेल को अनदेखा करें।',
+            'The link works for 48 hours. If you are not part of this society, ignore this email.']
+        : null,
+    });
+  },
+
+  /** society_users role change (migration 143) — a security notice to the affected user. */
+  role_changed(row, { appUrl }) {
+    const p = row.payload ?? {};
+    const en = row.locale === 'en';
+    const soc = String(p.society_name ?? '');
+    return notice(row, {
+      subjectHi: 'आपकी भूमिका बदली गई — सहकार लेखा',
+      subjectEn: 'Your role was changed — SahakarLekha',
+      lines: [[
+        `"${soc}" में आपकी भूमिका ${roleLabel(p.old_role, en)} से बदलकर ${roleLabel(p.new_role, en)} कर दी गई है (बदलने वाले: ${p.by}).`,
+        `Your role in "${soc}" was changed from ${roleLabel(p.old_role, en)} to ${roleLabel(p.new_role, en)} (by ${p.by}).`,
+      ]],
+      button: { href: `${base(appUrl)}/login`, hi: 'ऐप खोलें', en: 'Open the app' },
+      foot: SECURITY_FOOT,
+    });
+  },
+
+  /** society_settings."fyUnlockRequestedBy" set (migration 143) — the other admins must approve. */
+  fy_unlock_requested(row, { appUrl }) {
+    const p = row.payload ?? {};
+    const soc = String(p.society_name ?? '');
+    const fy = p.financial_year ? ` (${p.financial_year})` : '';
+    return notice(row, {
+      subjectHi: 'वित्त वर्ष अनलॉक का अनुरोध — आपकी मंज़ूरी चाहिए',
+      subjectEn: 'FY unlock requested — your approval is needed',
+      lines: [
+        [`"${soc}" के ऑडिट-लॉक वित्त वर्ष${fy} को खोलने का अनुरोध ${p.by} ने किया है।`,
+          `${p.by} has asked to unlock the audit-locked financial year${fy} of "${soc}".`],
+        ['नियम के अनुसार किसी दूसरे एडमिन की मंज़ूरी ज़रूरी है: Society Setup → FY Lock में देखें।',
+          'A different admin must approve it: see Society Setup → FY Lock.'],
+      ],
+      button: { href: `${base(appUrl)}/society-setup`, hi: 'Society Setup खोलें', en: 'Open Society Setup' },
+      foot: SECURITY_FOOT,
+    });
+  },
+
+  /** society_settings."fyLocked" true → false (migration 143) — every admin is told. */
+  fy_unlocked(row, { appUrl }) {
+    const p = row.payload ?? {};
+    const soc = String(p.society_name ?? '');
+    const fy = p.financial_year ? ` (${p.financial_year})` : '';
+    return notice(row, {
+      subjectHi: 'वित्त वर्ष अनलॉक हुआ — सहकार लेखा',
+      subjectEn: 'Financial year unlocked — SahakarLekha',
+      lines: [
+        [`"${soc}" का ऑडिट-लॉक वित्त वर्ष${fy} अनलॉक कर दिया गया है (अनलॉक करने वाले: ${p.by}).`,
+          `The audit-locked financial year${fy} of "${soc}" was unlocked (by ${p.by}).`],
+        ['अब इस वर्ष की entries बदली जा सकती हैं। काम पूरा होने पर इसे फिर से लॉक करें।',
+          'Entries for this year can now be changed. Lock it again when the work is done.'],
+      ],
+      button: { href: `${base(appUrl)}/society-setup`, hi: 'Society Setup खोलें', en: 'Open Society Setup' },
+      foot: SECURITY_FOOT,
+    });
   },
 };
 

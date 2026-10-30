@@ -8,8 +8,11 @@ verification email itself is the only exception.
 
 Run every command from the repo root (`D:\Website\sahakarlekha`).
 
-1. **Migration** — paste `supabase/migrations/142_notification_outbox.sql` into the SQL Editor → plain **Run**.
-   Then run the VERIFY query at the bottom of that file (expect `3 | 3 | 0 | 6 | 1`).
+1. **Migrations** — paste `supabase/migrations/142_notification_outbox.sql` into the SQL Editor → plain **Run**,
+   then its VERIFY query (expect `3 | 3 | 0 | 6 | 1`). Then a NEW query with
+   `143_notification_triggers.sql` → **Run**, then its VERIFY (expect `3 | 3 | 1`).
+   From 143 on, adding a user / changing a role / requesting or doing an FY unlock queues an email
+   (the invite goes out even unverified — it carries the verification link; the rest only to verified addresses).
 2. **Resend** — domain `notify.sahakarlekha.com` verified, and `RESEND_API_KEY` + `RESEND_FROM` set
    (see the email plan). Optional: a separate sender for notifications:
    ```bash
