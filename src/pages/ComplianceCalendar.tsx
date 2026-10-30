@@ -2,8 +2,9 @@
  * Compliance Calendar (ECR-13) — statutory due dates for the society.
  *
  * Slice 1: a read-only view of upcoming + recently-passed statutory deadlines (PF/ESI/TDS/
- * GST/24Q/IT return/audit), derived from society config + the clock. Notification channels,
- * role-routed alerts and per-item "filed" tracking are later slices.
+ * GST/24Q/IT return/audit), derived from society config + the clock. "Mark filed" persists to
+ * compliance_filings; sourced items are emailed to admins by the compliance-reminders Edge Function
+ * (src/lib/complianceReminders.ts, migration 145).
  */
 import React, { useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -42,6 +43,8 @@ const ComplianceCalendar: React.FC = () => {
   // byte-identical for the 4 legacy roles, opens edit to operational roles (delete fail-closes
   // at the data layer).
   const canEdit = can('update');
+  // Undo = a DELETE on compliance_filings, which RLS allows only to jwt_can_delete() roles (migration 030).
+  const canUndo = can('delete');
   const filedIds = getComplianceFiledIds();
 
   const items = useMemo(() => {
@@ -111,7 +114,7 @@ const ComplianceCalendar: React.FC = () => {
                     <TableCell><Badge variant="outline" className={STATUS_META[it.status].cls}>{hi ? STATUS_META[it.status].hi : STATUS_META[it.status].en}</Badge></TableCell>
                     {canEdit && (
                       <TableCell className="text-center">
-                        {it.status === 'filed' ? (
+                        {it.status === 'filed' ? (canUndo &&
                           <Button variant="ghost" size="sm" className="h-8 gap-1 text-muted-foreground" onClick={() => unmarkComplianceFiled(it.id)}>
                             <RotateCcw className="h-3.5 w-3.5" />{hi ? 'हटाएं' : 'Undo'}
                           </Button>
@@ -131,8 +134,8 @@ const ComplianceCalendar: React.FC = () => {
       </Card>
 
       <p className="text-[11px] text-muted-foreground">
-        {hi ? 'नोट: तिथियाँ मानक सांविधिक हैं; society के GSTIN/TAN/कर्मचारी के अनुसार दिखती हैं। SMS/WhatsApp/ईमेल अलर्ट व "फाइल हो गया" ट्रैकिंग अगली slices में।'
-            : 'Note: standard statutory dates, shown per the society\'s GSTIN/TAN/employees. SMS/WhatsApp/email alerts and "filed" tracking come in later slices.'}
+        {hi ? 'नोट: तिथियाँ मानक सांविधिक हैं; society के GSTIN/TAN/कर्मचारी के अनुसार दिखती हैं। ईमेल याद-दहानी (देय तिथि से 7 व 2 दिन पहले और उसी दिन, सत्यापित ईमेल वाले एडमिन को) अभी सिर्फ़ TDS जमा, Form 138 (24Q) और हरियाणा के वैधानिक ऑडिट के लिए जाती है — जिनकी तारीख़ नियम के पाठ से मिलाई गई है। "फाइल हुआ" दबाने पर याद-दहानी बंद।'
+            : 'Note: standard statutory dates, shown per the society\'s GSTIN/TAN/employees. Email reminders (7 and 2 days before and on the due date, to admins with a verified email) cover only TDS deposit, Form 138 (24Q) and the Haryana statutory audit for now — the dates checked against the rule text. "Mark filed" stops them.'}
       </p>
     </div>
   );

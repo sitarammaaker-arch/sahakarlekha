@@ -4181,6 +4181,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ECR-13: mark a compliance calendar item as filed (idempotent) / unmark it.
   const markComplianceFiled = useCallback((itemId: string, note?: string): void => {
+    if (guardFYLocked()) return;   // RULE 6
     if (complianceFilingsRef.current.some(f => f.itemId === itemId)) return;
     const filing: ComplianceFiling = { id: crypto.randomUUID(), itemId, filedAt: new Date().toISOString().split('T')[0], filedBy: userRef.current?.name, note };
     complianceFilingsRef.current = [...complianceFilingsRef.current, filing];
@@ -4194,15 +4195,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
     emitAudit({ entityType: 'compliance', entityId: itemId, action: 'update', after: { filed: true } });
-  }, []);
+  }, [guardFYLocked]);
   const unmarkComplianceFiled = useCallback((itemId: string): void => {
+    if (guardFYLocked()) return;   // RULE 6
     const filing = complianceFilingsRef.current.find(f => f.itemId === itemId);
     if (!filing) return;
     complianceFilingsRef.current = complianceFilingsRef.current.filter(f => f.itemId !== itemId);
     setComplianceFilingsState(prev => prev.filter(f => f.itemId !== itemId));
-    supabase.from('compliance_filings').delete().eq('id', filing.id).then(({ error }) => { if (error) { console.warn('Compliance filing delete:', error.message); reportError('write-partial', error.message, { at: 'Compliance filing delete:' }); } });
+    // RLS lets only jwt_can_delete() roles delete, and a refused delete removes 0 rows WITHOUT an error — so
+    // check the returned rows too. On failure restore the filing locally (RULE 1): the server still has it,
+    // and the reminder emails (migration 145) keep treating the item as filed.
+    supabase.from('compliance_filings').delete().eq('id', filing.id).select('id').then(({ data, error }) => {
+      if (!error && (data?.length ?? 0) > 0) return;
+      const msg = error?.message ?? 'no row deleted (permission)';
+      console.warn('Compliance filing delete:', msg);
+      reportError('write-partial', msg, { at: 'Compliance filing delete:' });
+      complianceFilingsRef.current = [...complianceFilingsRef.current.filter(f => f.id !== filing.id), filing];
+      setComplianceFilingsState(prev => [...prev.filter(f => f.id !== filing.id), filing]);
+      toastRef.current({ title: 'हटाया नहीं गया', description: `"फाइल हुआ" निशान क्लाउड से नहीं हटा — ${error ? error.message : 'आपकी भूमिका में हटाने की अनुमति नहीं है'}। (Could not undo "filed".)`, variant: 'destructive', duration: 10000 });
+    });
     emitAudit({ entityType: 'compliance', entityId: itemId, action: 'update', after: { filed: false } });
-  }, []);
+  }, [guardFYLocked]);
   const getComplianceFiledIds = useCallback((): string[] => complianceFilings.map(f => f.itemId), [complianceFilings]);
 
   // ── Housing Flats/Units register (master data; Member-pattern persistence + RULE-1 rollback) ──
