@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
@@ -33,6 +35,10 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { user } = useAuth();
+  // 147: only admins receive the weekly digest, so only they see its switch. null = not loaded / not migrated.
+  const [digest, setDigest] = useState<boolean | null>(null);
+  const [digestBusy, setDigestBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -47,7 +53,34 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
         setLoading(false);
       }
     })();
-  }, [open]);
+    if (user?.role === 'admin') {
+      (async () => {
+        try {
+          const { data, error } = await supabase.rpc('my_email_preferences');
+          setDigest(error ? null : ((data as { weekly_digest?: boolean } | null)?.weekly_digest ?? true));
+        } catch {
+          setDigest(null);
+        }
+      })();
+    }
+  }, [open, user?.role]);
+
+  const toggleDigest = async (on: boolean) => {
+    setDigestBusy(true);
+    try {
+      const { data, error } = await supabase.rpc('set_my_weekly_digest', { p_on: on });
+      if (error || (data as { status?: string } | null)?.status !== 'saved') {
+        toast({ title: 'सेटिंग नहीं बदली', description: error?.message || 'कुछ देर बाद दोबारा कोशिश करें।', variant: 'destructive', duration: 10000 });
+        return;
+      }
+      setDigest(on);
+      toast({ title: on ? 'साप्ताहिक सारांश चालू' : 'साप्ताहिक सारांश बंद', description: on ? 'हर सोमवार सुबह सारांश आएगा।' : 'अब सोमवार का सारांश नहीं आएगा।' });
+    } catch {
+      toast({ title: 'सेटिंग नहीं बदली', description: 'कुछ देर बाद दोबारा कोशिश करें।', variant: 'destructive', duration: 10000 });
+    } finally {
+      setDigestBusy(false);
+    }
+  };
 
   const send = async () => {
     setBusy(true);
@@ -117,6 +150,17 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
                   {status.pending ? (hi ? 'लिंक दोबारा भेजें' : 'Send the link again') : (hi ? 'सत्यापन लिंक भेजें' : 'Send verification link')}
                 </Button>
               </>
+            )}
+            {digest !== null && (
+              <div className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                <div className="text-sm">
+                  <div className="font-medium">{hi ? 'साप्ताहिक सारांश ईमेल' : 'Weekly summary email'}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {hi ? 'हर सोमवार सुबह: वाउचर, मंज़ूरी और अनुपालन की गिनती।' : 'Every Monday morning: voucher, approval and compliance counts.'}
+                  </div>
+                </div>
+                <Switch checked={digest} disabled={digestBusy} onCheckedChange={toggleDigest} aria-label={hi ? 'साप्ताहिक सारांश' : 'Weekly summary'} />
+              </div>
             )}
           </div>
         )}

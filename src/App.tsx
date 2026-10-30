@@ -222,6 +222,7 @@ const VerifyBackup = lazyWithRetry(() => import("./pages/VerifyBackup"));
 const RestoreCenter = lazyWithRetry(() => import("./pages/RestoreCenter"));
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
 const VerifyEmail = lazyWithRetry(() => import("./pages/VerifyEmail"));
+const EmailUnsubscribe = lazyWithRetry(() => import("./pages/EmailUnsubscribe"));
 const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
 const TermsConditions = lazyWithRetry(() => import("./pages/TermsConditions"));
 const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
@@ -297,6 +298,7 @@ const AppRoutes = () => {
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/email-unsubscribe" element={<EmailUnsubscribe />} />
       
       {/* Public Landing Page */}
       <Route path="/" element={<LandingPage />} />

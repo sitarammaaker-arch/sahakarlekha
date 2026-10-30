@@ -10,6 +10,7 @@ import Breadcrumbs from './Breadcrumbs';
 import NextSteps from './NextSteps';
 import SubscriptionBanner from '@/components/SubscriptionBanner';
 import OfflineBanner from '@/components/OfflineBanner';
+import EmailVerifyBanner from '@/components/EmailVerifyBanner';
 import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { fmtDate } from '@/lib/dateUtils';
@@ -85,6 +86,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           <div className="print:hidden">
             <OfflineBanner />
             <SubscriptionBanner />
+            <EmailVerifyBanner />
             <Breadcrumbs />
             <ModuleGlossaryBar />
           </div>
