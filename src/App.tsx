@@ -221,12 +221,14 @@ const ExportCenter = lazyWithRetry(() => import("./pages/ExportCenter"));
 const VerifyBackup = lazyWithRetry(() => import("./pages/VerifyBackup"));
 const RestoreCenter = lazyWithRetry(() => import("./pages/RestoreCenter"));
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
+const VerifyEmail = lazyWithRetry(() => import("./pages/VerifyEmail"));
 const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
 const TermsConditions = lazyWithRetry(() => import("./pages/TermsConditions"));
 const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
 const SuperAdminDashboard = lazyWithRetry(() => import("./pages/SuperAdminDashboard"));
 const SuperAdminFeedback = lazyWithRetry(() => import("./pages/SuperAdminFeedback"));
 const SuperAdminInvoices = lazyWithRetry(() => import("./pages/SuperAdminInvoices"));
+const SuperAdminEmails = lazyWithRetry(() => import("./pages/SuperAdminEmails"));
 import { SuperAdminRoute } from "@/components/SuperAdminRoute";
 
 import { staticSnapshotFor } from '@/lib/staticSnapshot';
@@ -294,6 +296,7 @@ const AppRoutes = () => {
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
       
       {/* Public Landing Page */}
       <Route path="/" element={<LandingPage />} />
@@ -488,6 +491,7 @@ const AppRoutes = () => {
       <Route path="/super-admin" element={<SuperAdminRoute><MainLayout><SuperAdminDashboard /></MainLayout></SuperAdminRoute>} />
       <Route path="/super-admin/feedback" element={<SuperAdminRoute><MainLayout><SuperAdminFeedback /></MainLayout></SuperAdminRoute>} />
       <Route path="/super-admin/invoices" element={<SuperAdminRoute><MainLayout><SuperAdminInvoices /></MainLayout></SuperAdminRoute>} />
+      <Route path="/super-admin/emails" element={<SuperAdminRoute><MainLayout><SuperAdminEmails /></MainLayout></SuperAdminRoute>} />
 
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />

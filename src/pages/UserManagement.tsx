@@ -5,6 +5,7 @@ import { useData } from '@/contexts/DataContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { startCheckout } from '@/lib/razorpayCheckout';
 import SubscriptionInvoices from '@/components/billing/SubscriptionInvoices';
+import SocietyEmailLog from '@/components/email/SocietyEmailLog';
 import CheckoutBuyerDialog from '@/components/billing/CheckoutBuyerDialog';
 import type { CheckoutBuyer } from '@/lib/billing/checkoutBuyer';
 import { supabase } from '@/lib/supabase';
@@ -482,6 +483,8 @@ export default function UserManagement() {
       </Card>
 
       <SubscriptionInvoices societyId={currentUser?.societyId || ''} hi={hi} />
+
+      {currentUser?.role === 'admin' && <SocietyEmailLog hi={hi} />}
 
       <CheckoutBuyerDialog
         open={!!payFor}

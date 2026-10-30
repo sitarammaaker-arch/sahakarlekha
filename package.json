@@ -358,6 +358,7 @@
     "test:subscription-invoice-pdf": "node scripts/test-subscription-invoice-pdf.mjs",
     "test:issue-invoice": "node scripts/test-issue-invoice.mjs",
     "test:invoice-email": "node scripts/test-invoice-email.mjs",
+    "test:email-outbox": "node scripts/test-email-outbox.mjs",
     "test:gstr1-csv": "node scripts/test-gstr1-csv.mjs",
     "test:checkout-buyer": "node scripts/test-checkout-buyer.mjs",
     "test:invoice-core": "node scripts/test-invoice-core.mjs",

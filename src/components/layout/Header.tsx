@@ -14,11 +14,12 @@ import {
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Languages, Bell, User, Settings, HelpCircle, Menu, LogOut, Search, Landmark, ShieldAlert, XCircle, Lock, CalendarClock, ShieldCheck, Warehouse, Sparkles } from 'lucide-react';
+import { Languages, Bell, User, Settings, HelpCircle, Menu, LogOut, Search, Landmark, ShieldAlert, XCircle, Lock, CalendarClock, ShieldCheck, Warehouse, Sparkles, Mail } from 'lucide-react';
 import { buildComplianceCalendar, complianceNotifications } from '@/lib/complianceCalendar';
 import { cn } from '@/lib/utils';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { MfaSetupDialog } from '@/components/security/MfaSetupDialog';
+import { EmailVerifyDialog } from '@/components/security/EmailVerifyDialog';
 import { helpForRoute } from '@/content/help';
 import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
 import { todayStr } from '@/lib/dateUtils';
@@ -39,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
   const ctxHelp = helpForRoute(pathname); // matching how-to for the current screen, if any
   const [searchOpen, setSearchOpen] = useState(false);
   const [mfaOpen, setMfaOpen] = useState(false);
+  const [emailVerifyOpen, setEmailVerifyOpen] = useState(false);
 
   // Live notification data
   // One overdue rule (due date passed, or marked) — the same the interest accrual uses (RULE 2).
@@ -384,6 +386,10 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
                   {language === 'hi' ? 'सुरक्षा (2FA)' : 'Security (2FA)'}
                   {user?.mfaEnabled && <Badge variant="outline" className="ml-auto text-[10px] px-1">ON</Badge>}
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setEmailVerifyOpen(true)}>
+                  <Mail className="h-4 w-4 mr-2" />
+                  {language === 'hi' ? 'ईमेल सत्यापन' : 'Email verification'}
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => window.open('/help', '_blank', 'noopener')}>
                   <HelpCircle className="h-4 w-4 mr-2" />
@@ -402,6 +408,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
 
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
       <MfaSetupDialog open={mfaOpen} onOpenChange={setMfaOpen} />
+      <EmailVerifyDialog open={emailVerifyOpen} onOpenChange={setEmailVerifyOpen} />
     </>
   );
 };

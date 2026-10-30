@@ -1,0 +1,253 @@
+// The notification outbox worker (supabase/functions/_shared/email-outbox.mjs, email slice 1) driven with a FAKE
+// service-role client and a FAKE Resend, plus static guards on migration 142, the send-worker function and the UI.
+// Run: node scripts/test-email-outbox.mjs   (npm run test:email-outbox)
+import { readFileSync } from 'node:fs';
+import { runOutbox, renderRow, TEMPLATES } from '../supabase/functions/_shared/email-outbox.mjs';
+import { verifySvix, signSvix, handleResendEvent } from '../supabase/functions/_shared/resend-webhook.mjs';
+
+let pass = 0, fail = 0;
+const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
+const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+
+const TOKEN = 'a'.repeat(48);
+const ROW = (over = {}) => ({
+  id: 'r1', society_id: 'SOC1', channel: 'email', template_key: 'email_verify', locale: 'hi',
+  recipient: 'clerk@example.com', payload: { token: TOKEN, name: 'Ram <Lal>' }, idempotency_key: 'email_verify:clerk@example.com:1',
+  status: 'sending', attempts: 1, ...over,
+});
+
+/** Fake client: claim_outbox returns `rows`; complete_outbox records the call and answers like migration 142. */
+function fakeClient(rows, { claimError } = {}) {
+  const calls = [];
+  return {
+    calls,
+    rpc: async (name, args) => {
+      calls.push({ name, args });
+      if (name === 'claim_outbox') return claimError ? { data: null, error: { message: claimError } } : { data: rows, error: null };
+      if (name === 'complete_outbox') {
+        const row = rows.find((r) => r.id === args.p_id);
+        const verdict = args.p_ok ? 'sent' : args.p_retryable && row.attempts < 5 ? 'retry' : 'failed';
+        return { data: verdict, error: null };
+      }
+      return { data: null, error: { message: `unexpected rpc ${name}` } };
+    },
+  };
+}
+
+/** Fake Resend: `reply(n)` gives the n-th response. */
+function fakeFetch(reply = () => ({ ok: true, status: 200, json: async () => ({ id: 'em_1' }), text: async () => '' })) {
+  const calls = [];
+  const f = async (url, init) => { calls.push({ url, init, body: JSON.parse(init.body) }); return reply(calls.length); };
+  return { calls, f };
+}
+const CFG = (f, extra = {}) => ({ apiKey: 're_test', from: 'सहकार लेखा <no-reply@notify.example>', appUrl: 'https://app.example/', fetch: f, gapMs: 0, ...extra });
+const completes = (c) => c.calls.filter((x) => x.name === 'complete_outbox').map((x) => x.args);
+
+// ── 1. Not configured → claims nothing ──────────────────────────────────────
+{
+  const c = fakeClient([ROW()]);
+  const r = fakeFetch();
+  ok((await runOutbox(c, { fetch: r.f })).status === 'not_configured', 'no key → not_configured');
+  ok((await runOutbox(c, { apiKey: 'k', fetch: r.f })).status === 'not_configured', 'no from → not_configured');
+  ok(c.calls.length === 0 && r.calls.length === 0, 'not configured → no claim, no send (rows keep waiting)');
+}
+
+// ── 2. Happy path ───────────────────────────────────────────────────────────
+{
+  const c = fakeClient([ROW()]);
+  const r = fakeFetch();
+  const out = await runOutbox(c, CFG(r.f, { batch: 7, dailyCap: 33 }));
+  ok(out.status === 'ok' && out.claimed === 1 && out.sent === 1, 'one claimed, one sent');
+  ok(c.calls[0].name === 'claim_outbox' && c.calls[0].args.p_limit === 7 && c.calls[0].args.p_daily_cap === 33, 'batch + daily cap reach claim_outbox');
+  const h = r.calls[0].init.headers;
+  ok(h.Authorization === 'Bearer re_test' && h['Idempotency-Key'] === 'email_verify:clerk@example.com:1', 'Idempotency-Key = row key');
+  const b = r.calls[0].body;
+  ok(b.to.length === 1 && b.to[0] === 'clerk@example.com', 'sent only to the row recipient');
+  ok(b.html.includes(`https://app.example/verify-email?token=${TOKEN}`) && b.text.includes(`https://app.example/verify-email?token=${TOKEN}`), 'verify link in html + text (trailing slash trimmed)');
+  ok(b.html.includes('Ram &lt;Lal&gt;') && !b.html.includes('Ram <Lal>'), 'name is HTML-escaped');
+  ok(b.subject.startsWith('अपना ईमेल सत्यापित करें'), 'Hindi-first subject');
+  const done = completes(c)[0];
+  ok(done.p_id === 'r1' && done.p_ok === true && done.p_provider_id === 'em_1', 'complete_outbox(ok, provider id)');
+}
+
+// ── 3. Failures: retryable vs permanent ─────────────────────────────────────
+{
+  const rows = [ROW({ id: 'a', idempotency_key: 'k1' }), ROW({ id: 'b', idempotency_key: 'k2' }), ROW({ id: 'c', idempotency_key: 'k3' }), ROW({ id: 'd', idempotency_key: 'k4' })];
+  const replies = [
+    { ok: false, status: 429, text: async () => 'rate limited' },
+    { ok: false, status: 503, text: async () => '' },
+    { ok: false, status: 422, text: async () => 'invalid to' },
+  ];
+  const r = fakeFetch((n) => { if (n === 4) throw new Error('ECONNRESET'); return replies[n - 1]; });
+  const c = fakeClient(rows);
+  const out = await runOutbox(c, CFG(r.f));
+  const cs = completes(c);
+  ok(cs[0].p_retryable === true && cs[0].p_error.startsWith('resend 429'), '429 → retryable');
+  ok(cs[1].p_retryable === true, '5xx → retryable');
+  ok(cs[2].p_retryable === false && cs[2].p_error.includes('invalid to'), '422 → permanent');
+  ok(cs[3].p_retryable === true && cs[3].p_error.startsWith('network: ECONNRESET'), 'network error → retryable');
+  ok(out.retry === 3 && out.failed === 1 && out.sent === 0, 'counts: 3 retry, 1 failed');
+}
+
+// ── 4. Render failures never reach Resend ───────────────────────────────────
+{
+  const c = fakeClient([ROW({ id: 'x', template_key: 'nope' }), ROW({ id: 'y', payload: { token: 'short' } })]);
+  const r = fakeFetch();
+  const out = await runOutbox(c, CFG(r.f));
+  ok(r.calls.length === 0, 'unknown template / bad token → no send');
+  const cs = completes(c);
+  ok(cs.every((x) => x.p_ok === false && x.p_retryable === false), 'render failures are permanent');
+  ok(cs[0].p_error.includes('unknown template') && cs[1].p_error.includes('no token'), 'render error recorded');
+  ok(out.failed === 2, 'both failed');
+}
+
+// ── 5. Claim error / thrown claim → error, no send ──────────────────────────
+{
+  const c = fakeClient([], { claimError: 'boom' });
+  const out = await runOutbox(c, CFG(fakeFetch().f));
+  ok(out.status === 'error' && out.error === 'claim: boom', 'claim error surfaced');
+  const thrower = { rpc: async () => { throw new Error('down'); } };
+  const out2 = await runOutbox(thrower, CFG(fakeFetch().f));
+  ok(out2.status === 'error' && out2.error === 'claim: down', 'thrown claim never escapes');
+}
+
+// ── 6. Templates ────────────────────────────────────────────────────────────
+{
+  const en = renderRow(ROW({ locale: 'en' }), { appUrl: '' });
+  ok(en.subject === 'Verify your email — SahakarLekha' && !/[ऀ-ॿ]/.test(en.text), 'locale en → English only');
+  ok(en.html.includes(`https://sahakarlekha.com/verify-email?token=${TOKEN}`), 'default app URL');
+  ok(Object.keys(TEMPLATES).sort().join() === 'email_verify,fy_unlock_requested,fy_unlocked,role_changed,user_invite', 'template set (slices 1–2)');
+  let threw = false; try { renderRow(ROW({ payload: {} })); } catch { threw = true; }
+  ok(threw, 'missing token throws');
+}
+
+// ── 6b. Slice 2 templates (migration 143 payloads) ──────────────────────────
+{
+  const soc = 'किसान <PACS>';
+  const inv = renderRow(ROW({ template_key: 'user_invite', payload: { token: TOKEN, name: 'Sita', role: 'accountant', society_name: soc, by: 'admin@x.in' } }), { appUrl: 'https://app.example' });
+  ok(inv.html.includes(`https://app.example/verify-email?token=${TOKEN}`) && inv.text.includes(`/verify-email?token=${TOKEN}`), 'invite with token → verify link');
+  ok(inv.html.includes('लेखाकार (accountant)') && inv.html.includes('किसान &lt;PACS&gt;') && !inv.html.includes('<PACS>'), 'invite: Hindi role label, society escaped');
+  ok(inv.subject.startsWith('किसान <PACS> — सहकार लेखा में आपका स्वागत है'), 'invite subject names the society');
+  const inv2 = renderRow(ROW({ template_key: 'user_invite', payload: { name: 'Sita', role: 'storeKeeper', society_name: 'S', by: 'system' } }), { appUrl: 'https://app.example' });
+  ok(inv2.html.includes('https://app.example/login') && !inv2.html.includes('verify-email'), 'invite to a verified address → login link, no token');
+  let bad = false; try { renderRow(ROW({ template_key: 'user_invite', payload: { token: 'zz' } })); } catch { bad = true; }
+  ok(bad, 'invite with a malformed token throws');
+
+  const rc = renderRow(ROW({ template_key: 'role_changed', payload: { name: 'Sita', old_role: 'viewer', new_role: 'admin', society_name: 'S', by: 'a@x.in' } }), {});
+  ok(rc.html.includes('व्यूअर (viewer)') && rc.html.includes('एडमिन (admin)') && rc.html.includes('a@x.in'), 'role change: old → new + actor');
+  ok(rc.text.includes('If you did not expect this change'), 'role change carries the security footnote');
+  const rcEn = renderRow(ROW({ template_key: 'role_changed', locale: 'en', payload: { old_role: 'viewer', new_role: 'mystery', society_name: 'S', by: 'b' } }), {});
+  ok(rcEn.subject === 'Your role was changed — SahakarLekha' && rcEn.html.includes('from viewer to mystery') && !/[ऀ-ॿ]/.test(rcEn.text), 'role change en: raw roles, no Hindi');
+
+  const req = renderRow(ROW({ template_key: 'fy_unlock_requested', payload: { name: 'B', society_name: 'S', by: 'a@x.in', financial_year: '2025-26' } }), { appUrl: 'https://app.example' });
+  ok(req.html.includes('(2025-26)') && req.html.includes('https://app.example/society-setup') && req.subject.includes('मंज़ूरी'), 'unlock request: FY, approve link');
+  const unl = renderRow(ROW({ template_key: 'fy_unlocked', payload: { society_name: 'S', by: 'system' } }), {});
+  ok(unl.html.includes('अनलॉक करने वाले: system') && !unl.html.includes('()'), 'unlocked: actor, no empty FY brackets');
+  ok([inv, rc, req, unl].every((m) => !/undefined|null/.test(m.text)), 'no "undefined"/"null" leaks into any text');
+}
+
+// ── 7. Static guards: migration 142 ─────────────────────────────────────────
+{
+  const m = read('supabase/migrations/142_notification_outbox.sql');
+  const sqlOnly = m.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
+  ok(!/create policy/i.test(sqlOnly), 'no client policies on outbox / suppression / verifications');
+  ok((sqlOnly.match(/enable row level security/g) ?? []).length === 3, 'RLS on all three tables');
+  for (const fn of ['enqueue_notification', 'claim_outbox', 'complete_outbox']) {
+    ok(new RegExp(`revoke execute on function public\\.${fn}\\([^)]*\\) from public, anon, authenticated;`).test(sqlOnly)
+      && new RegExp(`grant execute on function public\\.${fn}\\([^)]*\\) to service_role;`).test(sqlOnly), `${fn} is service-role only`);
+  }
+  ok(/grant execute on function public\.request_email_verification\(text\) to authenticated;/.test(sqlOnly), 'request: authenticated only');
+  ok(/grant execute on function public\.confirm_email_verification\(text\) to anon, authenticated;/.test(sqlOnly), 'confirm: anon + authenticated');
+  ok(/template_key <> 'email_verify'/.test(sqlOnly) && /verified_at is not null/.test(sqlOnly), 'claim skips unverified recipients except email_verify');
+  ok(/from public\.email_suppression s/.test(sqlOnly), 'claim checks the suppression list');
+  ok(/for update skip locked/.test(sqlOnly) && /interval '5 minutes'/.test(sqlOnly), 'lease claim with skip locked');
+  ok(/payload = payload - 'token'/.test(sqlOnly), 'token stripped from payload once sent');
+  ok(/auth\.jwt\(\) ->> 'email'/.test(sqlOnly) && !/p_recipient/.test(sqlOnly.split('request_email_verification')[1] ?? ''), 'verification recipient comes from the JWT');
+  ok(/encode\(digest\(v_token, 'sha256'\), 'hex'\)/.test(sqlOnly) && /interval '48 hours'/.test(sqlOnly), 'token stored hashed, 48 h expiry');
+  ok(/insert into public\.app_migrations \(version, name\) values \('142', 'notification_outbox'\)/.test(sqlOnly), 'migration registered');
+  const down = read('supabase/migrations/142_notification_outbox_down.sql');
+  ok(/drop table if exists public\.notification_outbox/.test(down) && /delete from public\.app_migrations where version = '142'/.test(down), 'down file undoes it');
+}
+
+// ── 7b. Static guards: migration 143 (triggers) ─────────────────────────────
+{
+  const m = read('supabase/migrations/143_notification_triggers.sql');
+  const sqlOnly = m.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
+  ok(/template_key not in \('email_verify', 'user_invite'\)/.test(sqlOnly), 'claim exempts only email_verify + user_invite from the verified gate');
+  ok(/after insert on public\.society_users/.test(sqlOnly) && /after update of role on public\.society_users/.test(sqlOnly), 'user triggers: insert + role update');
+  ok(/after update on public\.society_settings/.test(sqlOnly), 'FY trigger on society_settings');
+  ok((sqlOnly.match(/exception when others then\s+raise warning/g) ?? []).length === 2, 'both trigger bodies swallow errors (a save never fails on a notification)');
+  ok(!/net\.http_post|http_request/.test(sqlOnly), 'triggers never call HTTP');
+  ok(/lower\(su\.email\) <> lower\(new\."fyUnlockRequestedBy"\)/.test(sqlOnly), 'requester is not told about their own unlock request');
+  ok(/su\.role = 'admin' and su\.is_active/.test(sqlOnly), 'FY notices go to active admins only');
+  ok(/insert into public\.app_migrations \(version, name\) values \('143', 'notification_triggers'\)/.test(sqlOnly), 'migration 143 registered');
+  const down = read('supabase/migrations/143_notification_triggers_down.sql');
+  ok(/drop trigger if exists trg_notify_fy_unlock/.test(down) && /template_key <> 'email_verify'/.test(down), 'down drops triggers and restores the 142 claim');
+}
+
+// ── 7c. Resend webhook core (slice 3) ───────────────────────────────────────
+{
+  const secret = 'whsec_' + Buffer.from('a-test-signing-key-32-bytes-long!').toString('base64');
+  const body = JSON.stringify({ type: 'email.bounced', data: { email_id: 'em_1', to: ['Bad@Example.com'], bounce: { type: 'Permanent', subType: 'General', message: 'no such user' } } });
+  const now = 1_800_000_000;
+  const sig = await signSvix(secret, 'msg_1', String(now), body);
+  ok((await verifySvix(secret, { id: 'msg_1', timestamp: String(now), signature: sig }, body, now)).ok, 'valid Svix signature accepted');
+  ok((await verifySvix(secret, { id: 'msg_1', timestamp: String(now), signature: `v1,bogus ${sig}` }, body, now)).ok, 'any one valid v1 signature in the list is enough');
+  ok((await verifySvix(secret, { id: 'msg_1', timestamp: String(now), signature: sig }, body + ' ', now)).reason === 'bad_signature', 'changed body → bad_signature');
+  ok((await verifySvix(secret, { id: 'msg_2', timestamp: String(now), signature: sig }, body, now)).reason === 'bad_signature', 'other svix-id → bad_signature');
+  ok((await verifySvix(secret, { id: 'msg_1', timestamp: String(now), signature: sig }, body, now + 301)).reason === 'stale_timestamp', 'older than 5 min → stale_timestamp');
+  ok((await verifySvix(secret, { id: 'msg_1', timestamp: String(now) }, body, now)).reason === 'missing_headers', 'missing signature header');
+  ok((await verifySvix('', { id: 'msg_1', timestamp: String(now), signature: sig }, body, now)).reason === 'secret_not_configured', 'no secret → refused');
+  ok((await verifySvix(secret, { id: 'msg_1', timestamp: String(now), signature: sig.replace('v1,', 'v2,') }, body, now)).reason === 'bad_signature', 'only v1 signatures count');
+
+  const calls = [];
+  const supa = { rpc: async (n, a) => { calls.push({ n, a }); return { data: { status: 'recorded', matched: 1, suppressed: 1 }, error: null }; } };
+  const out = await handleResendEvent(supa, JSON.parse(body));
+  ok(out.status === 'recorded' && out.suppressed === 1, 'bounce recorded');
+  ok(calls[0].n === 'record_email_event' && calls[0].a.p_provider_id === 'em_1' && calls[0].a.p_type === 'email.bounced', 'record_email_event(provider id, type)');
+  ok(calls[0].a.p_recipients[0] === 'Bad@Example.com' && calls[0].a.p_detail === 'Permanent · General · no such user', 'recipients + bounce detail passed');
+  ok((await handleResendEvent(supa, { type: 'email.opened', data: {} })).status === 'ignored' && calls.length === 1, 'opens/clicks ignored (no tracking stored)');
+  await handleResendEvent(supa, { type: 'email.complained', data: { email_id: 'em_2', to: 'x@y.in' } });
+  ok(calls[1].a.p_detail === 'spam complaint' && calls[1].a.p_recipients[0] === 'x@y.in', 'complaint: string to → array');
+  const bad = await handleResendEvent({ rpc: async () => ({ data: null, error: { message: 'db down' } }) }, { type: 'email.delivered', data: { email_id: 'e' } });
+  ok(bad.status === 'error' && bad.error === 'db down', 'db error surfaced (function answers 500 → Resend retries)');
+}
+
+// ── 7d. Static guards: migration 144 + webhook function ─────────────────────
+{
+  const m = read('supabase/migrations/144_email_events_and_log.sql');
+  const sqlOnly = m.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
+  ok(/revoke execute on function public\.record_email_event\(text, text, text\[\], text\) from public, anon, authenticated;/.test(sqlOnly)
+    && /grant execute on function public\.record_email_event\(text, text, text\[\], text\) to service_role;/.test(sqlOnly), 'record_email_event is service-role only');
+  ok((sqlOnly.match(/if not public\.is_platform_admin\(\) then/g) ?? []).length === 3, 'three admin RPCs gated on is_platform_admin');
+  ok(/not public\.is_society_admin\(v_society\)/.test(sqlOnly) && /where o\.society_id = v_society/.test(sqlOnly), 'society log: admin of, and only, the caller society');
+  ok(!/o\.payload/.test(sqlOnly), 'no log RPC returns the payload (tokens)');
+  ok(/case when v_status = 'bounced' then 'bounce' else 'complaint' end/.test(sqlOnly), 'bounce/complaint → suppression');
+  ok(/insert into public\.app_migrations \(version, name\) values \('144', 'email_events_and_log'\)/.test(sqlOnly), 'migration 144 registered');
+  const w = read('supabase/functions/resend-webhook/index.ts');
+  ok(/await req\.text\(\)/.test(w) && w.indexOf('verifySvix(') < w.indexOf('JSON.parse(raw)'), 'webhook verifies the RAW body before parsing');
+  ok(/RESEND_WEBHOOK_SECRET/.test(w) && /--no-verify-jwt/.test(w), 'webhook secret + deploy note');
+  const app = read('src/App.tsx');
+  ok(/path="\/super-admin\/emails" element=\{<SuperAdminRoute>/.test(app), '/super-admin/emails behind SuperAdminRoute');
+  ok(read('src/pages/UserManagement.tsx').includes("currentUser?.role === 'admin' && <SocietyEmailLog"), 'society email log only for admins');
+}
+
+// ── 8. Static guards: worker + UI ───────────────────────────────────────────
+{
+  const w = read('supabase/functions/send-worker/index.ts');
+  ok(/if \(!secret\) return json\(\{ ok: false, error: 'OUTBOX_CRON_SECRET not configured' \}, 500\)/.test(w), 'worker fails closed without a secret');
+  ok(/req\.headers\.get\('x-outbox-secret'\) !== secret/.test(w), 'worker checks x-outbox-secret');
+  ok(/runOutbox\(/.test(w) && /--no-verify-jwt/.test(w), 'worker uses the shared core; deploy note present');
+  const readme = read('supabase/functions/send-worker/README.md');
+  ok(readme.includes('--no-verify-jwt') && readme.includes("'outbox-send-worker'"), 'README has deploy flag + cron job');
+  const app = read('src/App.tsx');
+  ok(/path="\/verify-email" element=\{<VerifyEmail \/>\}/.test(app), '/verify-email is a public route');
+  const page = read('src/pages/VerifyEmail.tsx');
+  ok(page.includes("rpc('confirm_email_verification'") && page.includes('ran.current'), 'page confirms the token once');
+  const dlg = read('src/components/security/EmailVerifyDialog.tsx');
+  ok(dlg.includes("rpc('request_email_verification'") && !/p_email|p_recipient/.test(dlg), 'dialog never sends an address');
+  ok(read('src/components/layout/Header.tsx').includes('<EmailVerifyDialog'), 'dialog is reachable from the user menu');
+}
+
+console.log(`email-outbox: ${pass} passed, ${fail} failed`);
+if (fail) process.exit(1);
