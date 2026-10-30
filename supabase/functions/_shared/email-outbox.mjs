@@ -169,6 +169,44 @@ export const TEMPLATES = {
       foot: SECURITY_FOOT,
     });
   },
+
+  /**
+   * Daily statutory reminder (migration 145, compliance-reminders fn) — 7 / 2 / 0 days before a sourced due
+   * date. Titles, period, due date, days left and a count only: an amount must never reach this email.
+   */
+  compliance_due(row, { appUrl }) {
+    const p = row.payload ?? {};
+    const due = String(p.due_date ?? '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) throw new Error('compliance_due: bad due_date');
+    const days = Number(p.days_left);
+    if (!Number.isInteger(days) || days < 0) throw new Error('compliance_due: bad days_left');
+    const [y, m, d] = due.split('-');
+    const dueShown = `${d}/${m}/${y}`;
+    const soc = String(p.society_name ?? '');
+    const title = String(p.title ?? '');
+    const titleHi = String(p.title_hi ?? title);
+    const period = p.period ? ` (${p.period})` : '';
+    const whenHi = days === 0 ? 'आज अंतिम तारीख़ है' : `${days} दिन बाकी`;
+    const whenEn = days === 0 ? 'due today' : `${days} day${days === 1 ? '' : 's'} left`;
+    const lines = [
+      [`"${soc}" — ${titleHi}${period} की अंतिम तारीख़ ${dueShown} है (${whenHi})।`,
+        `"${soc}" — ${title}${period} is due on ${dueShown} (${whenEn}).`],
+    ];
+    const pending = Number(p.pending_count);
+    if (Number.isInteger(pending) && pending > 1) {
+      lines.push([`अगले 7 दिनों में कुल ${pending} अनुपालन आइटम बाकी हैं।`, `${pending} compliance items are due in the next 7 days.`]);
+    }
+    lines.push(['फाइल कर दिया हो तो अनुपालन कैलेंडर में "फाइल हुआ" दबाएँ — फिर इसकी याद-दहानी नहीं आएगी।',
+      'If it is already filed, press "Mark filed" on the Compliance Calendar and these reminders stop.']);
+    return notice(row, {
+      subjectHi: `याद-दहानी: ${titleHi} — ${days === 0 ? 'आज' : dueShown} तक`,
+      subjectEn: `Reminder: ${title} due ${dueShown}`,
+      lines,
+      button: { href: `${base(appUrl)}/compliance-calendar`, hi: 'अनुपालन कैलेंडर खोलें', en: 'Open Compliance Calendar' },
+      foot: ['तारीख़ें सरकारी नियम के पाठ से ली गई हैं; अंतिम पुष्टि अपने CA / पोर्टल से करें।',
+        'Dates are taken from the rule text; confirm with your CA / the portal.'],
+    });
+  },
 };
 
 /** Render one outbox row. Throws on an unknown template or a bad payload (the caller marks it failed). */
