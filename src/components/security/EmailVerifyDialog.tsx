@@ -37,10 +37,16 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
   useEffect(() => {
     if (!open) return;
     setLoading(true);
-    supabase.rpc('my_email_verification')
-      .then(({ data, error }) => setStatus(error ? null : (data as Status | null)))
-      .catch(() => setStatus(null))
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('my_email_verification');
+        setStatus(error ? null : (data as Status | null));
+      } catch {
+        setStatus(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [open]);
 
   const send = async () => {

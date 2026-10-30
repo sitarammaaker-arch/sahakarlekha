@@ -22,9 +22,14 @@ const VerifyEmail: React.FC = () => {
     if (ran.current) return; // StrictMode double-run would burn the one-time token
     ran.current = true;
     const token = params.get('token') ?? '';
-    supabase.rpc('confirm_email_verification', { p_token: token })
-      .then(({ data, error }) => setState(!error && (data as { status?: string } | null)?.status === 'verified' ? 'verified' : 'invalid'))
-      .catch(() => setState('invalid'));
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('confirm_email_verification', { p_token: token });
+        setState(!error && (data as { status?: string } | null)?.status === 'verified' ? 'verified' : 'invalid');
+      } catch {
+        setState('invalid');
+      }
+    })();
   }, [params]);
 
   return (
