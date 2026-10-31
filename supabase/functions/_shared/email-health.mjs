@@ -13,7 +13,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 export function healthProblems(h) {
   const out = [];
   const n = (k) => Number(h?.[k] ?? 0);
-  if (n('stalled') > 0) out.push(`${n('stalled')} ईमेल 15 मिनट से ज़्यादा से कतार में रुके हैं — send-worker नहीं चल रहा।`);
+  if (n('stalled') > 0) out.push(`${n('stalled')} ईमेल 15 मिनट से ज़्यादा से भेजे जाने के इंतज़ार में रुके हैं — send-worker नहीं चल रहा।`);
   if (n('stuck') > 0) out.push(`${n('stuck')} ईमेल "भेजा जा रहा है" में अटके हैं।`);
   if (n('http_errors_6h') > 0) out.push(`पिछले 6 घंटे में cron की ${n('http_errors_6h')} HTTP call fail हुई (आख़िरी: ${h.http_last_error ?? '-'})। अक्सर वजह: secret ग़लत या function deploy नहीं।`);
   if (n('cron_failed_24h') > 0) out.push(`पिछले 24 घंटे में ${n('cron_failed_24h')} cron run fail हुए।`);

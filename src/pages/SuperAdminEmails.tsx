@@ -37,7 +37,7 @@ const REASON_HI: Record<string, string> = { bounce: 'बाउंस', complaint
 /** One Hindi line per non-zero signal — the same reading the email-health alert email gives. */
 function healthLines(h: EmailHealth): string[] {
   const out: string[] = [];
-  if (h.stalled > 0) out.push(`${h.stalled} ईमेल 15 मिनट से ज़्यादा से कतार में रुके हैं — send-worker नहीं चल रहा।`);
+  if (h.stalled > 0) out.push(`${h.stalled} ईमेल 15 मिनट से ज़्यादा से भेजे जाने के इंतज़ार में रुके हैं — send-worker नहीं चल रहा।`);
   if (h.stuck > 0) out.push(`${h.stuck} ईमेल "भेजा जा रहा है" में अटके हैं।`);
   if ((h.http_errors_6h ?? 0) > 0) out.push(`पिछले 6 घंटे में cron की ${h.http_errors_6h} HTTP call fail हुई (आख़िरी: ${h.http_last_error ?? '-'})।`);
   if ((h.cron_failed_24h ?? 0) > 0) out.push(`पिछले 24 घंटे में ${h.cron_failed_24h} cron run fail हुए।`);
@@ -132,7 +132,7 @@ export default function SuperAdminEmails() {
           ) : !health ? (
             <p className="text-muted-foreground">लोड हो रहा है…</p>
           ) : healthLines(health).length === 0 ? (
-            <p className="text-green-700">ईमेल कतार चल रही है, कोई cron fail नहीं, कोई ईमेल अटका नहीं।</p>
+            <p className="text-green-700">ईमेल भेजे जा रहे हैं, कोई cron fail नहीं, कोई ईमेल अटका नहीं।</p>
           ) : (
             <ul className="list-disc ml-5 space-y-0.5">
               {healthLines(health).map((l) => <li key={l}>{l}</li>)}
@@ -151,7 +151,7 @@ export default function SuperAdminEmails() {
         {Object.entries(counts).map(([k, n]) => (
           <Badge key={k} variant="secondary" className="text-xs">{k}: {n}</Badge>
         ))}
-        {rows.length === 0 && !error && <p className="text-sm text-muted-foreground">अभी कोई ईमेल कतार में नहीं आया।</p>}
+        {rows.length === 0 && !error && <p className="text-sm text-muted-foreground">अभी तक कोई ईमेल नहीं बना।</p>}
       </div>
 
       <Card className={supp.length ? 'border-amber-300' : undefined}>

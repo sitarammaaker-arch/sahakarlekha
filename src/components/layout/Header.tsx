@@ -388,7 +388,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setEmailVerifyOpen(true)}>
                   <Mail className="h-4 w-4 mr-2" />
-                  {language === 'hi' ? 'ईमेल सत्यापन' : 'Email verification'}
+                  {language === 'hi' ? 'ईमेल verify' : 'Email verification'}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => window.open('/help', '_blank', 'noopener')}>

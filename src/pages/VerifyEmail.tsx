@@ -43,7 +43,7 @@ const VerifyEmail: React.FC = () => {
 
       <Card className="w-full max-w-md shadow-card">
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">{hi ? 'ईमेल सत्यापन' : 'Email verification'}</CardTitle>
+          <CardTitle className="text-xl">{hi ? 'ईमेल verify' : 'Email verification'}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {state === 'checking' && (
@@ -56,7 +56,7 @@ const VerifyEmail: React.FC = () => {
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800 space-y-1">
               <div className="flex items-center gap-2 font-semibold">
                 <MailCheck className="h-5 w-5 text-green-600" />
-                {hi ? 'ईमेल सत्यापित हो गया' : 'Email verified'}
+                {hi ? 'ईमेल verify हो गया' : 'Email verified'}
               </div>
               <p>{hi ? 'अब सहकार लेखा की सूचनाएँ इस पते पर आएँगी।' : 'SahakarLekha notifications will now reach this address.'}</p>
             </div>
@@ -65,10 +65,10 @@ const VerifyEmail: React.FC = () => {
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800 space-y-1">
               <div className="flex items-center gap-2 font-semibold">
                 <AlertCircle className="h-5 w-5 text-red-600" />
-                {hi ? 'लिंक अमान्य या पुराना' : 'Link invalid or expired'}
+                {hi ? 'लिंक काम नहीं कर रहा या पुराना हो गया' : 'Link invalid or expired'}
               </div>
               <p>{hi
-                ? 'लिंक 48 घंटे तक ही चलता है और एक ही बार। ऐप में लॉगिन करके यूज़र मेन्यू → ईमेल सत्यापन से नया लिंक भेजें।'
+                ? 'लिंक 48 घंटे तक ही चलता है और एक ही बार। ऐप में लॉगिन करके यूज़र मेन्यू → ईमेल verify से नया लिंक भेजें।'
                 : 'A link works once, for 48 hours. Sign in and send a new one from the user menu → Email verification.'}</p>
             </div>
           )}

@@ -35,7 +35,7 @@ export default function SocietyEmailLog({ hi }: { hi: boolean }) {
         </CardTitle>
         <p className="text-xs text-muted-foreground">
           {hi
-            ? 'समिति से भेजी गई सूचनाएँ। "पता सत्यापित नहीं" वाले यूज़र को कहें: ऊपर यूज़र मेन्यू → ईमेल सत्यापन।'
+            ? 'समिति से भेजी गई सूचनाएँ। "ईमेल verify नहीं" वाले यूज़र को कहें: ऊपर यूज़र मेन्यू → ईमेल verify।'
             : 'Notifications sent for this society. Ask users whose address is not verified to use user menu → Email verification.'}
         </p>
       </CardHeader>
