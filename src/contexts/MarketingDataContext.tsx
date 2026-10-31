@@ -24,6 +24,7 @@ import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabasePaging';
+import { unlessEmpty } from '@/lib/emptyTables';
 import { applyLoadsTogether } from '@/lib/batchedLoads';
 import { resolveJurisdiction } from '@/lib/jurisdiction';
 import { reportError } from '@/lib/errorReporting';
@@ -186,7 +187,7 @@ const STANDARD_CROPS: Array<{ name: string; code: string; nameHi: string }> = [
 ];
 
 export function MarketingProvider({ children }: { children: ReactNode }) {
-  const { society, procurementLots, procurementPostingRuleResults, procurementSettlements, procurementQualityTests, accounts, vouchers, addVoucher, cancelVoucher, registerVoucherOwner } = useData();
+  const { society, procurementLots, procurementPostingRuleResults, procurementSettlements, procurementQualityTests, accounts, vouchers, addVoucher, cancelVoucher, registerVoucherOwner, knownEmptyTables } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -256,26 +257,27 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       setHiredTripsState([]);
       return;
     }
+    const empty = knownEmptyTables(sid);   // S2: one shared call; known-empty tables are not fetched
     applyLoadsTogether([
-      [fetchAllPaged<Crop>('procurement_crops', sid), setCropsState, storage.getProcurementCrops],
-      [fetchAllPaged<Variety>('procurement_varieties', sid), setVarietiesState, storage.getProcurementVarieties],
-      [fetchAllPaged<Season>('procurement_seasons', sid), setSeasonsState, storage.getProcurementSeasons],
-      [fetchAllPaged<Agency>('procurement_agencies', sid), setAgenciesState, storage.getProcurementAgencies],
-      [fetchAllPaged<ProcurementCentre>('procurement_centres', sid), setCentresState, storage.getProcurementCentres],
-      [fetchAllPaged<MSPRate>('procurement_msp_rates', sid), setMspRatesState, storage.getProcurementMspRates],
-      [fetchAllPaged<DeductionRule>('procurement_deduction_rules', sid), setDeductionRulesState, storage.getProcurementDeductionRules],
-      [fetchAllPaged<QualitySpec>('procurement_quality_specs', sid), setQualitySpecsState, storage.getProcurementQualitySpecs],
-      [fetchAllPaged<BardanaType>('procurement_bardana_types', sid), setBardanaTypesState, storage.getProcurementBardanaTypes],
-      [fetchAllPaged<Transporter>('marketing_transporters', sid), setTransportersState, storage.getMarketingTransporters],
-      [fetchAllPaged<Arhtiya>('procurement_arhtiyas', sid), setArhtiyasState, storage.getProcurementArhtiyas],
-      [fetchAllPaged<BardanaMovement>('procurement_bardana_movements', sid), setBardanaMovementsState, storage.getProcurementBardanaMovements],
-      [fetchAllPaged<ProcurementDispatch>('procurement_dispatches', sid), setDispatchesState, storage.getProcurementDispatches],
-      [fetchAllPaged<AgencyBill>('procurement_agency_bills', sid), setAgencyBillsState, storage.getProcurementAgencyBills],
-      [fetchAllPaged<DealerLicence>('marketing_dealer_licences', sid), setDealerLicencesState, storage.getDealerLicences],
-      [fetchAllPaged<SchemeClaim>('marketing_scheme_claims', sid), setSchemeClaimsState, storage.getSchemeClaims],
-      [fetchAllPaged<HiredTrip>('marketing_hired_trips', sid), setHiredTripsState, storage.getHiredTrips],
+      [unlessEmpty(empty, 'procurement_crops', () => fetchAllPaged<Crop>('procurement_crops', sid)), setCropsState, storage.getProcurementCrops],
+      [unlessEmpty(empty, 'procurement_varieties', () => fetchAllPaged<Variety>('procurement_varieties', sid)), setVarietiesState, storage.getProcurementVarieties],
+      [unlessEmpty(empty, 'procurement_seasons', () => fetchAllPaged<Season>('procurement_seasons', sid)), setSeasonsState, storage.getProcurementSeasons],
+      [unlessEmpty(empty, 'procurement_agencies', () => fetchAllPaged<Agency>('procurement_agencies', sid)), setAgenciesState, storage.getProcurementAgencies],
+      [unlessEmpty(empty, 'procurement_centres', () => fetchAllPaged<ProcurementCentre>('procurement_centres', sid)), setCentresState, storage.getProcurementCentres],
+      [unlessEmpty(empty, 'procurement_msp_rates', () => fetchAllPaged<MSPRate>('procurement_msp_rates', sid)), setMspRatesState, storage.getProcurementMspRates],
+      [unlessEmpty(empty, 'procurement_deduction_rules', () => fetchAllPaged<DeductionRule>('procurement_deduction_rules', sid)), setDeductionRulesState, storage.getProcurementDeductionRules],
+      [unlessEmpty(empty, 'procurement_quality_specs', () => fetchAllPaged<QualitySpec>('procurement_quality_specs', sid)), setQualitySpecsState, storage.getProcurementQualitySpecs],
+      [unlessEmpty(empty, 'procurement_bardana_types', () => fetchAllPaged<BardanaType>('procurement_bardana_types', sid)), setBardanaTypesState, storage.getProcurementBardanaTypes],
+      [unlessEmpty(empty, 'marketing_transporters', () => fetchAllPaged<Transporter>('marketing_transporters', sid)), setTransportersState, storage.getMarketingTransporters],
+      [unlessEmpty(empty, 'procurement_arhtiyas', () => fetchAllPaged<Arhtiya>('procurement_arhtiyas', sid)), setArhtiyasState, storage.getProcurementArhtiyas],
+      [unlessEmpty(empty, 'procurement_bardana_movements', () => fetchAllPaged<BardanaMovement>('procurement_bardana_movements', sid)), setBardanaMovementsState, storage.getProcurementBardanaMovements],
+      [unlessEmpty(empty, 'procurement_dispatches', () => fetchAllPaged<ProcurementDispatch>('procurement_dispatches', sid)), setDispatchesState, storage.getProcurementDispatches],
+      [unlessEmpty(empty, 'procurement_agency_bills', () => fetchAllPaged<AgencyBill>('procurement_agency_bills', sid)), setAgencyBillsState, storage.getProcurementAgencyBills],
+      [unlessEmpty(empty, 'marketing_dealer_licences', () => fetchAllPaged<DealerLicence>('marketing_dealer_licences', sid)), setDealerLicencesState, storage.getDealerLicences],
+      [unlessEmpty(empty, 'marketing_scheme_claims', () => fetchAllPaged<SchemeClaim>('marketing_scheme_claims', sid)), setSchemeClaimsState, storage.getSchemeClaims],
+      [unlessEmpty(empty, 'marketing_hired_trips', () => fetchAllPaged<HiredTrip>('marketing_hired_trips', sid)), setHiredTripsState, storage.getHiredTrips],
     ], 'marketing masters');
-  }, [user?.societyId]);
+  }, [user?.societyId, knownEmptyTables]);
 
   // ── Crop CRUD ────────────────────────────────────────────────────────────────
   const addCrop = useCallback((data: { name: string; code: string; nameHi?: string }): Crop => {
