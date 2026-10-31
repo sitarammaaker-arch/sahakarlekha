@@ -39,6 +39,9 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
   // 147: only admins receive the weekly digest, so only they see its switch. null = not loaded / not migrated.
   const [digest, setDigest] = useState<boolean | null>(null);
   const [digestBusy, setDigestBusy] = useState(false);
+  // 148: email language for every user. undefined = not loaded / not migrated (hidden); null = never chosen.
+  const [emailLocale, setEmailLocale] = useState<'hi' | 'en' | null | undefined>(undefined);
+  const [localeBusy, setLocaleBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -53,17 +56,36 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
         setLoading(false);
       }
     })();
-    if (user?.role === 'admin') {
-      (async () => {
-        try {
-          const { data, error } = await supabase.rpc('my_email_preferences');
-          setDigest(error ? null : ((data as { weekly_digest?: boolean } | null)?.weekly_digest ?? true));
-        } catch {
-          setDigest(null);
-        }
-      })();
-    }
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('my_email_preferences');
+        const p = data as { weekly_digest?: boolean; locale?: 'hi' | 'en' | null } | null;
+        setDigest(error || user?.role !== 'admin' ? null : (p?.weekly_digest ?? true));
+        // 'locale' only exists in the reply once migration 148 ran — before that the choice stays hidden.
+        setEmailLocale(error || !p || !('locale' in p) ? undefined : (p.locale ?? null));
+      } catch {
+        setDigest(null);
+        setEmailLocale(undefined);
+      }
+    })();
   }, [open, user?.role]);
+
+  const chooseLocale = async (loc: 'hi' | 'en') => {
+    setLocaleBusy(true);
+    try {
+      const { data, error } = await supabase.rpc('set_my_email_locale', { p_locale: loc });
+      if (error || (data as { status?: string } | null)?.status !== 'saved') {
+        toast({ title: 'भाषा नहीं बदली', description: error?.message || 'कुछ देर बाद दोबारा कोशिश करें।', variant: 'destructive', duration: 10000 });
+        return;
+      }
+      setEmailLocale(loc);
+      toast({ title: loc === 'en' ? 'Emails will now be in English' : 'अब ईमेल हिंदी में आएँगे' });
+    } catch {
+      toast({ title: 'भाषा नहीं बदली', description: 'कुछ देर बाद दोबारा कोशिश करें।', variant: 'destructive', duration: 10000 });
+    } finally {
+      setLocaleBusy(false);
+    }
+  };
 
   const toggleDigest = async (on: boolean) => {
     setDigestBusy(true);
@@ -150,6 +172,25 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
                   {status.pending ? (hi ? 'लिंक दोबारा भेजें' : 'Send the link again') : (hi ? 'सत्यापन लिंक भेजें' : 'Send verification link')}
                 </Button>
               </>
+            )}
+            {emailLocale !== undefined && (
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div className="text-sm">
+                  <div className="font-medium">{hi ? 'ईमेल की भाषा' : 'Email language'}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {hi ? 'सहकार लेखा के सभी ईमेल इसी भाषा में आएँगे।' : 'All SahakarLekha emails will use this language.'}
+                  </div>
+                </div>
+                <div className="flex gap-1">
+                  {(['hi', 'en'] as const).map((loc) => (
+                    <Button key={loc} size="sm" disabled={localeBusy}
+                      variant={(emailLocale ?? 'hi') === loc ? 'default' : 'outline'}
+                      onClick={() => (emailLocale ?? 'hi') !== loc && chooseLocale(loc)}>
+                      {loc === 'hi' ? 'हिंदी' : 'English'}
+                    </Button>
+                  ))}
+                </div>
+              </div>
             )}
             {digest !== null && (
               <div className="flex items-start justify-between gap-3 rounded-lg border p-3">

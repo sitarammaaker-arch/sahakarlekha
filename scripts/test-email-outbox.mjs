@@ -283,7 +283,64 @@ const completes = (c) => c.calls.filter((x) => x.name === 'complete_outbox').map
   ok(banner.includes("rpc('my_email_verification')") && /try \{ return Number\(localStorage/.test(banner) && /catch \{ \/\* per-session only \*\/ \}/.test(banner), 'banner: server status, storage wrapped in try/catch');
   ok(read('src/components/layout/MainLayout.tsx').includes('<EmailVerifyBanner />'), 'banner mounted in MainLayout');
   const dlg = read('src/components/security/EmailVerifyDialog.tsx');
-  ok(dlg.includes("rpc('set_my_weekly_digest'") && dlg.includes("user?.role === 'admin'"), 'dialog: digest switch for admins');
+  ok(dlg.includes("rpc('set_my_weekly_digest'") && dlg.includes("user?.role !== 'admin' ? null"), 'dialog: digest switch for admins only');
+}
+
+// ── 7f. Email health + language preference (migration 148) ──────────────────
+{
+  const { runHealthCheck, buildHealthEmail, healthProblems } = await import('../supabase/functions/_shared/email-health.mjs');
+  const H = { level: 'alert', stalled: 2, stuck: 0, failed_24h: 1, bounced_24h: 0, complained_24h: 0,
+    http_errors_6h: 3, http_last_error: '401 {"ok":false,"error":"unauthorized"}', cron_failed_24h: 0, missing_jobs: ['weekly-digest-monday'] };
+  const lines = healthProblems(H);
+  ok(lines.length === 4 && lines[0].includes('2 ईमेल') && lines.some((l) => l.includes('unauthorized')) && lines.some((l) => l.includes('weekly-digest-monday')), 'problems: stalled, http (with last error), missing job, failed');
+  ok(healthProblems({ level: 'ok' }).length === 0, 'healthy → no lines');
+  const m = buildHealthEmail('alert', H, { appUrl: 'https://app.example/' });
+  ok(m.subject.startsWith('ALERT') && m.html.includes('https://app.example/super-admin/emails') && m.text.includes('2 ईमेल'), 'alert email: subject, link, problems');
+  ok(m.html.includes('&quot;ok&quot;') && !m.html.includes('{"ok"'), 'error text escaped in html');
+  ok(buildHealthEmail('recovered', {}, {}).subject.startsWith('ठीक हो गया'), 'recovery email');
+
+  const client = (data, error = null) => { const calls = []; return { calls, rpc: async (n) => { calls.push(n); return { data, error }; } }; };
+  const send = fakeFetch();
+  const cfg = { apiKey: 're_t', from: 'SahakarLekha <noreply@x.in>', appUrl: 'https://app.example', fetch: send.f };
+  const none = await runHealthCheck(client({ action: 'none', health: { level: 'ok' }, recipients: ['a@x.in'] }), cfg);
+  ok(none.status === 'ok' && none.sent === 0 && send.calls.length === 0, 'action none → nothing sent');
+  const alert = await runHealthCheck(client({ action: 'alert', health: H, recipients: ['a@x.in', 'bad', 'b@x.in'] }), cfg);
+  ok(alert.status === 'ok' && alert.sent === 2 && send.calls.length === 1, 'alert → one Resend call');
+  ok(send.calls[0].url === 'https://api.resend.com/emails' && send.calls[0].body.to.join() === 'a@x.in,b@x.in', 'sent straight to Resend (not the outbox), invalid recipient dropped');
+  ok((await runHealthCheck(client({ action: 'alert', health: H, recipients: [] }), cfg)).status === 'no_recipient', 'no platform admin → no_recipient');
+  ok((await runHealthCheck(client({ action: 'alert', health: H, recipients: ['a@x.in'] }), { fetch: send.f })).status === 'not_configured', 'no key → not_configured');
+  ok((await runHealthCheck(client(null, { message: 'boom' }), cfg)).error === 'claim: boom', 'claim error surfaced');
+  const bad = await runHealthCheck(client({ action: 'alert', health: H, recipients: ['a@x.in'] }),
+    { ...cfg, fetch: async () => ({ ok: false, status: 422, text: async () => 'bad from' }) });
+  ok(bad.status === 'error' && bad.error.startsWith('resend 422'), 'Resend error surfaced, no throw');
+
+  const sql = read('supabase/migrations/148_email_health_and_locale.sql');
+  const code = sql.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
+  ok(/select ep\.locale into v_locale from public\.email_preferences ep where ep\.email = v_to;\s+v_locale := coalesce\(v_locale, p_locale, 'hi'\);/.test(code), 'enqueue: recipient choice → caller → Hindi');
+  ok(/grant execute on function public\.enqueue_notification\(text, text, text, jsonb, text, text, timestamptz\) to service_role;/.test(code)
+    && /revoke execute on function public\.enqueue_notification\(text, text, text, jsonb, text, text, timestamptz\) from public, anon, authenticated;/.test(code), 'enqueue stays service-role only');
+  ok(/locale text check \(locale in \('hi', 'en'\)\)/.test(code) && !/locale text not null/.test(code), 'locale nullable = not chosen');
+  ok(/p_locale not in \('hi', 'en'\)/.test(code) && /lower\(trim\(coalesce\(auth\.jwt\(\) ->> 'email', ''\)\)\)/.test(code.split('set_my_email_locale')[1] ?? ''), 'set_my_email_locale: own address, hi/en only');
+  ok(/revoke execute on function public\.email_health\(\) from public, anon, authenticated;/.test(code) && !/grant execute on function public\.email_health\(\)/.test(code), 'email_health is internal');
+  ok(/grant execute on function public\.claim_email_health_alert\(\) to service_role;/.test(code), 'claim: service role');
+  ok(/if not public\.is_platform_admin\(\) then/.test(code.split('admin_email_health')[1] ?? ''), 'admin_email_health gated on platform admin');
+  ok(/from net\._http_response/.test(code) && /exception when others then\s+v_http := null/.test(code), 'pg_net read is guarded (null, never an error)');
+  ok(/'outbox-send-worker', 'compliance-reminders-daily', 'weekly-digest-monday'/.test(code), 'expected email cron jobs listed');
+  ok(/v_open\.sent_at < now\(\) - interval '6 hours'/.test(code) && /v_action := 'recovered'/.test(code), 'alert at most every 6 h; recovery once');
+  ok(/from public\.platform_admins where is_active/.test(code), 'recipients = active platform admins');
+  ok(!/create policy/i.test(code) && /alter table public\.email_health_alerts enable row level security/.test(code), 'alerts table: RLS on, no policy');
+  ok(/values \('148', 'email_health_and_locale'\)/.test(code), 'migration 148 registered');
+  const down = read('supabase/migrations/148_email_health_and_locale_down.sql');
+  ok(/drop table if exists public\.email_health_alerts/.test(down) && /coalesce\(p_locale, 'hi'\)/.test(down) && /drop column if exists locale/.test(down), 'down restores 142 enqueue + 147 prefs, drops health');
+
+  const fn = read('supabase/functions/email-health/index.ts');
+  ok(/if \(!secret\) return json\(\{ ok: false, error: 'OUTBOX_CRON_SECRET not configured' \}, 500\)/.test(fn) && /x-outbox-secret/.test(fn) && /--no-verify-jwt/.test(fn), 'email-health: fail-closed secret, deploy note');
+  ok(!/runOutbox|enqueue_notification/.test(read('supabase/functions/_shared/email-health.mjs')), 'alert path never touches the outbox');
+  ok(/replace\(\(select command from cron\.job where jobname = 'outbox-send-worker'\), '\/send-worker', '\/email-health'\)/.test(read('supabase/functions/email-health/README.md')), 'README cron copies the secret from send-worker (no pasting)');
+  const page = read('src/pages/SuperAdminEmails.tsx');
+  ok(page.includes("rpc('admin_email_health')") && page.includes('सिस्टम की सेहत'), 'SuperAdmin health card');
+  const dlg2 = read('src/components/security/EmailVerifyDialog.tsx');
+  ok(dlg2.includes("rpc('set_my_email_locale'") && dlg2.includes("!('locale' in p)"), 'dialog: language choice, hidden before 148');
 }
 
 // ── 8. Static guards: worker + UI ───────────────────────────────────────────
