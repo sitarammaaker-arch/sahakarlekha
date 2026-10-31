@@ -134,7 +134,7 @@ const ComplianceCalendar: React.FC = () => {
       </Card>
 
       <p className="text-[11px] text-muted-foreground">
-        {hi ? 'नोट: तिथियाँ मानक सांविधिक हैं; society के GSTIN/TAN/कर्मचारी के अनुसार दिखती हैं। ईमेल याद-दहानी (देय तिथि से 7 व 2 दिन पहले और उसी दिन, सत्यापित ईमेल वाले एडमिन को) अभी सिर्फ़ TDS जमा, Form 138 (24Q) और हरियाणा के वैधानिक ऑडिट के लिए जाती है — जिनकी तारीख़ नियम के पाठ से मिलाई गई है। "फाइल हुआ" दबाने पर याद-दहानी बंद।'
+        {hi ? 'नोट: तिथियाँ मानक सांविधिक हैं; society के GSTIN/TAN/कर्मचारी के अनुसार दिखती हैं। ईमेल रिमाइंडर (आख़िरी तारीख़ से 7 व 2 दिन पहले और उसी दिन, verify ईमेल वाले एडमिन को) अभी सिर्फ़ TDS जमा, Form 138 (24Q) और हरियाणा के वैधानिक ऑडिट के लिए जाती है — जिनकी तारीख़ सरकारी नियम से मिलाई गई है। "फाइल हुआ" दबाने पर रिमाइंडर बंद।'
             : 'Note: standard statutory dates, shown per the society\'s GSTIN/TAN/employees. Email reminders (7 and 2 days before and on the due date, to admins with a verified email) cover only TDS deposit, Form 138 (24Q) and the Haryana statutory audit for now — the dates checked against the rule text. "Mark filed" stops them.'}
       </p>
     </div>

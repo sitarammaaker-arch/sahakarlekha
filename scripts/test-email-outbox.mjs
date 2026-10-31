@@ -65,7 +65,7 @@ const completes = (c) => c.calls.filter((x) => x.name === 'complete_outbox').map
   ok(b.to.length === 1 && b.to[0] === 'clerk@example.com', 'sent only to the row recipient');
   ok(b.html.includes(`https://app.example/verify-email?token=${TOKEN}`) && b.text.includes(`https://app.example/verify-email?token=${TOKEN}`), 'verify link in html + text (trailing slash trimmed)');
   ok(b.html.includes('Ram &lt;Lal&gt;') && !b.html.includes('Ram <Lal>'), 'name is HTML-escaped');
-  ok(b.subject.startsWith('अपना ईमेल सत्यापित करें'), 'Hindi-first subject');
+  ok(b.subject.startsWith('अपना ईमेल verify करें'), 'Hindi-first subject');
   const done = completes(c)[0];
   ok(done.p_id === 'r1' && done.p_ok === true && done.p_provider_id === 'em_1', 'complete_outbox(ok, provider id)');
 }
@@ -241,7 +241,7 @@ const completes = (c) => c.calls.filter((x) => x.name === 'complete_outbox').map
   const m = renderRow(dg({ ...P, unsubscribe_token: UT }), { appUrl: 'https://app.example/' });
   const link = `https://app.example/email-unsubscribe?t=${UT}`;
   ok(m.html.includes(link) && m.text.includes(link), 'digest carries the unsubscribe link (html + text)');
-  ok(m.html.includes('साप्ताहिक सारांश बंद करें') && m.headers?.['List-Unsubscribe'] === `<${link}>`, 'Hindi label + List-Unsubscribe header');
+  ok(m.html.includes('हफ़्ते की रिपोर्ट बंद करें') && m.headers?.['List-Unsubscribe'] === `<${link}>`, 'Hindi label + List-Unsubscribe header');
   const old = renderRow(dg(P), { appUrl: 'https://app.example' });
   ok(!old.html.includes('email-unsubscribe') && !old.headers, 'a row queued before 147 (no token) renders without a link, never a broken one');
   let bad = false; try { renderRow(dg({ ...P, unsubscribe_token: 'xyz' })); } catch { bad = true; }

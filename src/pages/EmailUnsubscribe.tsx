@@ -40,14 +40,14 @@ const EmailUnsubscribe: React.FC = () => {
 
       <Card className="w-full max-w-md shadow-card">
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">{hi ? 'साप्ताहिक सारांश' : 'Weekly summary'}</CardTitle>
+          <CardTitle className="text-xl">{hi ? 'हफ़्ते की रिपोर्ट' : 'Weekly summary'}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {(state === 'ask' || state === 'busy') && (
             <>
               <p className="text-sm text-muted-foreground">
                 {hi
-                  ? 'हर सोमवार आने वाला सारांश ईमेल बंद करना है? सुरक्षा अलर्ट, इनवॉइस और अनुपालन याद-दहानी पहले की तरह आते रहेंगे।'
+                  ? 'हर सोमवार आने वाली रिपोर्ट का ईमेल बंद करना है? सुरक्षा अलर्ट, इनवॉइस और compliance रिमाइंडर पहले की तरह आते रहेंगे।'
                   : 'Stop the Monday summary email? Security alerts, invoices and compliance reminders will still arrive.'}
               </p>
               <Button className="w-full" onClick={confirm} disabled={state === 'busy'}>
@@ -63,7 +63,7 @@ const EmailUnsubscribe: React.FC = () => {
                 {hi ? 'सारांश बंद हो गया' : 'Summary stopped'}
               </div>
               <p>{hi
-                ? 'दोबारा चालू करने के लिए ऐप में यूज़र मेन्यू → ईमेल सत्यापन खोलें।'
+                ? 'दोबारा चालू करने के लिए ऐप में यूज़र मेन्यू → ईमेल verify खोलें।'
                 : 'To turn it back on, open user menu → Email verification in the app.'}</p>
             </div>
           )}
@@ -71,10 +71,10 @@ const EmailUnsubscribe: React.FC = () => {
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800 space-y-1">
               <div className="flex items-center gap-2 font-semibold">
                 <AlertCircle className="h-5 w-5 text-red-600" />
-                {hi ? 'लिंक अमान्य है' : 'Link invalid'}
+                {hi ? 'लिंक काम नहीं कर रहा' : 'Link invalid'}
               </div>
               <p>{hi
-                ? 'ऐप में लॉगिन करके यूज़र मेन्यू → ईमेल सत्यापन से सारांश बंद कर सकते हैं।'
+                ? 'ऐप में लॉगिन करके यूज़र मेन्यू → ईमेल verify से रिपोर्ट बंद कर सकते हैं।'
                 : 'Sign in and turn the summary off from user menu → Email verification.'}</p>
             </div>
           )}

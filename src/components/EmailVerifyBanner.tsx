@@ -54,14 +54,14 @@ const EmailVerifyBanner: React.FC = () => {
         <MailWarning className="h-4 w-4 text-amber-700 shrink-0" />
         <span className="text-amber-900 dark:text-amber-200">
           {pending
-            ? (hi ? 'सत्यापन लिंक भेजा जा चुका है — अपना ईमेल खोलकर बटन दबाएँ।' : 'A verification link was sent — open your email and click it.')
+            ? (hi ? 'Verify लिंक भेजा जा चुका है — अपना ईमेल खोलकर बटन दबाएँ।' : 'A verification link was sent — open your email and click it.')
             : (hi
-              ? 'आपका ईमेल सत्यापित नहीं है, इसलिए अनुपालन याद-दहानी और सुरक्षा अलर्ट आप तक नहीं पहुँचते।'
+              ? 'आपका ईमेल verify नहीं है, इसलिए compliance रिमाइंडर और सुरक्षा अलर्ट आप तक नहीं पहुँचते।'
               : 'Your email is not verified, so compliance reminders and security alerts do not reach you.')}
         </span>
         <span className="ml-auto flex items-center gap-3">
           <button type="button" className="font-medium text-amber-900 underline dark:text-amber-200" onClick={() => setOpen(true)}>
-            {hi ? 'अभी सत्यापित करें' : 'Verify now'}
+            {hi ? 'अभी verify करें' : 'Verify now'}
           </button>
           <button type="button" className="text-amber-800/80 hover:underline dark:text-amber-300/80" onClick={later}>
             {hi ? 'बाद में' : 'Later'}

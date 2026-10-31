@@ -111,9 +111,9 @@ const P = { name: 'Ram', society_name: 'Rania <PACS>', item_id: 'tds-2026-09', r
 ok(Object.keys(TEMPLATES).includes('compliance_due'), 'compliance_due registered');
 {
   const m = renderRow(ROW(P), { appUrl: 'https://app.example/' });
-  ok(m.subject.startsWith('याद-दहानी: TDS जमा — 07/10/2026') && m.subject.includes('Reminder: TDS deposit due 07/10/2026'), 'Hindi-first subject with dd/mm/yyyy');
+  ok(m.subject.startsWith('रिमाइंडर: TDS जमा — 07/10/2026') && m.subject.includes('Reminder: TDS deposit due 07/10/2026'), 'Hindi-first subject with dd/mm/yyyy');
   ok(m.html.includes('2 दिन बाकी') && m.html.includes('2 days left'), 'days left in both languages');
-  ok(m.html.includes('कुल 3 अनुपालन आइटम'), 'count line');
+  ok(m.html.includes('कुल 3 compliance काम'), 'count line');
   ok(m.html.includes('https://app.example/compliance-calendar'), 'button → /compliance-calendar');
   ok(m.html.includes('Rania &lt;PACS&gt;') && !m.html.includes('<PACS>'), 'society name escaped');
   ok(!/₹|\bRs\.?\s?\d/.test(m.html + m.text + m.subject), 'no amount in the email');

@@ -90,19 +90,19 @@ const P = { name: 'Ram', society_name: 'Rania <PACS>', week: '2026-W45', period_
 ok(Object.keys(TEMPLATES).includes('weekly_digest'), 'weekly_digest registered');
 {
   const m = renderRow(ROW(P), { appUrl: 'https://app.example/' });
-  ok(m.subject === 'साप्ताहिक सारांश — Rania <PACS> / Weekly summary', `Hindi-first subject (got ${m.subject})`);
+  ok(m.subject === 'हफ़्ते की रिपोर्ट — Rania <PACS> / Weekly summary', `Hindi-first subject (got ${m.subject})`);
   ok(m.html.includes('इस हफ़्ते दर्ज वाउचर: 12') && m.html.includes('Vouchers entered this week: 12'), 'vouchers this week, both languages');
   ok(m.html.includes('आख़िरी वाउचर: 1 दिन पहले') && m.html.includes('1 day ago'), 'days since last');
   ok(m.html.includes('मंज़ूरी के लिए बाकी वाउचर: 4'), 'pending approval');
-  ok(m.html.includes('अगले 14 दिनों में अनुपालन की अंतिम तारीख़ें: 2'), 'compliance due');
-  ok(m.html.includes('3 यूज़र का ईमेल सत्यापित नहीं है') && m.html.includes('3 users have not verified'), 'unverified users');
+  ok(m.html.includes('अगले 14 दिनों में compliance की आख़िरी तारीख़ें: 2'), 'compliance due');
+  ok(m.html.includes('3 यूज़र का ईमेल verify नहीं है') && m.html.includes('3 users have not verified'), 'unverified users');
   ok(m.html.includes('(26/10/2026 – 01/11/2026)'), 'period shown dd/mm/yyyy');
   ok(m.html.includes('https://app.example/dashboard'), 'button → /dashboard');
   ok(m.html.includes('Rania &lt;PACS&gt;') && !m.html.includes('<PACS>'), 'society name escaped in html');
   ok(!/₹|\bRs\.?\s?\d|amount\s*:|balance\s*:/i.test(m.html + m.text + m.subject), 'no amount in the email');
   ok(m.text.includes('इस हफ़्ते दर्ज वाउचर: 12') && m.text.includes('/dashboard'), 'text part');
   const q = renderRow(ROW({ ...P, unverified_users: 0, days_since_last: null }));
-  ok(!q.html.includes('सत्यापित नहीं') && q.html.includes('अभी तक कोई वाउचर दर्ज नहीं हुआ'), 'unverified line only when > 0; no voucher ever');
+  ok(!q.html.includes('verify नहीं') && q.html.includes('अभी तक कोई वाउचर दर्ज नहीं हुआ'), 'unverified line only when > 0; no voucher ever');
   ok(renderRow(ROW({ ...P, days_since_last: 0 })).html.includes('आख़िरी वाउचर: आज'), 'last voucher today');
   const en = renderRow(ROW(P, 'en'));
   ok(en.subject === 'Weekly summary' && !en.html.includes('वाउचर') && en.html.includes('Open dashboard'), 'English locale');
@@ -140,7 +140,7 @@ ok(Object.keys(TEMPLATES).includes('weekly_digest'), 'weekly_digest registered')
   ok(/req\.headers\.get\('x-outbox-secret'\) !== secret/.test(fn), 'checks x-outbox-secret');
   const readme = read('supabase/functions/weekly-digest/README.md');
   ok(readme.includes('--no-verify-jwt') && readme.includes("'30 1 * * 1'") && readme.includes("replace((select command from cron.job where jobid = 10), '/send-worker', '/weekly-digest')"), 'README: --no-verify-jwt, Monday 01:30 UTC, cron copied from job 10 (no secret pasted)');
-  ok(/weekly_digest: 'साप्ताहिक सारांश'/.test(read('src/components/email/EmailLogTable.tsx')), 'email log label');
+  ok(/weekly_digest: 'हफ़्ते की रिपोर्ट'/.test(read('src/components/email/EmailLogTable.tsx')), 'email log label');
 }
 
 console.log(`\nweekly digest: ${pass} passed, ${fail} failed`);

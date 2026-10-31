@@ -17,10 +17,10 @@ type Status = { email: string; verified_at: string | null; pending: boolean };
 
 /** Toast copy for request_email_verification()'s non-queued answers (migration 142). */
 const REQUEST_MSG: Record<string, [string, string]> = {
-  already_verified: ['पहले से सत्यापित', 'यह ईमेल पहले ही सत्यापित है।'],
+  already_verified: ['पहले से verify', 'यह ईमेल पहले ही verify हो चुका है।'],
   too_soon: ['थोड़ा रुकें', 'लिंक अभी-अभी भेजा गया है। 2 मिनट बाद दोबारा कोशिश करें।'],
   suppressed: ['इस पते पर ईमेल नहीं जा सकता', 'इस पते से पहले bounce/शिकायत आई है। एडमिन से अपना सही ईमेल लगवाएँ।'],
-  not_staff: ['यूज़र नहीं मिला', 'यह ईमेल किसी सक्रिय यूज़र का नहीं है।'],
+  not_staff: ['यूज़र नहीं मिला', 'यह ईमेल किसी चालू यूज़र का नहीं है।'],
   not_signed_in: ['लॉगिन ज़रूरी', 'दोबारा लॉगिन करके कोशिश करें।'],
 };
 
@@ -96,7 +96,7 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
         return;
       }
       setDigest(on);
-      toast({ title: on ? 'साप्ताहिक सारांश चालू' : 'साप्ताहिक सारांश बंद', description: on ? 'हर सोमवार सुबह सारांश आएगा।' : 'अब सोमवार का सारांश नहीं आएगा।' });
+      toast({ title: on ? 'हफ़्ते की रिपोर्ट चालू' : 'हफ़्ते की रिपोर्ट बंद', description: on ? 'हर सोमवार सुबह सारांश आएगा।' : 'अब सोमवार का सारांश नहीं आएगा।' });
     } catch {
       toast({ title: 'सेटिंग नहीं बदली', description: 'कुछ देर बाद दोबारा कोशिश करें।', variant: 'destructive', duration: 10000 });
     } finally {
@@ -114,7 +114,7 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
         return;
       }
       if (s === 'queued') {
-        toast({ title: 'सत्यापन लिंक भेजा गया', description: `${status?.email ?? ''} पर 1–2 मिनट में ईमेल आएगा। Spam folder भी देखें।` });
+        toast({ title: 'Verify लिंक भेजा गया', description: `${status?.email ?? ''} पर 1–2 मिनट में ईमेल आएगा। Spam folder भी देखें।` });
         setStatus((p) => (p ? { ...p, pending: true } : p));
         return;
       }
@@ -133,11 +133,11 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {verified ? <MailCheck className="h-5 w-5 text-green-600" /> : <MailWarning className="h-5 w-5 text-amber-600" />}
-            {hi ? 'ईमेल सत्यापन' : 'Email verification'}
+            {hi ? 'ईमेल verify' : 'Email verification'}
           </DialogTitle>
           <DialogDescription>
             {hi
-              ? 'सूचनाएँ (इनवॉइस, सुरक्षा अलर्ट, अनुपालन रिमाइंडर) सिर्फ़ सत्यापित ईमेल पर भेजी जाती हैं।'
+              ? 'सूचनाएँ (इनवॉइस, सुरक्षा अलर्ट, compliance रिमाइंडर) सिर्फ़ verify किए गए ईमेल पर भेजी जाती हैं।'
               : 'Notifications (invoices, security alerts, compliance reminders) go only to a verified email.'}
           </DialogDescription>
         </DialogHeader>
@@ -154,10 +154,10 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
               <div className="font-medium break-all">{status.email}</div>
               <div className={verified ? 'text-green-700' : 'text-amber-700'}>
                 {verified
-                  ? (hi ? `सत्यापित · ${new Date(status.verified_at as string).toLocaleDateString('en-IN')}` : `Verified · ${new Date(status.verified_at as string).toLocaleDateString('en-IN')}`)
+                  ? (hi ? `verify हो गया · ${new Date(status.verified_at as string).toLocaleDateString('en-IN')}` : `Verified · ${new Date(status.verified_at as string).toLocaleDateString('en-IN')}`)
                   : status.pending
                     ? (hi ? 'लिंक भेजा जा चुका है — ईमेल खोलकर क्लिक करें' : 'Link sent — open the email and click it')
-                    : (hi ? 'सत्यापित नहीं' : 'Not verified')}
+                    : (hi ? 'verify नहीं' : 'Not verified')}
               </div>
             </div>
             {!verified && (
@@ -169,7 +169,7 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
                 </p>
                 <Button className="w-full" onClick={send} disabled={busy}>
                   {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  {status.pending ? (hi ? 'लिंक दोबारा भेजें' : 'Send the link again') : (hi ? 'सत्यापन लिंक भेजें' : 'Send verification link')}
+                  {status.pending ? (hi ? 'लिंक दोबारा भेजें' : 'Send the link again') : (hi ? 'Verify लिंक भेजें' : 'Send verification link')}
                 </Button>
               </>
             )}
@@ -195,12 +195,12 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
             {digest !== null && (
               <div className="flex items-start justify-between gap-3 rounded-lg border p-3">
                 <div className="text-sm">
-                  <div className="font-medium">{hi ? 'साप्ताहिक सारांश ईमेल' : 'Weekly summary email'}</div>
+                  <div className="font-medium">{hi ? 'हफ़्ते की रिपोर्ट (ईमेल)' : 'Weekly summary email'}</div>
                   <div className="text-xs text-muted-foreground">
-                    {hi ? 'हर सोमवार सुबह: वाउचर, मंज़ूरी और अनुपालन की गिनती।' : 'Every Monday morning: voucher, approval and compliance counts.'}
+                    {hi ? 'हर सोमवार सुबह: वाउचर, मंज़ूरी और compliance की गिनती।' : 'Every Monday morning: voucher, approval and compliance counts.'}
                   </div>
                 </div>
-                <Switch checked={digest} disabled={digestBusy} onCheckedChange={toggleDigest} aria-label={hi ? 'साप्ताहिक सारांश' : 'Weekly summary'} />
+                <Switch checked={digest} disabled={digestBusy} onCheckedChange={toggleDigest} aria-label={hi ? 'हफ़्ते की रिपोर्ट' : 'Weekly summary'} />
               </div>
             )}
           </div>

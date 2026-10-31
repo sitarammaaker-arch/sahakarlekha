@@ -19,8 +19,8 @@ const shell = (body) => `<div style="font-family:Arial,'Noto Sans Devanagari',sa
 /** Role keys (society_users.role) → Hindi label; unknown roles show as stored. */
 const ROLE_HI = {
   admin: 'एडमिन', accountant: 'लेखाकार', viewer: 'व्यूअर', auditor: 'ऑडिटर', manager: 'प्रबंधक',
-  secretary: 'सचिव', cashier: 'कैशियर', storeKeeper: 'भंडारपाल', procurementOfficer: 'खरीद अधिकारी',
-  salesOperator: 'बिक्री संचालक', internalAuditor: 'आंतरिक ऑडिटर', externalCA: 'बाहरी CA',
+  secretary: 'सचिव', cashier: 'कैशियर', storeKeeper: 'स्टोर कीपर', procurementOfficer: 'खरीद अधिकारी',
+  salesOperator: 'सेल्स ऑपरेटर', internalAuditor: 'आंतरिक ऑडिटर', externalCA: 'बाहरी CA',
   boardMember: 'बोर्ड सदस्य', chairman: 'अध्यक्ष', employee: 'कर्मचारी', dataEntry: 'डेटा एंट्री',
 };
 const roleLabel = (r, en) => (en || !ROLE_HI[r] ? String(r ?? '') : `${ROLE_HI[r]} (${r})`);
@@ -72,22 +72,22 @@ export const TEMPLATES = {
     const link = `${base(appUrl)}/verify-email?token=${token}`;
     const name = row.payload?.name ? String(row.payload.name) : '';
     const en = row.locale === 'en';
-    const subject = en ? 'Verify your email — SahakarLekha' : 'अपना ईमेल सत्यापित करें — सहकार लेखा / Verify your email';
-    const btn = `<p style="margin:20px 0"><a href="${esc(link)}" style="background:#0F7B5A;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">${en ? 'Verify email' : 'ईमेल सत्यापित करें / Verify'}</a></p>`;
+    const subject = en ? 'Verify your email — SahakarLekha' : 'अपना ईमेल verify करें — सहकार लेखा / Verify your email';
+    const btn = `<p style="margin:20px 0"><a href="${esc(link)}" style="background:#0F7B5A;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">${en ? 'Verify email' : 'ईमेल verify करें / Verify'}</a></p>`;
     const html = shell(en
       ? `<p>Hello${name ? ` ${esc(name)}` : ''},</p>
     <p>Please confirm that this address is yours. Until it is confirmed, SahakarLekha sends no notifications here.</p>
     ${btn}
     <p style="color:#475569;font-size:12px">The link works for 48 hours. If you did not ask for this, ignore this email.</p>`
       : `<p>नमस्ते${name ? ` ${esc(name)}` : ''},</p>
-    <p>कृपया पुष्टि करें कि यह ईमेल आपका है। पुष्टि होने तक सहकार लेखा इस पते पर कोई सूचना नहीं भेजेगा।<br>
+    <p>कृपया पक्का करें कि यह ईमेल आपका है। जब तक यह पक्का नहीं होता, सहकार लेखा इस पते पर कोई सूचना नहीं भेजेगा।<br>
       <span style="color:#475569">Please confirm this address is yours. Until then, no notifications are sent here.</span></p>
     ${btn}
-    <p style="color:#475569;font-size:12px">लिंक 48 घंटे तक चलेगा। अगर आपने यह नहीं माँगा, तो इस ईमेल को अनदेखा करें।<br>
+    <p style="color:#475569;font-size:12px">लिंक 48 घंटे तक चलेगा। अगर आपने यह नहीं माँगा, तो इस ईमेल को छोड़ दें।<br>
       The link works for 48 hours. If you did not ask for this, ignore this email.</p>`);
     const text = (en
       ? [`Hello${name ? ` ${name}` : ''},`, '', 'Please confirm this address is yours:', link, '', 'The link works for 48 hours.']
-      : [`नमस्ते${name ? ` ${name}` : ''},`, '', 'कृपया पुष्टि करें कि यह ईमेल आपका है:', link, '',
+      : [`नमस्ते${name ? ` ${name}` : ''},`, '', 'कृपया पक्का करें कि यह ईमेल आपका है:', link, '',
          'लिंक 48 घंटे तक चलेगा। / The link works for 48 hours.']).join('\n');
     return { subject, html, text };
   },
@@ -106,17 +106,17 @@ export const TEMPLATES = {
       ['लॉगिन के लिए यही ईमेल और एडमिन से मिला पासवर्ड इस्तेमाल करें।',
         'Sign in with this email and the password your admin gives you.'],
     ];
-    if (token) lines.push(['नीचे बटन दबाकर पुष्टि करें कि यह ईमेल आपका है — तभी आगे की सूचनाएँ यहाँ आएँगी।',
+    if (token) lines.push(['नीचे बटन दबाकर पक्का करें कि यह ईमेल आपका है — तभी आगे की सूचनाएँ यहाँ आएँगी।',
       'Click below to confirm this email is yours — only then will notifications reach it.']);
     return notice(row, {
       subjectHi: `${soc} — सहकार लेखा में आपका स्वागत है`,
       subjectEn: 'Welcome to SahakarLekha',
       lines,
       button: token
-        ? { href: `${base(appUrl)}/verify-email?token=${token}`, hi: 'ईमेल सत्यापित करें', en: 'Verify email' }
+        ? { href: `${base(appUrl)}/verify-email?token=${token}`, hi: 'ईमेल verify करें', en: 'Verify email' }
         : { href: `${base(appUrl)}/login`, hi: 'लॉगिन करें', en: 'Sign in' },
       foot: token
-        ? ['पुष्टि का लिंक 48 घंटे चलेगा। अगर आप इस समिति से जुड़े नहीं हैं, तो इस ईमेल को अनदेखा करें।',
+        ? ['यह लिंक 48 घंटे चलेगा। अगर आप इस समिति से जुड़े नहीं हैं, तो इस ईमेल को छोड़ दें।',
             'The link works for 48 hours. If you are not part of this society, ignore this email.']
         : null,
     });
@@ -201,16 +201,16 @@ export const TEMPLATES = {
     ];
     const pending = Number(p.pending_count);
     if (Number.isInteger(pending) && pending > 1) {
-      lines.push([`अगले 7 दिनों में कुल ${pending} अनुपालन आइटम बाकी हैं।`, `${pending} compliance items are due in the next 7 days.`]);
+      lines.push([`अगले 7 दिनों में कुल ${pending} compliance काम बाकी हैं।`, `${pending} compliance items are due in the next 7 days.`]);
     }
-    lines.push(['फाइल कर दिया हो तो अनुपालन कैलेंडर में "फाइल हुआ" दबाएँ — फिर इसकी याद-दहानी नहीं आएगी।',
+    lines.push(['फाइल कर दिया हो तो अनुपालन कैलेंडर में "फाइल हुआ" दबाएँ — फिर इसका रिमाइंडर नहीं आएगा।',
       'If it is already filed, press "Mark filed" on the Compliance Calendar and these reminders stop.']);
     return notice(row, {
-      subjectHi: `याद-दहानी: ${titleHi} — ${days === 0 ? 'आज' : dueShown} तक`,
+      subjectHi: `रिमाइंडर: ${titleHi} — ${days === 0 ? 'आज' : dueShown} तक`,
       subjectEn: `Reminder: ${title} due ${dueShown}`,
       lines,
       button: { href: `${base(appUrl)}/compliance-calendar`, hi: 'अनुपालन कैलेंडर खोलें', en: 'Open Compliance Calendar' },
-      foot: ['तारीख़ें सरकारी नियम के पाठ से ली गई हैं; अंतिम पुष्टि अपने CA / पोर्टल से करें।',
+      foot: ['तारीख़ें सरकारी नियम से ली गई हैं; आख़िरी बार अपने CA / पोर्टल से करें।',
         'Dates are taken from the rule text; confirm with your CA / the portal.'],
     });
   },
@@ -243,21 +243,21 @@ export const TEMPLATES = {
       [since === null ? '• अभी तक कोई वाउचर दर्ज नहीं हुआ' : since === 0 ? '• आख़िरी वाउचर: आज' : `• आख़िरी वाउचर: ${since} दिन पहले`,
         since === null ? '• No voucher entered yet' : since === 0 ? '• Last voucher: today' : `• Last voucher: ${since} day${since === 1 ? '' : 's'} ago`],
       [`• मंज़ूरी के लिए बाकी वाउचर: ${pending}`, `• Vouchers waiting for approval: ${pending}`],
-      [`• अगले 14 दिनों में अनुपालन की अंतिम तारीख़ें: ${due}`, `• Compliance items due in the next 14 days: ${due}`],
+      [`• अगले 14 दिनों में compliance की आख़िरी तारीख़ें: ${due}`, `• Compliance items due in the next 14 days: ${due}`],
     ];
     if (unver > 0) {
-      lines.push([`• ${unver} यूज़र का ईमेल सत्यापित नहीं है — उन्हें कोई सूचना नहीं जाती। हर यूज़र अपने मेन्यू में "ईमेल सत्यापन" से पुष्टि कर सकता है।`,
+      lines.push([`• ${unver} यूज़र का ईमेल verify नहीं है — उन्हें कोई सूचना नहीं जाती। हर यूज़र अपने मेन्यू में "ईमेल verify" से इसे पक्का कर सकता है।`,
         `• ${unver} user${unver === 1 ? ' has' : 's have'} not verified their email and get no notifications. Each user can verify from "Email verification" in their menu.`]);
     }
     return notice(row, {
-      subjectHi: `साप्ताहिक सारांश — ${soc}`,
+      subjectHi: `हफ़्ते की रिपोर्ट — ${soc}`,
       subjectEn: 'Weekly summary',
       lines,
       button: { href: `${base(appUrl)}/dashboard`, hi: 'डैशबोर्ड खोलें', en: 'Open dashboard' },
       foot: ['यह सारांश हर सोमवार सुबह एडमिन को आता है। इसमें सिर्फ़ गिनती है, कोई रकम नहीं।',
         'This summary reaches admins every Monday morning. It carries counts only, never an amount.'],
       unsubscribe: tok
-        ? { href: `${base(appUrl)}/email-unsubscribe?t=${tok}`, hi: 'साप्ताहिक सारांश बंद करें', en: 'Stop the weekly summary' }
+        ? { href: `${base(appUrl)}/email-unsubscribe?t=${tok}`, hi: 'हफ़्ते की रिपोर्ट बंद करें', en: 'Stop the weekly summary' }
         : null,
     });
   },

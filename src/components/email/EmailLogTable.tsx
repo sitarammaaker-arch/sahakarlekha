@@ -17,13 +17,13 @@ export interface EmailLogRow {
 }
 
 export const TEMPLATE_HI: Record<string, string> = {
-  email_verify: 'ईमेल सत्यापन',
+  email_verify: 'ईमेल verify',
   user_invite: 'नया यूज़र (स्वागत)',
   role_changed: 'भूमिका बदली',
   fy_unlock_requested: 'FY अनलॉक अनुरोध',
   fy_unlocked: 'FY अनलॉक हुआ',
-  compliance_due: 'अनुपालन याद-दहानी',
-  weekly_digest: 'साप्ताहिक सारांश',
+  compliance_due: 'Compliance रिमाइंडर',
+  weekly_digest: 'हफ़्ते की रिपोर्ट',
 };
 
 /** status + delivery_status → one Hindi label and a badge tone. Delivery (what happened after Resend) wins. */
@@ -34,11 +34,11 @@ export function emailStateHi(r: Pick<EmailLogRow, 'status' | 'delivery_status'>)
   if (r.delivery_status === 'delayed') return { label: 'देरी हो रही है', tone: 'outline' };
   switch (r.status) {
     case 'sent': return { label: 'भेजा गया', tone: 'default' };
-    case 'pending': return { label: 'कतार में', tone: 'secondary' };
+    case 'pending': return { label: 'भेजना बाकी', tone: 'secondary' };
     case 'sending': return { label: 'भेजा जा रहा है', tone: 'secondary' };
-    case 'skipped': return { label: 'नहीं भेजा — पता सत्यापित नहीं', tone: 'outline' };
+    case 'skipped': return { label: 'नहीं भेजा — ईमेल verify नहीं', tone: 'outline' };
     case 'suppressed': return { label: 'नहीं भेजा — पता ब्लॉक (bounce/शिकायत)', tone: 'destructive' };
-    case 'failed': return { label: 'विफल', tone: 'destructive' };
+    case 'failed': return { label: 'फेल', tone: 'destructive' };
     default: return { label: r.status, tone: 'outline' };
   }
 }
