@@ -28,6 +28,17 @@ import type { SearchDoc, SearchResult, SearchType } from './search/rank';
 // Re-exported so existing importers (AskAssistant, SearchDialog, …) need no change.
 export type { SearchDoc, SearchResult, SearchType };
 
+/** English source-type labels, for a user who switched the app to English. */
+export const TYPE_LABEL_EN: Record<SearchType, string> = {
+  help: 'Help · how-to',
+  cookbook: 'Entry cookbook',
+  guide: 'Guide',
+  blog: 'Blog',
+  faq: 'FAQ',
+  glossary: 'Glossary',
+  calculator: 'Calculator',
+};
+
 export const TYPE_LABEL: Record<SearchType, string> = {
   help: 'मदद · कैसे करें',
   cookbook: 'एंट्री कुकबुक',
