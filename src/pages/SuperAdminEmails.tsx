@@ -4,6 +4,8 @@
  *   • Counts by state for the loaded rows, then the log itself (admin_email_log — no payload, so no tokens).
  *   • The suppression list (bounces / spam complaints from the resend-webhook, or manual) with "हटाएँ" to lift
  *     an entry once the address has been corrected.
+ *   • Migration 148: a "सिस्टम की सेहत" card from admin_email_health() — the same reading the email-health
+ *     alert email gives.
  * Every read/write is a SECURITY DEFINER RPC gated on is_platform_admin(). Nothing here sends an email.
  */
 import { useCallback, useEffect, useState } from 'react';
@@ -14,13 +16,37 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Mail, RefreshCw, AlertTriangle, Ban } from 'lucide-react';
+import { ArrowLeft, Mail, RefreshCw, AlertTriangle, Ban, HeartPulse } from 'lucide-react';
 import { EmailLogTable, emailStateHi, type EmailLogRow } from '@/components/email/EmailLogTable';
 import { fmtDateTime } from '@/lib/dateUtils';
 
 interface SuppressionRow { email: string; reason: string; detail: string | null; created_at: string }
 
+/** admin_email_health() (migration 148). Sections the DB could not read come back null. */
+interface EmailHealth {
+  level: 'ok' | 'warn' | 'alert';
+  checked_at: string;
+  stalled: number; stuck: number; failed_24h: number; bounced_24h: number; complained_24h: number;
+  http_errors_6h: number | null; http_last_error: string | null;
+  cron_failed_24h: number | null; missing_jobs: string[] | null;
+  last_alert: { sent_at: string; resolved_at: string | null } | null;
+}
+
 const REASON_HI: Record<string, string> = { bounce: 'बाउंस', complaint: 'spam शिकायत', manual: 'हाथ से' };
+
+/** One Hindi line per non-zero signal — the same reading the email-health alert email gives. */
+function healthLines(h: EmailHealth): string[] {
+  const out: string[] = [];
+  if (h.stalled > 0) out.push(`${h.stalled} ईमेल 15 मिनट से ज़्यादा से कतार में रुके हैं — send-worker नहीं चल रहा।`);
+  if (h.stuck > 0) out.push(`${h.stuck} ईमेल "भेजा जा रहा है" में अटके हैं।`);
+  if ((h.http_errors_6h ?? 0) > 0) out.push(`पिछले 6 घंटे में cron की ${h.http_errors_6h} HTTP call fail हुई (आख़िरी: ${h.http_last_error ?? '-'})।`);
+  if ((h.cron_failed_24h ?? 0) > 0) out.push(`पिछले 24 घंटे में ${h.cron_failed_24h} cron run fail हुए।`);
+  if (h.missing_jobs?.length) out.push(`ये cron job बंद या ग़ायब हैं: ${h.missing_jobs.join(', ')}।`);
+  if (h.complained_24h > 0) out.push(`पिछले 24 घंटे में ${h.complained_24h} spam शिकायत।`);
+  if (h.failed_24h > 0) out.push(`पिछले 24 घंटे में ${h.failed_24h} ईमेल fail हुए।`);
+  if (h.bounced_24h > 0) out.push(`पिछले 24 घंटे में ${h.bounced_24h} ईमेल bounce हुए।`);
+  return out;
+}
 
 export default function SuperAdminEmails() {
   const { toast } = useToast();
@@ -28,14 +54,20 @@ export default function SuperAdminEmails() {
   const [supp, setSupp] = useState<SuppressionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [health, setHealth] = useState<EmailHealth | null>(null);
+  const [healthError, setHealthError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [log, sup] = await Promise.all([
+    const [log, sup, hl] = await Promise.all([
       supabase.rpc('admin_email_log', { p_limit: 300 }),
       supabase.rpc('admin_email_suppression'),
+      supabase.rpc('admin_email_health'),
     ]);
     setLoading(false);
+    // Health is separate: before migration 148 it fails on its own without hiding the log.
+    setHealth(hl.error ? null : (hl.data as EmailHealth | null));
+    setHealthError(hl.error ? hl.error.message : '');
     const e = log.error || sup.error;
     if (e) { setError(e.message); return; }
     setError('');
@@ -80,6 +112,40 @@ export default function SuperAdminEmails() {
           <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" /> लोड नहीं हुआ: {error}
         </p>
       )}
+
+      <Card className={health?.level === 'alert' ? 'border-red-400' : health?.level === 'warn' ? 'border-amber-300' : undefined}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+            {health?.level === 'ok' ? <HeartPulse className="h-4 w-4 text-green-600" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+            सिस्टम की सेहत
+            {health && (
+              <Badge variant={health.level === 'alert' ? 'destructive' : health.level === 'warn' ? 'outline' : 'secondary'}>
+                {health.level === 'alert' ? 'गड़बड़' : health.level === 'warn' ? 'ध्यान दें' : 'सब ठीक'}
+              </Badge>
+            )}
+            {health && <span className="text-xs font-normal text-muted-foreground ml-auto">जाँच: {fmtDateTime(health.checked_at)}</span>}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm space-y-1">
+          {healthError ? (
+            <p className="text-muted-foreground">सेहत की जाँच अभी उपलब्ध नहीं (migration 148 चलाएँ): {healthError}</p>
+          ) : !health ? (
+            <p className="text-muted-foreground">लोड हो रहा है…</p>
+          ) : healthLines(health).length === 0 ? (
+            <p className="text-green-700">ईमेल कतार चल रही है, कोई cron fail नहीं, कोई ईमेल अटका नहीं।</p>
+          ) : (
+            <ul className="list-disc ml-5 space-y-0.5">
+              {healthLines(health).map((l) => <li key={l}>{l}</li>)}
+            </ul>
+          )}
+          {health?.last_alert && (
+            <p className="text-xs text-muted-foreground">
+              आख़िरी अलर्ट: {fmtDateTime(health.last_alert.sent_at)}
+              {health.last_alert.resolved_at ? ` · ठीक हुआ: ${fmtDateTime(health.last_alert.resolved_at)}` : ' · अभी खुला है'}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap gap-2">
         {Object.entries(counts).map(([k, n]) => (
