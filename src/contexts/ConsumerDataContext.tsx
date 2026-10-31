@@ -22,6 +22,7 @@ import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabasePaging';
+import { unlessEmpty } from '@/lib/emptyTables';
 import { applyLoadsTogether } from '@/lib/batchedLoads';
 import { resolveJurisdiction } from '@/lib/jurisdiction';
 import { reportError } from '@/lib/errorReporting';
@@ -111,7 +112,7 @@ interface ConsumerDataContextValue {
 const ConsumerDataContext = createContext<ConsumerDataContextValue | null>(null);
 
 export function ConsumerProvider({ children }: { children: ReactNode }) {
-  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase, deletePurchase, addStockMovement, purchases, suppliers, stockItems, registerVoucherOwner } = useData();
+  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase, deletePurchase, addStockMovement, purchases, suppliers, stockItems, registerVoucherOwner, knownEmptyTables } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -349,14 +350,15 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       setPOState([]);
       return;
     }
+    const empty = knownEmptyTables(sid);   // S2: one shared call; known-empty tables are not fetched
     applyLoadsTogether([
-      [fetchAllPaged<ConsumerPrice>('consumer_price_lists', sid), setPricesState, storage.getConsumerPrices],
-      [fetchAllPaged<SalesReturn>('sales_returns', sid), setSalesReturnsState, storage.getSalesReturns],
-      [fetchAllPaged<PurchaseReturn>('purchase_returns', sid), setPurchaseReturnsState, storage.getPurchaseReturns],
-      [fetchAllPaged<PatronageRun>('consumer_patronage_runs', sid), setPatronageRunsState, storage.getConsumerPatronageRuns],
-      [fetchAllPaged<PurchaseOrder>('consumer_purchase_orders', sid), setPOState, storage.getConsumerPurchaseOrders],
+      [unlessEmpty(empty, 'consumer_price_lists', () => fetchAllPaged<ConsumerPrice>('consumer_price_lists', sid)), setPricesState, storage.getConsumerPrices],
+      [unlessEmpty(empty, 'sales_returns', () => fetchAllPaged<SalesReturn>('sales_returns', sid)), setSalesReturnsState, storage.getSalesReturns],
+      [unlessEmpty(empty, 'purchase_returns', () => fetchAllPaged<PurchaseReturn>('purchase_returns', sid)), setPurchaseReturnsState, storage.getPurchaseReturns],
+      [unlessEmpty(empty, 'consumer_patronage_runs', () => fetchAllPaged<PatronageRun>('consumer_patronage_runs', sid)), setPatronageRunsState, storage.getConsumerPatronageRuns],
+      [unlessEmpty(empty, 'consumer_purchase_orders', () => fetchAllPaged<PurchaseOrder>('consumer_purchase_orders', sid)), setPOState, storage.getConsumerPurchaseOrders],
     ], 'consumer tables');
-  }, [user?.societyId]);
+  }, [user?.societyId, knownEmptyTables]);
 
   const commitPO = useCallback((next: PurchaseOrder, revertTo: PurchaseOrder | null, onFail?: () => void) => {
     setPOState(prev => { const u = prev.some(p => p.id === next.id) ? prev.map(p => p.id === next.id ? next : p) : [...prev, next]; storage.setConsumerPurchaseOrders(u); return u; });
