@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 
 interface QuickAction {
   key: string;
-  label: string;
+  label: { hi: string; en: string };
   icon: React.ElementType;
   path: string;
   variant: 'primary' | 'success' | 'destructive' | 'info';
@@ -25,28 +25,28 @@ interface QuickAction {
 const quickActions: QuickAction[] = [
   {
     key: 'newReceipt',
-    label: 'नई रसीद',
+    label: { hi: 'नई रसीद', en: 'New Receipt' },
     icon: ArrowDownLeft,
     path: '/vouchers?type=receipt',
     variant: 'success',
   },
   {
     key: 'newPayment',
-    label: 'नया भुगतान',
+    label: { hi: 'नया भुगतान', en: 'New Payment' },
     icon: ArrowUpRight,
     path: '/vouchers?type=payment',
     variant: 'destructive',
   },
   {
     key: 'cashEntry',
-    label: 'नकद एंट्री',
+    label: { hi: 'नकद एंट्री', en: 'Cash Entry' },
     icon: Wallet,
     path: '/cash-book',
     variant: 'primary',
   },
   {
     key: 'addMember',
-    label: 'नया सदस्य',
+    label: { hi: 'नया सदस्य', en: 'New Member' },
     icon: Users,
     path: '/members?action=new',
     variant: 'info',
@@ -61,7 +61,8 @@ const variantStyles = {
 };
 
 export const QuickActions: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const hi = language === 'hi';
   const navigate = useNavigate();
 
   return (
@@ -86,7 +87,7 @@ export const QuickActions: React.FC = () => {
                 )}
               >
                 <Icon className="h-6 w-6" />
-                <span className="text-sm font-medium">{action.label}</span>
+                <span className="text-sm font-medium">{hi ? action.label.hi : action.label.en}</span>
               </Button>
             );
           })}
@@ -99,7 +100,7 @@ export const QuickActions: React.FC = () => {
             onClick={() => navigate('/reports')}
           >
             <FileText className="h-4 w-4" />
-            रिपोर्ट देखें
+            {hi ? 'रिपोर्ट देखें' : 'View Reports'}
           </Button>
         </div>
       </CardContent>

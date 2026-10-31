@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useToast } from '@/hooks/use-toast';
 import { trackEvent } from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,8 @@ export const FeedbackFab: React.FC = () => {
   const { user, isSuperAdmin } = useAuth();
   const { society } = useData();
   const { toast } = useToast();
+  const { language } = useLanguage();
+  const hi = language === 'hi';
 
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<'suggestion' | 'bug'>('suggestion');
@@ -30,7 +33,7 @@ export const FeedbackFab: React.FC = () => {
 
   const submit = async () => {
     if (!message.trim()) {
-      toast({ title: 'संदेश लिखें', description: 'कृपया अपनी बात लिखें।', variant: 'destructive' });
+      toast({ title: hi ? 'संदेश लिखें' : 'Write a message', description: hi ? 'कृपया अपनी बात लिखें।' : 'Please write your message.', variant: 'destructive' });
       return;
     }
     setSubmitting(true);
@@ -47,13 +50,15 @@ export const FeedbackFab: React.FC = () => {
       }]);
       if (error) throw error;
       trackEvent('feedback_submit', { kind });
-      toast({ title: 'भेज दिया गया ✓', description: 'आपकी बात हम तक पहुँच गई — धन्यवाद!' });
+      toast({ title: hi ? 'भेज दिया गया ✓' : 'Sent ✓', description: hi ? 'आपकी बात हम तक पहुँच गई — धन्यवाद!' : 'We have received it — thank you!' });
       setMessage('');
       setOpen(false);
     } catch {
       toast({
-        title: 'भेजा नहीं जा सका',
-        description: 'कृपया थोड़ी देर बाद फिर कोशिश करें, या WhatsApp +91 94679 18545 पर बताएँ।',
+        title: hi ? 'भेजा नहीं जा सका' : 'Could not send',
+        description: hi
+          ? 'कृपया थोड़ी देर बाद फिर कोशिश करें, या WhatsApp +91 94679 18545 पर बताएँ।'
+          : 'Please try again shortly, or tell us on WhatsApp +91 94679 18545.',
         variant: 'destructive',
         duration: 10000,
       });
@@ -66,17 +71,17 @@ export const FeedbackFab: React.FC = () => {
     <>
       <button
         onClick={() => setOpen(true)}
-        aria-label="सुझाव या समस्या बताएँ"
+        aria-label={hi ? 'सुझाव या समस्या बताएँ' : 'Share a suggestion or problem'}
         className="print:hidden fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-3 shadow-lg hover:shadow-xl transition-shadow"
       >
         <MessageSquarePlus className="h-5 w-5" />
-        <span className="hidden sm:inline text-sm font-medium">सुझाव / समस्या</span>
+        <span className="hidden sm:inline text-sm font-medium">{hi ? 'सुझाव / समस्या' : 'Feedback'}</span>
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>सुझाव या समस्या बताएँ</DialogTitle>
+            <DialogTitle>{hi ? 'सुझाव या समस्या बताएँ' : 'Share a suggestion or problem'}</DialogTitle>
           </DialogHeader>
 
           <div className="flex gap-2">
@@ -84,13 +89,13 @@ export const FeedbackFab: React.FC = () => {
               type="button" variant={kind === 'suggestion' ? 'default' : 'outline'} size="sm" className="gap-1.5 flex-1"
               onClick={() => setKind('suggestion')}
             >
-              <Lightbulb className="h-4 w-4" /> सुझाव
+              <Lightbulb className="h-4 w-4" /> {hi ? 'सुझाव' : 'Suggestion'}
             </Button>
             <Button
               type="button" variant={kind === 'bug' ? 'default' : 'outline'} size="sm" className="gap-1.5 flex-1"
               onClick={() => setKind('bug')}
             >
-              <Bug className="h-4 w-4" /> समस्या
+              <Bug className="h-4 w-4" /> {hi ? 'समस्या' : 'Problem'}
             </Button>
           </div>
 
@@ -98,18 +103,22 @@ export const FeedbackFab: React.FC = () => {
             rows={4}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder={kind === 'bug' ? 'क्या गड़बड़ी हुई? कौन-से पेज पर?' : 'आपका सुझाव लिखें…'}
+            placeholder={kind === 'bug'
+              ? (hi ? 'क्या गड़बड़ी हुई? कौन-से पेज पर?' : 'What went wrong? On which page?')
+              : (hi ? 'आपका सुझाव लिखें…' : 'Write your suggestion…')}
             autoFocus
           />
 
           <p className="text-xs text-muted-foreground">
-            आपकी समिति, पेज व यूज़र अपने-आप जुड़ जाएँगे — आपको कुछ और भरने की ज़रूरत नहीं।
+            {hi
+              ? 'आपकी समिति, पेज व यूज़र अपने-आप जुड़ जाएँगे — आपको कुछ और भरने की ज़रूरत नहीं।'
+              : 'Your society, page and user are attached automatically — nothing else to fill in.'}
           </p>
 
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setOpen(false)}>रद्द करें</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>{hi ? 'रद्द करें' : 'Cancel'}</Button>
             <Button onClick={submit} disabled={submitting}>
-              {submitting ? 'भेज रहे हैं…' : 'भेजें'}
+              {submitting ? (hi ? 'भेज रहे हैं…' : 'Sending…') : (hi ? 'भेजें' : 'Send')}
             </Button>
           </div>
         </DialogContent>
