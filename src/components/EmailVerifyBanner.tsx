@@ -19,7 +19,7 @@ const snoozed = (): boolean => {
 };
 
 const EmailVerifyBanner: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { language } = useLanguage();
   const hi = language === 'hi';
   const [show, setShow] = useState(false);
@@ -27,7 +27,8 @@ const EmailVerifyBanner: React.FC = () => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!user?.societyId || snoozed()) { setShow(false); return; }
+    // A platform admin viewing a society is not a society user: nothing to verify (alerts reach them directly).
+    if (!user?.societyId || isSuperAdmin || snoozed()) { setShow(false); return; }
     let alive = true;
     (async () => {
       try {
@@ -39,7 +40,7 @@ const EmailVerifyBanner: React.FC = () => {
       } catch { /* stay quiet */ }
     })();
     return () => { alive = false; };
-  }, [user?.societyId, user?.email, open]);   // re-check when the dialog closes
+  }, [user?.societyId, user?.email, isSuperAdmin, open]);   // re-check when the dialog closes
 
   if (!show) return null;
 

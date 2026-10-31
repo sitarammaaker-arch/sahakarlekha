@@ -282,6 +282,8 @@ const completes = (c) => c.calls.filter((x) => x.name === 'complete_outbox').map
   const banner = read('src/components/EmailVerifyBanner.tsx');
   ok(banner.includes("rpc('my_email_verification')") && /try \{ return Number\(localStorage/.test(banner) && /catch \{ \/\* per-session only \*\/ \}/.test(banner), 'banner: server status, storage wrapped in try/catch');
   ok(read('src/components/layout/MainLayout.tsx').includes('<EmailVerifyBanner />'), 'banner mounted in MainLayout');
+  ok(/if \(!user\?\.societyId \|\| isSuperAdmin \|\| snoozed\(\)\)/.test(banner), 'banner hidden for a platform admin viewing a society (nothing to verify)');
+  ok(/\{!verified && !isSuperAdmin && \(/.test(read('src/components/security/EmailVerifyDialog.tsx')), 'dialog: no "send link" button for a platform admin');
   const dlg = read('src/components/security/EmailVerifyDialog.tsx');
   ok(dlg.includes("rpc('set_my_weekly_digest'") && dlg.includes("user?.role !== 'admin' ? null"), 'dialog: digest switch for admins only');
 }

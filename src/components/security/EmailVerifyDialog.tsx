@@ -20,7 +20,7 @@ const REQUEST_MSG: Record<string, [string, string]> = {
   already_verified: ['पहले से verify', 'यह ईमेल पहले ही verify हो चुका है।'],
   too_soon: ['थोड़ा रुकें', 'लिंक अभी-अभी भेजा गया है। 2 मिनट बाद दोबारा कोशिश करें।'],
   suppressed: ['इस पते पर ईमेल नहीं जा सकता', 'इस पते से पहले bounce/शिकायत आई है। एडमिन से अपना सही ईमेल लगवाएँ।'],
-  not_staff: ['यूज़र नहीं मिला', 'यह ईमेल किसी चालू यूज़र का नहीं है।'],
+  not_staff: ['इस login को verify की ज़रूरत नहीं', 'यह किसी समिति के यूज़र का login नहीं है (जैसे platform admin), इसलिए इसे verify नहीं किया जाता।'],
   not_signed_in: ['लॉगिन ज़रूरी', 'दोबारा लॉगिन करके कोशिश करें।'],
 };
 
@@ -35,7 +35,7 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   // 147: only admins receive the weekly digest, so only they see its switch. null = not loaded / not migrated.
   const [digest, setDigest] = useState<boolean | null>(null);
   const [digestBusy, setDigestBusy] = useState(false);
@@ -160,7 +160,14 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
                     : (hi ? 'verify नहीं' : 'Not verified')}
               </div>
             </div>
-            {!verified && (
+            {isSuperAdmin && !verified && (
+              <p className="text-xs text-muted-foreground">
+                {hi
+                  ? 'आप platform admin के रूप में login हैं। आपको verify की ज़रूरत नहीं — सिस्टम के अलर्ट आपको सीधे भेजे जाते हैं।'
+                  : 'You are signed in as a platform admin. No verification needed — system alerts reach you directly.'}
+              </p>
+            )}
+            {!verified && !isSuperAdmin && (
               <>
                 <p className="text-xs text-muted-foreground">
                   {hi
