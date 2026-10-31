@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { logAudit } from '@/lib/auditLog';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -89,6 +90,9 @@ const UniversalImporter: React.FC = () => {
   const fyStartIso = fyStartFromLabel(society.financialYear) || (/^\d{4}-\d{2}-\d{2}$/.test(society.financialYearStart || '') ? society.financialYearStart : '');
   const { user } = useAuth();
   const { toast } = useToast();
+  const { language } = useLanguage();
+  const hi = language === 'hi';
+  const L = (h: string, e: string) => (hi ? h : e);
 
   // Accounts tab state
   const [accountPreview, setAccountPreview] = useState<PreviewRow[] | null>(null);
@@ -144,12 +148,12 @@ const UniversalImporter: React.FC = () => {
     try {
       const parsed = await parseFileToRows(file);
       if (parsed.length < 3) {
-        toast({ title: 'File खाली है', description: 'कम से कम 1 data row होनी चाहिए', variant: 'destructive' });
+        toast({ title: L('File खाली है', 'File is empty'), description: L('कम से कम 1 data row होनी चाहिए', 'There must be at least 1 data row'), variant: 'destructive' });
         return;
       }
       const headers = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, ''));
       setAccountPreview(buildPreviewFromParsed(parsed, headers, (row, rowNum) => validateAccountRow(row, rowNum, accounts)));
-    } catch { toast({ title: 'File parse error', description: 'Valid CSV या Excel file upload करें', variant: 'destructive' }); }
+    } catch { toast({ title: 'File parse error', description: L('Valid CSV या Excel file upload करें', 'Upload a valid CSV or Excel file'), variant: 'destructive' }); }
     e.target.value = '';
   }
 
@@ -161,7 +165,7 @@ const UniversalImporter: React.FC = () => {
     if (society.fyLocked) {
       toast({
         title: 'FY Locked',
-        description: 'वित्तीय वर्ष audit-locked है — accounts import नहीं हो सकते।',
+        description: L('वित्तीय वर्ष audit-locked है — accounts import नहीं हो सकते।', 'The financial year is audit-locked — accounts cannot be imported.'),
         variant: 'destructive',
       });
       return;
@@ -169,7 +173,7 @@ const UniversalImporter: React.FC = () => {
 
     const validRows = accountPreview.filter(r => r.status === 'ok');
     if (validRows.length === 0) {
-      toast({ title: 'Import नहीं हो सकता', description: 'सभी rows में errors हैं। पहले CSV fix करें।', variant: 'destructive' });
+      toast({ title: L('Import नहीं हो सकता', 'Cannot import'), description: L('सभी rows में errors हैं। पहले CSV fix करें।', 'Every row has errors. Fix the CSV first.'), variant: 'destructive' });
       return;
     }
     setAccountImporting(true);
@@ -185,7 +189,9 @@ const UniversalImporter: React.FC = () => {
       .filter(row => !toSave.includes(row) && (parseFloat(row.data.opening_balance) || 0) > 0)
       .map(row => row.data.account_name.trim());
     const droppedNote = droppedOpenings.length > 0
-      ? ` इनमें ${droppedOpenings.length} की opening नहीं लगी (खाता पहले से था): ${droppedOpenings.slice(0, 5).join(', ')}${droppedOpenings.length > 5 ? ' …' : ''} — इन्हें "Opening Balances" import या पेज से भरें।`
+      ? (hi
+        ? ` इनमें ${droppedOpenings.length} की opening नहीं लगी (खाता पहले से था): ${droppedOpenings.slice(0, 5).join(', ')}${droppedOpenings.length > 5 ? ' …' : ''} — इन्हें "Opening Balances" import या पेज से भरें।`
+        : ` ${droppedOpenings.length} of them got no opening (the account already existed): ${droppedOpenings.slice(0, 5).join(', ')}${droppedOpenings.length > 5 ? ' …' : ''} — fill these via the "Opening Balances" import or page.`)
       : '';
     let saved = 0, failed = 0;
     const settle = () => {
@@ -194,14 +200,18 @@ const UniversalImporter: React.FC = () => {
       setAccountPreview(null);
       if (failed > 0) {
         toast({
-          title: `${saved} खाते सेव हुए, ${failed} सेव नहीं हुए`,
-          description: `जो सेव नहीं हुए, वे सूची में नहीं जोड़े गए — फ़ाइल दोबारा import करें (पहले से बने खाते अपने-आप skip होंगे)।${skipped > 0 ? ` ${skipped} पहले से मौजूद थे।` : ''}${droppedNote}`,
+          title: hi ? `${saved} खाते सेव हुए, ${failed} सेव नहीं हुए` : `${saved} accounts saved, ${failed} not saved`,
+          description: hi
+            ? `जो सेव नहीं हुए, वे सूची में नहीं जोड़े गए — फ़ाइल दोबारा import करें (पहले से बने खाते अपने-आप skip होंगे)।${skipped > 0 ? ` ${skipped} पहले से मौजूद थे।` : ''}${droppedNote}`
+            : `The unsaved ones were not added to the list — import the file again (accounts already created are skipped).${skipped > 0 ? ` ${skipped} already existed.` : ''}${droppedNote}`,
           variant: 'destructive', duration: 12000,
         });
       } else {
         toast({
-          title: `${saved} खाते import हुए`,
-          description: skipped > 0 ? `${skipped} खाते पहले से मौजूद थे, skip किए गए।${droppedNote}` : 'सभी खाते क्लाउड में सेव हो गए',
+          title: hi ? `${saved} खाते import हुए` : `${saved} accounts imported`,
+          description: skipped > 0
+            ? (hi ? `${skipped} खाते पहले से मौजूद थे, skip किए गए।${droppedNote}` : `${skipped} accounts already existed and were skipped.${droppedNote}`)
+            : L('सभी खाते क्लाउड में सेव हो गए', 'All accounts saved to the cloud'),
           ...(droppedOpenings.length > 0 ? { variant: 'destructive' as const, duration: 15000 } : {}),
         });
       }
@@ -232,7 +242,7 @@ const UniversalImporter: React.FC = () => {
     try {
       const parsed = await parseFileToRows(file);
       if (parsed.length < 3) {
-        toast({ title: 'File खाली है', description: 'कम से कम 1 data row होनी चाहिए', variant: 'destructive' });
+        toast({ title: L('File खाली है', 'File is empty'), description: L('कम से कम 1 data row होनी चाहिए', 'There must be at least 1 data row'), variant: 'destructive' });
         return;
       }
       const headers = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, ''));
@@ -248,7 +258,7 @@ const UniversalImporter: React.FC = () => {
         }, planOpts);
         return { ...r, data: { ...r.data, join_kind: joiningKindLabel(plan, r.data.join_date, society.financialYear) } };
       }));
-    } catch { toast({ title: 'File parse error', description: 'Valid CSV या Excel file upload करें', variant: 'destructive' }); }
+    } catch { toast({ title: 'File parse error', description: L('Valid CSV या Excel file upload करें', 'Upload a valid CSV or Excel file'), variant: 'destructive' }); }
     e.target.value = '';
   }
 
@@ -261,7 +271,7 @@ const UniversalImporter: React.FC = () => {
     if (society.fyLocked) {
       toast({
         title: 'FY Locked',
-        description: 'वित्तीय वर्ष audit-locked है — members import नहीं हो सकते।',
+        description: L('वित्तीय वर्ष audit-locked है — members import नहीं हो सकते।', 'The financial year is audit-locked — members cannot be imported.'),
         variant: 'destructive',
       });
       return;
@@ -269,7 +279,7 @@ const UniversalImporter: React.FC = () => {
 
     const validRows = memberPreview.filter(r => r.status === 'ok');
     if (validRows.length === 0) {
-      toast({ title: 'Import नहीं हो सकता', description: 'सभी rows में errors हैं। पहले CSV fix करें।', variant: 'destructive' });
+      toast({ title: L('Import नहीं हो सकता', 'Cannot import'), description: L('सभी rows में errors हैं। पहले CSV fix करें।', 'Every row has errors. Fix the CSV first.'), variant: 'destructive' });
       return;
     }
     setMemberImporting(true);
@@ -334,18 +344,20 @@ const UniversalImporter: React.FC = () => {
         { societyId: user.societyId, actor: { name: user.name, email: user.email, role: user.role } });
     }
     const notes = [
-      skipped > 0 ? `${skipped} सदस्य पहले से थे (वही सदस्य संख्या) — छोड़े गए` : '',
-      repeatedInFile > 0 ? `${repeatedInFile} पंक्तियों में सदस्य संख्या फ़ाइल में दोबारा आई — पहली ही ली गई` : '',
+      skipped > 0 ? (hi ? `${skipped} सदस्य पहले से थे (वही सदस्य संख्या) — छोड़े गए` : `${skipped} members already existed (same member number) — skipped`) : '',
+      repeatedInFile > 0 ? (hi ? `${repeatedInFile} पंक्तियों में सदस्य संख्या फ़ाइल में दोबारा आई — पहली ही ली गई` : `${repeatedInFile} rows repeated a member number in the file — only the first was taken`) : '',
     ].filter(Boolean);
     toast({
-      title: `${imported} Members Import हुए`,
-      description: notes.length ? notes.join(' · ') : 'सभी members successfully import हो गए',
+      title: hi ? `${imported} Members Import हुए` : `${imported} members imported`,
+      description: notes.length ? notes.join(' · ') : L('सभी members successfully import हो गए', 'All members imported successfully'),
     });
     if (sum.historicalMembers > 0) {
       // Old members get no cash receipt — their share belongs in the opening balances (joiningReceipts).
       toast({
-        title: `${sum.historicalMembers} पुराने सदस्य — नकद रसीद नहीं बनी`,
-        description: `ये सदस्य इस वित्तीय वर्ष से पहले जुड़े थे। इनकी शेयर पूँजी ₹${sum.historicalShare}${sum.historicalAdmission ? ` (प्रवेश शुल्क ₹${sum.historicalAdmission})` : ''} opening balance में शामिल करें (शेयर पूँजी 1102)। (Joined before this FY — carry these amounts in the opening balances.)`,
+        title: hi ? `${sum.historicalMembers} पुराने सदस्य — नकद रसीद नहीं बनी` : `${sum.historicalMembers} earlier members — no cash receipt made`,
+        description: hi
+          ? `ये सदस्य इस वित्तीय वर्ष से पहले जुड़े थे। इनकी शेयर पूँजी ₹${sum.historicalShare}${sum.historicalAdmission ? ` (प्रवेश शुल्क ₹${sum.historicalAdmission})` : ''} opening balance में शामिल करें (शेयर पूँजी 1102)। (Joined before this FY — carry these amounts in the opening balances.)`
+          : `These members joined before this financial year. Include their share capital ₹${sum.historicalShare}${sum.historicalAdmission ? ` (admission fee ₹${sum.historicalAdmission})` : ''} in the opening balances (Share Capital 1102).`,
         duration: 15000,
       });
     }
@@ -359,12 +371,12 @@ const UniversalImporter: React.FC = () => {
     try {
       const parsed = await parseFileToRows(file);
       if (parsed.length < 3) {
-        toast({ title: 'File खाली है', description: 'कम से कम 1 data row होनी चाहिए', variant: 'destructive' });
+        toast({ title: L('File खाली है', 'File is empty'), description: L('कम से कम 1 data row होनी चाहिए', 'There must be at least 1 data row'), variant: 'destructive' });
         return;
       }
       const headers = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, ''));
       setObPreview(buildPreviewFromParsed(parsed, headers, (row, rowNum) => validateObRow(row, accounts, rowNum)));
-    } catch { toast({ title: 'File parse error', description: 'Valid CSV या Excel file upload करें', variant: 'destructive' }); }
+    } catch { toast({ title: 'File parse error', description: L('Valid CSV या Excel file upload करें', 'Upload a valid CSV or Excel file'), variant: 'destructive' }); }
     e.target.value = '';
   }
 
@@ -383,7 +395,7 @@ const UniversalImporter: React.FC = () => {
     if (society.fyLocked) {
       toast({
         title: 'FY Locked',
-        description: 'वित्तीय वर्ष audit-locked है — opening balances import नहीं हो सकते।',
+        description: L('वित्तीय वर्ष audit-locked है — opening balances import नहीं हो सकते।', 'The financial year is audit-locked — opening balances cannot be imported.'),
         variant: 'destructive',
       });
       return;
@@ -391,7 +403,7 @@ const UniversalImporter: React.FC = () => {
 
     const validRows = obPreview.filter(r => r.status === 'ok');
     if (validRows.length === 0) {
-      toast({ title: 'Import नहीं हो सकता', description: 'सभी rows में errors हैं।', variant: 'destructive' });
+      toast({ title: L('Import नहीं हो सकता', 'Cannot import'), description: L('सभी rows में errors हैं।', 'Every row has errors.'), variant: 'destructive' });
       return;
     }
 
@@ -412,15 +424,17 @@ const UniversalImporter: React.FC = () => {
     // `unmatched` here means the chart changed between preview and commit.
     if (unmatched.length > 0) {
       toast({
-        title: `${unmatched.length} rows skip हुईं`,
-        description: `ये accounts अब नहीं मिले: ${unmatched.slice(0, 3).join(', ')}${unmatched.length > 3 ? '…' : ''}. दोबारा preview करें।`,
+        title: hi ? `${unmatched.length} rows skip हुईं` : `${unmatched.length} rows skipped`,
+        description: hi
+          ? `ये accounts अब नहीं मिले: ${unmatched.slice(0, 3).join(', ')}${unmatched.length > 3 ? '…' : ''}. दोबारा preview करें।`
+          : `These accounts were not found any more: ${unmatched.slice(0, 3).join(', ')}${unmatched.length > 3 ? '…' : ''}. Preview again.`,
         variant: 'destructive',
         duration: 12000,
       });
     }
     toast({
-      title: `${entries.length} Opening Balances Set हुए`,
-      description: 'Supabase में save हो रहे हैं। कोई cloud error आया तो अलग से चेतावनी दिखेगी। Opening Balances page से verify करें।',
+      title: hi ? `${entries.length} Opening Balances Set हुए` : `${entries.length} opening balances set`,
+      description: L('Supabase में save हो रहे हैं। कोई cloud error आया तो अलग से चेतावनी दिखेगी। Opening Balances page से verify करें।', 'Saving to the cloud. If a cloud error comes, a separate warning will show. Verify on the Opening Balances page.'),
     });
   }
 
@@ -432,26 +446,26 @@ const UniversalImporter: React.FC = () => {
     try {
       const parsed = await parseFileToRows(file);
       if (parsed.length < 3) {
-        toast({ title: 'File खाली है', description: 'कम से कम 1 data row होनी चाहिए', variant: 'destructive' });
+        toast({ title: L('File खाली है', 'File is empty'), description: L('कम से कम 1 data row होनी चाहिए', 'There must be at least 1 data row'), variant: 'destructive' });
         return;
       }
       const headers = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, ''));
       const fyStart = fyStartIso;
       const fyEnd = `20${society.financialYear.split('-')[1]}-03-31`;
       setVoucherPreview(buildPreviewFromParsed(parsed, headers, (row, rowNum) => validateVoucherRow(row, accounts, fyStart, fyEnd, rowNum)));
-    } catch { toast({ title: 'File parse error', description: 'Valid CSV या Excel file upload करें', variant: 'destructive' }); }
+    } catch { toast({ title: 'File parse error', description: L('Valid CSV या Excel file upload करें', 'Upload a valid CSV or Excel file'), variant: 'destructive' }); }
     e.target.value = '';
   }
 
   function handleVoucherImport() {
     if (!voucherPreview) return;
     if (society.fyLocked) {
-      toast({ title: 'FY Locked', description: 'वित्त वर्ष audit-locked है — नई entries नहीं जोड़ी जा सकतीं।', variant: 'destructive' });
+      toast({ title: 'FY Locked', description: L('वित्त वर्ष audit-locked है — नई entries नहीं जोड़ी जा सकतीं।', 'The financial year is audit-locked — new entries cannot be added.'), variant: 'destructive' });
       return;
     }
     const validRows = voucherPreview.filter(r => r.status === 'ok');
     if (validRows.length === 0) {
-      toast({ title: 'Import नहीं हो सकता', description: 'सभी rows में errors हैं। पहले file fix करें।', variant: 'destructive' });
+      toast({ title: L('Import नहीं हो सकता', 'Cannot import'), description: L('सभी rows में errors हैं। पहले file fix करें।', 'Every row has errors. Fix the file first.'), variant: 'destructive' });
       return;
     }
     setVoucherImporting(true);
@@ -483,11 +497,11 @@ const UniversalImporter: React.FC = () => {
     setVoucherImporting(false);
     setVoucherPreview(null);
     const parts = [];
-    if (skipped) parts.push(`${skipped} पहले से import थे (skip)`);
-    if (failed) parts.push(`${failed} fail हुए`);
+    if (skipped) parts.push(hi ? `${skipped} पहले से import थे (skip)` : `${skipped} already imported (skipped)`);
+    if (failed) parts.push(hi ? `${failed} fail हुए` : `${failed} failed`);
     toast({
-      title: `${imported} वाउचर Import हुए`,
-      description: parts.length ? parts.join(' · ') : 'सभी वाउचर successfully बन गए। Vouchers / Day Book से verify करें।',
+      title: hi ? `${imported} वाउचर Import हुए` : `${imported} vouchers imported`,
+      description: parts.length ? parts.join(' · ') : L('सभी वाउचर successfully बन गए। Vouchers / Day Book से verify करें।', 'All vouchers created. Verify from Vouchers / Day Book.'),
     });
   }
 
@@ -497,14 +511,17 @@ const UniversalImporter: React.FC = () => {
     const list = (xs: string[]) => xs.slice(0, 6).join(', ') + (xs.length > 6 ? ` … (+${xs.length - 6})` : '');
     return (
       <div className="p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-xs space-y-1.5">
-        {w.wrongSide.length > 0 && (
-          <p><b>⚠️ {w.wrongSide.length} rows की opening उलटी तरफ़ है</b> (देनदारी/पूँजी Dr में या संपत्ति Cr में, कुल ₹{w.wrongSide.reduce((t, r) => t + r.amount, 0).toLocaleString('hi-IN')}) — ज़्यादातर यह file में Dr/Cr की गलती होती है: {list(w.wrongSide.map(r => r.name))}</p>
+        {w.wrongSide.length > 0 && (hi
+            ? <p><b>⚠️ {w.wrongSide.length} rows की opening उलटी तरफ़ है</b> (देनदारी/पूँजी Dr में या संपत्ति Cr में, कुल ₹{w.wrongSide.reduce((t, r) => t + r.amount, 0).toLocaleString('hi-IN')}) — ज़्यादातर यह file में Dr/Cr की गलती होती है: {list(w.wrongSide.map(r => r.name))}</p>
+            : <p><b>⚠️ {w.wrongSide.length} rows have the opening on the wrong side</b> (liability/capital as Dr or asset as Cr, total ₹{w.wrongSide.reduce((t, r) => t + r.amount, 0).toLocaleString('en-IN')}) — usually a Dr/Cr mistake in the file: {list(w.wrongSide.map(r => r.name))}</p>
         )}
-        {w.plHeads.length > 0 && (
-          <p><b>ℹ️ {w.plHeads.length} आय/व्यय खातों पर opening है</b> — यह तभी सही है जब समिति बीच साल से शुरू कर रही हो: {list(w.plHeads.map(r => r.name))}</p>
+        {w.plHeads.length > 0 && (hi
+            ? <p><b>ℹ️ {w.plHeads.length} आय/व्यय खातों पर opening है</b> — यह तभी सही है जब समिति बीच साल से शुरू कर रही हो: {list(w.plHeads.map(r => r.name))}</p>
+            : <p><b>ℹ️ {w.plHeads.length} income/expense accounts have an opening</b> — this is right only if the society starts mid-year: {list(w.plHeads.map(r => r.name))}</p>
         )}
-        {dropped.length > 0 && (
-          <p><b>⚠️ {dropped.length} खाते पहले से मौजूद हैं — इनकी opening नहीं लगेगी</b> (खाता skip होगा): {list(dropped)}। इन्हें "Opening Balances" import से भरें।</p>
+        {dropped.length > 0 && (hi
+            ? <p><b>⚠️ {dropped.length} खाते पहले से मौजूद हैं — इनकी opening नहीं लगेगी</b> (खाता skip होगा): {list(dropped)}। इन्हें "Opening Balances" import से भरें।</p>
+            : <p><b>⚠️ {dropped.length} accounts already exist — their opening will not be applied</b> (the account is skipped): {list(dropped)}. Fill these via the "Opening Balances" import.</p>
         )}
       </div>
     );
@@ -530,16 +547,16 @@ const UniversalImporter: React.FC = () => {
         {/* Summary bar */}
         <div className="flex gap-3 flex-wrap">
           <Badge variant="outline" className="gap-1 text-green-700 border-green-300 bg-green-50">
-            <CheckCircle2 className="h-3 w-3" /> {okCount} rows ready
+            <CheckCircle2 className="h-3 w-3" /> {okCount} {L('rows तैयार', 'rows ready')}
           </Badge>
           {errCount > 0 && (
             <Badge variant="outline" className="gap-1 text-red-700 border-red-300 bg-red-50">
-              <XCircle className="h-3 w-3" /> {errCount} rows में error
+              <XCircle className="h-3 w-3" /> {errCount} {L('rows में error', 'rows with errors')}
             </Badge>
           )}
           {errCount > 0 && (
             <p className="text-xs text-muted-foreground self-center">
-              Error वाली rows skip होंगी। CSV fix करके दोबारा upload करें।
+              {L('Error वाली rows skip होंगी। CSV fix करके दोबारा upload करें।', 'Rows with errors will be skipped. Fix the CSV and upload again.')}
             </p>
           )}
         </div>
@@ -610,7 +627,7 @@ const UniversalImporter: React.FC = () => {
           Universal Importer
         </h1>
         <p className="text-muted-foreground mt-1">
-          दूसरे software से data import करें — CSV या Excel (.xlsx) template, preview और Hindi error messages के साथ
+          {L('दूसरे software से data import करें — CSV या Excel (.xlsx) template, preview और Hindi error messages के साथ', 'Import data from other software — CSV or Excel (.xlsx) templates, with a preview and clear error messages')}
         </p>
       </div>
 
@@ -618,14 +635,14 @@ const UniversalImporter: React.FC = () => {
       <Card className="bg-blue-50 border-blue-200">
         <CardContent className="pt-4 pb-3">
           <p className="text-sm font-semibold text-blue-800 mb-3 flex items-center gap-1">
-            <Info className="h-4 w-4" /> कैसे काम करता है?
+            <Info className="h-4 w-4" /> {L('कैसे काम करता है?', 'How does it work?')}
           </p>
           <div className="flex flex-wrap gap-4">
-            <StepBadge n={1} label="Template Download करें" />
+            <StepBadge n={1} label={L('Template Download करें', 'Download the template')} />
             <ArrowRight className="h-4 w-4 text-blue-400 self-center hidden sm:block" />
-            <StepBadge n={2} label="Data भरें / पुराने software से export करके columns match करें" />
+            <StepBadge n={2} label={L('Data भरें / पुराने software से export करके columns match करें', 'Fill in the data / export from the old software and match the columns')} />
             <ArrowRight className="h-4 w-4 text-blue-400 self-center hidden sm:block" />
-            <StepBadge n={3} label="CSV या Excel Upload करें — Preview देखें — Confirm करके Import करें" />
+            <StepBadge n={3} label={L('CSV या Excel Upload करें — Preview देखें — Confirm करके Import करें', 'Upload the CSV or Excel — check the preview — confirm to import')} />
           </div>
         </CardContent>
       </Card>
@@ -652,8 +669,8 @@ const UniversalImporter: React.FC = () => {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Accounts Master Import</CardTitle>
               <CardDescription>
-                Chart of Accounts / Ledger Heads — नए accounts bulk में add करें।
-                System accounts (Cash, Bank, Share Capital आदि) पहले से exist करते हैं।
+                {L('Chart of Accounts / Ledger Heads — नए accounts bulk में add करें।', 'Chart of Accounts / Ledger Heads — add new accounts in bulk.')}
+                {L('System accounts (Cash, Bank, Share Capital आदि) पहले से exist करते हैं।', 'System accounts (Cash, Bank, Share Capital etc.) already exist.')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -661,11 +678,11 @@ const UniversalImporter: React.FC = () => {
               <div className="space-y-2">
                 <p className="text-sm font-medium flex items-center gap-2">
                   <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">1</span>
-                  Template Download करें
+                  {L('Template Download करें', 'Download the template')}
                 </p>
                 <p className="text-xs text-muted-foreground ml-7">
-                  नीचे दिए template में example rows और Hindi hints पहले से भरे हैं।
-                  Example rows delete करके अपना data भरें।
+                  {L('नीचे दिए template में example rows और Hindi hints पहले से भरे हैं।', 'The template below already has example rows and Hindi hints.')}
+                  {L('Example rows delete करके अपना data भरें।', 'Delete the example rows and fill in your data.')}
                 </p>
                 <div className="ml-7 flex gap-2 flex-wrap">
                   <Button
@@ -675,7 +692,7 @@ const UniversalImporter: React.FC = () => {
                     onClick={() => downloadExcelTemplate('accounts_template.xlsx', ACCOUNTS_TEMPLATE)}
                   >
                     <Download className="h-4 w-4" />
-                    Excel (.xlsx) Download करें
+                    {L('Excel (.xlsx) Download करें', 'Download Excel (.xlsx)')}
                   </Button>
                   <Button
                     variant="outline"
@@ -684,7 +701,7 @@ const UniversalImporter: React.FC = () => {
                     onClick={() => downloadTemplate('accounts_template.csv', ACCOUNTS_TEMPLATE)}
                   >
                     <Download className="h-4 w-4" />
-                    CSV Download करें
+                    {L('CSV Download करें', 'Download CSV')}
                   </Button>
                 </div>
               </div>
@@ -692,19 +709,21 @@ const UniversalImporter: React.FC = () => {
               {/* Template format info */}
               <div className="ml-7 bg-muted rounded-lg p-3 text-xs space-y-1">
                 <p className="font-medium mb-1">Template Columns:</p>
-                <p><span className="font-medium text-primary">account_name</span> — Account का नाम (जैसे: Cash in Hand, Bank - SBI)</p>
+                <p><span className="font-medium text-primary">account_name</span> — {L('Account का नाम (जैसे: Cash in Hand, Bank - SBI)', 'Account name (e.g. Cash in Hand, Bank - SBI)')}</p>
                 <p><span className="font-medium text-primary">account_type</span> — <span className="text-green-700">Asset</span> / <span className="text-orange-600">Liability</span> / <span className="text-purple-600">Equity</span> / <span className="text-blue-600">Income</span> / <span className="text-red-600">Expense</span></p>
-                <p><span className="font-medium text-primary">opening_balance</span> — शुरुआती राशि (सिर्फ numbers, जैसे: 50000)</p>
+                <p><span className="font-medium text-primary">opening_balance</span> — {L('शुरुआती राशि (सिर्फ numbers, जैसे: 50000)', 'Opening amount (numbers only, e.g. 50000)')}</p>
                 <p><span className="font-medium text-primary">balance_type</span> — <span className="text-green-700">Debit</span> (Asset/Expense) / <span className="text-orange-600">Credit</span> (Liability/Income)</p>
-                <p><span className="font-medium text-primary">parent_group</span> — (वैकल्पिक) किस समूह के नीचे खाता जाए — समूह का नाम या कोड (जैसे: Bank Accounts, 2300, Admin Expenses)। खाली छोड़ें तो प्रकार का सामान्य समूह लगेगा। समूह खाते के प्रकार का ही होना चाहिए।</p>
-                <p className="pl-4 text-amber-800">⚠️ बैंक खाता हमेशा <b>Bank Accounts</b> समूह में डालें — किसी और समूह (जैसे Current Assets) में डालने पर वह Bank Book, बैंक-चुनाव और Bank Reconciliation में नहीं दिखेगा। बैंक/संस्था से लिया ऋण <b>2300</b> (Loans / Borrowings) में डालें।</p>
+                <p><span className="font-medium text-primary">parent_group</span> — {L('(वैकल्पिक) किस समूह के नीचे खाता जाए — समूह का नाम या कोड (जैसे: Bank Accounts, 2300, Admin Expenses)। खाली छोड़ें तो प्रकार का सामान्य समूह लगेगा। समूह खाते के प्रकार का ही होना चाहिए।', '(optional) The group the account goes under — group name or code (e.g. Bank Accounts, 2300, Admin Expenses). Left blank, the usual group for the type is used. The group must be of the same type as the account.')}</p>
+                {hi
+                  ? <p className="pl-4 text-amber-800">⚠️ बैंक खाता हमेशा <b>Bank Accounts</b> समूह में डालें — किसी और समूह (जैसे Current Assets) में डालने पर वह Bank Book, बैंक-चुनाव और Bank Reconciliation में नहीं दिखेगा। बैंक/संस्था से लिया ऋण <b>2300</b> (Loans / Borrowings) में डालें।</p>
+                  : <p className="pl-4 text-amber-800">⚠️ Always put a bank account under the <b>Bank Accounts</b> group — under any other group (e.g. Current Assets) it will not show in the Bank Book, the bank picker or Bank Reconciliation. Put a loan taken from a bank/institution under <b>2300</b> (Loans / Borrowings).</p>}
               </div>
 
               {/* Step 2 */}
               <div className="space-y-2">
                 <p className="text-sm font-medium flex items-center gap-2">
                   <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">2</span>
-                  CSV Upload करें
+                  {L('CSV Upload करें', 'Upload CSV')}
                 </p>
                 <div className="ml-7">
                   <input
@@ -721,7 +740,7 @@ const UniversalImporter: React.FC = () => {
                     onClick={() => accountFileRef.current?.click()}
                   >
                     <Upload className="h-4 w-4" />
-                    CSV / Excel File चुनें
+                    {L('CSV / Excel File चुनें', 'Choose a CSV / Excel file')}
                   </Button>
                 </div>
               </div>
@@ -731,7 +750,7 @@ const UniversalImporter: React.FC = () => {
                 <div className="space-y-3">
                   <p className="text-sm font-medium flex items-center gap-2">
                     <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">3</span>
-                    Preview — confirm करके Import करें
+                    {L('Preview — confirm करके Import करें', 'Preview — confirm to import')}
                   </p>
                   <div className="ml-7 space-y-3">
                     <PreviewTable
@@ -742,7 +761,7 @@ const UniversalImporter: React.FC = () => {
                         account_type: 'Type',
                         opening_balance: 'Opening Bal.',
                         balance_type: 'Dr/Cr',
-                        parent_group: 'समूह (Group)',
+                        parent_group: L('समूह (Group)', 'Group'),
                       }}
                     />
                     {accountOpeningCheck && <OpeningWarnCard w={accountOpeningCheck.warnings} dropped={accountOpeningCheck.dropped} />}
@@ -754,7 +773,7 @@ const UniversalImporter: React.FC = () => {
                         onClick={handleAccountImport}
                       >
                         <CheckCircle2 className="h-4 w-4" />
-                        {accountPreview.filter(r => r.status === 'ok').length} Accounts Import करें
+                        {accountPreview.filter(r => r.status === 'ok').length} {L('Accounts Import करें', 'accounts — import')}
                       </Button>
                       <Button
                         variant="outline"
@@ -777,7 +796,7 @@ const UniversalImporter: React.FC = () => {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Members Master Import</CardTitle>
               <CardDescription>
-                सदस्यों का data bulk में add करें। Same Member ID वाले records skip होंगे।
+                {L('सदस्यों का data bulk में add करें। Same Member ID वाले records skip होंगे।', 'Add member data in bulk. Records with the same Member ID are skipped.')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -785,7 +804,7 @@ const UniversalImporter: React.FC = () => {
               <div className="space-y-2">
                 <p className="text-sm font-medium flex items-center gap-2">
                   <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">1</span>
-                  Template Download करें
+                  {L('Template Download करें', 'Download the template')}
                 </p>
                 <div className="ml-7 flex gap-2 flex-wrap">
                   <Button
@@ -795,7 +814,7 @@ const UniversalImporter: React.FC = () => {
                     onClick={() => downloadExcelTemplate('members_template.xlsx', membersTemplate(fyStartIso))}
                   >
                     <Download className="h-4 w-4" />
-                    Excel (.xlsx) Download करें
+                    {L('Excel (.xlsx) Download करें', 'Download Excel (.xlsx)')}
                   </Button>
                   <Button
                     variant="outline"
@@ -804,7 +823,7 @@ const UniversalImporter: React.FC = () => {
                     onClick={() => downloadTemplate('members_template.csv', membersTemplate(fyStartIso))}
                   >
                     <Download className="h-4 w-4" />
-                    CSV Download करें
+                    {L('CSV Download करें', 'Download CSV')}
                   </Button>
                 </div>
               </div>
@@ -812,16 +831,20 @@ const UniversalImporter: React.FC = () => {
               {/* Template format info */}
               <div className="ml-7 bg-muted rounded-lg p-3 text-xs space-y-1">
                 <p className="font-medium mb-1">Required Columns:</p>
-                <p><span className="font-medium text-primary">member_id</span> — Unique सदस्य क्रमांक (जैसे: M001, M002)</p>
-                <p><span className="font-medium text-primary">name</span> — सदस्य का पूरा नाम</p>
-                <p><span className="font-medium text-primary">father_name</span> — पिता/पति का नाम</p>
+                <p><span className="font-medium text-primary">member_id</span> — {L('Unique सदस्य क्रमांक (जैसे: M001, M002)', 'Unique member number (e.g. M001, M002)')}</p>
+                <p><span className="font-medium text-primary">name</span> — {L('सदस्य का पूरा नाम', 'Full name of the member')}</p>
+                <p><span className="font-medium text-primary">father_name</span> — {L('पिता/पति का नाम', 'Father/husband name')}</p>
                 <p><span className="font-medium text-primary">member_type</span> — <span className="text-green-700">member</span> / <span className="text-orange-600">nominal</span></p>
-                <p><span className="font-medium text-primary">join_date</span> — ज़रूरी, Format: YYYY-MM-DD (जैसे: 2022-04-01)। <b>इसी से तय होता है कि सदस्य पुराना है या नया:</b></p>
-                <p className="pl-4">• वित्त वर्ष {society.financialYear} शुरू होने ({fyStartIso}) से <b>पहले</b> की तारीख़ = <b>पुराना सदस्य</b> — कोई रसीद नहीं बनती; उसकी शेयर पूँजी / प्रवेश शुल्क opening balance (शेयर पूँजी 1102) में डालें।</p>
-                <p className="pl-4">• इसी वित्त वर्ष की तारीख़ = <b>नया सदस्य</b> — शेयर पूँजी व प्रवेश शुल्क की रसीद बनती है (payment_mode cash → नकद, cheque/online → बैंक)।</p>
-                <p className="pl-4 text-muted-foreground">Template में M001, M002 पुराने और M003 नए सदस्य का उदाहरण है। Preview में हर row पर "पुराना / नया" दिखेगा।</p>
+                <p><span className="font-medium text-primary">join_date</span> — {L('ज़रूरी, Format: YYYY-MM-DD (जैसे: 2022-04-01)।', 'Required, format: YYYY-MM-DD (e.g. 2022-04-01).')} <b>{L('इसी से तय होता है कि सदस्य पुराना है या नया:', 'This decides whether the member is earlier or new:')}</b></p>
+                {hi
+                  ? <p className="pl-4">• वित्त वर्ष {society.financialYear} शुरू होने ({fyStartIso}) से <b>पहले</b> की तारीख़ = <b>पुराना सदस्य</b> — कोई रसीद नहीं बनती; उसकी शेयर पूँजी / प्रवेश शुल्क opening balance (शेयर पूँजी 1102) में डालें।</p>
+                  : <p className="pl-4">• A date <b>before</b> FY {society.financialYear} starts ({fyStartIso}) = <b>earlier member</b> — no receipt is made; put their share capital / admission fee in the opening balance (Share Capital 1102).</p>}
+                {hi
+                  ? <p className="pl-4">• इसी वित्त वर्ष की तारीख़ = <b>नया सदस्य</b> — शेयर पूँजी व प्रवेश शुल्क की रसीद बनती है (payment_mode cash → नकद, cheque/online → बैंक)।</p>
+                  : <p className="pl-4">• A date in this financial year = <b>new member</b> — a receipt is made for share capital and admission fee (payment_mode cash → cash, cheque/online → bank).</p>}
+                <p className="pl-4 text-muted-foreground">{L('Template में M001, M002 पुराने और M003 नए सदस्य का उदाहरण है। Preview में हर row पर "पुराना / नया" दिखेगा।', 'The template has M001, M002 as earlier and M003 as a new member. The preview shows "पुराना / नया" (earlier / new) on every row.')}</p>
                 <p><span className="font-medium text-primary">status</span> — <span className="text-green-700">active</span> / <span className="text-orange-600">inactive</span></p>
-                <p><span className="font-medium text-primary">share_capital</span> — शेयर पूंजी (numbers only)</p>
+                <p><span className="font-medium text-primary">share_capital</span> — {L('शेयर पूंजी (numbers only)', 'Share capital (numbers only)')}</p>
                 <p className="text-muted-foreground mt-1">Optional — Personal: age, occupation, caste (General/Backward Class/Schedule Caste/Schedule Tribe)</p>
                 <p className="text-muted-foreground">Optional — Address: address, post_office, tehsil, district, state, pin_code, phone</p>
                 <p className="text-muted-foreground">Optional — Finance: admission_fee, payment_mode (cash/cheque/online), share_count, share_face_value</p>
@@ -832,7 +855,7 @@ const UniversalImporter: React.FC = () => {
               <div className="space-y-2">
                 <p className="text-sm font-medium flex items-center gap-2">
                   <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">2</span>
-                  CSV Upload करें
+                  {L('CSV Upload करें', 'Upload CSV')}
                 </p>
                 <div className="ml-7">
                   <input
@@ -849,7 +872,7 @@ const UniversalImporter: React.FC = () => {
                     onClick={() => memberFileRef.current?.click()}
                   >
                     <Upload className="h-4 w-4" />
-                    CSV / Excel File चुनें
+                    {L('CSV / Excel File चुनें', 'Choose a CSV / Excel file')}
                   </Button>
                 </div>
               </div>
@@ -859,7 +882,7 @@ const UniversalImporter: React.FC = () => {
                 <div className="space-y-3">
                   <p className="text-sm font-medium flex items-center gap-2">
                     <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">3</span>
-                    Preview — confirm करके Import करें
+                    {L('Preview — confirm करके Import करें', 'Preview — confirm to import')}
                   </p>
                   <div className="ml-7 space-y-3">
                     <PreviewTable
@@ -867,15 +890,15 @@ const UniversalImporter: React.FC = () => {
                       columns={['member_id', 'name', 'father_name', 'join_date', 'join_kind', 'member_type', 'share_capital']}
                       labels={{
                         member_id: 'Member ID',
-                        name: 'नाम',
-                        father_name: 'पिता का नाम',
-                        age: 'आयु',
-                        caste: 'वर्ग',
-                        district: 'जिला',
+                        name: L('नाम', 'Name'),
+                        father_name: L('पिता का नाम', 'Father name'),
+                        age: L('आयु', 'Age'),
+                        caste: L('वर्ग', 'Category'),
+                        district: L('जिला', 'District'),
                         member_type: 'Type',
                         share_capital: 'Share Capital',
-                        join_date: 'जुड़ने की तिथि',
-                        join_kind: 'पुराना / नया',
+                        join_date: L('जुड़ने की तिथि', 'Join date'),
+                        join_kind: L('पुराना / नया', 'Earlier / new'),
                       }}
                     />
                     {(() => {
@@ -883,7 +906,9 @@ const UniversalImporter: React.FC = () => {
                       const old = ok.filter(r => (r.data.join_kind || '').startsWith('पुराना')).length;
                       return ok.length > 0 && (
                         <p className="text-xs text-muted-foreground">
-                          {old} पुराने सदस्य (रसीद नहीं — शेयर opening balance में डालें) · {ok.length - old} नए सदस्य (रसीद बनेगी)
+                          {hi
+                            ? <>{old} पुराने सदस्य (रसीद नहीं — शेयर opening balance में डालें) · {ok.length - old} नए सदस्य (रसीद बनेगी)</>
+                            : <>{old} earlier members (no receipt — put the share in the opening balance) · {ok.length - old} new members (a receipt will be made)</>}
                         </p>
                       );
                     })()}
@@ -895,7 +920,7 @@ const UniversalImporter: React.FC = () => {
                         onClick={handleMemberImport}
                       >
                         <CheckCircle2 className="h-4 w-4" />
-                        {memberPreview.filter(r => r.status === 'ok').length} Members Import करें
+                        {memberPreview.filter(r => r.status === 'ok').length} {L('Members Import करें', 'members — import')}
                       </Button>
                       <Button
                         variant="outline"
@@ -918,8 +943,8 @@ const UniversalImporter: React.FC = () => {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Opening Balances Import</CardTitle>
               <CardDescription>
-                पिछले साल का closing balance / शुरुआती शेष set करें।
-                Account का नाम बिल्कुल वैसा होना चाहिए जैसा system में Ledger Heads में है।
+                {L('पिछले साल का closing balance / शुरुआती शेष set करें।', 'Set last year\'s closing balance / opening balance.')}
+                {L('Account का नाम बिल्कुल वैसा होना चाहिए जैसा system में Ledger Heads में है।', 'The account name must match exactly how it is in Ledger Heads.')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -929,9 +954,11 @@ const UniversalImporter: React.FC = () => {
                 <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
                 <div className="text-xs text-amber-800 space-y-1">
                   <p className="font-medium">Important:</p>
-                  <p>Opening Balance import करने से पहले सुनिश्चित करें कि सभी accounts <strong>Ledger Heads</strong> में बन चुके हैं।</p>
-                  <p>अगर account_name exactly match नहीं करेगा तो row skip होगी।</p>
-                  <p>Same account की existing opening balance overwrite होगी।</p>
+                  {hi
+                    ? <p>Opening Balance import करने से पहले सुनिश्चित करें कि सभी accounts <strong>Ledger Heads</strong> में बन चुके हैं।</p>
+                    : <p>Before importing opening balances, make sure every account already exists in <strong>Ledger Heads</strong>.</p>}
+                  <p>{L('अगर account_name exactly match नहीं करेगा तो row skip होगी।', 'If account_name does not match exactly, the row is skipped.')}</p>
+                  <p>{L('Same account की existing opening balance overwrite होगी।', 'The existing opening balance of the same account is overwritten.')}</p>
                 </div>
               </div>
 
@@ -939,7 +966,7 @@ const UniversalImporter: React.FC = () => {
               <div className="space-y-2">
                 <p className="text-sm font-medium flex items-center gap-2">
                   <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">1</span>
-                  Template Download करें
+                  {L('Template Download करें', 'Download the template')}
                 </p>
                 <div className="ml-7 flex gap-2 flex-wrap">
                   <Button
@@ -949,7 +976,7 @@ const UniversalImporter: React.FC = () => {
                     onClick={() => downloadExcelTemplate('opening_balances_template.xlsx', OPENING_BALANCES_TEMPLATE)}
                   >
                     <Download className="h-4 w-4" />
-                    Excel (.xlsx) Download करें
+                    {L('Excel (.xlsx) Download करें', 'Download Excel (.xlsx)')}
                   </Button>
                   <Button
                     variant="outline"
@@ -958,7 +985,7 @@ const UniversalImporter: React.FC = () => {
                     onClick={() => downloadTemplate('opening_balances_template.csv', OPENING_BALANCES_TEMPLATE)}
                   >
                     <Download className="h-4 w-4" />
-                    CSV Download करें
+                    {L('CSV Download करें', 'Download CSV')}
                   </Button>
                 </div>
               </div>
@@ -966,17 +993,17 @@ const UniversalImporter: React.FC = () => {
               {/* Template format info */}
               <div className="ml-7 bg-muted rounded-lg p-3 text-xs space-y-1">
                 <p className="font-medium mb-1">Template Columns:</p>
-                <p><span className="font-medium text-primary">account_name</span> — System में exact नाम (जैसे: Cash in Hand, Share Capital)</p>
-                <p><span className="font-medium text-primary">opening_balance</span> — राशि (numbers only, जैसे: 50000)</p>
+                <p><span className="font-medium text-primary">account_name</span> — {L('System में exact नाम (जैसे: Cash in Hand, Share Capital)', 'Exact name in the system (e.g. Cash in Hand, Share Capital)')}</p>
+                <p><span className="font-medium text-primary">opening_balance</span> — {L('राशि (numbers only, जैसे: 50000)', 'Amount (numbers only, e.g. 50000)')}</p>
                 <p><span className="font-medium text-primary">balance_type</span> — <span className="text-green-700">Debit</span> / <span className="text-orange-600">Credit</span></p>
-                <p className="text-muted-foreground mt-1">Tip: Ledger Heads page से account names copy करें ताकि exact match हो।</p>
+                <p className="text-muted-foreground mt-1">{L('Tip: Ledger Heads page से account names copy करें ताकि exact match हो।', 'Tip: copy account names from the Ledger Heads page so they match exactly.')}</p>
               </div>
 
               {/* Step 2 */}
               <div className="space-y-2">
                 <p className="text-sm font-medium flex items-center gap-2">
                   <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">2</span>
-                  CSV Upload करें
+                  {L('CSV Upload करें', 'Upload CSV')}
                 </p>
                 <div className="ml-7">
                   <input
@@ -993,7 +1020,7 @@ const UniversalImporter: React.FC = () => {
                     onClick={() => obFileRef.current?.click()}
                   >
                     <Upload className="h-4 w-4" />
-                    CSV / Excel File चुनें
+                    {L('CSV / Excel File चुनें', 'Choose a CSV / Excel file')}
                   </Button>
                 </div>
               </div>
@@ -1003,7 +1030,7 @@ const UniversalImporter: React.FC = () => {
                 <div className="space-y-3">
                   <p className="text-sm font-medium flex items-center gap-2">
                     <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">3</span>
-                    Preview — confirm करके Import करें
+                    {L('Preview — confirm करके Import करें', 'Preview — confirm to import')}
                   </p>
                   <div className="ml-7 space-y-3">
                     <PreviewTable
@@ -1024,7 +1051,7 @@ const UniversalImporter: React.FC = () => {
                         onClick={handleObImport}
                       >
                         <CheckCircle2 className="h-4 w-4" />
-                        {obPreview.filter(r => r.status === 'ok').length} Opening Balances Set करें
+                        {obPreview.filter(r => r.status === 'ok').length} {L('Opening Balances Set करें', 'opening balances — set')}
                       </Button>
                       <Button
                         variant="outline"
@@ -1047,8 +1074,8 @@ const UniversalImporter: React.FC = () => {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Bulk Voucher Import</CardTitle>
               <CardDescription>
-                एक ही तरह के बहुत सारे वाउचर एक साथ डालें — जैसे MSP खरीद के हज़ारों वाउचर।
-                हर पंक्ति = एक वाउचर (एक Debit, एक Credit). Accounts पहले से बने होने चाहिए।
+                {L('एक ही तरह के बहुत सारे वाउचर एक साथ डालें — जैसे MSP खरीद के हज़ारों वाउचर।', 'Enter many vouchers of one kind together — e.g. thousands of MSP purchase vouchers.')}
+                {L('हर पंक्ति = एक वाउचर (एक Debit, एक Credit). Accounts पहले से बने होने चाहिए।', 'Each row = one voucher (one Debit, one Credit). The accounts must already exist.')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1056,16 +1083,16 @@ const UniversalImporter: React.FC = () => {
               <div className="space-y-2">
                 <p className="text-sm font-medium flex items-center gap-2">
                   <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">1</span>
-                  Template Download करें
+                  {L('Template Download करें', 'Download the template')}
                 </p>
                 <div className="ml-7 flex gap-2 flex-wrap">
                   <Button variant="outline" size="sm" className="gap-2"
                     onClick={() => downloadExcelTemplate('vouchers_template.xlsx', vouchersTemplate(fyStartIso))}>
-                    <Download className="h-4 w-4" /> Excel (.xlsx) Download करें
+                    <Download className="h-4 w-4" /> {L('Excel (.xlsx) Download करें', 'Download Excel (.xlsx)')}
                   </Button>
                   <Button variant="outline" size="sm" className="gap-2 text-muted-foreground"
                     onClick={() => downloadTemplate('vouchers_template.csv', vouchersTemplate(fyStartIso))}>
-                    <Download className="h-4 w-4" /> CSV Download करें
+                    <Download className="h-4 w-4" /> {L('CSV Download करें', 'Download CSV')}
                   </Button>
                 </div>
               </div>
@@ -1073,24 +1100,24 @@ const UniversalImporter: React.FC = () => {
               {/* Template format info */}
               <div className="ml-7 bg-muted rounded-lg p-3 text-xs space-y-1">
                 <p className="font-medium mb-1">Template Columns:</p>
-                <p><span className="font-medium text-primary">date</span> — YYYY-MM-DD (चालू वित्त वर्ष के भीतर)</p>
+                <p><span className="font-medium text-primary">date</span> — YYYY-MM-DD {L('(चालू वित्त वर्ष के भीतर)', '(within the current financial year)')}</p>
                 <p><span className="font-medium text-primary">type</span> — receipt / payment / journal / contra / sale / purchase</p>
-                <p><span className="font-medium text-primary">debit_account</span> · <span className="font-medium text-primary">credit_account</span> — System में मौजूद <strong>exact</strong> नाम (Ledger Heads से लें)</p>
-                <p><span className="font-medium text-primary">amount</span> — राशि (numbers only); हर वाउचर अपने-आप balanced (Dr = Cr)</p>
-                <p><span className="font-medium text-primary">narration</span> — विवरण (जैसे किसान का नाम) · <span className="font-medium text-primary">reference</span> — बाहरी ref (गेट-पास नं)</p>
-                <p className="text-orange-700 mt-1">⚠️ same <strong>reference</strong> दोबारा upload करने पर वह वाउचर skip होगा (duplicate नहीं बनेगा)।</p>
+                <p><span className="font-medium text-primary">debit_account</span> · <span className="font-medium text-primary">credit_account</span> — {L('System में मौजूद', 'The')} <strong>exact</strong> {L('नाम (Ledger Heads से लें)', 'name in the system (take it from Ledger Heads)')}</p>
+                <p><span className="font-medium text-primary">amount</span> — {L('राशि (numbers only); हर वाउचर अपने-आप balanced (Dr = Cr)', 'Amount (numbers only); every voucher is balanced automatically (Dr = Cr)')}</p>
+                <p><span className="font-medium text-primary">narration</span> — {L('विवरण (जैसे किसान का नाम)', 'Description (e.g. the farmer name)')} · <span className="font-medium text-primary">reference</span> — {L('बाहरी ref (गेट-पास नं)', 'External ref (gate-pass no.)')}</p>
+                <p className="text-orange-700 mt-1">⚠️ {L('same', 'Uploading the same')} <strong>reference</strong> {L('दोबारा upload करने पर वह वाउचर skip होगा (duplicate नहीं बनेगा)।', 'again skips that voucher (no duplicate is made).')}</p>
               </div>
 
               {/* Step 2 */}
               <div className="space-y-2">
                 <p className="text-sm font-medium flex items-center gap-2">
                   <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">2</span>
-                  CSV / Excel Upload करें
+                  {L('CSV / Excel Upload करें', 'Upload CSV / Excel')}
                 </p>
                 <div className="ml-7">
                   <input ref={voucherFileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleVoucherFile} />
                   <Button variant="outline" size="sm" className="gap-2" onClick={() => voucherFileRef.current?.click()}>
-                    <Upload className="h-4 w-4" /> CSV / Excel File चुनें
+                    <Upload className="h-4 w-4" /> {L('CSV / Excel File चुनें', 'Choose a CSV / Excel file')}
                   </Button>
                 </div>
               </div>
@@ -1100,7 +1127,7 @@ const UniversalImporter: React.FC = () => {
                 <div className="space-y-3">
                   <p className="text-sm font-medium flex items-center gap-2">
                     <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">3</span>
-                    Preview — confirm करके Import करें
+                    {L('Preview — confirm करके Import करें', 'Preview — confirm to import')}
                   </p>
                   <div className="ml-7 space-y-3">
                     <PreviewTable
@@ -1116,7 +1143,7 @@ const UniversalImporter: React.FC = () => {
                         disabled={voucherImporting || voucherPreview.filter(r => r.status === 'ok').length === 0}
                         onClick={handleVoucherImport}>
                         <CheckCircle2 className="h-4 w-4" />
-                        {voucherImporting ? 'Import हो रहा है…' : `${voucherPreview.filter(r => r.status === 'ok').length} वाउचर Import करें`}
+                        {voucherImporting ? L('Import हो रहा है…', 'Importing…') : `${voucherPreview.filter(r => r.status === 'ok').length} ${L('वाउचर Import करें', 'vouchers — import')}`}
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => setVoucherPreview(null)}>Cancel</Button>
                     </div>

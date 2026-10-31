@@ -45,7 +45,7 @@ export default function SocietyEmailLog({ hi }: { hi: boolean }) {
         ) : rows.length === 0 ? (
           <p className="px-4 pb-4 text-sm text-muted-foreground">{hi ? 'अभी कोई ईमेल नहीं।' : 'No emails yet.'}</p>
         ) : (
-          <EmailLogTable rows={rows} />
+          <EmailLogTable rows={rows} hi={hi} />
         )}
       </CardContent>
     </Card>

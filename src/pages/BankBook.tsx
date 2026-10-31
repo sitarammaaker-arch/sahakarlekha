@@ -66,7 +66,9 @@ const BankBook: React.FC = () => {
     }),
   });
   const zeroWarnText = zeroWarn.warn
-    ? `इस बैंक खाते में कोई एंट्री या शेष नहीं है, जबकि दूसरे बैंक खातों में Rs. ${zeroWarn.otherTotal.toLocaleString('en-IN')} का शेष है — ऊपर से सही बैंक खाता चुनें।`
+    ? (language === 'hi'
+      ? `इस बैंक खाते में कोई एंट्री या शेष नहीं है, जबकि दूसरे बैंक खातों में Rs. ${zeroWarn.otherTotal.toLocaleString('en-IN')} का शेष है — ऊपर से सही बैंक खाता चुनें।`
+      : `This bank account has no entries or balance, while the other bank accounts hold Rs. ${zeroWarn.otherTotal.toLocaleString('en-IN')} — choose the right bank account above.`)
     : '';
 
   const fmt = (amount: number) =>

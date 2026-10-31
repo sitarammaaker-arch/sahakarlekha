@@ -21,7 +21,8 @@ import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { trackEvent } from '@/lib/analytics';
-import { search, TYPE_LABEL } from '@/lib/siteSearch';
+import { search, TYPE_LABEL, TYPE_LABEL_EN } from '@/lib/siteSearch';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { askSeam, type AskOutcome } from '@/lib/ask/client';
 import { classify, REGULATED_REFUSAL } from '@/lib/ask/classify';
 import { WHATSAPP_NUMBER } from '@/lib/socials';
@@ -39,6 +40,10 @@ const AskAssistant: React.FC = () => {
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';
   const [input, setInput] = React.useState(q);
+  // Page chrome follows the app language; the answers are the (Hindi) corpus, and the SEO meta stays Hindi.
+  const { language } = useLanguage();
+  const L = (h: string, e: string) => (language === 'hi' ? h : e);
+  const typeLabel = language === 'hi' ? TYPE_LABEL : TYPE_LABEL_EN;
 
   useDocumentMeta({
     title: q ? `"${q}" — पूछें | SahakarLekha` : 'पूछें (Ask SahakarLekha) — सहकारी समिति लेखांकन सहायक',
@@ -111,17 +116,17 @@ const AskAssistant: React.FC = () => {
       <div className="max-w-3xl mx-auto px-4 py-10 md:py-14">
         <div className="flex items-center gap-2 text-primary mb-2">
           <Sparkles className="h-6 w-6" />
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">पूछें — Ask SahakarLekha</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">{L('पूछें — Ask SahakarLekha', 'Ask SahakarLekha')}</h1>
         </div>
-        <p className="text-muted-foreground mb-5">सहकारी समिति लेखांकन का कोई भी सवाल लिखें — सीधा, स्रोत-सहित जवाब मिलेगा।</p>
+        <p className="text-muted-foreground mb-5">{L('सहकारी समिति लेखांकन का कोई भी सवाल लिखें — सीधा, स्रोत-सहित जवाब मिलेगा।', 'Type any cooperative society accounting question — you get a direct answer with its source.')}</p>
 
         <form onSubmit={submit} className="relative">
           <input
             type="search" value={input} onChange={(e) => setInput(e.target.value)} autoFocus
-            placeholder="जैसे: member kaise jode, GST जमा की एंट्री, क्लोज़िंग स्टॉक…"
+            placeholder={L('जैसे: member kaise jode, GST जमा की एंट्री, क्लोज़िंग स्टॉक…', 'e.g. add a member, GST deposit entry, closing stock…')}
             className="w-full rounded-xl border border-border bg-background pl-4 pr-12 py-3.5 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
-          <button type="submit" aria-label="पूछें" className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-lg bg-primary text-white flex items-center justify-center hover:bg-primary/90">
+          <button type="submit" aria-label={L('पूछें', 'Ask')} className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-lg bg-primary text-white flex items-center justify-center hover:bg-primary/90">
             <Send className="h-4 w-4" />
           </button>
         </form>
@@ -143,14 +148,14 @@ const AskAssistant: React.FC = () => {
             refusal still points somewhere useful — it is honest, not a dead end. */}
         {q && localGuard && !seamSettled && (
           <p className="mt-8 text-sm text-muted-foreground" aria-live="polite">
-            यह एक नियामक आँकड़ा (दर / सीमा / धारा) है — प्रमाणित स्रोत देखा जा रहा है…
+            {L('यह एक नियामक आँकड़ा (दर / सीमा / धारा) है — प्रमाणित स्रोत देखा जा रहा है…', 'This is a regulated figure (rate / limit / section) — checking for a verified source…')}
           </p>
         )}
 
         {q && (refusal || localRefusal) && (
           <div className="mt-8">
             <p className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-500 mb-2">
-              मैं इसका उत्तर नहीं दूँगा
+              {L('मैं इसका उत्तर नहीं दूँगा', 'I will not answer this')}
             </p>
             <Card className="border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20">
               <CardContent className="p-5 flex gap-3">
@@ -168,7 +173,7 @@ const AskAssistant: React.FC = () => {
         {q && computed && (
           <div className="mt-8">
             <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">
-              जवाब{computed.lane === 'D' ? ' · आपकी बही से' : ''}
+              {L('जवाब', 'Answer')}{computed.lane === 'D' ? L(' · आपकी बही से', ' · from your books') : ''}
             </p>
             <Card className="border-primary/30">
               <CardContent className="p-5">
@@ -195,7 +200,7 @@ const AskAssistant: React.FC = () => {
                 )}
                 {computed.cite?.url && (
                   <Link to={computed.cite.url} className="inline-flex items-center gap-1 text-primary font-semibold mt-3 hover:underline">
-                    {computed.cite.title || 'पूरा देखें'} <ArrowRight className="h-4 w-4" />
+                    {computed.cite.title || L('पूरा देखें', 'See all')} <ArrowRight className="h-4 w-4" />
                   </Link>
                 )}
               </CardContent>
@@ -206,7 +211,7 @@ const AskAssistant: React.FC = () => {
         {/* Top answer */}
         {q && top && (
           <div className="mt-8">
-            <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">जवाब · स्रोत: {TYPE_LABEL[top.type]}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">{L('जवाब · स्रोत', 'Answer · source')}: {typeLabel[top.type]}</p>
             <Card className="border-primary/30">
               <CardContent className="p-5">
                 <p className="font-bold text-lg text-foreground">{top.title}</p>
@@ -226,7 +231,7 @@ const AskAssistant: React.FC = () => {
                   </table>
                 )}
                 <Link to={top.url} className="inline-flex items-center gap-1 text-primary font-semibold mt-3 hover:underline">
-                  पूरा पढ़ें <ArrowRight className="h-4 w-4" />
+                  {L('पूरा पढ़ें', 'Read in full')} <ArrowRight className="h-4 w-4" />
                 </Link>
               </CardContent>
             </Card>
@@ -236,7 +241,7 @@ const AskAssistant: React.FC = () => {
         {/* Related sources */}
         {q && rest.length > 0 && (
           <div className="mt-6">
-            <p className="text-sm font-semibold text-foreground mb-3">और प्रासंगिक</p>
+            <p className="text-sm font-semibold text-foreground mb-3">{L('और प्रासंगिक', 'Related')}</p>
             <div className="space-y-2">
               {rest.map((r) => (
                 <Link key={r.id} to={r.url} className="block">
@@ -244,7 +249,7 @@ const AskAssistant: React.FC = () => {
                     <CardContent className="p-3.5 flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-medium text-foreground truncate">{r.title}</p>
-                        <p className="text-xs text-muted-foreground">{TYPE_LABEL[r.type]}</p>
+                        <p className="text-xs text-muted-foreground">{typeLabel[r.type]}</p>
                       </div>
                       <ArrowRight className="h-4 w-4 text-primary shrink-0" />
                     </CardContent>
@@ -258,10 +263,10 @@ const AskAssistant: React.FC = () => {
         {/* No results */}
         {q && results.length === 0 && (
           <div className="mt-10 text-center">
-            <p className="text-muted-foreground">इसका सीधा जवाब अभी नहीं मिला।</p>
+            <p className="text-muted-foreground">{L('इसका सीधा जवाब अभी नहीं मिला।', 'No direct answer found yet.')}</p>
             <p className="text-sm text-muted-foreground mt-2">
-              अलग शब्दों में आज़माएँ, या{' '}
-              <a href={`https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">WhatsApp पर पूछें</a>।
+              {L('अलग शब्दों में आज़माएँ, या', 'Try different words, or')}{' '}
+              <a href={`https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{L('WhatsApp पर पूछें', 'ask on WhatsApp')}</a>{L('।', '.')}
             </p>
           </div>
         )}
@@ -270,7 +275,8 @@ const AskAssistant: React.FC = () => {
         {q && (
           <p className="mt-8 text-xs text-muted-foreground border-t pt-4 flex items-start gap-2">
             <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-            ये जवाब SahakarLekha के मदद, कुकबुक, गाइड व FAQ से सीधे लिए गए हैं — कोई अनुमान नहीं। यह सामान्य जानकारी है, कानूनी/लेखा ruling नहीं; ज़रूरी मामलों में अपने ऑडिटर/RCS से पुष्टि करें।
+            {L('ये जवाब SahakarLekha के मदद, कुकबुक, गाइड व FAQ से सीधे लिए गए हैं — कोई अनुमान नहीं। यह सामान्य जानकारी है, कानूनी/लेखा ruling नहीं; ज़रूरी मामलों में अपने ऑडिटर/RCS से पुष्टि करें।',
+              'These answers come straight from SahakarLekha help, cookbook, guides and FAQ — no guessing. This is general information, not a legal/accounting ruling; confirm important matters with your auditor/RCS.')}
           </p>
         )}
       </div>

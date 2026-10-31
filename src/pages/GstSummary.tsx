@@ -478,7 +478,13 @@ export default function GstSummary() {
   // GSTR-1 JSON export (NIC format)
   const handleGstr1Json = () => {
     if (!stateCode) {
-      toast({ title: 'GSTR-1 JSON नहीं बन सकता', description: 'समिति सेटअप में समिति का GSTIN या राज्य भरें — राज्य के बिना place of supply ग़लत जाता है।', variant: 'destructive', duration: 10000 });
+      toast({
+        title: hi ? 'GSTR-1 JSON नहीं बन सकता' : 'Cannot build the GSTR-1 JSON',
+        description: hi
+          ? 'समिति सेटअप में समिति का GSTIN या राज्य भरें — राज्य के बिना place of supply ग़लत जाता है।'
+          : 'Fill in the society GSTIN or state in Society Setup — without the state the place of supply goes wrong.',
+        variant: 'destructive', duration: 10000,
+      });
       return;
     }
     const fp = fromDate.slice(5, 7) + fromDate.slice(0, 4); // MMYYYY
