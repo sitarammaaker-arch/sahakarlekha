@@ -15,6 +15,15 @@ interface Props {
 
 type Status = { email: string; verified_at: string | null; pending: boolean };
 
+/** Toast copy (English) for request_email_verification()'s non-queued answers. */
+const REQUEST_MSG_EN: Record<string, [string, string]> = {
+  already_verified: ['Already verified', 'This email is already verified.'],
+  too_soon: ['Please wait', 'A link was just sent. Try again in 2 minutes.'],
+  suppressed: ['Email cannot be sent to this address', 'This address bounced or complained before. Ask your admin to set the right email.'],
+  not_staff: ['No verification needed', 'This login is not a society user (e.g. a platform admin), so it is not verified.'],
+  not_signed_in: ['Sign-in needed', 'Sign in again and retry.'],
+};
+
 /** Toast copy for request_email_verification()'s non-queued answers (migration 142). */
 const REQUEST_MSG: Record<string, [string, string]> = {
   already_verified: ['पहले से verify', 'यह ईमेल पहले ही verify हो चुका है।'],
@@ -75,13 +84,13 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
     try {
       const { data, error } = await supabase.rpc('set_my_email_locale', { p_locale: loc });
       if (error || (data as { status?: string } | null)?.status !== 'saved') {
-        toast({ title: 'भाषा नहीं बदली', description: error?.message || 'कुछ देर बाद दोबारा कोशिश करें।', variant: 'destructive', duration: 10000 });
+        toast({ title: hi ? 'भाषा नहीं बदली' : 'Language not changed', description: error?.message || (hi ? 'कुछ देर बाद दोबारा कोशिश करें।' : 'Try again shortly.'), variant: 'destructive', duration: 10000 });
         return;
       }
       setEmailLocale(loc);
       toast({ title: loc === 'en' ? 'Emails will now be in English' : 'अब ईमेल हिंदी में आएँगे' });
     } catch {
-      toast({ title: 'भाषा नहीं बदली', description: 'कुछ देर बाद दोबारा कोशिश करें।', variant: 'destructive', duration: 10000 });
+      toast({ title: hi ? 'भाषा नहीं बदली' : 'Language not changed', description: hi ? 'कुछ देर बाद दोबारा कोशिश करें।' : 'Try again shortly.', variant: 'destructive', duration: 10000 });
     } finally {
       setLocaleBusy(false);
     }
@@ -92,13 +101,15 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
     try {
       const { data, error } = await supabase.rpc('set_my_weekly_digest', { p_on: on });
       if (error || (data as { status?: string } | null)?.status !== 'saved') {
-        toast({ title: 'सेटिंग नहीं बदली', description: error?.message || 'कुछ देर बाद दोबारा कोशिश करें।', variant: 'destructive', duration: 10000 });
+        toast({ title: hi ? 'सेटिंग नहीं बदली' : 'Setting not changed', description: error?.message || (hi ? 'कुछ देर बाद दोबारा कोशिश करें।' : 'Try again shortly.'), variant: 'destructive', duration: 10000 });
         return;
       }
       setDigest(on);
-      toast({ title: on ? 'हफ़्ते की रिपोर्ट चालू' : 'हफ़्ते की रिपोर्ट बंद', description: on ? 'हर सोमवार सुबह सारांश आएगा।' : 'अब सोमवार का सारांश नहीं आएगा।' });
+      toast(hi
+        ? { title: on ? 'हफ़्ते की रिपोर्ट चालू' : 'हफ़्ते की रिपोर्ट बंद', description: on ? 'हर सोमवार सुबह सारांश आएगा।' : 'अब सोमवार का सारांश नहीं आएगा।' }
+        : { title: on ? 'Weekly summary on' : 'Weekly summary off', description: on ? 'A summary will arrive every Monday morning.' : 'The Monday summary will no longer be sent.' });
     } catch {
-      toast({ title: 'सेटिंग नहीं बदली', description: 'कुछ देर बाद दोबारा कोशिश करें।', variant: 'destructive', duration: 10000 });
+      toast({ title: hi ? 'सेटिंग नहीं बदली' : 'Setting not changed', description: hi ? 'कुछ देर बाद दोबारा कोशिश करें।' : 'Try again shortly.', variant: 'destructive', duration: 10000 });
     } finally {
       setDigestBusy(false);
     }
@@ -110,15 +121,17 @@ export const EmailVerifyDialog: React.FC<Props> = ({ open, onOpenChange }) => {
       const { data, error } = await supabase.rpc('request_email_verification', { p_locale: hi ? 'hi' : 'en' });
       const s = (data as { status?: string } | null)?.status;
       if (error || !s) {
-        toast({ title: 'लिंक नहीं भेजा जा सका', description: error?.message || 'कुछ देर बाद दोबारा कोशिश करें।', variant: 'destructive', duration: 10000 });
+        toast({ title: hi ? 'लिंक नहीं भेजा जा सका' : 'Link not sent', description: error?.message || (hi ? 'कुछ देर बाद दोबारा कोशिश करें।' : 'Try again shortly.'), variant: 'destructive', duration: 10000 });
         return;
       }
       if (s === 'queued') {
-        toast({ title: 'Verify लिंक भेजा गया', description: `${status?.email ?? ''} पर 1–2 मिनट में ईमेल आएगा। Spam folder भी देखें।` });
+        toast(hi
+          ? { title: 'Verify लिंक भेजा गया', description: `${status?.email ?? ''} पर 1–2 मिनट में ईमेल आएगा। Spam folder भी देखें।` }
+          : { title: 'Verification link sent', description: `An email will reach ${status?.email ?? ''} in 1–2 minutes. Check the spam folder too.` });
         setStatus((p) => (p ? { ...p, pending: true } : p));
         return;
       }
-      const [title, description] = REQUEST_MSG[s] ?? ['लिंक नहीं भेजा जा सका', s];
+      const [title, description] = (hi ? REQUEST_MSG : REQUEST_MSG_EN)[s] ?? [hi ? 'लिंक नहीं भेजा जा सका' : 'Link not sent', s];
       toast({ title, description, variant: s === 'already_verified' ? 'default' : 'destructive' });
     } finally {
       setBusy(false);
