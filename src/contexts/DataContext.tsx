@@ -2322,6 +2322,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       narration,
       refType: 'bill-receipt',
       refId: data.customerId,
+      origin: 'manual',   // ECR-11: user-created → subject to the approval matrix
       billAllocations,
       lines: [
         { id: lid(), accountId: debitAcc, type: 'Dr', amount: total },
@@ -2380,6 +2381,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       narration,
       refType: 'bill-payment',
       refId: data.supplierId,
+      origin: 'manual',   // ECR-11: user-created → subject to the approval matrix
       billAllocations,
       lines: [
         { id: lid(), accountId: supAcc, type: 'Dr', amount: total },
