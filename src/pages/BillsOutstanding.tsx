@@ -9,6 +9,7 @@
 import React, { useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
+import { useConsumerData } from '@/contexts/ConsumerDataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,14 +22,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import LateFeeRuleFields from '@/components/LateFeeRuleFields';
 import { asDayCount } from '@/lib/interestDayCount';
-import { billPaymentsMap, computeLateFee, daysOverdue, describeLateFeeRule, isActiveRule } from '@/lib/lateFee';
+import { billPaymentsMap, computeLateFee, daysOverdue, describeLateFeeRule, isActiveRule, withAdjustedReturns } from '@/lib/lateFee';
 import type { LateFeeRule } from '@/types';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate, todayStr } from '@/lib/dateUtils';
 import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
 import { billsReminderMessage } from '@/lib/whatsappReminders';
 import {
-  getOpenBills, getOpenPurchaseBills, getPartyUnallocated, bucketByAge, ageInDays,
+  getOpenBills, getOpenPurchaseBills, getPartyUnallocated, bucketByAge, ageInDays, getSaleReturnedMap, getPurchaseReturnedMap,
 } from '@/lib/billUtils';
 
 const today = () => new Date().toISOString().split('T')[0];
@@ -40,6 +41,7 @@ interface FeeRow { party: string; no: string; dueDate: string; lateDays: number;
 const BillsOutstanding: React.FC = () => {
   const { language } = useLanguage();
   const { society, customers, suppliers, sales, purchases, vouchers, updateSociety } = useData();
+  const { salesReturns, purchaseReturns } = useConsumerData();
   const { user } = useAuth();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -71,24 +73,26 @@ const BillsOutstanding: React.FC = () => {
   };
 
   const receivableRows = useMemo<Row[]>(() => {
+    const returned = getSaleReturnedMap(salesReturns);
     const rows: Row[] = [];
     for (const c of customers) {
-      for (const { sale, balance } of getOpenBills(sales, vouchers, c.id)) {
+      for (const { sale, balance } of getOpenBills(sales, vouchers, c.id, returned)) {
         rows.push({ party: c.name, no: sale.saleNo, date: sale.date, balance, days: ageInDays(sale.date, asOf), partyId: c.id, dueDate: sale.dueDate, overdue: daysOverdue(sale.dueDate, asOf) });
       }
     }
     return rows.sort((a, b) => b.days - a.days);
-  }, [customers, sales, vouchers, asOf]);
+  }, [customers, sales, salesReturns, vouchers, asOf]);
 
   const payableRows = useMemo<Row[]>(() => {
+    const returned = getPurchaseReturnedMap(purchaseReturns);
     const rows: Row[] = [];
     for (const s of suppliers) {
-      for (const { purchase, balance } of getOpenPurchaseBills(purchases, vouchers, s.id)) {
+      for (const { purchase, balance } of getOpenPurchaseBills(purchases, vouchers, s.id, returned)) {
         rows.push({ party: s.name, no: purchase.purchaseNo, date: purchase.date, balance, days: ageInDays(purchase.date, asOf), dueDate: purchase.dueDate, overdue: daysOverdue(purchase.dueDate, asOf) });
       }
     }
     return rows.sort((a, b) => b.days - a.days);
-  }, [suppliers, purchases, vouchers, asOf]);
+  }, [suppliers, purchases, purchaseReturns, vouchers, asOf]);
 
   // Unallocated advance / on-account held across all parties (this tab's side).
   const advanceTotal = useMemo(() => {
@@ -103,7 +107,7 @@ const BillsOutstanding: React.FC = () => {
   const reminderFor = (partyId: string) => {
     const c = customers.find(x => x.id === partyId);
     const bills = receivableRows.filter(r => r.partyId === partyId).sort((a, b) => a.date.localeCompare(b.date))
-      .map(r => ({ no: r.no, date: fmtDate(r.date), balance: r.balance }));
+      .map(r => ({ no: r.no, date: fmtDate(r.date), balance: r.balance, dueDate: r.dueDate ? fmtDate(r.dueDate) : undefined }));
     return {
       phone: c?.mobile || c?.phone,
       message: billsReminderMessage({ partyName: c?.legalName || c?.name, societyName: society.nameHi || society.name, asOf: fmtDate(todayStr()), bills }),
@@ -124,7 +128,9 @@ const BillsOutstanding: React.FC = () => {
   // The charge on every bill carrying a rule, cleared ones too: a bill paid late is no longer outstanding,
   // but what its lateness cost is still worked out.
   const feeRows = useMemo<FeeRow[]>(() => {
-    const payments = billPaymentsMap(vouchers);
+    const payments = withAdjustedReturns(billPaymentsMap(vouchers), tab === 'receivable'
+      ? salesReturns.map(r => ({ ...r, billId: r.originalSaleId }))
+      : purchaseReturns.map(r => ({ ...r, billId: r.originalPurchaseId })));
     const basis = asDayCount(society.interestDayCount);
     const bills = tab === 'receivable'
       ? sales.map(b => ({ id: b.id, no: b.saleNo, party: b.customerName, total: b.grandTotal ?? b.netAmount ?? 0, dueDate: b.dueDate, rule: b.lateFeeRule, isDeleted: b.isDeleted, mode: b.paymentMode }))
@@ -136,7 +142,7 @@ const BillsOutstanding: React.FC = () => {
       if (fee.amount > 0) out.push({ party: b.party, no: b.no, dueDate: b.dueDate, lateDays: fee.lateDays, balance: fee.balance, amount: fee.amount, rule: b.rule });
     }
     return out.sort((a, b) => b.amount - a.amount);
-  }, [tab, sales, purchases, vouchers, asOf, society.interestDayCount]);
+  }, [tab, sales, purchases, salesReturns, purchaseReturns, vouchers, asOf, society.interestDayCount]);
   const shownFeeRows = feeRows.filter(r => matchesParty(r.party));
   const feeTotal = shownFeeRows.reduce((sum, r) => sum + r.amount, 0);
   const sideRule = tab === 'receivable' ? society.lateFeeRules?.sales : society.lateFeeRules?.purchases;

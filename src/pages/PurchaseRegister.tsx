@@ -16,7 +16,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { generatePurchaseRegisterPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import { parseFY } from '@/lib/depreciation';
-import { getBillSettledMap, getBillStatusFor } from '@/lib/billUtils';
+import { getBillSettledMap, getBillStatusFor, getPurchaseReturnedMap } from '@/lib/billUtils';
 
 const fmtAmt = (n: number) =>
   'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -29,6 +29,7 @@ const PurchaseRegister: React.FC = () => {
   const fy = society.financialYear;
   const fyDates = parseFY(fy);
   const settledMap = useMemo(() => getBillSettledMap(vouchers), [vouchers]);
+  const returnedMap = useMemo(() => getPurchaseReturnedMap(purchaseReturns), [purchaseReturns]);
 
   const [fromDate, setFromDate] = useState(fyDates?.start || '');
   const [toDate, setToDate] = useState(fyDates?.end || '');
@@ -208,7 +209,7 @@ const PurchaseRegister: React.FC = () => {
                           {p.paymentMode !== 'credit'
                             ? <span className="text-xs text-success font-medium">{hi ? 'चुकता' : 'Paid'}</span>
                             : (() => {
-                                const st = getBillStatusFor(p.grandTotal ?? p.netAmount ?? 0, settledMap[p.id] || 0);
+                                const st = getBillStatusFor(p.grandTotal ?? p.netAmount ?? 0, settledMap[p.id] || 0, returnedMap[p.id] || 0);
                                 const cls = st.status === 'paid' ? 'text-success' : st.status === 'partial' ? 'text-amber-700' : 'text-destructive';
                                 const lbl = st.status === 'paid' ? (hi ? 'चुकता' : 'Paid') : st.status === 'partial' ? (hi ? 'आंशिक' : 'Partial') : (hi ? 'बकाया' : 'Unpaid');
                                 return <span className={`text-xs font-medium ${cls}`}>{lbl}{st.balance > 0.01 ? ` · ${fmtAmt(st.balance)}` : ''}</span>;

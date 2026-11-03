@@ -130,6 +130,9 @@ const br = rm.billsReminderMessage({ partyName: 'सीता', asOf: '24/10/202
 ok(br.includes('• S-1 (01/09/2026): ₹500.00') && br.includes('• S-3 (05/10/2026): ₹250.50'), 'open bills listed');
 ok(!br.includes('S-2'), 'settled bill left out');
 ok(br.includes('कुल बकाया: ₹750.50'), 'total of open bills');
+const dueMsg = rm.billsReminderMessage({ asOf: 'x', bills: [{ no: 'S-1', date: '01/04/2026', balance: 100, dueDate: '16/04/2026' }, { no: 'S-2', date: '02/04/2026', balance: 50 }] });
+ok(dueMsg.includes('देय तिथि 16/04/2026'), 'bills reminder: the due date when the bill has one');
+ok(dueMsg.split('देय तिथि').length === 2, 'bills reminder: no due date line for a bill without one');
 const many = rm.billsReminderMessage({ asOf: 'x', bills: Array.from({ length: 13 }, (_, i) => ({ no: `B${i}`, date: 'd', balance: 1 })) });
 ok(many.includes('• और 3 बिल') && many.includes('कुल बकाया: ₹13.00'), 'more than 10 bills counted, total still full');
 

@@ -41,7 +41,8 @@ import { toMinor, toRupees, mulMinor } from '@/lib/money';
 import { useToast } from '@/hooks/use-toast';
 import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
 import { saleBillMessage } from '@/lib/whatsappShare';
-import { getBillReceivedMap, getBillStatus } from '@/lib/billUtils';
+import { useConsumerData } from '@/contexts/ConsumerDataContext';
+import { getBillReceivedMap, getBillStatus, getSaleReturnedMap } from '@/lib/billUtils';
 import type { SaleItem, PaymentMode } from '@/types';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 import CreditTermsField from '@/components/CreditTermsField';
@@ -363,7 +364,9 @@ const SaleManagement: React.FC = () => {
 
   // ── Download Invoice PDF ──────────────────────────────────────────────────
   // Bill-wise receipts applied per sale — the same map Bills Outstanding reads (RULE 2).
+  const { salesReturns } = useConsumerData();
   const billSettled = useMemo(() => getBillReceivedMap(vouchers), [vouchers]);
+  const billReturned = useMemo(() => getSaleReturnedMap(salesReturns), [salesReturns]);
 
   // WhatsApp share: to the linked customer, else the walk-in phone, else the member buyer.
   const saleShare = (sale: typeof sales[number]) => {
@@ -371,7 +374,7 @@ const SaleManagement: React.FC = () => {
     const member = sale.memberId ? members.find(m => m.id === sale.memberId) : undefined;
     // A member's store-credit sale is recovered through Member Credit, not bill-wise — its balance isn't known here.
     const balance = sale.paymentMode === 'credit' && !sale.memberId
-      ? getBillStatus(sale, billSettled[sale.id] || 0).balance : undefined;
+      ? getBillStatus(sale, billSettled[sale.id] || 0, billReturned[sale.id] || 0).balance : undefined;
     return {
       phone: customer?.mobile || customer?.phone || sale.customerPhone || member?.phone,
       message: saleBillMessage({

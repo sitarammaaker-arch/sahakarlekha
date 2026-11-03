@@ -102,6 +102,22 @@ export function billPaymentsMap(
   return map;
 }
 
+/**
+ * A return adjusted against the party's account ('credit-adjust') lowers what is owed from its date, so the
+ * charge stops running on that part. A return refunded in cash or by bank does not: the bill stays owed.
+ */
+export function withAdjustedReturns(
+  payments: Record<string, BillPayment[]>,
+  returns: readonly { billId?: string; date: string; grandTotal?: number; refundMode?: string; isDeleted?: boolean }[],
+): Record<string, BillPayment[]> {
+  const map: Record<string, BillPayment[]> = { ...payments };
+  for (const r of returns) {
+    if (r.isDeleted || r.refundMode !== 'credit-adjust' || !r.billId) continue;
+    map[r.billId] = [...(map[r.billId] ?? []), { date: r.date, amount: Number(r.grandTotal) || 0 }];
+  }
+  return map;
+}
+
 export interface LateFeeResult {
   amount: number;
   /** Charged days: from the day after dueDate + grace to the day it was cleared, or asOf. */

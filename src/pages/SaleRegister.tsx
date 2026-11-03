@@ -16,7 +16,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { generateSaleRegisterPDF } from '@/lib/pdf';
 import { fmtDate } from '@/lib/dateUtils';
 import { parseFY } from '@/lib/depreciation';
-import { getBillReceivedMap, getBillStatus } from '@/lib/billUtils';
+import { getBillReceivedMap, getBillStatus, getSaleReturnedMap } from '@/lib/billUtils';
 
 const fmtAmt = (n: number) =>
   'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -29,6 +29,7 @@ const SaleRegister: React.FC = () => {
   const fy = society.financialYear;
   const fyDates = parseFY(fy);
   const receivedMap = useMemo(() => getBillReceivedMap(vouchers), [vouchers]);
+  const returnedMap = useMemo(() => getSaleReturnedMap(salesReturns), [salesReturns]);
 
   const [fromDate, setFromDate] = useState(fyDates?.start || '');
   const [toDate, setToDate] = useState(fyDates?.end || '');
@@ -204,7 +205,7 @@ const SaleRegister: React.FC = () => {
                           {s.paymentMode !== 'credit'
                             ? <span className="text-xs text-success font-medium">{hi ? 'चुकता' : 'Paid'}</span>
                             : (() => {
-                                const st = getBillStatus(s, receivedMap[s.id] || 0);
+                                const st = getBillStatus(s, receivedMap[s.id] || 0, returnedMap[s.id] || 0);
                                 const cls = st.status === 'paid' ? 'text-success' : st.status === 'partial' ? 'text-amber-700' : 'text-destructive';
                                 const lbl = st.status === 'paid' ? (hi ? 'चुकता' : 'Paid') : st.status === 'partial' ? (hi ? 'आंशिक' : 'Partial') : (hi ? 'बकाया' : 'Unpaid');
                                 return <span className={`text-xs font-medium ${cls}`}>{lbl}{st.balance > 0.01 ? ` · ${fmtAmt(st.balance)}` : ''}</span>;

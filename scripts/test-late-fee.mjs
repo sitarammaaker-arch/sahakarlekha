@@ -10,7 +10,7 @@ const ROOT = resolve(new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-
 const out = join(mkdtempSync(join(tmpdir(), 'late-')), 'bundle.cjs');
 await build({ entryPoints: [join(ROOT, 'src/lib/lateFee.ts')], bundle: true, platform: 'node', format: 'cjs', outfile: out, logLevel: 'error',
   alias: { '@': join(ROOT, 'src') }, absWorkingDir: ROOT });
-const { addDays, billTerms, billPaymentsMap, computeLateFee, daysOverdue, isActiveRule, resolveLateFeeRule, describeLateFeeRule } = createRequire(import.meta.url)(out);
+const { addDays, billTerms, billPaymentsMap, computeLateFee, daysOverdue, isActiveRule, resolveLateFeeRule, describeLateFeeRule, withAdjustedReturns } = createRequire(import.meta.url)(out);
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -111,6 +111,23 @@ const map = billPaymentsMap([
 eq(map.A.length, 1, 'deleted vouchers and advances do not count');
 eq(map.A[0].date, '2026-04-26', 'payment keeps the voucher date');
 eq(map.B[0].amount, 5, 'legacy saleId allocations count');
+
+// ── returns: only one adjusted against the account lowers what is owed ──
+const ret = withAdjustedReturns({ A: [{ date: '2026-04-26', amount: 40000 }] }, [
+  { billId: 'A', date: '2026-04-26', grandTotal: 10000, refundMode: 'credit-adjust' },
+  { billId: 'A', date: '2026-04-26', grandTotal: 500, refundMode: 'cash' },
+  { billId: 'A', date: '2026-04-26', grandTotal: 700, refundMode: 'bank' },
+  { billId: 'A', date: '2026-04-26', grandTotal: 900, refundMode: 'credit-adjust', isDeleted: true },
+  { billId: 'B', date: '2026-04-20', grandTotal: 50, refundMode: 'credit-adjust' },
+]);
+eq(ret.A.length, 2, 'cash, bank and deleted returns do not count');
+eq(ret.B[0].amount, 50, 'a bill with no payment can still have a return');
+const returned = fee(pct18, withAdjustedReturns({}, [{ billId: 'X', date: '2026-04-26', grandTotal: 100000, refundMode: 'credit-adjust' }]).X, '2026-12-31');
+eq(returned.lateDays, 10, 'a fully returned bill stops running on the return date');
+eq(returned.balance, 0, 'a fully returned bill owes nothing');
+const src = { A: [] };
+withAdjustedReturns(src, [{ billId: 'A', date: '2026-04-26', grandTotal: 1, refundMode: 'credit-adjust' }]);
+eq(src.A.length, 0, 'the payments passed in are not changed');
 
 // ── wording ──
 ok(describeLateFeeRule(pct18, false).includes('18%'), 'English wording');
