@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,6 +19,7 @@ import { Users2, Plus, Edit2, Trash2, Download, FileSpreadsheet, Shield, Info, C
 import { useToast } from '@/hooks/use-toast';
 import { fmtDate } from '@/lib/dateUtils';
 import { downloadCSV } from '@/lib/exportUtils';
+import { SIGNATORY_ROLES, type SignatoryRole } from '@/lib/reportSignatures';
 import type { BoardMember, BoardDesignation, BoardType, SignatoryConfig } from '@/types';
 
 const DESIGNATIONS: { value: BoardDesignation; label: string; labelHi: string }[] = [
@@ -65,6 +67,7 @@ const BoardOfDirectors: React.FC = () => {
     secretarySource: signatories.secretary?.source || 'board' as 'board' | 'employee',
     president: signatories.president?.name || '',
     presidentSource: signatories.president?.source || 'board' as 'board' | 'employee',
+    reportRoles: signatories.reportRoles ?? [...SIGNATORY_ROLES],
   });
 
   const openAdd = () => {
@@ -129,10 +132,24 @@ const BoardOfDirectors: React.FC = () => {
     if (sigForm.accountant) newSig.accountant = { name: sigForm.accountant, source: sigForm.accountantSource };
     if (sigForm.secretary) newSig.secretary = { name: sigForm.secretary, source: sigForm.secretarySource };
     if (sigForm.president) newSig.president = { name: sigForm.president, source: sigForm.presidentSource };
-    updateSociety({ signatories: newSig });
+    newSig.reportRoles = SIGNATORY_ROLES.filter(r => sigForm.reportRoles.includes(r));
     setSigDialogOpen(false);
-    toast({ title: hi ? 'हस्ताक्षर प्राधिकारी सहेजा गया' : 'Signing authority saved' });
+    // updateSociety shows its own destructive toast and rolls back if the cloud save fails.
+    updateSociety({ signatories: newSig }, {
+      onSaved: () => toast({ title: hi ? 'हस्ताक्षर की सेटिंग सहेजी गई' : 'Signature settings saved' }),
+    });
   };
+
+  const toggleReportRole = (role: SignatoryRole, on: boolean) => {
+    setSigForm(f => ({ ...f, reportRoles: on ? [...f.reportRoles, role] : f.reportRoles.filter(r => r !== role) }));
+  };
+
+  const ROLE_LABELS: Record<SignatoryRole, string> = {
+    accountant: hi ? 'लेखाकार' : 'Accountant',
+    secretary: hi ? 'सचिव / प्रबंधक' : 'Secretary / Manager',
+    president: hi ? 'अध्यक्ष' : 'President',
+  };
+  const printedRoles = SIGNATORY_ROLES.filter(r => !signatories.reportRoles || signatories.reportRoles.includes(r));
 
   // Combined list for signatory dropdowns: board members + employees
   const signatoryOptions = useMemo(() => {
@@ -215,7 +232,7 @@ const BoardOfDirectors: React.FC = () => {
       </Card>
 
       {/* Signing Authority Summary */}
-      {(signatories.accountant || signatories.secretary || signatories.president) && (
+      {(signatories.accountant || signatories.secretary || signatories.president || signatories.reportRoles) && (
         <Card className="border-violet-200 dark:border-violet-800">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-violet-700 dark:text-violet-300 flex items-center gap-2">
@@ -238,6 +255,12 @@ const BoardOfDirectors: React.FC = () => {
                 <p className="text-xs text-muted-foreground">{hi ? 'अध्यक्ष' : 'President'}</p>
               </div>
             </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              {hi ? 'रिपोर्ट पर हस्ताक्षर: ' : 'Signatures on reports: '}
+              {printedRoles.length === 0
+                ? (hi ? 'कोई नहीं (बिना हस्ताक्षर)' : 'None (no signature block)')
+                : printedRoles.map(r => ROLE_LABELS[r]).join(', ')}
+            </p>
           </CardContent>
         </Card>
       )}
@@ -452,6 +475,26 @@ const BoardOfDirectors: React.FC = () => {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            {/* Whose lines reports carry — the admin's choice */}
+            <div className="space-y-2 p-3 border rounded-lg">
+              <Label className="text-xs font-semibold">{hi ? 'रिपोर्ट पर किनके हस्ताक्षर छपें?' : 'Whose signatures should reports carry?'}</Label>
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                {SIGNATORY_ROLES.map(role => (
+                  <label key={role} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={sigForm.reportRoles.includes(role)}
+                      onCheckedChange={v => toggleReportRole(role, v === true)}
+                    />
+                    {ROLE_LABELS[role]}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {sigForm.reportRoles.length === 0
+                  ? (hi ? 'कोई नहीं चुना: रिपोर्ट बिना हस्ताक्षर के निकलेंगी।' : 'None selected: reports will print without signatures.')
+                  : (hi ? 'जिन्हें हटाएँगे, उनकी लाइन रिपोर्ट पर नहीं छपेगी। सब हटा दें तो रिपोर्ट बिना हस्ताक्षर के निकलेंगी।' : 'Unticked lines will not print on reports. Untick all to print without signatures.')}
+              </p>
             </div>
           </div>
           <DialogFooter>

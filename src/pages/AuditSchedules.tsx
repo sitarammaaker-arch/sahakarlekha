@@ -29,6 +29,7 @@ import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
 import { tieSchedules, hideZeroLines } from '@/lib/auditScheduleTie';
 import { CasStatements } from '@/components/cas/CasStatements';
 import { statutoryLimits, scheduleLimitsLine } from '@/lib/rules/statutoryLimits';
+import ReportSignatureRow from '@/components/reports/ReportSignatureRow';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(n));
@@ -409,18 +410,7 @@ const AuditSchedules: React.FC = () => {
       </>)}
 
       {/* Signature block */}
-      <div className="mt-8 pt-8 border-t grid grid-cols-3 gap-4 text-center text-sm">
-        {[
-          hi ? 'लेखाकार' : 'Accountant',
-          hi ? 'सचिव' : 'Secretary',
-          hi ? 'अध्यक्ष' : 'Chairman',
-        ].map(label => (
-          <div key={label}>
-            <div className="h-16 border-b border-dashed border-muted-foreground/30 mb-2" />
-            <p className="font-medium">{label}</p>
-          </div>
-        ))}
-      </div>
+      <ReportSignatureRow />
     </div>
   );
 };

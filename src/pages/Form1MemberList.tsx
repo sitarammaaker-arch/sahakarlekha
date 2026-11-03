@@ -28,6 +28,7 @@ import { memberStatusLabel, memberTypeLabel } from '@/lib/memberLifecycle';
 import { isExit } from '@/lib/members/cessation';
 import { isHaryana } from '@/lib/members/admission';
 import { addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, registerReportIdentity } from '@/lib/pdf';
+import { selectSignatures } from '@/lib/reportSignatures';
 
 // Table font per paper (pt): read at 100% on the paper it is printed on.
 const PAPER_FONT = { a4: { body: 8, head: 7.5 }, a3: { body: 10, head: 10 } } as const;
@@ -345,9 +346,9 @@ const Form1MemberList: React.FC = () => {
 
       {/* Signature line for print */}
       <div className="hidden print:flex justify-between mt-16 text-sm">
-        <div className="text-center w-40 border-t pt-2">Secretary / Manager</div>
-        <div className="text-center w-40 border-t pt-2">President / Chairman</div>
-        <div className="text-center w-40 border-t pt-2">Registrar / Auditor</div>
+        {selectSignatures(['Secretary / Manager', 'President / Chairman', 'Registrar / Auditor'], undefined, society.signatories?.reportRoles).labels.map(label => (
+          <div key={label} className="text-center w-40 border-t pt-2">{label}</div>
+        ))}
       </div>
     </div>
   );

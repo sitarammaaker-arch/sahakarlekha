@@ -11,6 +11,7 @@ import { generateTradingAccountPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { PrintButton, PrintHeader } from '@/components/ReportPrint';
 import { splitNegativeLines } from '@/lib/reports/negativeLines';
+import ReportSignatureRow from '@/components/reports/ReportSignatureRow';
 
 const TradingAccount: React.FC = () => {
   const { language } = useLanguage();
@@ -404,18 +405,7 @@ const TradingAccount: React.FC = () => {
           </div>
 
           {/* Signature row */}
-          <div className="mt-8 pt-8 border-t grid grid-cols-3 gap-4 text-center text-sm">
-            {[
-              hi ? 'लेखाकार' : 'Accountant',
-              hi ? 'सचिव' : 'Secretary',
-              hi ? 'अध्यक्ष' : 'Chairman',
-            ].map(label => (
-              <div key={label}>
-                <div className="h-16 border-b border-dashed border-muted-foreground/30 mb-2" />
-                <p className="font-medium">{label}</p>
-              </div>
-            ))}
-          </div>
+          <ReportSignatureRow />
         </CardContent>
       </Card>
 

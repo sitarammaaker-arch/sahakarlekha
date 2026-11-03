@@ -16,6 +16,7 @@ import { installDevanagariCells } from '@/lib/pdfDevanagari';
 import { standardFileStem, scopeFor } from '@/lib/exportNaming';
 import { makeReportId } from '@/lib/reportId';
 import { getReportBranding } from '@/lib/reportBranding';
+import { getReportSignatureRoles, selectSignatures } from '@/lib/reportSignatures';
 import { getPdfLang } from '@/lib/pdfLang';
 import { auditorCertificateHi, interimNoticeHi } from '@/lib/pdfHindiLabels';
 import { emitReportGenerated } from '@/lib/reportAudit';
@@ -165,6 +166,17 @@ export function getSignatoryNames(society: SocietySettings): { accountant: strin
  * Returns the Y position used.
  */
 export function addSignatureBlock(doc: jsPDF, font: string, labels: string[], startY: number, note?: string, names?: string[]): number {
+  const chosen = selectSignatures(labels, names, getReportSignatureRoles());
+  // No lines: the "Certified that…" note goes too (nobody is certifying), and no page is added for an empty block.
+  if (chosen.labels.length === 0) return startY;
+  return addDocumentSignatureBlock(doc, font, chosen.labels, startY, note, chosen.names);
+}
+
+/**
+ * The same block for a document that is signed to be valid (notice, bill, receipt, letter, certificate, blank
+ * form): always printed in full, whatever the society chose for its reports.
+ */
+export function addDocumentSignatureBlock(doc: jsPDF, font: string, labels: string[], startY: number, note?: string, names?: string[]): number {
   const pageW = doc.internal.pageSize.width;
   const pageH = doc.internal.pageSize.height;
   // If not enough space on current page, add new page
@@ -1260,7 +1272,7 @@ export function generateDemandNoticePDF(input: DemandNoticeInput, society: Socie
   doc.setFont(font, 'normal');
   doc.text('This is a computer-generated demand notice. Interest is indicative and computed on outstanding principal.', 15, sy, { maxWidth: 180 });
   doc.setTextColor(0);
-  addSignatureBlock(doc, font, ['Secretary / Manager', 'Chairman / President'], sy + 8);
+  addDocumentSignatureBlock(doc, font, ['Secretary / Manager', 'Chairman / President'], sy + 8);
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName(`DemandNotice-${input.memberId}`, society));
 }
@@ -1304,7 +1316,7 @@ export function generateHousingShareNominationPDF(flats: HousingFlat[], members:
   doc.setTextColor(60);
   doc.text('Certified that the above is a true record of share certificates and nominations per flat as maintained by the Society.', 15, sy + 7);
   doc.setTextColor(0);
-  addSignatureBlock(doc, font, ['Secretary / Manager', 'Chairman / President'], sy + 14);
+  addDocumentSignatureBlock(doc, font, ['Secretary / Manager', 'Chairman / President'], sy + 14);
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('ShareNominationRegister', society));
 }
@@ -1346,7 +1358,7 @@ export function generateMaintenanceBillPDF(bill: MaintenanceBill, flat: HousingF
   doc.setFontSize(7.5); doc.setTextColor(90); doc.setFont(font, 'normal');
   doc.text('Please pay by the due date to avoid interest. This is a computer-generated bill.', 15, sy, { maxWidth: 180 });
   doc.setTextColor(0);
-  addSignatureBlock(doc, font, ['Secretary / Manager', 'Treasurer'], sy + 8);
+  addDocumentSignatureBlock(doc, font, ['Secretary / Manager', 'Treasurer'], sy + 8);
   addPageNumbers(doc, font, society?.name);
   // The shared file is named by the bill (what the member recognises); the download keeps the standard stem.
   if (opts.output === 'file') {
@@ -1378,7 +1390,7 @@ export function generateMaintenanceReceiptPDF(input: MaintenanceReceiptInput, so
   doc.setTextColor(90);
   doc.text('Subject to realisation of cheque/instrument. Computer-generated receipt.', 15, y + 6, { maxWidth: 180 });
   doc.setTextColor(0);
-  addSignatureBlock(doc, font, ['Authorised Signatory'], y + 16);
+  addDocumentSignatureBlock(doc, font, ['Authorised Signatory'], y + 16);
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName(`Receipt-${input.receiptNo}`.replace(/[\\/]/g, '-'), society));
 }
@@ -2547,16 +2559,22 @@ export function generateAuditSchedulesPDF(
   });
 
   // Signature block — needs only its own height (lines + labels), kept with the last schedule.
-  y += 10;
-  ensureSpace(12);
-  doc.setFont(font, 'normal');
-  doc.setFontSize(9);
-  const sigPositions = [MARGIN, pageW / 2 - 25, pageW - MARGIN - 51];
-  const sigLabels = ['Accountant', 'Secretary', 'Chairman'];
-  sigPositions.forEach((x, i) => {
-    doc.text('_______________________', x, y);
-    doc.text(sigLabels[i], x, y + 6);
-  });
+  const sigLabels = selectSignatures(['Accountant', 'Secretary', 'Chairman'], undefined, getReportSignatureRoles()).labels;
+  if (sigLabels.length > 0) {
+    y += 10;
+    ensureSpace(12);
+    doc.setFont(font, 'normal');
+    doc.setFontSize(9);
+    const sigPositions = sigLabels.length === 1
+      ? [pageW / 2 - 25]
+      : sigLabels.length === 2
+        ? [MARGIN, pageW - MARGIN - 51]
+        : [MARGIN, pageW / 2 - 25, pageW - MARGIN - 51];
+    sigLabels.forEach((label, i) => {
+      doc.text('_______________________', sigPositions[i], y);
+      doc.text(label, sigPositions[i], y + 6);
+    });
+  }
 
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('AuditSchedules', society));
@@ -2726,7 +2744,7 @@ export function generateMemberApplicationPDF(member: Member, society: SocietySet
 
   // Signature block for office
   const sigNames = getSignatoryNames(society);
-  addSignatureBlock(doc, font,
+  addDocumentSignatureBlock(doc, font,
     ['Accountant', 'Secretary\n(Seal)', 'President\n(Seal)'],
     y, undefined,
     [sigNames.accountant, sigNames.secretary, sigNames.president]
@@ -4074,7 +4092,7 @@ export function generateBlankFormatPDF(spec: BlankPdfSpec): void {
     15, endY,
   );
   doc.setTextColor(0);
-  addSignatureBlock(doc, font, spec.signatures, endY + 8);
+  addDocumentSignatureBlock(doc, font, spec.signatures, endY + 8);
   addPageNumbers(doc, font);
   doc.save(`${spec.file}.pdf`);
 }
@@ -4197,7 +4215,7 @@ export function generateMemberRefusalLetterPDF(member: Member, society: SocietyS
   doc.text(refund, mL, y); y += refund.length * 5 + 12;
 
   const sig = getSignatoryNames(society);
-  addSignatureBlock(doc, font, ['Secretary', 'President'], y, undefined, [sig.secretary, sig.president]);
+  addDocumentSignatureBlock(doc, font, ['Secretary', 'President'], y, undefined, [sig.secretary, sig.president]);
   doc.save(pdfFileName('MembershipRefusal', society));
 }
 

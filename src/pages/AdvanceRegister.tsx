@@ -89,7 +89,7 @@ export default function AdvanceRegister() {
           )}
           <div className="flex justify-between text-xs text-muted-foreground p-4 pt-8">
             <span>{hi ? 'तैयारकर्ता' : 'Prepared by'}: ____________</span>
-            <span>{hi ? 'अधिकृत हस्ताक्षर' : 'Authorised signatory'}: ____________</span>
+            {society.signatories?.reportRoles?.length !== 0 && <span>{hi ? 'अधिकृत हस्ताक्षर' : 'Authorised signatory'}: ____________</span>}
           </div>
         </CardContent>
       </Card>

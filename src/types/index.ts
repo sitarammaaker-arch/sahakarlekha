@@ -1150,6 +1150,8 @@ export interface SocietySettings {
     accountant?: SignatoryConfig;
     secretary?: SignatoryConfig;
     president?: SignatoryConfig;
+    // Whose signature lines reports carry — the admin's choice. Unset = all three, [] = none (lib/reportSignatures).
+    reportRoles?: ('accountant' | 'secretary' | 'president')[];
   };
   // Audit Certificate details per FY ("2026-27" → details) so a certificate can be reopened and
   // reprinted. jsonb column "auditCertificates" (migration 108); the settings upsert trims it

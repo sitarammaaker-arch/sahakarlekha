@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { setReportBranding, brandFooterFor } from '@/lib/reportBranding';
+import { setReportSignatureRoles } from '@/lib/reportSignatures';
 import { setReportAuditSink, buildReportAuditInput } from '@/lib/reportAudit';
 import { logAudit } from '@/lib/auditLog';
 import { translations } from '@/contexts/LanguageContext';
@@ -42,6 +43,12 @@ export default function ExportContextBinder() {
     setReportBranding({ showBrandFooter: brandFooterFor(plan) });
     return () => setReportBranding({ showBrandFooter: true });
   }, [plan]);
+
+  const reportRoles = society?.signatories?.reportRoles;
+  useEffect(() => {
+    setReportSignatureRoles(reportRoles);
+    return () => setReportSignatureRoles(undefined);
+  }, [reportRoles]);
 
   useEffect(() => {
     if (!user?.societyId) { setReportAuditSink(null); return; }
