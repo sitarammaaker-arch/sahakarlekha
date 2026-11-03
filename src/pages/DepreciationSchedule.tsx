@@ -15,6 +15,7 @@ import { generateDepreciationSchedulePDF } from '@/lib/pdf';
 import { calcDepForFY, parseFY, DEP_ACCOUNTS, wdvAccumulatedBefore, accumulatedDepThrough } from '@/lib/depreciation';
 import { fmtDate } from '@/lib/dateUtils';
 import type { Asset, AssetCategory } from '@/types';
+import ReportSignatureRow from '@/components/reports/ReportSignatureRow';
 
 const fmtAmt = (n: number) =>
   'Rs. ' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -315,18 +316,7 @@ const DepreciationSchedule: React.FC = () => {
       </div>
 
       {/* Signature block */}
-      <div className="mt-8 pt-8 border-t grid grid-cols-3 gap-4 text-center text-sm">
-        {[
-          hi ? 'लेखाकार' : 'Accountant',
-          hi ? 'सचिव' : 'Secretary',
-          hi ? 'अध्यक्ष' : 'Chairman',
-        ].map(label => (
-          <div key={label}>
-            <div className="h-16 border-b border-dashed border-muted-foreground/30 mb-2" />
-            <p className="font-medium">{label}</p>
-          </div>
-        ))}
-      </div>
+      <ReportSignatureRow />
     </div>
   );
 };

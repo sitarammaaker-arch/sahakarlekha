@@ -16,6 +16,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { generateClosingStockPDF } from '@/lib/pdf';
 import { parseFY } from '@/lib/depreciation';
 import { computeStock, computeStockCostRate } from '@/lib/stockUtils';
+import ReportSignatureRow from '@/components/reports/ReportSignatureRow';
 
 const fmtV = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -367,14 +368,7 @@ const ClosingStockReport: React.FC = () => {
       </div>
 
       {/* Signature */}
-      <div className="mt-8 pt-8 border-t grid grid-cols-3 gap-4 text-center text-sm">
-        {[hi ? 'लेखाकार' : 'Accountant', hi ? 'सचिव' : 'Secretary', hi ? 'अध्यक्ष' : 'Chairman'].map(label => (
-          <div key={label}>
-            <div className="h-16 border-b border-dashed border-muted-foreground/30 mb-2" />
-            <p className="font-medium">{label}</p>
-          </div>
-        ))}
-      </div>
+      <ReportSignatureRow />
     </div>
   );
 };

@@ -669,7 +669,7 @@ const UniversalImporter: React.FC = () => {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Accounts Master Import</CardTitle>
               <CardDescription>
-                {L('Chart of Accounts / Ledger Heads — नए accounts bulk में add करें।', 'Chart of Accounts / Ledger Heads — add new accounts in bulk.')}
+                {L('Chart of Accounts / Ledger Heads — नए accounts bulk में add करें।', 'Chart of Accounts / Ledger Heads — add new accounts in bulk.')}{' '}
                 {L('System accounts (Cash, Bank, Share Capital आदि) पहले से exist करते हैं।', 'System accounts (Cash, Bank, Share Capital etc.) already exist.')}
               </CardDescription>
             </CardHeader>
@@ -681,7 +681,7 @@ const UniversalImporter: React.FC = () => {
                   {L('Template Download करें', 'Download the template')}
                 </p>
                 <p className="text-xs text-muted-foreground ml-7">
-                  {L('नीचे दिए template में example rows और Hindi hints पहले से भरे हैं।', 'The template below already has example rows and Hindi hints.')}
+                  {L('नीचे दिए template में example rows और Hindi hints पहले से भरे हैं।', 'The template below already has example rows and Hindi hints.')}{' '}
                   {L('Example rows delete करके अपना data भरें।', 'Delete the example rows and fill in your data.')}
                 </p>
                 <div className="ml-7 flex gap-2 flex-wrap">
@@ -943,7 +943,7 @@ const UniversalImporter: React.FC = () => {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Opening Balances Import</CardTitle>
               <CardDescription>
-                {L('पिछले साल का closing balance / शुरुआती शेष set करें।', 'Set last year\'s closing balance / opening balance.')}
+                {L('पिछले साल का closing balance / शुरुआती शेष set करें।', 'Set last year\'s closing balance / opening balance.')}{' '}
                 {L('Account का नाम बिल्कुल वैसा होना चाहिए जैसा system में Ledger Heads में है।', 'The account name must match exactly how it is in Ledger Heads.')}
               </CardDescription>
             </CardHeader>
@@ -1074,7 +1074,7 @@ const UniversalImporter: React.FC = () => {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Bulk Voucher Import</CardTitle>
               <CardDescription>
-                {L('एक ही तरह के बहुत सारे वाउचर एक साथ डालें — जैसे MSP खरीद के हज़ारों वाउचर।', 'Enter many vouchers of one kind together — e.g. thousands of MSP purchase vouchers.')}
+                {L('एक ही तरह के बहुत सारे वाउचर एक साथ डालें — जैसे MSP खरीद के हज़ारों वाउचर।', 'Enter many vouchers of one kind together — e.g. thousands of MSP purchase vouchers.')}{' '}
                 {L('हर पंक्ति = एक वाउचर (एक Debit, एक Credit). Accounts पहले से बने होने चाहिए।', 'Each row = one voucher (one Debit, one Credit). The accounts must already exist.')}
               </CardDescription>
             </CardHeader>
