@@ -140,6 +140,19 @@ const BillWiseSettlement: React.FC<Props> = ({ mode, compact, onDone }) => {
       : addBillReceipt({ customerId: partyId, date, paymentMode, bankAccountId: paymentMode === 'bank' ? bankAccountId : undefined, allocations: allocations.map(a => ({ saleId: a.id, amount: a.amount })), advance, onAccount, narration });
     if (v) {
       const party = (isPay ? suppliers : customers).find(p => p.id === partyId);
+      if (v.approvalStatus === 'pending') {
+        // Held by the approval matrix — NOT posted yet, and the bills' outstanding is untouched until approved.
+        toast({
+          title: hi ? '⏳ अनुमोदन के लिए भेजा गया' : '⏳ Sent for approval',
+          description: hi
+            ? `${party?.name || ''} — ₹${fmt(v.amount)} (${v.voucherNo}) approve होने तक बिल की बकाया नहीं घटेगी।`
+            : `₹${fmt(v.amount)} (${v.voucherNo}) is pending approval — bill balances change only after it is approved.`,
+          duration: 10000,
+        });
+        reset();
+        onDone?.(v);
+        return;
+      }
       toast({
         title: isPay ? (hi ? '✅ भुगतान दर्ज हुआ' : '✅ Payment recorded') : (hi ? '✅ प्राप्ति दर्ज हुई' : '✅ Receipt recorded'),
         description: hi
