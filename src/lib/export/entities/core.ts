@@ -63,6 +63,7 @@ const society: EntityDescriptor = {
     internal('boardType', 'Board Type', 'बोर्ड प्रकार', { type: 'enum' }),
     internal('boardMembers', 'Board Members', 'बोर्ड सदस्य', { type: 'json', piiClass: 'contact' }),
     internal('signatories', 'Signatories', 'हस्ताक्षरकर्ता', { type: 'json', piiClass: 'contact' }),
+    internal('lateFeeRules', 'Late Charge Rules', 'विलंब शुल्क नियम', { type: 'json' }),
     internal('approvalRequired', 'Approval Required', 'अनुमोदन आवश्यक', { type: 'boolean' }),
     internal('approvalThresholdAmount', 'Approval Threshold', 'अनुमोदन सीमा', { type: 'currency' }),
     internal('approvalVoucherTypes', 'Approval Voucher Types', 'अनुमोदन वाउचर प्रकार', { type: 'json' }),

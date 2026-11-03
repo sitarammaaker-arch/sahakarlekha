@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { QuickItemDialog } from '@/components/QuickItemDialog';
 import { QuickCreateMaster, allowedQuickKinds } from '@/components/QuickCreateMaster';
 import { roleCanCreateMaster } from '@/lib/masterCreate';
@@ -39,6 +39,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { PurchaseItem, PaymentMode } from '@/types';
 import { purchaseTdsAdvice } from '@/lib/tax/purchaseTdsAdvice';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
+import CreditTermsField from '@/components/CreditTermsField';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -95,6 +96,14 @@ const PurchaseManagement: React.FC = () => {
   const [tcsPct, setTcsPct] = useState<number>(0);
   const [rcmApplicable, setRcmApplicable] = useState<boolean>(false); // ECR-22: reverse charge
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
+  const [creditDays, setCreditDays] = useState('');
+  const creditDaysTouched = useRef(false);   // the party's default fills it until someone types
+  // A credit bill starts with the supplier's usual credit days.
+  useEffect(() => {
+    if (paymentMode !== 'credit' || creditDaysTouched.current) return;
+    const days = suppliers.find(s => s.id === supplierId)?.creditDays;
+    setCreditDays(days ? String(days) : '');
+  }, [paymentMode, supplierId, suppliers]);
   const [bankAccountId, setBankAccountId] = useState<string>('');   // which bank, when mode = 'bank'
   const [narration, setNarration] = useState('');
   const [savedPurchaseNo, setSavedPurchaseNo] = useState<string | null>(null);
@@ -183,6 +192,8 @@ const PurchaseManagement: React.FC = () => {
 
   // ── Reset form helper ─────────────────────────────────────────────────────
   const resetForm = () => {
+    setCreditDays('');
+    creditDaysTouched.current = false;
     setPurchaseDate(TODAY);
     setSupplierId('');
     setSupplierName('');
@@ -220,6 +231,8 @@ const PurchaseManagement: React.FC = () => {
     setTcsPct(purchase.tcsPct || 0);
     setRcmApplicable(!!purchase.rcmApplicable);
     setPaymentMode(purchase.paymentMode);
+    setCreditDays(purchase.creditDays ? String(purchase.creditDays) : '');
+    creditDaysTouched.current = true;
     setBankAccountId(purchase.bankAccountId || '');
     setNarration(purchase.narration || '');
     setSavedPurchaseNo(null);
@@ -295,6 +308,7 @@ const PurchaseManagement: React.FC = () => {
       rcmApplicable,
       paymentMode,
       bankAccountId: paymentMode === 'bank' ? (bankAccountId || undefined) : undefined,
+      creditDays: paymentMode === 'credit' ? (Math.floor(Number(creditDays)) || null) : null,
       narration: narration.trim(),
       createdBy: user?.name ?? 'Unknown',
     };
@@ -430,6 +444,8 @@ const PurchaseManagement: React.FC = () => {
         taxAmount: purchase.taxAmount || 0,
         grandTotal: purchase.grandTotal || purchase.netAmount,
         paymentMode: purchase.paymentMode,
+        creditDays: purchase.creditDays,
+        dueDate: purchase.dueDate,
         narration: purchase.narration,
       }, society);
       toast({ title: language === 'hi' ? `Purchase Record: ${purchase.purchaseNo}` : `Purchase Record: ${purchase.purchaseNo}` });
@@ -900,6 +916,9 @@ const PurchaseManagement: React.FC = () => {
                     </button>
                   ))}
                 </div>
+                {paymentMode === 'credit' && (
+                  <CreditTermsField value={creditDays} billDate={purchaseDate} hi={language === 'hi'} onChange={v => { creditDaysTouched.current = true; setCreditDays(v); }} />
+                )}
                 {paymentMode === 'bank' && (
                   <div className="space-y-1">
                     <Label>{language === 'hi' ? 'बैंक खाता' : 'Bank Account'}</Label>

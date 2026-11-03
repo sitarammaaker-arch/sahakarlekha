@@ -25,6 +25,7 @@ import type { EntityLink, Supplier, SupplierType, GstRegistrationType, TdsSectio
 import { Truck, Plus, Pencil, Trash2, Search, IndianRupee, FileSpreadsheet, Download, User, Building2 } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import { useToast } from '@/hooks/use-toast';
+import LateFeeRuleFields from '@/components/LateFeeRuleFields';
 import { useDeepLinkQuery } from '@/hooks/useDeepLinkQuery';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
@@ -680,6 +681,8 @@ const Suppliers: React.FC = () => {
                 {hi ? '🟦 उधारी की शर्तें / Credit Terms' : '🟦 Credit Terms'}
               </AccordionTrigger>
               <AccordionContent className="space-y-3 pt-2">
+                <LateFeeRuleFields value={form.lateFeeRule} hi={hi} onChange={rule => setForm(f => ({ ...f, lateFeeRule: rule }))}
+                  inheritLabel={hi ? 'समिति का नियम' : 'Society rule'} noneLabel={hi ? 'इस पार्टी पर नहीं' : 'Exempt this party'} />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label>{hi ? 'उधारी दिन (हम पाते हैं)' : 'Credit Days (we get)'}</Label>

@@ -3935,3 +3935,14 @@ alter table members add column if not exists "statusDetails" jsonb;
 -- ── Society variant (migration 126, CM-PACS preset) ───────────────────────────────────────────────────────────────
 -- A state preset's name ('cm_pacs' = Haryana CM-PACS); societyType stays the legal type. See src/lib/societyPresets.ts.
 alter table society_settings add column if not exists "societyVariant" text;
+
+-- 152 · Credit terms on a bill and the late-charge rule (lib/lateFee). Nullable: empty rule = off.
+alter table sales add column if not exists "creditDays" integer;
+alter table sales add column if not exists "dueDate" text;
+alter table sales add column if not exists "lateFeeRule" jsonb;
+alter table purchases add column if not exists "creditDays" integer;
+alter table purchases add column if not exists "dueDate" text;
+alter table purchases add column if not exists "lateFeeRule" jsonb;
+alter table customers add column if not exists "lateFeeRule" jsonb;
+alter table suppliers add column if not exists "lateFeeRule" jsonb;
+alter table society_settings add column if not exists "lateFeeRules" jsonb;
