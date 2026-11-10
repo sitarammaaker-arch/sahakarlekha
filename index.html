@@ -20,12 +20,35 @@
     <link rel="alternate" type="application/rss+xml" title="SahakarLekha Blog" href="https://sahakarlekha.com/rss.xml" />
 
     <!-- Google Analytics (GA4). page_view is sent from the app on every route change (src/lib/analytics.ts), so send_page_view is off here to avoid double counting. -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-PB8FG0M5ET"></script>
+    <!-- The gtag.js library (about 180 KB) is NOT fetched with the page: it competed with the page's own
+         scripts on a slow phone. gtag() calls queue in dataLayer from the first line, and the library is
+         added once the page has loaded and the browser is idle, or at the visitor's first tap / key /
+         scroll, whichever comes first. Everything queued before then is sent when it arrives. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
       gtag('config', 'G-PB8FG0M5ET', { send_page_view: false });
+      (function () {
+        var done = false;
+        var events = ['pointerdown', 'keydown', 'scroll', 'touchstart'];
+        function load() {
+          if (done) return;
+          done = true;
+          events.forEach(function (e) { window.removeEventListener(e, load); });
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=G-PB8FG0M5ET';
+          document.head.appendChild(s);
+        }
+        function whenIdle() {
+          if ('requestIdleCallback' in window) window.requestIdleCallback(load, { timeout: 3000 });
+          else setTimeout(load, 2000);
+        }
+        events.forEach(function (e) { window.addEventListener(e, load, { passive: true, once: true }); });
+        if (document.readyState === 'complete') whenIdle();
+        else window.addEventListener('load', whenIdle, { once: true });
+      })();
     </script>
 
     <!-- Open Graph -->

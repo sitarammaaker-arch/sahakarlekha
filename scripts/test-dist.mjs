@@ -197,10 +197,11 @@ for (const file of htmlFiles(DIST)) {
 }
 
 // Entry-chunk budget. Every public page downloads the entry chunk; it was 1.77 MB while App.tsx imported
-// the data contexts and the app layout eagerly, and is ~350 KB with them behind src/AppDataShell. A jump
-// past the budget means something from the logged-in app is being imported eagerly again
+// the data contexts and the app layout eagerly, ~350 KB with them behind src/AppDataShell, and ~160 KB
+// once AuthContext stopped importing lib/storage (the chart-of-accounts templates). A jump past the
+// budget means something from the logged-in app is being imported eagerly again
 // (scripts/test-app-data-paths.mjs names the usual suspects).
-const ENTRY_BUDGET = 500 * 1024;
+const ENTRY_BUDGET = 250 * 1024;
 const entrySrc = (readFileSync(resolve(DIST, 'index.html'), 'utf-8').match(/<script type="module"[^>]*src="(\/assets\/[^"]+\.js)"/) || [])[1];
 let entryKb = 0;
 if (!entrySrc) errors.push('index.html: no entry <script type="module"> found');

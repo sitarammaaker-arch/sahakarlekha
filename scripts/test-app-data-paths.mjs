@@ -22,6 +22,21 @@ ok('the protected shell keeps the login check, the loading screen, the layout an
   shell.includes('<Navigate to="/login" replace />') && shell.includes('isLoading') && shell.includes('<MainLayout><CapabilityGuard>') && shell.includes('useNoIndex()'));
 ok('the gate keeps the providers mounted once an app path was opened', /everWanted/.test(app) && /wanted \|\| everWanted/.test(app));
 
+// 1b. the two entry-side modules that need the session do not import lib/storage (chart templates)
+for (const rel of ['src/contexts/AuthContext.tsx', 'src/lib/errorReporting.ts']) {
+  const s = readFileSync(resolve(ROOT, rel), 'utf8');
+  ok(`${rel} takes the session from lib/authSession, not lib/storage`, /from '@\/lib\/authSession'/.test(s) && !/from ['"]@\/lib\/storage['"]/.test(s));
+}
+const storage = readFileSync(resolve(ROOT, 'src/lib/storage.ts'), 'utf8');
+const session = readFileSync(resolve(ROOT, 'src/lib/authSession.ts'), 'utf8');
+ok('lib/storage still re-exports the session helpers (every other import keeps working)', /export \{ getAuthSession, setAuthSession \} from '\.\/authSession'/.test(storage));
+ok('the session key is unchanged (a different key would log everyone out)', session.includes("AUTH_SESSION_KEY = 'sahayata_auth'") && storage.includes("auth: 'sahayata_auth'"));
+
+// 1c. analytics does not compete with the page's own scripts
+const html = readFileSync(resolve(ROOT, 'index.html'), 'utf8');
+ok('gtag.js is not a <script src> in the page head (it is added after load / first interaction)', !/<script[^>]*src="https:\/\/www\.googletagmanager\.com/.test(html) && html.includes("s.src = 'https://www.googletagmanager.com/gtag/js?id="));
+ok('gtag() calls still queue from the first line', html.includes('function gtag(){dataLayer.push(arguments);}') && html.includes("gtag('config', 'G-PB8FG0M5ET', { send_page_view: false });"));
+
 // 2. the public list agrees with the routes
 const routes = [...app.matchAll(/<Route\s+path="([^"]+)"\s+element=\{([^\n]*)/g)].map((m) => ({ path: m[1], el: m[2] }));
 const isPrivate = (r) => /ProtectedRoute|CapabilityGuard|SuperAdminRoute/.test(r.el);

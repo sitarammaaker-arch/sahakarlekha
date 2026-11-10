@@ -10,7 +10,7 @@
  * A later slice can plug Sentry into this same seam and/or add an in-app viewer.
  */
 import { supabase } from '@/lib/supabase';
-import { getAuthSession } from '@/lib/storage';
+import { getAuthSession } from '@/lib/authSession'; // not '@/lib/storage': that file is the chart templates
 
 export interface ErrorRecord {
   id: string;

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from 'react';
-import { getAuthSession, setAuthSession } from '@/lib/storage';
+import { getAuthSession, setAuthSession } from '@/lib/authSession'; // not '@/lib/storage': that file is the chart templates
 import { supabase } from '@/lib/supabase';
 import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { generateSecret, otpauthUri } from '@/lib/totp';
