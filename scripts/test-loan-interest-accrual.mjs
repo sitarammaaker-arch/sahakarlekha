@@ -113,5 +113,23 @@ const master = readFileSync(pathResolve(ROOT, 'supabase-tables.sql'), 'utf8');
 ok(/create table if not exists loan_interest_accruals/.test(master) && !/create policy[^\n]*loan_interest_accruals/.test(master), 'master schema declares the table without policies');
 ok(/table: 'loan_interest_accruals'/.test(strip('src/lib/export/entities/core.ts')), 'backed up (export registry)');
 
+// ── Disbursement date cuts the days (staging demo 2026-11-10: a loan given 25-10 accrued 183 days for 01-04..30-09) ──
+const H = '2026-04-01', HE = '2026-09-30', HD = 183;   // the half-year: 183 days, both ends included
+ok(A.loanDaysInPeriod({ disbursementDate: '2026-03-15' }, HE, HD) === 183, 'given before the period → the whole period');
+ok(A.loanDaysInPeriod({ disbursementDate: H }, HE, HD) === 183, 'given on the first day → the whole period');
+ok(A.loanDaysInPeriod({ disbursementDate: '2026-07-20' }, HE, HD) === 73, 'given 20-07 → 73 days (20-07..30-09, both ends)');
+ok(A.loanDaysInPeriod({ disbursementDate: HE }, HE, HD) === 1, 'given on the last day → 1 day');
+ok(A.loanDaysInPeriod({ disbursementDate: '2026-10-25' }, HE, HD) === 0, 'given after the period end → 0 days');
+ok(A.loanDaysInPeriod({}, HE, HD) === 183, 'no disbursement date on record → the whole period (unchanged)');
+const half = A.accrualRows([
+  L('old', { disbursementDate: '2026-03-15', amount: 50000, interestRate: 7 }),
+  L('mid', { disbursementDate: '2026-07-20', amount: 120000, interestRate: 11, dueDate: '2029-07-19' }),
+  L('late', { disbursementDate: '2026-10-25', amount: 35000, interestRate: 7 }),
+], HE, HD);
+ok(half.map((r) => r.loanId).join() === 'old,mid', 'a loan given after the period end gets no accrual row');
+const mid = half.find((r) => r.loanId === 'mid');
+ok(mid.days === 73 && mid.interest === A.simpleInterest(120000, 11, 73) && mid.interest === 2640, 'mid-period loan: 73 days → ₹2,640.00 (not 183 days)');
+ok(half.find((r) => r.loanId === 'old').days === 183, 'older loan keeps the full period');
+
 console.log(`loan interest accrual (H2-1): ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

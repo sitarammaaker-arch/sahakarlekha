@@ -44,10 +44,10 @@ const BOTH = new Set(['pos_billing', 'dairy_collection']);
 const base = [acc('3301', 'Cash'), acc('3300', 'Current Assets', { isGroup: true })];
 const materialise = (specs, prefix) => specs.map((s, i) => ({ ...s.template, id: `${prefix}-${i}` }));
 
-// 1. Catalog = exactly what the removed seeders created (6 consumer + 5 dairy), unique keys.
+// 1. Catalog = exactly what the removed seeders created (6 consumer + 6 dairy — milk payable added 2026-11-10), unique keys.
 {
   ok(DOMAIN_ACCOUNT_SPECS.filter(s => s.capability === 'pos_billing').length === 6, '6 consumer specs');
-  ok(DOMAIN_ACCOUNT_SPECS.filter(s => s.capability === 'dairy_collection').length === 5, '5 dairy specs');
+  ok(DOMAIN_ACCOUNT_SPECS.filter(s => s.capability === 'dairy_collection').length === 6, '6 dairy specs');
   ok(new Set(DOMAIN_ACCOUNT_SPECS.map(s => s.key)).size === DOMAIN_ACCOUNT_SPECS.length, 'spec keys unique');
   ok(DOMAIN_ACCOUNT_SPECS.every(s => s.template.openingBalance === 0 && !s.template.isGroup), 'templates: zero opening, ledger (not group)');
 }
@@ -57,8 +57,8 @@ const materialise = (specs, prefix) => specs.map((s, i) => ({ ...s.template, id:
   ok(planMissingDomainAccounts(base, new Set()).length === 0, 'no capability → nothing planned');
   const c = planMissingDomainAccounts(base, CONSUMER);
   ok(c.length === 6 && c.every(s => s.capability === 'pos_billing'), 'consumer → 6 consumer specs');
-  ok(planMissingDomainAccounts(base, DAIRY).length === 5, 'dairy → 5 dairy specs');
-  ok(planMissingDomainAccounts(base, BOTH).length === 11, 'both → 11');
+  ok(planMissingDomainAccounts(base, DAIRY).length === 6, 'dairy → 6 dairy specs');
+  ok(planMissingDomainAccounts(base, BOTH).length === 12, 'both → 12');
 }
 
 // 3. Idempotent: every created template is found by its own resolver → a second plan is empty.
@@ -146,6 +146,30 @@ const materialise = (specs, prefix) => specs.map((s, i) => ({ ...s.template, id:
   const iErr = hook.indexOf('if (error)'), iAdd = hook.indexOf('addAccount(m.template');
   ok(iErr > 0 && iAdd > iErr, 'hook: DB read error bails before any addAccount');
   ok(/materialiseDomainAccount\(spec, chart\)/.test(hook), 'hook: creates from the template materialised against the DB-fresh chart');
+}
+
+// 9. A NON-dairy chart reuses the dairy template ids for other heads (staging demo 2026-11-10: a multipurpose
+//    society's milk cost went to 5108 Wastage, milk sales to 4106 Agricultural Implements Sales). The id pass
+//    must skip them, the planner must create the dedicated ledgers, and the dairy chart must still resolve.
+{
+  const S = await import(abs('../src/lib/storage.ts'));
+  const mp = S.fullChartForType('multipurpose');
+  const nameOf = (id) => mp.find((a) => a.id === id)?.name;
+  ok(nameOf('5108') === 'Wastage' && nameOf('4106') === 'Agricultural Implements Sales' && nameOf('2102') === 'Expenses Payable', 'fixture: the multipurpose chart really has the colliding heads');
+  ok(D.resolveMilkProcurementAccountId(mp) === null, 'multipurpose: milk cost does NOT resolve to 5108 Wastage');
+  ok(D.resolveMilkBulkSalesAccountId(mp) === null, 'multipurpose: milk sales does NOT resolve to 4106 Agricultural Implements Sales');
+  ok(D.resolveMilkPayableAccountId(mp) === null, 'multipurpose: milk payable does NOT resolve to 2102 Expenses Payable');
+  ok(D.resolveMemberInputReceivableAccountId(mp) === null && D.resolveBonusDistributionAccountId(mp) === null && D.resolveBonusPayableAccountId(mp) === null, 'multipurpose: 3305 / 1210 / 2106 not taken as dairy ledgers');
+  const planned = planMissingDomainAccounts(mp, DAIRY).map((x) => x.key).sort().join();
+  ok(planned === ['dairy.bonusDistribution', 'dairy.bonusPayable', 'dairy.memberInputReceivable', 'dairy.milkBulkSales', 'dairy.milkPayable', 'dairy.milkProcurement'].sort().join(), 'multipurpose: "Create domain accounts" plans all 6 dairy ledgers (was 0)');
+  const after = [...mp, ...materialise(planMissingDomainAccounts(mp, DAIRY), 'mp')];
+  ok(D.resolveMilkBulkSalesAccountId(after)?.startsWith('mp-') && D.resolveMilkPayableAccountId(after)?.startsWith('mp-'), 'multipurpose: after provisioning, milk postings go to the new dedicated ledgers');
+  const diag = diagnoseDomainAccounts(mp, [], DAIRY);
+  ok(!JSON.stringify(diag).includes('Agricultural Implements Sales'), 'diagnostic: 4106 implements sales no longer listed as a milk-sales candidate');
+  const dc = S.fullChartForType('dairy');
+  ok(D.resolveMilkProcurementAccountId(dc) === '5108' && D.resolveMilkBulkSalesAccountId(dc) === '4106' && D.resolveMilkPayableAccountId(dc) === '2102', 'dairy chart: still resolves to its template ids');
+  ok(planMissingDomainAccounts(dc, DAIRY).length === 0, 'dairy chart: nothing to create');
+  ok(D.resolveMilkBulkSalesAccountId([acc('4106', 'दूध बिक्री (संघ)', { type: 'income' })]) === '4106', 'a renamed dairy ledger at the template id still resolves');
 }
 
 console.log(`domain-account-provisioning: ${pass} passed, ${fail} failed`);

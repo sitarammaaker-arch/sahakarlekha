@@ -91,7 +91,7 @@ const openings = planOpeningEvents(
   { openingDate: '2000-01-01', jurisdiction: 'hr' },
 );
 ok(openings.length === 2, 'one opening event per account with a non-zero balance (zero skipped)');
-ok(openings[0].eventType === 'account.opening' && openings[0].aggregateType === 'account' && openings[0].eventId === openingEventId('1001'), 'account.opening event, deterministic id');
+ok(openings[0].eventType === 'account.opening' && openings[0].aggregateType === 'account' && openings[0].eventId === openingEventId('1001', 'SOC001') && openings[0].eventId === 'opening-SOC001-1001', 'account.opening event, deterministic id');
 ok(openings[0].payload.lines[0].drCr === 'Dr' && openings[0].payload.lines[0].amountMinor === 500000, 'debit opening → Dr leg in paise');
 ok(openings[1].payload.lines[0].drCr === 'Cr', 'credit opening → Cr leg');
 ok(openings[0].occurredAt === '2000-01-01T00:00:00.000Z', 'opening dated before all vouchers');
@@ -109,7 +109,13 @@ const acc = (over = {}) => ({ id: '1001', openingBalance: 5000, openingBalanceTy
 const d1 = planOpeningDelta(acc(), 0, 1, 'SOC001', { jurisdiction: 'hr' });
 ok(d1 && d1.eventType === 'account.opening' && d1.aggregateType === 'account', 'delta: account.opening event');
 ok(d1.payload.lines[0].drCr === 'Dr' && d1.payload.lines[0].amountMinor === 500000, 'delta: new debit account → Dr 500000');
-ok(d1.eventId === `${openingEventId('1001')}-1` && d1.sequence === 1, 'delta: id is opening-<id>-<seq>, distinct from the genesis opening');
+ok(d1.eventId === 'opening-SOC001-1001-1' && d1.sequence === 1, 'delta: id is opening-<society>-<id>-<seq>, distinct from the genesis opening');
+// Two societies share template account ids (3301 Cash in Hand …); event_id is the whole PK of ledger_events,
+// so their opening ids must differ or the second society's opening is refused (staging 2026-11-10).
+const dA = planOpeningDelta(acc(), 0, 1, 'SOC-A'), dB = planOpeningDelta(acc(), 0, 1, 'SOC-B');
+ok(dA.eventId !== dB.eventId, 'delta: same account + sequence in two societies → different event ids');
+const gA = planOpeningEvents([acc()], 'SOC-A', { openingDate: '2000-01-01' })[0], gB = planOpeningEvents([acc()], 'SOC-B', { openingDate: '2000-01-01' })[0];
+ok(gA.eventId !== gB.eventId, 'genesis opening: same account in two societies → different event ids');
 ok(d1.occurredAt === `${OPENING_EVENT_DATE}T00:00:00.000Z`, 'delta dated at the opening date (before all vouchers)');
 ok(d1.producer.kind === 'human', 'delta: default producer is human (a live edit, not a backfill)');
 
