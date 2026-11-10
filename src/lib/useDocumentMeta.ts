@@ -4,6 +4,7 @@
  * then restores the previous values on unmount so other pages aren't affected.
  */
 import { useEffect } from 'react';
+import { fitTitle } from './seo';
 
 const SITE = 'https://sahakarlekha.com';
 
@@ -44,7 +45,9 @@ export function useDocumentMeta(opts: {
   /** Article pages: og:type=article + article:published_time / modified_time / section. */
   article?: { publishedTime: string; modifiedTime?: string; section?: string };
 }) {
-  const { title, description, canonicalPath, jsonLd, robots, image, article } = opts;
+  const { description, canonicalPath, jsonLd, robots, image, article } = opts;
+  // Same rule as the prerender: a title too long for a search result loses its brand tail.
+  const title = opts.title ? fitTitle(opts.title) : opts.title;
   // Stringify once so the effect dep is stable across re-renders (inline objects change identity each render).
   const jsonLdStr = jsonLd ? JSON.stringify(jsonLd) : undefined;
   const articleStr = article ? JSON.stringify(article) : undefined;

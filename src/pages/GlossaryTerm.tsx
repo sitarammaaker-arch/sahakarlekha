@@ -14,6 +14,7 @@ import GuideMarkdown from '@/components/guide/GuideMarkdown';
 import HelpfulWidget from '@/components/HelpfulWidget';
 import { trackEvent } from '@/lib/analytics';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { glossaryTitle } from '@/lib/seo';
 import { findTerm, learningPath, allGlossary } from '@/content/glossary';
 import { calculatorsForGlossary } from '@/content/calculators';
 import { blogForGlossary } from '@/content/relatedContent';
@@ -79,7 +80,7 @@ const GlossaryTerm: React.FC = () => {
   ] : undefined;
 
   useDocumentMeta({
-    title: term ? `${term.hindiName || term.title} (${term.englishName}) — सहकारी लेखांकन शब्दकोश | SahakarLekha` : undefined,
+    title: term ? glossaryTitle(`${term.hindiName || term.title} (${term.englishName})`) : undefined,
     description: term ? glossaryMetaDescription(term) : undefined,  // L5: Hindi first, same as the prerender
     canonicalPath: `/glossary/${slug}`,
     jsonLd,
