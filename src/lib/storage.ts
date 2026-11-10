@@ -1147,13 +1147,9 @@ export const getNextObjectionNo = (auditYear: string): string => {
   return `AUD/${auditYear}/${String(current).padStart(3, '0')}`;
 };
 
-export const getAuthSession = () =>
-  get<{ email: string; name: string; role: string; societyId: string; branchId?: string } | null>(KEYS.auth, null);
-
-export const setAuthSession = (session: { email: string; name: string; role: string; societyId: string; branchId?: string } | null): void => {
-  if (session) set(KEYS.auth, session);
-  else localStorage.removeItem(KEYS.auth);
-};
+// The session helpers live in ./authSession (a tiny module the entry chunk can import without pulling in
+// this whole file). Re-exported so every existing `from '@/lib/storage'` import keeps working.
+export { getAuthSession, setAuthSession } from './authSession';
 
 // ── Inventory ────────────────────────────────────────────────────────────────
 export const getStockItems = (): StockItem[] => get(KEYS.stockItems, []);
