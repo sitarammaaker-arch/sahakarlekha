@@ -253,4 +253,8 @@ insert into public.app_migrations (version, name) values ('153', 'opening_event_
 
 commit;
 
--- VERIFY: select pg_get_functiondef('public.sync_account_opening_event'::regproc) ~ 'v_sid || ''-'' || p_account_id';  → true
+-- VERIFY (plain substring — a `~` regex treats `||` as "or" and is always true):
+--   select position('v_sid || ''-'' || p_account_id' in pg_get_functiondef('public.sync_account_opening_event'::regproc)) > 0 as opening_fixed,
+--          position('v_sid || ''-'' || p_remove'     in pg_get_functiondef('public.merge_accounts'::regproc)) > 0             as merge_fixed,
+--          exists (select 1 from public.app_migrations where version = '153')                                                  as recorded;
+--   → true, true, true   (prod: run and confirmed 2026-11-10)
