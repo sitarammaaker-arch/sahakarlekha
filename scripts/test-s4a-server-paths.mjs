@@ -48,6 +48,13 @@ const addAcc = body('addAccount'), updAcc = body('updateAccount'), delAcc = body
 ok('addAccount: no client opening event when ON; server sync after the account saves', /openingViaServer \? null : buildOpeningDelta/.test(addAcc) && /syncOpeningOnServer\(newAccount\.id\)/.test(addAcc));
 ok('updateAccount: no client opening event when ON; server sync when the opening changed', /!openingViaServer \? buildOpeningDelta/.test(updAcc) && /openingTouched\) syncOpeningOnServer\(id\)/.test(updAcc));
 ok('deleteAccount: journal opening netted to 0 by the server when ON', /zeroViaServer \? null : buildOpeningDelta/.test(delAcc) && /syncOpeningOnServer\(id, 0\)/.test(delAcc));
+// Flag OFF (or not read yet) AND journal not in memory: buildOpeningDelta returns null, and the opening used
+// to be dropped with no error (a bank account added from Bank Book, prod 2026-11-10). Each path must then hand
+// the opening to the server instead.
+ok('addAccount: journal not loaded → server sync (never a silent skip)', /\(openingViaServer \|\| !journalLoadedRef\.current\) && \(Number\(newAccount\.openingBalance\)/.test(addAcc));
+ok('updateAccount: journal not loaded → server sync', /\(openingViaServer \|\| !journalLoadedRef\.current\) && openingTouched\) syncOpeningOnServer\(id\)/.test(updAcc));
+ok('deleteAccount: journal not loaded → server nets the opening to 0', /\(zeroViaServer \|\| !journalLoadedRef\.current\) syncOpeningOnServer\(id, 0\)/.test(delAcc));
+ok('party accounts (supplier + customer): journal not loaded → server sync', (src.match(/persistLedgerEvent\(ev\); \} else if \(!journalLoadedRef\.current\) syncOpeningOnServer\(accountId\)/g) || []).length === 2);
 
 const merge = body('mergeAccounts');
 ok('mergeAccounts: posting service → ONE rpc merge_accounts', merge.includes("rpc('merge_accounts'"));

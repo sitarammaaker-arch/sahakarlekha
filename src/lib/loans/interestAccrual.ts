@@ -13,7 +13,7 @@
  * exactly what was accrued for THAT loan. PURE.
  */
 import { loanOutstanding, kccOutstanding } from '../memberSnapshot';
-import { DEFAULT_DAY_COUNT, periodInterest, type DayCountBasis } from '@/lib/interestDayCount';
+import { DEFAULT_DAY_COUNT, periodDays, periodInterest, type DayCountBasis } from '@/lib/interestDayCount';
 
 export const ACC_INTEREST_RECEIVABLE = '3313';
 export const ACC_INTEREST_INCOME = '4408';
@@ -87,16 +87,32 @@ export const accruableLoans = <L extends AccruableLoan>(loans: readonly L[]): L[
  * `interestRoom(loan)` — the most interest the law still allows on the loan (s.65, Haryana), or null
  * when no limit applies. The accrual is capped at it and flagged; never negative.
  */
+/**
+ * Days a loan bears interest in the `days`-day period ending on (and including) `periodTo`: the period's
+ * days, cut at the disbursement date (a loan given mid-period accrues only from the day it was given, both
+ * ends included like periodDays). A loan given AFTER the period end bears none. No disbursement date on
+ * record → the whole period (the old behaviour; nothing to cut at).
+ */
+export function loanDaysInPeriod(loan: Pick<AccruableLoan, 'disbursementDate'>, periodTo: string, days: number): number {
+  const d = Math.max(0, Math.floor(days));
+  const from = (loan.disbursementDate || '').slice(0, 10);
+  if (!from || !periodTo) return d;
+  if (from > periodTo) return 0;
+  return Math.min(d, periodDays(from, periodTo));
+}
+
 export function accrualRows(loans: readonly AccruableLoan[], periodTo: string, days: number, basis: DayCountBasis = DEFAULT_DAY_COUNT, interestRoom?: (loan: AccruableLoan) => number | null): AccrualRow[] {
-  return accruableLoans(loans).map((l) => {
+  // A loan disbursed after the period end has no interest for the period → no row (it would only add a ₹0 line).
+  return accruableLoans(loans).filter((l) => loanDaysInPeriod(l, periodTo, days) > 0).map((l) => {
+    const loanDays = loanDaysInPeriod(l, periodTo, days);
     const outstanding = Math.max(0, loanOutstanding(l));   // shared formula; clamp only for interest
-    const full = basis === '365' ? simpleInterest(outstanding, l.interestRate, days) : periodInterest(outstanding, l.interestRate, periodTo, days, basis);
+    const full = basis === '365' ? simpleInterest(outstanding, l.interestRate, loanDays) : periodInterest(outstanding, l.interestRate, periodTo, loanDays, basis);
     const room = interestRoom ? interestRoom(l) : null;
     const capped = room == null ? full : Math.min(full, Math.max(0, room));
     return {
       loanId: l.id, loanNo: l.loanNo, memberId: l.memberId, principal: l.amount, outstanding,
       // '365' keeps the exact historical formula; other bases use the society's year basis.
-      ratePa: l.interestRate, days, interest: capped,
+      ratePa: l.interestRate, days: loanDays, interest: capped,
       overdue: isOverdueAt(l, periodTo),
       ...(capped < full ? { cappedBySection65: true } : {}),
     };

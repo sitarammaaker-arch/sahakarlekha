@@ -71,9 +71,16 @@ export function planGenesisEvents(
   return { events, seeded: events.length, skippedDeleted, skippedPending, skippedEmpty };
 }
 
-/** Deterministic id for an account's opening-balance event (idempotent under upsert). */
-export function openingEventId(accountId: string): string {
-  return `opening-${accountId}`;
+/**
+ * Deterministic id for an account's opening-balance event (idempotent under upsert).
+ * The society is part of the id: ledger_events.event_id is the table's whole primary key and account
+ * ids repeat across societies (every templated chart has 3301, 3302-01, 1102 …). Without it, the first
+ * society to journal 'opening-3301' blocked every other society's opening on 3301 — and an upsert on
+ * event_id (the ops backfill/reconcile scripts) would have MOVED that event to the other society.
+ * Events written before this change keep their old ids; readers match openings by (society, account).
+ */
+export function openingEventId(accountId: string, tenantId: string): string {
+  return `opening-${tenantId}-${accountId}`;
 }
 
 /**
@@ -106,7 +113,7 @@ export function planOpeningEvents(
           producer,
           payload: { lines: [{ accountId: a.id, drCr, amountMinor }], opening: true },
         },
-        { eventId: openingEventId(a.id), occurredAt: `${opts.openingDate}T00:00:00.000Z` },
+        { eventId: openingEventId(a.id, tenantId), occurredAt: `${opts.openingDate}T00:00:00.000Z` },
       ),
     );
   }
@@ -120,7 +127,7 @@ export const OPENING_EVENT_DATE = '2000-01-01';
 /**
  * PURE — the LIVE-path counterpart of planOpeningEvents (T-09 auto-cutover). ledger_events is WORM
  * (insert-only from the client), so when an account's opening balance CHANGES the journal cannot
- * rewrite `opening-<id>` — it appends a DELTA `account.opening` event whose single leg is the signed
+ * rewrite `opening-<society>-<id>` — it appends a DELTA `account.opening` event whose single leg is the signed
  * difference (new − previous). Summing all of an account's opening events then always equals the
  * current opening, so ledger parity holds without any ops re-seed. Same eventType as genesis so the
  * split trial balance books it in the OPENING columns; dated at OPENING_EVENT_DATE so every as-of
@@ -159,6 +166,6 @@ export function planOpeningDelta(
         newSignedMinor,
       },
     },
-    { eventId: `${openingEventId(account.id)}-${sequence}`, occurredAt: `${OPENING_EVENT_DATE}T00:00:00.000Z` },
+    { eventId: `${openingEventId(account.id, tenantId)}-${sequence}`, occurredAt: `${OPENING_EVENT_DATE}T00:00:00.000Z` },
   );
 }

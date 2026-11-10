@@ -4573,7 +4573,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       opts?.onSaved?.(newAccount);
       if (openingEvent) persistLedgerEvent(openingEvent);
-      else if (openingViaServer && (Number(newAccount.openingBalance) || 0) !== 0) syncOpeningOnServer(newAccount.id);
+      // No client event while the journal isn't in memory (posting service off, or its flag not read yet)
+      // used to mean NO journal opening at all, silently (seen in production, 2026-11) — the server
+      // computes the delta from the DB journal for any society, so hand it over instead of dropping it.
+      else if ((openingViaServer || !journalLoadedRef.current) && (Number(newAccount.openingBalance) || 0) !== 0) syncOpeningOnServer(newAccount.id);
     });
     return newAccount;
   }, []);
@@ -4641,7 +4644,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
           opts?.onSaved?.();
           if (openingEvent) persistLedgerEvent(openingEvent);
-          else if (openingViaServer && openingTouched) syncOpeningOnServer(id);
+          else if ((openingViaServer || !journalLoadedRef.current) && openingTouched) syncOpeningOnServer(id);   // see addAccount
           // Chart edits were never audited, so a ledger flipped to group left no trace of who/when.
           const changed = (Object.keys(data) as (keyof LedgerAccount)[]).filter(k => before[k] !== updatedAccount[k]);
           if (changed.length) emitAudit({
@@ -4748,7 +4751,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (zeroEvent) ledgerEventsRef.current = [...ledgerEventsRef.current, zeroEvent];
     deleteAccountRow(account, {
       context: 'account-delete',
-      onSuccess: () => { if (zeroEvent) persistLedgerEvent(zeroEvent); else if (zeroViaServer) syncOpeningOnServer(id, 0); },
+      onSuccess: () => { if (zeroEvent) persistLedgerEvent(zeroEvent); else if (zeroViaServer || !journalLoadedRef.current) syncOpeningOnServer(id, 0); },
       onFail: () => { if (zeroEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== zeroEvent.eventId); },
     });
     // H11: was console-only — a deleted ledger left no durable trail.
@@ -8162,7 +8165,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // opening used to leave accounts and ledger_events disagreeing, which silently disables journal reads.
       if ((Number(newAccount.openingBalance) || 0) !== 0) {
         if (postingServiceRef.current) syncOpeningOnServer(accountId);
-        else { const ev = buildOpeningDelta(newAccount); if (ev) { ledgerEventsRef.current = [...ledgerEventsRef.current, ev]; persistLedgerEvent(ev); } }
+        else { const ev = buildOpeningDelta(newAccount); if (ev) { ledgerEventsRef.current = [...ledgerEventsRef.current, ev]; persistLedgerEvent(ev); } else if (!journalLoadedRef.current) syncOpeningOnServer(accountId); }
       }
       if (accCode) {
         supabase.from('accounts').update({ code: accCode }).eq('id', accountId).eq('society_id', societyIdRef.current).select('id').then(({ data: rows, error: cErr }) => {
@@ -8367,7 +8370,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // opening used to leave accounts and ledger_events disagreeing, which silently disables journal reads.
       if ((Number(newAccount.openingBalance) || 0) !== 0) {
         if (postingServiceRef.current) syncOpeningOnServer(accountId);
-        else { const ev = buildOpeningDelta(newAccount); if (ev) { ledgerEventsRef.current = [...ledgerEventsRef.current, ev]; persistLedgerEvent(ev); } }
+        else { const ev = buildOpeningDelta(newAccount); if (ev) { ledgerEventsRef.current = [...ledgerEventsRef.current, ev]; persistLedgerEvent(ev); } else if (!journalLoadedRef.current) syncOpeningOnServer(accountId); }
       }
       if (accCode) {
         supabase.from('accounts').update({ code: accCode }).eq('id', accountId).eq('society_id', societyIdRef.current).select('id').then(({ data: rows, error: cErr }) => {

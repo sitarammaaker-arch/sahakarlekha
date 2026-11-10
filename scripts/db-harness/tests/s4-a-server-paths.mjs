@@ -108,7 +108,7 @@ await inRollback(async (tx) => {
   const s1 = await call('select public.sync_account_opening_event($1) r', [acc]);
   const e1 = s1.ok ? s1.rows[0].r.events[0] : null;
   ok('opening: Rs 500 Dr => one account.opening event, Dr 50000', !!e1 && e1.event_type === 'account.opening' && e1.payload.lines[0].drCr === 'Dr' && e1.payload.lines[0].amountMinor === 50000, code(s1));
-  ok('opening: event id / date follow planOpeningDelta', !!e1 && e1.event_id === `opening-${acc}-1` && String(e1.occurred_at).startsWith('2000-01-01'), e1 && `${e1.event_id} ${e1.occurred_at}`);
+  ok('opening: event id / date follow planOpeningDelta', !!e1 && e1.event_id === `opening-${RANIA}-${acc}-1` && String(e1.occurred_at).startsWith('2000-01-01'), e1 && `${e1.event_id} ${e1.occurred_at}`);
   ok('opening: again => in_sync (idempotent)', (await call('select public.sync_account_opening_event($1) r', [acc])).rows?.[0]?.r?.status === 'in_sync');
   await tx.asOwner();
   await tx.query(`update public.accounts set "openingBalance" = 200, "openingBalanceType" = 'credit' where id = $1`, [acc]);
