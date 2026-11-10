@@ -196,10 +196,27 @@ for (const file of htmlFiles(DIST)) {
   }
 }
 
+// Entry-chunk budget. Every public page downloads the entry chunk; it was 1.77 MB while App.tsx imported
+// the data contexts and the app layout eagerly, and is ~350 KB with them behind src/AppDataShell. A jump
+// past the budget means something from the logged-in app is being imported eagerly again
+// (scripts/test-app-data-paths.mjs names the usual suspects).
+const ENTRY_BUDGET = 500 * 1024;
+const entrySrc = (readFileSync(resolve(DIST, 'index.html'), 'utf-8').match(/<script type="module"[^>]*src="(\/assets\/[^"]+\.js)"/) || [])[1];
+let entryKb = 0;
+if (!entrySrc) errors.push('index.html: no entry <script type="module"> found');
+else {
+  const entryBytes = readFileSync(resolve(DIST, entrySrc.replace(/^\//, ''))).length;
+  entryKb = Math.round(entryBytes / 1024);
+  if (entryBytes > ENTRY_BUDGET) errors.push(`${entrySrc}: entry chunk is ${entryKb} KB (budget ${ENTRY_BUDGET / 1024} KB) — every public page pays for this`);
+  const preloads = [...readFileSync(resolve(DIST, 'index.html'), 'utf-8').matchAll(/rel="modulepreload"[^>]*href="\/assets\/([^"]+)"/g)].map((m) => m[1]);
+  const heavy = preloads.filter((f) => /^(DataContext|AppDataShell|MainLayout|pdf|xlsx|charts)-/.test(f));
+  if (heavy.length) errors.push(`index.html preloads app-only chunks on every page: ${heavy.join(', ')}`);
+}
+
 if (errors.length) {
   console.error(`[test-dist] ${errors.length} problem(s):`);
   [...new Set(errors)].slice(0, process.env.ALL ? 1e9 : 30).forEach((e) => console.error('  ✗ ' + e));
   if (errors.length > 30) console.error(`  … and ${errors.length - 30} more`);
   process.exit(1);
 }
-console.log(`[test-dist] ✓ ${pagesChecked} pages · ${locsChecked} sitemap URLs map to their own file · ${linksChecked} internal links resolve · ${ldChecked} JSON-LD blocks valid.`);
+console.log(`[test-dist] ✓ ${pagesChecked} pages · ${locsChecked} sitemap URLs map to their own file · ${linksChecked} internal links resolve · ${ldChecked} JSON-LD blocks valid · entry chunk ${entryKb} KB.`);

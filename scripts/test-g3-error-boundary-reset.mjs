@@ -17,9 +17,11 @@ ok('…and clears a caught error when it changes', /componentDidUpdate\(prev: Pr
 ok('escape button follows homeHref (staff → dashboard, public → home)', /this\.props\.homeHref \?\? '\/dashboard'/.test(eb) && /'Home पर जाएं'/.test(eb));
 
 const app = readFileSync(resolve(root, 'src/App.tsx'), 'utf8');
-ok('staff route boundary resets on path change', /<ErrorBoundary resetKey=\{pathname\}>\{children\}<\/ErrorBoundary>/.test(app));
+// The protected-route body moved to src/AppDataShell.tsx (the lazy app chunk) as ProtectedShell.
+const shell = readFileSync(resolve(root, 'src/AppDataShell.tsx'), 'utf8');
+ok('staff route boundary resets on path change', /<ErrorBoundary resetKey=\{pathname\}>\{children\}<\/ErrorBoundary>/.test(shell));
 ok('top-level (public) boundary resets on path change and escapes to /', /<ErrorBoundary resetKey=\{pathname\} homeHref="\/">/.test(app));
-const pr = app.slice(app.indexOf('const ProtectedRoute'), app.indexOf('const PublicRoute'));
+const pr = shell.slice(shell.indexOf('export const ProtectedShell'), shell.indexOf('export const AppLayout'));
 ok('ProtectedRoute calls useLocation before any early return (hook order)', pr.indexOf('useLocation()') > 0 && pr.indexOf('useLocation()') < pr.indexOf('return '));
 ok('no temporary crash route left behind', !/zz-crash|TEMP-G3/.test(app));
 

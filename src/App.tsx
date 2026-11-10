@@ -1,4 +1,4 @@
-import { lazy, Suspense, ComponentType } from "react";
+import { lazy, Suspense, ComponentType, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,20 +6,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { DataProvider, useData } from "@/contexts/DataContext";
-import { LabourProvider } from "@/contexts/LabourDataContext";
-import { HousingProvider } from "@/contexts/HousingDataContext";
-import { DairyProvider } from "@/contexts/DairyDataContext";
-import { MarketingProvider } from "@/contexts/MarketingDataContext";
-import { TransportOpsProvider } from "@/contexts/TransportOpsContext";
-import { ConsumerProvider } from "@/contexts/ConsumerDataContext";
-import ExportContextBinder from "@/components/ExportContextBinder";
-import { MainLayout } from "@/components/layout/MainLayout";
-import { CapabilityGuard } from "@/components/CapabilityGuard";
+// The data providers, the app layout and the route guard live in ./AppDataShell and are loaded lazily
+// (see below) — importing any of them here puts the whole logged-in app in every public page's entry chunk.
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePageTracking } from "@/lib/analytics";
-import { useNoIndex } from "@/lib/useDocumentMeta";
 import { reloadOnceForStaleChunk } from "@/lib/chunkReload";
+import { needsAppData } from "@/lib/appDataPaths";
 
 // Auto-recover from stale-chunk errors after a new deploy. When the app has stayed
 // open across a deploy, an old hashed chunk filename can 404 on the CDN and the
@@ -46,6 +38,12 @@ function lazyWithRetry<T extends ComponentType<unknown>>(
     }
   });
 }
+
+// The logged-in app's shell — one lazy chunk, fetched the first time an app path is opened.
+const appShell = () => import("./AppDataShell");
+const AppDataProviders = lazyWithRetry(appShell);
+const ProtectedShell = lazyWithRetry(() => appShell().then((m) => ({ default: m.ProtectedShell })));
+const MainLayout = lazyWithRetry(() => appShell().then((m) => ({ default: m.AppLayout })));
 
 // Pages — lazy-loaded so each route ships as its own chunk (keeps the initial
 // bundle small; heavy libs like jsPDF/html2canvas/recharts/xlsx load on demand).
@@ -236,32 +234,9 @@ import { staticSnapshotFor } from '@/lib/staticSnapshot';
 
 const queryClient = new QueryClient();
 
-// Protected Route wrapper
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
-  const { isLoading } = useData();
-  const { pathname } = useLocation();
-  // App-only screens must never be indexed (robots.txt + X-Robots-Tag are the
-  // other two layers; this covers any route a crawler still reaches with JS).
-  useNoIndex();
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">डेटा लोड हो रहा है...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return <MainLayout><CapabilityGuard><ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary></CapabilityGuard></MainLayout>;
-};
+// Protected Route wrapper — the login check, loading screen, layout and capability guard are
+// AppDataShell's ProtectedShell (same code as before, in the lazy app chunk).
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => <ProtectedShell>{children}</ProtectedShell>;
 
 // Public Route wrapper (redirects to dashboard if authenticated)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -503,32 +478,40 @@ const AppRoutes = () => {
   );
 };
 
+/**
+ * Mounts the data providers only once an app path is opened, and keeps them mounted from then on.
+ *
+ * A public page (landing, blog, guide …) renders its routes with no data providers at all, so it never
+ * downloads the app chunk. The first app path (a direct visit to /dashboard, or the redirect after
+ * login) switches the providers on; they then STAY on for the rest of the visit — going from the app to
+ * a public page and back does not unmount them, so the society's data is not loaded a second time.
+ */
+const AppDataGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { pathname } = useLocation();
+  const wanted = needsAppData(pathname);
+  const [everWanted, setEverWanted] = useState(wanted);
+  useEffect(() => { if (wanted) setEverWanted(true); }, [wanted]);
+  if (!(wanted || everWanted)) return <>{children}</>;
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AppDataProviders>{children}</AppDataProviders>
+    </Suspense>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <LanguageProvider>
       <AuthProvider>
-        <DataProvider>
-        <LabourProvider>
-        <HousingProvider>
-        <DairyProvider>
-        <MarketingProvider>
-        <TransportOpsProvider>
-        <ConsumerProvider>
         <TooltipProvider>
-          <ExportContextBinder />
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <AppRoutes />
+            <AppDataGate>
+              <AppRoutes />
+            </AppDataGate>
           </BrowserRouter>
         </TooltipProvider>
-        </ConsumerProvider>
-        </TransportOpsProvider>
-        </MarketingProvider>
-        </DairyProvider>
-        </HousingProvider>
-        </LabourProvider>
-        </DataProvider>
       </AuthProvider>
     </LanguageProvider>
   </QueryClientProvider>

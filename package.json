@@ -40,6 +40,7 @@
     "test:s4a-server-paths": "node scripts/test-s4a-server-paths.mjs",
     "test:private-noindex": "node scripts/private-noindex.mjs",
     "test:spa-rewrite": "node scripts/spa-rewrite.mjs",
+    "test:app-data-paths": "node scripts/test-app-data-paths.mjs",
     "test:seo-helpers": "node scripts/test-seo-helpers.mjs",
     "test:blog-search": "node scripts/test-blog-search.mjs",
     "test:blog-trust": "node scripts/test-blog-trust.mjs",

@@ -208,7 +208,7 @@ const sumSide = (legs, side) => Math.round(legs.filter(l => l.type === side).red
   ok(/domain: 'transport' \}/.test(read('src/lib/navigation/hubs.ts')), 'Society-work hub has a Transport section');
   const app = read('src/App.tsx');
   for (const rt of ['/transport-vehicles', '/transport-trips', '/vehicle-expenses', '/vehicle-profit']) ok(app.includes(`path="${rt}"`), `route ${rt} registered`);
-  ok(/<TransportOpsProvider>/.test(app), 'TransportOpsProvider mounted');
+  ok(/<TransportOpsProvider>/.test(read('src/AppDataShell.tsx')), 'TransportOpsProvider mounted'); // providers live in the lazy app shell
   const vercel = read('vercel.json');
   for (const rt of ['transport-vehicles', 'transport-trips', 'vehicle-expenses', 'vehicle-profit']) ok(vercel.includes(rt), `noindex covers ${rt}`);
 }
