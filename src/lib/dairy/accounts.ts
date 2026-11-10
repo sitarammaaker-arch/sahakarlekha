@@ -41,11 +41,31 @@ const findBy = (
     const bySub = live.find((a) => a.subtype === subtype);
     if (bySub) return bySub.id;
   }
-  const byId = live.find((a) => a.id === id);
+  const byId = live.find((a) => a.id === id && !isOtherChartsHead(a));
   if (byId) return byId.id;
   const byName = live.find((a) => nameHit(a, nameHints));
   return byName ? byName.id : null;
 };
+
+/**
+ * The template ids above are the DAIRY chart's. Other charts use the same ids for unrelated heads — a
+ * multipurpose / PACS / marketing society (storage.ts) has 5108 Wastage, 4106 Agricultural Implements
+ * Sales, 2102 Expenses Payable, 3305 Subsidy Receivable, 1210 Social / Cooperative Dev Fund, 2106 Member
+ * Payable. Matching those by id alone posted milk cost to Wastage and milk sales to implements sales
+ * (staging demo 2026-11-10), and the Ledger Hygiene card called them "OK", so "Create domain accounts"
+ * never made the dedicated ledgers. An account still carrying one of these names is NOT the dairy ledger:
+ * the id pass skips it (the subtype and name passes are unchanged, so a renamed milk ledger still resolves).
+ */
+const OTHER_CHART_HEADS: ReadonlyArray<string> = [
+  'Wastage', 'Wastage / Shortage', 'बर्बादी व्यय', 'बर्बादी / कमी व्यय',
+  'Agricultural Implements Sales', 'कृषि यंत्र बिक्री',
+  'Expenses Payable', 'देय व्यय', 'Cane Price Payable', 'देय गन्ना मूल्य',
+  'Subsidy Receivable', 'प्राप्य अनुदान', 'Long-term Loans', 'दीर्घकालीन ऋण',
+  'Social / Cooperative Dev Fund', 'सहकारी विकास निधि',
+  'Member Payable', 'सदस्य देय',
+].map((n) => n.toLowerCase());
+const isOtherChartsHead = (a: Acc): boolean =>
+  OTHER_CHART_HEADS.includes((a.name || '').trim().toLowerCase()) || OTHER_CHART_HEADS.includes((a.nameHi || '').trim().toLowerCase());
 
 /**
  * True when `a` is one findBy(subtype, id, nameHints) COULD pick — the union of its three passes.
@@ -53,7 +73,7 @@ const findBy = (
  * which one is chosen.
  */
 export const dairyAccountMatches = (a: Acc, subtype: string | null, id: string, nameHints: ReadonlyArray<string>): boolean =>
-  !a.isDeleted && ((!!subtype && a.subtype === subtype) || a.id === id || nameHit(a, nameHints));
+  !a.isDeleted && ((!!subtype && a.subtype === subtype) || (a.id === id && !isOtherChartsHead(a)) || nameHit(a, nameHints));
 
 /** Name fallbacks for the ledgers the old load-time seeder created (shared with dairyAccountMatches). */
 export const DAIRY_HINTS = {
@@ -62,6 +82,7 @@ export const DAIRY_HINTS = {
   memberInputReceivable: ['सदस्य आदान प्राप्य', 'Member Input Receivable'],
   bonusDistribution: ['संरक्षण बोनस वितरण', 'Patronage Bonus Distribution'],
   bonusPayable: ['देय बोनस', 'Bonus Payable'],
+  milkPayable: ['देय दुग्ध', 'दुग्ध भुगतान', 'Milk Payment Payable', 'Milk Payable'],
 } as const;
 
 export const resolveMilkProcurementAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
@@ -71,7 +92,7 @@ export const resolveMilkBulkSalesAccountId = (accounts: ReadonlyArray<Acc>): str
   findBy(accounts, 'milk_sales', DAIRY_ACCOUNT_IDS.milkBulkSales, DAIRY_HINTS.milkBulkSales);
 
 export const resolveMilkPayableAccountId = (accounts: ReadonlyArray<Acc>): string | null =>
-  findBy(accounts, null, DAIRY_ACCOUNT_IDS.milkPayable, ['देय दुग्ध', 'दुग्ध भुगतान', 'Milk Payment Payable', 'Milk Payable']);
+  findBy(accounts, null, DAIRY_ACCOUNT_IDS.milkPayable, DAIRY_HINTS.milkPayable);
 
 // 3303-01 is the catch-all child of the 3303 Sundry Debtors GROUP in a current chart; a legacy chart still
 // has 3303 itself as the ledger (findBy skips groups, so the second lookup only ever returns a ledger).

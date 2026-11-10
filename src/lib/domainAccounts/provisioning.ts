@@ -31,7 +31,7 @@ import {
 } from '@/lib/consumer/accounts';
 import {
   dairyAccountMatches, DAIRY_ACCOUNT_IDS, DAIRY_HINTS,
-  resolveMilkProcurementAccountId, resolveMilkBulkSalesAccountId, resolveMemberInputReceivableAccountId,
+  resolveMilkProcurementAccountId, resolveMilkBulkSalesAccountId, resolveMilkPayableAccountId, resolveMemberInputReceivableAccountId,
   resolveBonusDistributionAccountId, resolveBonusPayableAccountId,
 } from '@/lib/dairy/accounts';
 import {
@@ -112,6 +112,10 @@ export const DOMAIN_ACCOUNT_SPECS: ReadonlyArray<DomainAccountSpec> = [
     { name: 'Milk Procurement (Direct)', nameHi: 'दुग्ध खरीदी लागत (प्रत्यक्ष)', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '5100', subtype: 'milk_procurement' }),
   dairy('milkBulkSales', 'milk_sales', resolveMilkBulkSalesAccountId,
     { name: 'Milk Sales — Bulk / Union', nameHi: 'दुग्ध बिक्री — यूनियन', type: 'income', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'milk_sales' }),
+  // A non-dairy chart (multipurpose / PACS) has 2102 = Expenses Payable, which the resolver skips — so the
+  // milk payable must be creatable here too, or a milk settlement there has no ledger to credit.
+  dairy('milkPayable', null, resolveMilkPayableAccountId,
+    { name: 'Milk Payment Payable', nameHi: 'देय दुग्ध भुगतान', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100' }),
   dairy('memberInputReceivable', null, resolveMemberInputReceivableAccountId,
     { name: 'Member Input Receivable', nameHi: 'सदस्य आदान प्राप्य', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300' }),
   dairy('bonusDistribution', null, resolveBonusDistributionAccountId,

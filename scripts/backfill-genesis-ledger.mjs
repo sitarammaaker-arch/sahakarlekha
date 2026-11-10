@@ -81,7 +81,7 @@ async function readAll(table, cols) {
 // were missing from this select, so every genesis event was seeded with empty metadata.
 const vouchers = await readAll('vouchers', 'id, type, date, "debitAccountId", "creditAccountId", amount, lines, "isDeleted", "approvalStatus", "voucherNo", narration, "createdAt", "memberId", society_id, jurisdiction');
 const accounts = await readAll('accounts', 'id, "openingBalance", "openingBalanceType", society_id, jurisdiction');
-const existingEvents = await readAll('ledger_events', 'aggregate_id, event_type');
+const existingEvents = await readAll('ledger_events', 'society_id, aggregate_id, event_type');
 
 // Skip aggregates that already have a posted event (live-path) — genesis fills only the gap.
 const alreadyPosted = new Set(existingEvents.filter((e) => e.event_type === 'voucher.posted').map((e) => e.aggregate_id));
@@ -94,9 +94,12 @@ const plan = planGenesisEvents(inputs);
 // Opening-balance events (T-06): getTrialBalance = openings + voucher postings, so the journal needs
 // the openings too. One account.opening event per account with a non-zero opening balance, dated
 // before all vouchers. Skip accounts that already have one (idempotent). Grouped by society.
-const alreadyOpened = new Set(existingEvents.filter((e) => e.event_type === 'account.opening').map((e) => e.aggregate_id));
+// Keyed by (society, account): account ids repeat across societies (template charts), so an opening in
+// ONE society must not count as "already opened" for every other society that has the same account id.
+const openKey = (sid, aid) => `${sid}|${aid}`;
+const alreadyOpened = new Set(existingEvents.filter((e) => e.event_type === 'account.opening').map((e) => openKey(e.society_id, e.aggregate_id)));
 const acctsBySoc = new Map();
-for (const a of accounts) { if (alreadyOpened.has(a.id)) continue; (acctsBySoc.get(a.society_id) ?? acctsBySoc.set(a.society_id, []).get(a.society_id)).push(a); }
+for (const a of accounts) { if (alreadyOpened.has(openKey(a.society_id, a.id))) continue; (acctsBySoc.get(a.society_id) ?? acctsBySoc.set(a.society_id, []).get(a.society_id)).push(a); }
 const openingEvents = [];
 for (const [sid, accts] of acctsBySoc) {
   if (!sid) continue;
