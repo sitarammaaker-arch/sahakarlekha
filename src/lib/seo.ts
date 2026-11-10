@@ -14,7 +14,7 @@ const len = (s: string): number => [...s].length;
 
 // The brand tail a title may end with. Google shows the site name beside every result anyway, so when
 // a title is too long the tail is the first thing to go — never the words that say what the page is.
-const BRAND_TAIL = /\s+[|—]\s+(SahakarLekha|सहकार लेखा ब्लॉग|सहकार लेखा)\s*$/;
+const BRAND_TAIL = /\s+[|—]\s+(SahakarLekha|SahakarLekha Guide|सहकार लेखा ब्लॉग|सहकार लेखा गाइड|सहकार लेखा)\s*$/;
 
 /** A title that fits is returned as is; a longer one loses its brand tail. Nothing else is changed. */
 export function fitTitle(title: string, max: number = TITLE_MAX): string {

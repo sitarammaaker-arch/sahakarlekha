@@ -189,7 +189,7 @@ const PRICING_JSON_LD = pricingJsonLd();
 
 const Pricing: React.FC = () => {
   useDocumentMeta({
-    title: 'SahakarLekha Pricing — Starter, Plus & Pro Cooperative Accounting Plans',
+    title: 'SahakarLekha Pricing — Starter, Plus & Pro Plans',
     description:
       'SahakarLekha cooperative accounting ₹1,499/FY से शुरू करें। Staff, role-based access, payroll, multi-branch accounting और advanced operations के लिए Plus या Pro चुनें।',
     canonicalPath: '/pricing',

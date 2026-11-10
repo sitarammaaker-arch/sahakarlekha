@@ -31,7 +31,7 @@ export const STATES: StateInfo[] = [
     nameHi: 'हरियाणा',
     nameEn: 'Haryana',
     Icon: MapPin,
-    metaTitle: 'हरियाणा सहकारी समिति लेखा सॉफ्टवेयर — ₹1,499/FY से | Haryana Cooperative Society Accounting Software',
+    metaTitle: 'हरियाणा सहकारी समिति सॉफ्टवेयर | Haryana Co-op Software',
     metaDescription: 'हरियाणा की सहकारी समितियों के लिए लेखा सॉफ्टवेयर — HAFED MSP खरीद, Vita दुग्ध भुगतान, PACS/KCC साख, RCS हरियाणा ऑडिट प्रारूप, TDS व GST सारांश। हिंदी+English, ₹1,499/FY से।',
     h1Hi: 'हरियाणा सहकारी समिति लेखा सॉफ्टवेयर',
     introHi: 'हरियाणा की सहकारी समितियाँ हरियाणा सहकारी समिति अधिनियम, 1984 व नियम, 1989 के अंतर्गत पंजीकृत होती हैं और सहकारिता विभाग / Registrar of Cooperative Societies (RCS), हरियाणा के अधीन ऑडिट होती हैं। SahakarLekha इन्हीं ज़रूरतों के लिए बना द्विभाषी (हिंदी+English) लेखा सॉफ्टवेयर है।',

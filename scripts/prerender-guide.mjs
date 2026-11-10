@@ -139,6 +139,13 @@ const HUB_LINKS = [
   ['/help', 'मदद केंद्र'], ['/cookbook', 'एंट्री कुकबुक'], ['/glossary', 'शब्दकोश'],
   ['/tools', 'कैलकुलेटर'], ['/downloads', 'मुफ्त प्रारूप'], ['/software', 'सॉफ्टवेयर'], ['/faq', 'FAQ'],
 ];
+// The live site's footer links. Without them the static HTML — all a crawler that runs no JavaScript
+// ever sees — gave About, Contact, Pricing, the policies and the state page no inbound link at all.
+const FOOTER_LINKS = [
+  ['/pricing', 'मूल्य'], ['/about', 'हमारे बारे में'], ['/contact', 'संपर्क'],
+  ['/cooperative-software/haryana', 'हरियाणा की समितियों के लिए'], ['/author/sitaram', 'लेखक'],
+  ['/editorial-policy', 'संपादकीय नीति'], ['/privacy', 'गोपनीयता नीति'], ['/terms', 'नियम व शर्तें'],
+];
 
 /**
  * Scoped styles for the static shell. Real users see this HTML for a few seconds
@@ -208,6 +215,8 @@ function shell({ crumbs = [], current = '', html, hero = '' }) {
   const explore =
     `<nav aria-label="explore" class="sl-explore"><p><strong>और देखें:</strong> ` +
     HUB_LINKS.map(([href, label]) => `<a href="${href}">${esc(label)}</a>`).join(' · ') +
+    `</p><p>` +
+    FOOTER_LINKS.map(([href, label]) => `<a href="${href}">${esc(label)}</a>`).join(' · ') +
     `</p></nav>`;
   return (
     `<div class="sl-pre"><style>${SHELL_CSS}</style>` + BRAND_BAR + hero +
@@ -397,7 +406,7 @@ function softwarePages(DATA) {
   const pages = [
     {
       path: '/software',
-      title: 'सहकारी समिति लेखा सॉफ्टवेयर — हर प्रकार के लिए | Cooperative Society Software',
+      title: 'सहकारी समिति लेखा सॉफ्टवेयर | Cooperative Society Software',
       description: 'PACS, दुग्ध, विपणन, उपभोक्ता, आवास, चीनी, श्रमिक व बहुउद्देशीय — हर प्रकार की सहकारी समिति के लिए लेखा सॉफ्टवेयर, ₹1,499/FY से। अपनी समिति का प्रकार चुनें।',
       lastmod: LASTMOD.software,
       jsonLd: [crumb([{ name: 'Software', item: `${SITE}/software` }])],
@@ -1310,7 +1319,7 @@ function staticExtraPages(DATA) {
   // SoftwareApplication/WebSite/FAQPage, and transform() preserves them for path '/'.
   pages.push({
     path: '/',
-    title: 'SahakarLekha — Cooperative Accounting & Management Platform for India',
+    title: 'SahakarLekha — Cooperative Society Accounting Software India',
     description: 'भारतीय cooperative societies के लिए accounting, GST/TDS, member records, reports और audit-ready workflows — PACS, Dairy, Marketing, Consumer व अन्य। SahakarLekha ₹1,499/FY से शुरू करें, Hindi + English।',
     lastmod: LASTMOD.static,
     // Mirrors LandingPage's hero (same h1/lead/CTA copy) so the hand-off to React is
@@ -1412,7 +1421,7 @@ function staticExtraPages(DATA) {
 
   pages.push({
     path: '/pricing',
-    title: 'SahakarLekha Pricing — Starter, Plus & Pro Cooperative Accounting Plans',
+    title: 'SahakarLekha Pricing — Starter, Plus & Pro Plans',
     description: 'SahakarLekha cooperative accounting ₹1,499/FY से शुरू करें। Staff, role-based access, payroll, multi-branch accounting और advanced operations के लिए Plus या Pro चुनें।',
     lastmod: LASTMOD.pricing,
     jsonLd: [crumb([{ name: 'मूल्य', item: `${SITE}/pricing` }]), ...(DATA.seo ? [DATA.seo.pricingJsonLd()] : [])],

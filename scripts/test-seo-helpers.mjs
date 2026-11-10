@@ -18,7 +18,9 @@ ok('a long title loses "| SahakarLekha"', fitTitle(long) === 'प्रतिश
 ok('a long title loses "| सहकार लेखा ब्लॉग"', fitTitle('सहकारिता आंदोलन: इतिहास, संस्थाएँ व सफलता की कहानियाँ — पूरी जानकारी | सहकार लेखा ब्लॉग') === 'सहकारिता आंदोलन: इतिहास, संस्थाएँ व सफलता की कहानियाँ — पूरी जानकारी');
 const noTail = 'हरियाणा सहकारी समिति लेखा सॉफ्टवेयर — ₹1,499/FY से | Haryana Cooperative Society Accounting Software';
 ok('a long title with no brand tail is left alone (never cut mid-sentence)', fitTitle(noTail) === noTail);
-ok('the brand in the MIDDLE of a title is never touched', fitTitle('SahakarLekha Pricing — Starter, Plus & Pro Cooperative Accounting Plans') === 'SahakarLekha Pricing — Starter, Plus & Pro Cooperative Accounting Plans');
+ok('the brand in the MIDDLE of a title is never touched', fitTitle('SahakarLekha Pricing — Starter, Plus & Pro Cooperative Accounting Plans for Every Society') === 'SahakarLekha Pricing — Starter, Plus & Pro Cooperative Accounting Plans for Every Society');
+ok('a long guide chapter title loses "— सहकार लेखा गाइड"', fitTitle('समग्र केस-स्टडी: रानिया सहकारी समिति (पूर्ण वर्ष) — सहकार लेखा गाइड') === 'समग्र केस-स्टडी: रानिया सहकारी समिति (पूर्ण वर्ष)');
+ok('…and the English "— SahakarLekha Guide"', fitTitle('Comprehensive Case Study: Rania Cooperative Society (Full Year) — SahakarLekha Guide') === 'Comprehensive Case Study: Rania Cooperative Society (Full Year)');
 ok('empty / undefined pass through', fitTitle('') === '' && fitTitle(undefined) === undefined);
 
 // glossaryTitle
@@ -44,6 +46,10 @@ ok('useDocumentMeta applies fitTitle', hook.includes("from './seo'") && hook.inc
 ok('the prerender loads the same module and applies fitTitle to every page', pre.includes("resolve(ROOT, 'src', 'lib', 'seo.ts')") && pre.includes('fitTitle(page0.title)'));
 ok('the glossary title is built by glossaryTitle in the page and the prerender', readFileSync(resolve(ROOT, 'src/pages/GlossaryTerm.tsx'), 'utf8').includes('glossaryTitle(') && pre.includes('DATA.seo.glossaryTitle(name)'));
 ok('the template carries no keywords meta', !/<meta name="keywords"/.test(readFileSync(resolve(ROOT, 'index.html'), 'utf8')));
+
+// static shell: the footer links a crawler that runs no JavaScript needs
+ok('the static shell links About, Contact, Pricing, the policies and the state page',
+  ['/about', '/contact', '/pricing', '/privacy', '/terms', '/editorial-policy', '/cooperative-software/haryana'].every((p) => pre.includes(`['${p}',`)) && pre.includes('FOOTER_LINKS.map'));
 
 console.log(`\nseo helpers: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

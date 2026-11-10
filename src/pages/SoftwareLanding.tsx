@@ -31,7 +31,7 @@ const SoftwareLanding: React.FC = () => {
 /* ── Hub: /software ─────────────────────────────────────────────────────────── */
 const HubPage: React.FC = () => {
   useDocumentMeta({
-    title: 'सहकारी समिति लेखा सॉफ्टवेयर — हर प्रकार के लिए | Cooperative Society Software',
+    title: 'सहकारी समिति लेखा सॉफ्टवेयर | Cooperative Society Software',
     description: 'PACS, दुग्ध, विपणन, उपभोक्ता, आवास, चीनी, श्रमिक व बहुउद्देशीय — हर प्रकार की सहकारी समिति के लिए लेखा सॉफ्टवेयर, ₹1,499/FY से। अपनी समिति का प्रकार चुनें।',
     canonicalPath: '/software',
   });
