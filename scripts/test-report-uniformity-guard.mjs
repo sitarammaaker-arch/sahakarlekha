@@ -106,7 +106,8 @@ ok(/exportFileName\(filename, 'csv', exportContext/.test(eu) && /exportFileName\
 ok(/contextMeta\(exportContext, now\)/.test(eu), 'downloadExcel attaches the README provenance meta');
 const pdf = src.get('src/lib/pdf.ts');
 ok(/standardFileStem\(/.test(pdf.slice(pdf.indexOf('export function pdfFileName'), pdf.indexOf('export function pdfFileName') + 600)), 'pdfFileName builds on the shared stem');
-const app = src.get('src/App.tsx');
+// Mounted beside the data providers in src/AppDataShell.tsx (the lazy app chunk App.tsx loads).
+const app = fs.readFileSync(path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '../src/AppDataShell.tsx'), 'utf8');
 ok(/<ExportContextBinder \/>/.test(app), 'the export context binder is mounted in App');
 
 console.log(`\nReport uniformity guard: ${pass} passed, ${fail} failed`);
