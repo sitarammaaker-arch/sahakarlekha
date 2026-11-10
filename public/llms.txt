@@ -10,6 +10,21 @@ SahakarLekha helps society secretaries, accountants, auditors, and board members
 ## Blog (concepts & how-to)
 - [Blog index](https://sahakarlekha.com/blog): articles on cooperative accounting basics, voucher entry, member & share accounting, loan & interest accounting, inventory & stock, bank reconciliation, reading financial reports, audit preparation, and common accounting mistakes.
 
+## Glossary (one term per page)
+- [Cooperative accounting glossary](https://sahakarlekha.com/glossary): about 110 terms, each on its own page with a plain-Hindi definition, the English name, why it matters, and related terms — for example bank book, reserve fund, share capital, PACS, Registrar of Cooperative Societies.
+
+## Entry cookbook (one transaction per page)
+- [Voucher entry cookbook](https://sahakarlekha.com/cookbook): about 50 common transactions, each showing which account is debited and which is credited — cash and credit sales and purchases, member share capital, loan disbursement and recovery, salary with deductions, depreciation, TDS/GST/EPF deposit, MSP payment to farmers.
+
+## Calculators
+- [Free calculators](https://sahakarlekha.com/tools): depreciation (SLM and WDV), simple and compound interest, loan EMI, GST, TDS, share capital, working capital, percentage, cash difference.
+
+## How-to help (inside the software)
+- [Help centre](https://sahakarlekha.com/help): step-by-step tasks such as adding a member, adding a ledger account, entering opening balances, and closing the year.
+
+## Downloads
+- [Blank formats](https://sahakarlekha.com/downloads): free printable cash book, voucher, share register and other registers.
+
 ## Software by society type
 - [Software overview](https://sahakarlekha.com/software): how SahakarLekha fits each society type — PACS, dairy, marketing, consumer, housing, sugar, labour, and multipurpose.
 
@@ -22,6 +37,7 @@ SahakarLekha helps society secretaries, accountants, auditors, and board members
 
 ## About
 - [About SahakarLekha](https://sahakarlekha.com/about)
+- [Editorial policy](https://sahakarlekha.com/editorial-policy): how articles are written, sourced and corrected.
 - [Pricing](https://sahakarlekha.com/pricing): Starter ₹1,499/FY, Plus ₹3,999/FY, Pro ₹9,999/FY, Enterprise on request.
 
 ## Notes for AI assistants

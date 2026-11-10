@@ -49,6 +49,9 @@ const FAQ_FILE = resolve(ROOT, 'src', 'content', 'faq.ts');
 const QUIZ_FILE = resolve(ROOT, 'src', 'content', 'guide', 'quizzes.ts');
 const GLOSSARY_LINKS_FILE = resolve(ROOT, 'src', 'content', 'glossaryLinks.ts');
 const HUB_META_FILE = resolve(ROOT, 'src', 'content', 'hubMeta.ts');
+const SEO_FILE = resolve(ROOT, 'src', 'lib', 'seo.ts');
+/** Set in main once the registries are loaded; identity until then (fail-soft). */
+let fitTitle = (t) => t;
 const DOWNLOADS_FILE = resolve(ROOT, 'src', 'content', 'downloads.ts');
 const GUIDE_UPDATED_FILE = resolve(ROOT, 'src', 'content', 'guide', 'updated.ts');
 const RELATED_FILE = resolve(ROOT, 'src', 'content', 'relatedContent.ts');
@@ -280,6 +283,7 @@ async function loadData() {
     ['blogCats', BLOG_CATEGORIES_FILE, 'BLOG_CATEGORIES'], // /blog sections + /blog/category/<slug> hubs
     ['policy', EDITORIAL_POLICY_FILE, null], // /editorial-policy text + the article trust note — same module as the pages
     ['hindiDate', HINDI_DATE_FILE, 'formatHindiDate'],
+    ['seo', SEO_FILE, null], // fitTitle / glossaryTitle / pricingJsonLd — the same module the live pages use
   ];
   for (const [key, file, exportName] of jobs) {
     try {
@@ -772,18 +776,20 @@ function authorPages(DATA, blog) {
 // Unknown /blog/<slug> (or /blog/category/<slug>) used to get the homepage template with HTTP 200 (a
 // soft-404 that called itself "/"). vercel.json now keeps /blog/* out of the SPA rewrite, so a path with
 // no prerendered file falls through to Vercel's not-found handling, which serves THIS root 404.html with
-// a real HTTP 404 status. (Every other path is still rewritten to the SPA, so in practice only blog
-// paths — and missing /api, /assets files — ever see it.)
+// a real HTTP 404 status. Since scripts/spa-rewrite.mjs the same is true of ANY path whose first segment
+// is not an App.tsx route (/no-such-page, /manifest.json, /wp-login.php …), so the wording is not about
+// the blog alone.
 function blogNotFoundPage() {
   return {
     file: '404.html',
     noindex: true,
-    title: 'लेख नहीं मिला | सहकार लेखा ब्लॉग',
-    description: 'यह लेख नहीं मिला। सहकार लेखा ब्लॉग के बाक़ी लेख पढ़ें।',
+    title: 'पेज नहीं मिला | सहकार लेखा',
+    description: 'यह पेज नहीं मिला। लिंक पुराना या ग़लत हो सकता है।',
     body: shell({
-      crumbs: [['/blog', 'ब्लॉग']],
-      current: 'लेख नहीं मिला',
-      html: `<h1>यह लेख नहीं मिला</h1><p>लिंक पुराना या ग़लत हो सकता है। <a href="/blog">सभी लेख देखें</a>।</p>`,
+      current: 'पेज नहीं मिला',
+      html:
+        `<h1>यह पेज नहीं मिला</h1><p>लिंक पुराना या ग़लत हो सकता है।</p>` +
+        `<p><a href="/">होम</a> · <a href="/blog">सभी लेख</a> · <a href="/guide">गाइड</a> · <a href="/glossary">शब्दकोश</a> · <a href="/help">मदद केंद्र</a> · <a href="/contact">संपर्क</a></p>`,
     }),
   };
 }
@@ -1072,7 +1078,7 @@ function glossaryPages(DATA) {
 
     pages.push({
       path: `/glossary/${t.slug}`,
-      title: `${name} — सहकारी लेखांकन शब्दकोश | SahakarLekha`,
+      title: DATA.seo ? DATA.seo.glossaryTitle(name) : `${name} — सहकारी लेखांकन शब्दकोश | SahakarLekha`,
       description: DATA.hub.glossaryMetaDescription({ hindi: s['hindi explanation'], definition: s['definition'] }), // L5: same rule as GlossaryTerm
       lastmod: t.lastUpdated || LASTMOD.static,
       body: shell({
@@ -1409,7 +1415,7 @@ function staticExtraPages(DATA) {
     title: 'SahakarLekha Pricing — Starter, Plus & Pro Cooperative Accounting Plans',
     description: 'SahakarLekha cooperative accounting ₹1,499/FY से शुरू करें। Staff, role-based access, payroll, multi-branch accounting और advanced operations के लिए Plus या Pro चुनें।',
     lastmod: LASTMOD.pricing,
-    jsonLd: [crumb([{ name: 'मूल्य', item: `${SITE}/pricing` }])],
+    jsonLd: [crumb([{ name: 'मूल्य', item: `${SITE}/pricing` }]), ...(DATA.seo ? [DATA.seo.pricingJsonLd()] : [])],
     body: shell({
       current: 'मूल्य',
       html:
@@ -1580,7 +1586,8 @@ function buildSitemaps(dynamicPages, blogMax) {
 
 /* ---------------- head + body transform ---------------- */
 
-function transform(template, page) {
+function transform(template, page0) {
+  const page = { ...page0, title: fitTitle(page0.title) };   // same rule as useDocumentMeta
   const url = SITE + (page.path || '/blog');
   let html = template;
 
@@ -1639,6 +1646,7 @@ try {
   }
   const template = readFileSync(TEMPLATE, 'utf-8');
   const DATA = await loadData();
+  if (DATA.seo && DATA.seo.fitTitle) fitTitle = DATA.seo.fitTitle;
 
   // Published (live-today) blog slugs — body builders use this so static HTML
   // never links to a still-scheduled drip post.

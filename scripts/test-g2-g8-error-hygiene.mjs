@@ -27,9 +27,14 @@ ok('reportError adds the user agent to context', /navigator\.userAgent/.test(rep
 ok('reportError stamps society_id from the auth session (never throws)', /getAuthSession\(\)\?\.societyId/.test(rep) && /society_id: societyId/.test(rep) && /catch \{ \/\* no storage/.test(rep));
 
 const vercel = JSON.parse(readFileSync(resolve(root, 'vercel.json'), 'utf8'));
-const spa = (vercel.rewrites || []).find(r => r.destination === '/index.html');
-const re = spa && new RegExp('^' + spa.source + '$');
-ok('SPA rewrite still serves app routes', !!re && re.test('/blog') && re.test('/dashboard') && re.test('/'));
+// Two rules since the soft-404 fix (scripts/spa-rewrite.mjs): `/(a|b|…)` and `/(a|b|…)/:path*`. Only a
+// path whose first segment is a real App.tsx route reaches the app; `/` and `/blog` are prerendered files.
+const spaRules = (vercel.rewrites || []).filter(r => r.destination === '/index.html');
+const toRe = (source) => new RegExp('^' + source.replace('/:path*', '(/.*)?') + '$');
+const spaRes = spaRules.map(r => toRe(r.source));
+const re = spaRes.length ? { test: (p) => spaRes.some(x => x.test(p)) } : null;
+ok('SPA rewrite still serves app routes', !!re && re.test('/dashboard') && re.test('/login') && re.test('/guide/any-chapter') && re.test('/members/123'));
+ok('SPA rewrite does not answer an unknown top-level path (a real 404, not a soft one)', !!re && !re.test('/no-such-page') && !re.test('/PRICING') && !re.test('/manifest.json') && !re.test('/wp-login.php'));
 ok('SPA rewrite never serves index.html for /assets/* (missing chunk ⇒ 404)', !!re && !re.test('/assets/BlogIndex-NHzHmXeZ.js'));
 ok('…nor for /api/*', !!re && !re.test('/api/x'));
 // /blog/<slug> pages are all prerendered files; an unknown one must reach 404.html with a real 404

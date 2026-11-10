@@ -18,6 +18,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { pricingJsonLd } from '@/lib/seo';
 import {
   Card,
   CardContent,
@@ -183,12 +184,16 @@ const Cell: React.FC<{ value: boolean | string }> = ({ value }) => {
 
 /* ────────────────────────── Component ────────────────────────── */
 
+// Built once: the three public plans and their prices, the same object the prerender writes.
+const PRICING_JSON_LD = pricingJsonLd();
+
 const Pricing: React.FC = () => {
   useDocumentMeta({
     title: 'SahakarLekha Pricing — Starter, Plus & Pro Cooperative Accounting Plans',
     description:
       'SahakarLekha cooperative accounting ₹1,499/FY से शुरू करें। Staff, role-based access, payroll, multi-branch accounting और advanced operations के लिए Plus या Pro चुनें।',
     canonicalPath: '/pricing',
+    jsonLd: PRICING_JSON_LD,
   });
   return (
     <PublicLayout>
