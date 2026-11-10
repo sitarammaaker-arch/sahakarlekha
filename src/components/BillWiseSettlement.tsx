@@ -27,7 +27,8 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { HandCoins, CheckCircle2, Wand2 } from 'lucide-react';
 import type { Voucher } from '@/types';
-import { getOpenBills, getOpenPurchaseBills, getBillSettledMap } from '@/lib/billUtils';
+import { useConsumerData } from '@/contexts/ConsumerDataContext';
+import { getOpenBills, getOpenPurchaseBills, getBillSettledMap, getSaleReturnedMap, getPurchaseReturnedMap } from '@/lib/billUtils';
 import { getBankAccountIds } from '@/lib/storage';
 
 const today = () => new Date().toISOString().split('T')[0];
@@ -66,27 +67,31 @@ const BillWiseSettlement: React.FC<Props> = ({ mode, compact, onDone }) => {
     return accounts.filter(a => ids.includes(a.id));
   }, [accounts]);
 
+  const { salesReturns, purchaseReturns } = useConsumerData();
   const settledMap = useMemo(() => getBillSettledMap(vouchers), [vouchers]);
+  const saleReturned = useMemo(() => getSaleReturnedMap(salesReturns), [salesReturns]);
+  const purchaseReturned = useMemo(() => getPurchaseReturnedMap(purchaseReturns), [purchaseReturns]);
 
   const openItems = useMemo<OpenItem[]>(() => {
     if (!partyId) return [];
     if (isPay) {
-      return getOpenPurchaseBills(purchases, vouchers, partyId).map(({ purchase: p, balance }) => ({
-        id: p.id, no: p.purchaseNo, date: p.date, total: p.grandTotal ?? p.netAmount ?? 0, received: settledMap[p.id] || 0, balance,
+      // total is net of adjusted returns, so total - received = balance on every row.
+      return getOpenPurchaseBills(purchases, vouchers, partyId, purchaseReturned).map(({ purchase: p, balance }) => ({
+        id: p.id, no: p.purchaseNo, date: p.date, total: (p.grandTotal ?? p.netAmount ?? 0) - (purchaseReturned[p.id] || 0), received: settledMap[p.id] || 0, balance,
       }));
     }
-    return getOpenBills(sales, vouchers, partyId).map(({ sale: s, balance }) => ({
-      id: s.id, no: s.saleNo, date: s.date, total: s.grandTotal ?? s.netAmount ?? 0, received: settledMap[s.id] || 0, balance,
+    return getOpenBills(sales, vouchers, partyId, saleReturned).map(({ sale: s, balance }) => ({
+      id: s.id, no: s.saleNo, date: s.date, total: (s.grandTotal ?? s.netAmount ?? 0) - (saleReturned[s.id] || 0), received: settledMap[s.id] || 0, balance,
     }));
-  }, [partyId, isPay, sales, purchases, vouchers, settledMap]);
+  }, [partyId, isPay, sales, purchases, vouchers, settledMap, saleReturned, purchaseReturned]);
 
   // All parties, those with open bills first (so advances to a new party are possible too).
   const parties = useMemo(() => {
     const base = isPay ? suppliers : customers;
     return base
-      .map(p => ({ id: p.id, name: p.name, count: (isPay ? getOpenPurchaseBills(purchases, vouchers, p.id) : getOpenBills(sales, vouchers, p.id)).length }))
+      .map(p => ({ id: p.id, name: p.name, count: (isPay ? getOpenPurchaseBills(purchases, vouchers, p.id, purchaseReturned) : getOpenBills(sales, vouchers, p.id, saleReturned)).length }))
       .sort((a, b) => (b.count - a.count) || a.name.localeCompare(b.name));
-  }, [isPay, customers, suppliers, sales, purchases, vouchers]);
+  }, [isPay, customers, suppliers, sales, purchases, vouchers, saleReturned, purchaseReturned]);
 
   const allocTotal = useMemo(
     () => openItems.reduce((s, b) => s + (parseFloat(alloc[b.id]) || 0), 0),

@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable';
 import type { RowInput } from 'jspdf-autotable';
 import QRCode from 'qrcode';
 import { rpParticulars } from '@/lib/ledger/rpLabel';
-import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord, Voucher, HousingFlat, MaintenanceBill } from '@/types';
+import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord, Voucher, HousingFlat, MaintenanceBill, LateFeeRule } from '@/types';
 import { ACCOUNT_IDS } from '@/lib/storage';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -17,6 +17,7 @@ import { standardFileStem, scopeFor } from '@/lib/exportNaming';
 import { makeReportId } from '@/lib/reportId';
 import { getReportBranding } from '@/lib/reportBranding';
 import { getReportSignatureRoles, selectSignatures } from '@/lib/reportSignatures';
+import { describeLateFeeRule, isActiveRule } from '@/lib/lateFee';
 import { getPdfLang } from '@/lib/pdfLang';
 import { auditorCertificateHi, interimNoticeHi } from '@/lib/pdfHindiLabels';
 import { emitReportGenerated } from '@/lib/reportAudit';
@@ -2787,6 +2788,9 @@ function _numToWordsIN(num: number): string {
 export interface SaleInvoiceInput {
   saleNo: string;
   date: string;
+  creditDays?: number | null;
+  dueDate?: string | null;
+  lateFeeRule?: LateFeeRule | null;
   customer: {
     legalName?: string;
     name?: string;
@@ -3190,6 +3194,20 @@ export function generateSaleInvoicePDF(input: SaleInvoiceInput, society: Society
   }
 
   // ── Notes ──────────────────────────────────────────────────────────────────
+  // Credit terms: on the paper from day one, so the party sees them.
+  if (input.dueDate) {
+    doc.setFontSize(7.5);
+    doc.setFont(font, 'bold');
+    doc.text(`Credit: ${input.creditDays} days  |  Due date: ${fmtDate(input.dueDate)}`, left, ty);
+    doc.setFont(font, 'normal');
+    ty += 4;
+    if (isActiveRule(input.lateFeeRule)) {
+      doc.text(`After the due date: ${describeLateFeeRule(input.lateFeeRule, false)}.`, left, ty);
+      ty += 4;
+    }
+    ty += 2;
+  }
+
   if (input.narration) {
     doc.setFontSize(7.5);
     doc.setTextColor(80);
@@ -3683,6 +3701,9 @@ export function generateVoucherPDF(input: VoucherPDFInput, society: SocietySetti
 export interface PurchaseRecordInput {
   purchaseNo: string;
   date: string;
+  creditDays?: number | null;
+  dueDate?: string | null;
+  lateFeeRule?: LateFeeRule | null;
   supplierBillNo?: string;
   supplierBillDate?: string;
   supplier: {
@@ -4008,6 +4029,20 @@ export function generatePurchaseRecordPDF(input: PurchaseRecordInput, society: S
   }
 
   // ── Notes / TDS note ───────────────────────────────────────────────────────
+  // Credit terms: on the paper from day one, so the party sees them.
+  if (input.dueDate) {
+    doc.setFontSize(7.5);
+    doc.setFont(font, 'bold');
+    doc.text(`Credit: ${input.creditDays} days  |  Due date: ${fmtDate(input.dueDate)}`, left, ty);
+    doc.setFont(font, 'normal');
+    ty += 4;
+    if (isActiveRule(input.lateFeeRule)) {
+      doc.text(`After the due date: ${describeLateFeeRule(input.lateFeeRule, false)}.`, left, ty);
+      ty += 4;
+    }
+    ty += 2;
+  }
+
   if (input.narration) {
     doc.setFontSize(7.5);
     doc.setTextColor(80);

@@ -1058,6 +1058,14 @@ export interface BoardMember {
   status: 'active' | 'resigned' | 'expired';
 }
 
+// The late-payment charge on a credit bill (विलंब शुल्क, lib/lateFee).
+export type LateFeeType = 'none' | 'percent' | 'flat' | 'perDay' | 'perMonth';
+export interface LateFeeRule {
+  type: LateFeeType;
+  rate: number;         // % a year for 'percent', rupees for the penalty types
+  graceDays?: number;   // the charge starts this many days after the due date
+}
+
 export interface SignatoryConfig {
   name: string;
   source: 'board' | 'employee';
@@ -1143,6 +1151,7 @@ export interface SocietySettings {
   /** Migration 136 (Marketing D1): post each MSP lot through 5116 Govt Procurement Purchase (Dr 5116 / Cr 2105 + Dr agency / Cr 5116). */
   procurementVia5116?: boolean;
   storageLossNormPct?: number;  // ECR-20: permitted godown storage-loss (driage/shrinkage) % — items above this are flagged. Undefined/0 = no norm.
+  lateFeeRules?: { sales?: LateFeeRule | null; purchases?: LateFeeRule | null }; // off until the admin sets one (lib/lateFee)
   // Board & Signing Authority
   boardType?: BoardType;       // 'bod' (elected) or 'boa' (appointed by Registrar)
   boardMembers?: BoardMember[];
@@ -1387,6 +1396,9 @@ export interface Sale {
   roundOff?: number;       // 115 · applied round off (±0.99), posted to 5499; outside the taxable value
   paymentMode: PaymentMode;
   bankAccountId?: string;  // when paymentMode = 'bank', which bank account to credit
+  creditDays?: number | null;  // credit bills: the term agreed on this bill
+  dueDate?: string | null;     // date + creditDays; no due date = no late charge
+  lateFeeRule?: LateFeeRule | null; // the rule frozen on this bill when it was made (lib/lateFee)
   customerId?: string; // linked registered customer
   memberId?: string;   // Consumer C2 — member buyer at the retail counter (member pricing + future patronage)
   receivableAccountId?: string; // Consumer C3 — routing only (not persisted): credit-sale debtor account (member receivable control)
@@ -1617,6 +1629,9 @@ export interface Purchase {
   roundOff?: number;       // 115 · applied round off (±0.99), posted to 5499
   paymentMode: PaymentMode;
   bankAccountId?: string;  // when paymentMode = 'bank', which bank account to credit
+  creditDays?: number | null;  // credit bills: the term agreed on this bill
+  dueDate?: string | null;     // date + creditDays; no due date = no late charge
+  lateFeeRule?: LateFeeRule | null; // the rule frozen on this bill when it was made (lib/lateFee)
   supplierId?: string;     // linked registered supplier
   voucherId?: string;
   taxVoucherIds?: string[]; // auto-created GST/TDS journal voucher IDs
@@ -1698,6 +1713,7 @@ export interface Supplier {
 
   // ── Credit Terms ──
   creditDays?: number;
+  lateFeeRule?: LateFeeRule | null; // this party's own rule; unset = the society's; type 'none' = exempt
   creditLimit?: number;
   discountPercent?: number;
   openingBalance?: number;
@@ -1780,6 +1796,7 @@ export interface Customer {
 
   // ── Credit Terms ──
   creditDays?: number;
+  lateFeeRule?: LateFeeRule | null; // this party's own rule; unset = the society's; type 'none' = exempt
   creditLimit?: number;
   discountPercent?: number;
   openingBalance?: number;        // Dr/Cr handled separately

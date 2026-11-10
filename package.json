@@ -305,6 +305,8 @@
     "test:report-audit": "node scripts/test-report-audit.mjs",
     "test:pdf-report-id-footer": "node scripts/test-pdf-report-id-footer.mjs",
     "test:report-signatures": "node scripts/test-report-signatures.mjs",
+    "test:late-fee": "node scripts/test-late-fee.mjs",
+    "test:bill-balance": "node scripts/test-bill-balance.mjs",
     "test:export-naming": "node scripts/test-export-naming.mjs",
     "test:report-uniformity-guard": "node scripts/test-report-uniformity-guard.mjs",
     "test:member-identity": "node scripts/test-member-identity.mjs",

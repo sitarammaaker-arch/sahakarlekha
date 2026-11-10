@@ -11,6 +11,10 @@ import type { Sale, Purchase, Voucher, BillAllocation, BillMethod } from '@/type
  * Every bill's settled amount is DERIVED by summing 'against' allocations across all
  * ACTIVE (non-deleted) vouchers — ONE source of truth (RULE 2/5): deleting or editing a
  * receipt/payment automatically updates bill balances; no stored field can drift.
+ *
+ * A return adjusted against the party's account ('credit-adjust') also lowers what the bill still owes, the same
+ * amount its voucher takes off the party's ledger. A return refunded in cash or by bank does not: the money went
+ * back, and the bill stays owed.
  */
 
 // ── Allocation field accessors (back-compat: legacy receipts used saleId/saleNo) ──
@@ -41,6 +45,26 @@ export function getBillSettledMap(vouchers: Voucher[]): Record<string, number> {
 /** Back-compat alias (sales side already imports this name). */
 export const getBillReceivedMap = getBillSettledMap;
 
+/** billId → total returned and adjusted against the party's account. Pass rows with billId set from originalSaleId / originalPurchaseId. */
+export function getBillReturnedMap(
+  returns: readonly { billId?: string; grandTotal?: number; refundMode?: string; isDeleted?: boolean }[],
+): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const r of returns) {
+    if (r.isDeleted || r.refundMode !== 'credit-adjust' || !r.billId) continue;
+    map[r.billId] = (map[r.billId] || 0) + (Number(r.grandTotal) || 0);
+  }
+  return map;
+}
+
+export function getSaleReturnedMap(returns: readonly { originalSaleId?: string; grandTotal?: number; refundMode?: string; isDeleted?: boolean }[]): Record<string, number> {
+  return getBillReturnedMap(returns.map(r => ({ ...r, billId: r.originalSaleId })));
+}
+
+export function getPurchaseReturnedMap(returns: readonly { originalPurchaseId?: string; grandTotal?: number; refundMode?: string; isDeleted?: boolean }[]): Record<string, number> {
+  return getBillReturnedMap(returns.map(r => ({ ...r, billId: r.originalPurchaseId })));
+}
+
 export interface BillStatus {
   total: number;
   received: number;
@@ -49,17 +73,18 @@ export interface BillStatus {
 }
 
 /** Settlement status given a bill total and how much has been settled. */
-export function getBillStatusFor(total: number, settled: number): BillStatus {
-  const rec = Math.min(Math.max(settled, 0), total);
-  const balance = +(total - rec).toFixed(2);
+export function getBillStatusFor(total: number, settled: number, returned = 0): BillStatus {
+  const owed = Math.max(total - Math.max(returned, 0), 0);
+  const rec = Math.min(Math.max(settled, 0), owed);
+  const balance = +(owed - rec).toFixed(2);
   const status: BillStatus['status'] =
-    settled <= 0.01 ? 'unpaid' : (balance <= 0.01 ? 'paid' : 'partial');
+    settled <= 0.01 && returned <= 0.01 ? 'unpaid' : (balance <= 0.01 ? 'paid' : 'partial');
   return { total, received: rec, balance, status };
 }
 
 /** Sale-based wrapper (back-compat: SaleRegister + ReceivePayment call getBillStatus(sale, received)). */
-export function getBillStatus(sale: Sale, received: number): BillStatus {
-  return getBillStatusFor(sale.grandTotal ?? sale.netAmount ?? 0, received);
+export function getBillStatus(sale: Sale, received: number, returned = 0): BillStatus {
+  return getBillStatusFor(sale.grandTotal ?? sale.netAmount ?? 0, received, returned);
 }
 
 export function isCreditBill(sale: Sale): boolean {
@@ -74,11 +99,12 @@ export function getOpenBills(
   sales: Sale[],
   vouchers: Voucher[],
   customerId: string,
+  returned: Record<string, number> = {},
 ): { sale: Sale; balance: number }[] {
   const settled = getBillSettledMap(vouchers);
   return sales
     .filter(s => s.customerId === customerId && isCreditBill(s))
-    .map(s => ({ sale: s, balance: getBillStatus(s, settled[s.id] || 0).balance }))
+    .map(s => ({ sale: s, balance: getBillStatus(s, settled[s.id] || 0, returned[s.id] || 0).balance }))
     .filter(x => x.balance > 0.01)
     .sort((a, b) => (a.sale.date || '').localeCompare(b.sale.date || ''));
 }
@@ -88,11 +114,12 @@ export function getOpenPurchaseBills(
   purchases: Purchase[],
   vouchers: Voucher[],
   supplierId: string,
+  returned: Record<string, number> = {},
 ): { purchase: Purchase; balance: number }[] {
   const settled = getBillSettledMap(vouchers);
   return purchases
     .filter(p => p.supplierId === supplierId && isCreditPurchase(p))
-    .map(p => ({ purchase: p, balance: getBillStatusFor(p.grandTotal ?? p.netAmount ?? 0, settled[p.id] || 0).balance }))
+    .map(p => ({ purchase: p, balance: getBillStatusFor(p.grandTotal ?? p.netAmount ?? 0, settled[p.id] || 0, returned[p.id] || 0).balance }))
     .filter(x => x.balance > 0.01)
     .sort((a, b) => (a.purchase.date || '').localeCompare(b.purchase.date || ''));
 }

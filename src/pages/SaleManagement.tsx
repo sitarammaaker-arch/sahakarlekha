@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { QuickItemDialog } from '@/components/QuickItemDialog';
 import { QuickCreateMaster, allowedQuickKinds } from '@/components/QuickCreateMaster';
 import { roleCanCreateMaster } from '@/lib/masterCreate';
@@ -41,9 +41,11 @@ import { toMinor, toRupees, mulMinor } from '@/lib/money';
 import { useToast } from '@/hooks/use-toast';
 import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
 import { saleBillMessage } from '@/lib/whatsappShare';
-import { getBillReceivedMap, getBillStatus } from '@/lib/billUtils';
+import { useConsumerData } from '@/contexts/ConsumerDataContext';
+import { getBillReceivedMap, getBillStatus, getSaleReturnedMap } from '@/lib/billUtils';
 import type { SaleItem, PaymentMode } from '@/types';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
+import CreditTermsField from '@/components/CreditTermsField';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -97,6 +99,14 @@ const SaleManagement: React.FC = () => {
   const [igstPct, setIgstPct] = useState<number>(0);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
   const [bankAccountId, setBankAccountId] = useState<string>('');   // which bank, when mode = 'bank'
+  const [creditDays, setCreditDays] = useState('');
+  const creditDaysTouched = useRef(false);   // the party's default fills it until someone types
+  // A credit bill starts with the customer's usual credit days.
+  useEffect(() => {
+    if (paymentMode !== 'credit' || creditDaysTouched.current) return;
+    const days = customers.find(c => c.id === customerId)?.creditDays;
+    setCreditDays(days ? String(days) : '');
+  }, [paymentMode, customerId, customers]);
   const [narration, setNarration] = useState('');
   const [savedSaleNo, setSavedSaleNo] = useState<string | null>(null);
   // The saved sale's id: its number is read from the list, so the server-issued number shows once restamped.
@@ -180,6 +190,8 @@ const SaleManagement: React.FC = () => {
 
   // ── Reset form helper ─────────────────────────────────────────────────────
   const resetForm = () => {
+    setCreditDays('');
+    creditDaysTouched.current = false;
     setSaleDate(TODAY);
     setCustomerId('');
     setCustomerName('');
@@ -209,6 +221,8 @@ const SaleManagement: React.FC = () => {
     setSgstPct(sale.sgstPct || 0);
     setIgstPct(sale.igstPct || 0);
     setPaymentMode(sale.paymentMode);
+    setCreditDays(sale.creditDays ? String(sale.creditDays) : '');
+    creditDaysTouched.current = true;
     setBankAccountId(sale.bankAccountId || '');
     setNarration(sale.narration || '');
     setSavedSaleNo(null);
@@ -299,6 +313,7 @@ const SaleManagement: React.FC = () => {
       taxAmount, grandTotal, roundOff,
       paymentMode,
       bankAccountId: paymentMode === 'bank' ? (bankAccountId || undefined) : undefined,
+      creditDays: paymentMode === 'credit' ? (Math.floor(Number(creditDays)) || null) : null,
       narration: narration.trim(),
       createdBy: user?.name ?? 'Unknown',
     };
@@ -349,7 +364,9 @@ const SaleManagement: React.FC = () => {
 
   // ── Download Invoice PDF ──────────────────────────────────────────────────
   // Bill-wise receipts applied per sale — the same map Bills Outstanding reads (RULE 2).
+  const { salesReturns } = useConsumerData();
   const billSettled = useMemo(() => getBillReceivedMap(vouchers), [vouchers]);
+  const billReturned = useMemo(() => getSaleReturnedMap(salesReturns), [salesReturns]);
 
   // WhatsApp share: to the linked customer, else the walk-in phone, else the member buyer.
   const saleShare = (sale: typeof sales[number]) => {
@@ -357,7 +374,7 @@ const SaleManagement: React.FC = () => {
     const member = sale.memberId ? members.find(m => m.id === sale.memberId) : undefined;
     // A member's store-credit sale is recovered through Member Credit, not bill-wise — its balance isn't known here.
     const balance = sale.paymentMode === 'credit' && !sale.memberId
-      ? getBillStatus(sale, billSettled[sale.id] || 0).balance : undefined;
+      ? getBillStatus(sale, billSettled[sale.id] || 0, billReturned[sale.id] || 0).balance : undefined;
     return {
       phone: customer?.mobile || customer?.phone || sale.customerPhone || member?.phone,
       message: saleBillMessage({
@@ -427,6 +444,9 @@ const SaleManagement: React.FC = () => {
         taxAmount: sale.taxAmount || 0,
         grandTotal: sale.grandTotal || sale.netAmount,
         paymentMode: sale.paymentMode,
+        creditDays: sale.creditDays,
+        dueDate: sale.dueDate,
+        lateFeeRule: sale.lateFeeRule,
         narration: sale.narration,
       }, society, { output });
       if (output === 'file') return file;
@@ -818,6 +838,9 @@ const SaleManagement: React.FC = () => {
                   <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-2">
                     ⚠️ {cashReceiptWarningText(cashWarning, language === 'hi')}
                   </p>
+                )}
+                {paymentMode === 'credit' && (
+                  <CreditTermsField value={creditDays} billDate={saleDate} hi={language === 'hi'} onChange={v => { creditDaysTouched.current = true; setCreditDays(v); }} />
                 )}
                 {paymentMode === 'bank' && (
                   <div className="space-y-1">

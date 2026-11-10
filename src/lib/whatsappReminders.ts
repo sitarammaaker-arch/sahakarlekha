@@ -37,7 +37,7 @@ const BILLS_MAX = 10;
 /** One customer's open credit bills (as Bills Outstanding lists them) and their total. */
 export function billsReminderMessage(p: {
   partyName?: string; societyName?: string; asOf: string;
-  bills: { no: string; date: string; balance: number }[];
+  bills: { no: string; date: string; balance: number; dueDate?: string }[];
 }): string {
   const bills = p.bills.filter(b => (Number(b.balance) || 0) >= 0.005);
   const total = bills.reduce((s, b) => s + (Number(b.balance) || 0), 0);
@@ -46,7 +46,7 @@ export function billsReminderMessage(p: {
     greet(p.partyName),
     `${p.asOf} तक आपके उधार बिलों का बकाया:`,
     ``,
-    ...shown.map(b => `• ${b.no} (${b.date}): ${rupees(b.balance)}`),
+    ...shown.map(b => `• ${b.no} (${b.date}): ${rupees(b.balance)}${b.dueDate ? `, देय तिथि ${b.dueDate}` : ''}`),
     ...(bills.length > shown.length ? [`• और ${bills.length - shown.length} बिल`] : []),
     ``,
     `कुल बकाया: ${rupees(total)}`,

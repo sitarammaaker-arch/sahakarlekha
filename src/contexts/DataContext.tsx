@@ -35,6 +35,7 @@ import { syncPrimaryNominee } from '@/lib/nomineeUtils';
 import { localOnlyAccountsReport } from '@/lib/accounting/localOnlyAccounts';
 import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
+import { billTerms, resolveLateFeeRule } from '@/lib/lateFee';
 import { buildPostVoucherPayload, buildEditVoucherPayload, buildStockDocumentPayload, buildPendingVoucherPayload, postVoucherErrorCode, postVoucherMessage } from '@/lib/ledger/postVoucherClient';
 import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
 import { fyStartOf, fyStartFromLabel, societyFyStart } from '@/lib/fyPeriod';
@@ -7053,7 +7054,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // receivableAccountId is routing-only (chose the credit debtor above) — never store it on
     // the sale row (no column; would break a later updateSale upsert).
     const { receivableAccountId: _omitRcv, ...saleFields } = data;
-    const sale: Sale = { ...saleFields, id: saleId, saleNo, voucherId: newVoucher.id, gstVoucherIds: undefined, createdAt: new Date().toISOString(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) };
+    const saleCustomer = data.customerId ? customers.find(c => c.id === data.customerId) : undefined;
+    const saleTerms = billTerms({ paymentMode: data.paymentMode, date: data.date, creditDays: data.creditDays, partyCreditDays: saleCustomer?.creditDays, rule: resolveLateFeeRule(saleCustomer?.lateFeeRule, society.lateFeeRules?.sales) });
+    const sale: Sale = { ...saleFields, ...saleTerms, id: saleId, saleNo, voucherId: newVoucher.id, gstVoucherIds: undefined, createdAt: new Date().toISOString(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) };
     salesRef.current = [...salesRef.current, sale];
     setSalesState(prev => [...prev, sale]);
 
@@ -7078,7 +7081,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ECR-17 Phase 5: branchId stays IN saleBase — the branch-scoped RLS SELECT policies
     // (migration 039) must see it on the row from birth, or a branch-restricted user's own
     // sale vanishes from their next load. Stale-schema-cache fallback below (RULE 1).
-    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound, customerId, memberId: sMember, bankAccountId: sBankId, gstVoucherIds: _gv, ...saleBase } = sale;
+    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound, customerId, memberId: sMember, bankAccountId: sBankId, gstVoucherIds: _gv, creditDays: sCreditDays, dueDate: sDueDate, lateFeeRule: sLateFee, ...saleBase } = sale;
     // Feature 6: a duplicate saleNo (another till) makes the base upsert fail with 23505 —
     // bump to the next number, restamp local state, and retry (only saleNo changes).
     const attemptSaleSave = (base: typeof saleBase, tries: number) => {
@@ -7086,7 +7089,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!error) {
           // Step 2: Sale GST + customer/member (no TDS on sales). Same missing-column guard as
           // purchases — one un-migrated column can't silently drop the GST anymore (RULE 1).
-          persistExtras('sales', sale.id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound ?? 0, customerId, memberId: sMember, bankAccountId: sBankId ?? null }, `Sale ${sale.saleNo}`);
+          persistExtras('sales', sale.id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound ?? 0, creditDays: sCreditDays ?? null, dueDate: sDueDate ?? null, lateFeeRule: sLateFee ?? null, customerId, memberId: sMember, bankAccountId: sBankId ?? null }, `Sale ${sale.saleNo}`);
           return;
         }
         if (isMissingBranchColumn(error) && 'branchId' in base) {
@@ -7322,8 +7325,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     // 5️⃣ Update the sale record in place (same id + saleNo)
+    const updCustomer = data.customerId ? customers.find(c => c.id === data.customerId) : undefined;
     const updated: Sale = {
       ...data,
+      ...billTerms({ paymentMode: data.paymentMode, date: data.date, creditDays: data.creditDays, partyCreditDays: updCustomer?.creditDays, rule: resolveLateFeeRule(updCustomer?.lateFeeRule, society.lateFeeRules?.sales), original }),
       id,
       saleNo: original.saleNo,
       voucherId: newVoucher.id,
@@ -7343,7 +7348,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     // ECR-17 Phase 5: branchId stays IN saleBase (see addSale); stale-schema-cache fallback (RULE 1).
-    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound, customerId, bankAccountId: sBankId, gstVoucherIds: _gv, ...saleBase } = updated;
+    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound, customerId, bankAccountId: sBankId, gstVoucherIds: _gv, creditDays: sCreditDays, dueDate: sDueDate, lateFeeRule: sLateFee, ...saleBase } = updated;
     const attemptSaleUpdate = (payload: typeof saleBase) => {
       supabase.from('sales').upsert(withSoc(payload)).then(({ error }) => {
         if (error) {
@@ -7359,7 +7364,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // re-verify. (A fully atomic sale-edit is a separate, larger redesign.)
           toastRef.current({ title: 'बिक्री edit cloud-save fail', description: `बिक्री क्लाउड में सेव नहीं हुई — ${error.message}. Refresh करके बिक्री दोबारा जाँचें; ज़रूरत हो तो फिर से edit करें।`, variant: 'destructive', duration: 15000 });
         } else {
-          persistExtras('sales', id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound ?? 0, customerId, bankAccountId: sBankId ?? null }, `Sale ${original.saleNo}`);
+          persistExtras('sales', id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound ?? 0, creditDays: sCreditDays ?? null, dueDate: sDueDate ?? null, lateFeeRule: sLateFee ?? null, customerId, bankAccountId: sBankId ?? null }, `Sale ${original.saleNo}`);
         }
       });
     };
@@ -7477,7 +7482,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!server) persistMovement(mv);
     });
 
-    const purchase: Purchase = { ...data, id: purchaseId, purchaseNo, voucherId: newVoucher.id, taxVoucherIds: undefined, createdAt: new Date().toISOString(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) };
+    const purSupplier = data.supplierId ? suppliers.find(s => s.id === data.supplierId) : undefined;
+    const purTerms = billTerms({ paymentMode: data.paymentMode, date: data.date, creditDays: data.creditDays, partyCreditDays: purSupplier?.creditDays, rule: resolveLateFeeRule(purSupplier?.lateFeeRule, society.lateFeeRules?.purchases) });
+    const purchase: Purchase = { ...data, ...purTerms, id: purchaseId, purchaseNo, voucherId: newVoucher.id, taxVoucherIds: undefined, createdAt: new Date().toISOString(), branchId: data.branchId ?? branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) };
     purchasesRef.current = [...purchasesRef.current, purchase];
     setPurchasesState(prev => [...prev, purchase]);
 
@@ -7502,13 +7509,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ECR-17 Phase 5: branchId stays IN purchaseBase — the branch-scoped RLS SELECT policies
     // (migration 039) must see it on the row from birth, or a branch-restricted user's own
     // purchase vanishes from their next load. Stale-schema-cache fallback below (RULE 1).
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc, roundOff: pRound, supplierId: pSupplierId, rcmApplicable: pRcm, bankAccountId: pBankId, supplierBillNo: pBillNo, supplierBillDate: pBillDate, taxVoucherIds: _tv, ...purchaseBase } = purchase;
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc, roundOff: pRound, supplierId: pSupplierId, rcmApplicable: pRcm, bankAccountId: pBankId, supplierBillNo: pBillNo, supplierBillDate: pBillDate, taxVoucherIds: _tv, creditDays: pCreditDays, dueDate: pDueDate, lateFeeRule: pLateFee, ...purchaseBase } = purchase;
     // Feature 6: duplicate purchaseNo (another till) → 23505; bump + retry (only purchaseNo changes).
     const attemptPurchaseSave = (base: typeof purchaseBase, tries: number) => {
       supabase.from('purchases').upsert(withSoc(base)).then(({ error }) => {
         if (!error) {
           // Step 2: GST/TDS/TCS columns — one un-migrated column no longer takes the rest (RULE 1).
-          persistExtras('purchases', purchase.id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc ?? 0, roundOff: pRound ?? 0, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null, supplierBillNo: pBillNo ?? null, supplierBillDate: pBillDate ?? null }, `Purchase ${purchase.purchaseNo}`);
+          persistExtras('purchases', purchase.id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc ?? 0, roundOff: pRound ?? 0, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null, supplierBillNo: pBillNo ?? null, supplierBillDate: pBillDate ?? null, creditDays: pCreditDays ?? null, dueDate: pDueDate ?? null, lateFeeRule: pLateFee ?? null }, `Purchase ${purchase.purchaseNo}`);
           return;
         }
         if (isMissingBranchColumn(error) && 'branchId' in base) {
@@ -7745,8 +7752,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     // 5️⃣ Update the purchase record in place (same id + purchaseNo)
+    const updSupplier = data.supplierId ? suppliers.find(s => s.id === data.supplierId) : undefined;
     const updated: Purchase = {
       ...data,
+      ...billTerms({ paymentMode: data.paymentMode, date: data.date, creditDays: data.creditDays, partyCreditDays: updSupplier?.creditDays, rule: resolveLateFeeRule(updSupplier?.lateFeeRule, society.lateFeeRules?.purchases), original }),
       id,
       purchaseNo: original.purchaseNo,
       voucherId: newVoucher.id,
@@ -7766,7 +7775,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     // ECR-17 Phase 5: branchId stays IN purchaseBase (see addPurchase); stale-schema-cache fallback (RULE 1).
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc, roundOff: pRound, supplierId: pSupplierId, rcmApplicable: pRcm, bankAccountId: pBankId, supplierBillNo: pBillNo, supplierBillDate: pBillDate, taxVoucherIds: _tv, ...purchaseBase } = updated;
+    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc, roundOff: pRound, supplierId: pSupplierId, rcmApplicable: pRcm, bankAccountId: pBankId, supplierBillNo: pBillNo, supplierBillDate: pBillDate, taxVoucherIds: _tv, creditDays: pCreditDays, dueDate: pDueDate, lateFeeRule: pLateFee, ...purchaseBase } = updated;
     const attemptPurchaseUpdate = (payload: typeof purchaseBase) => {
       supabase.from('purchases').upsert(withSoc(payload)).then(({ error }) => {
         if (error) {
@@ -7778,7 +7787,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('Purchase update failed:', error.message);
           toastRef.current({ title: 'खरीद का बदलाव सेव नहीं हुआ', description: error.message, variant: 'destructive' });
         } else {
-          persistExtras('purchases', id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc ?? 0, roundOff: pRound ?? 0, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null, supplierBillNo: pBillNo ?? null, supplierBillDate: pBillDate ?? null }, `Purchase ${original.purchaseNo}`);
+          persistExtras('purchases', id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc ?? 0, roundOff: pRound ?? 0, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null, supplierBillNo: pBillNo ?? null, supplierBillDate: pBillDate ?? null, creditDays: pCreditDays ?? null, dueDate: pDueDate ?? null, lateFeeRule: pLateFee ?? null }, `Purchase ${original.purchaseNo}`);
         }
       });
     };
@@ -8057,7 +8066,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       mobile, landline, email, website, contactPerson, contactDesignation, salesRep,
       gstin, pan, registrationType, placeOfSupply, tdsApplicable, tdsSection, tcsApplicable,
       bankName, accountNo, ifsc, branch, upiId, beneficiaryName,
-      creditDays, creditLimit, discountPercent, openingBalance, openingBalanceType,
+      creditDays, lateFeeRule, creditLimit, discountPercent, openingBalance, openingBalanceType,
       notes,
       ...baseCols
     } = s;
@@ -8088,7 +8097,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIf('tdsSection', tdsSection); setIf('tcsApplicable', tcsApplicable);
       setIf('bankName', bankName); setIf('accountNo', accountNo); setIf('ifsc', ifsc);
       setIf('branch', branch); setIf('upiId', upiId); setIf('beneficiaryName', beneficiaryName);
-      setIf('creditDays', creditDays); setIf('creditLimit', creditLimit); setIf('discountPercent', discountPercent);
+      setIf('creditDays', creditDays); setIf('lateFeeRule', lateFeeRule); setIf('creditLimit', creditLimit); setIf('discountPercent', discountPercent);
       setIf('openingBalance', openingBalance); setIf('openingBalanceType', openingBalanceType);
       setIf('notes', notes);
       if (Object.keys(extras).length === 0) return;
@@ -8264,7 +8273,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       mobile, landline, email, website, contactPerson, contactDesignation,
       gstin, pan, registrationType, placeOfSupply, tdsApplicable, tcsApplicable,
       bankName, accountNo, ifsc, branch, upiId,
-      creditDays, creditLimit, discountPercent, openingBalance, openingBalanceType,
+      creditDays, lateFeeRule, creditLimit, discountPercent, openingBalance, openingBalanceType,
       notes,
       ...baseCols
     } = c;
@@ -8293,7 +8302,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIf('placeOfSupply', placeOfSupply); setIf('tdsApplicable', tdsApplicable); setIf('tcsApplicable', tcsApplicable);
       setIf('bankName', bankName); setIf('accountNo', accountNo); setIf('ifsc', ifsc);
       setIf('branch', branch); setIf('upiId', upiId);
-      setIf('creditDays', creditDays); setIf('creditLimit', creditLimit); setIf('discountPercent', discountPercent);
+      setIf('creditDays', creditDays); setIf('lateFeeRule', lateFeeRule); setIf('creditLimit', creditLimit); setIf('discountPercent', discountPercent);
       setIf('openingBalance', openingBalance); setIf('openingBalanceType', openingBalanceType);
       setIf('notes', notes);
       if (Object.keys(extras).length === 0) return;
