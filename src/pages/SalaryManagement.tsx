@@ -540,8 +540,10 @@ const SalaryManagement: React.FC = () => {
     };
   };
 
+  // addSalaryRecord returns id '' when it refused (and has toasted why) — the row then stays unprocessed.
   const processRow = (row: ProcessRow) => {
-    addSalaryRecord(salaryRecordFromRow(row));
+    const saved = addSalaryRecord(salaryRecordFromRow(row));
+    if (!saved.id) return;
     setProcessRows(rows => rows.map(r => (r.employee.id === row.employee.id ? { ...r, processed: true } : r)));
     toast({ title: hi ? 'वेतन प्रोसेस किया गया' : `Salary processed for ${row.employee.name}` });
   };
@@ -553,9 +555,14 @@ const SalaryManagement: React.FC = () => {
       toast({ title: hi ? 'सभी वेतन पहले से प्रोसेस हो चुके हैं' : 'All salaries already processed', variant: 'destructive' });
       return;
     }
-    pending.forEach(row => { addSalaryRecord(salaryRecordFromRow(row)); });
-    setProcessRows(rows => rows.map(r => ({ ...r, processed: true })));
-    toast({ title: hi ? `${pending.length} कर्मचारियों का वेतन प्रोसेस किया गया` : `${pending.length} salaries processed` });
+    const done = new Set<string>();
+    pending.forEach(row => { if (addSalaryRecord(salaryRecordFromRow(row)).id) done.add(row.employee.id); });
+    setProcessRows(rows => rows.map(r => (done.has(r.employee.id) ? { ...r, processed: true } : r)));
+    const refused = pending.length - done.size;
+    toast({
+      title: hi ? `${done.size} कर्मचारियों का वेतन प्रोसेस किया गया` : `${done.size} salaries processed`,
+      ...(refused > 0 ? { description: hi ? `${refused} पर्चियाँ नहीं बनीं — कारण ऊपर के संदेश में है।` : `${refused} slip(s) were not saved — see the messages above.`, variant: 'destructive' as const } : {}),
+    });
   };
   // Confirmation summary before the one-click mass post — an accidental "Process All"
   // would post (or double-post) a whole month's salary to the ledger with no undo.
@@ -566,7 +573,8 @@ const SalaryManagement: React.FC = () => {
 
   const handleMarkPaid = () => {
     if (!markPaidId) return;
-    updateSalaryRecord(markPaidId, { isPaid: true, paidDate: markPaidDate, paymentMode: markPaidMode, bankAccountId: markPaidMode === 'bank' ? (markPaidBankId || undefined) : undefined });
+    const ok = updateSalaryRecord(markPaidId, { isPaid: true, paidDate: markPaidDate, paymentMode: markPaidMode, bankAccountId: markPaidMode === 'bank' ? (markPaidBankId || undefined) : undefined });
+    if (!ok) return;   // refused — the dialog stays open, the toast says why
     toast({ title: hi ? 'भुगतान चिह्नित किया गया' : 'Marked as paid' });
     setMarkPaidId(null);
   };
@@ -1255,7 +1263,7 @@ const SalaryManagement: React.FC = () => {
                                   onClick={() => {
                                     setMarkPaidId(record.id);
                                     setMarkPaidDate(new Date().toISOString().split('T')[0]);
-                                    setMarkPaidMode(record.paymentMode);
+                                    setMarkPaidMode(record.paymentMode === 'credit' ? 'bank' : record.paymentMode);   // no Credit in the dialog
                                     setMarkPaidBankId(record.bankAccountId || '');
                                   }}
                                 >
@@ -1390,7 +1398,8 @@ const SalaryManagement: React.FC = () => {
                 <SelectContent>
                   <SelectItem value="cash">{hi ? 'नकद' : 'Cash'}</SelectItem>
                   <SelectItem value="bank">{hi ? 'बैंक' : 'Bank'}</SelectItem>
-                  <SelectItem value="credit">{hi ? 'उधार' : 'Credit'}</SelectItem>
+                  {/* No "उधार / Credit": a salary not yet handed over is simply left unpaid (it stays in
+                      Salary Payable 2103). "Credit" here used to post a payment out of the first bank. */}
                 </SelectContent>
               </Select>
             </div>

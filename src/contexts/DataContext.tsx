@@ -200,7 +200,7 @@ interface DataContextType {
   // when a guard blocked it (FY-lock / period-lock / approved-under-maker-checker /
   // engine voucher / unbalanced) — the guard already showed the real reason, so callers
   // must NOT show a success toast on false (mirrors cancelVoucher's contract).
-  updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines' | 'costCentreId'>>) => boolean;
+  updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines' | 'costCentreId'>>, opts?: { viaParent?: boolean }) => boolean;
   cancelVoucher: (id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean }) => boolean;
   /** H: a domain context registers who owns its vouchers; returns the unregister fn. */
   registerVoucherOwner: (key: string, check: VoucherOwnerCheck) => () => void;
@@ -357,7 +357,8 @@ interface DataContextType {
   deleteEmployee: (id: string) => void;
   salaryRecords: SalaryRecord[];
   addSalaryRecord: (data: Omit<SalaryRecord, 'id' | 'slipNo' | 'createdAt'>) => SalaryRecord;
-  updateSalaryRecord: (id: string, data: Partial<SalaryRecord>) => void;
+  /** true = saved; false = refused (a toast says why). */
+  updateSalaryRecord: (id: string, data: Partial<SalaryRecord>) => boolean;
   deleteSalaryRecord: (id: string) => void;
 
   kccLoans: KccLoan[];
@@ -2433,8 +2434,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return v && v.id ? v : null;
   }, [suppliers, accounts, addVoucher, user?.name]);
 
-  const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines' | 'costCentreId'>>): boolean => {
+  // RULE 3: a salary slip owns TWO vouchers — its accrual journal (accrualVoucherId) and its payment
+  // (voucherId). Neither is edited, cancelled or reversed from the Vouchers page: the slip, the TDS Register,
+  // 24Q and Statutory Reconciliation would keep showing what the ledger no longer has. The Salary page
+  // (viaParent) is the only door. Returns true (and toasts) when BLOCKED.
+  const guardSalaryVoucher = (id: string, what: string): boolean => {
+    const slip = salaryRecordsRef.current.find(r => r.voucherId === id || r.accrualVoucherId === id);
+    if (!slip) return false;
+    const kind = slip.accrualVoucherId === id ? 'वेतन-खर्च (accrual)' : 'भुगतान';
+    toastRef.current({
+      title: `वाउचर ${what} नहीं होगा`,
+      description: `यह वेतन पर्ची ${slip.slipNo} का ${kind} वाउचर है। वेतन पेज पर पर्ची बदलें या हटाएँ — वाउचर अपने-आप ठीक होगा। / This is the ${slip.accrualVoucherId === id ? 'accrual' : 'payment'} voucher of salary slip ${slip.slipNo}; change or delete the slip on the Salary page.`,
+      variant: 'destructive', duration: 10000,
+    });
+    return true;
+  };
+  const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines' | 'costCentreId'>>, opts?: { viaParent?: boolean }): boolean => {
     if (guardPermission('update', 'वाउचर बदलने')) return false;   // ECR-06: role gate
+    if (!opts?.viaParent && guardSalaryVoucher(id, 'बदला')) return false;
     if (guardFYLocked()) return false;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return false;
@@ -2759,15 +2776,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     // H12: Block cancelling auto-generated vouchers — parent record would dangle
-    const linkedSalary = salaryRecordsRef.current.find(r => r.voucherId === id);
-    if (linkedSalary) {
-      toastRef.current({
-        title: 'वाउचर नहीं हटाया जा सकता',
-        description: `यह वेतन स्लिप ${linkedSalary.slipNo} का भुगतान वाउचर है। वेतन पेज पर स्लिप को unpaid करें या हटाएँ — वाउचर अपने-आप उलट जाएगा।`,
-        variant: 'destructive',
-      });
-      return false;
-    }
+    // Both the payment AND the accrual voucher of a salary slip (the accrual used to be cancellable here).
+    if (!opts?.viaParent && guardSalaryVoucher(id, 'रद्द')) return false;
     // Block cancelling an auto wage-accrual voucher while its muster entry is live —
     // otherwise the entry's `accrued` flag goes stale and payWages would Dr 2109 against
     // a liability that no longer exists (double-counting the expense).
@@ -2947,6 +2957,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (current.reversedBy) { toastRef.current({ title: 'पहले से reversed', description: `यह वाउचर पहले ही reverse हो चुका है।`, variant: 'destructive' }); return null; }
     if (current.reversalOf) { toastRef.current({ title: 'यह स्वयं reversal है', description: 'Reversal entry को दोबारा reverse नहीं किया जाता।', variant: 'destructive' }); return null; }
     if (isEngineVoucher(current) && !opts?.engine) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return null; }
+    if (guardSalaryVoucher(id, 'reverse')) return null;
     const revDate = new Date().toISOString().split('T')[0];
     if (guardPeriodLock(revDate)) return null; // reversal must post into an open period
 
@@ -7936,8 +7947,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Accrual (H8+): recognise the salary expense + liability the moment it is processed,
     // regardless of payment — Dr Salary Expense 5201 / Cr Salary Payable 2103. Payment later
     // clears the liability. Dated at the salary month-end when parseable, else the process date.
+    // A slip is saved only WITH its accrual voucher: a slip whose PF/ESI/PT/TDS never reach the ledger would
+    // still feed 24Q, the TDS Register and Statutory Reconciliation (RULE 1/2). Net ≤ 0 cannot be booked.
+    if (!((base.netSalary || 0) > 0)) {
+      toastRef.current({ title: 'वेतन पर्ची नहीं बनी / Slip not saved', description: `${slipNo}: नेट वेतन शून्य या ऋणात्मक है — कटौतियाँ (PT/TDS आदि) और कार्य-दिवस जाँचें। / Net salary is zero or negative — check the deductions and paid days.`, variant: 'destructive', duration: 12000 });
+      return { ...data, id: '' } as unknown as SalaryRecord;
+    }
     let accrualVoucherId: string | undefined;
-    if ((base.netSalary || 0) > 0) {
+    {
       const emp = employees.find(e => e.id === base.employeeId);
       const payableAcc = accounts.find(a => a.id === '2103')?.id || '2103';
       const accrualDate = /^\d{4}-\d{2}$/.test(base.month || '')
@@ -7958,7 +7975,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           createdBy: 'System',
         });
         accrualVoucherId = av?.id || undefined;
-      } catch { /* accrual best-effort; record still saves */ }
+      } catch { accrualVoucherId = undefined; }
+    }
+    if (!accrualVoucherId) {
+      // addVoucher has already said why (locked period, FY lock, role, expired plan …).
+      toastRef.current({ title: 'वेतन पर्ची नहीं बनी / Slip not saved', description: `${slipNo}: वेतन का बही-voucher नहीं बन सका, इसलिए पर्ची भी save नहीं की गई — ऊपर का कारण ठीक करके फिर प्रोसेस करें। / The salary journal could not be posted, so the slip was not saved.`, variant: 'destructive', duration: 12000 });
+      return { ...data, id: '' } as unknown as SalaryRecord;
     }
     const record: SalaryRecord = { ...base, accrualVoucherId };
     salaryRecordsRef.current = [...salaryRecordsRef.current, record];
@@ -7968,16 +7990,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         salaryRecordsRef.current = salaryRecordsRef.current.filter(r => r.id !== record.id);
         setSalaryRecordsState(prev => prev.filter(r => r.id !== record.id));   // RULE 1: roll back
-        toastRef.current({ title: 'वेतन रिकॉर्ड सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        // …and its accrual voucher, or the ledger would carry a salary no slip explains (RULE 3).
+        if (record.accrualVoucherId) cancelLinkedVouchers([record.accrualVoucherId], `Salary slip ${record.slipNo} not saved`, 'System');
+        toastRef.current({ title: 'वेतन रिकॉर्ड सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. उसका बही-voucher भी रद्द किया गया।`, variant: 'destructive', duration: 12000 });
       }
     });
     return record;
   }, [society.financialYear, addVoucher, accounts, employees]);
 
-  const updateSalaryRecord = useCallback((id: string, data: Partial<SalaryRecord>) => {
-    if (guardFYLocked()) return;
+  const updateSalaryRecord = useCallback((id: string, data: Partial<SalaryRecord>): boolean => {
+    if (guardFYLocked()) return false;
     const oldRecord = salaryRecordsRef.current.find(r => r.id === id);
-    if (!oldRecord) return;
+    if (!oldRecord) return false;
     const merged = { ...oldRecord, ...data };
     const lid = () => crypto.randomUUID();
 
@@ -7996,7 +8020,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       for (const v of [payTouched ? payV : undefined, accV && !accV.isDeleted && !isEngineVoucher(accV) ? accV : undefined]) {
         if (v && isEditLocked(v, !!societyRef.current?.approvalRequired)) {
           toastRef.current({ title: 'वेतन बदलाव नहीं हुआ', description: `वाउचर ${v.voucherNo} सीधे edit नहीं हो सकता (approved / reversed) — पहले उसे reverse करें, फिर वेतन बदलें।`, variant: 'destructive', duration: 12000 });
-          return;
+          return false;
         }
       }
       // An unbalanced statutory breakdown cannot be re-booked: refuse the whole edit rather than save a
@@ -8005,11 +8029,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const payableAccCheck = accounts.find(a => a.id === '2103')?.id || '2103';
         if ((merged.pt || 0) > 0 && !professionalTaxAccountId(accounts)) {
           toastRef.current({ ...MISSING_HEAD_TOAST.pt, variant: 'destructive', duration: 12000 });
-          return;
+          return false;
         }
         if (!salaryAccrualLines(merged, payableAccCheck, lid, { ptPayable: professionalTaxAccountId(accounts) ?? undefined }).balanced) {
           toastRef.current({ title: 'वेतन बदलाव नहीं हुआ', description: 'रकमें संतुलित नहीं हैं — (मूल वेतन + भत्ते + नियोक्ता PF/ESI) = (नेट वेतन + सभी देय कटौतियाँ) होना चाहिए। नेट वेतन और कटौतियाँ दोबारा जाँचकर डालें।', variant: 'destructive', duration: 12000 });
-          return;
+          return false;
         }
       }
     }
@@ -8024,6 +8048,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       cancelLinkedVouchers([oldRecord.voucherId], `Salary slip ${oldRecord.slipNo} marked unpaid`, 'System');
       merged.voucherId = undefined;
     } else if (!oldRecord.isPaid && data.isPaid && !oldRecord.voucherId) {
+      // A salary "paid on credit" is not paid: it stays unpaid in Salary Payable 2103. Refuse rather than post
+      // a payment out of the first bank account (non-cash modes used to map to a bank).
+      if (merged.paymentMode === 'credit') {
+        toastRef.current({ title: 'भुगतान दर्ज नहीं हुआ / Not marked paid', description: 'उधार में दिया वेतन "भुगतान" नहीं है — पर्ची unpaid रहने दें, या नकद/बैंक चुनें। / Choose cash or bank.', variant: 'destructive', duration: 10000 });
+        return false;
+      }
       // (b) Create the payment voucher. If the salary was accrued (Cr Salary Payable 2103),
       // payment CLEARS that liability (Dr 2103 / Cr Bank). Legacy records with no accrual fall
       // back to the old expense-on-pay (Dr 5201 / Cr Bank) so their books stay correct.
@@ -8040,7 +8070,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         narration: `Salary paid: ${emp?.name || ''} - ${oldRecord.month}`,
         createdBy: 'System',
       });
-      if (newV.id) merged.voucherId = newV.id;
+      if (!newV.id) {
+        // addVoucher said why (locked period, FY lock, role, expired plan …). A slip is never PAID without its
+        // payment voucher — the liability would stay open while the slip and its PDF say PAID (RULE 1).
+        toastRef.current({ title: 'भुगतान दर्ज नहीं हुआ / Not marked paid', description: `${oldRecord.slipNo}: भुगतान का voucher नहीं बन सका, इसलिए पर्ची Paid नहीं की गई। / The payment voucher could not be posted, so the slip stays unpaid.`, variant: 'destructive', duration: 12000 });
+        return false;
+      }
+      merged.voucherId = newV.id;
     } else if (oldRecord.isPaid && data.isPaid && oldRecord.voucherId) {
       // (c) Still paid — re-sync voucher if amount / date / paymentMode changed
       const dateChanged = data.paidDate !== undefined && data.paidDate !== oldRecord.paidDate;
@@ -8063,7 +8099,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             amount: merged.netSalary,
             lines: newLines,
             narration: `Salary paid: ${emp?.name || ''} - ${oldRecord.month}`,
-          })) return;
+          }, { viaParent: true })) return false;
         }
       }
     }
@@ -8076,7 +8112,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (av && !av.isDeleted && !isEngineVoucher(av)) {
         const payableAcc = accounts.find(a => a.id === '2103')?.id || '2103';
         const accrual = salaryAccrualLines(merged, payableAcc, lid, { ptPayable: professionalTaxAccountId(accounts) ?? undefined });
-        if (!updateVoucher(av.id, { amount: accrual.drTotal, debitAccountId: '5201', creditAccountId: payableAcc, lines: accrual.lines })) return;
+        if (!updateVoucher(av.id, { amount: accrual.drTotal, debitAccountId: '5201', creditAccountId: payableAcc, lines: accrual.lines }, { viaParent: true })) return false;
       }
     }
 
@@ -8087,9 +8123,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         salaryRecordsRef.current = salaryRecordsRef.current.map(r => r.id === id ? oldRecord : r);
         setSalaryRecordsState(prev => prev.map(r => r.id === id ? oldRecord : r));   // RULE 1: roll back to prior state
+        // A payment voucher made by THIS edit goes too — the slip is back to unpaid (RULE 3).
+        if (!oldRecord.voucherId && merged.voucherId) cancelLinkedVouchers([merged.voucherId], `Salary slip ${oldRecord.slipNo} not saved`, 'System');
         toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
       }
     });
+    return true;
   }, [employees, accounts, addVoucher, updateVoucher]);
 
   const deleteSalaryRecord = useCallback((id: string) => {
@@ -8099,6 +8138,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // liability and cash all reverse cleanly.
     const record = salaryRecordsRef.current.find(r => r.id === id);
     const cancelIds = [record?.voucherId, record?.accrualVoucherId].filter(Boolean) as string[];
+    // RULE 3: a slip whose TDS is linked to a deposited challan (TDS Register entry `sal-<id>`) is not deleted —
+    // the challan and its Dr 2202 deposit would stay while the deduction vanished (2202 goes negative, the
+    // quarter shows more deposited than deducted). Unlink it in the TDS Register first.
+    const tdsEntryId = `sal-${id}`;
+    const challanLinkedToast = () => toastRef.current({
+      title: 'वेतन पर्ची नहीं हटी / Slip not deleted',
+      description: `${record?.slipNo ?? ''}: इसका TDS एक जमा चालान से जुड़ा है। पहले TDS Register में इस एंट्री को चालान से अलग करें, फिर पर्ची हटाएँ। / Its TDS is linked to a deposited challan — unlink it in the TDS Register first.`,
+      variant: 'destructive', duration: 12000,
+    });
+    if (storage.getTdsChallanLinks().some(l => l.entryId === tdsEntryId)) { challanLinkedToast(); return; }
+    supabase.from('tds_challan_links').select('entryId').eq('society_id', societyIdRef.current).eq('entryId', tdsEntryId).limit(1).then(({ data: linked, error: linkErr }) => {
+      // An unreadable links table (not migrated / offline) falls back to the cached check above.
+      if (!linkErr && linked && linked.length > 0) { challanLinkedToast(); return; }
+      removeSlip();
+    }, () => removeSlip());
+    const removeSlip = () => {
     setSalaryRecordsState(prev => prev.filter(r => r.id !== id));
     salaryRecordsRef.current = salaryRecordsRef.current.filter(r => r.id !== id);
     // The vouchers are cancelled only once the slip row is gone from the cloud (RULE 1 + 3) — a failed
@@ -8114,6 +8169,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       cancelLinkedVouchers(cancelIds, `Salary slip ${record?.slipNo} deleted`, 'System');
     });
     emitAudit({ entityType: 'salaryRecord', entityId: id, action: 'delete', before: record ? { slipNo: record.slipNo, netSalary: record.netSalary, isPaid: record.isPaid } : undefined, reason: 'Salary slip deleted' });   // H11
+    };
   }, []);
 
   // ── Suppliers ──────────────────────────────────────────────────────────────
