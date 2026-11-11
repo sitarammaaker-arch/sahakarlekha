@@ -51,11 +51,14 @@ const DAY_MS = 86_400_000;
  * The status a subscription really has NOW, derived from period_end — the same rule as
  * refresh_subscription_status() (migration 159), so the notice and the pause never wait for the
  * hourly job:
- *   no period_end, or plan 'legacy' → the stored status (grandfathered societies never expire);
+ *   no period_end                   → the stored status (an indefinite row never expires);
  *   before period_end               → the stored status;
  *   up to GRACE_DAYS after          → 'grace'  (still writable, with a notice);
  *   later                           → 'expired' (new vouchers paused).
  * Never LOOSER than the stored status: if the server already says grace / expired, that stands.
+ * The plan does not matter: a grandfathered ('legacy') society is indefinite only while its
+ * period_end is null. Founder 2026-11-11 gave the existing legacy societies an end date
+ * (31-03-2027, migration 160), after which they follow this same rule.
  */
 export function effectiveStatus(
   plan: string | null | undefined,
@@ -64,7 +67,8 @@ export function effectiveStatus(
   nowMs: number = Date.now(),
 ): SubStatus {
   const stored: SubStatus = status ?? 'active';
-  if (!periodEnd || (plan ?? 'legacy') === 'legacy') return stored;
+  void plan; // kept in the signature for callers; the rule depends on period_end alone
+  if (!periodEnd) return stored;
   const end = new Date(periodEnd).getTime();
   if (!Number.isFinite(end) || nowMs < end) return stored;
   const derived: SubStatus = nowMs >= end + GRACE_DAYS * DAY_MS ? 'expired' : 'grace';
@@ -86,6 +90,9 @@ export function graceDaysLeft(periodEnd: string | null | undefined, nowMs: numbe
 
 /** A paid plan this close to its end shows a renewal reminder. */
 export const RENEWAL_NOTICE_DAYS = 15;
+
+/** A grandfathered (free) society is told this many days before its free period ends. */
+export const LEGACY_NOTICE_DAYS = 30;
 
 /** ₹ display label, e.g. 1499 → "₹1,499"; null → "Custom". */
 export const priceLabel = (n: number | null): string =>

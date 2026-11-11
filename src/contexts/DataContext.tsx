@@ -997,7 +997,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Phase 2a-4c: the signed-in society's subscription row (RLS also scopes it to the caller's society,
   // 055 policy). The guard below derives "expired" from it AT CALL TIME (effectiveStatus, the rule of
   // migration 159), so a session that stays open across the end of the grace period is paused too.
-  // No row / legacy / no period_end → never expired, i.e. the grandfathered societies are never blocked.
+  // No row / no period_end → never expired. A grandfathered (legacy) society is blocked only after the
+  // end date it was given (migration 160) plus the grace days.
   const subRowRef = useRef<SubRow | null>(null);
   useEffect(() => {
     if (!user?.societyId) { subRowRef.current = null; return; }   // J6: logged out → nothing to read
