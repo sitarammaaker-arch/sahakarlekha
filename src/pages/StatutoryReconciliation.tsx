@@ -12,13 +12,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Scale } from 'lucide-react';
-import { reconcileStatutory, salariedRow, labourRow } from '@/lib/statutoryReconciliation';
+import { Scale, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { reconcileStatutory, salariedRow, labourRow, checkSlipsAgainstLedger, type SlipLedgerIssue } from '@/lib/statutoryReconciliation';
 
 const currentMonth = () => new Date().toISOString().slice(0, 7); // YYYY-MM
 
 const StatutoryReconciliation: React.FC = () => {
-  const { salaryRecords } = useData();
+  const { salaryRecords, vouchers } = useData();
   const { computePfEsi } = useLabourData();
   const { language } = useLanguage();
   const hi = language === 'hi';
@@ -31,6 +31,18 @@ const StatutoryReconciliation: React.FC = () => {
     const lab = labourRow(comp, comp.perWorker.length);
     return reconcileStatutory([sal, lab]);
   }, [salaryRecords, computePfEsi, period]);
+
+  // Each slip of the month against its own accrual voucher — catches a slip the ledger does not carry.
+  const issues = useMemo(() => checkSlipsAgainstLedger(salaryRecords.filter(r => r.month === period), vouchers), [salaryRecords, vouchers, period]);
+  const issueText = (i: SlipLedgerIssue) => {
+    const slip = i.slipNo ?? i.slipId;
+    switch (i.kind) {
+      case 'no_voucher': return hi ? `${slip}: पर्ची में PF/ESI है, पर उसका बही-voucher नहीं मिला` : `${slip}: the slip has PF/ESI but no accrual voucher`;
+      case 'voucher_cancelled': return hi ? `${slip}: उसका बही-voucher ${i.voucherNo ?? ''} रद्द है` : `${slip}: its accrual voucher ${i.voucherNo ?? ''} is cancelled`;
+      case 'pf_mismatch': return hi ? `${slip}: PF पर्ची में ${fmt(i.slip)}, बही (2203) में ${fmt(i.ledger)}` : `${slip}: PF ${fmt(i.slip)} on the slip, ${fmt(i.ledger)} in the ledger (2203)`;
+      case 'esi_mismatch': return hi ? `${slip}: ESI पर्ची में ${fmt(i.slip)}, बही (2204) में ${fmt(i.ledger)}` : `${slip}: ESI ${fmt(i.slip)} on the slip, ${fmt(i.ledger)} in the ledger (2204)`;
+    }
+  };
 
   const t = rec.totals;
   const sourceLabel = (s: 'salaried' | 'labour') => s === 'salaried' ? (hi ? 'वेतनभोगी कर्मचारी' : 'Salaried employees') : (hi ? 'श्रमिक (मस्टर)' : 'Labour (muster)');
@@ -102,6 +114,21 @@ const StatutoryReconciliation: React.FC = () => {
           <p className="text-2xl font-bold">{fmt(t.esiTotal)}</p>
         </CardContent></Card>
       </div>
+
+      <Card>
+        <CardContent className="pt-4 space-y-2">
+          <p className="text-sm font-semibold">{hi ? 'वेतन पर्ची ↔ बही मिलान' : 'Salary slips ↔ ledger'}</p>
+          {issues.length === 0 ? (
+            <p className="text-sm text-green-700 flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />{hi ? 'इस माह की हर पर्ची का PF/ESI उसके बही-voucher से मेल खाता है।' : 'Every slip of this month matches its accrual voucher.'}</p>
+          ) : (
+            <ul className="space-y-1">
+              {issues.map((i, n) => (
+                <li key={n} className="text-sm text-destructive flex items-start gap-2"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />{issueText(i)}</li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <p className="text-[11px] text-muted-foreground">
         {hi

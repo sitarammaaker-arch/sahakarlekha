@@ -932,6 +932,9 @@ var salaryRecord = {
   naturalKey: ["slipNo"],
   formats: ["csv", "xlsx", "json"],
   backupPolicy: "full",
+  // Columns = the real salary_records columns (2026-11-11: dropped nine names the table never had — daAllowance,
+  // hraAllowance, taAllowance, otherAllowances, pfDeduction, taxDeduction, otherDeductions, narration, createdBy —
+  // and added bankAccountId, which a full-mode export used to lose).
   columns: [
     c6("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
     c6("slipNo", "Slip No.", "\u092A\u0930\u094D\u091A\u0940 \u0938\u0902\u0916\u094D\u092F\u093E"),
@@ -939,29 +942,21 @@ var salaryRecord = {
     c6("month", "Month", "\u092E\u093E\u0939"),
     money6("basicSalary", "Basic Salary", "\u092E\u0942\u0932 \u0935\u0947\u0924\u0928"),
     money6("allowances", "Allowances", "\u092D\u0924\u094D\u0924\u0947"),
-    internal6("daAllowance", "DA", "\u092E\u0939\u0902\u0917\u093E\u0908 \u092D\u0924\u094D\u0924\u093E", { type: "currency" }),
-    internal6("hraAllowance", "HRA", "\u092E\u0915\u093E\u0928 \u0915\u093F\u0930\u093E\u092F\u093E \u092D\u0924\u094D\u0924\u093E", { type: "currency" }),
-    internal6("taAllowance", "TA", "\u092F\u093E\u0924\u094D\u0930\u093E \u092D\u0924\u094D\u0924\u093E", { type: "currency" }),
-    internal6("otherAllowances", "Other Allowances", "\u0905\u0928\u094D\u092F \u092D\u0924\u094D\u0924\u0947", { type: "currency" }),
     money6("deductions", "Deductions", "\u0915\u091F\u094C\u0924\u093F\u092F\u093E\u0901"),
-    internal6("pfDeduction", "PF Deduction", "\u092A\u0940\u090F\u092B \u0915\u091F\u094C\u0924\u0940", { type: "currency" }),
     internal6("pfEmployee", "PF (Employee)", "\u092A\u0940\u090F\u092B (\u0915\u0930\u094D\u092E\u091A\u093E\u0930\u0940)", { type: "currency" }),
     internal6("pfEmployer", "PF (Employer)", "\u092A\u0940\u090F\u092B (\u0928\u093F\u092F\u094B\u0915\u094D\u0924\u093E)", { type: "currency" }),
     internal6("esiEmployee", "ESI (Employee)", "\u0908\u090F\u0938\u0906\u0908 (\u0915\u0930\u094D\u092E\u091A\u093E\u0930\u0940)", { type: "currency" }),
     internal6("esiEmployer", "ESI (Employer)", "\u0908\u090F\u0938\u0906\u0908 (\u0928\u093F\u092F\u094B\u0915\u094D\u0924\u093E)", { type: "currency" }),
     internal6("pt", "Professional Tax", "\u0935\u094D\u092F\u0935\u0938\u093E\u092F \u0915\u0930", { type: "currency" }),
     internal6("tds", "TDS", "\u091F\u0940\u0921\u0940\u090F\u0938", { type: "currency" }),
-    internal6("taxDeduction", "Tax Deduction", "\u0915\u0930 \u0915\u091F\u094C\u0924\u0940", { type: "currency" }),
-    internal6("otherDeductions", "Other Deductions", "\u0905\u0928\u094D\u092F \u0915\u091F\u094C\u0924\u093F\u092F\u093E\u0901", { type: "currency" }),
     money6("netSalary", "Net Salary", "\u0936\u0941\u0926\u094D\u0927 \u0935\u0947\u0924\u0928"),
     c6("paymentMode", "Payment Mode", "\u092D\u0941\u0917\u0924\u093E\u0928 \u092E\u093E\u0927\u094D\u092F\u092E", { type: "enum" }),
+    internal6("bankAccountId", "Paid From (Bank)", "\u092D\u0941\u0917\u0924\u093E\u0928 \u092C\u0948\u0902\u0915 \u0916\u093E\u0924\u093E"),
     c6("isPaid", "Paid", "\u092D\u0941\u0917\u0924\u093E\u0928 \u0939\u0941\u0906", { type: "boolean" }),
     c6("paidDate", "Paid Date", "\u092D\u0941\u0917\u0924\u093E\u0928 \u0924\u093F\u0925\u093F", { type: "date" }),
-    c6("narration", "Narration", "\u0935\u093F\u0935\u0930\u0923"),
     internal6("voucherId", "Payment Voucher", "\u092D\u0941\u0917\u0924\u093E\u0928 \u0935\u093E\u0909\u091A\u0930"),
     internal6("accrualVoucherId", "Accrual Voucher", "\u0909\u092A\u093E\u0930\u094D\u091C\u0928 \u0935\u093E\u0909\u091A\u0930"),
-    internal6("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" }),
-    internal6("createdBy", "Created By", "\u0928\u093F\u0930\u094D\u092E\u093E\u0924\u093E")
+    internal6("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]
 };
 var worker = {

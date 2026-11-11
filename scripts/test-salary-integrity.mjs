@@ -6,6 +6,7 @@
 // Run: node scripts/test-salary-integrity.mjs   (npm run test:salary-integrity)
 import { readFileSync } from 'node:fs';
 import { entriesFor26Q, SALARY_TDS_SECTION } from '../src/lib/tds26q.ts';
+import { checkSlipsAgainstLedger } from '../src/lib/statutoryReconciliation.ts';
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -101,6 +102,49 @@ const fn = (name) => { const a = dc.indexOf(`const ${name} = useCallback(`); ret
   ok(u.map((f) => f.replace(NEW, OLD)).join('\n') === d.join('\n'), 'up = down with only the isDeleted filter added');
   ok(/compliance_reminder_targets\(\)/.test(u[0]) && /weekly_digest_targets\(p_day date\)/.test(u[1]), 'the reminder and the digest function');
   ok(/values \('162', 'employee_reminders_skip_deleted'\)/.test(code(up)) && /delete from public\.app_migrations where version = '162'/.test(down), '162 ledger insert / down delete');
+}
+
+// ── 8. Follow-up risks (2026-11-11, second pass) ─────────────────────────────
+{
+  const add = fn('addSalaryRecord');
+  ok(/const dropSlipWithoutAccrual = \(\) => \{/.test(add) && /\}, \{ onFailed: dropSlipWithoutAccrual \}\);/.test(add), 'a server refusal of the accrual later removes the slip too');
+  ok(/if \(!salaryRecordsRef\.current\.some\(r => r\.id === base\.id\)\) return;/.test(add) && /from\('salary_records'\)\.delete\(\)\.eq\('id', base\.id\)/.test(add), '…only if the slip is still there, and from the cloud as well');
+  const up = fn('updateSalaryRecord');
+  ok(/onFailed: \(\) => \{[\s\S]*isPaid: false, paidDate: undefined, voucherId: undefined/.test(up), 'a server refusal of the payment later makes the slip unpaid again');
+  ok(/const nextPaid = data\.isPaid \?\? oldRecord\.isPaid;/.test(up) && /if \(oldRecord\.isPaid && !nextPaid && oldRecord\.voucherId\) \{/.test(up) && !/!data\.isPaid/.test(up), 'an edit that omits isPaid never un-pays a slip');
+  ok(/const bankChanged = data\.bankAccountId !== undefined && data\.bankAccountId !== oldRecord\.bankAccountId;/.test(up) && /if \(amountChanged \|\| dateChanged \|\| modeChanged \|\| bankChanged\) \{/.test(up), 'changing only the paying bank re-syncs the payment voucher');
+
+  // Slip ↔ ledger check
+  const V = (id, lines, isDeleted = false) => ({ id, voucherNo: id, isDeleted, lines });
+  const L = (accountId, type, amount) => ({ accountId, type, amount });
+  const vouchers = [
+    V('a1', [L('5201', 'Dr', 11300), L('2103', 'Cr', 8800), L('2203', 'Cr', 2400), L('2204', 'Cr', 100)]),
+    V('a2', [L('5201', 'Dr', 1000), L('2103', 'Cr', 1000)]),
+    V('a3', [L('5201', 'Dr', 1000), L('2103', 'Cr', 1000)], true),
+  ];
+  const slip = (id, accrualVoucherId, pf = 0, esi = 0) => ({ id, slipNo: id, accrualVoucherId, pfEmployee: pf / 2, pfEmployer: pf / 2, esiEmployee: esi / 2, esiEmployer: esi / 2 });
+  const issues = checkSlipsAgainstLedger([slip('ok', 'a1', 2400, 100), slip('pf', 'a2', 1200), slip('gone', 'a3'), slip('legacy', undefined), slip('nov', undefined, 600), slip('miss', 'zz')], vouchers);
+  const k = (id) => issues.filter((i) => i.slipId === id).map((i) => i.kind).join();
+  ok(k('ok') === '', 'a slip that matches its voucher raises nothing');
+  ok(k('pf') === 'pf_mismatch' && issues.find((i) => i.slipId === 'pf').ledger === 0, 'PF on the slip but not in 2203 → pf_mismatch');
+  ok(k('gone') === 'voucher_cancelled', 'cancelled accrual voucher is reported');
+  ok(k('legacy') === '', 'an old net-only slip without an accrual is not an error');
+  ok(k('nov') === 'no_voucher' && k('miss') === 'no_voucher', 'PF/ESI with no (or a missing) accrual voucher is reported');
+  const sr = read('src/pages/StatutoryReconciliation.tsx');
+  ok(/checkSlipsAgainstLedger\(salaryRecords\.filter\(r => r\.month === period\), vouchers\)/.test(sr), 'the page runs the check for the chosen month');
+
+  // Register export
+  const sm = read('src/pages/SalaryManagement.tsx');
+  const reg = sm.slice(sm.indexOf('const salaryRegisterRows = () => {'), sm.indexOf('const handleSalaryCSV'));
+  ok(/filteredHistory\.map\(/.test(reg) && !/salaryRecords\.map\(/.test(reg), 'the register export follows the on-screen filters');
+  ok(['Gross', 'PF (Emp)', 'ESI (Emp)', 'PT', 'TDS', 'Total Deductions', 'Net Salary', 'PF (Employer)', 'ESI (Employer)'].every((h) => reg.includes(`'${h}'`)), 'and carries the full breakdown');
+
+  // Export entity = real table
+  const ent = read('src/lib/export/entities/payroll.ts');
+  const blk = ent.slice(ent.indexOf('const salaryRecord'), ent.indexOf('const worker'));
+  const cols = [...blk.matchAll(/(?:c|money|internal)\('([a-zA-Z]+)'/g)].map((m) => m[1]);
+  const real = ['id', 'slipNo', 'employeeId', 'month', 'basicSalary', 'allowances', 'deductions', 'netSalary', 'paymentMode', 'voucherId', 'isPaid', 'paidDate', 'createdAt', 'accrualVoucherId', 'pfEmployee', 'pfEmployer', 'esiEmployee', 'esiEmployer', 'pt', 'tds', 'bankAccountId'];
+  ok(cols.every((c) => real.includes(c)) && real.every((r) => cols.includes(r)), `salary export columns = the salary_records columns (${cols.filter((c) => !real.includes(c)).join(',') || 'ok'})`);
 }
 
 console.log(`salary-integrity: ${pass} passed, ${fail} failed`);

@@ -579,17 +579,26 @@ const SalaryManagement: React.FC = () => {
     setMarkPaidId(null);
   };
 
-  const handleSalaryCSV = () => {
+  // Salary register export: the rows the screen shows (filteredHistory — same month / employee / status
+  // filters), with the full breakdown the slip and its accrual voucher carry.
+  const salaryRegisterRows = () => {
     const getEmpName = (id: string) => employees.find(e => e.id === id)?.name || id;
-    const headers = ['Slip No', 'Month', 'Employee', 'Net Salary', 'Payment Mode', 'Status'];
-    const rows = salaryRecords.map(r => [r.slipNo || '', r.month || '', getEmpName(r.employeeId), r.netSalary || 0, r.paymentMode || '', r.isPaid ? 'Paid' : 'Pending']);
-    downloadCSV(headers, rows, 'salary_history.csv');
+    const headers = ['Slip No', 'Month', 'Employee', 'Basic', 'Allowances', 'Gross', 'PF (Emp)', 'ESI (Emp)', 'PT', 'TDS', 'Total Deductions', 'Net Salary', 'PF (Employer)', 'ESI (Employer)', 'Payment Mode', 'Status', 'Paid On'];
+    const rows = filteredHistory.map(r => {
+      const gross = (r.basicSalary || 0) + (r.allowances || 0);
+      return [r.slipNo || '', r.month || '', getEmpName(r.employeeId), r.basicSalary || 0, r.allowances || 0, gross,
+        r.pfEmployee || 0, r.esiEmployee || 0, r.pt || 0, r.tds || 0, r.deductions || 0, r.netSalary || 0,
+        r.pfEmployer || 0, r.esiEmployer || 0, r.paymentMode || '', r.isPaid ? 'Paid' : 'Pending', r.isPaid ? (r.paidDate || '') : ''];
+    });
+    return { headers, rows };
+  };
+  const handleSalaryCSV = () => {
+    const { headers, rows } = salaryRegisterRows();
+    downloadCSV(headers, rows, 'salary_register.csv');
   };
   const handleSalaryExcel = () => {
-    const getEmpName = (id: string) => employees.find(e => e.id === id)?.name || id;
-    const headers = ['Slip No', 'Month', 'Employee', 'Net Salary', 'Payment Mode', 'Status'];
-    const rows = salaryRecords.map(r => [r.slipNo || '', r.month || '', getEmpName(r.employeeId), r.netSalary || 0, r.paymentMode || '', r.isPaid ? 'Paid' : 'Pending']);
-    downloadExcelSingle(headers, rows, 'salary_history.xlsx', 'Salary History');
+    const { headers, rows } = salaryRegisterRows();
+    downloadExcelSingle(headers, rows, 'salary_register.xlsx', 'Salary Register');
   };
 
   // ── render ────────────────────────────────────────────────────────────────
