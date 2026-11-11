@@ -165,6 +165,15 @@ const issued = () => ({ data: { status: 'issued', invoice_no: 'SL/2026-27/0001' 
   ok(r.status === 'test_mode' && c.calls.updates[0].patch.invoice_error === 'test_mode', 'server refusal for a test payment is reported + recorded, not treated as issued');
 }
 
+// ── 3c. "+ GST" order (migration 158): the invoice is built from the exact charge ──
+{
+  const order = { ...ORDER, amount: 3539, amount_paise: 353882 };
+  const c = fakeClient({ tables: { orders: [order], billing_seller: [SELLER], society_settings: [SOC] }, rpc: issued });
+  const r = await issueInvoiceForOrder(c, 'order_1');
+  const p = c.calls.rpc[0].args.p_calc;
+  ok(r.status === 'issued' && p.total_paise === 353882 && p.taxable_paise === 299900 && p.cgst_paise === 26991 && p.sgst_paise === 26991, 'amount_paise drives the invoice: ₹2,999.00 + 2 × ₹269.91 = ₹3,538.82 (not the rounded ₹3,539)');
+}
+
 // ── 4. admin-retry-invoice ───────────────────────────────────────────────────
 {
   const fn = read('supabase/functions/admin-retry-invoice/index.ts');

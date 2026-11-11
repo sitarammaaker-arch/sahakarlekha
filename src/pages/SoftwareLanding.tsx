@@ -32,7 +32,7 @@ const SoftwareLanding: React.FC = () => {
 const HubPage: React.FC = () => {
   useDocumentMeta({
     title: 'सहकारी समिति लेखा सॉफ्टवेयर | Cooperative Society Software',
-    description: 'PACS, दुग्ध, विपणन, उपभोक्ता, आवास, चीनी, श्रमिक व बहुउद्देशीय — हर प्रकार की सहकारी समिति के लिए लेखा सॉफ्टवेयर, ₹1,499/FY से। अपनी समिति का प्रकार चुनें।',
+    description: 'PACS, दुग्ध, विपणन, उपभोक्ता, आवास, चीनी, श्रमिक व बहुउद्देशीय — हर प्रकार की सहकारी समिति के लिए लेखा सॉफ्टवेयर, ₹2,999/year + GST से। अपनी समिति का प्रकार चुनें।',
     canonicalPath: '/software',
   });
 
@@ -48,7 +48,7 @@ const HubPage: React.FC = () => {
         </h1>
         <p className="mt-3 text-muted-foreground max-w-2xl">
           अपनी समिति का प्रकार चुनें — हर प्रकार के लिए अनुकूलित खाता-संरचना (COA), रिपोर्ट व अनुपालन।
-          <span className="block mt-1 text-sm">Cooperative society accounting software, tailored for every society type in India — from ₹1,499/FY.</span>
+          <span className="block mt-1 text-sm">Cooperative society accounting software, tailored for every society type in India — from ₹2,999/year + GST.</span>
         </p>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
@@ -183,7 +183,7 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
           <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-primary" /> RCS ऑडिट प्रारूप</span>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> TDS · GST सारांश</span>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> हिंदी + English</span>
-          <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> ₹1,499/FY से</span>
+          <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> ₹2,999/year + GST से</span>
         </div>
 
         {/* Knowledge-graph edges: type-specific guide/blog/help/cookbook (GOS-11) */}
@@ -194,7 +194,7 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
 
         {/* CTA */}
         <div className="mt-8 rounded-xl bg-primary/5 border border-primary/20 p-6 text-center">
-          <p className="font-semibold text-foreground">अपनी {data.nameHi} का खाता आज ही डिजिटल करें — ₹1,499/FY से।</p>
+          <p className="font-semibold text-foreground">अपनी {data.nameHi} का खाता आज ही डिजिटल करें — ₹2,999/year + GST से।</p>
           <div className="mt-4 flex flex-wrap justify-center gap-3">
             <Link to="/register"><Button className="gap-2">रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
             <Link to="/contact"><Button variant="outline">डेमो/संपर्क</Button></Link>

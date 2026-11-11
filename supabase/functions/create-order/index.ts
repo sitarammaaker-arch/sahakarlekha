@@ -14,7 +14,7 @@
  * Deno runtime — not the app's TypeScript. Deploy: npx supabase functions deploy create-order
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { validateBuyer } from '../_shared/invoice-core.mjs';
+import { totalWithGstPaise, validateBuyer } from '../_shared/invoice-core.mjs';
 
 // SEC-03 (migration 085): a token that still owes a 2FA code gets nothing. getUser() verifies the
 // token; its payload is read only to refuse more (unreadable → pending).
@@ -28,9 +28,10 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// Annual price in ₹ per self-serve plan — MIRRORS src/lib/plans.ts PLAN_CATALOG.
+// Annual price in ₹ per self-serve plan, BEFORE GST — MIRRORS src/lib/plans.ts PLAN_CATALOG
+// (scripts/test-invoice-core.mjs asserts they match). GST is added on top at the billing_seller rate.
 // Enterprise is contact-sales (no self-serve checkout); legacy/trial are internal.
-const PRICE_INR: Record<string, number> = { starter: 1499, plus: 3999, pro: 9999 };
+const PRICE_INR: Record<string, number> = { starter: 2999, plus: 6999, pro: 14999 };
 const RANK: Record<string, number> = { starter: 1, plus: 2, pro: 3 };
 const PERIOD_MONTHS = 12;
 
@@ -112,6 +113,18 @@ Deno.serve(async (req) => {
       setEnd = addYear(curEnd && curEnd > now ? curEnd : now); // extend, never lose time
     } // else NEW (trial/legacy → paid): full price, now + 12mo (defaults)
 
+    // Prices are "+ GST": the charge is the price plus GST at the seller's rate (billing_seller — nothing
+    // statutory is hard-coded here). No rate → no order: we must not charge an amount we cannot invoice.
+    const { data: seller } = await supa.from('billing_seller').select('gst_rate_pct').eq('id', true).maybeSingle();
+    let totalPaise: number;
+    try {
+      totalPaise = totalWithGstPaise(rupees, seller?.gst_rate_pct);
+    } catch (e) {
+      console.error(`GST rate not available: ${e instanceof Error ? e.message : String(e)}`);
+      return json({ error: 'Billing अभी तैयार नहीं है — कोई पैसा नहीं कटा, कृपया हमसे संपर्क करें / Billing is not set up yet — nothing was charged, please contact us' }, 500);
+    }
+    const gstPaise = totalPaise - rupees * 100;
+
     // Create the order on Razorpay (Basic auth = key_id:key_secret).
     const rzpRes = await fetch('https://api.razorpay.com/v1/orders', {
       method: 'POST',
@@ -120,7 +133,7 @@ Deno.serve(async (req) => {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        amount: rupees * 100, // paise
+        amount: totalPaise, // paise — price + GST
         currency: 'INR',
         receipt: `sl_${society_id}_${plan}`.slice(0, 40),
         notes: { society_id, plan, kind },
@@ -134,11 +147,15 @@ Deno.serve(async (req) => {
     // Our row is what the webhook activates from. If it is not saved, NEVER hand back the order id: the
     // customer could pay a Razorpay order we cannot find, and the plan would never activate. The unpaid
     // Razorpay order just expires on its own.
+    // amount_paise (migration 158) is the exact charge and is part of THIS insert on purpose: before 158
+    // runs the insert fails and the order id never leaves — better no sale than a paid order whose
+    // invoice total (to the paisa) cannot be checked. amount = whole rupees for the older readers.
     const { error: insErr } = await supa.from('orders').insert({
       id: order.id,
       society_id,
       plan,
-      amount: rupees,
+      amount: Math.round(totalPaise / 100),
+      amount_paise: totalPaise,
       currency: 'INR',
       status: 'created',
       kind,
@@ -169,7 +186,8 @@ Deno.serve(async (req) => {
       if (bErr) console.error(`buyer details not saved on ${order.id}: ${bErr.message}`);
     }
 
-    return json({ orderId: order.id, amount: rupees * 100, currency: 'INR', keyId, kind, rupees, buyerSaved });
+    // amount = what Razorpay charges (paise, GST included); rupees = the plan price before GST.
+    return json({ orderId: order.id, amount: totalPaise, currency: 'INR', keyId, kind, rupees, gstPaise, buyerSaved });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

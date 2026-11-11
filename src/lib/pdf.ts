@@ -3426,7 +3426,7 @@ export function generateSubscriptionInvoicePDF(inv: SubscriptionInvoice, opts: {
 
   doc.setFontSize(7.5);
   doc.setTextColor(90);
-  doc.text('Prices are inclusive of GST. This is a computer-generated invoice.', left, ty);
+  doc.text('Invoice total includes GST as shown above. This is a computer-generated invoice.', left, ty);
   doc.setTextColor(0);
   if (opts.save !== false) doc.save(v.fileName);
   return doc;

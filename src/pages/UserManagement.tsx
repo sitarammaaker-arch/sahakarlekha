@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDateTime } from '@/lib/dateUtils';
+import { PLAN_CATALOG, priceLabel } from '@/lib/plans';
 import { UserRole } from '@/types';
 
 const USERS_KEY = 'sahayata_app_users';
@@ -386,7 +387,12 @@ export default function UserManagement() {
   const renewal = periodEnd ? new Date(periodEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
   // Phase 2b-3: Razorpay checkout. Order + activation are server-side; this only opens checkout.
   // Phase 2b — plan pricing/ranking for the checkout buttons (mirrors src/lib/plans.ts).
-  const PLAN_PRICE: Record<string, string> = { starter: '₹1,499', plus: '₹3,999', pro: '₹9,999' };
+  // Prices are before GST (the catalogue is the value source); create-order adds GST at checkout.
+  const PLAN_PRICE: Record<string, string> = {
+    starter: `${priceLabel(PLAN_CATALOG.starter.price)} + GST`,
+    plus: `${priceLabel(PLAN_CATALOG.plus.price)} + GST`,
+    pro: `${priceLabel(PLAN_CATALOG.pro.price)} + GST`,
+  };
   const PLAN_RANK: Record<string, number> = { starter: 1, plus: 2, pro: 3 };
   // The plan click opens the buyer-details dialog (tax invoice); its confirm starts the checkout.
   const handlePay = (targetPlan: string, action: string) => setPayFor({ plan: targetPlan, action });
@@ -394,8 +400,8 @@ export default function UserManagement() {
     ? `${payFor.action}: ${payFor.plan[0].toUpperCase() + payFor.plan.slice(1)} (${PLAN_PRICE[payFor.plan]}/${hi ? 'वर्ष' : 'yr'})`
     : '';
   const payNote = payFor?.action === 'Upgrade'
-    ? (hi ? 'बचे दिनों का credit घटाकर सिर्फ़ अंतर लिया जाएगा।' : 'Only the prorated difference for your remaining period is charged.')
-    : '';
+    ? (hi ? 'बचे दिनों का credit घटाकर सिर्फ़ अंतर लिया जाएगा, उस पर GST अलग से जुड़ेगा।' : 'Only the prorated difference for your remaining period is charged, plus GST.')
+    : (hi ? 'भुगतान के समय इस दाम पर GST अलग से जुड़ेगा।' : 'GST is added to this price at payment.');
   const confirmPay = async (buyer: CheckoutBuyer) => {
     if (!payFor) return;
     setPaying(true);

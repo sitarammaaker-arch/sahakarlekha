@@ -3,8 +3,9 @@
 // is proven here before an invoice is issued.
 // Run: node scripts/test-invoice-core.mjs
 import { readFileSync } from 'node:fs';
-import { GST_STATE_CODES, SETUP_STATE_CODES, cleanGstin, buyerStateCode, stateCodeFromState, validStateCode, splitInclusive, buildInvoiceCalc } from '../supabase/functions/_shared/invoice-core.mjs';
+import { GST_STATE_CODES, SETUP_STATE_CODES, cleanGstin, buyerStateCode, stateCodeFromState, validStateCode, splitInclusive, buildInvoiceCalc, totalWithGstPaise } from '../supabase/functions/_shared/invoice-core.mjs';
 import { INDIAN_STATES } from '../src/lib/constants.ts';
+import { PLAN_CATALOG } from '../src/lib/plans.ts';
 import { GST_STATE_CODES as APP_CODES } from '../src/lib/gstStates.ts';
 
 let pass = 0, fail = 0;
@@ -93,6 +94,60 @@ const SELLER = { state_code: '06', gst_rate_pct: 18 };
   ok(hr.status === 'ok' && hr.calc.place_of_supply === '06' && hr.calc.cgst_paise === 11433, "Society Setup's stored 'hr' → Haryana, CGST + SGST (not buyer_state_unknown)");
   const s = buildInvoiceCalc({ amountRupees: 1499, seller: { state_code: '06', gst_rate_pct: '18' }, buyer: { state: 'Haryana' } });
   ok(s.status === 'ok' && s.calc.gst_rate_pct === 18, 'numeric rate from PostgREST as a string is accepted');
+}
+
+// ── 4b. "+ GST" prices (2026-11-11): charge = price + GST, and the invoice gives the price back ──
+{
+  ok(totalWithGstPaise(2999, 18) === 353882 && totalWithGstPaise(6999, 18) === 825882 && totalWithGstPaise(14999, '18') === 1769882, '₹2,999 / ₹6,999 / ₹14,999 + 18% = ₹3,538.82 / ₹8,258.82 / ₹17,698.82');
+  for (const id of ['starter', 'plus', 'pro']) {
+    const price = PLAN_CATALOG[id].price;
+    const total = totalWithGstPaise(price, 18);
+    for (const intra of [true, false]) {
+      const s = splitInclusive(total, 18, intra);
+      ok(s.taxable === price * 100 && sum(s) === total && s.cgst === s.sgst, `${id}: the invoice taxable value is the plan price to the paisa (${intra ? 'intra' : 'inter'})`);
+    }
+  }
+  // A prorated upgrade is any whole-rupee amount — never off by a paisa at 18%.
+  let bad = 0;
+  for (let r = 1; r <= 12000; r += 7) {
+    const t = totalWithGstPaise(r, 18);
+    const a = splitInclusive(t, 18, true), b = splitInclusive(t, 18, false);
+    if (a.taxable !== r * 100 || b.taxable !== r * 100 || sum(a) !== t || sum(b) !== t) bad++;
+  }
+  ok(bad === 0, 'every whole-rupee price + 18% splits back to that price, intra and inter');
+  let threw = 0;
+  for (const [r, p] of [[0, 18], [-5, 18], [10.5, 18], [100, null], [100, ''], [100, 'x'], [100, -1]]) { try { totalWithGstPaise(r, p); } catch { threw++; } }
+  ok(threw === 7, 'no charge is computed from a bad price or a missing / bad rate');
+  const c = buildInvoiceCalc({ amountPaise: 353882, amountRupees: 3539, seller: SELLER, buyer: { state: 'Haryana' } });
+  ok(c.status === 'ok' && c.calc.total_paise === 353882 && c.calc.taxable_paise === 299900 && c.calc.cgst_paise === 26991 && c.calc.sgst_paise === 26991, 'amountPaise wins over the rounded rupees: ₹2,999 + ₹269.91 + ₹269.91 = ₹3,538.82');
+  ok(buildInvoiceCalc({ amountPaise: null, amountRupees: 1499, seller: SELLER, buyer: { state: 'Haryana' } }).calc.total_paise === 149900, 'an order from before 158 (no paise) still uses its whole rupees');
+
+  const co = read('supabase/functions/create-order/index.ts');
+  const m = co.match(/const PRICE_INR: Record<string, number> = \{ starter: (\d+), plus: (\d+), pro: (\d+) \};/);
+  ok(m && Number(m[1]) === PLAN_CATALOG.starter.price && Number(m[2]) === PLAN_CATALOG.plus.price && Number(m[3]) === PLAN_CATALOG.pro.price, 'create-order PRICE_INR mirrors PLAN_CATALOG');
+  ok(/totalPaise = totalWithGstPaise\(rupees, seller\?\.gst_rate_pct\)/.test(co) && /from\('billing_seller'\)\.select\('gst_rate_pct'\)/.test(co) && !/\b18\b/.test(co.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')), 'the GST rate comes from billing_seller — never hard-coded in create-order');
+  ok(co.indexOf('totalWithGstPaise(rupees') < co.indexOf("fetch('https://api.razorpay.com/v1/orders'"), 'no rate → refused BEFORE a Razorpay order exists');
+  ok(/amount: totalPaise, \/\/ paise/.test(co), 'Razorpay is charged price + GST');
+  const ins = co.indexOf("const { error: insErr } = await supa.from('orders').insert({");
+  ok(/amount_paise: totalPaise,/.test(co.slice(ins, co.indexOf('});', ins))), 'amount_paise is in the base insert — no order id leaves unless the exact charge is saved');
+}
+
+// ── 4c. Migration 158 — an order is charged to the paisa ────────────────────
+{
+  const fn = (sql) => { const a = sql.indexOf('create or replace function public.issue_invoice('); return a < 0 ? '' : sql.slice(a, sql.indexOf('$$;', a) + 3); };
+  const up = read('supabase/migrations/158_orders_amount_paise.sql');
+  const down = read('supabase/migrations/158_orders_amount_paise_down.sql');
+  const f133 = fn(read('supabase/migrations/133_orders_test_mode.sql'));
+  const f158 = fn(up);
+  const a = f158.indexOf('  -- 158:'), b = f158.indexOf('  if (p_calc ->> \'gst_rate_pct\')');
+  const a3 = f133.indexOf("  v_total := (p_calc ->> 'total_paise')::bigint;"), b3 = f133.indexOf('  if (p_calc ->> \'gst_rate_pct\')');
+  ok(a > 0 && f158.slice(0, a) + f158.slice(b) === f133.slice(0, a3) + f133.slice(b3), '158 issue_invoice = 133 body with only the total check changed');
+  ok(/if v_total <> coalesce\(v_order\.amount_paise, v_order\.amount::bigint \* 100\) then\s+raise exception/.test(f158), 'total must equal the exact charge; older orders fall back to rupees × 100');
+  ok(/is_test is distinct from false/.test(f158) && f158.indexOf('is_test is distinct from false') < f158.indexOf('insert into public.invoice_counters'), '158 keeps the test-mode guard');
+  ok(fn(down) === f133, '158 down restores the 133 issue_invoice byte-for-byte');
+  ok(/add column if not exists amount_paise bigint check \(amount_paise is null or amount_paise > 0\)/.test(up) && /drop column if exists amount_paise/.test(down), 'amount_paise added / dropped');
+  ok(/revoke execute on function public\.issue_invoice\(text, jsonb\) from public, anon, authenticated;/.test(code(up)), '158 keeps issue_invoice service-role only');
+  ok(/values \('158', 'orders_amount_paise'\)/.test(up) && /delete from public\.app_migrations where version = '158'/.test(down), '158 ledger insert / down delete');
 }
 
 // ── 5. Migration 130 ─────────────────────────────────────────────────────────

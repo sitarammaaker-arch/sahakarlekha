@@ -114,8 +114,8 @@ const AboutUs: React.FC = () => {
             </Card>
             <Card className="text-center">
               <CardContent className="p-6">
-                <p className="text-3xl md:text-4xl font-extrabold text-primary">₹1,499</p>
-                <p className="mt-2 font-semibold text-foreground text-sm">प्रति वर्ष से / Per FY, from</p>
+                <p className="text-3xl md:text-4xl font-extrabold text-primary">₹2,999</p>
+                <p className="mt-2 font-semibold text-foreground text-sm">प्रति वर्ष + GST से / Per year + GST, from</p>
                 <p className="mt-1 text-xs text-muted-foreground">No hidden charges, export anytime</p>
               </CardContent>
             </Card>

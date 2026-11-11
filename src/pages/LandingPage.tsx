@@ -65,7 +65,7 @@ const STATS = [
   { value: '8', label: 'Society Types', labelHi: 'समिति प्रकार' },
   { value: '36', label: 'States & UTs', labelHi: 'राज्य/केंद्रशासित' },
   { value: '150+', label: 'Account Heads', labelHi: 'लेजर हेड' },
-  { value: '₹1,499', label: 'Starter / FY', labelHi: 'से शुरू' },
+  { value: '₹2,999', label: 'Starter / year + GST', labelHi: 'से शुरू (+ GST)' },
 ];
 
 const TOUR = [
@@ -81,7 +81,7 @@ const TOUR = [
 const NV = 'nv' as const;
 const COMPARE_DATE = '2 अक्टूबर 2026 / 2 Oct 2026';
 const TALLY_ROWS: { f: string; tally: boolean | string; zoho: boolean | string; sl: boolean | string }[] = [
-  { f: 'Price / मूल्य', tally: 'Silver: ₹22,500 + GST (lifetime) या ₹8,100 + GST/वर्ष (rental)', zoho: 'Free plan (revenue ≤ ₹25 लाख); paid ₹749/माह से (annual)', sl: '₹1,499/FY से' },
+  { f: 'Price / मूल्य', tally: 'Silver: ₹22,500 + GST (lifetime) या ₹8,100 + GST/वर्ष (rental)', zoho: 'Free plan (revenue ≤ ₹25 लाख); paid ₹749/माह से (annual)', sl: '₹2,999/year + GST से' },
   { f: 'GST e-Invoice (IRN)', tally: true, zoho: 'Standard plan से', sl: 'नहीं / Not supported' },
   { f: 'e-Way Bill', tally: true, zoho: NV, sl: 'JSON बनता है (NIC portal पर upload)' },
   { f: 'RCS two-section Trial Balance / Balance Sheet', tally: NV, zoho: NV, sl: true },
@@ -198,7 +198,7 @@ const LandingPage: React.FC = () => {
               PACS, dairy, marketing, consumer और अन्य cooperative societies के लिए बनाया गया — जहाँ vouchers से लेकर financial statements, GST/TDS और audit-ready reports तक एक connected system में रहते हैं।
             </p>
             <p className="mt-3 text-sm text-foreground/80 max-w-xl mx-auto lg:mx-0">
-              Professional cooperative accounting ₹1,499/FY से। Team व operations बढ़ें तो Plus या Pro के साथ आगे बढ़ें।
+              Professional cooperative accounting ₹2,999/year + GST से। Team व operations बढ़ें तो Plus या Pro के साथ आगे बढ़ें।
             </p>
             <div className="mt-7 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <Link to="/register">
@@ -213,7 +213,7 @@ const LandingPage: React.FC = () => {
               </a>
             </div>
             <p className="mt-3 text-xs text-muted-foreground text-center lg:text-left">
-              ✓ Unlimited Vouchers · ✓ Unlimited Members · ✓ Data Export Anytime · ✓ ₹1,499/FY से
+              ✓ Unlimited Vouchers · ✓ Unlimited Members · ✓ Data Export Anytime · ✓ ₹2,999/year + GST से
             </p>
             {/* Ask entry — grounded answers from help/cookbook/guide, no signup needed */}
             <Link to="/ask" className="mt-5 flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors max-w-xl mx-auto lg:mx-0">
@@ -243,7 +243,7 @@ const LandingPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-center text-sm">
           {[
             ['🏛️', 'सहकारी-विशेष', 'Built for cooperatives'],
-            ['💳', '₹1,499/FY से', 'Transparent pricing'],
+            ['💳', '₹2,999/year + GST से', 'Transparent pricing'],
             ['🔒', 'आपका डेटा सुरक्षित', 'Your data, exportable'],
             ['🇮🇳', 'हिंदी + English', '36 states'],
           ].map(([e, hi, en]) => (
@@ -491,8 +491,8 @@ const LandingPage: React.FC = () => {
           <h2 className="text-2xl sm:text-3xl font-bold text-foreground">यह किसके लिए बना है?</h2>
           <p className="mt-4 text-muted-foreground leading-relaxed">
             भारत की 8 लाख से ज़्यादा सहकारी समितियाँ ग्रामीण भारत की रीढ़ हैं — पर इनके लिए कभी कोई सॉफ्टवेयर नहीं बना; सब Tally जैसे सामान्य औज़ार को ज़बरदस्ती सहकारी प्रारूप में ढालते रहे।
-            <strong className="text-foreground"> SahakarLekha इसी को बदलने के लिए बना है</strong> — और इसे सहकारी समितियों के लिए किफायती रखा गया है, professional accounting ₹1,499/FY से।
-            <br /><span className="text-sm">Purpose-built for cooperative societies and priced to be affordable — professional accounting from ₹1,499/FY, with Plus and Pro as you grow.</span>
+            <strong className="text-foreground"> SahakarLekha इसी को बदलने के लिए बना है</strong> — और इसे सहकारी समितियों के लिए किफायती रखा गया है, professional accounting ₹2,999/year + GST से।
+            <br /><span className="text-sm">Purpose-built for cooperative societies and priced to be affordable — professional accounting from ₹2,999/year + GST, with Plus and Pro as you grow.</span>
           </p>
         </div>
       </section>
@@ -504,7 +504,7 @@ const LandingPage: React.FC = () => {
           <p className="mt-2 text-sm text-muted-foreground">
             Starter = Accounting · Plus = Team · Pro = Scale · Enterprise = Network
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">Professional accounting ₹1,499/FY से — team, automation या scale बढ़े तो upgrade करें।</p>
+          <p className="mt-1 text-xs text-muted-foreground">Professional accounting ₹2,999/year + GST से — team, automation या scale बढ़े तो upgrade करें।</p>
           <div className="mt-5">
             <Link to="/pricing">
               <Button variant="outline" className="gap-2">मूल्य देखें / See pricing <ArrowRight className="h-4 w-4" /></Button>
@@ -583,7 +583,7 @@ const LandingPage: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-2xl sm:text-3xl font-bold">आज ही शुरू करें</h2>
           <p className="mt-3 text-lg text-primary-foreground/80">
-            Get Started — Professional accounting ₹1,499/FY से, कोई छिपा शुल्क नहीं। आपका डेटा कभी भी निर्यात करें; कोई लॉक-इन नहीं।
+            Get Started — Professional accounting ₹2,999/year + GST से, कोई छिपा शुल्क नहीं। आपका डेटा कभी भी निर्यात करें; कोई लॉक-इन नहीं।
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/register">

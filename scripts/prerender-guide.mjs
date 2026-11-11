@@ -68,7 +68,7 @@ const LASTMOD = {
   cookbook: '2026-06-27',
   calc: '2026-06-27',
   faq: '2026-06-19',
-  pricing: '2026-08-20',
+  pricing: '2026-11-11',
   static: '2026-06-19',
 };
 
@@ -407,7 +407,7 @@ function softwarePages(DATA) {
     {
       path: '/software',
       title: 'सहकारी समिति लेखा सॉफ्टवेयर | Cooperative Society Software',
-      description: 'PACS, दुग्ध, विपणन, उपभोक्ता, आवास, चीनी, श्रमिक व बहुउद्देशीय — हर प्रकार की सहकारी समिति के लिए लेखा सॉफ्टवेयर, ₹1,499/FY से। अपनी समिति का प्रकार चुनें।',
+      description: 'PACS, दुग्ध, विपणन, उपभोक्ता, आवास, चीनी, श्रमिक व बहुउद्देशीय — हर प्रकार की सहकारी समिति के लिए लेखा सॉफ्टवेयर, ₹2,999/year + GST से। अपनी समिति का प्रकार चुनें।',
       lastmod: LASTMOD.software,
       jsonLd: [crumb([{ name: 'Software', item: `${SITE}/software` }])],
       body: types.length
@@ -1320,7 +1320,7 @@ function staticExtraPages(DATA) {
   pages.push({
     path: '/',
     title: 'SahakarLekha — Cooperative Society Accounting Software India',
-    description: 'भारतीय cooperative societies के लिए accounting, GST/TDS, member records, reports और audit-ready workflows — PACS, Dairy, Marketing, Consumer व अन्य। SahakarLekha ₹1,499/FY से शुरू करें, Hindi + English।',
+    description: 'भारतीय cooperative societies के लिए accounting, GST/TDS, member records, reports और audit-ready workflows — PACS, Dairy, Marketing, Consumer व अन्य। SahakarLekha ₹2,999/year + GST से शुरू करें, Hindi + English।',
     lastmod: LASTMOD.static,
     // Mirrors LandingPage's hero (same h1/lead/CTA copy) so the hand-off to React is
     // near-seamless. Pricing copy must match the paid model: no public free plan.
@@ -1330,9 +1330,9 @@ function staticExtraPages(DATA) {
           `<span class="sl-badge">Cooperative-first Accounting Platform</span>` +
           `<h1>सहकारी समिति का <span>Accounting, Compliance और Control</span> — एक ही जगह।</h1>` +
           `<p class="sl-lead">PACS, dairy, marketing, consumer और अन्य cooperative societies के लिए बनाया गया — जहाँ vouchers से लेकर financial statements, GST/TDS और audit-ready reports तक एक connected system में रहते हैं।</p>` +
-          `<p>Professional cooperative accounting <strong>₹1,499/FY से</strong>। Team व operations बढ़ें तो Plus या Pro के साथ आगे बढ़ें।</p>` +
+          `<p>Professional cooperative accounting <strong>₹2,999/year + GST से</strong>। Team व operations बढ़ें तो Plus या Pro के साथ आगे बढ़ें।</p>` +
           `<div class="sl-ctas"><a class="sl-btn" href="/register">शुरू करें / Get Started →</a><a class="sl-btn sl-btn-o" href="/pricing">मूल्य देखें</a></div>` +
-          `<p class="sl-ticks">✓ Unlimited Vouchers · ✓ Unlimited Members · ✓ Data Export Anytime · ✓ ₹1,499/FY से</p>` +
+          `<p class="sl-ticks">✓ Unlimited Vouchers · ✓ Unlimited Members · ✓ Data Export Anytime · ✓ ₹2,999/year + GST से</p>` +
         `</div></section>`,
       html:
         `<h2>एक ही system में सब कुछ</h2>` +
@@ -1342,7 +1342,7 @@ function staticExtraPages(DATA) {
           `<li>सहकारी-विशेष — ऋण रजिस्टर व ऋण-सीमा जाँच, आरक्षित निधि विनियोजन, नामांकन, RCS ऑडिट प्रारूप</li>` +
           `<li>साप्ताहिक स्वतः बैकअप · हिन्दी + English · डेटा कभी भी export करें, कोई लॉक-इन नहीं</li>` +
         `</ul>` +
-        `<p>PACS, dairy, marketing, consumer, housing — हर प्रकार की समिति के लिए। Starter ₹1,499/FY · Plus ₹3,999/FY · Pro ₹9,999/FY — <a href="/pricing">सभी plans देखें</a>।</p>` +
+        `<p>PACS, dairy, marketing, consumer, housing — हर प्रकार की समिति के लिए। Starter ₹2,999/year + GST · Plus ₹6,999/year + GST · Pro ₹14,999/year + GST — <a href="/pricing">सभी plans देखें</a>।</p>` +
         `<p><a href="/software">अपनी समिति के प्रकार के लिए</a> · <a href="/guide">मुफ़्त गाइड व कोर्स</a> · <a href="/blog">ब्लॉग</a> · <a href="/tools">कैलकुलेटर</a> · <a href="/glossary">शब्दकोश</a></p>` +
         registerCta(),
     }),
@@ -1359,8 +1359,8 @@ function staticExtraPages(DATA) {
       current: 'हमारे बारे में',
       html:
         `<h1>हमारे बारे में — About SahakarLekha</h1>` +
-        `<p>SahakarLekha एक <strong>सहकारी-विशेष क्लाउड लेखा प्लेटफ़ॉर्म</strong> है। हमारा उद्देश्य — भारत की हर सहकारी समिति को, चाहे गाँव की छोटी समिति हो या राज्य-स्तरीय फेडरेशन, आधुनिक, पारदर्शी व किफ़ायती लेखा प्रणाली देना — <a href="/pricing">₹1,499/FY से</a>।</p>` +
-        `<p>A cooperative-specific cloud accounting platform — built for PACS, dairy, marketing, consumer and housing societies, in Hindi and English, from ₹1,499 per financial year.</p>` +
+        `<p>SahakarLekha एक <strong>सहकारी-विशेष क्लाउड लेखा प्लेटफ़ॉर्म</strong> है। हमारा उद्देश्य — भारत की हर सहकारी समिति को, चाहे गाँव की छोटी समिति हो या राज्य-स्तरीय फेडरेशन, आधुनिक, पारदर्शी व किफ़ायती लेखा प्रणाली देना — <a href="/pricing">₹2,999/year + GST से</a>।</p>` +
+        `<p>A cooperative-specific cloud accounting platform — built for PACS, dairy, marketing, consumer and housing societies, in Hindi and English, from ₹2,999 per year plus GST.</p>` +
         `<h2>अनुपालन की तैयारी (Compliance support)</h2>` +
         `<ul>` +
           `<li>राज्य-वार ऑडिट schedules — Haryana, Maharashtra, Gujarat, Karnataka, Kerala, UP आदि (धाराएँ राज्य अधिनियम अनुसार अलग)</li>` +
@@ -1389,7 +1389,7 @@ function staticExtraPages(DATA) {
           `<li><strong>WhatsApp:</strong> +91 94679 18545</li>` +
           `<li><strong>ईमेल / Email:</strong> support@sahakarlekha.com</li>` +
         `</ul>` +
-        `<p>अपनी समिति अभी शुरू करें (<a href="/pricing">₹1,499/FY से</a>), या पहले <a href="/guide">गाइड</a> व <a href="/faq">सामान्य प्रश्न</a> देखें।</p>` +
+        `<p>अपनी समिति अभी शुरू करें (<a href="/pricing">₹2,999/year + GST से</a>), या पहले <a href="/guide">गाइड</a> व <a href="/faq">सामान्य प्रश्न</a> देखें।</p>` +
         registerCta(),
     }),
   });
@@ -1422,23 +1422,23 @@ function staticExtraPages(DATA) {
   pages.push({
     path: '/pricing',
     title: 'SahakarLekha Pricing — Starter, Plus & Pro Plans',
-    description: 'SahakarLekha cooperative accounting ₹1,499/FY से शुरू करें। Staff, role-based access, payroll, multi-branch accounting और advanced operations के लिए Plus या Pro चुनें।',
+    description: 'SahakarLekha cooperative accounting ₹2,999/साल + GST से — 30 दिन मुफ़्त trial। सभी रिपोर्ट, payroll व multi-branch हर plan में; ज़्यादा users और Member Portal के लिए Plus या Pro चुनें।',
     lastmod: LASTMOD.pricing,
     jsonLd: [crumb([{ name: 'मूल्य', item: `${SITE}/pricing` }]), ...(DATA.seo ? [DATA.seo.pricingJsonLd()] : [])],
     body: shell({
       current: 'मूल्य',
       html:
         `<h1>SahakarLekha मूल्य — Starter, Plus व Pro</h1>` +
-        `<p>Professional cooperative accounting ₹1,499/FY से। आपकी समिति छोटी हो या बढ़ रही हो — SahakarLekha उसके साथ बढ़ता है। Staff, automation और advanced control की ज़रूरत हो तो Plus या Pro चुनें।</p>` +
-        `<h2>Starter — ₹1,499 / वित्त वर्ष (≈ ₹125/माह)</h2>` +
-        `<p>छोटी, single-user समिति के लिए पूरा professional accounting — demo नहीं। 1 समिति · 1 user · असीमित vouchers व सदस्य। Ledger, Trial Balance, Balance Sheet, P&amp;L, Receipts &amp; Payments, GST/TDS सारांश, Member/Share/Loan register, PDF/Excel/CSV export, secure cloud backup, core security व basic audit trail — आपका डेटा आपका।</p>` +
-        `<h2>Plus — ₹3,999 / वित्त वर्ष (≈ ₹333/माह) · सबसे लोकप्रिय</h2>` +
-        `<p>staff के साथ चलने वाली समिति के लिए। Starter का सब कुछ, और: <strong>5 Staff Users + 1 Auditor/CA शामिल</strong>, Role-Based Access व staff activity controls, payroll automation, scheduled backup/export, report branding हटता व priority support।</p>` +
-        `<h2>Pro — ₹9,999 / वित्त वर्ष (≈ ₹833/माह)</h2>` +
-        `<p>multi-branch व advanced संचालन के लिए। Plus का सब कुछ, और: Unlimited Users, Multi-Branch Accounting व branch-wise reporting, Multi-Society Consolidation, Custom Chart of Accounts, API Access, Data-Migration सहायता व Custom-Branded Reports।</p>` +
+        `<p>Professional cooperative accounting ₹2,999/साल + GST से। रजिस्टर करने पर 30 दिन का मुफ़्त trial मिलता है। Accounting के feature हर plan में एक जैसे हैं — फ़र्क users की संख्या और Member Portal का है।</p>` +
+        `<h2>Starter — ₹2,999 / साल + GST (≈ ₹250/माह)</h2>` +
+        `<p>छोटी, single-user समिति के लिए पूरा professional accounting — demo नहीं। 1 समिति · 1 user · असीमित vouchers व सदस्य। Ledger, Trial Balance, Balance Sheet, P&amp;L, Receipts &amp; Payments, GST/TDS सारांश, Member/Share/Loan register, Payroll, Multi-Branch, Custom Chart of Accounts, PDF/Excel/CSV export व साप्ताहिक cloud backup — आपका डेटा आपका। Member Portal शामिल नहीं।</p>` +
+        `<h2>Plus — ₹6,999 / साल + GST (≈ ₹583/माह)</h2>` +
+        `<p>staff के साथ चलने वाली समिति के लिए। Starter का सब कुछ, और: <strong>6 users</strong> (जैसे 5 staff + 1 Auditor/CA), हर user की अलग भूमिका (Role-Based Access) व Member Portal — सदस्य अपना खाता खुद देखें।</p>` +
+        `<h2>Pro — ₹14,999 / साल + GST (≈ ₹1,250/माह)</h2>` +
+        `<p>बड़ी team वाली समिति के लिए। Plus का सब कुछ, और: असीमित users — हर शाखा व विभाग के staff के लिए।</p>` +
         `<h2>Enterprise / Federation — ₹49,000/साल से</h2>` +
-        `<p>Federations, unions, clusters व बड़े deployments के लिए — bulk society deployment, central administration, organisation-wide reporting, integrations/API, bulk migration व dedicated onboarding/support। <a href="/contact">हमसे बात करें</a>।</p>` +
-        `<p>सभी दाम प्रति समिति, प्रति वित्त वर्ष (अप्रैल renewal)। <a href="/faq">अक्सर पूछे जाने वाले प्रश्न देखें</a></p>` +
+        `<p>Federations, unions, clusters व बड़े deployments के लिए — कई समितियों का एक साथ setup, bulk डेटा-migration व dedicated onboarding/support। <a href="/contact">हमसे बात करें</a>।</p>` +
+        `<p>सभी दाम प्रति समिति, भुगतान की तारीख़ से 12 महीने के लिए; GST अलग से जुड़ता है। Plan app के अंदर online ख़रीदें; बीच में upgrade पर सिर्फ़ बचे समय का अंतर लगता है। <a href="/faq">अक्सर पूछे जाने वाले प्रश्न देखें</a></p>` +
         registerCta(),
     }),
   });

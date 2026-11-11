@@ -259,7 +259,7 @@ const GlossaryTerm: React.FC = () => {
         {/* Register CTA */}
         <Card className="mt-10 bg-primary/5 border-primary/20">
           <CardContent className="p-6 text-center">
-            <p className="font-bold text-lg text-foreground">अपनी समिति का खाता डिजिटल कीजिए — ₹1,499/FY से</p>
+            <p className="font-bold text-lg text-foreground">अपनी समिति का खाता डिजिटल कीजिए — ₹2,999/year + GST से</p>
             <p className="text-sm text-muted-foreground mt-1">सहकारी समितियों के लिए ही बना, हिन्दी-केंद्रित प्लेटफ़ॉर्म।</p>
             <div className="flex flex-wrap gap-3 justify-center mt-4">
               <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'glossary_footer', target: 'register', term: slug })}><Button className="gap-2">रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>

@@ -562,7 +562,7 @@ const BlogPost: React.FC = () => {
             <Card className="mt-10 bg-primary/5 border-primary/20">
               <CardContent className="p-6 text-center">
                 <Newspaper className="h-9 w-9 text-primary mx-auto mb-2" />
-                <p className="font-bold text-lg text-foreground">अपनी समिति का खाता डिजिटल कीजिए — ₹1,499/FY से</p>
+                <p className="font-bold text-lg text-foreground">अपनी समिति का खाता डिजिटल कीजिए — ₹2,999/year + GST से</p>
                 <p className="text-sm text-muted-foreground mt-1 max-w-xl mx-auto">
                   वाउचर से बैलेंस शीट तक, सब एक क्लिक पर। सहकारी समितियों के लिए ही बना, हिन्दी-केंद्रित प्लेटफ़ॉर्म।
                 </p>

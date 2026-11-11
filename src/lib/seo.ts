@@ -53,7 +53,7 @@ export function pricingJsonLd(): object {
         name: PLAN_NAME[p.id as 'starter' | 'plus' | 'pro'],
         price: String(p.price),
         priceCurrency: 'INR',
-        description: 'Per society, per financial year',
+        description: 'Per society, for 12 months from the payment date. Price excludes GST.',
         url: `${SITE}/pricing`,
       })),
     },
