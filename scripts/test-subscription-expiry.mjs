@@ -3,7 +3,7 @@
 // (the server job). This proves the pure rule case by case and statically ties the SQL and the wiring to it.
 // Run: node scripts/test-subscription-expiry.mjs   (npm run test:subscription-expiry)
 import { readFileSync } from 'node:fs';
-import { GRACE_DAYS, RENEWAL_NOTICE_DAYS, effectiveStatus, daysUntil, graceDaysLeft } from '../src/lib/plans.ts';
+import { GRACE_DAYS, LEGACY_NOTICE_DAYS, RENEWAL_NOTICE_DAYS, effectiveStatus, daysUntil, graceDaysLeft } from '../src/lib/plans.ts';
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -23,9 +23,19 @@ ok(effectiveStatus('trial', 'trialing', at(-6.99), NOW) === 'grace', 'day 6.99 a
 ok(effectiveStatus('trial', 'trialing', at(-7), NOW) === 'expired', 'exactly 7 days after the end → expired');
 ok(effectiveStatus('plus', 'active', at(-30), NOW) === 'expired', 'a paid plan a month past its end → expired');
 ok(effectiveStatus('pro', 'active', at(-3), NOW) === 'grace', 'a paid plan 3 days past its end → grace');
-// Legacy / no period never expire.
-ok(effectiveStatus('legacy', 'active', null, NOW) === 'active', 'legacy with no period → active');
-ok(effectiveStatus('legacy', 'active', at(-400), NOW) === 'active', 'legacy is never expired, even with an old date');
+// No period_end never expires. A legacy row WITH an end date follows the same rule (migration 160).
+ok(effectiveStatus('legacy', 'active', null, NOW) === 'active', 'legacy with no end date → active (indefinite)');
+ok(effectiveStatus('legacy', 'active', at(140), NOW) === 'active', 'legacy before its end date → active');
+ok(effectiveStatus('legacy', 'active', at(-3), NOW) === 'grace', 'legacy 3 days past its end date → grace');
+ok(effectiveStatus('legacy', 'active', at(-7), NOW) === 'expired', 'legacy a week past its end date → expired');
+{
+  // The founder's dates: free until 31-03-2027 (IST), notice 1–7 April, paused from 8 April.
+  const END = '2027-03-31T23:59:59+05:30';
+  const on = (s) => effectiveStatus('legacy', 'active', END, Date.parse(s));
+  ok(on('2027-03-31T23:00:00+05:30') === 'active', '31 March 2027, 11 pm IST → still free');
+  ok(on('2027-04-01T00:30:00+05:30') === 'grace' && on('2027-04-07T23:00:00+05:30') === 'grace', '1 – 7 April 2027 → notice');
+  ok(on('2027-04-08T00:30:00+05:30') === 'expired', '8 April 2027 → new entries paused');
+}
 ok(effectiveStatus('starter', 'active', null, NOW) === 'active', 'no period_end → the stored status');
 ok(effectiveStatus(undefined, undefined, undefined, NOW) === 'active', 'no row at all → active (never stricter)');
 ok(effectiveStatus('trial', 'trialing', 'not-a-date', NOW) === 'trialing', 'an unreadable date never blocks');
@@ -79,8 +89,31 @@ ok(RENEWAL_NOTICE_DAYS > 0 && RENEWAL_NOTICE_DAYS <= 30, 'a renewal reminder win
   const banner = read('src/components/SubscriptionBanner.tsx');
   ok(/const PLAN_PAGE = '\/user-management';/.test(banner) && !/to="\/pricing"/.test(banner), 'the banner sends the user to where a plan is bought, not the public pricing page');
   ok(/status === 'grace'/.test(banner) && /graceDaysLeft\(periodEnd\)/.test(banner) && /status === 'expired'/.test(banner), 'grace and expired have their own notices');
-  ok(/plan === 'legacy'\) return null/.test(banner), 'legacy societies see no banner');
-  ok(/status === 'active' && left != null && left <= RENEWAL_NOTICE_DAYS/.test(banner), 'a paid plan near its end is reminded to renew');
+  ok(/if \(plan === 'legacy' && !periodEnd\) return null;/.test(banner), 'a legacy society with NO end date sees no banner');
+  ok(/const noticeDays = plan === 'legacy' \? LEGACY_NOTICE_DAYS : RENEWAL_NOTICE_DAYS;/.test(banner) && /status === 'active' && left != null && left <= noticeDays/.test(banner), 'a paid plan (15 days) and a legacy society (30 days) are reminded before the end');
+  ok(/आपकी मुफ़्त अवधि समाप्त हो गई है/.test(banner) && /मुफ़्त अवधि \$\{Math\.max\(left, 0\)\} दिन में पूरी हो रही है/.test(banner), 'a legacy society is told its FREE PERIOD is ending, not a "plan"');
+  ok(LEGACY_NOTICE_DAYS === 30, 'legacy notice is 30 days');
+}
+
+// ── 4. Migration 160 — legacy societies get an end date ──────────────────────
+{
+  const fnOf = (sql) => { const a = sql.indexOf('create or replace function public.refresh_subscription_status()'); return a < 0 ? '' : sql.slice(a, sql.indexOf('$$;', a) + 3); };
+  const m159 = code(read('supabase/migrations/159_subscription_expiry.sql'));
+  const up = read('supabase/migrations/160_legacy_end_date.sql');
+  const down = read('supabase/migrations/160_legacy_end_date_down.sql');
+  const c = code(up);
+  const f159 = fnOf(m159), f160 = fnOf(c);
+  ok(f160.length > 0 && f160 === f159.replace("       and plan <> 'legacy'\n", ''), '160 function = 159 body with ONLY the legacy exclusion removed');
+  ok(!/legacy/.test(f160) && /period_end is not null/.test(f160), 'the rule depends on period_end alone — a null end date is still indefinite');
+  ok(fnOf(code(down)) === f159, '160 down restores the 159 function byte-for-byte');
+  ok(/revoke execute on function public\.refresh_subscription_status\(\) from public, anon, authenticated;/.test(c), '160 keeps the function service-role only');
+  const upd = c.slice(c.indexOf('update public.subscriptions\n   set period_end = timestamptz'));
+  ok(/set period_end = timestamptz '2027-03-31 23:59:59\+05:30'/.test(upd) && /where plan = 'legacy'\s+and period_end is null;/.test(upd), 'every legacy row WITHOUT an end date → 31-03-2027 end of day IST; one that has a date is left alone');
+  const setClause = upd.slice(upd.indexOf('set '), upd.indexOf(' where '));
+  ok(setClause.length > 0 && !/\bplan\b|\bstatus\b|seats_limit/.test(setClause), 'the plan, status and limits are NOT changed — legacy stays legacy until then');
+  ok(/notes\s+= concat_ws\(/.test(upd), 'the decision is recorded in notes');
+  ok(/values \('160', 'legacy_end_date'\)/.test(c) && /delete from public\.app_migrations where version = '160'/.test(down), '160 ledger insert / down delete');
+  ok(/set period_end = null, status = 'active'/.test(down) && /period_end = timestamptz '2027-03-31 23:59:59\+05:30'/.test(down), 'down clears only the date this migration set');
 }
 
 console.log(`subscription-expiry: ${pass} passed, ${fail} failed`);
