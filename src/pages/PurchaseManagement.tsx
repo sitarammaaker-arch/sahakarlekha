@@ -29,6 +29,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { PackagePlus, Plus, Trash2, Eye, Pencil, Printer, Search, FileSpreadsheet, Download } from 'lucide-react';
 import { generatePurchaseRecordPDF } from '@/lib/pdf';
+import { rcmTaxOutsideTotal } from '@/lib/rcm';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { getBankAccountIds } from '@/lib/storage';
@@ -144,10 +145,10 @@ const PurchaseManagement: React.FC = () => {
   // ── Derived totals ────────────────────────────────────────────────────────
   const totalAmount = items.reduce((s, i) => s + i.amount, 0);
   // T-02: net / GST / TDS / TCS / grand-total born exact in integer paise (shared with SaleManagement).
-  const preRound = computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct, tdsPct, tcsPct, cashDiscount });
+  const preRound = computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct, tdsPct, tcsPct, cashDiscount, rcm: rcmApplicable });
   const wantedRoundOff = !roundOffOn ? 0 : roundOffManual.trim() !== '' ? Number(roundOffManual) || 0 : autoRoundOff(preRound.totalBeforeRoundOff);
   const { netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, tdsAmount, tcsAmount, grandTotal, roundOff, cashDiscount: cashDiscountApplied } =
-    computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct, tdsPct, tcsPct, cashDiscount, roundOff: wantedRoundOff });
+    computeInvoiceTotals({ items, discount, cgstPct, sgstPct, igstPct, tdsPct, tcsPct, cashDiscount, roundOff: wantedRoundOff, rcm: rcmApplicable });
 
   // Phase-2 D3: 194Q ADVICE from the sourced TDS engine — this FY's purchases from the supplier
   // (this bill included) against the threshold. Never changes the bill; the TDS % stays the user's.
@@ -420,6 +421,7 @@ const PurchaseManagement: React.FC = () => {
     }));
     try {
       generatePurchaseRecordPDF({
+        rcmApplicable: rcmTaxOutsideTotal(purchase),
         purchaseNo: purchase.purchaseNo,
         date: purchase.date,
         supplierBillNo: purchase.supplierBillNo,
@@ -783,7 +785,7 @@ const PurchaseManagement: React.FC = () => {
                   {/* ECR-22: Reverse Charge Mechanism */}
                   <label className="flex items-center gap-2 pt-1 text-sm cursor-pointer">
                     <input type="checkbox" checked={rcmApplicable} onChange={e => setRcmApplicable(e.target.checked)} className="h-4 w-4" />
-                    <span>{language === 'hi' ? 'रिवर्स चार्ज (RCM) लागू' : 'Reverse Charge (RCM) applicable'}</span>
+                    <span>{language === 'hi' ? 'रिवर्स चार्ज (RCM) लागू — GST सरकार को देय, आपूर्तिकर्ता को नहीं' : 'Reverse Charge (RCM) — GST is paid to the government, not the supplier'}</span>
                   </label>
                   {taxAmount > 0 && (
                     <div className="flex justify-between border-t border-blue-200 pt-1 font-medium text-blue-700 dark:text-blue-300">
@@ -870,9 +872,13 @@ const PurchaseManagement: React.FC = () => {
                 </div>
                 {taxAmount > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    {language === 'hi'
-                      ? `* GST के लिए अलग जर्नल एंट्री स्वतः बनेगी (Dr GST Input / Cr ${supplierName || 'आपूर्तिकर्ता'})`
-                      : `* Separate journal entry will be auto-created for GST (Dr GST Input / Cr ${supplierName || 'Supplier'})`}
+                    {rcmApplicable
+                      ? (language === 'hi'
+                        ? `* रिवर्स चार्ज: GST ${fmt(taxAmount)} ${supplierName || 'आपूर्तिकर्ता'} को नहीं, सरकार को देय है — इसलिए ऊपर की कुल राशि में नहीं जुड़ा। प्रविष्टि: नाम Input GST / जमा "Reverse Charge GST Payable (RCM)"। चालान भरने पर: नाम RCM देय / जमा बैंक।`
+                        : `* Reverse charge: GST ${fmt(taxAmount)} is owed to the government, not to ${supplierName || 'the supplier'} — so it is not in the total above. Entry: Dr Input GST / Cr "Reverse Charge GST Payable (RCM)". On paying the challan: Dr RCM payable / Cr Bank.`)
+                      : (language === 'hi'
+                        ? `* GST की प्रविष्टि इसी वाउचर में बनेगी (Dr Input GST / Cr ${supplierName || 'आपूर्तिकर्ता'})`
+                        : `* The GST entry is part of this voucher (Dr Input GST / Cr ${supplierName || 'Supplier'})`)}
                   </p>
                 )}
                 {tdsAmount > 0 && (
@@ -1255,6 +1261,13 @@ const PurchaseManagement: React.FC = () => {
                       <span>{fmt(viewPurchase.taxAmount || 0)}</span>
                     </div>
                   </div>
+                )}
+                {rcmTaxOutsideTotal(viewPurchase) && (
+                  <p className="text-xs text-left text-muted-foreground">
+                    {language === 'hi'
+                      ? `रिवर्स चार्ज (RCM): ऊपर का GST ${fmt(viewPurchase.taxAmount || 0)} सरकार को देय है, आपूर्तिकर्ता को नहीं — कुल राशि में शामिल नहीं।`
+                      : `Reverse charge (RCM): the GST above (${fmt(viewPurchase.taxAmount || 0)}) is owed to the government, not the supplier — it is not in the total.`}
+                  </p>
                 )}
                 {/* TDS Deduction */}
                 {(viewPurchase.tdsAmount || 0) > 0 && (

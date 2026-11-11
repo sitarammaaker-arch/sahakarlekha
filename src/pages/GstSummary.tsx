@@ -20,6 +20,7 @@ import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
 import { partyGstin, societyStateCode, placeOfSupply } from '@/lib/gstStates';
 import { INDIAN_STATES } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
+import { computeRCM, type RcmPurchase } from '@/lib/rcm';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -197,11 +198,16 @@ export default function GstSummary() {
     grand: activePurchases.reduce((s, r) => s + r.grandTotal, 0) - purchaseReturnTotals.grand,
   }), [activePurchases, purchaseReturnTotals]);
 
-  // Net GST payable / refundable
-  const netCgst = outputTotals.cgst - itcTotals.cgst;
-  const netSgst = outputTotals.sgst - itcTotals.sgst;
-  const netIgst = outputTotals.igst - itcTotals.igst;
-  const netGst  = outputTotals.tax  - itcTotals.tax;
+  // Reverse charge: tax the society owes as RECIPIENT on its flagged purchases (same sum as the GSTR-9 page —
+  // lib/rcm.computeRCM). It is a liability of the period (3.1(d)) AND input tax (CGST Act s.2(62)(b)); the
+  // purchases' tax was already inside itcTotals, so only the liability side was missing here.
+  const rcmIn = useMemo(() => computeRCM(activePurchases as unknown as RcmPurchase[], fromDate, toDate), [activePurchases, fromDate, toDate]);
+
+  // Net GST payable / refundable (output tax + reverse-charge tax − input credit)
+  const netCgst = outputTotals.cgst + rcmIn.cgst - itcTotals.cgst;
+  const netSgst = outputTotals.sgst + rcmIn.sgst - itcTotals.sgst;
+  const netIgst = outputTotals.igst + rcmIn.igst - itcTotals.igst;
+  const netGst  = outputTotals.tax  + rcmIn.total - itcTotals.tax;
 
   // ── GSTR-1: B2B Sales (customer has gstNo) ───────────────────────────────
   const b2bSales = useMemo(() =>
@@ -385,7 +391,7 @@ export default function GstSummary() {
         osup_det: { txval: outwardTaxable.taxable, iamt: outwardTaxable.igst, camt: outwardTaxable.cgst, samt: outwardTaxable.sgst, csamt: 0 },
         osup_zero: { txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0 },
         osup_nil_exmp: { txval: outwardNil.taxable, iamt: 0, camt: 0, samt: 0, csamt: 0 },
-        isup_rev: { txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0 },
+        isup_rev: { txval: rcmIn.taxableValue, iamt: rcmIn.igst, camt: rcmIn.cgst, samt: rcmIn.sgst, csamt: 0 },
         osup_nongst: { txval: 0 },
       },
       itc_elg: {
@@ -423,7 +429,7 @@ export default function GstSummary() {
         ['(a)', 'Outward taxable supplies (other than zero rated, nil, exempted)', outwardTaxable.taxable.toFixed(2), outwardTaxable.igst.toFixed(2), outwardTaxable.cgst.toFixed(2), outwardTaxable.sgst.toFixed(2), '0.00'],
         ['(b)', 'Outward taxable supplies (zero rated)', '0.00', '0.00', '0.00', '0.00', '0.00'],
         ['(c)', 'Other outward supplies (Nil rated, exempted)', outwardNil.taxable.toFixed(2), '0.00', '0.00', '0.00', '0.00'],
-        ['(d)', 'Inward supplies (liable to reverse charge)', '0.00', '0.00', '0.00', '0.00', '0.00'],
+        ['(d)', 'Inward supplies (liable to reverse charge)', rcmIn.taxableValue.toFixed(2), rcmIn.igst.toFixed(2), rcmIn.cgst.toFixed(2), rcmIn.sgst.toFixed(2), '0.00'],
         ['(e)', 'Non-GST outward supplies', '0.00', '', '', '', ''],
       ],
       styles: { fontSize: 7, cellPadding: 1.5 },
@@ -436,7 +442,7 @@ export default function GstSummary() {
       startY: y2,
       head: [['4', 'Eligible ITC', 'IGST', 'CGST', 'SGST', 'Cess']],
       body: [
-        ['(A)(v)', 'ITC Available — All other ITC (purchases)', itcAvailable.igst.toFixed(2), itcAvailable.cgst.toFixed(2), itcAvailable.sgst.toFixed(2), '0.00'],
+        ['(A)', 'ITC Available — purchases (incl. reverse charge: ' + rcmIn.total.toFixed(2) + ')', itcAvailable.igst.toFixed(2), itcAvailable.cgst.toFixed(2), itcAvailable.sgst.toFixed(2), '0.00'],
         ['(B)', 'ITC Reversed (purchase returns / debit notes)', itcReversed.igst.toFixed(2), itcReversed.cgst.toFixed(2), itcReversed.sgst.toFixed(2), '0.00'],
         ['(C)', 'Net ITC Available [(A)-(B)]', itcNet.igst.toFixed(2), itcNet.cgst.toFixed(2), itcNet.sgst.toFixed(2), '0.00'],
       ],
@@ -1322,7 +1328,7 @@ export default function GstSummary() {
                       { key: '(a)', label: hi ? 'कर योग्य बाह्य आपूर्ति (शून्य दर, nil, मुक्त को छोड़कर)' : 'Outward taxable supplies (other than zero rated, nil rated and exempted)', data: outwardTaxable },
                       { key: '(b)', label: hi ? 'बाह्य कर योग्य आपूर्ति (शून्य दर)' : 'Outward taxable supplies (zero rated)', data: { taxable: 0, igst: 0, cgst: 0, sgst: 0 } },
                       { key: '(c)', label: hi ? 'अन्य बाह्य आपूर्ति (Nil/मुक्त)' : 'Other outward supplies (Nil rated, exempted)', data: outwardNil },
-                      { key: '(d)', label: hi ? 'आवक आपूर्ति (रिवर्स चार्ज)' : 'Inward supplies (liable to reverse charge)', data: { taxable: 0, igst: 0, cgst: 0, sgst: 0 } },
+                      { key: '(d)', label: hi ? 'आवक आपूर्ति (रिवर्स चार्ज)' : 'Inward supplies (liable to reverse charge)', data: { taxable: rcmIn.taxableValue, igst: rcmIn.igst, cgst: rcmIn.cgst, sgst: rcmIn.sgst } },
                       { key: '(e)', label: hi ? 'गैर-GST बाह्य आपूर्ति' : 'Non-GST outward supplies', data: { taxable: 0, igst: 0, cgst: 0, sgst: 0 } },
                     ].map(row => (
                       <TableRow key={row.key}>
@@ -1360,7 +1366,16 @@ export default function GstSummary() {
                   <TableBody>
                     <TableRow>
                       <TableCell className="font-mono text-xs">(A)(v)</TableCell>
-                      <TableCell className="text-sm">{hi ? 'उपलब्ध ITC — सभी अन्य ITC (खरीद)' : 'ITC Available — All other ITC (purchases)'}</TableCell>
+                      <TableCell className="text-sm">
+                        {hi ? 'उपलब्ध ITC — सभी अन्य ITC (खरीद)' : 'ITC Available — All other ITC (purchases)'}
+                        {rcmIn.total > 0 && (
+                          <span className="block text-xs text-muted-foreground">
+                            {hi
+                              ? `इसमें रिवर्स चार्ज का ${fmt(rcmIn.total)} शामिल है। यह कर नकद से ही भरना है, ITC से नहीं (CGST नियम 85(4)); और इसका ITC कर भरने के बाद ही मिलता है (धारा 16(2)(c))।`
+                              : `Includes ${fmt(rcmIn.total)} of reverse charge. That tax is paid in cash, not from ITC (CGST Rule 85(4)); its credit is available once the tax is paid (s.16(2)(c)).`}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right font-mono text-blue-700">{fmt(itcAvailable.igst)}</TableCell>
                       <TableCell className="text-right font-mono text-blue-700">{fmt(itcAvailable.cgst)}</TableCell>
                       <TableCell className="text-right font-mono text-blue-700">{fmt(itcAvailable.sgst)}</TableCell>

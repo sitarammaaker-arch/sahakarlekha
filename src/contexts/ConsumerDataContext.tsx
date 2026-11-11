@@ -41,7 +41,7 @@ const VARIANCE_LABEL: Record<MatchReason, string> = {
 };
 import { getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
 import { salesReturnCreditAccountId } from '@/lib/consumer/salesReturnAccount';
-import { usesCombinedGst } from '@/lib/accounting/gstLedgers';
+import { usesCombinedGst, voucherRcmAccountId } from '@/lib/accounting/gstLedgers';
 import { isUniqueViolation, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun, PurchaseOrder, PurchaseOrderItem, Purchase, SalesReturn, SalesReturnItem, SalesReturnRefund, PurchaseReturn, PurchaseReturnItem, PurchaseReturnRefund } from '@/types';
 
@@ -706,7 +706,10 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     // Cash discount on the original bill (115, after GST): the returned share comes back out of 4499 Discount
     // Received in proportion, so the supplier is debited only what the bill actually owed for these goods.
     const cashDiscShare = round2(((purchase as { cashDiscount?: number }).cashDiscount || 0) * ratio);
-    const grandTotal = round2(netAmount + taxAmount - cashDiscShare);
+    // Reverse charge: a purchase posted with a reverse-charge payable line never credited the supplier with the
+    // GST, so the return takes back the value only and reverses the tax against that same payable head.
+    const rcmAccId = taxAmount > 0 ? voucherRcmAccountId(purchase.voucherId ? vouchers.find(v => v.id === purchase.voucherId) : null, accounts) : null;
+    const grandTotal = round2(netAmount + (rcmAccId ? 0 : taxAmount) - cashDiscShare);
     if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
     const fy = society.financialYear;
     const seq = purchaseReturns.filter(r => r.returnNo?.includes(fy)).reduce((m, r) => { const x = r.returnNo?.match(/\/(\d+)$/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0) + 1;
@@ -731,6 +734,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     gstLegs('input', { cgst: cgstAmount, sgst: sgstAmount, igst: igstAmount, total: taxAmount }, { legacy: usesCombinedGst('input', purchase.voucherId ? vouchers.find(v => v.id === purchase.voucherId) : null) })
       .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Cr', amount: g.amount }));
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
+    if (rcmAccId) lines.push({ id: lid(), accountId: rcmAccId, type: 'Dr', amount: taxAmount });
     if (cashDiscShare > 0) lines.push({ id: lid(), accountId: resolveDiscountReceivedAccountId(accounts), type: 'Dr', amount: cashDiscShare });
     const primaryCrAcc = purchaseAccBuckets.size > 0 ? [...purchaseAccBuckets.keys()][0] : '5101';
     const voucher = addVoucher({
@@ -785,7 +789,10 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     // Cash discount on the original bill (115, after GST): the returned share comes back out of 4499 Discount
     // Received in proportion, so the supplier is debited only what the bill actually owed for these goods.
     const cashDiscShare = round2(((purchase as { cashDiscount?: number }).cashDiscount || 0) * ratio);
-    const grandTotal = round2(netAmount + taxAmount - cashDiscShare);
+    // Reverse charge: a purchase posted with a reverse-charge payable line never credited the supplier with the
+    // GST, so the return takes back the value only and reverses the tax against that same payable head.
+    const rcmAccId = taxAmount > 0 ? voucherRcmAccountId(purchase.voucherId ? vouchers.find(v => v.id === purchase.voucherId) : null, accounts) : null;
+    const grandTotal = round2(netAmount + (rcmAccId ? 0 : taxAmount) - cashDiscShare);
     if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
 
     // 1) Reverse the OLD return: cancel its voucher + restore the stock it removed (+qty).
@@ -811,6 +818,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     gstLegs('input', { cgst: cgstAmount, sgst: sgstAmount, igst: igstAmount, total: taxAmount }, { legacy: usesCombinedGst('input', purchase.voucherId ? vouchers.find(v => v.id === purchase.voucherId) : null) })
       .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Cr', amount: g.amount }));
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
+    if (rcmAccId) lines.push({ id: lid(), accountId: rcmAccId, type: 'Dr', amount: taxAmount });
     if (cashDiscShare > 0) lines.push({ id: lid(), accountId: resolveDiscountReceivedAccountId(accounts), type: 'Dr', amount: cashDiscShare });
     const primaryCrAcc = purchaseAccBuckets.size > 0 ? [...purchaseAccBuckets.keys()][0] : '5101';
     const voucher = addVoucher({
