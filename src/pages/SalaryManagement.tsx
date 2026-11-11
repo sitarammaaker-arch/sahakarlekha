@@ -64,6 +64,11 @@ const EMPTY_EMP_FORM = {
   phone: '',
   bankAccount: '',
   pan: '',
+  uan: '',
+  esiNo: '',
+  // PF / ESI apply by default (the slip computes them unless switched off for this employee).
+  pfApplicable: true,
+  esiApplicable: true,
   status: 'active' as 'active' | 'inactive',
 };
 
@@ -168,13 +173,46 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ empForm, setEmpForm, hi, on
         />
       </div>
       <div className="space-y-1 col-span-2">
-        <Label>{hi ? 'PAN (Form 24Q हेतु)' : 'PAN (for Form 24Q)'}</Label>
+        <Label>{hi ? 'PAN (TDS विवरण हेतु)' : 'PAN (for the TDS statement)'}</Label>
         <Input
           value={empForm.pan}
           onChange={e => setEmpForm(f => ({ ...f, pan: e.target.value.toUpperCase() }))}
           placeholder="ABCDE1234F"
           maxLength={10}
         />
+        {empForm.pan.trim() !== '' && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(empForm.pan.trim()) && (
+          <p className="text-xs text-destructive">{hi ? 'PAN का रूप ग़लत लगता है — 5 अक्षर, 4 अंक, 1 अक्षर (जैसे ABCDE1234F)।' : 'PAN looks wrong — 5 letters, 4 digits, 1 letter (e.g. ABCDE1234F).'}</p>
+        )}
+      </div>
+      <div className="space-y-1 col-span-2 sm:col-span-1">
+        <Label>{hi ? 'UAN (PF खाता संख्या)' : 'UAN (PF account no.)'}</Label>
+        <Input
+          value={empForm.uan}
+          onChange={e => setEmpForm(f => ({ ...f, uan: e.target.value.replace(/\D/g, '') }))}
+          placeholder="100XXXXXXXXX"
+          maxLength={12}
+          inputMode="numeric"
+        />
+      </div>
+      <div className="space-y-1 col-span-2 sm:col-span-1">
+        <Label>{hi ? 'ESI नंबर (IP नंबर)' : 'ESI No. (IP number)'}</Label>
+        <Input
+          value={empForm.esiNo}
+          onChange={e => setEmpForm(f => ({ ...f, esiNo: e.target.value.replace(/\D/g, '') }))}
+          maxLength={10}
+          inputMode="numeric"
+        />
+      </div>
+      <div className="col-span-2 flex flex-wrap gap-x-6 gap-y-2">
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" className="h-4 w-4" checked={empForm.pfApplicable} onChange={e => setEmpForm(f => ({ ...f, pfApplicable: e.target.checked }))} />
+          {hi ? 'PF लागू है' : 'PF applies'}
+        </label>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" className="h-4 w-4" checked={empForm.esiApplicable} onChange={e => setEmpForm(f => ({ ...f, esiApplicable: e.target.checked }))} />
+          {hi ? 'ESI लागू है' : 'ESI applies'}
+        </label>
+        <p className="w-full text-xs text-muted-foreground">{hi ? 'जो लागू न हो, उसका निशान हटाएँ — फिर वेतन प्रोसेस करते समय उसकी कटौती नहीं बनेगी।' : 'Untick what does not apply — the salary run then makes no such deduction.'}</p>
       </div>
       <div className="space-y-1 col-span-2">
         <Label>{hi ? 'स्थिति' : 'Status'}</Label>
@@ -290,7 +328,7 @@ const SalaryManagement: React.FC = () => {
   const export24Q = () => {
     const headers = ['Emp No', 'Name', 'PAN', 'Gross Salary', 'TDS'];
     const rows = form24Q.rows.map(r => [r.empNo, r.name, r.pan, r.grossSalary, r.tds]);
-    downloadCSV(headers, rows, `form24Q_${society.financialYear}_${q24Quarter}.csv`);
+    downloadCSV(headers, rows, `form138_summary_${society.financialYear}_${q24Quarter}.csv`);
   };
 
   const [historyMonth, setHistoryMonth] = useState('');
@@ -359,6 +397,10 @@ const SalaryManagement: React.FC = () => {
       phone: empForm.phone,
       bankAccount: empForm.bankAccount || undefined,
       pan: empForm.pan.toUpperCase().trim() || undefined,
+      uan: empForm.uan.trim() || undefined,
+      esiNo: empForm.esiNo.trim() || undefined,
+      pfApplicable: empForm.pfApplicable,
+      esiApplicable: empForm.esiApplicable,
       status: empForm.status,
     });
     toast({ title: hi ? 'कर्मचारी जोड़ा गया' : 'Employee added' });
@@ -382,6 +424,10 @@ const SalaryManagement: React.FC = () => {
       phone: empForm.phone,
       bankAccount: empForm.bankAccount || undefined,
       pan: empForm.pan.toUpperCase().trim() || undefined,
+      uan: empForm.uan.trim() || undefined,
+      esiNo: empForm.esiNo.trim() || undefined,
+      pfApplicable: empForm.pfApplicable,
+      esiApplicable: empForm.esiApplicable,
       status: empForm.status,
     });
     toast({ title: hi ? 'कर्मचारी अपडेट किया गया' : 'Employee updated' });
@@ -399,6 +445,10 @@ const SalaryManagement: React.FC = () => {
       phone: emp.phone,
       bankAccount: emp.bankAccount || '',
       pan: emp.pan || '',
+      uan: emp.uan || '',
+      esiNo: emp.esiNo || '',
+      pfApplicable: emp.pfApplicable ?? true,
+      esiApplicable: emp.esiApplicable ?? true,
       status: emp.status,
     });
   };
@@ -1128,7 +1178,7 @@ const SalaryManagement: React.FC = () => {
               </Button>
               <Button size="sm" variant="outline" onClick={() => setQ24Open(true)} className="gap-1">
                 <FileSpreadsheet className="h-4 w-4" />
-                {hi ? 'फॉर्म 24Q' : 'Form 24Q'}
+                {hi ? 'Form 138 (24Q)' : 'Form 138 (24Q)'}
               </Button>
             </div>
           </div>
@@ -1471,7 +1521,10 @@ const SalaryManagement: React.FC = () => {
       <Dialog open={q24Open} onOpenChange={setQ24Open}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{hi ? 'फॉर्म 24Q — त्रैमासिक वेतन TDS' : 'Form 24Q — Quarterly Salary TDS'} ({society.financialYear})</DialogTitle>
+            {/* Income-tax Rules 2026, rule 219(1) Table Sl. 1: tax deducted u/s 392 is reported quarterly in Form 138
+                (the old 24Q) — https://www.incometaxindia.gov.in/w/rule-219-1 (read 2026-11-11). This dialog is a
+                per-employee SUMMARY for preparing it, not the statement file itself. */}
+            <DialogTitle>{hi ? 'Form 138 (पहले 24Q) — त्रैमासिक वेतन TDS सारांश' : 'Form 138 (formerly 24Q) — Quarterly Salary TDS Summary'} ({society.financialYear})</DialogTitle>
             <DialogDescription>
               {hi
                 ? 'चुनी हुई तिमाही में हर कर्मचारी का वेतन व TDS सारांश। वेतन का TDS भुगतान के समय कटता है (आयकर अधिनियम 2025, धारा 392(1)) — इसलिए यहाँ सिर्फ़ Paid पर्चियाँ आती हैं, भुगतान की तारीख़ वाली तिमाही में (सितंबर का वेतन 6 अक्टूबर को दिया तो Q3)। Unpaid पर्चियों का TDS भुगतान होने पर आएगा।'
