@@ -41,6 +41,7 @@ const VARIANCE_LABEL: Record<MatchReason, string> = {
 };
 import { getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
 import { salesReturnCreditAccountId } from '@/lib/consumer/salesReturnAccount';
+import { usesCombinedGst } from '@/lib/accounting/gstLedgers';
 import { isUniqueViolation, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import type { ConsumerPrice, ConsumerPriceTier, Voucher, PatronageRun, PurchaseOrder, PurchaseOrderItem, Purchase, SalesReturn, SalesReturnItem, SalesReturnRefund, PurchaseReturn, PurchaseReturnItem, PurchaseReturnRefund } from '@/types';
 
@@ -112,7 +113,7 @@ interface ConsumerDataContextValue {
 const ConsumerDataContext = createContext<ConsumerDataContextValue | null>(null);
 
 export function ConsumerProvider({ children }: { children: ReactNode }) {
-  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase, deletePurchase, addStockMovement, purchases, suppliers, stockItems, registerVoucherOwner, knownEmptyTables } = useData();
+  const { society, accounts, addAccount, vouchers, sales, members, addVoucher, cancelVoucher, updateMember, addPurchase, deletePurchase, addStockMovement, purchases, suppliers, stockItems, registerVoucherOwner, gstLegs, knownEmptyTables } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const societyId = user?.societyId || 'SOC001';
@@ -544,7 +545,9 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     });
     const lid = () => crypto.randomUUID();
     const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: salesReturnAccId, type: 'Dr', amount: netAmount }];
-    if (taxAmount > 0) lines.push({ id: lid(), accountId: '2201', type: 'Dr', amount: taxAmount });
+    // RM-17: reverse the GST on the ledger(s) the ORIGINAL sale used — head-wise, or the combined 2201 for an older bill.
+    gstLegs('output', { cgst: cgstAmount, sgst: sgstAmount, igst: igstAmount, total: taxAmount }, { legacy: usesCombinedGst('output', sale.voucherId ? vouchers.find(v => v.id === sale.voucherId) : null) })
+      .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Dr', amount: g.amount }));
     lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: grandTotal });
     const voucher = addVoucher({
       type: 'credit_note', date: data.date,
@@ -570,7 +573,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     });
     toastRef.current({ title: `✅ वापसी दर्ज — ${returnNo}`, description: `स्टॉक वापस + ₹${grandTotal.toLocaleString('en-IN')}` });
     return ret;
-  }, [sales, salesReturns, accounts, vouchers, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, user]);
+  }, [sales, salesReturns, accounts, vouchers, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, gstLegs, user]);
 
   // Edit a posted sales return (fix a wrong quantity/refund). Reverses the old return's
   // voucher + stock, then re-posts the new one under the SAME return number & id. RULE 1/2/3.
@@ -617,7 +620,9 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     });
     const lid = () => crypto.randomUUID();
     const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: salesReturnAccId, type: 'Dr', amount: netAmount }];
-    if (taxAmount > 0) lines.push({ id: lid(), accountId: '2201', type: 'Dr', amount: taxAmount });
+    // RM-17: reverse the GST on the ledger(s) the ORIGINAL sale used — head-wise, or the combined 2201 for an older bill.
+    gstLegs('output', { cgst: cgstAmount, sgst: sgstAmount, igst: igstAmount, total: taxAmount }, { legacy: usesCombinedGst('output', sale.voucherId ? vouchers.find(v => v.id === sale.voucherId) : null) })
+      .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Dr', amount: g.amount }));
     lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: grandTotal });
     const voucher = addVoucher({
       type: 'credit_note', date: data.date,
@@ -638,7 +643,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     commitSalesReturn(updated, cur);
     toastRef.current({ title: `✅ वापसी संशोधित — ${cur.returnNo}`, description: `नई राशि ₹${grandTotal.toLocaleString('en-IN')}` });
     return updated;
-  }, [sales, salesReturns, accounts, vouchers, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, user]);
+  }, [sales, salesReturns, accounts, vouchers, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, gstLegs, user]);
 
   const deleteSalesReturn = useCallback((id: string) => {
     if (guardFYLocked()) return;
@@ -722,7 +727,9 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     });
     const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [];
     purchaseAccBuckets.forEach((amt, accId) => { const r = round2(amt); if (r > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: r }); });
-    if (taxAmount > 0) lines.push({ id: lid(), accountId: '3310', type: 'Cr', amount: taxAmount });
+    // RM-17: reverse the ITC on the ledger(s) the ORIGINAL purchase used — head-wise, or the combined 3310 for an older bill.
+    gstLegs('input', { cgst: cgstAmount, sgst: sgstAmount, igst: igstAmount, total: taxAmount }, { legacy: usesCombinedGst('input', purchase.voucherId ? vouchers.find(v => v.id === purchase.voucherId) : null) })
+      .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Cr', amount: g.amount }));
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
     if (cashDiscShare > 0) lines.push({ id: lid(), accountId: resolveDiscountReceivedAccountId(accounts), type: 'Dr', amount: cashDiscShare });
     const primaryCrAcc = purchaseAccBuckets.size > 0 ? [...purchaseAccBuckets.keys()][0] : '5101';
@@ -750,7 +757,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     });
     toastRef.current({ title: `✅ खरीद वापसी दर्ज — ${returnNo}`, description: `स्टॉक कम + ₹${grandTotal.toLocaleString('en-IN')}` });
     return ret;
-  }, [purchases, purchaseReturns, suppliers, stockItems, accounts, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitPurchaseReturn, user]);
+  }, [purchases, purchaseReturns, suppliers, stockItems, accounts, vouchers, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitPurchaseReturn, gstLegs, user]);
 
   // Edit a posted purchase return. Reverses the old return's voucher + stock, then re-posts
   // the new one under the SAME return number & id. RULE 1/2/3.
@@ -800,7 +807,9 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     });
     const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [];
     purchaseAccBuckets.forEach((amt, accId) => { const r = round2(amt); if (r > 0) lines.push({ id: lid(), accountId: accId, type: 'Cr', amount: r }); });
-    if (taxAmount > 0) lines.push({ id: lid(), accountId: '3310', type: 'Cr', amount: taxAmount });
+    // RM-17: reverse the ITC on the ledger(s) the ORIGINAL purchase used — head-wise, or the combined 3310 for an older bill.
+    gstLegs('input', { cgst: cgstAmount, sgst: sgstAmount, igst: igstAmount, total: taxAmount }, { legacy: usesCombinedGst('input', purchase.voucherId ? vouchers.find(v => v.id === purchase.voucherId) : null) })
+      .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Cr', amount: g.amount }));
     lines.push({ id: lid(), accountId: debitAccId, type: 'Dr', amount: grandTotal });
     if (cashDiscShare > 0) lines.push({ id: lid(), accountId: resolveDiscountReceivedAccountId(accounts), type: 'Dr', amount: cashDiscShare });
     const primaryCrAcc = purchaseAccBuckets.size > 0 ? [...purchaseAccBuckets.keys()][0] : '5101';
@@ -823,7 +832,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     commitPurchaseReturn(updated, cur);
     toastRef.current({ title: `✅ खरीद वापसी संशोधित — ${cur.returnNo}`, description: `नई राशि ₹${grandTotal.toLocaleString('en-IN')}` });
     return updated;
-  }, [purchases, purchaseReturns, suppliers, stockItems, accounts, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitPurchaseReturn, user]);
+  }, [purchases, purchaseReturns, suppliers, stockItems, accounts, vouchers, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitPurchaseReturn, gstLegs, user]);
 
   const deletePurchaseReturn = useCallback((id: string) => {
     if (guardFYLocked()) return;

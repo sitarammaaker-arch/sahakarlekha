@@ -63,7 +63,7 @@ export const normRegNo = (s: string) => (s || '').toUpperCase().replace(/[\s\-.]
 
 export function TransportOpsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { society, accounts, customers, vouchers, addVoucher, cancelVoucher, registerVoucherOwner } = useData();
+  const { society, accounts, customers, vouchers, addVoucher, cancelVoucher, registerVoucherOwner, gstLegs } = useData();
   const moduleOn = useCapabilityEnabled(['transport']);
   const loadSid = moduleOn ? user?.societyId : undefined;
   const { toast } = useToast();
@@ -199,7 +199,8 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
       toastRef.current({ title: 'भाड़ा आय खाता नहीं है', description: '"Freight Income" (4501) खाता chart में नहीं है — Ledger Hygiene में "डोमेन खाते बनाएँ" दबाएँ, फिर ट्रिप दर्ज करें।', variant: 'destructive', duration: 12000 });
       return sentinel;
     }
-    // GST (GTA). Forward charge adds a Cr 2201 line (one line, split in the narration — same as sales);
+    // GST (GTA). Forward charge adds the Cr GST legs — head-wise (Output CGST / SGST / IGST), or the combined
+    // 2201 where the chart lacks those heads (RM-17, lib/accounting/gstLedgers — same rule as sales);
     // reverse charge posts nothing (the recipient pays) but says so on the voucher.
     const gstMode: GtaGstMode = data.gstMode ?? 'none';
     const supplierCode = societyStateCode(society, INDIAN_STATES.find(st => st.value === society.state)?.label);
@@ -210,11 +211,12 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
     const recipientCode = resolveStateCode(custGstin, customer.placeOfSupply || customer.state);
     const tax = gtaTax(gstMode, data.date, taxable, !!supplierCode && !!recipientCode && recipientCode !== supplierCode);
     const forward = (gstMode === 'fcm5' || gstMode === 'fcm18') && !!tax && tax.total > 0;
-    const gstAccountId = forward ? (accounts.find(a => a.id === '2201' && !a.isGroup)?.id ?? null) : null;
+    const gstCr = forward && tax ? gstLegs('output', { cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, total: tax.total }) : [];
+    const gstAccountId = forward && gstCr.length > 0 && gstCr.every(g => accounts.some(a => a.id === g.accountId && !a.isGroup)) ? gstCr[0].accountId : null;
     if (forward && !gstAccountId) { toastRef.current({ title: 'देय GST खाता नहीं है', description: '"GST Payable" (2201) खाता chart में नहीं है — पहले Ledger Heads में बनाएँ।', variant: 'destructive', duration: 12000 }); return sentinel; }
     const baseLegs = tripLegs(customer.accountId, data, { freight: ids.freight, loading: ids.loading, detention: ids.detention });
     const legs = forward && tax
-      ? [{ ...baseLegs[0], amount: round2(baseLegs[0].amount + tax.total) }, ...baseLegs.slice(1), { accountId: gstAccountId!, type: 'Cr' as const, amount: tax.total }]
+      ? [{ ...baseLegs[0], amount: round2(baseLegs[0].amount + tax.total) }, ...baseLegs.slice(1), ...gstCr.map(g => ({ accountId: g.accountId, type: 'Cr' as const, amount: g.amount }))]
       : baseLegs;
     const amount = forward && tax ? round2(taxable + tax.total) : taxable;
     const gstNote = gtaNarration(gstMode, tax, society.financialYear);
@@ -260,7 +262,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
     doc.trip = trip;
     setTrips(prev => [...prev, trip]);
     return trip;
-  }, [vehicles, customers, accounts, trips, society, user, addVoucher, cancelVoucher]);
+  }, [vehicles, customers, accounts, trips, society, user, addVoucher, cancelVoucher, gstLegs]);
 
   const recordTripCollection = useCallback((data: { tripId: string; amount: number; tdsAmount?: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string }): Voucher => {
     const sentinel = { id: '', voucherNo: '', type: 'receipt', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;

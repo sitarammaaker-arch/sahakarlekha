@@ -26,7 +26,8 @@ import { resolveJurisdiction } from '@/lib/jurisdiction';
 import { reportError } from '@/lib/errorReporting';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, getBankAccountIds, defaultBankAccountId, defaultDebtorsAccountId } from '@/lib/storage';
-import { computeBillLines, demandLegs, billTotal, round2, gstLineForBill } from '@/lib/housing/billing';
+import { computeBillLines, demandLegs, billTotal, round2, gstLineForBill, gstBillLines } from '@/lib/housing/billing';
+import { GST_COMBINED_ID, halveIntraStateGst } from '@/lib/accounting/gstLedgers';
 import { plannedBillInterest } from '@/lib/housing/arrears';
 import { buildMemberStatement } from '@/lib/housing/statement';
 import { buildFundStatement } from '@/lib/funds';
@@ -105,7 +106,7 @@ const HousingDataContext = createContext<HousingDataContextValue | undefined>(un
 export function HousingProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   // Compose core (never fork): FY-lock + chart from society; sub-ledgers + vouchers via the core engine.
-  const { society, accounts, members, vouchers, addAccount, addVoucher, cancelVoucher, registerVoucherOwner } = useData();
+  const { society, accounts, members, vouchers, addAccount, addVoucher, cancelVoucher, registerVoucherOwner, gstLegs } = useData();
   // J6b: load this module's tables only when its capability is on for the society (same rule as the
   // sidebar / CapabilityGuard) — societies that don't use housing no longer fetch them on every login.
   const moduleOn = useCapabilityEnabled(['housing']);
@@ -346,8 +347,14 @@ export function HousingProvider({ children }: { children: ReactNode }) {
           ? [{ chargeHeadId: '', name: 'Maintenance', accountId: '4101', isFund: false, amount: +flat.monthlyMaintenance.toFixed(2) }]
           : [];
       // GST (R2a): only when the society has enabled it AND the flat's taxable base > ₹7,500.
-      const gst = gstLineForBill(billLines, { enabled: !!society.maintenanceGstEnabled, rate: society.maintenanceGstRate ?? 18, gstAccountId: '2201' });
-      if (gst && accounts.some(a => a.id === '2201')) billLines.push(gst);
+      // RM-17: posted head-wise (Output CGST + SGST — maintenance is always within the State), or on the
+      // combined 2201 where the chart lacks those heads. No GST account at all → no GST line (as before).
+      const gstRate = society.maintenanceGstRate ?? 18;
+      const gst = gstLineForBill(billLines, { enabled: !!society.maintenanceGstEnabled, rate: gstRate, gstAccountId: GST_COMBINED_ID.output });
+      if (gst) {
+        const gstLines = gstBillLines(gst, gstRate, gstLegs('output', halveIntraStateGst(gst.amount)));
+        if (gstLines.every(l => accounts.some(a => a.id === l.accountId))) billLines.push(...gstLines);
+      }
       const amount = billTotal(billLines);
       if (amount <= 0) continue;   // nothing billable for this flat this period
       const rec = resolveReceivable(flat.memberId);
@@ -397,7 +404,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     });
     toastRef.current({ title: 'रखरखाव बिल बने', description: `${created.length} बिल · अवधि ${data.period}`, duration: 6000 });
     return created;
-  }, [accounts, housingFlats, maintenanceBills, chargeHeads, members, society, addAccount, addVoucher, cancelVoucher, user]);
+  }, [accounts, housingFlats, maintenanceBills, chargeHeads, members, society, addAccount, addVoucher, cancelVoucher, gstLegs, user]);
 
   const deleteMaintenanceBill = useCallback((id: string): boolean => {
     if (guardFYLocked()) return false;
