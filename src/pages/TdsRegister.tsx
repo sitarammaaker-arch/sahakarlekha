@@ -344,6 +344,8 @@ const TdsRegister: React.FC = () => {
   };
   const handleDeleteEntry = (id: string) => {
     if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    // Automatic entries (purchase / salary) are not rows of tds_entries — change their source document instead.
+    if (id.startsWith('sal-') || id.startsWith('pur-')) return;
     const prev = entries;
     persistEntries(entries.filter(e => e.id !== id));
     supabase.from('tds_entries').update({ isDeleted: true }).eq('id', id).select('id').then(({ data, error }) => {
@@ -616,6 +618,10 @@ const TdsRegister: React.FC = () => {
                         <TableCell>
                           {entry.purchaseId
                             ? <Badge variant="outline" className="text-xs bg-blue-50">Auto</Badge>
+                            : entry.id.startsWith('sal-')
+                            // Built from a paid salary slip (salaryTdsEntries) — it lives on the Salary page, not in
+                            // tds_entries, so it is neither "Manual" nor deletable here.
+                            ? <Badge variant="outline" className="text-xs bg-blue-50" title={hi ? 'वेतन पेज की पर्ची से' : 'From a salary slip'}>{hi ? 'वेतन' : 'Salary'}</Badge>
                             : <span className="inline-flex items-center gap-1">
                                 <Badge variant="outline" className="text-xs bg-amber-50">Manual</Badge>
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-700" title={hi ? 'हटाएं' : 'Delete'} onClick={() => handleDeleteEntry(entry.id)}>
