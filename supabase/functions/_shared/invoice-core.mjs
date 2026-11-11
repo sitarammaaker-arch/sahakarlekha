@@ -3,9 +3,11 @@
  * scripts/test-invoice-core.mjs, so the GST split is unit-tested in CI before a single invoice
  * is issued. issue_invoice() (migration 130) re-checks every figure this returns.
  *
- * Rules (founder 2026-10-20):
- *   • Prices are GST-INCLUSIVE: the invoice total is exactly the order amount; the taxable value
- *     is backed out of it.
+ * Rules (founder 2026-10-20, prices changed to "+ GST" 2026-11-11):
+ *   • Plan prices are GST-EXCLUSIVE. create-order adds the GST with totalWithGstPaise() and charges that
+ *     total; the invoice total is exactly the amount charged, and the taxable value is backed out of it —
+ *     which returns the plan price to the paisa (a whole-rupee price at a whole-percent rate has no
+ *     rounding). Orders placed before 2026-11-11 were GST-inclusive; the same split serves both.
  *   • Place of supply = the buyer's state — GSTIN prefix first, else the state (Setup value / name). Unknown →
  *     NO invoice ('buyer_state_unknown'), never a guessed state.
  *   • Same state as the seller → CGST + SGST, always equal halves; otherwise IGST.
@@ -109,12 +111,29 @@ export function splitInclusive(totalPaise, ratePct, intra) {
 }
 
 /**
+ * What to charge for a GST-exclusive price: price + GST, in integer paise. Rate in percent, worked in
+ * basis points. splitInclusive() of the result gives the price back as the taxable value.
+ * @param {number} baseRupees  whole rupees, > 0
+ * @param {number|string} ratePct
+ */
+export function totalWithGstPaise(baseRupees, ratePct) {
+  if (!Number.isSafeInteger(baseRupees) || baseRupees <= 0) throw new Error(`price must be positive whole rupees (${baseRupees})`);
+  if (ratePct == null || ratePct === '') throw new Error('GST rate missing');
+  const bp = Math.round(Number(ratePct) * 100);
+  if (!Number.isFinite(bp) || bp < 0) throw new Error(`bad GST rate (${ratePct})`);
+  const basePaise = baseRupees * 100;
+  return basePaise + Math.round((basePaise * bp) / 10000);
+}
+
+/**
  * Everything issue_invoice() needs, or the reason no invoice can be issued yet.
- * @param {{ amountRupees: number,
+ * @param {{ amountPaise?: number|null, amountRupees?: number,
  *           seller: { state_code?: string|null, gst_rate_pct?: number|string|null } | null,
  *           buyer: { name?: string, address?: string, state?: string, gstin?: string } | null }} input
+ *   amountPaise = the amount charged (orders.amount_paise, migration 158); amountRupees = the older
+ *   whole-rupee orders.amount, used only when there is no paise figure.
  */
-export function buildInvoiceCalc({ amountRupees, seller, buyer }) {
+export function buildInvoiceCalc({ amountPaise, amountRupees, seller, buyer }) {
   if (!seller || !/^[0-3][0-9]$/.test(String(seller.state_code ?? '')) || seller.gst_rate_pct == null || seller.gst_rate_pct === '') {
     return { status: 'seller_incomplete' };
   }
@@ -123,7 +142,7 @@ export function buildInvoiceCalc({ amountRupees, seller, buyer }) {
   if (!pos) return { status: 'buyer_state_unknown' };
 
   const rate = Number(seller.gst_rate_pct);
-  const total = Math.round(Number(amountRupees) * 100);
+  const total = amountPaise != null ? Number(amountPaise) : Math.round(Number(amountRupees) * 100);
   const s = splitInclusive(total, rate, pos === seller.state_code);
   return {
     status: 'ok',

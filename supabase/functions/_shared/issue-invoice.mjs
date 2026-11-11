@@ -40,7 +40,8 @@ export async function issueInvoiceForOrder(supa, orderId, opts = {}) {
       const buyer = order.buyer_state_code
         ? { name: order.buyer_name || fromSoc?.name, address: order.buyer_address || fromSoc?.address, state: order.buyer_state_code, gstin: order.buyer_gstin }
         : fromSoc;
-      const built = buildInvoiceCalc({ amountRupees: order.amount, seller, buyer });
+      // amount_paise (migration 158) is the exact amount charged; older orders only have whole rupees.
+      const built = buildInvoiceCalc({ amountPaise: order.amount_paise ?? null, amountRupees: order.amount, seller, buyer });
       if (built.status !== 'ok') result = { status: built.status };
       else {
         const { data: res, error } = await supa.rpc('issue_invoice', { p_order_id: orderId, p_calc: built.calc });

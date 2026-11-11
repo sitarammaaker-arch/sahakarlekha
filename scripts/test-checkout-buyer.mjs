@@ -46,7 +46,7 @@ ok(stateCodeFromName('Andaman & Nicobar Islands') === '35' && stateCodeFromName(
 // ── 3. Wiring ────────────────────────────────────────────────────────────────
 {
   const co = read('supabase/functions/create-order/index.ts');
-  ok(/import \{ validateBuyer \} from '\.\.\/_shared\/invoice-core\.mjs'/.test(co), 'create-order validates with the shared core');
+  ok(/import \{ [^}]*\bvalidateBuyer\b[^}]* \} from '\.\.\/_shared\/invoice-core\.mjs'/.test(co), 'create-order validates with the shared core');
   ok(co.indexOf('validateBuyer(buyer)') < co.indexOf("fetch('https://api.razorpay.com/v1/orders'"), 'invalid buyer refused BEFORE a Razorpay order exists');
   ok(/if \(checkedBuyer && !checkedBuyer\.ok\) return json\(\{ error: checkedBuyer\.error \}, 400\)/.test(co), 'invalid buyer → 400 with the message');
   const ins = co.indexOf("const { error: insErr } = await supa.from('orders').insert({");

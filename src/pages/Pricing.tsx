@@ -2,13 +2,19 @@
  * SahakarLekha Pricing Page — Bilingual Hindi+English
  * Public page, no auth required.
  *
- * 3-tier structure: Starter ₹1,499 / Plus ₹3,999 / Pro ₹9,999 per society / FY,
- * plus a compact Enterprise/Federation section and one-time add-ons.
- * Positioning: Starter = Accounting · Plus = Team · Pro = Scale · Enterprise = Network.
- * No permanent public free plan. Starter is full professional accounting — statutory
- * reports & export are NEVER gated, unlimited vouchers/members; its limit is team size
- * (1 society · 1 user). Billing is not yet wired, so paid CTAs route to /contact
- * (manual activation); annual FY billing only, no proration is claimed.
+ * 3-tier structure: Starter ₹2,999 / Plus ₹6,999 / Pro ₹14,999 per society, for 12 months
+ * from the payment date, GST EXTRA (src/lib/plans.ts is the value source; create-order adds
+ * the GST), plus a compact Enterprise/Federation section.
+ *
+ * EVERY CLAIM HERE MUST MATCH THE CODE (audited 2026-11-11). What the plan really changes:
+ *   • login users — 1 / 6 / unlimited (subscriptions.seats_limit, any roles);
+ *   • Member Portal — Plus / Pro (and the trial), not paid Starter.
+ * Everything else — reports, export, payroll, branches, consolidation, chart of accounts,
+ * roles, weekly backup — is open on every plan, so it is listed as such. Do not list a
+ * feature as Plus/Pro-only until the app actually gates it, and do not list one that is
+ * not built (customer API, custom-branded reports, priority support, seat add-ons).
+ * A new society gets a 30-day trial (migration 057); plans are bought in the app
+ * (User Management → Razorpay), upgrades are prorated, there is no self-serve downgrade.
  *
  * Layout follows the common SaaS pricing pattern: equal-height cards, tinted header
  * band, CTA aligned above the feature list, trust row, comparison table with the
@@ -60,7 +66,7 @@ interface Plan {
   price: string;
   priceNote: string;
   period: string;
-  inheritNote?: string; // "Free का सब कुछ, और—"
+  inheritNote?: string; // "Starter का सब कुछ, और—"
   features: Feature[];
   highlight?: boolean;
   badge?: string;
@@ -72,77 +78,72 @@ const PLANS: Plan[] = [
     id: 'starter',
     name: 'Starter / स्टार्टर',
     tagline: 'छोटी · single-user समिति के लिए / For a small, single-user society',
-    price: '₹1,499',
-    priceNote: '≈ ₹125/माह · प्रति समिति / FY',
+    price: '₹2,999',
+    priceNote: '+ GST · ≈ ₹250/माह · प्रति समिति',
     period: '/ साल',
     features: [
       { text: 'पूरा Double-Entry Accounting (दोहरी एंट्री)' },
       { text: 'Ledger · Trial Balance · BS · P&L · R&P' },
       { text: 'GST + TDS सारांश · Member/Share/Loan Register' },
-      { text: 'PDF/Excel/CSV Export · Secure Cloud Backup' },
+      { text: 'Payroll · Multi-Branch · Custom Chart of Accounts' },
+      { text: 'PDF/Excel/CSV Export · साप्ताहिक Cloud Backup' },
       { text: '1 समिति · 1 user · असीमित vouchers व सदस्य', icon: 'info' },
-      { text: 'Core security · basic audit trail · self-service support', icon: 'info' },
+      { text: 'Member Portal शामिल नहीं', icon: 'info' },
     ],
-    cta: { label: 'शुरू करें / Get Started', to: '/register' },
+    cta: { label: '30 दिन मुफ़्त आज़माएँ / Start Free Trial', to: '/register' },
   },
   {
     id: 'plus',
     name: 'Plus / प्लस',
     tagline: 'staff के साथ चलने वाली सक्रिय समिति / Active society with staff',
-    price: '₹3,999',
-    priceNote: '≈ ₹333/माह · प्रति समिति / FY',
+    price: '₹6,999',
+    priceNote: '+ GST · ≈ ₹583/माह · प्रति समिति',
     period: '/ साल',
     highlight: true,
-    badge: 'सबसे लोकप्रिय / Most Popular',
+    badge: 'Staff वाली समिति के लिए / For teams',
     inheritNote: 'Starter का सब कुछ, और— / Everything in Starter, plus:',
     features: [
-      { text: '5 Staff Users + 1 Auditor/CA — शामिल' },
-      { text: 'Role-Based Access · staff activity controls' },
-      { text: 'Payroll automation · Scheduled backup/export' },
-      { text: 'Starter report branding हटता · Priority Support' },
+      { text: '6 users — जैसे 5 staff + 1 Auditor/CA' },
+      { text: 'हर user की अलग भूमिका (Role-Based Access)' },
+      { text: 'Member Portal — सदस्य अपना खाता खुद देखें' },
     ],
-    cta: { label: 'Plus चुनें / Choose Plus', to: '/contact' },
+    cta: { label: '30 दिन मुफ़्त आज़माएँ / Start Free Trial', to: '/register' },
   },
   {
     id: 'pro',
     name: 'Pro / प्रो',
-    tagline: 'Multi-branch व advanced संचालन के लिए / For multi-branch & advanced ops',
-    price: '₹9,999',
-    priceNote: '≈ ₹833/माह · प्रति समिति / FY',
+    tagline: 'बड़ी team वाली समिति के लिए / For a society with a large team',
+    price: '₹14,999',
+    priceNote: '+ GST · ≈ ₹1,250/माह · प्रति समिति',
     period: '/ साल',
     inheritNote: 'Plus का सब कुछ, और— / Everything in Plus, plus:',
     features: [
-      { text: 'Unlimited Users · Multi-Branch Accounting' },
-      { text: 'Branch-wise + Consolidated (Multi-Society) reporting' },
-      { text: 'Custom Chart of Accounts · API Access' },
-      { text: 'Data-Migration · Custom-Branded Reports · Advanced Support' },
+      { text: 'असीमित users — हर शाखा व विभाग के staff के लिए' },
+      { text: 'Member Portal शामिल' },
     ],
-    cta: { label: 'Pro चुनें / Choose Pro', to: '/contact' },
+    cta: { label: '30 दिन मुफ़्त आज़माएँ / Start Free Trial', to: '/register' },
   },
 ];
 
 interface ComparisonRow {
   feature: string;
-  free: boolean | string;
+  starter: boolean | string;
   plus: boolean | string;
   pro: boolean | string;
 }
 
+// Only the last two rows differ by plan — that is what the app enforces today (see the header).
 const COMPARISON: ComparisonRow[] = [
-  { feature: 'Double-Entry Accounting + सभी रिपोर्ट', free: true, plus: true, pro: true },
-  { feature: 'GST · TDS · Audit Certificate', free: true, plus: true, pro: true },
-  { feature: 'असीमित Vouchers व सदस्य', free: true, plus: true, pro: true },
-  { feature: 'Export (PDF/Excel/CSV) + Cloud Backup', free: true, plus: true, pro: true },
-  { feature: 'Users', free: '1', plus: '5 + 1 CA', pro: 'असीमित' },
-  { feature: 'समिति / Societies', free: '1', plus: '1', pro: 'Multi' },
-  { feature: 'Report branding हटता / Removed', free: false, plus: true, pro: true },
-  { feature: 'Role-Based Access + staff controls', free: false, plus: true, pro: true },
-  { feature: 'Payroll Automation', free: false, plus: true, pro: true },
-  { feature: 'Scheduled Backup / Export', free: false, plus: true, pro: true },
-  { feature: 'Priority Support', free: false, plus: true, pro: true },
-  { feature: 'Multi-Branch Accounting + branch-wise reporting', free: false, plus: false, pro: true },
-  { feature: 'Multi-Society Consolidation', free: false, plus: false, pro: true },
-  { feature: 'Custom Chart of Accounts · API · Custom branding', free: false, plus: false, pro: true },
+  { feature: 'Double-Entry Accounting + सभी रिपोर्ट', starter: true, plus: true, pro: true },
+  { feature: 'GST · TDS · Audit Certificate', starter: true, plus: true, pro: true },
+  { feature: 'असीमित Vouchers व सदस्य', starter: true, plus: true, pro: true },
+  { feature: 'Export (PDF/Excel/CSV) + साप्ताहिक Cloud Backup', starter: true, plus: true, pro: true },
+  { feature: 'Payroll (वेतन)', starter: true, plus: true, pro: true },
+  { feature: 'Multi-Branch Accounting + branch-wise reporting', starter: true, plus: true, pro: true },
+  { feature: 'Custom Chart of Accounts', starter: true, plus: true, pro: true },
+  { feature: 'Multi-Society Consolidation (backup files से)', starter: true, plus: true, pro: true },
+  { feature: 'Users (login)', starter: '1', plus: '6', pro: 'असीमित' },
+  { feature: 'Member Portal', starter: false, plus: true, pro: true },
 ];
 
 interface Faq {
@@ -153,19 +154,23 @@ interface Faq {
 const FAQS: Faq[] = [
   {
     q: 'क्या कोई permanent free plan है? / Is there a permanent free plan?',
-    a: 'कोई स्थायी सार्वजनिक free plan नहीं है — professional accounting Starter ₹1,499/वित्त वर्ष (≈ ₹125/माह) से शुरू होता है. असीमित vouchers/सदस्य, सभी statutory रिपोर्ट (GST/TDS/audit) और export हर plan में शामिल. / There is no permanent public free plan — professional accounting starts at Starter ₹1,499/FY (about ₹125/month), with unlimited vouchers/members, statutory reports and export included in every plan.',
+    a: 'कोई स्थायी free plan नहीं है. रजिस्टर करने पर 30 दिन का मुफ़्त trial मिलता है (1 user); उसके बाद professional accounting Starter ₹2,999/साल + GST (≈ ₹250/माह) से. असीमित vouchers/सदस्य, सभी statutory रिपोर्ट (GST/TDS/audit) और export हर plan में शामिल. / There is no permanent free plan. Registering gives a 30-day free trial (1 user); after that, professional accounting starts at Starter ₹2,999/year plus GST (about ₹250/month), with unlimited vouchers/members, statutory reports and export included in every plan.',
   },
   {
     q: 'कब upgrade करूँ? / When should I upgrade?',
-    a: 'जब staff के लिए कई users व role-based access चाहिए, payroll/scheduled-backup automation चाहिए → Plus. जब multi-branch, consolidation या API चाहिए → Pro. / Move to Plus when you need staff users, roles and automation; Pro when you need multi-branch, consolidation or API.',
+    a: 'Accounting के feature हर plan में एक जैसे हैं; फ़र्क users की संख्या और Member Portal का है. एक से ज़्यादा user (staff, auditor/CA) या Member Portal चाहिए → Plus (6 users). 6 से ज़्यादा users चाहिए → Pro (असीमित). / The accounting features are the same on every plan; the difference is the number of users and the Member Portal. Need more than one user or the Member Portal → Plus (6 users). Need more than 6 users → Pro (unlimited).',
   },
   {
     q: 'भुगतान कैसे और कब होता है? / How and when do I pay?',
-    a: 'सभी plan प्रति समिति, प्रति वित्त वर्ष (अप्रैल renewal) पर हैं — कोई monthly billing नहीं (per-month राशि सिर्फ़ दिखाने के लिए). अभी plan चुनने के लिए हमसे संपर्क करें. / All plans are billed per society, per financial year (April renewal); there is no monthly billing (the per-month figure is display-only). Contact us to choose a plan.',
+    a: 'हर plan एक समिति के लिए है और भुगतान की तारीख़ से 12 महीने चलता है — कोई monthly billing नहीं (per-month राशि सिर्फ़ दिखाने के लिए). Plan app के अंदर User Management से online (Razorpay) ख़रीदें; लिखे दाम पर GST अलग से जुड़ता है (भुगतान से पहले कुल रकम दिखती है) और GST Tax Invoice मिलती है. बीच में ऊँचे plan पर जाएँ तो सिर्फ़ बचे समय का अंतर लगता है. / Each plan covers one society for 12 months from the payment date; there is no monthly billing (the per-month figure is display-only). Buy online inside the app (User Management); GST is added to the listed price (the total is shown before you pay) and you get a GST tax invoice. Upgrading mid-term costs only the difference for the remaining time.',
   },
   {
     q: 'क्या मेरा डेटा सुरक्षित और मेरा रहता है? / Is my data safe and mine?',
-    a: 'हाँ. हर plan में secure cloud backup और पूरा export (PDF/Excel/CSV) — आपका डेटा हमेशा आपका है. / Yes. Every plan includes secure cloud backup and full export. Your data is always yours.',
+    a: 'हाँ. हर plan में साप्ताहिक cloud backup और पूरा export (PDF/Excel/CSV) — आपका डेटा हमेशा आपका है. / Yes. Every plan includes a weekly cloud backup and full export. Your data is always yours.',
+  },
+  {
+    q: 'Trial और paid plan की रिपोर्ट में क्या फ़र्क है? / How do trial and paid reports differ?',
+    a: 'Trial में बनी PDF रिपोर्ट के नीचे "Generated free with SahakarLekha" की एक line छपती है. किसी भी paid plan (Starter, Plus, Pro) पर यह line नहीं छपती. / PDF reports made during the trial carry a "Generated free with SahakarLekha" footer line. No paid plan (Starter, Plus, Pro) prints it.',
   },
 ];
 
@@ -191,7 +196,7 @@ const Pricing: React.FC = () => {
   useDocumentMeta({
     title: 'SahakarLekha Pricing — Starter, Plus & Pro Plans',
     description:
-      'SahakarLekha cooperative accounting ₹1,499/FY से शुरू करें। Staff, role-based access, payroll, multi-branch accounting और advanced operations के लिए Plus या Pro चुनें।',
+      'SahakarLekha cooperative accounting ₹2,999/साल + GST से — 30 दिन मुफ़्त trial। सभी रिपोर्ट, payroll व multi-branch हर plan में; ज़्यादा users और Member Portal के लिए Plus या Pro चुनें।',
     canonicalPath: '/pricing',
     jsonLd: PRICING_JSON_LD,
   });
@@ -201,7 +206,7 @@ const Pricing: React.FC = () => {
       <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-primary/10 py-16 sm:py-20">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <span className="inline-block bg-primary/10 text-primary rounded-full px-4 py-1 text-sm font-medium mb-4">
-            सालाना billing · अप्रैल FY renewal
+            30 दिन मुफ़्त trial · सालाना billing
           </span>
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-foreground leading-tight">
             मूल्य निर्धारण — Pricing
@@ -210,8 +215,8 @@ const Pricing: React.FC = () => {
             सरल शुरुआत। साफ कीमत। जरूरत के साथ Scale करें।
           </p>
           <p className="mt-3 text-base text-foreground/80 max-w-2xl mx-auto">
-            सहकारी समितियों के लिए professional accounting ₹1,499/FY से। अपनी जरूरत के अनुसार
-            Starter, Plus या Pro चुनें।
+            सहकारी समितियों के लिए professional accounting ₹2,999/साल + GST से। पहले 30 दिन मुफ़्त
+            आज़माएँ, फिर users की संख्या के अनुसार Starter, Plus या Pro चुनें।
           </p>
         </div>
       </section>
@@ -305,7 +310,7 @@ const Pricing: React.FC = () => {
               <CreditCard className="h-4 w-4 text-primary" /> पारदर्शी कीमत · कोई छिपा शुल्क नहीं
             </span>
             <span className="flex items-center gap-2">
-              <RefreshCw className="h-4 w-4 text-primary" /> कभी भी upgrade / downgrade
+              <RefreshCw className="h-4 w-4 text-primary" /> कभी भी upgrade — सिर्फ़ बचे समय का अंतर
             </span>
             <span className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-primary" /> डेटा हमेशा आपका — पूरा export
@@ -324,9 +329,9 @@ const Pricing: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Federations, unions, clusters व बड़े deployments के लिए — bulk society
-                  deployment, central administration, organisation-wide reporting,
-                  integrations/API, bulk migration, custom branding व dedicated onboarding/support.
+                  Federations, unions, clusters व बड़े deployments के लिए — कई समितियों का
+                  एक साथ setup, bulk डेटा-migration व dedicated onboarding/support. दायरा और दाम
+                  बातचीत से तय होते हैं.
                 </p>
                 <p className="mt-2 text-sm font-medium">₹49,000/साल से शुरू / Starting at ₹49,000/year</p>
               </div>
@@ -339,28 +344,28 @@ const Pricing: React.FC = () => {
           </div>
 
           <p className="text-xs text-muted-foreground text-center mt-6">
-            Add-ons: अतिरिक्त staff user ₹500/साल · Onboarding / डेटा-migration ₹1,999 ·
-            सभी दाम प्रति समिति, प्रति वित्त वर्ष (अप्रैल renewal)
+            Onboarding / डेटा-migration सहायता ₹1,999 (एक बार, संपर्क करें) · सभी दाम प्रति
+            समिति, भुगतान की तारीख़ से 12 महीने के लिए; GST अलग से जुड़ता है · Plan app के अंदर online ख़रीदें
           </p>
         </div>
       </section>
 
-      {/* Section 2: Trust — Free is not a demo */}
+      {/* Section 2: Trust — Starter is not a demo */}
       <section className="py-14 bg-muted/30">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-3">
-            ₹1,499/FY में पूरा professional accounting
+            ₹2,999/साल + GST में पूरा professional accounting
           </h2>
           <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-8">
             Starter एक demo नहीं — छोटी समिति अपना पूरे साल का हिसाब इसी पर रख सकती है। Upgrade तब —
-            जब staff, automation या multi-branch की ज़रूरत बढ़े।
+            जब एक से ज़्यादा user या Member Portal की ज़रूरत हो।
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { icon: FileText, t: 'असली accounting', d: 'पूरा double-entry, रिपोर्ट व audit — Starter पर' },
               { icon: InfinityIcon, t: 'कोई data सीमा नहीं', d: 'असीमित vouchers, सदस्य व FY' },
               { icon: ShieldCheck, t: 'डेटा आपका', d: 'कभी भी PDF/Excel/CSV export' },
-              { icon: Users, t: 'Upgrade तब', d: 'जब team, automation या branch चाहिए' },
+              { icon: Users, t: 'Upgrade तब', d: 'जब ज़्यादा users या Member Portal चाहिए' },
             ].map((it) => (
               <div key={it.t} className="rounded-lg bg-white border border-muted p-5">
                 <it.icon className="h-6 w-6 text-primary mb-3" />
@@ -397,7 +402,7 @@ const Pricing: React.FC = () => {
                       <TableRow key={row.feature}>
                         <TableCell className="font-medium text-sm">{row.feature}</TableCell>
                         <TableCell className="text-center">
-                          <Cell value={row.free} />
+                          <Cell value={row.starter} />
                         </TableCell>
                         <TableCell className="text-center bg-primary/5">
                           <Cell value={row.plus} />
@@ -413,7 +418,7 @@ const Pricing: React.FC = () => {
             </CardContent>
           </Card>
           <p className="text-xs text-muted-foreground text-center mt-6">
-            Starter ₹1,499/FY: 1 समिति · 1 user · असीमित vouchers व सदस्य · सभी रिपोर्ट व export
+            Starter ₹2,999/साल + GST: 1 समिति · 1 user · असीमित vouchers व सदस्य · सभी रिपोर्ट व export
           </p>
         </div>
       </section>
@@ -444,14 +449,14 @@ const Pricing: React.FC = () => {
             आज ही शुरू करें / Get Started Today
           </h2>
           <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">
-            Professional cooperative accounting ₹1,499/FY से — कोई छिपा शुल्क नहीं. Staff, automation
-            या multi-branch चाहिए तो Plus या Pro. / Professional cooperative accounting from ₹1,499/FY —
-            no hidden charges. Choose Plus or Pro for staff, automation or multi-branch.
+            30 दिन मुफ़्त आज़माएँ, फिर ₹2,999/साल + GST से — कोई छिपा शुल्क नहीं. ज़्यादा users या Member
+            Portal चाहिए तो Plus या Pro. / Try it free for 30 days, then from ₹2,999/year plus GST — no hidden
+            charges. Choose Plus or Pro for more users or the Member Portal.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
             <Link to="/register">
               <Button size="lg" variant="secondary" className="gap-2">
-                शुरू करें / Get Started <ArrowRight className="h-4 w-4" />
+                30 दिन मुफ़्त आज़माएँ / Start Free Trial <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <Link to="/contact">
@@ -460,7 +465,7 @@ const Pricing: React.FC = () => {
                 variant="outline"
                 className="gap-2 border-white/40 bg-transparent text-white hover:bg-white/10"
               >
-                Plus / Pro के लिए संपर्क करें / Talk to us
+                सवाल है? संपर्क करें / Talk to us
               </Button>
             </Link>
           </div>

@@ -22,8 +22,8 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
     items: [
       {
         q: 'SahakarLekha क्या है? / What is SahakarLekha?',
-        aHi: 'SahakarLekha भारत की सहकारी समितियों के लिए विशेष रूप से बनाया गया क्लाउड-आधारित लेखा सॉफ्टवेयर है (Starter ₹1,499/वित्त वर्ष से)। यह 8 प्रकार की समितियों, 36 राज्यों, TDS/GST अनुपालन और द्विभाषी (हिंदी+अंग्रेजी) इंटरफेस का समर्थन करता है।',
-        aEn: 'SahakarLekha is cloud-based accounting software built specifically for Indian cooperative societies (Starter from ₹1,499/FY). It supports 8 society types, 36 states, TDS/GST compliance, and a bilingual (Hindi+English) interface.',
+        aHi: 'SahakarLekha भारत की सहकारी समितियों के लिए विशेष रूप से बनाया गया क्लाउड-आधारित लेखा सॉफ्टवेयर है (Starter ₹2,999/साल + GST से)। यह 8 प्रकार की समितियों, 36 राज्यों, TDS/GST अनुपालन और द्विभाषी (हिंदी+अंग्रेजी) इंटरफेस का समर्थन करता है।',
+        aEn: 'SahakarLekha is cloud-based accounting software built specifically for Indian cooperative societies (Starter from ₹2,999/year + GST). It supports 8 society types, 36 states, TDS/GST compliance, and a bilingual (Hindi+English) interface.',
       },
       {
         q: 'कैसे रजिस्टर करें? / How to register?',
@@ -32,8 +32,8 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
       },
       {
         q: 'कीमत क्या है? / How much does it cost?',
-        aHi: 'कोई स्थायी सार्वजनिक free plan नहीं है — professional accounting Starter ₹1,499/वित्त वर्ष (≈ ₹125/माह) से शुरू होता है, जिसमें असीमित वाउचर/सदस्य, सभी रिपोर्ट, TDS, GST व ऑडिट शामिल हैं। Staff के लिए multiple users, role-based access, payroll व multi-branch चाहिए तो Plus (₹3,999/वर्ष) या Pro (₹9,999/वर्ष) चुनें।',
-        aEn: 'There is no permanent public free plan. Professional accounting starts at Starter — ₹1,499/FY (about ₹125/month) — including unlimited vouchers and members, all reports, TDS, GST and audit. Choose Plus (₹3,999/yr) or Pro (₹9,999/yr) for staff users, role-based access, payroll and multi-branch.',
+        aHi: 'कोई स्थायी free plan नहीं है। रजिस्टर करने पर 30 दिन का मुफ़्त trial मिलता है; उसके बाद professional accounting Starter ₹2,999/साल + GST (≈ ₹250/माह) से शुरू होता है, जिसमें असीमित वाउचर/सदस्य, सभी रिपोर्ट, TDS, GST, payroll व ऑडिट शामिल हैं। एक से ज़्यादा user या Member Portal चाहिए तो Plus (₹6,999/साल + GST, 6 users) या Pro (₹14,999/साल + GST, असीमित users) चुनें।',
+        aEn: 'There is no permanent free plan. Registering gives a 30-day free trial; after that, professional accounting starts at Starter — ₹2,999/year plus GST (about ₹250/month) — including unlimited vouchers and members, all reports, TDS, GST, payroll and audit. Choose Plus (₹6,999/yr + GST, 6 users) or Pro (₹14,999/yr + GST, unlimited users) for more than one user or the Member Portal.',
       },
       {
         q: 'कौन-कौन सी समितियों के लिए है? / Which society types are supported?',
@@ -121,13 +121,13 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
     items: [
       {
         q: 'क्या कोई छिपा शुल्क है? / Any hidden charges?',
-        aHi: 'नहीं। Plan का पूरा मूल्य Pricing पेज पर लिखा है (Starter ₹1,499/वित्त वर्ष से)। कोई विज्ञापन नहीं, कोई डेटा बिक्री नहीं।',
-        aEn: 'No. Each plan\'s full price is shown on the Pricing page (Starter from ₹1,499/FY). No ads, no data selling.',
+        aHi: 'नहीं। Plan का पूरा मूल्य Pricing पेज पर लिखा है (Starter ₹2,999/साल से); उस पर सिर्फ़ GST अलग से जुड़ता है। कोई विज्ञापन नहीं, कोई डेटा बिक्री नहीं।',
+        aEn: 'No. Each plan\'s full price is shown on the Pricing page (Starter from ₹2,999/year); only GST is added to it. No ads, no data selling.',
       },
       {
-        q: 'Pro Plan कब आएगा? / When will Pro plan launch?',
-        aHi: 'Pro Plan पर काम चल रहा है। इसमें multi-society consolidation, priority support, और advanced analytics शामिल होंगे। जल्द ही उपलब्ध होगा।',
-        aEn: 'Pro Plan is under development. It will include multi-society consolidation, priority support, and advanced analytics. Coming soon.',
+        q: 'Starter, Plus और Pro में क्या फ़र्क है? / How do Starter, Plus and Pro differ?',
+        aHi: 'Accounting के feature तीनों में एक जैसे हैं। फ़र्क login users की संख्या का है — Starter 1, Plus 6, Pro असीमित — और Member Portal का, जो Plus और Pro में है। हर plan भुगतान की तारीख़ से 12 महीने चलता है।',
+        aEn: 'The accounting features are the same on all three. They differ in login users — Starter 1, Plus 6, Pro unlimited — and in the Member Portal, which is on Plus and Pro. Each plan runs for 12 months from the payment date.',
       },
     ],
   },
