@@ -1472,7 +1472,11 @@ const SalaryManagement: React.FC = () => {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{hi ? 'फॉर्म 24Q — त्रैमासिक वेतन TDS' : 'Form 24Q — Quarterly Salary TDS'} ({society.financialYear})</DialogTitle>
-            <DialogDescription>{hi ? 'चुनी हुई तिमाही में हर कर्मचारी का वेतन व TDS सारांश।' : 'Per-employee salary + TDS summary for the selected quarter.'}</DialogDescription>
+            <DialogDescription>
+              {hi
+                ? 'चुनी हुई तिमाही में हर कर्मचारी का वेतन व TDS सारांश। वेतन का TDS भुगतान के समय कटता है (आयकर अधिनियम 2025, धारा 392(1)) — इसलिए यहाँ सिर्फ़ Paid पर्चियाँ आती हैं, भुगतान की तारीख़ वाली तिमाही में (सितंबर का वेतन 6 अक्टूबर को दिया तो Q3)। Unpaid पर्चियों का TDS भुगतान होने पर आएगा।'
+                : 'Per-employee salary + TDS for the selected quarter. Salary TDS is deducted at the time of payment (Income-tax Act 2025, s.392(1)), so only PAID slips appear, in the quarter of the payment date. Unpaid slips appear once paid.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-3 flex-wrap">
             <Select value={q24Quarter} onValueChange={v => setQ24Quarter(v as Quarter)}>
@@ -1493,7 +1497,7 @@ const SalaryManagement: React.FC = () => {
           </div>
           <div className="max-h-[55vh] overflow-y-auto mt-2">
             {form24Q.rows.length === 0 ? (
-              <p className="p-6 text-center text-sm text-muted-foreground">{hi ? 'इस तिमाही में कोई वेतन रिकॉर्ड नहीं।' : 'No salary records in this quarter.'}</p>
+              <p className="p-6 text-center text-sm text-muted-foreground">{hi ? 'इस तिमाही में कोई भुगतान किया गया वेतन नहीं।' : 'No salary paid in this quarter.'}</p>
             ) : (
               <Table>
                 <TableHeader><TableRow>
