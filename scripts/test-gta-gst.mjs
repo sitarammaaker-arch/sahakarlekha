@@ -77,7 +77,7 @@ ok(G.GTA_GST_SOURCES.length >= 5 && G.GTA_GST_SOURCES.every(s => /^https:\/\//.t
 
 // The context posts GST only for forward charge.
 const ctx = readFileSync(new URL('../src/contexts/TransportOpsContext.tsx', import.meta.url), 'utf8');
-ok(/const forward = \(gstMode === 'fcm5' \|\| gstMode === 'fcm18'\)/.test(ctx) && /accountId: gstAccountId!, type: 'Cr'/.test(ctx), 'context adds the Cr 2201 line only when forward');
+ok(/const forward = \(gstMode === 'fcm5' \|\| gstMode === 'fcm18'\)/.test(ctx) && /const gstCr = forward && tax \? gstLegs\('output'/.test(ctx) && /\.\.\.gstCr\.map\(g => \(\{ accountId: g\.accountId, type: 'Cr' as const, amount: g\.amount \}\)\)/.test(ctx), 'context adds the Cr output-GST legs (head-wise, or 2201) only when forward');
 
 console.log(`\ngta-gst: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

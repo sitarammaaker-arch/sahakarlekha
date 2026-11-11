@@ -4,7 +4,7 @@
  * useData().addVoucher; the voucher is the money authority, the document the vehicle tag.
  *
  * GST: tripLegs is the pre-tax trip. The GTA GST rule (who pays, which rate — read from the notification texts)
- * lives in lib/transport/gtaGst; TransportOpsContext adds the Cr 2201 line for forward charge and only a note
+ * lives in lib/transport/gtaGst; TransportOpsContext adds the Cr output-GST legs (lib/accounting/gstLedgers) for forward charge and only a note
  * for reverse charge.
  */
 
