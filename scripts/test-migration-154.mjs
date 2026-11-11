@@ -48,12 +48,13 @@ if (S) {
     const chart = S.fullChartForType(t);
     const byId = new Map(chart.map((a) => [a.id, a]));
     ok(new Set(chart.map((a) => a.id)).size === chart.length, `${t}: no duplicate ids`);
-    ok(tpl.every((a) => !ids.includes(a.id)), `${t}: the template itself does not use a new code`);
+    // Since migration 155 the marketing template (and transport, built on it) carries 2296 itself; no other code is reused.
+    ok(tpl.every((a) => !ids.includes(a.id) || (a.id === '2296' && a.name === 'Market Fee Payable')), `${t}: the template does not reuse a new code for another head`);
     ok(['2196', '2197', '2198', '2297'].every((id) => byId.has(id)), `${t}: seeded with the four unconditional heads`);
     ok(!add.some((x) => /bonus payable/i.test(x.name) || x.nameHi.includes('देय बोनस')), `${t}: no new head can be mistaken for the dairy producers' Bonus Payable`);
     ok(add.filter((a) => byId.has(a.id)).every((a) => byId.get(a.parentId)?.isGroup), `${t}: each new head hangs under an existing group`);
-    const hasMarketFee = chart.some((a) => a.id === '4202' && a.name === 'Market Fee');
-    ok(byId.has('2296') === hasMarketFee, `${t}: Market Fee Payable ${hasMarketFee ? 'present' : 'absent'} (follows the 4202 Market Fee head)`);
+    const hasMarketFee = tpl.some((a) => a.id === '2296') || chart.some((a) => a.id === '4202' && a.name === 'Market Fee');
+    ok(byId.has('2296') === hasMarketFee, `${t}: Market Fee Payable ${hasMarketFee ? 'present' : 'absent'} (marketing charts only)`);
     // Additive only: every account the chart had before is still there, unchanged.
     const before = S.migrateAccounts(tpl.map((a) => ({ ...a }))).accounts.filter((a) => !ids.includes(a.id));
     ok(JSON.stringify(before) === JSON.stringify(chart.filter((a) => !ids.includes(a.id))), `${t}: no existing account renamed, retyped or moved`);
