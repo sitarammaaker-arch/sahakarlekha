@@ -3986,7 +3986,7 @@ export function generatePurchaseRecordPDF(input: PurchaseRecordInput, society: S
       if (input.cgstAmount > 0) addTotalsRow(`CGST @ ${input.cgstPct}% (ITC)`, fmt(input.cgstAmount));
       if (input.sgstAmount > 0) addTotalsRow(`SGST @ ${input.sgstPct}% (ITC)`, fmt(input.sgstAmount));
     }
-    addTotalsRow(input.rcmApplicable ? 'Reverse charge (RCM) GST - payable to Govt, not in total' : 'Total ITC', fmt(input.taxAmount));
+    addTotalsRow(input.rcmApplicable ? 'RCM GST (not in total)' : 'Total ITC', fmt(input.taxAmount));
   }
   if (input.tdsAmount > 0) {
     addTotalsRow(`TDS @ ${input.tdsPct}% (deducted)`, '- ' + fmt(input.tdsAmount));

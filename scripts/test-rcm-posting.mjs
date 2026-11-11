@@ -144,5 +144,12 @@ const form = (o) => ({ ...T.computeInvoiceTotals(o), rcmApplicable: !!o.rcm });
   ok(/const rcmIn = useMemo\(\(\) => computeRCM\(activePurchases/.test(gs) && /isup_rev: \{ txval: rcmIn\.taxableValue/.test(gs) && /outputTotals\.tax\s+\+ rcmIn\.total - itcTotals\.tax/.test(gs), 'GST Summary: 3.1(d), the 3B JSON and net payable carry the reverse-charge tax (same computeRCM as GSTR-9)');
 }
 
+// The purchase PDF's totals column is narrow: a long label runs into the amount (seen on PUR/2026-27/011).
+{
+  const pdf = readFileSync(new URL('../src/lib/pdf.ts', import.meta.url), 'utf8');
+  const m = pdf.match(/addTotalsRow\(input\.rcmApplicable \? '([^']+)' : 'Total ITC'/);
+  ok(!!m && m[1].length <= 26 && /RCM/.test(m[1]), 'purchase PDF: the RCM totals label is short enough not to overlap the amount');
+}
+
 console.log(`RCM posting: ${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;
