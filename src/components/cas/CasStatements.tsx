@@ -246,6 +246,13 @@ export function CasStatements({ hi }: { hi: boolean }) {
                 : (hi
                   ? `ऐप का अपना तुलन पत्र भी संतुलित नहीं: परिसंपत्तियाँ ${fmt(data.leaves.totalAssets)}, देनदारियाँ ${fmt(data.leaves.totalLiabilities)}`
                   : `the app's own Balance Sheet is not balanced: assets ${fmt(data.leaves.totalAssets)}, liabilities ${fmt(data.leaves.totalLiabilities)}`)} />
+            {bs.npaProvision > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {hi
+                  ? `NPA प्रावधान (2194) ${fmt(bs.npaProvision)} CAS के अनुसार "ऋण एवं अग्रिम" के नीचे "घटाएँ: NPA प्रावधान" के रूप में दिखाया गया है, इसलिए दोनों योग ऐप के तुलन पत्र से इतना कम हैं।`
+                  : `Provision for NPAs (2194) ${fmt(bs.npaProvision)} is shown as "Less: Provision for NPA" under Loans and Advances (CAS), so both totals are that much lower than the app's Balance Sheet.`}
+              </p>
+            )}
             {bs.overdueInterestProvision > 0 && (
               <p className="text-xs text-muted-foreground">
                 {hi

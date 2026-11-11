@@ -19,6 +19,7 @@ import type { Asset, AssetCategory, AssetStatus } from '@/types';
 import { standardDepreciationRate, assetRateDeviations } from '@/lib/depreciationRateMaster';
 import { capexPendingAssets } from '@/lib/capexApproval';
 import { calcSLMDepreciation, calcWDVDepreciation, DEP_ACCOUNTS } from '@/lib/depreciation';
+import { disposalGainAccountId } from '@/lib/assetDisposal';
 
 const CATEGORIES: AssetCategory[] = ['Land', 'Building', 'Furniture', 'Equipment', 'Vehicle', 'Computer', 'Other'];
 
@@ -318,7 +319,8 @@ const AssetRegister: React.FC = () => {
         // Cr Fixed Asset (remove from books at cost)
         lines.push({ id: lid(), accountId: assetAccountId, type: 'Cr', amount: cost });
         // Cr Profit on Sale (if profit)
-        if (profitLoss > 0) lines.push({ id: lid(), accountId: '4410', type: 'Cr', amount: profitLoss });
+        // A PACS credits its Capital Reserve (NABARD CAS); every other chart 4410 — see disposalGainAccountId.
+        if (profitLoss > 0) lines.push({ id: lid(), accountId: disposalGainAccountId(accounts), type: 'Cr', amount: profitLoss });
 
         const dv = addVoucher({
           type: 'journal',

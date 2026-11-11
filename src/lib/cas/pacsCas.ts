@@ -56,7 +56,7 @@ export const CAS_BS_LIABILITIES: CasSectionDef[] = [
   ] },
   { id: 'L2', label: 'Reserves and Funds (created out of surplus)', labelHi: 'संचय एवं निधियाँ (अधिशेष से)', lines: [
     { id: 'L2i', label: 'i. Reserve Fund', labelHi: 'i. संचय निधि', ids: ['1201'] },
-    { id: 'L2ii', label: 'ii. Capital Reserve', labelHi: 'ii. पूँजी संचय' },
+    { id: 'L2ii', label: 'ii. Capital Reserve', labelHi: 'ii. पूँजी संचय', ids: ['1298'] },
     { id: 'L2iii', label: 'iii. Agricultural Credit Stabilisation Fund', labelHi: 'iii. कृषि ऋण स्थिरीकरण निधि' },
     { id: 'L2iv', label: 'iv. Dividend Equalization Fund', labelHi: 'iv. लाभांश समीकरण निधि' },
     { id: 'L2v', label: 'v. Common Good Fund', labelHi: 'v. सामान्य हित निधि' },
@@ -70,8 +70,8 @@ export const CAS_BS_LIABILITIES: CasSectionDef[] = [
     { id: 'L4i', label: 'i. Provident Fund', labelHi: 'i. भविष्य निधि' },
     { id: 'L4ii', label: 'ii. Building Fund (from State Government)', labelHi: 'ii. भवन निधि (राज्य सरकार से)' },
     { id: 'L4iii', label: 'iii. Recapitalisation Assistance Fund', labelHi: 'iii. पुनर्पूँजीकरण सहायता निधि' },
-    { id: 'L4iv', label: 'iv. Subsidies meant for Society', labelHi: 'iv. समिति हेतु अनुदान' },
-    { id: 'L4v', label: 'v. Subsidy meant for members', labelHi: 'v. सदस्यों हेतु अनुदान' },
+    { id: 'L4iv', label: 'iv. Subsidies meant for Society', labelHi: 'iv. समिति हेतु अनुदान', ids: ['1297'] },
+    { id: 'L4v', label: 'v. Subsidy meant for members', labelHi: 'v. सदस्यों हेतु अनुदान', ids: ['2199'] },
     { id: 'L4vi', label: 'vi. Others', labelHi: 'vi. अन्य' },
   ] },
   { id: 'L5', label: 'Deposits', labelHi: 'जमाएँ', lines: [
@@ -99,8 +99,8 @@ export const CAS_BS_LIABILITIES: CasSectionDef[] = [
     { id: 'L8', label: 'Bills for Collection', labelHi: 'वसूली हेतु बिल' },
   ] },
   { id: 'L10', label: 'Provisions', labelHi: 'प्रावधान', lines: [
-    { id: 'L10i', label: 'i. Provision for PF / Gratuity / Bonus / Pension', labelHi: 'i. PF / उपदान / बोनस / पेंशन प्रावधान' },
-    { id: 'L10ii', label: 'ii. Provision for Standard Assets', labelHi: 'ii. मानक परिसंपत्ति प्रावधान' },
+    { id: 'L10i', label: 'i. Provision for PF / Gratuity / Bonus / Pension', labelHi: 'i. PF / उपदान / बोनस / पेंशन प्रावधान', ids: ['2197', '2198'] },
+    { id: 'L10ii', label: 'ii. Provision for Standard Assets', labelHi: 'ii. मानक परिसंपत्ति प्रावधान', ids: ['2195'] },
     { id: 'L10iii', label: 'iii. Provision for Expenses', labelHi: 'iii. व्यय प्रावधान' },
     { id: 'L10iv', label: 'iv. Others', labelHi: 'iv. अन्य' },
   ] },
@@ -128,7 +128,7 @@ export const CAS_BS_ASSETS: CasSectionDef[] = [
     { id: 'A5ii', label: 'ii. Medium Term / Long Term Agricultural Loans', labelHi: 'ii. मध्यम / दीर्घकालीन कृषि ऋण', ids: ['3304', '3305'] },
     { id: 'A5xi', label: 'xi. Loans to Staff Members', labelHi: 'xi. कर्मचारियों को ऋण', ids: ['3315'] },
     { id: 'A5xii', label: 'iii–x, xii. Other Loans', labelHi: 'iii–x, xii. अन्य ऋण', ids: ['3316'] },
-    { id: 'A5b', label: '(b) Less: Provision for NPA', labelHi: '(ख) घटाएँ: NPA प्रावधान' },
+    { id: 'A5b', label: '(b) Less: Provision for NPA', labelHi: '(ख) घटाएँ: NPA प्रावधान', key: 'npaProvision' },
   ] },
   { id: 'A6', label: 'Closing Stocks', labelHi: 'समापन माल', lines: [
     { id: 'A6', label: 'Closing stock (category-wise split not held in the ledger)', labelHi: 'समापन माल (श्रेणी-वार बँटवारा ledger में नहीं)', key: 'closingStock', subtypes: ['inventory'] },
@@ -157,7 +157,9 @@ export const CAS_BS_ASSETS: CasSectionDef[] = [
 ];
 
 // Heads the builder handles through a computed line (never via mapping / catch-all).
-const BS_COMPUTED_HEADS = new Set(['1208', '3312', '3313', '2211']);
+// 2194 Provision for NPAs is a liability head in the chart; CAS nets it against loans ("Less:" at A5b), like 2211.
+const BS_COMPUTED_HEADS = new Set(['1208', '3312', '3313', '2211', '2194']);
+const ASSET_SIDE_LESS = new Set(['2211', '2194']);
 
 // ── Annexure III — Profit & Loss Account ─────────────────────────────────────────────────────
 export const CAS_PL_EXPENDITURE: CasSectionDef[] = [
@@ -180,7 +182,7 @@ export const CAS_PL_EXPENDITURE: CasSectionDef[] = [
     { id: 'E12', label: '12. Donations and Subscriptions', labelHi: '12. दान व चंदा', ids: ['5405'] },
     { id: 'E13', label: '13. Depreciation on properties', labelHi: '13. संपत्तियों पर ह्रास', subtypes: ['depreciation_expense'] },
     { id: 'E14', label: '14. Other expenses', labelHi: '14. अन्य व्यय', catchAll: true },
-    { id: 'E15', label: '15. Provisions (Standard / NPA / Bad debts / Overdue interest / Others)', labelHi: '15. प्रावधान (मानक / NPA / अशोध्य / अतिदेय ब्याज / अन्य)' },
+    { id: 'E15', label: '15. Provisions (Standard / NPA / Bad debts / Overdue interest / Others)', labelHi: '15. प्रावधान (मानक / NPA / अशोध्य / अतिदेय ब्याज / अन्य)', ids: ['5498'] },
     { id: 'E16', label: '16. Profit for the year', labelHi: '16. वर्ष का लाभ', key: 'profit' },
   ] },
 ];
@@ -271,6 +273,8 @@ export interface CasBalanceSheet {
   totalAssets: number;
   /** The Overdue Interest Reserve moved from the liability side to "Less:" on the asset side (D2). */
   overdueInterestProvision: number;
+  /** Provision for NPAs (2194) moved from the liability side to "Less:" under Loans and Advances. */
+  npaProvision: number;
 }
 
 export function buildCasBalanceSheet(input: CasBalanceSheetInput): CasBalanceSheet {
@@ -283,6 +287,8 @@ export function buildCasBalanceSheet(input: CasBalanceSheetInput): CasBalanceShe
   const pl = r2(on(cap, '1208', liabAmt) - on(ast, '1208', assetAmt) + input.netProfit);
   // Overdue Interest Reserve (2211) → "Less:" on the asset side (D2). A Dr-gone 2211 stays an asset.
   const oir = r2(on(cap, '2211', liabAmt));
+  // Provision for NPAs (2194) → "Less:" under Loans and Advances (Annexure IV). A Dr-gone 2194 stays an asset.
+  const npa = r2(on(cap, '2194', liabAmt));
   // Interest receivable (3313 + 3312) split into standard-accrued and overdue.
   const receivable = r2(on(ast, '3313', assetAmt) + on(ast, '3312', assetAmt));
   const overdue = r2(Math.max(0, Math.min(input.overdueInterestReceivable, receivable)));
@@ -291,12 +297,13 @@ export function buildCasBalanceSheet(input: CasBalanceSheetInput): CasBalanceShe
     cap.filter((b) => !BS_COMPUTED_HEADS.has(b.account.id)).map((b) => leafOf(b, liabAmt(b))),
     { plProfit: pl > 0 ? pl : 0 });
   const assets = assign(CAS_BS_ASSETS,
-    [...ast.filter((b) => !BS_COMPUTED_HEADS.has(b.account.id) || b.account.id === '2211').map((b) => leafOf(b, assetAmt(b)))],
+    [...ast.filter((b) => !BS_COMPUTED_HEADS.has(b.account.id) || ASSET_SIDE_LESS.has(b.account.id)).map((b) => leafOf(b, assetAmt(b)))],
     {
       closingStock: input.unpostedStock,
       interestAccruedStandard: r2(receivable - overdue),
       overdueInterestReceivable: overdue,
       overdueInterestProvision: -oir,
+      npaProvision: -npa,
       plLoss: pl < 0 ? -pl : 0,
     });
   // A Cr-gone 3312/3313 (asset on the liability side) is unusual — keep it visible, never dropped.
@@ -306,7 +313,7 @@ export function buildCasBalanceSheet(input: CasBalanceSheetInput): CasBalanceShe
     for (const b of strayReceivable) { others.heads.push({ id: b.account.id, name: b.account.name, amount: r2(liabAmt(b)) }); others.amount = r2(others.amount + liabAmt(b)); }
     for (const s of liabilities) s.total = r2(s.rows.reduce((t, r) => t + r.amount, 0));
   }
-  return { liabilities, assets, totalLiabilities: sum(liabilities), totalAssets: sum(assets), overdueInterestProvision: oir };
+  return { liabilities, assets, totalLiabilities: sum(liabilities), totalAssets: sum(assets), overdueInterestProvision: oir, npaProvision: npa };
 }
 
 export interface CasProfitLoss { expenditure: CasSection[]; income: CasSection[]; total: number; netProfit: number }
@@ -360,7 +367,7 @@ export function buildCasTrading(trialBalance: readonly AccountBalance[], opts: {
 export function casBalanceSheetTies(bs: CasBalanceSheet, app: { assetLeaves: readonly AccountBalance[]; totalAssets: number }): boolean {
   const ast1208 = app.assetLeaves.filter((b) => b.account.id === '1208').reduce((t, b) => t + b.netBalance, 0);
   const plLoss = bs.assets.flatMap((s) => s.rows).find((r) => r.id === 'A8-11')?.amount ?? 0;
-  const expected = r2(app.totalAssets - bs.overdueInterestProvision - ast1208 + plLoss);
+  const expected = r2(app.totalAssets - bs.overdueInterestProvision - bs.npaProvision - ast1208 + plLoss);
   return Math.abs(bs.totalAssets - expected) < 0.01 && Math.abs(bs.totalAssets - bs.totalLiabilities) < 0.01;
 }
 
@@ -375,6 +382,7 @@ export interface CasTrialBalance { liabilitiesIncome: CasTbRow[]; assetsExpendit
 const TB_OWN_LINES: Record<string, { id: string; label: string; labelHi: string }> = {
   '1208': { id: 'TB-PL', label: 'Balance in Profit and Loss Account', labelHi: 'लाभ-हानि खाते का शेष' },
   '2211': { id: 'TB-OIR', label: 'Overdue Interest Reserve', labelHi: 'अतिदेय ब्याज संचय' },
+  '2194': { id: 'TB-NPA', label: 'Provision for NPA', labelHi: 'NPA प्रावधान' },
   '3312': { id: 'TB-INT', label: 'Interest accrued / overdue interest receivable on loans', labelHi: 'ऋणों पर उपार्जित / अतिदेय प्राप्य ब्याज' },
   '3313': { id: 'TB-INT', label: 'Interest accrued / overdue interest receivable on loans', labelHi: 'ऋणों पर उपार्जित / अतिदेय प्राप्य ब्याज' },
   '5150': { id: 'TB-CS', label: 'Closing Stock (Trading A/c)', labelHi: 'समापन माल (व्यापार खाता)' },

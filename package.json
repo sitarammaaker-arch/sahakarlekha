@@ -254,6 +254,7 @@
     "test:migration-154": "node scripts/test-migration-154.mjs",
     "test:migration-155": "node scripts/test-migration-155.mjs",
     "test:migration-156": "node scripts/test-migration-156.mjs",
+    "test:migration-157": "node scripts/test-migration-157.mjs",
     "test:gst-ledgers": "node scripts/test-gst-ledgers.mjs",
     "test:round-off-cash-discount": "node scripts/test-round-off-cash-discount.mjs",
     "test:inline-create-masters": "node scripts/test-inline-create-masters.mjs",

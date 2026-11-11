@@ -937,6 +937,34 @@ export const ACCOUNTS_TO_ADD_156: LedgerAccount[] = [
   { id: '3393', name: 'Input IGST', nameHi: 'इनपुट IGST', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
 ];
 
+/**
+ * PACS only (migration 157, scripts/gen-migration-157.mjs): heads NABARD's Common Accounting System for PACS
+ * names and the PACS chart lacked. Additive — nothing existing is renamed, retyped or moved.
+ *   1298 Capital Reserve — "Capital Reserve ... may arise on account of ... Profit on sale of capital asset"
+ *        (CAS Annexure VI Part 2 para 6(i); Manual 8.4.7). A PACS books a disposal gain here (assetDisposal.ts).
+ *   1297 / 2199 — CAS Balance Sheet "Grants and other Funds": "Subsidies meant for Society" is a fund,
+ *        "Subsidy meant for members" is "in the nature of Outside liability" (Annexure IV; Manual Ch.2 Note (ii)).
+ *   2195 / 2194 / 5498 — provisions are "made from P&L Account" (CAS Ch.I para 5(l)): standard-asset provision
+ *        under liabilities, NPA provision netted against loans (Annexure IV), charged at Annexure III item 15.
+ *        CAS states no rates ("as per norms"), so the app only gives the heads; it computes nothing.
+ * Added only to a chart that has the PACS-only 4303 head (ACCOUNTS_TO_ADD_157_REQUIRES).
+ */
+export const ACCOUNTS_TO_ADD_157: LedgerAccount[] = [
+  { id: '1297', name: 'Subsidy for Society (Capital Grant)', nameHi: 'समिति हेतु अनुदान (पूँजीगत)', type: 'equity', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
+  { id: '1298', name: 'Capital Reserve', nameHi: 'पूँजी संचय', type: 'equity', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
+  { id: '2194', name: 'Provision for NPAs', nameHi: 'NPA प्रावधान', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
+  { id: '2195', name: 'Provision for Standard Assets', nameHi: 'मानक परिसंपत्ति प्रावधान', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
+  { id: '2199', name: 'Subsidy held for Members', nameHi: 'सदस्यों हेतु अनुदान (देय)', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
+  { id: '5498', name: 'Loan Loss Provisions', nameHi: 'ऋण हानि प्रावधान', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
+];
+const PACS_MARKER = { id: '4303', name: 'Govt Subsidy / NABARD Grant' } as const;
+/** Every ACCOUNTS_TO_ADD_157 head is added ONLY to a chart holding the PACS-only 4303 head (same id AND name). */
+// A plain literal (not built with Object.fromEntries): a call at module top level stops esbuild tree-shaking this
+// list out of bundles that import storage.ts for other things (the /ask Edge bundle).
+export const ACCOUNTS_TO_ADD_157_REQUIRES: Record<string, { id: string; name: string }> = {
+  '1297': PACS_MARKER, '1298': PACS_MARKER, '2194': PACS_MARKER, '2195': PACS_MARKER, '2199': PACS_MARKER, '5498': PACS_MARKER,
+};
+
 /** An ACCOUNTS_TO_ADD_154 head that is added ONLY to a chart already holding this account (same id AND name). */
 export const ACCOUNTS_TO_ADD_154_REQUIRES: Record<string, { id: string; name: string }> = {
   '2296': { id: '4202', name: 'Market Fee' },
@@ -988,10 +1016,10 @@ export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAc
   // Society Shares" at 3202) + an ACCOUNTS_TO_ADD copy at 3208 create a duplicate head.
   const existingIds = new Set(patched.map(a => a.id));
   const existingNameType = new Set(patched.map(a => `${a.name.trim().toLowerCase()}|${a.type}`));
-  for (const listed of [...ACCOUNTS_TO_ADD, ...ACCOUNTS_TO_ADD_115, ...ACCOUNTS_TO_ADD_154, ...ACCOUNTS_TO_ADD_155, ...ACCOUNTS_TO_ADD_156]) {
+  for (const listed of [...ACCOUNTS_TO_ADD, ...ACCOUNTS_TO_ADD_115, ...ACCOUNTS_TO_ADD_154, ...ACCOUNTS_TO_ADD_155, ...ACCOUNTS_TO_ADD_156, ...ACCOUNTS_TO_ADD_157]) {
     if (existingIds.has(listed.id)) continue;
     if (existingNameType.has(`${listed.name.trim().toLowerCase()}|${listed.type}`)) continue;
-    const needs = ACCOUNTS_TO_ADD_154_REQUIRES[listed.id];
+    const needs = ACCOUNTS_TO_ADD_154_REQUIRES[listed.id] ?? ACCOUNTS_TO_ADD_157_REQUIRES[listed.id];
     if (needs && !patched.some(a => a.id === needs.id && a.name.trim().toLowerCase() === needs.name.toLowerCase())) continue;
     // A head merged here gets its patch too (5311 comes from ACCOUNTS_TO_ADD for charts whose template lacks it).
     const patch = patchFor(listed);
