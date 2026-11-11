@@ -55,8 +55,8 @@ export const HUBS: HubDef[] = [
     { hi: 'श्रमिक', en: 'Labour', domain: 'labour' },
     { hi: 'आवास', en: 'Housing', domain: 'housing' },
   ] },
-  { id: 'payroll', hi: 'वेतन', en: 'Payroll', icon: Banknote, sections: [
-    { hi: 'वेतन', en: 'Payroll', moduleIds: ['salary', 'payroll'] },
+  { id: 'payroll', hi: 'वेतन', en: 'Salary', icon: Banknote, sections: [
+    { hi: 'वेतन', en: 'Salary', moduleIds: ['salary', 'payroll'] }, // 'payroll' is out of the menu (RETIRED_FROM_MENU)
   ] },
   { id: 'reports', hi: 'रिपोर्ट', en: 'Reports', icon: BarChart3, sections: [
     { hi: 'अंतिम खाते', en: 'Final accounts', moduleIds: ['trialBalance', 'tradingAccount', 'profitLoss', 'balanceSheet', 'receiptsPayments'] },

@@ -31,6 +31,17 @@ export function isModuleVisible(m: ModuleDefinition, ctx: NavContext): boolean {
   return m.requiredCapabilities.every((c) => ctx.capabilities.has(c));
 }
 
+/**
+ * Pages kept but taken OUT of every menu (sidebar, group pages, Ctrl+K search, next-step links). The route,
+ * its gates and the data stay — a society that has data there opens it by URL.
+ *   • payroll — founder 2026-11-11: ONE salary path in the menu. The new Payroll engine is not complete yet
+ *     (its TDS is not in the TDS Register / 24Q, its data is not in backup, the compliance calendar does not
+ *     see it, no designation / phone / bank in its employee master), so the older Salary page is the one
+ *     shown. Bring Payroll back here when those gaps are closed (docs/payroll/PAYROLL-CONSOLIDATION-PLAN.md).
+ * Super-admin show-all still sees them (support).
+ */
+export const RETIRED_FROM_MENU: ReadonlySet<string> = new Set(['payroll']);
+
 export interface NavGroup {
   domain: NavDomain;
   headingKey: string | null;
@@ -39,7 +50,7 @@ export interface NavGroup {
 
 /** Visible modules grouped by domain in render order, each sorted by `order`. Empty groups dropped. */
 export function getVisibleGroups(ctx: NavContext, catalog: ModuleDefinition[] = MODULE_CATALOG): NavGroup[] {
-  const visible = catalog.filter((m) => isModuleVisible(m, ctx));
+  const visible = catalog.filter((m) => isModuleVisible(m, ctx) && (ctx.superAdminShowAll || !RETIRED_FROM_MENU.has(m.id)));
   return DOMAIN_ORDER
     .map((domain) => ({
       domain,

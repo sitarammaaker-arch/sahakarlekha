@@ -103,5 +103,19 @@ ok(/useAllNavigation\(\)/.test(hubPage) && /hubSections\(hub, visible\)/.test(hu
 ok(/grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4/.test(hubPage) && /min-h-\[56px\]/.test(hubPage) && /overflow-x-auto/.test(hubPage), 'group page: 1→2→3→4 columns, 56px tap targets, group strip scrolls inside the page');
 ok(/path="\/hub\/:hubId" element=\{<ProtectedRoute><NavHub \/><\/ProtectedRoute>\}/.test(read('App.tsx')), 'route behind login');
 
+// Founder 2026-11-11: ONE salary path in the menu. Payroll is out of every menu (sidebar, group pages, search,
+// next steps) but its route keeps working; super-admin show-all still sees it.
+{
+  const { RETIRED_FROM_MENU, isModuleVisible } = await nav('navVisibility.ts');
+  const ctx = (extra = {}) => ({ societyType: 'pacs', capabilities: new Set(), hasRole: () => true, userRole: 'admin', ...extra });
+  const ids = (c) => getVisibleGroups(c).flatMap((g) => g.items.map((m) => m.id));
+  ok(RETIRED_FROM_MENU.has('payroll') && RETIRED_FROM_MENU.size === 1, 'only payroll is out of the menu');
+  ok(!ids(ctx()).includes('payroll') && ids(ctx()).includes('salary'), 'admin menu: वेतन (salary) shown, payroll not');
+  ok(ids(ctx({ superAdminShowAll: true })).includes('payroll'), 'super-admin show-all still lists payroll');
+  const payroll = MODULE_CATALOG.find((m) => m.id === 'payroll');
+  ok(isModuleVisible(payroll, ctx()), 'the payroll ROUTE stays open (CapabilityGuard uses isModuleVisible, not the menu list)');
+  ok(!/'\/salary':\s*\[[^\]]*'payroll'/.test(read('lib/navigation/nextSteps.ts')), 'the Salary page no longer suggests Payroll as a next step');
+}
+
 console.log(`Nav hubs: ${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

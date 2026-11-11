@@ -82,7 +82,7 @@ ok(ALL.every((p) => portalPlanAllowed(p, 'active') === planAllows(p, 'memberPort
   const pr = read('src/pages/Pricing.tsx');
   const row = (label) => { const m = pr.match(new RegExp(`feature: '${label}[^']*', starter: (true|false), plus: (true|false), pro: (true|false)`)); return m ? m.slice(1).map((x) => x === 'true') : null; };
   const want = (f) => ['starter', 'plus', 'pro'].map((p) => planAllows(p, f));
-  ok(JSON.stringify(row('Payroll')) === JSON.stringify(want('payroll')), 'comparison: Payroll row matches PLAN_FEATURES');
+  ok(JSON.stringify(row('वेतन \\(Payroll\\)')) ===JSON.stringify(want('payroll')), 'comparison: वेतन (Payroll) row matches PLAN_FEATURES');
   ok(JSON.stringify(row('Member Portal')) === JSON.stringify(want('memberPortal')), 'comparison: Member Portal row matches');
   ok(JSON.stringify(row('Multi-Branch')) === JSON.stringify(want('multiBranch')), 'comparison: Multi-Branch row matches');
   ok(JSON.stringify(row('कई समितियों की संयुक्त रिपोर्ट')) === JSON.stringify(want('consolidation')), 'comparison: consolidation row matches');
