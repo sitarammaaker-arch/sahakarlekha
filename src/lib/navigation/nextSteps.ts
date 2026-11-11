@@ -39,7 +39,7 @@ export const NEXT_STEPS: Record<string, string[]> = {
   '/customers':         ['sales'],
 
   // ── payroll ──
-  '/salary':            ['payroll', 'tdsRegister'],
+  '/salary':            ['tdsRegister'],
   '/payroll':           ['tdsRegister', 'tdsForm16A'],
 
   // ── reports chain ──

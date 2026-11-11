@@ -1431,9 +1431,9 @@ function staticExtraPages(DATA) {
         `<h1>SahakarLekha मूल्य — Starter, Plus व Pro</h1>` +
         `<p>Professional cooperative accounting ₹2,999/साल + GST से। रजिस्टर करने पर 30 दिन का मुफ़्त trial मिलता है। हिसाब-किताब और सभी रिपोर्ट हर plan में एक जैसी हैं; Plus में staff, Payroll और Member Portal जुड़ते हैं, Pro में शाखाएँ, संयुक्त रिपोर्ट और असीमित users।</p>` +
         `<h2>Starter — ₹2,999 / साल + GST (≈ ₹250/माह)</h2>` +
-        `<p>छोटी समिति, जहाँ एक व्यक्ति हिसाब रखता है — पूरा professional accounting, कोई demo नहीं। 1 समिति · 1 user · असीमित vouchers व सदस्य। Ledger, Trial Balance, Balance Sheet, लाभ-हानि, प्राप्ति-भुगतान, GST/TDS सारांश, सदस्य/Share/Loan register, Custom Chart of Accounts, PDF/Excel/CSV export व साप्ताहिक cloud backup — आपका डेटा आपका। Payroll, Member Portal और शाखाएँ शामिल नहीं।</p>` +
+        `<p>छोटी समिति, जहाँ एक व्यक्ति हिसाब रखता है — पूरा professional accounting, कोई demo नहीं। 1 समिति · 1 user · असीमित vouchers व सदस्य। Ledger, Trial Balance, Balance Sheet, लाभ-हानि, प्राप्ति-भुगतान, GST/TDS सारांश, सदस्य/Share/Loan register, Custom Chart of Accounts, PDF/Excel/CSV export व साप्ताहिक cloud backup — आपका डेटा आपका। वेतन (Payroll), Member Portal और शाखाएँ शामिल नहीं।</p>` +
         `<h2>Plus — ₹6,999 / साल + GST (≈ ₹583/माह)</h2>` +
-        `<p>staff के साथ चलने वाली समिति के लिए। Starter का सब कुछ, और: <strong>6 users</strong> (जैसे 5 staff + 1 Auditor/CA), हर user की अलग भूमिका (Role-Based Access), Payroll — कर्मचारी व वेतन, और Member Portal — सदस्य अपना खाता खुद देखें।</p>` +
+        `<p>staff के साथ चलने वाली समिति के लिए। Starter का सब कुछ, और: <strong>6 users</strong> (जैसे 5 staff + 1 Auditor/CA), हर user की अलग भूमिका (Role-Based Access), वेतन — कर्मचारी, वेतन पर्ची व PF/ESI/TDS कटौती, और Member Portal — सदस्य अपना खाता खुद देखें।</p>` +
         `<h2>Pro — ₹14,999 / साल + GST (≈ ₹1,250/माह)</h2>` +
         `<p>बड़ी team वाली समिति के लिए। Plus का सब कुछ, और: असीमित users — हर शाखा व विभाग के staff के लिए; Multi-Branch — शाखा-वार हिसाब व रिपोर्ट; कई समितियों की संयुक्त रिपोर्ट; डेटा-migration सहायता शामिल — पुराना हिसाब हम डालेंगे (₹4,999 + GST की बचत); और priority WhatsApp support।</p>` +
         `<h2>Enterprise / Federation — ₹49,000/साल + GST से</h2>` +

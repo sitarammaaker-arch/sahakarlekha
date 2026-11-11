@@ -135,7 +135,7 @@ export function minPlanFor(feature: PlanFeature): 'plus' | 'pro' {
 
 /** Feature names for notices, Hindi first. */
 export const PLAN_FEATURE_LABEL: Record<PlanFeature, { hi: string; en: string }> = {
-  payroll:       { hi: 'Payroll (कर्मचारी व वेतन)', en: 'Payroll (staff and salaries)' },
+  payroll:       { hi: 'वेतन (कर्मचारी व वेतन पर्ची)', en: 'Salary (staff and pay slips)' },
   multiBranch:   { hi: 'Multi-Branch (शाखाएँ)', en: 'Multi-Branch' },
   consolidation: { hi: 'कई समितियों की संयुक्त रिपोर्ट', en: 'Multi-society consolidation' },
   memberPortal:  { hi: 'Member Portal', en: 'Member Portal' },
