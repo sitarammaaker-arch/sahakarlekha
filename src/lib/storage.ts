@@ -876,6 +876,33 @@ export const ACCOUNTS_TO_ADD_115: LedgerAccount[] = [
   { id: '5499', name: 'Round Off', nameHi: 'राउंड ऑफ', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '5400', subtype: 'round_off' },
 ];
 
+/**
+ * Payable heads the 2026-11-11 comparison with the official texts found missing (reports/…सरकारी मिलान).
+ * ADDITIVE ONLY: no existing account is renamed, retyped or moved, so no report figure changes until a
+ * society posts to one of these. Persisted for existing societies by migration 154
+ * (scripts/gen-migration-154.mjs). Codes at the END of their range, as for 115.
+ *   2196 — the education fund is held outside the society (Haryana Act 1984 s.87(1)(b); MSCS Act s.63(1)(b)),
+ *          so the share of profit set aside for it is owed until deposited.
+ *   2197 / 2198 — the credit side of 5206 Gratuity Provision and 5207 Employee Bonus, which had none.
+ *   2297 — tax payable on reverse charge must be shown apart from ordinary output tax (CGST Rules r.56(1), (4)).
+ *   2296 — market fee is collected for the Market Committee, like HRDF (2205) for the HRDF Board; only for a
+ *          chart that has the 4202 "Market Fee" head (see ACCOUNTS_TO_ADD_154_REQUIRES).
+ */
+export const ACCOUNTS_TO_ADD_154: LedgerAccount[] = [
+  { id: '2196', name: 'Education Fund Payable', nameHi: 'देय शिक्षा निधि अंशदान', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
+  { id: '2197', name: 'Provision for Gratuity', nameHi: 'उपदान प्रावधान (देय)', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
+  // Named so the dairy resolver's 'Bonus Payable' / 'देय बोनस' hint (the PRODUCERS' patronage bonus, 2106) never matches it.
+  { id: '2198', name: 'Outstanding Employee Bonus', nameHi: 'बकाया कर्मचारी बोनस', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
+  { id: '2296', name: 'Market Fee Payable', nameHi: 'देय मंडी शुल्क', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
+  // Named so the 'gst.output.combined' role matcher (/^gst payable|देय gst/, the ordinary output-tax account 2201) never matches it.
+  { id: '2297', name: 'Reverse Charge GST Payable (RCM)', nameHi: 'रिवर्स चार्ज GST देय (RCM)', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
+];
+
+/** An ACCOUNTS_TO_ADD_154 head that is added ONLY to a chart already holding this account (same id AND name). */
+export const ACCOUNTS_TO_ADD_154_REQUIRES: Record<string, { id: string; name: string }> = {
+  '2296': { id: '4202', name: 'Market Fee' },
+};
+
 export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAccount[]; changed: boolean; newlyAdded: LedgerAccount[] } {
   let changed = false;
   const newlyAdded: LedgerAccount[] = [];
@@ -893,9 +920,11 @@ export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAc
   // Society Shares" at 3202) + an ACCOUNTS_TO_ADD copy at 3208 create a duplicate head.
   const existingIds = new Set(patched.map(a => a.id));
   const existingNameType = new Set(patched.map(a => `${a.name.trim().toLowerCase()}|${a.type}`));
-  for (const newAcc of [...ACCOUNTS_TO_ADD, ...ACCOUNTS_TO_ADD_115]) {
+  for (const newAcc of [...ACCOUNTS_TO_ADD, ...ACCOUNTS_TO_ADD_115, ...ACCOUNTS_TO_ADD_154]) {
     if (existingIds.has(newAcc.id)) continue;
     if (existingNameType.has(`${newAcc.name.trim().toLowerCase()}|${newAcc.type}`)) continue;
+    const needs = ACCOUNTS_TO_ADD_154_REQUIRES[newAcc.id];
+    if (needs && !patched.some(a => a.id === needs.id && a.name.trim().toLowerCase() === needs.name.toLowerCase())) continue;
     patched.push(newAcc);
     newlyAdded.push(newAcc);
     existingNameType.add(`${newAcc.name.trim().toLowerCase()}|${newAcc.type}`);
