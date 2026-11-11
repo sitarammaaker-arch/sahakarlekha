@@ -1431,14 +1431,14 @@ function staticExtraPages(DATA) {
         `<h1>SahakarLekha मूल्य — Starter, Plus व Pro</h1>` +
         `<p>Professional cooperative accounting ₹2,999/साल + GST से। रजिस्टर करने पर 30 दिन का मुफ़्त trial मिलता है। Accounting के feature हर plan में एक जैसे हैं — फ़र्क users की संख्या और Member Portal का है।</p>` +
         `<h2>Starter — ₹2,999 / साल + GST (≈ ₹250/माह)</h2>` +
-        `<p>छोटी, single-user समिति के लिए पूरा professional accounting — demo नहीं। 1 समिति · 1 user · असीमित vouchers व सदस्य। Ledger, Trial Balance, Balance Sheet, P&amp;L, Receipts &amp; Payments, GST/TDS सारांश, Member/Share/Loan register, Payroll, Multi-Branch, Custom Chart of Accounts, PDF/Excel/CSV export व साप्ताहिक cloud backup — आपका डेटा आपका। Member Portal शामिल नहीं।</p>` +
+        `<p>छोटी समिति, जहाँ एक व्यक्ति हिसाब रखता है — पूरा professional accounting, कोई demo नहीं। 1 समिति · 1 user · असीमित vouchers व सदस्य। Ledger, Trial Balance, Balance Sheet, लाभ-हानि, प्राप्ति-भुगतान, GST/TDS सारांश, सदस्य/Share/Loan register, Payroll, Multi-Branch, Custom Chart of Accounts, PDF/Excel/CSV export व साप्ताहिक cloud backup — आपका डेटा आपका। Member Portal शामिल नहीं।</p>` +
         `<h2>Plus — ₹6,999 / साल + GST (≈ ₹583/माह)</h2>` +
         `<p>staff के साथ चलने वाली समिति के लिए। Starter का सब कुछ, और: <strong>6 users</strong> (जैसे 5 staff + 1 Auditor/CA), हर user की अलग भूमिका (Role-Based Access) व Member Portal — सदस्य अपना खाता खुद देखें।</p>` +
         `<h2>Pro — ₹14,999 / साल + GST (≈ ₹1,250/माह)</h2>` +
-        `<p>बड़ी team वाली समिति के लिए। Plus का सब कुछ, और: असीमित users — हर शाखा व विभाग के staff के लिए।</p>` +
-        `<h2>Enterprise / Federation — ₹49,000/साल से</h2>` +
+        `<p>बड़ी team वाली समिति के लिए। Plus का सब कुछ, और: असीमित users — हर शाखा व विभाग के staff के लिए; डेटा-migration सहायता शामिल — पुराना हिसाब हम डालेंगे (₹4,999 + GST की बचत); और priority WhatsApp support।</p>` +
+        `<h2>Enterprise / Federation — ₹49,000/साल + GST से</h2>` +
         `<p>Federations, unions, clusters व बड़े deployments के लिए — कई समितियों का एक साथ setup, bulk डेटा-migration व dedicated onboarding/support। <a href="/contact">हमसे बात करें</a>।</p>` +
-        `<p>सभी दाम प्रति समिति, भुगतान की तारीख़ से 12 महीने के लिए; GST अलग से जुड़ता है। Plan app के अंदर online ख़रीदें; बीच में upgrade पर सिर्फ़ बचे समय का अंतर लगता है। <a href="/faq">अक्सर पूछे जाने वाले प्रश्न देखें</a></p>` +
+        `<p>सभी दाम प्रति समिति, भुगतान की तारीख़ से 12 महीने के लिए; GST अलग से जुड़ता है। Plan app के अंदर online ख़रीदें; बीच में upgrade पर सिर्फ़ बचे समय का अंतर लगता है। डेटा-migration सहायता ₹4,999 + GST एक बार (Pro में शामिल)। <a href="/faq">अक्सर पूछे जाने वाले प्रश्न देखें</a></p>` +
         registerCta(),
     }),
   });

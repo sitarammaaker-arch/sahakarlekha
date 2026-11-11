@@ -126,8 +126,8 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
       },
       {
         q: 'Starter, Plus और Pro में क्या फ़र्क है? / How do Starter, Plus and Pro differ?',
-        aHi: 'Accounting के feature तीनों में एक जैसे हैं। फ़र्क login users की संख्या का है — Starter 1, Plus 6, Pro असीमित — और Member Portal का, जो Plus और Pro में है। हर plan भुगतान की तारीख़ से 12 महीने चलता है।',
-        aEn: 'The accounting features are the same on all three. They differ in login users — Starter 1, Plus 6, Pro unlimited — and in the Member Portal, which is on Plus and Pro. Each plan runs for 12 months from the payment date.',
+        aHi: 'Accounting के feature तीनों में एक जैसे हैं। फ़र्क login users की संख्या का है — Starter 1, Plus 6, Pro असीमित — और Member Portal का, जो Plus और Pro में है। Pro में डेटा-migration सहायता (बाकी plans में ₹4,999 + GST) और priority WhatsApp support भी शामिल है। हर plan भुगतान की तारीख़ से 12 महीने चलता है।',
+        aEn: 'The accounting features are the same on all three. They differ in login users — Starter 1, Plus 6, Pro unlimited — and in the Member Portal, which is on Plus and Pro. Pro also includes data-migration help (₹4,999 + GST on the other plans) and priority WhatsApp support. Each plan runs for 12 months from the payment date.',
       },
     ],
   },
