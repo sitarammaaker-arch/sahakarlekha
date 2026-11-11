@@ -16,6 +16,12 @@
  * A new society gets a 30-day trial (migration 057); plans are bought in the app
  * (User Management → Razorpay), upgrades are prorated, there is no self-serve downgrade.
  *
+ * SERVICES (founder 2026-11-11 — promises the founder fulfils by hand, not app features):
+ *   • data-migration help — ₹4,999 + GST once; INCLUDED in Pro;
+ *   • priority WhatsApp support — Pro only;
+ *   • support for everyone — support@sahakarlekha.com / the contact form.
+ * These are what set Pro apart from Plus besides unlimited users. Change them only with the founder.
+ *
  * Layout follows the common SaaS pricing pattern: equal-height cards, tinted header
  * band, CTA aligned above the feature list, trust row, comparison table with the
  * featured column highlighted, and an FAQ.
@@ -77,14 +83,14 @@ const PLANS: Plan[] = [
   {
     id: 'starter',
     name: 'Starter / स्टार्टर',
-    tagline: 'छोटी · single-user समिति के लिए / For a small, single-user society',
+    tagline: 'छोटी समिति, जहाँ एक व्यक्ति हिसाब रखता है / For a small society run by one person',
     price: '₹2,999',
     priceNote: '+ GST · ≈ ₹250/माह · प्रति समिति',
     period: '/ साल',
     features: [
       { text: 'पूरा Double-Entry Accounting (दोहरी एंट्री)' },
-      { text: 'Ledger · Trial Balance · BS · P&L · R&P' },
-      { text: 'GST + TDS सारांश · Member/Share/Loan Register' },
+      { text: 'Ledger · Trial Balance · Balance Sheet · लाभ-हानि · प्राप्ति-भुगतान' },
+      { text: 'GST + TDS सारांश · सदस्य / Share / Loan Register' },
       { text: 'Payroll · Multi-Branch · Custom Chart of Accounts' },
       { text: 'PDF/Excel/CSV Export · साप्ताहिक Cloud Backup' },
       { text: '1 समिति · 1 user · असीमित vouchers व सदस्य', icon: 'info' },
@@ -95,12 +101,12 @@ const PLANS: Plan[] = [
   {
     id: 'plus',
     name: 'Plus / प्लस',
-    tagline: 'staff के साथ चलने वाली सक्रिय समिति / Active society with staff',
+    tagline: 'staff के साथ चलने वाली समिति / A society with staff',
     price: '₹6,999',
     priceNote: '+ GST · ≈ ₹583/माह · प्रति समिति',
     period: '/ साल',
     highlight: true,
-    badge: 'Staff वाली समिति के लिए / For teams',
+    badge: 'सुझाया गया / Recommended',
     inheritNote: 'Starter का सब कुछ, और— / Everything in Starter, plus:',
     features: [
       { text: '6 users — जैसे 5 staff + 1 Auditor/CA' },
@@ -119,7 +125,8 @@ const PLANS: Plan[] = [
     inheritNote: 'Plus का सब कुछ, और— / Everything in Plus, plus:',
     features: [
       { text: 'असीमित users — हर शाखा व विभाग के staff के लिए' },
-      { text: 'Member Portal शामिल' },
+      { text: 'डेटा-migration सहायता शामिल — पुराना हिसाब हम डालेंगे (₹4,999 + GST की बचत)' },
+      { text: 'Priority WhatsApp support — आपके सवाल का जवाब सबसे पहले' },
     ],
     cta: { label: '30 दिन मुफ़्त आज़माएँ / Start Free Trial', to: '/register' },
   },
@@ -132,7 +139,8 @@ interface ComparisonRow {
   pro: boolean | string;
 }
 
-// Only the last two rows differ by plan — that is what the app enforces today (see the header).
+// Users and the Member Portal differ in the app; migration help and support are the founder's
+// services (see the header). Everything above them is the same on every plan.
 const COMPARISON: ComparisonRow[] = [
   { feature: 'Double-Entry Accounting + सभी रिपोर्ट', starter: true, plus: true, pro: true },
   { feature: 'GST · TDS · Audit Certificate', starter: true, plus: true, pro: true },
@@ -141,9 +149,11 @@ const COMPARISON: ComparisonRow[] = [
   { feature: 'Payroll (वेतन)', starter: true, plus: true, pro: true },
   { feature: 'Multi-Branch Accounting + branch-wise reporting', starter: true, plus: true, pro: true },
   { feature: 'Custom Chart of Accounts', starter: true, plus: true, pro: true },
-  { feature: 'Multi-Society Consolidation (backup files से)', starter: true, plus: true, pro: true },
-  { feature: 'Users (login)', starter: '1', plus: '6', pro: 'असीमित' },
-  { feature: 'Member Portal', starter: false, plus: true, pro: true },
+  { feature: 'कई समितियों की संयुक्त रिपोर्ट (backup file से)', starter: true, plus: true, pro: true },
+  { feature: 'Users (login)', starter: '1', plus: '6 (जैसे 5 staff + 1 CA)', pro: 'असीमित' },
+  { feature: 'Member Portal — सदस्य अपना खाता खुद देखें', starter: false, plus: true, pro: true },
+  { feature: 'डेटा-migration सहायता (पुराना हिसाब हम डालें)', starter: '₹4,999 + GST', plus: '₹4,999 + GST', pro: 'शामिल' },
+  { feature: 'Support', starter: 'ईमेल', plus: 'ईमेल', pro: 'Priority WhatsApp' },
 ];
 
 interface Faq {
@@ -158,7 +168,11 @@ const FAQS: Faq[] = [
   },
   {
     q: 'कब upgrade करूँ? / When should I upgrade?',
-    a: 'Accounting के feature हर plan में एक जैसे हैं; फ़र्क users की संख्या और Member Portal का है. एक से ज़्यादा user (staff, auditor/CA) या Member Portal चाहिए → Plus (6 users). 6 से ज़्यादा users चाहिए → Pro (असीमित). / The accounting features are the same on every plan; the difference is the number of users and the Member Portal. Need more than one user or the Member Portal → Plus (6 users). Need more than 6 users → Pro (unlimited).',
+    a: 'Accounting के feature हर plan में एक जैसे हैं. एक से ज़्यादा user (staff, auditor/CA) या Member Portal चाहिए → Plus (6 users). 6 से ज़्यादा users चाहिए, या पुराना हिसाब हमसे डलवाना है और priority WhatsApp support चाहिए → Pro. / The accounting features are the same on every plan. Need more than one user or the Member Portal → Plus (6 users). Need more than 6 users, or want us to bring in your old books and get priority WhatsApp support → Pro.',
+  },
+  {
+    q: 'डेटा-migration सहायता क्या है? / What is data-migration help?',
+    a: 'आपका पुराना हिसाब — खाते और उनके opening balance, सदस्य व उनकी share/loan बाक़ी — हमारी team app में डालकर देती है, ताकि आप पहले दिन से काम शुरू कर सकें. यह एक बार की सेवा है: Starter व Plus में ₹4,999 + GST, Pro में शामिल. इसके लिए हमसे संपर्क करें. / Our team enters your old books — accounts with their opening balances, members with their share and loan balances — so you can start on day one. It is a one-time service: ₹4,999 + GST on Starter and Plus, included in Pro. Contact us to arrange it.',
   },
   {
     q: 'भुगतान कैसे और कब होता है? / How and when do I pay?',
@@ -178,7 +192,7 @@ const FAQS: Faq[] = [
 
 const Cell: React.FC<{ value: boolean | string }> = ({ value }) => {
   if (typeof value === 'string') {
-    return <span className="text-sm font-medium">{value}</span>;
+    return <span className="text-xs sm:text-sm font-medium">{value}</span>;
   }
   return value ? (
     <CheckCircle2 className="h-5 w-5 text-green-600 inline-block" />
@@ -196,7 +210,7 @@ const Pricing: React.FC = () => {
   useDocumentMeta({
     title: 'SahakarLekha Pricing — Starter, Plus & Pro Plans',
     description:
-      'SahakarLekha cooperative accounting ₹2,999/साल + GST से — 30 दिन मुफ़्त trial। सभी रिपोर्ट, payroll व multi-branch हर plan में; ज़्यादा users और Member Portal के लिए Plus या Pro चुनें।',
+      'SahakarLekha cooperative accounting ₹2,999/साल + GST से — 30 दिन मुफ़्त trial। सभी रिपोर्ट, payroll व multi-branch हर plan में; staff और Member Portal के लिए Plus, असीमित users व डेटा-migration के लिए Pro।',
     canonicalPath: '/pricing',
     jsonLd: PRICING_JSON_LD,
   });
@@ -212,7 +226,7 @@ const Pricing: React.FC = () => {
             मूल्य निर्धारण — Pricing
           </h1>
           <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-            सरल शुरुआत। साफ कीमत। जरूरत के साथ Scale करें।
+            सरल शुरुआत। साफ़ क़ीमत। ज़रूरत बढ़े तो plan बढ़ाएँ।
           </p>
           <p className="mt-3 text-base text-foreground/80 max-w-2xl mx-auto">
             सहकारी समितियों के लिए professional accounting ₹2,999/साल + GST से। पहले 30 दिन मुफ़्त
@@ -333,7 +347,7 @@ const Pricing: React.FC = () => {
                   एक साथ setup, bulk डेटा-migration व dedicated onboarding/support. दायरा और दाम
                   बातचीत से तय होते हैं.
                 </p>
-                <p className="mt-2 text-sm font-medium">₹49,000/साल से शुरू / Starting at ₹49,000/year</p>
+                <p className="mt-2 text-sm font-medium">₹49,000/साल + GST से शुरू / From ₹49,000/year + GST</p>
               </div>
               <Link to="/contact" className="shrink-0">
                 <Button size="lg" className="gap-2">
@@ -344,8 +358,8 @@ const Pricing: React.FC = () => {
           </div>
 
           <p className="text-xs text-muted-foreground text-center mt-6">
-            Onboarding / डेटा-migration सहायता ₹1,999 (एक बार, संपर्क करें) · सभी दाम प्रति
-            समिति, भुगतान की तारीख़ से 12 महीने के लिए; GST अलग से जुड़ता है · Plan app के अंदर online ख़रीदें
+            सभी दाम प्रति समिति, भुगतान की तारीख़ से 12 महीने के लिए, GST अलग से · Plan app के अंदर
+            online ख़रीदें · डेटा-migration सहायता ₹4,999 + GST एक बार (Pro में शामिल) — <Link to="/contact" className="underline">संपर्क करें</Link>
           </p>
         </div>
       </section>
@@ -357,8 +371,8 @@ const Pricing: React.FC = () => {
             ₹2,999/साल + GST में पूरा professional accounting
           </h2>
           <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-8">
-            Starter एक demo नहीं — छोटी समिति अपना पूरे साल का हिसाब इसी पर रख सकती है। Upgrade तब —
-            जब एक से ज़्यादा user या Member Portal की ज़रूरत हो।
+            Starter कोई demo नहीं — छोटी समिति अपने पूरे साल का हिसाब इसी पर रख सकती है। Upgrade तब
+            करें, जब एक से ज़्यादा user या Member Portal की ज़रूरत हो।
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
