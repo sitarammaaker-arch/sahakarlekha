@@ -99,7 +99,7 @@ import { procurementPostingBinding, missingProcurementRoles, PROCUREMENT_ROLE_LA
 import { isRejectedQuality, procurementBusinessDate, allocateFarmerCode, canRecordQuality, farmerPaidByEngineVoucher, withDerivedAmountPaid, FARMER_PAYMENT_REF_TYPE, agencyDirectAccounts, isLotCancelled, lotCancelBlockers, LOT_CANCEL_BLOCKER_TEXT, ENGINE_REVERSAL_REF_TYPE, COMMISSION_ACCRUAL_REF_TYPE, procurementLegsOf, isValidIfsc, isValidBankAccount } from '@/lib/procurement/agentFlow';
 import { todayStr } from '@/lib/dateUtils';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, nextFY } from '@/lib/depreciation';
-import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS } from '@/lib/assetDisposal';
+import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS, disposalGainAccountId } from '@/lib/assetDisposal';
 import { fetchAllPaged as fetchAllPagedFor } from '@/lib/supabasePaging';
 import { fetchEmptyTables, unlessEmpty } from '@/lib/emptyTables';
 import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib/diagnostics/phantomVouchers';
@@ -6382,7 +6382,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     while (cursor <= disposalFY && guard++ < 200) { accum += calcDepForFY(asset, cursor, accum); cursor = nextFY(cursor); }
     accum = Math.min(accum, asset.cost - (asset.residualValue || 0));
     const cashBank = opts.mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
-    const posting = assetDisposalPosting({ category: asset.category, cost: asset.cost, accumDep: accum, saleProceeds: opts.saleProceeds, cashBankAccount: cashBank });
+    const posting = assetDisposalPosting({ category: asset.category, cost: asset.cost, accumDep: accum, saleProceeds: opts.saleProceeds, cashBankAccount: cashBank, gainAccount: disposalGainAccountId(accounts) });
     const firstDr = posting.lines.find(l => l.type === 'Dr');
     const firstCr = posting.lines.find(l => l.type === 'Cr');
     const voucher = addVoucher({

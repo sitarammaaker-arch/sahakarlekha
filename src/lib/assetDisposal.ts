@@ -21,6 +21,19 @@ export const ACCUM_DEP_ACCOUNTS: Partial<Record<AssetCategory, string>> = {
 };
 export const PROFIT_ON_SALE = '4410';
 export const LOSS_ON_SALE = '5406';
+/** PACS only (storage.ts ACCOUNTS_TO_ADD_157): the Capital Reserve that takes a profit on sale of a capital asset. */
+export const CAPITAL_RESERVE = '1298';
+
+/**
+ * Where a disposal GAIN is credited. A PACS follows NABARD's Common Accounting System: "Capital Reserve ...
+ * may arise on account of ... Profit on sale of capital asset" (CAS Annexure VI Part 2 para 6(i); Manual 8.4.7),
+ * so a chart that carries the PACS Capital Reserve head (1298) credits it; every other chart keeps
+ * 4410 Profit on Sale of Assets (income). A loss is an expense in both (Manual 8.4.8).
+ */
+export function disposalGainAccountId(accounts: ReadonlyArray<{ id: string; name: string; isGroup?: boolean; type?: string }>): string {
+  const reserve = accounts.find(a => a.id === CAPITAL_RESERVE && !a.isGroup && a.type === 'equity' && a.name.trim() === 'Capital Reserve');
+  return reserve ? CAPITAL_RESERVE : PROFIT_ON_SALE;
+}
 
 export interface DisposalInput {
   category: AssetCategory;
@@ -28,6 +41,8 @@ export interface DisposalInput {
   accumDep: number;        // accumulated depreciation to the disposal date
   saleProceeds: number;
   cashBankAccount: string; // resolved cash/bank leg
+  /** Account credited with a gain — disposalGainAccountId(accounts). Default 4410 Profit on Sale of Assets. */
+  gainAccount?: string;
 }
 
 export interface DisposalLine { accountId: string; type: 'Dr' | 'Cr'; amount: number; }
@@ -54,7 +69,7 @@ export function assetDisposalPosting(input: DisposalInput): DisposalPosting {
   if (accumDep > 0 && accumAcc) lines.push({ accountId: accumAcc, type: 'Dr', amount: accumDep });
   if (gainLoss < 0) lines.push({ accountId: LOSS_ON_SALE, type: 'Dr', amount: r2(-gainLoss) });
   lines.push({ accountId: ASSET_ACCOUNTS[input.category], type: 'Cr', amount: cost });
-  if (gainLoss > 0) lines.push({ accountId: PROFIT_ON_SALE, type: 'Cr', amount: gainLoss });
+  if (gainLoss > 0) lines.push({ accountId: input.gainAccount || PROFIT_ON_SALE, type: 'Cr', amount: gainLoss });
 
   const drTotal = r2(lines.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0));
   return { cost, accumDep, wdv, gainLoss, drTotal, lines };
