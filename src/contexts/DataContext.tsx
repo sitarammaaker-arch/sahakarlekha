@@ -33,7 +33,8 @@ import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
 import { syncPrimaryNominee } from '@/lib/nomineeUtils';
 import { localOnlyAccountsReport } from '@/lib/accounting/localOnlyAccounts';
-import { gstLedgerLegs, usesCombinedGst, gstLegLabel, type GstSide, type GstLeg } from '@/lib/accounting/gstLedgers';
+import { gstLedgerLegs, usesCombinedGst, gstLegLabel, rcmPayableAccountId, type GstSide, type GstLeg } from '@/lib/accounting/gstLedgers';
+import { rcmPurchaseTerms } from '@/lib/rcm';
 import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
 import { billTerms, resolveLateFeeRule } from '@/lib/lateFee';
@@ -7390,6 +7391,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return { ...data, id: '' } as unknown as Purchase;
     // RM-01: refuse up front for the reasons addVoucher would — no load-time repair re-creates the voucher later.
     if (guardVoucherPostable(data.date)) return { ...data, id: '' } as unknown as Purchase;
+    // Reverse charge (lib/rcm.rcmPurchaseTerms): the GST is owed to the government, not to the supplier, so the
+    // bill total carries no GST. No reverse-charge payable head → refuse BEFORE anything is changed.
+    const rcmT = rcmPurchaseTerms(data);
+    const rcmAccId = rcmT.rcm ? rcmPayableAccountId(accountsRef.current, localOnlyAccountIdsRef.current) : null;
+    if (rcmT.rcm && !rcmAccId) {
+      toastRef.current({ title: 'RCM देय खाता नहीं मिला', description: '"Reverse Charge GST Payable (RCM)" (2297) खाता chart में नहीं है — पहले Ledger Heads में बनाएँ, फिर यह खरीद सेव करें। कुछ भी सेव नहीं हुआ। (No reverse-charge payable ledger — nothing was saved.)', variant: 'destructive', duration: 12000 });
+      return { ...data, id: '' } as unknown as Purchase;
+    }
+    if (rcmT.rcm) data = { ...data, grandTotal: rcmT.grandTotal };
     // Enforce per-item Purchase A/c (group): block posting if any STOCK item being
     // purchased has no purchaseAccountId, so purchases never silently fall to '5101'.
     const unmappedNames = data.items
@@ -7427,12 +7437,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // balances by construction. Falls back to '5101' for unmapped items.
     splitNetByAccount(
       data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.purchaseAccountId || '5101', weight: it.amount })),
-      goodsBase('purchase', grandTotal, data.roundOff, data.cashDiscount), data.taxAmount || 0, data.tdsAmount || 0, data.tcsAmount || 0,
+      goodsBase('purchase', grandTotal, data.roundOff, data.cashDiscount), rcmT.taxInPayable, data.tdsAmount || 0, data.tcsAmount || 0,
     ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Dr', amount }));
 
     // Dr: GST input credit — head-wise (Input CGST / SGST / IGST), or the combined 3310 (lib/accounting/gstLedgers)
     gstLegs('input', { cgst: data.cgstAmount, sgst: data.sgstAmount, igst: data.igstAmount, total: data.taxAmount || 0 }, { legacy: false })
       .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Dr', amount: g.amount, narration: g.head === 'combined' ? `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` : gstLegLabel('input', g) }));
+    // Cr: reverse-charge GST payable (2297) — the society owes this tax to the government as recipient; the supplier
+    // is credited the value only (CGST Act s.9(3)/(4), s.2(98); kept apart from output tax: s.2(82), Rule 56(4)).
+    if (rcmT.rcm) lines.push({ id: lid(), accountId: rcmAccId!, type: 'Cr', amount: rcmT.rcmTax, narration: `RCM देय (reverse charge): CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
 
     // Dr: TDS / TCS Receivable (3307) — the seller collected this income tax FROM us and put it
     // on the bill, so it is our 26AS credit, not the goods' cost. Dr, never Cr 2202.
@@ -7636,6 +7649,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     // RM-17: a bill whose voucher sits on the combined ITC ledger stays there when edited (no history moves).
     const legacyGst = usesCombinedGst('input', original.voucherId ? vouchersRef.current.find(v => v.id === original.voucherId) : null);
+    // Reverse charge (lib/rcm.rcmPurchaseTerms): the GST is owed to the government, not to the supplier, so the
+    // bill total carries no GST. No reverse-charge payable head → refuse BEFORE anything is changed.
+    const rcmT = rcmPurchaseTerms(data);
+    const rcmAccId = rcmT.rcm ? rcmPayableAccountId(accountsRef.current, localOnlyAccountIdsRef.current) : null;
+    if (rcmT.rcm && !rcmAccId) {
+      toastRef.current({ title: 'RCM देय खाता नहीं मिला', description: '"Reverse Charge GST Payable (RCM)" (2297) खाता chart में नहीं है — पहले Ledger Heads में बनाएँ, फिर यह खरीद सेव करें। कुछ भी सेव नहीं हुआ। (No reverse-charge payable ledger — nothing was saved.)', variant: 'destructive', duration: 12000 });
+      return null;
+    }
+    if (rcmT.rcm) data = { ...data, grandTotal: rcmT.grandTotal };
     // RM-01: check every voucher-birth refusal BEFORE stock is adjusted or the old voucher is cancelled.
     if (guardVoucherPostable(original.date, data.date)) return null;
 
@@ -7712,10 +7734,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // T-02 / RULE 4: exact-paise split by purchaseAccountId (same shared rule as addPurchase / repair).
     splitNetByAccount(
       data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.purchaseAccountId || '5101', weight: it.amount })),
-      goodsBase('purchase', grandTotal, data.roundOff, data.cashDiscount), data.taxAmount || 0, data.tdsAmount || 0, data.tcsAmount || 0,
+      goodsBase('purchase', grandTotal, data.roundOff, data.cashDiscount), rcmT.taxInPayable, data.tdsAmount || 0, data.tcsAmount || 0,
     ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Dr', amount }));
     gstLegs('input', { cgst: data.cgstAmount, sgst: data.sgstAmount, igst: data.igstAmount, total: data.taxAmount || 0 }, { legacy: legacyGst })
       .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Dr', amount: g.amount, narration: g.head === 'combined' ? `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` : gstLegLabel('input', g) }));
+    // Cr: reverse-charge GST payable (2297) — the society owes this tax to the government as recipient; the supplier
+    // is credited the value only (CGST Act s.9(3)/(4), s.2(98); kept apart from output tax: s.2(82), Rule 56(4)).
+    if (rcmT.rcm) lines.push({ id: lid(), accountId: rcmAccId!, type: 'Cr', amount: rcmT.rcmTax, narration: `RCM देय (reverse charge): CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
     if ((data.tcsAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: ACCOUNT_IDS.TAX_CREDIT, type: 'Dr', amount: data.tcsAmount!, narration: `TCS ${data.tcsPct||0}% — collected by ${data.supplierName}` });
     }

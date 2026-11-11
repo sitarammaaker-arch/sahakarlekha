@@ -30,6 +30,11 @@ export interface InvoiceTotalsInput {
   cashDiscount?: number;
   /** Round off applied to the bill (+ raises, − lowers the total). Clamped to ±0.99 — see autoRoundOff. */
   roundOff?: number;
+  /**
+   * Reverse charge (purchase): the GST is self-assessed and paid by US to the government, not to the
+   * supplier (CGST Act s.9(3)/(4), s.2(98)) — so it is computed as usual but stays OUT of the bill total.
+   */
+  rcm?: boolean;
 }
 
 export interface InvoiceTotals {
@@ -46,7 +51,7 @@ export interface InvoiceTotals {
   tcsAmount: number;
   /** cash discount actually applied (capped at the pre-discount total). */
   cashDiscount: number;
-  /** net + tax + tcs − tds − cashDiscount — the bill before rounding. */
+  /** net + tax + tcs − tds − cashDiscount — the bill before rounding. Under reverse charge the tax is left out. */
   totalBeforeRoundOff: number;
   /** round off actually applied (clamped to ±0.99). */
   roundOff: number;
@@ -74,7 +79,7 @@ export function computeInvoiceTotals(input: InvoiceTotalsInput): InvoiceTotals {
   const taxMinor = addMinor(cgstMinor, sgstMinor, igstMinor);
   const tdsMinor = applyPercent(netMinor, Number(input.tdsPct) || 0).minor;
   const tcsMinor = applyPercent(netMinor, Number(input.tcsPct) || 0).minor;
-  const preDiscountMinor = subMinor(addMinor(netMinor, taxMinor, tcsMinor), tdsMinor);
+  const preDiscountMinor = subMinor(addMinor(netMinor, input.rcm ? 0 : taxMinor, tcsMinor), tdsMinor);
   const cashDiscountMinor = Math.min(Math.max(0, toMinor(Number(input.cashDiscount) || 0)), Math.max(0, preDiscountMinor));
   const beforeRoundMinor = subMinor(preDiscountMinor, cashDiscountMinor);
   const capMinor = toMinor(MAX_ROUND_OFF);

@@ -3699,6 +3699,8 @@ export function generateVoucherPDF(input: VoucherPDFInput, society: SocietySetti
 // clear this is for our books, not a re-issued invoice to the supplier.
 
 export interface PurchaseRecordInput {
+  /** Reverse charge: the GST shown is self-assessed and owed to the government — it is not in the bill total. */
+  rcmApplicable?: boolean;
   purchaseNo: string;
   date: string;
   creditDays?: number | null;
@@ -3984,7 +3986,7 @@ export function generatePurchaseRecordPDF(input: PurchaseRecordInput, society: S
       if (input.cgstAmount > 0) addTotalsRow(`CGST @ ${input.cgstPct}% (ITC)`, fmt(input.cgstAmount));
       if (input.sgstAmount > 0) addTotalsRow(`SGST @ ${input.sgstPct}% (ITC)`, fmt(input.sgstAmount));
     }
-    addTotalsRow('Total ITC', fmt(input.taxAmount));
+    addTotalsRow(input.rcmApplicable ? 'Reverse charge (RCM) GST - payable to Govt, not in total' : 'Total ITC', fmt(input.taxAmount));
   }
   if (input.tdsAmount > 0) {
     addTotalsRow(`TDS @ ${input.tdsPct}% (deducted)`, '- ' + fmt(input.tdsAmount));

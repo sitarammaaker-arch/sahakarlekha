@@ -103,3 +103,25 @@ export function halveIntraStateGst(total: number): { cgst: number; sgst: number;
 /** Short narration for a GST leg. */
 export const gstLegLabel = (side: GstSide, leg: GstLeg): string =>
   leg.head === 'combined' ? (side === 'output' ? 'GST' : 'GST ITC') : `${side === 'output' ? 'Output' : 'Input'} ${leg.head.toUpperCase()}`;
+
+/**
+ * Reverse charge: the head for tax the society owes as RECIPIENT (2297, migration 154). Kept apart from the
+ * output-tax heads because it is not output tax (CGST Act s.2(82)) and is paid in cash (Rule 85(4)).
+ */
+export const RCM_PAYABLE_ID = '2297';
+const RCM_PATTERN = /\brcm\b|reverse charge/i;   // = role gst.rcm.payable (lib/accounting/roles)
+
+/** The society's reverse-charge payable ledger, or null (standard code if it really is that head, else a single named one). */
+export function rcmPayableAccountId(accounts: readonly GstAccountLike[], unavailableIds?: ReadonlySet<string>): string | null {
+  const fits = (a: GstAccountLike) => !a.isGroup && a.type === 'liability' && RCM_PATTERN.test(a.name) && !unavailableIds?.has(a.id);
+  const std = accounts.find((a) => a.id === RCM_PAYABLE_ID);
+  if (std && fits(std)) return std.id;
+  const named = accounts.filter(fits);
+  return named.length === 1 ? named[0].id : null;
+}
+
+/** The reverse-charge payable ledger a voucher was posted to, or null — how a return knows the purchase was posted under reverse charge. */
+export function voucherRcmAccountId(voucher: { lines?: Array<{ accountId: string }> | null } | null | undefined, accounts: readonly GstAccountLike[]): string | null {
+  const ids = new Set(accounts.filter((a) => !a.isGroup && a.type === 'liability' && RCM_PATTERN.test(a.name)).map((a) => a.id));
+  return voucher?.lines?.find((l) => ids.has(l.accountId))?.accountId ?? null;
+}
