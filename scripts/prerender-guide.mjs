@@ -1422,20 +1422,20 @@ function staticExtraPages(DATA) {
   pages.push({
     path: '/pricing',
     title: 'SahakarLekha Pricing — Starter, Plus & Pro Plans',
-    description: 'SahakarLekha cooperative accounting ₹2,999/साल + GST से — 30 दिन मुफ़्त trial। सभी रिपोर्ट, payroll व multi-branch हर plan में; ज़्यादा users और Member Portal के लिए Plus या Pro चुनें।',
+    description: 'SahakarLekha cooperative accounting ₹2,999/साल + GST से — 30 दिन मुफ़्त trial। सभी रिपोर्ट हर plan में; staff, Payroll और Member Portal के लिए Plus; शाखाएँ, असीमित users व डेटा-migration के लिए Pro।',
     lastmod: LASTMOD.pricing,
     jsonLd: [crumb([{ name: 'मूल्य', item: `${SITE}/pricing` }]), ...(DATA.seo ? [DATA.seo.pricingJsonLd()] : [])],
     body: shell({
       current: 'मूल्य',
       html:
         `<h1>SahakarLekha मूल्य — Starter, Plus व Pro</h1>` +
-        `<p>Professional cooperative accounting ₹2,999/साल + GST से। रजिस्टर करने पर 30 दिन का मुफ़्त trial मिलता है। Accounting के feature हर plan में एक जैसे हैं — फ़र्क users की संख्या और Member Portal का है।</p>` +
+        `<p>Professional cooperative accounting ₹2,999/साल + GST से। रजिस्टर करने पर 30 दिन का मुफ़्त trial मिलता है। हिसाब-किताब और सभी रिपोर्ट हर plan में एक जैसी हैं; Plus में staff, Payroll और Member Portal जुड़ते हैं, Pro में शाखाएँ, संयुक्त रिपोर्ट और असीमित users।</p>` +
         `<h2>Starter — ₹2,999 / साल + GST (≈ ₹250/माह)</h2>` +
-        `<p>छोटी समिति, जहाँ एक व्यक्ति हिसाब रखता है — पूरा professional accounting, कोई demo नहीं। 1 समिति · 1 user · असीमित vouchers व सदस्य। Ledger, Trial Balance, Balance Sheet, लाभ-हानि, प्राप्ति-भुगतान, GST/TDS सारांश, सदस्य/Share/Loan register, Payroll, Multi-Branch, Custom Chart of Accounts, PDF/Excel/CSV export व साप्ताहिक cloud backup — आपका डेटा आपका। Member Portal शामिल नहीं।</p>` +
+        `<p>छोटी समिति, जहाँ एक व्यक्ति हिसाब रखता है — पूरा professional accounting, कोई demo नहीं। 1 समिति · 1 user · असीमित vouchers व सदस्य। Ledger, Trial Balance, Balance Sheet, लाभ-हानि, प्राप्ति-भुगतान, GST/TDS सारांश, सदस्य/Share/Loan register, Custom Chart of Accounts, PDF/Excel/CSV export व साप्ताहिक cloud backup — आपका डेटा आपका। Payroll, Member Portal और शाखाएँ शामिल नहीं।</p>` +
         `<h2>Plus — ₹6,999 / साल + GST (≈ ₹583/माह)</h2>` +
-        `<p>staff के साथ चलने वाली समिति के लिए। Starter का सब कुछ, और: <strong>6 users</strong> (जैसे 5 staff + 1 Auditor/CA), हर user की अलग भूमिका (Role-Based Access) व Member Portal — सदस्य अपना खाता खुद देखें।</p>` +
+        `<p>staff के साथ चलने वाली समिति के लिए। Starter का सब कुछ, और: <strong>6 users</strong> (जैसे 5 staff + 1 Auditor/CA), हर user की अलग भूमिका (Role-Based Access), Payroll — कर्मचारी व वेतन, और Member Portal — सदस्य अपना खाता खुद देखें।</p>` +
         `<h2>Pro — ₹14,999 / साल + GST (≈ ₹1,250/माह)</h2>` +
-        `<p>बड़ी team वाली समिति के लिए। Plus का सब कुछ, और: असीमित users — हर शाखा व विभाग के staff के लिए; डेटा-migration सहायता शामिल — पुराना हिसाब हम डालेंगे (₹4,999 + GST की बचत); और priority WhatsApp support।</p>` +
+        `<p>बड़ी team वाली समिति के लिए। Plus का सब कुछ, और: असीमित users — हर शाखा व विभाग के staff के लिए; Multi-Branch — शाखा-वार हिसाब व रिपोर्ट; कई समितियों की संयुक्त रिपोर्ट; डेटा-migration सहायता शामिल — पुराना हिसाब हम डालेंगे (₹4,999 + GST की बचत); और priority WhatsApp support।</p>` +
         `<h2>Enterprise / Federation — ₹49,000/साल + GST से</h2>` +
         `<p>Federations, unions, clusters व बड़े deployments के लिए — कई समितियों का एक साथ setup, bulk डेटा-migration व dedicated onboarding/support। <a href="/contact">हमसे बात करें</a>।</p>` +
         `<p>सभी दाम प्रति समिति, भुगतान की तारीख़ से 12 महीने के लिए; GST अलग से जुड़ता है। Plan app के अंदर online ख़रीदें; बीच में upgrade पर सिर्फ़ बचे समय का अंतर लगता है। डेटा-migration सहायता ₹4,999 + GST एक बार (Pro में शामिल)। <a href="/faq">अक्सर पूछे जाने वाले प्रश्न देखें</a></p>` +

@@ -48,7 +48,7 @@ import { computeReceiptsPayments } from '@/lib/reports/receiptsPayments';
 import { computeCashBook, computeBankBook } from '@/lib/reports/accountBook';
 import { computeEntityLinks, type MemberDomainLinkSources } from '@/lib/entityLinks';
 import { fetchSubscriptionRow, type SubRow } from '@/lib/subscriptionRow';
-import { effectiveStatus } from '@/lib/plans';
+import { effectiveStatus, planAllows, minPlanFor, PLAN_FEATURE_LABEL, type PlanFeature } from '@/lib/plans';
 import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate, reconcileMovements } from '@/lib/stockUtils';
 import { computeGodownStock, godownMovementsWithOpening, UNASSIGNED_GODOWN } from '@/lib/godownStock';
@@ -818,6 +818,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addBranch = useCallback((data: Omit<Branch, 'id' | 'createdAt'>): Branch => {
     if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as Branch;   // RULE 6: FY-lock guard
+    if (guardPlanFeature('multiBranch')) return { ...data, id: '', createdAt: '' } as Branch;
     const branch: Branch = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString(), isActive: data.isActive ?? true };
     let snapshot: Branch[] = [];
     setBranchesState(prev => {
@@ -1082,6 +1083,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Phase 2a-4c: new entries are paused while the subscription is expired (reads stay available).
   // Returns true (and toasts) when BLOCKED — same convention as guardFYLocked. Shared by addVoucher
   // and guardVoucherPostable so both refuse for the identical reason (RULE 2).
+  // Plan gate (founder 2026-11-11): a feature the plan does not include is refused HERE, before any optimistic
+  // update, so nothing is shown that the server would not keep (RULE 1). No row yet / legacy → allowed.
+  // Returns true (and toasts) when BLOCKED — same convention as guardFYLocked.
+  const guardPlanFeature = useCallback((feature: PlanFeature): boolean => {
+    const plan = subRowRef.current?.plan;
+    if (planAllows(plan, feature)) return false;
+    const need = minPlanFor(feature) === 'plus' ? 'Plus' : 'Pro';
+    const label = PLAN_FEATURE_LABEL[feature];
+    toastRef.current({
+      title: `${need} plan चाहिए / ${need} plan needed`,
+      description: `${label.hi} ${need} plan में शामिल है — User Management से plan लें। आपका बाकी हिसाब पहले की तरह चलता रहेगा। / ${label.en} is part of the ${need} plan — upgrade in User Management.`,
+      variant: 'destructive',
+      duration: 12000,
+    });
+    return true;
+  }, []);
   const guardSubscriptionExpired = useCallback((): boolean => {
     const row = subRowRef.current;
     if (!row || effectiveStatus(row.plan, row.status, row.period_end) !== 'expired') return false;
@@ -7841,6 +7858,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ── Employees ──────────────────────────────────────────────────────────────
   const addEmployee = useCallback((data: Omit<Employee, 'id' | 'empNo'>): Employee => {
     if (guardFYLocked()) return { ...data, id: '' } as unknown as Employee;
+    if (guardPlanFeature('payroll')) return { ...data, id: '' } as unknown as Employee;
     const maxEmpNum = employeesRef.current.reduce((max, e) => {
       const m = e.empNo?.match(/EMP\/(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
     }, 0);
@@ -7904,6 +7922,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ── Salary Records ─────────────────────────────────────────────────────────
   const addSalaryRecord = useCallback((data: Omit<SalaryRecord, 'id' | 'slipNo' | 'createdAt'>): SalaryRecord => {
     if (guardFYLocked()) return { ...data, id: '' } as unknown as SalaryRecord;
+    if (guardPlanFeature('payroll')) return { ...data, id: '' } as unknown as SalaryRecord;
     const fy = society.financialYear;
     const maxSlipNum = salaryRecordsRef.current.filter(r => r.slipNo?.includes(fy)).reduce((max, r) => {
       const m = r.slipNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;

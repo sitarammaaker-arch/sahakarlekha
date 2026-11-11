@@ -8,11 +8,12 @@
  *
  * EVERY CLAIM HERE MUST MATCH THE CODE (audited 2026-11-11). What the plan really changes:
  *   • login users — 1 / 6 / unlimited (subscriptions.seats_limit, any roles);
- *   • Member Portal — Plus / Pro (and the trial), not paid Starter.
- * Everything else — reports, export, payroll, branches, consolidation, chart of accounts,
- * roles, weekly backup — is open on every plan, so it is listed as such. Do not list a
- * feature as Plus/Pro-only until the app actually gates it, and do not list one that is
- * not built (customer API, custom-branded reports, priority support, seat add-ons).
+ *   • the features in src/lib/plans.ts PLAN_FEATURES — Payroll and Member Portal on Plus / Pro;
+ *     Multi-Branch and multi-society consolidation on Pro (founder 2026-11-11; CapabilityGuard shows
+ *     an upgrade notice, DataContext refuses the save, migration 161 guards the payroll engine).
+ * Everything else — reports, export, chart of accounts, weekly backup — is open on every plan.
+ * Do not list a feature as Plus/Pro-only unless PLAN_FEATURES gates it, and do not list one that is
+ * not built (customer API, custom-branded reports, seat add-ons).
  * A new society gets a 30-day trial (migration 057); plans are bought in the app
  * (User Management → Razorpay), upgrades are prorated, there is no self-serve downgrade.
  *
@@ -91,10 +92,10 @@ const PLANS: Plan[] = [
       { text: 'पूरा Double-Entry Accounting (दोहरी एंट्री)' },
       { text: 'Ledger · Trial Balance · Balance Sheet · लाभ-हानि · प्राप्ति-भुगतान' },
       { text: 'GST + TDS सारांश · सदस्य / Share / Loan Register' },
-      { text: 'Payroll · Multi-Branch · Custom Chart of Accounts' },
+      { text: 'अपनी ज़रूरत के खाते बनाएँ (Custom Chart of Accounts)' },
       { text: 'PDF/Excel/CSV Export · साप्ताहिक Cloud Backup' },
       { text: '1 समिति · 1 user · असीमित vouchers व सदस्य', icon: 'info' },
-      { text: 'Member Portal शामिल नहीं', icon: 'info' },
+      { text: 'Payroll, Member Portal और शाखाएँ शामिल नहीं', icon: 'info' },
     ],
     cta: { label: '30 दिन मुफ़्त आज़माएँ / Start Free Trial', to: '/register' },
   },
@@ -111,6 +112,7 @@ const PLANS: Plan[] = [
     features: [
       { text: '6 users — जैसे 5 staff + 1 Auditor/CA' },
       { text: 'हर user की अलग भूमिका (Role-Based Access)' },
+      { text: 'Payroll — कर्मचारी, वेतन पर्ची और वेतन की entry' },
       { text: 'Member Portal — सदस्य अपना खाता खुद देखें' },
     ],
     cta: { label: '30 दिन मुफ़्त आज़माएँ / Start Free Trial', to: '/register' },
@@ -125,6 +127,8 @@ const PLANS: Plan[] = [
     inheritNote: 'Plus का सब कुछ, और— / Everything in Plus, plus:',
     features: [
       { text: 'असीमित users — हर शाखा व विभाग के staff के लिए' },
+      { text: 'Multi-Branch — शाखा-वार हिसाब और रिपोर्ट' },
+      { text: 'कई समितियों की संयुक्त रिपोर्ट (Consolidation)' },
       { text: 'डेटा-migration सहायता शामिल — पुराना हिसाब हम डालेंगे (₹4,999 + GST की बचत)' },
       { text: 'Priority WhatsApp support — आपके सवाल का जवाब सबसे पहले' },
     ],
@@ -139,19 +143,19 @@ interface ComparisonRow {
   pro: boolean | string;
 }
 
-// Users and the Member Portal differ in the app; migration help and support are the founder's
-// services (see the header). Everything above them is the same on every plan.
+// Rows from Payroll down differ by plan: the app gates them (PLAN_FEATURES, seats); migration help and
+// support are the founder's services (see the header). The rows above are the same on every plan.
 const COMPARISON: ComparisonRow[] = [
   { feature: 'Double-Entry Accounting + सभी रिपोर्ट', starter: true, plus: true, pro: true },
   { feature: 'GST · TDS · Audit Certificate', starter: true, plus: true, pro: true },
   { feature: 'असीमित Vouchers व सदस्य', starter: true, plus: true, pro: true },
   { feature: 'Export (PDF/Excel/CSV) + साप्ताहिक Cloud Backup', starter: true, plus: true, pro: true },
-  { feature: 'Payroll (वेतन)', starter: true, plus: true, pro: true },
-  { feature: 'Multi-Branch Accounting + branch-wise reporting', starter: true, plus: true, pro: true },
   { feature: 'Custom Chart of Accounts', starter: true, plus: true, pro: true },
-  { feature: 'कई समितियों की संयुक्त रिपोर्ट (backup file से)', starter: true, plus: true, pro: true },
   { feature: 'Users (login)', starter: '1', plus: '6 (जैसे 5 staff + 1 CA)', pro: 'असीमित' },
+  { feature: 'Payroll — कर्मचारी व वेतन', starter: false, plus: true, pro: true },
   { feature: 'Member Portal — सदस्य अपना खाता खुद देखें', starter: false, plus: true, pro: true },
+  { feature: 'Multi-Branch — शाखा-वार हिसाब व रिपोर्ट', starter: false, plus: false, pro: true },
+  { feature: 'कई समितियों की संयुक्त रिपोर्ट', starter: false, plus: false, pro: true },
   { feature: 'डेटा-migration सहायता (पुराना हिसाब हम डालें)', starter: '₹4,999 + GST', plus: '₹4,999 + GST', pro: 'शामिल' },
   { feature: 'Support', starter: 'ईमेल', plus: 'ईमेल', pro: 'Priority WhatsApp' },
 ];
@@ -168,7 +172,7 @@ const FAQS: Faq[] = [
   },
   {
     q: 'कब upgrade करूँ? / When should I upgrade?',
-    a: 'Accounting के feature हर plan में एक जैसे हैं. एक से ज़्यादा user (staff, auditor/CA) या Member Portal चाहिए → Plus (6 users). 6 से ज़्यादा users चाहिए, या पुराना हिसाब हमसे डलवाना है और priority WhatsApp support चाहिए → Pro. / The accounting features are the same on every plan. Need more than one user or the Member Portal → Plus (6 users). Need more than 6 users, or want us to bring in your old books and get priority WhatsApp support → Pro.',
+    a: 'हिसाब-किताब और सभी रिपोर्ट हर plan में एक जैसी हैं. एक से ज़्यादा user (staff, auditor/CA), Payroll या Member Portal चाहिए → Plus. शाखाएँ (Multi-Branch), कई समितियों की संयुक्त रिपोर्ट, 6 से ज़्यादा users, या पुराना हिसाब हमसे डलवाना और priority WhatsApp support चाहिए → Pro. / Books and all reports are the same on every plan. Need more than one user, Payroll or the Member Portal → Plus. Need branches, multi-society consolidation, more than 6 users, or want us to bring in your old books with priority WhatsApp support → Pro.',
   },
   {
     q: 'डेटा-migration सहायता क्या है? / What is data-migration help?',
@@ -210,7 +214,7 @@ const Pricing: React.FC = () => {
   useDocumentMeta({
     title: 'SahakarLekha Pricing — Starter, Plus & Pro Plans',
     description:
-      'SahakarLekha cooperative accounting ₹2,999/साल + GST से — 30 दिन मुफ़्त trial। सभी रिपोर्ट, payroll व multi-branch हर plan में; staff और Member Portal के लिए Plus, असीमित users व डेटा-migration के लिए Pro।',
+      'SahakarLekha cooperative accounting ₹2,999/साल + GST से — 30 दिन मुफ़्त trial। सभी रिपोर्ट हर plan में; staff, Payroll और Member Portal के लिए Plus; शाखाएँ, असीमित users व डेटा-migration के लिए Pro।',
     canonicalPath: '/pricing',
     jsonLd: PRICING_JSON_LD,
   });
@@ -372,14 +376,14 @@ const Pricing: React.FC = () => {
           </h2>
           <p className="text-center text-muted-foreground max-w-2xl mx-auto mb-8">
             Starter कोई demo नहीं — छोटी समिति अपने पूरे साल का हिसाब इसी पर रख सकती है। Upgrade तब
-            करें, जब एक से ज़्यादा user या Member Portal की ज़रूरत हो।
+            करें, जब staff, Payroll, Member Portal या शाखाओं की ज़रूरत हो।
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { icon: FileText, t: 'असली accounting', d: 'पूरा double-entry, रिपोर्ट व audit — Starter पर' },
               { icon: InfinityIcon, t: 'कोई data सीमा नहीं', d: 'असीमित vouchers, सदस्य व FY' },
               { icon: ShieldCheck, t: 'डेटा आपका', d: 'कभी भी PDF/Excel/CSV export' },
-              { icon: Users, t: 'Upgrade तब', d: 'जब ज़्यादा users या Member Portal चाहिए' },
+              { icon: Users, t: 'Upgrade तब', d: 'जब staff, Payroll, Member Portal या शाखाएँ चाहिए' },
             ].map((it) => (
               <div key={it.t} className="rounded-lg bg-white border border-muted p-5">
                 <it.icon className="h-6 w-6 text-primary mb-3" />
@@ -463,9 +467,9 @@ const Pricing: React.FC = () => {
             आज ही शुरू करें / Get Started Today
           </h2>
           <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">
-            30 दिन मुफ़्त आज़माएँ, फिर ₹2,999/साल + GST से — कोई छिपा शुल्क नहीं. ज़्यादा users या Member
-            Portal चाहिए तो Plus या Pro. / Try it free for 30 days, then from ₹2,999/year plus GST — no hidden
-            charges. Choose Plus or Pro for more users or the Member Portal.
+            30 दिन मुफ़्त आज़माएँ, फिर ₹2,999/साल + GST से — कोई छिपा शुल्क नहीं. staff, Payroll,
+            Member Portal या शाखाएँ चाहिए तो Plus या Pro. / Try it free for 30 days, then from ₹2,999/year plus GST —
+            no hidden charges. Choose Plus or Pro for staff, Payroll, the Member Portal or branches.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
             <Link to="/register">

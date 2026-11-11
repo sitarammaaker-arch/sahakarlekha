@@ -100,3 +100,43 @@ export const priceLabel = (n: number | null): string =>
 
 /** The public plans, in display order. */
 export const PUBLIC_PLANS: PlanId[] = ['starter', 'plus', 'pro'];
+
+/**
+ * Features that depend on the plan (founder 2026-11-11). Everything not listed here is open on
+ * every plan. Trial and legacy societies get every feature (a trial is for trying the product;
+ * grandfathered societies keep what they had) — until their period ends, when the separate
+ * expiry rule above pauses new entries for everyone.
+ *   payroll       — Plus and up (staff salary: /salary, /payroll)
+ *   multiBranch   — Pro and up (/branches)
+ *   consolidation — Pro and up (/multi-society-consolidation)
+ *   memberPortal  — Plus and up (mirrors src/lib/memberPortalHandout.ts portalPlanAllowed and the
+ *                   server gate of migration 064; scripts/test-plan-features.mjs keeps them equal)
+ * The server enforces payroll too: migration 161 refuses a new payroll employee or payroll run
+ * for a plan without it.
+ */
+export type PlanFeature = 'payroll' | 'multiBranch' | 'consolidation' | 'memberPortal';
+
+export const PLAN_FEATURES: Record<PlanFeature, PlanId[]> = {
+  payroll:       ['plus', 'pro', 'enterprise', 'legacy', 'trial'],
+  multiBranch:   ['pro', 'enterprise', 'legacy', 'trial'],
+  consolidation: ['pro', 'enterprise', 'legacy', 'trial'],
+  memberPortal:  ['plus', 'pro', 'enterprise', 'legacy', 'trial'],
+};
+
+/** Does this plan include the feature? An unknown / missing plan is treated as legacy (never stricter). */
+export function planAllows(plan: string | null | undefined, feature: PlanFeature): boolean {
+  return PLAN_FEATURES[feature].includes(((plan ?? 'legacy') as PlanId));
+}
+
+/** The cheapest public plan that includes the feature — what the upgrade notice asks for. */
+export function minPlanFor(feature: PlanFeature): 'plus' | 'pro' {
+  return PLAN_FEATURES[feature].includes('plus') ? 'plus' : 'pro';
+}
+
+/** Feature names for notices, Hindi first. */
+export const PLAN_FEATURE_LABEL: Record<PlanFeature, { hi: string; en: string }> = {
+  payroll:       { hi: 'Payroll (कर्मचारी व वेतन)', en: 'Payroll (staff and salaries)' },
+  multiBranch:   { hi: 'Multi-Branch (शाखाएँ)', en: 'Multi-Branch' },
+  consolidation: { hi: 'कई समितियों की संयुक्त रिपोर्ट', en: 'Multi-society consolidation' },
+  memberPortal:  { hi: 'Member Portal', en: 'Member Portal' },
+};

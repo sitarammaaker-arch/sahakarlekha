@@ -19,12 +19,16 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from '@/hooks/use-toast';
 import { isModuleVisible, navigationService, declaredActivities, type NavContext } from '@/lib/navigation';
 import { moduleForRoute } from '@/lib/navigation/routeModule';
+import { useSubscription } from '@/hooks/useSubscription';
+import { planAllows } from '@/lib/plans';
+import PlanUpgradeNotice from '@/components/PlanUpgradeNotice';
 
 export function CapabilityGuard({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { society, societyCapabilities, societyActivities } = useData();
   const { hasPermission, isSuperAdmin, user } = useAuth();
   const { language } = useLanguage();
+  const { loading: planLoading, plan } = useSubscription();
   const societyType = society.societyType ?? 'other';
 
   // Exact catalog route, or — for a detail view like /members/:id — its list page's module.
@@ -52,5 +56,12 @@ export function CapabilityGuard({ children }: { children: React.ReactNode }) {
   }, [blocked, location.pathname, language]);
 
   if (blocked) return <Navigate to="/dashboard" replace />;
+  // Plan gate (founder 2026-11-11): the page exists for this society, but its plan does not include the
+  // feature → the upgrade notice instead of the page. While the plan is loading the page is shown (never
+  // stricter than the data says); DataContext refuses the save itself if the plan does not allow it.
+  const planFeature = module?.requiredPlanFeature;
+  if (planFeature && !isSuperAdmin && !planLoading && !planAllows(plan, planFeature)) {
+    return <PlanUpgradeNotice feature={planFeature} />;
+  }
   return <>{children}</>;
 }
