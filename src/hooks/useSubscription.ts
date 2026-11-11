@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchSubscriptionRow, type SubRow, type SubscriptionStatus } from '@/lib/subscriptionRow';
-import { PLAN_CATALOG, type PlanId, type PlanSpec } from '@/lib/plans';
+import { PLAN_CATALOG, effectiveStatus, type PlanId, type PlanSpec } from '@/lib/plans';
 
 export type { SubscriptionStatus };
 
@@ -52,7 +52,9 @@ export function useSubscription(): SubscriptionState {
 
   // Missing/unreadable row → legacy (grandfathered): unlimited, active, never stricter.
   const plan: PlanId = row?.plan ?? 'legacy';
-  const status: SubscriptionStatus = row?.status ?? 'active';
+  // Derived from period_end (migration 159's rule), so an ended trial shows as grace / expired even
+  // before the hourly server job has rewritten the stored status.
+  const status: SubscriptionStatus = effectiveStatus(plan, row?.status, row?.period_end);
   const spec: PlanSpec = PLAN_CATALOG[plan] ?? PLAN_CATALOG.legacy;
 
   return {

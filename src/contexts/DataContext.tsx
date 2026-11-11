@@ -47,7 +47,8 @@ import { computeTradingAccount, computeProfitLoss } from '@/lib/reports/tradingA
 import { computeReceiptsPayments } from '@/lib/reports/receiptsPayments';
 import { computeCashBook, computeBankBook } from '@/lib/reports/accountBook';
 import { computeEntityLinks, type MemberDomainLinkSources } from '@/lib/entityLinks';
-import { fetchSubscriptionRow } from '@/lib/subscriptionRow';
+import { fetchSubscriptionRow, type SubRow } from '@/lib/subscriptionRow';
+import { effectiveStatus } from '@/lib/plans';
 import { canTransitionMember } from '@/lib/memberLifecycle';
 import { computeStock, computeStockValue, computeStockCostRate, reconcileMovements } from '@/lib/stockUtils';
 import { computeGodownStock, godownMovementsWithOpening, UNASSIGNED_GODOWN } from '@/lib/godownStock';
@@ -993,16 +994,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // T-01: keep the jurisdiction code in sync with the society's state, via the SSOT.
     jurisdictionRef.current = resolveJurisdiction(society.state);
   }, [society]);
-  // Phase 2a-4c: subscription read-only flag, read for the signed-in society (RLS also scopes it
-  // to the caller's society, 055 policy). true ONLY when status='expired' → false for
-  // legacy / active / trialing, i.e. never blocks the 19 grandfathered societies.
-  const subExpiredRef = useRef(false);
+  // Phase 2a-4c: the signed-in society's subscription row (RLS also scopes it to the caller's society,
+  // 055 policy). The guard below derives "expired" from it AT CALL TIME (effectiveStatus, the rule of
+  // migration 159), so a session that stays open across the end of the grace period is paused too.
+  // No row / legacy / no period_end → never expired, i.e. the grandfathered societies are never blocked.
+  const subRowRef = useRef<SubRow | null>(null);
   useEffect(() => {
-    if (!user?.societyId) { subExpiredRef.current = false; return; }   // J6: logged out → nothing to read
+    if (!user?.societyId) { subRowRef.current = null; return; }   // J6: logged out → nothing to read
     let cancelled = false;
     // J5: shared with useSubscription (one request per society per minute, not one per reader).
     fetchSubscriptionRow(user.societyId).then((row) => {
-      if (!cancelled) subExpiredRef.current = row?.status === 'expired';
+      if (!cancelled) subRowRef.current = row;
     });
     return () => { cancelled = true; };
   }, [user?.societyId]);   // re-read per signed-in society (was once, at mount — possibly logged out)
@@ -1080,11 +1082,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Returns true (and toasts) when BLOCKED — same convention as guardFYLocked. Shared by addVoucher
   // and guardVoucherPostable so both refuse for the identical reason (RULE 2).
   const guardSubscriptionExpired = useCallback((): boolean => {
-    if (!subExpiredRef.current) return false;
+    const row = subRowRef.current;
+    if (!row || effectiveStatus(row.plan, row.status, row.period_end) !== 'expired') return false;
     toastRef.current({
-      title: 'Plan expired / प्लान समाप्त',
-      description: 'Subscription expired — new entries are paused. Please renew; your data is safe. कृपया renew करें, डेटा सुरक्षित है।',
+      title: 'प्लान समाप्त / Plan expired',
+      description: 'आपका trial / plan समाप्त हो गया है, इसलिए नई एंट्री रुकी है। आपका डेटा सुरक्षित है — रिपोर्ट और export चालू हैं। User Management से plan लेते ही एंट्री फिर शुरू हो जाएगी। / Your trial or plan has ended, so new entries are paused. Your data is safe; buy a plan in User Management to continue.',
       variant: 'destructive',
+      duration: 12000,
     });
     return true;
   }, []);
