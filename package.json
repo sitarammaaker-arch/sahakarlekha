@@ -372,6 +372,7 @@
     "test:issue-invoice": "node scripts/test-issue-invoice.mjs",
     "test:subscription-expiry": "node scripts/test-subscription-expiry.mjs",
     "test:plan-features": "node scripts/test-plan-features.mjs",
+    "test:salary-integrity": "node scripts/test-salary-integrity.mjs",
     "test:invoice-email": "node scripts/test-invoice-email.mjs",
     "test:email-outbox": "node scripts/test-email-outbox.mjs",
     "test:compliance-reminders": "node scripts/test-compliance-reminders.mjs",

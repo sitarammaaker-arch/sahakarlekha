@@ -30,7 +30,7 @@ ok('updateSalaryRecord found', salary.length > 0);
 ok('updateSalaryRecord never persists / upserts a voucher row itself', !/persistVoucher\(/.test(salary) && !/from\('vouchers'\)/.test(salary));
 ok('updateSalaryRecord re-syncs the payment and the accrual voucher through updateVoucher', (salary.match(/updateVoucher\(/g) || []).length >= 2);
 ok('updateSalaryRecord pre-checks edit locks before changing anything', salary.indexOf('isEditLocked(') > 0 && salary.indexOf('isEditLocked(') < salary.indexOf('cancelLinkedVouchers('));
-ok('a refused voucher edit stops the salary save', /\)\) return;/.test(salary));
+ok('a refused voucher edit stops the salary save', /\)\) return false;/.test(salary));   // returns false since the 2026-11-11 salary fixes
 
 const joining = body('postJoiningReceipts');
 ok('postJoiningReceipts found', joining.length > 0);

@@ -37,6 +37,29 @@ const NATURE_CODES: Record<string, string> = {
   '195': 'Other sums payable to a non-resident',
 };
 
+/**
+ * What belongs in the 26Q file. Salary TDS (section 192) is filed in Form 24Q, never 26Q — the TDS Register
+ * lists it (it shares challans and the register view), but the 26Q export must leave it out. A challan goes
+ * into 26Q unless EVERY entry linked to it is salary TDS (a challan deposited only for salary belongs to 24Q).
+ * An unlinked challan stays — the register cannot tell which return it is for. PURE.
+ */
+export const SALARY_TDS_SECTION = '192';
+export function entriesFor26Q(entries: TdsEntry[], challans: TdsChallan[]): { entries: TdsEntry[]; challans: TdsChallan[] } {
+  const nonSalary = entries.filter((e) => e.section !== SALARY_TDS_SECTION);
+  const linkedSections = new Map<string, Set<string>>();
+  for (const e of entries) {
+    if (!e.challanId) continue;
+    const set = linkedSections.get(e.challanId) ?? new Set<string>();
+    set.add(e.section);
+    linkedSections.set(e.challanId, set);
+  }
+  const salaryOnly = (c: TdsChallan) => {
+    const secs = linkedSections.get(c.id);
+    return !!secs && secs.size > 0 && [...secs].every((x) => x === SALARY_TDS_SECTION);
+  };
+  return { entries: nonSalary, challans: challans.filter((c) => !salaryOnly(c)) };
+}
+
 export interface Generate26QOptions {
   entries: TdsEntry[];
   challans: TdsChallan[];

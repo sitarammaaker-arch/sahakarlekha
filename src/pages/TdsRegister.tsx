@@ -21,7 +21,7 @@ import { FileText, Download, Plus, AlertTriangle, CheckCircle2, Clock, FileSprea
 import { useToast } from '@/hooks/use-toast';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
-import { generate26QText, download26Q, validate26QData, getQuarterFromDate, getQuarterDueDate } from '@/lib/tds26q';
+import { generate26QText, download26Q, validate26QData, entriesFor26Q, getQuarterFromDate, getQuarterDueDate } from '@/lib/tds26q';
 import { applyPercent, toMinor, toRupees } from '@/lib/money';
 import type { TdsEntry, TdsChallan, TdsChallanLink, TdsSection, TdsDeducteeType, TdsQuarter } from '@/types';
 import { resolveSectionRef, describeSectionRef, isAct2025 } from '@/lib/rules/tdsSections';
@@ -175,7 +175,7 @@ const TdsRegister: React.FC = () => {
 
      `sal-<id>` mirrors `pur-<id>`, which matters more than it looks: the challan-link
      map below is keyed on the stable entry id and already "works for auto pur-<id> +
-     manual alike". So salary TDS gets challan linkage, 24Q and the 26Q export for free —
+     manual alike". So salary TDS gets challan linkage and the register view for free (the 26Q export leaves it out: entriesFor26Q) —
      no migration, no new table, no change to tds26q.ts. */
   const salaryTdsEntries = useMemo((): TdsEntry[] => {
     return salaryRecords
@@ -378,7 +378,16 @@ const TdsRegister: React.FC = () => {
 
   // 26Q Export
   const handleExport26Q = () => {
-    const errors = validate26QData(quarterEntries, quarterChallans, society);
+    // Salary TDS (section 192) is listed here but filed in 24Q — never in the 26Q file (entriesFor26Q).
+    const q26 = entriesFor26Q(quarterEntries, quarterChallans);
+    if (q26.entries.length === 0) {
+      toast({
+        title: hi ? '26Q में कोई एंट्री नहीं' : 'Nothing for 26Q',
+        description: hi ? 'इस तिमाही में सिर्फ़ वेतन का TDS है — वह 24Q में जाता है (वेतन पेज → 24Q)।' : 'This quarter has only salary TDS, which is filed in 24Q (Salary page → 24Q).',
+      });
+      return;
+    }
+    const errors = validate26QData(q26.entries, q26.challans, society);
     if (errors.length > 0) {
       toast({
         title: hi ? '26Q निर्यात त्रुटि' : '26Q Export Validation Errors',
@@ -388,8 +397,8 @@ const TdsRegister: React.FC = () => {
       return;
     }
     const text = generate26QText({
-      entries: quarterEntries,
-      challans: quarterChallans,
+      entries: q26.entries,
+      challans: q26.challans,
       society,
       quarter: selectedQuarter,
       financialYear: fy,
