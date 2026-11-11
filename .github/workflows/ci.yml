@@ -105,7 +105,15 @@ jobs:
         run: npm ci
       - name: Install Chromium for Playwright
         if: env.E2E_SUPABASE_URL != ''
-        run: npx playwright install --with-deps chromium
+        # --with-deps also apt-installs the system libraries. When the runner cannot reach the Ubuntu
+        # mirrors (2026-11-11: "Temporary failure resolving archive.ubuntu.com" for hours, every e2e run
+        # failed before a single test), fall back to the browser alone — the hosted image already carries
+        # most of those libraries, and a real gap still fails loudly when Chromium starts.
+        run: |
+          npx playwright install --with-deps chromium || {
+            echo "::warning::apt dependencies could not be installed (mirror unreachable) — installing Chromium only"
+            npx playwright install chromium
+          }
       - name: E2E (staging)
         if: env.E2E_SUPABASE_URL != ''
         run: npm run e2e

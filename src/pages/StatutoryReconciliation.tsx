@@ -118,7 +118,9 @@ const StatutoryReconciliation: React.FC = () => {
       <Card>
         <CardContent className="pt-4 space-y-2">
           <p className="text-sm font-semibold">{hi ? 'वेतन पर्ची ↔ बही मिलान' : 'Salary slips ↔ ledger'}</p>
-          {issues.length === 0 ? (
+          {salaryRecords.every(r => r.month !== period) ? (
+            <p className="text-sm text-muted-foreground">{hi ? 'इस माह की कोई वेतन पर्ची नहीं — मिलाने को कुछ नहीं।' : 'No salary slips this month — nothing to match.'}</p>
+          ) : issues.length === 0 ? (
             <p className="text-sm text-green-700 flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />{hi ? 'इस माह की हर पर्ची का PF/ESI उसके बही-voucher से मेल खाता है।' : 'Every slip of this month matches its accrual voucher.'}</p>
           ) : (
             <ul className="space-y-1">

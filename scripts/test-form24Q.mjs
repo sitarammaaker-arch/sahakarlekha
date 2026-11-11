@@ -29,7 +29,7 @@ register(
     `),
 );
 
-const { quarterMonths, build24Q } = await import(abs('../src/lib/form24Q.ts'));
+const { quarterMonths, build24Q, salaryTdsWhen } = await import(abs('../src/lib/form24Q.ts'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
@@ -42,11 +42,12 @@ const emps = [
   { id: 'e1', empNo: 'E002', name: 'Sita', pan: 'ABCDE1234F' },
   { id: 'e2', empNo: 'E001', name: 'Ravi', pan: '' },
 ];
+// Paid in the same month (TDS is deducted at payment — s.392(1), see salaryTdsWhen).
 const recs = [
-  { employeeId: 'e1', month: '2024-04', basicSalary: 50000, allowances: 5000, tds: 3000 },
-  { employeeId: 'e1', month: '2024-05', basicSalary: 50000, allowances: 5000, tds: 3000 },
-  { employeeId: 'e2', month: '2024-06', basicSalary: 20000, allowances: 0, tds: 0 },
-  { employeeId: 'e1', month: '2024-07', basicSalary: 50000, allowances: 5000, tds: 3000 }, // Q2 — excluded from Q1
+  { employeeId: 'e1', month: '2024-04', basicSalary: 50000, allowances: 5000, tds: 3000, isPaid: true, paidDate: '2024-04-30' },
+  { employeeId: 'e1', month: '2024-05', basicSalary: 50000, allowances: 5000, tds: 3000, isPaid: true, paidDate: '2024-05-31' },
+  { employeeId: 'e2', month: '2024-06', basicSalary: 20000, allowances: 0, tds: 0, isPaid: true, paidDate: '2024-06-28' },
+  { employeeId: 'e1', month: '2024-07', basicSalary: 50000, allowances: 5000, tds: 3000, isPaid: true, paidDate: '2024-07-31' }, // Q2 — excluded from Q1
 ];
 
 // 2. Q1 aggregation: e1 two months, e2 one; e1's July excluded.
@@ -65,6 +66,21 @@ ok(q2.rows.length === 1 && q2.totals.tds === 3000, 'Q2 = single July record');
 // 4. Empty quarter.
 const q3 = build24Q(recs, emps, '2024-25', 'Q3');
 ok(q3.rows.length === 0 && q3.totals.tds === 0 && q3.totals.deductees === 0, 'empty quarter → no rows');
+
+// 5. WHEN salary TDS counts — at payment (Income-tax Act 2025 s.392(1), incometaxindia.gov.in/w/section-392-5).
+{
+  const late = [
+    { employeeId: 'e1', month: '2024-09', basicSalary: 50000, allowances: 5000, tds: 4000, isPaid: true, paidDate: '2024-10-06' }, // Sep salary paid in Oct
+    { employeeId: 'e2', month: '2024-09', basicSalary: 20000, allowances: 0, tds: 500, isPaid: false },                         // unpaid
+    { employeeId: 'e2', month: '2025-03', basicSalary: 20000, allowances: 0, tds: 700, isPaid: true, paidDate: '2025-04-02' },  // March salary paid in April
+  ];
+  ok(build24Q(late, emps, '2024-25', 'Q2').totals.tds === 0, 'a September salary paid in October is NOT in Q2');
+  ok(build24Q(late, emps, '2024-25', 'Q3').totals.tds === 4000, '…it is in Q3 (the payment quarter)');
+  ok(salaryTdsWhen(late[1]) === null && ['Q1', 'Q2', 'Q3', 'Q4'].every((q) => build24Q(late, emps, '2024-25', q).totals.tds !== 500), 'an unpaid slip has no deduction in any quarter');
+  ok(build24Q(late, emps, '2025-26', 'Q1').totals.tds === 700 && build24Q(late, emps, '2024-25', 'Q4').totals.tds === 0, 'a March salary paid in April belongs to the NEXT tax year');
+  const w = salaryTdsWhen({ isPaid: true, paidDate: undefined, month: '2024-08' });
+  ok(!!w && w.quarter === 'Q2' && w.fy === '2024-25', 'paid with no recorded date → falls back to the salary month');
+}
 
 console.log(`\nForm 24Q (pure): ${pass} passed, ${fail} failed`);
 process.exitCode = fail > 0 ? 1 : 0;

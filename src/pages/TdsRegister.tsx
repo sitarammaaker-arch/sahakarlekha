@@ -21,6 +21,7 @@ import { FileText, Download, Plus, AlertTriangle, CheckCircle2, Clock, FileSprea
 import { useToast } from '@/hooks/use-toast';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
+import { salaryTdsWhen } from '@/lib/form24Q';
 import { generate26QText, download26Q, validate26QData, entriesFor26Q, getQuarterFromDate, getQuarterDueDate } from '@/lib/tds26q';
 import { applyPercent, toMinor, toRupees } from '@/lib/money';
 import type { TdsEntry, TdsChallan, TdsChallanLink, TdsSection, TdsDeducteeType, TdsQuarter } from '@/types';
@@ -181,14 +182,13 @@ const TdsRegister: React.FC = () => {
     return salaryRecords
       // No isDeleted on SalaryRecord (unlike purchases) — a salary run is cancelled by
       // reversing the voucher, not by soft-deleting the record.
-      .filter(r => (r.tds || 0) > 0)
+      // Salary TDS is deducted when the salary is PAID (Income-tax Act 2025 s.392(1)) — an unpaid slip has no
+      // deduction yet, and a paid one belongs to the quarter / year of its payment date (salaryTdsWhen).
+      .filter(r => (r.tds || 0) > 0 && !!salaryTdsWhen(r))
       .map(r => {
         const emp = employees.find(e => e.id === r.employeeId);
-        // FY from the salary MONTH, not the society's current FY — a March salary
-        // processed in April belongs to the old year's 24Q (mirrors Audit #10 above).
-        const d = `${r.month}-01`;
-        const sd = new Date(d);
-        const sy = sd.getMonth() >= 3 ? sd.getFullYear() : sd.getFullYear() - 1;
+        const when = salaryTdsWhen(r)!;
+        const d = when.date;
         const gross = (r.basicSalary || 0) + (r.allowances || 0);
         return {
           id: `sal-${r.id}`,
@@ -204,8 +204,8 @@ const TdsRegister: React.FC = () => {
           // fabricated figure on a statutory register (AI-N8).
           tdsRate: gross > 0 ? Number(((r.tds || 0) / gross * 100).toFixed(2)) : 0,
           tdsAmount: r.tds || 0,
-          quarter: getQuarterFromDate(d),
-          financialYear: `${sy}-${String((sy + 1) % 100).padStart(2, '0')}`,
+          quarter: when.quarter,
+          financialYear: when.fy,
           status: 'pending' as const,
           createdAt: r.createdAt,
         };
