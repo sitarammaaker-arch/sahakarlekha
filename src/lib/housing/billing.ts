@@ -50,6 +50,20 @@ export function gstLineForBill(
   return { chargeHeadId: '', name: `GST @${opts.rate}%`, accountId: opts.gstAccountId, isFund: false, gstable: false, amount: gst };
 }
 
+/**
+ * RM-17: the bill's GST line as head-wise lines. Maintenance is always a supply inside the State, so the
+ * caller passes CGST + SGST legs (lib/accounting/gstLedgers); a single 'combined' leg keeps the one line.
+ * The lines sum to exactly the original GST amount.
+ */
+export function gstBillLines(
+  gst: MaintenanceBillLine,
+  rate: number,
+  legs: { accountId: string; amount: number; head: string }[],
+): MaintenanceBillLine[] {
+  if (legs.length === 0 || legs.some(l => l.head === 'combined')) return [{ ...gst, accountId: legs[0]?.accountId ?? gst.accountId }];
+  return legs.map(l => ({ ...gst, name: `${l.head.toUpperCase()} @${round2(rate / 2)}%`, accountId: l.accountId, amount: l.amount }));
+}
+
 /** Total (₹) of a set of bill lines. */
 export const billTotal = (lines: MaintenanceBillLine[]): number =>
   round2(lines.reduce((s, l) => s + l.amount, 0));

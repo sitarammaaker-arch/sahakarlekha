@@ -198,7 +198,7 @@ export default function Trips() {
           <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
             <p>{hi ? 'लेखा प्रविष्टि: नाम ग्राहक ' : 'Entry: Dr customer '}<span className="font-medium text-foreground">{money(total)}</span>{hi ? ' / जमा भाड़ा आय (4501)' : ' / Cr Freight Income (4501)'}{(Number(loading) || 0) > 0 ? (hi ? ', लदाई शुल्क (4503)' : ', Loading charges (4503)') : ''}{(Number(detention) || 0) > 0 ? (hi ? ', रुकाई शुल्क (4504)' : ', Detention (4504)') : ''}</p>
             {gstMode === 'fcm5' || gstMode === 'fcm18'
-              ? (tax && tax.total > 0 && <p>{hi ? 'साथ में जमा देय GST (2201): ' : 'plus Cr GST Payable (2201): '}{taxSplit}</p>)
+              ? (tax && tax.total > 0 && <p>{hi ? 'साथ में जमा आउटपुट GST (CGST/SGST/IGST खाते): ' : 'plus Cr Output GST (CGST/SGST/IGST ledgers): '}{taxSplit}</p>)
               : gstMode === 'rcm' && tax && <p>{hi ? 'GST समिति नहीं, ग्राहक reverse charge में भरेगा: ' : 'GST is paid by the customer under reverse charge: '}{taxSplit}{hi ? ' (वाउचर में दर्ज नहीं होता, सिर्फ़ विवरण में लिखा जाता है)' : ' (not posted; noted on the voucher)'}</p>}
           </div>
           <Button onClick={save} className="w-full" disabled={saving || !ids.freight || activeVehicles.length === 0 || activeCustomers.length === 0 || !!gstProblem}>{saving ? (hi ? 'सेव हो रहा है…' : 'Saving…') : (hi ? 'ट्रिप सेव करें' : 'Save trip')}</Button>

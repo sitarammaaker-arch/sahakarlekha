@@ -33,6 +33,7 @@ import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
 import { syncPrimaryNominee } from '@/lib/nomineeUtils';
 import { localOnlyAccountsReport } from '@/lib/accounting/localOnlyAccounts';
+import { gstLedgerLegs, usesCombinedGst, gstLegLabel, type GstSide, type GstLeg } from '@/lib/accounting/gstLedgers';
 import { settlementTypedColumns, hydrateSettlement, hydrateJForm, hydrateAmount } from '@/lib/typedMoney';
 import { issueOfficialNumber } from '@/lib/numbering';
 import { billTerms, resolveLateFeeRule } from '@/lib/lateFee';
@@ -201,6 +202,8 @@ interface DataContextType {
   cancelVoucher: (id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean }) => boolean;
   /** H: a domain context registers who owns its vouchers; returns the unregister fn. */
   registerVoucherOwner: (key: string, check: VoucherOwnerCheck) => () => void;
+  /** RM-17: the ledger(s) a document's GST goes to — head-wise, or the combined 2201 / 3310 (lib/accounting/gstLedgers). */
+  gstLegs: (side: GstSide, parts: { cgst?: number; sgst?: number; igst?: number; total: number }, opts?: { legacy?: boolean }) => GstLeg[];
   /** S2: which skippable tables (src/lib/emptyTables.ts) hold no rows for this society — one shared call. */
   knownEmptyTables: (sid: string) => Promise<ReadonlySet<string>>;
   reverseVoucher: (id: string, reason: string) => Voucher | null;
@@ -979,6 +982,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [accounts, setAccountsState] = useState<LedgerAccount[]>([]);
   // Latest accounts for callbacks with stable identity (M1-4a: the account-delete rollbacks read it).
   const accountsRef = useRef<LedgerAccount[]>([]);
+  // Accounts merged on screen that the database lacks (see localOnlyAccountsReport) — never posted to automatically.
+  const localOnlyAccountIdsRef = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => { accountsRef.current = accounts; }, [accounts]);
   const [society, setSocietyState] = useState<SocietySettings>(() => storage.getSociety());
   const societyRef = useRef(society);
@@ -1344,6 +1349,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           : aErr ? storage.getAccounts() : [...CMS_SOCIETY_ACCOUNTS];
         const { accounts: baseAccts, changed: acctsMigrated, newlyAdded } = storage.migrateAccounts(rawAccts);
         setAccountsState(baseAccts);
+        localOnlyAccountIdsRef.current = new Set(aData && aData.length > 0 ? newlyAdded.map(a => a.id) : []);
         if (!aErr) storage.setAccounts(baseAccts);
         // RM-01 (S0 emergency safety fix): the load path NEVER writes to the database. The template
         // accounts migrateAccounts adds are merged into LOCAL state only (every device merges the same
@@ -2643,6 +2649,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     voucherOwnersRef.current.set(key, check);
     return () => { if (voucherOwnersRef.current.get(key) === check) voucherOwnersRef.current.delete(key); };
   }, []);
+
+  // RM-17: GST goes head-wise (Output / Input CGST · SGST · IGST) — the one rule in lib/accounting/gstLedgers.
+  // A head the database does not hold yet (merged on screen only, migration 156 not run) is not used: the
+  // server would refuse the voucher (post_voucher:account_not_found), so the tax stays on 2201 / 3310.
+  const gstLegs = useCallback((side: GstSide, parts: { cgst?: number; sgst?: number; igst?: number; total: number }, opts?: { legacy?: boolean }): GstLeg[] =>
+    gstLedgerLegs(side, parts, accountsRef.current, { legacy: opts?.legacy, unavailableIds: localOnlyAccountIdsRef.current }), []);
 
   // Batch A (P1-4 / RULE 3): an approved MSP settlement owns its deduction voucher. Cancelling that voucher
   // alone reversed the deductions in the ledger while the settlement kept its locked Net Payable. Payments,
@@ -7003,10 +7015,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       goodsBase('sale', grandTotal, data.roundOff), data.taxAmount || 0,
     ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Cr', amount }));
 
-    // Cr: GST Output Payable (2201) for tax amount
-    if ((data.taxAmount ?? 0) > 0) {
-      lines.push({ id: lid(), accountId: '2201', type: 'Cr', amount: data.taxAmount!, narration: `GST: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
-    }
+    // Cr: GST output — head-wise (Output CGST / SGST / IGST), or the combined 2201 (lib/accounting/gstLedgers)
+    gstLegs('output', { cgst: data.cgstAmount, sgst: data.sgstAmount, igst: data.igstAmount, total: data.taxAmount || 0 }, { legacy: false })
+      .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Cr', amount: g.amount, narration: g.head === 'combined' ? `GST: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` : gstLegLabel('output', g) }));
     // Round off (5499) — outside the taxable value and GST.
     adjustmentLines('sale', accountsRef.current, data.roundOff).forEach(l => lines.push({ id: lid(), ...l }));
 
@@ -7208,6 +7219,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'बिक्री नहीं मिली', description: 'Refresh करके दोबारा देखें। (Sale not found.)', variant: 'destructive' });
       return null;
     }
+    // RM-17: a bill whose voucher sits on the combined GST ledger stays there when edited (no history moves).
+    const legacyGst = usesCombinedGst('output', ...[original.voucherId, ...(original.gstVoucherIds ?? [])].map(vid => vouchersRef.current.find(v => v.id === vid)));
     // RM-01: check every voucher-birth refusal BEFORE stock is adjusted or the old voucher is cancelled —
     // both the original date and the new one — so an edit cannot stop half-way.
     if (guardVoucherPostable(original.date, data.date)) return null;
@@ -7286,9 +7299,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.salesAccountId || '4101', weight: it.amount })),
       goodsBase('sale', grandTotal, data.roundOff), data.taxAmount || 0,
     ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Cr', amount }));
-    if ((data.taxAmount ?? 0) > 0) {
-      lines.push({ id: lid(), accountId: '2201', type: 'Cr', amount: data.taxAmount!, narration: `GST: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
-    }
+    gstLegs('output', { cgst: data.cgstAmount, sgst: data.sgstAmount, igst: data.igstAmount, total: data.taxAmount || 0 }, { legacy: legacyGst })
+      .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Cr', amount: g.amount, narration: g.head === 'combined' ? `GST: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` : gstLegLabel('output', g) }));
     // Round off (5499) — outside the taxable value and GST.
     adjustmentLines('sale', accountsRef.current, data.roundOff).forEach(l => lines.push({ id: lid(), ...l }));
 
@@ -7418,10 +7430,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       goodsBase('purchase', grandTotal, data.roundOff, data.cashDiscount), data.taxAmount || 0, data.tdsAmount || 0, data.tcsAmount || 0,
     ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Dr', amount }));
 
-    // Dr: GST Input Credit (3310) for tax amount
-    if ((data.taxAmount ?? 0) > 0) {
-      lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: data.taxAmount!, narration: `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
-    }
+    // Dr: GST input credit — head-wise (Input CGST / SGST / IGST), or the combined 3310 (lib/accounting/gstLedgers)
+    gstLegs('input', { cgst: data.cgstAmount, sgst: data.sgstAmount, igst: data.igstAmount, total: data.taxAmount || 0 }, { legacy: false })
+      .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Dr', amount: g.amount, narration: g.head === 'combined' ? `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` : gstLegLabel('input', g) }));
 
     // Dr: TDS / TCS Receivable (3307) — the seller collected this income tax FROM us and put it
     // on the bill, so it is our 26AS credit, not the goods' cost. Dr, never Cr 2202.
@@ -7623,6 +7634,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: 'खरीद नहीं मिली', description: 'Refresh करके दोबारा देखें। (Purchase not found.)', variant: 'destructive' });
       return null;
     }
+    // RM-17: a bill whose voucher sits on the combined ITC ledger stays there when edited (no history moves).
+    const legacyGst = usesCombinedGst('input', original.voucherId ? vouchersRef.current.find(v => v.id === original.voucherId) : null);
     // RM-01: check every voucher-birth refusal BEFORE stock is adjusted or the old voucher is cancelled.
     if (guardVoucherPostable(original.date, data.date)) return null;
 
@@ -7701,9 +7714,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       data.items.map(it => ({ accountId: stockItems.find(s => s.id === it.itemId)?.purchaseAccountId || '5101', weight: it.amount })),
       goodsBase('purchase', grandTotal, data.roundOff, data.cashDiscount), data.taxAmount || 0, data.tdsAmount || 0, data.tcsAmount || 0,
     ).forEach(({ accountId, amount }) => lines.push({ id: lid(), accountId, type: 'Dr', amount }));
-    if ((data.taxAmount ?? 0) > 0) {
-      lines.push({ id: lid(), accountId: '3310', type: 'Dr', amount: data.taxAmount!, narration: `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` });
-    }
+    gstLegs('input', { cgst: data.cgstAmount, sgst: data.sgstAmount, igst: data.igstAmount, total: data.taxAmount || 0 }, { legacy: legacyGst })
+      .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Dr', amount: g.amount, narration: g.head === 'combined' ? `GST ITC: CGST ₹${data.cgstAmount||0} + SGST ₹${data.sgstAmount||0} + IGST ₹${data.igstAmount||0}` : gstLegLabel('input', g) }));
     if ((data.tcsAmount ?? 0) > 0) {
       lines.push({ id: lid(), accountId: ACCOUNT_IDS.TAX_CREDIT, type: 'Dr', amount: data.tcsAmount!, narration: `TCS ${data.tcsPct||0}% — collected by ${data.supplierName}` });
     }
@@ -8509,7 +8521,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlements: procurementSettlementsView, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment, cancelProcurementLot,
-    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
+    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
@@ -8548,7 +8560,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlementsView, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment, cancelProcurementLot,
-    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
+    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,

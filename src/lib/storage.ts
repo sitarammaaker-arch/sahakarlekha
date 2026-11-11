@@ -898,6 +898,25 @@ export const ACCOUNTS_TO_ADD_154: LedgerAccount[] = [
   { id: '2297', name: 'Reverse Charge GST Payable (RCM)', nameHi: 'रिवर्स चार्ज GST देय (RCM)', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
 ];
 
+/**
+ * Head-wise GST ledgers (RM-17, migration 156 — scripts/gen-migration-156.mjs). ADDITIVE ONLY: the combined
+ * 2201 "GST Payable" and 3310 "GST Input Credit (ITC)" stay as they are, with their balances and history;
+ * new GST postings go to these (the one rule: lib/accounting/gstLedgers).
+ *   WHY: credit of central tax cannot be used against State tax and vice versa (CGST Act s.49(5)), and the
+ *   accounts must show output tax and input credit separately (s.35; CGST Rules r.56) — one combined ledger
+ *   on each side cannot.
+ * Named "Output X" / "Input X" so the role matchers pick them up as gst.output.* / gst.input.* and the
+ * combined-ledger matchers (/^gst payable|देय gst/, /gst input credit|itc/) never do.
+ */
+export const ACCOUNTS_TO_ADD_156: LedgerAccount[] = [
+  { id: '2291', name: 'Output CGST', nameHi: 'आउटपुट CGST', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
+  { id: '2292', name: 'Output SGST', nameHi: 'आउटपुट SGST', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
+  { id: '2293', name: 'Output IGST', nameHi: 'आउटपुट IGST', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
+  { id: '3391', name: 'Input CGST', nameHi: 'इनपुट CGST', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
+  { id: '3392', name: 'Input SGST', nameHi: 'इनपुट SGST', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
+  { id: '3393', name: 'Input IGST', nameHi: 'इनपुट IGST', type: 'asset', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '3300', subtype: 'current_asset' },
+];
+
 /** An ACCOUNTS_TO_ADD_154 head that is added ONLY to a chart already holding this account (same id AND name). */
 export const ACCOUNTS_TO_ADD_154_REQUIRES: Record<string, { id: string; name: string }> = {
   '2296': { id: '4202', name: 'Market Fee' },
@@ -920,7 +939,7 @@ export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAc
   // Society Shares" at 3202) + an ACCOUNTS_TO_ADD copy at 3208 create a duplicate head.
   const existingIds = new Set(patched.map(a => a.id));
   const existingNameType = new Set(patched.map(a => `${a.name.trim().toLowerCase()}|${a.type}`));
-  for (const newAcc of [...ACCOUNTS_TO_ADD, ...ACCOUNTS_TO_ADD_115, ...ACCOUNTS_TO_ADD_154]) {
+  for (const newAcc of [...ACCOUNTS_TO_ADD, ...ACCOUNTS_TO_ADD_115, ...ACCOUNTS_TO_ADD_154, ...ACCOUNTS_TO_ADD_156]) {
     if (existingIds.has(newAcc.id)) continue;
     if (existingNameType.has(`${newAcc.name.trim().toLowerCase()}|${newAcc.type}`)) continue;
     const needs = ACCOUNTS_TO_ADD_154_REQUIRES[newAcc.id];
