@@ -69,3 +69,50 @@ export function labourRow(comp: { grossWages?: number; epfEmployee?: number; epf
     esiEmployee: r2(comp.esiEmployee || 0), esiEmployer: r2(comp.esiEmployer || 0),
   };
 }
+
+/**
+ * Slip ↔ ledger check (2026-11-11). The figures above come from the slips alone, so a slip whose accrual
+ * voucher was lost (refused, cancelled, edited elsewhere) would still look fine here. For every slip of the
+ * period this compares what the slip says with what its OWN accrual voucher actually credits:
+ *   EPF payable 2203 = employee + employer PF,  ESI payable 2204 = employee + employer ESI.
+ * A slip without an accrual voucher is reported only when it carries PF/ESI (older net-only slips book the
+ * expense at payment, by design). Amounts are compared to the paisa. PURE.
+ */
+export const ACC_EPF_PAYABLE = '2203';
+export const ACC_ESI_PAYABLE = '2204';
+
+export interface SlipForLedgerCheck {
+  id: string; slipNo?: string; accrualVoucherId?: string;
+  pfEmployee?: number; pfEmployer?: number; esiEmployee?: number; esiEmployer?: number;
+}
+export interface VoucherForLedgerCheck {
+  id: string; isDeleted?: boolean; voucherNo?: string;
+  lines?: Array<{ accountId: string; type: 'Dr' | 'Cr'; amount: number }>;
+}
+export type SlipLedgerIssue =
+  | { kind: 'no_voucher'; slipId: string; slipNo?: string }
+  | { kind: 'voucher_cancelled'; slipId: string; slipNo?: string; voucherNo?: string }
+  | { kind: 'pf_mismatch' | 'esi_mismatch'; slipId: string; slipNo?: string; voucherNo?: string; slip: number; ledger: number };
+
+const paise = (n: number) => Math.round((n || 0) * 100);
+
+export function checkSlipsAgainstLedger(slips: SlipForLedgerCheck[], vouchers: VoucherForLedgerCheck[]): SlipLedgerIssue[] {
+  const byId = new Map(vouchers.map((v) => [v.id, v]));
+  const out: SlipLedgerIssue[] = [];
+  for (const s of slips) {
+    const pf = paise((s.pfEmployee || 0) + (s.pfEmployer || 0));
+    const esi = paise((s.esiEmployee || 0) + (s.esiEmployer || 0));
+    if (!s.accrualVoucherId) {
+      if (pf + esi > 0) out.push({ kind: 'no_voucher', slipId: s.id, slipNo: s.slipNo });
+      continue;
+    }
+    const v = byId.get(s.accrualVoucherId);
+    if (!v) { out.push({ kind: 'no_voucher', slipId: s.id, slipNo: s.slipNo }); continue; }
+    if (v.isDeleted) { out.push({ kind: 'voucher_cancelled', slipId: s.id, slipNo: s.slipNo, voucherNo: v.voucherNo }); continue; }
+    const cr = (acc: string) => (v.lines || []).filter((l) => l.accountId === acc).reduce((a, l) => a + (l.type === 'Cr' ? paise(l.amount) : -paise(l.amount)), 0);
+    const lpf = cr(ACC_EPF_PAYABLE), lesi = cr(ACC_ESI_PAYABLE);
+    if (lpf !== pf) out.push({ kind: 'pf_mismatch', slipId: s.id, slipNo: s.slipNo, voucherNo: v.voucherNo, slip: pf / 100, ledger: lpf / 100 });
+    if (lesi !== esi) out.push({ kind: 'esi_mismatch', slipId: s.id, slipNo: s.slipNo, voucherNo: v.voucherNo, slip: esi / 100, ledger: lesi / 100 });
+  }
+  return out;
+}

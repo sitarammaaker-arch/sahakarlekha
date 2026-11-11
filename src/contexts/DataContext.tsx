@@ -7966,6 +7966,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // net-basis accrual so old salary flows are unchanged. The lines come from the ONE shared
       // builder (lib/payroll/accrualLines.ts) that updateSalaryRecord also uses.
       const { lines, drTotal, hasStatutory } = salaryAccrualLines(base, payableAcc, undefined, { ptPayable: ptAcc ?? undefined });
+      // The accrual is saved optimistically; if the SERVER refuses it later (addVoucher rolls it back and calls
+      // onFailed), the slip must go too — otherwise it points at a voucher that does not exist (RULE 1).
+      const dropSlipWithoutAccrual = () => {
+        if (!salaryRecordsRef.current.some(r => r.id === base.id)) return;   // already gone (its own save failed)
+        salaryRecordsRef.current = salaryRecordsRef.current.filter(r => r.id !== base.id);
+        setSalaryRecordsState(prev => prev.filter(r => r.id !== base.id));
+        supabase.from('salary_records').delete().eq('id', base.id).then(({ error }) => {
+          if (error) reportError('salary-orphan-delete', error.message, { id: base.id });
+        }, () => {});
+        toastRef.current({ title: 'वेतन पर्ची हटाई गई / Slip removed', description: `${slipNo}: वेतन का बही-voucher cloud में save नहीं हुआ, इसलिए पर्ची भी हटा दी गई — दोबारा प्रोसेस करें। / The salary journal was not saved in the cloud, so the slip was removed too.`, variant: 'destructive', duration: 12000 });
+      };
       try {
         const av = addVoucher({
           type: 'journal', date: accrualDate, debitAccountId: '5201', creditAccountId: payableAcc, amount: drTotal, lines,
@@ -7973,7 +7984,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             ? `Salary accrual (statutory): ${emp?.name || ''} - ${base.month} (${slipNo})`
             : `Salary accrual: ${emp?.name || ''} - ${base.month} (${slipNo})`,
           createdBy: 'System',
-        });
+        }, { onFailed: dropSlipWithoutAccrual });
         accrualVoucherId = av?.id || undefined;
       } catch { accrualVoucherId = undefined; }
     }
@@ -8004,6 +8015,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!oldRecord) return false;
     const merged = { ...oldRecord, ...data };
     const lid = () => crypto.randomUUID();
+    // A field the caller did not send keeps its value: an edit that omits isPaid must never "un-pay" a paid slip
+    // (the (a) branch used to test the raw flag, so an omitted isPaid counted as "unpaid").
+    const nextPaid = data.isPaid ?? oldRecord.isPaid;
+    const bankChanged = data.bankAccountId !== undefined && data.bankAccountId !== oldRecord.bankAccountId;
 
     // B3 / JRN-01: a paid salary's vouchers are re-synced through updateVoucher (which appends the
     // reversed/reposted journal pair — or calls edit_voucher under the posting service). The old code
@@ -8014,9 +8029,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // accrual-relevant field change re-syncs it — not only the net. Payment vouchers stay net-based.
     const accrualChanged = salaryAccrualChanged(oldRecord, merged);
     {
-      const payV = oldRecord.isPaid && data.isPaid && oldRecord.voucherId ? vouchersRef.current.find(x => x.id === oldRecord.voucherId) : undefined;
+      const payV = oldRecord.isPaid && nextPaid && oldRecord.voucherId ? vouchersRef.current.find(x => x.id === oldRecord.voucherId) : undefined;
       const accV = accrualChanged && oldRecord.accrualVoucherId ? vouchersRef.current.find(x => x.id === oldRecord.accrualVoucherId) : undefined;
-      const payTouched = payV && !payV.isDeleted && (amountChanged || (data.paidDate !== undefined && data.paidDate !== oldRecord.paidDate) || (data.paymentMode !== undefined && data.paymentMode !== oldRecord.paymentMode));
+      const payTouched = payV && !payV.isDeleted && (amountChanged || (data.paidDate !== undefined && data.paidDate !== oldRecord.paidDate) || (data.paymentMode !== undefined && data.paymentMode !== oldRecord.paymentMode) || bankChanged);
       for (const v of [payTouched ? payV : undefined, accV && !accV.isDeleted && !isEngineVoucher(accV) ? accV : undefined]) {
         if (v && isEditLocked(v, !!societyRef.current?.approvalRequired)) {
           toastRef.current({ title: 'वेतन बदलाव नहीं हुआ', description: `वाउचर ${v.voucherNo} सीधे edit नहीं हो सकता (approved / reversed) — पहले उसे reverse करें, फिर वेतन बदलें।`, variant: 'destructive', duration: 12000 });
@@ -8043,11 +8058,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // (b) Was unpaid, now paid → create new voucher
     // (c) Still paid, but amount/date/paymentMode changed → update existing voucher + entries
 
-    if (oldRecord.isPaid && !data.isPaid && oldRecord.voucherId) {
+    if (oldRecord.isPaid && !nextPaid && oldRecord.voucherId) {
       // (a) Cancel the linked voucher
       cancelLinkedVouchers([oldRecord.voucherId], `Salary slip ${oldRecord.slipNo} marked unpaid`, 'System');
       merged.voucherId = undefined;
-    } else if (!oldRecord.isPaid && data.isPaid && !oldRecord.voucherId) {
+    } else if (!oldRecord.isPaid && nextPaid && !oldRecord.voucherId) {
       // A salary "paid on credit" is not paid: it stays unpaid in Salary Payable 2103. Refuse rather than post
       // a payment out of the first bank account (non-cash modes used to map to a bank).
       if (merged.paymentMode === 'credit') {
@@ -8069,6 +8084,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         amount: merged.netSalary,
         narration: `Salary paid: ${emp?.name || ''} - ${oldRecord.month}`,
         createdBy: 'System',
+      }, {
+        // Server refused the payment later (rolled back by addVoucher) → the slip is UNPAID again (RULE 1).
+        onFailed: () => {
+          const cur = salaryRecordsRef.current.find(r => r.id === id);
+          if (!cur || !cur.isPaid) return;
+          const back: SalaryRecord = { ...cur, isPaid: false, paidDate: undefined, voucherId: undefined };
+          salaryRecordsRef.current = salaryRecordsRef.current.map(r => r.id === id ? back : r);
+          setSalaryRecordsState(prev => prev.map(r => r.id === id ? back : r));
+          supabase.from('salary_records').upsert(withSoc(back)).then(({ error }) => {
+            if (error) reportError('salary-unpay-sync', error.message, { id });
+          }, () => {});
+          toastRef.current({ title: 'भुगतान दर्ज नहीं हुआ / Not marked paid', description: `${oldRecord.slipNo}: भुगतान voucher cloud में save नहीं हुआ, इसलिए पर्ची फिर unpaid है। / The payment voucher was not saved, so the slip is unpaid again.`, variant: 'destructive', duration: 12000 });
+        },
       });
       if (!newV.id) {
         // addVoucher said why (locked period, FY lock, role, expired plan …). A slip is never PAID without its
@@ -8077,11 +8105,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
       }
       merged.voucherId = newV.id;
-    } else if (oldRecord.isPaid && data.isPaid && oldRecord.voucherId) {
-      // (c) Still paid — re-sync voucher if amount / date / paymentMode changed
+    } else if (oldRecord.isPaid && nextPaid && oldRecord.voucherId) {
+      // (c) Still paid — re-sync voucher if amount / date / paymentMode / paying bank changed
       const dateChanged = data.paidDate !== undefined && data.paidDate !== oldRecord.paidDate;
       const modeChanged = data.paymentMode !== undefined && data.paymentMode !== oldRecord.paymentMode;
-      if (amountChanged || dateChanged || modeChanged) {
+      if (amountChanged || dateChanged || modeChanged || bankChanged) {
         const v = vouchersRef.current.find(x => x.id === oldRecord.voucherId);
         if (v && !v.isDeleted) {
           const emp = employees.find(e => e.id === oldRecord.employeeId);
