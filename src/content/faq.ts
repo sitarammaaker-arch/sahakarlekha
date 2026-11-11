@@ -32,8 +32,8 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
       },
       {
         q: 'कीमत क्या है? / How much does it cost?',
-        aHi: 'कोई स्थायी free plan नहीं है। रजिस्टर करने पर 30 दिन का मुफ़्त trial मिलता है; उसके बाद professional accounting Starter ₹2,999/साल + GST (≈ ₹250/माह) से शुरू होता है, जिसमें असीमित वाउचर/सदस्य, सभी रिपोर्ट, TDS, GST, payroll व ऑडिट शामिल हैं। एक से ज़्यादा user या Member Portal चाहिए तो Plus (₹6,999/साल + GST, 6 users) या Pro (₹14,999/साल + GST, असीमित users) चुनें।',
-        aEn: 'There is no permanent free plan. Registering gives a 30-day free trial; after that, professional accounting starts at Starter — ₹2,999/year plus GST (about ₹250/month) — including unlimited vouchers and members, all reports, TDS, GST, payroll and audit. Choose Plus (₹6,999/yr + GST, 6 users) or Pro (₹14,999/yr + GST, unlimited users) for more than one user or the Member Portal.',
+        aHi: 'कोई स्थायी free plan नहीं है। रजिस्टर करने पर 30 दिन का मुफ़्त trial मिलता है; उसके बाद professional accounting Starter ₹2,999/साल + GST (≈ ₹250/माह) से शुरू होता है, जिसमें असीमित वाउचर/सदस्य, सभी रिपोर्ट, TDS, GST व ऑडिट शामिल हैं। एक से ज़्यादा user, Payroll या Member Portal चाहिए तो Plus (₹6,999/साल + GST, 6 users) या Pro (₹14,999/साल + GST, असीमित users) चुनें; शाखाएँ (Multi-Branch) सिर्फ़ Pro में हैं।',
+        aEn: 'There is no permanent free plan. Registering gives a 30-day free trial; after that, professional accounting starts at Starter — ₹2,999/year plus GST (about ₹250/month) — including unlimited vouchers and members, all reports, TDS, GST and audit. Choose Plus (₹6,999/yr + GST, 6 users) or Pro (₹14,999/yr + GST, unlimited users) for more than one user, Payroll or the Member Portal; branches are on Pro.',
       },
       {
         q: 'कौन-कौन सी समितियों के लिए है? / Which society types are supported?',
@@ -126,8 +126,8 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
       },
       {
         q: 'Starter, Plus और Pro में क्या फ़र्क है? / How do Starter, Plus and Pro differ?',
-        aHi: 'Accounting के feature तीनों में एक जैसे हैं। फ़र्क login users की संख्या का है — Starter 1, Plus 6, Pro असीमित — और Member Portal का, जो Plus और Pro में है। Pro में डेटा-migration सहायता (बाकी plans में ₹4,999 + GST) और priority WhatsApp support भी शामिल है। हर plan भुगतान की तारीख़ से 12 महीने चलता है।',
-        aEn: 'The accounting features are the same on all three. They differ in login users — Starter 1, Plus 6, Pro unlimited — and in the Member Portal, which is on Plus and Pro. Pro also includes data-migration help (₹4,999 + GST on the other plans) and priority WhatsApp support. Each plan runs for 12 months from the payment date.',
+        aHi: 'हिसाब-किताब और सभी रिपोर्ट तीनों में एक जैसी हैं। फ़र्क login users का है — Starter 1, Plus 6, Pro असीमित; Payroll और Member Portal Plus व Pro में हैं; Multi-Branch (शाखाएँ) और कई समितियों की संयुक्त रिपोर्ट सिर्फ़ Pro में। Pro में डेटा-migration सहायता (बाकी plans में ₹4,999 + GST) और priority WhatsApp support भी शामिल है। हर plan भुगतान की तारीख़ से 12 महीने चलता है।',
+        aEn: 'Books and all reports are the same on all three. They differ in login users — Starter 1, Plus 6, Pro unlimited; Payroll and the Member Portal are on Plus and Pro; Multi-Branch and multi-society consolidation are on Pro only. Pro also includes data-migration help (₹4,999 + GST on the other plans) and priority WhatsApp support. Each plan runs for 12 months from the payment date.',
       },
     ],
   },

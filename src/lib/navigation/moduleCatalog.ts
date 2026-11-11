@@ -19,6 +19,7 @@ import {
   Download, Route, Fuel,
 } from 'lucide-react';
 import type { Capability, NavDomain, Role } from './capabilities';
+import type { PlanFeature } from '@/lib/plans';
 
 export interface ModuleDefinition {
   id: string;
@@ -28,6 +29,10 @@ export interface ModuleDefinition {
   domain: NavDomain;
   requiredCapabilities: Capability[]; // [] = universal (always visible)
   requiredRoles?: Role[];
+  /** Plan gate (founder 2026-11-11): the page opens only on a plan that includes this feature.
+   *  The module stays in the menu so the user sees what an upgrade brings; CapabilityGuard shows
+   *  the upgrade notice instead of the page. */
+  requiredPlanFeature?: PlanFeature;
   order: number;
 }
 
@@ -70,8 +75,8 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'purchaseOrders', titleKey: 'purchaseOrders', icon: ClipboardList,   route: '/purchase-orders', domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant'], order: 6.2 },
   // E1: FCO 1985 dealer authorisation / Form O validity + the general scheme-claim register.
   { id: 'dealerCompliance', titleKey: 'dealerCompliance', icon: ShieldCheck, route: '/dealer-compliance', domain: 'operations', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant', 'viewer'], order: 6.8 },
-  { id: 'salary',         titleKey: 'salary',         icon: BadgeDollarSign, route: '/salary',          domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 8 },
-  { id: 'payroll',        titleKey: 'payroll',        icon: Wallet,          route: '/payroll',         domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], order: 8.5 },
+  { id: 'salary',         titleKey: 'salary',         icon: BadgeDollarSign, route: '/salary',          domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], requiredPlanFeature: 'payroll', order: 8 },
+  { id: 'payroll',        titleKey: 'payroll',        icon: Wallet,          route: '/payroll',         domain: 'operations', requiredCapabilities: U, requiredRoles: ['admin', 'accountant'], requiredPlanFeature: 'payroll', order: 8.5 },
   { id: 'milkCollection', titleKey: 'milkCollection', icon: Milk,            route: '/milk-collection', domain: 'dairy', requiredCapabilities: ['dairy_collection'], order: 0 },  // C4: dairy-only
   { id: 'dairyRateCharts', titleKey: 'dairyRateCharts', icon: Table2,        route: '/dairy-rate-charts', domain: 'dairy', requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin', 'accountant'], order: 1 },
   { id: 'farmerSettlement', titleKey: 'farmerSettlement', icon: HandCoins,   route: '/farmer-settlement', domain: 'dairy', requiredCapabilities: ['dairy_collection'], requiredRoles: ['admin', 'accountant'], order: 2 },
@@ -196,10 +201,10 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'societySetup',               titleKey: 'societySetup',               icon: Settings,        route: '/society-setup',                domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 0 },
   { id: 'openingBalances',            titleKey: 'openingBalances',            icon: BookOpenCheck,   route: '/opening-balances',             domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 1 },
   { id: 'userManagement',             titleKey: 'userManagement',             icon: UserCog,         route: '/user-management',              domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 2 },
-  { id: 'branches',                   titleKey: 'branches',                   icon: Building2,       route: '/branches',                     domain: 'administration', requiredCapabilities: U, order: 2.5 },
+  { id: 'branches',                   titleKey: 'branches',                   icon: Building2,       route: '/branches',                     domain: 'administration', requiredCapabilities: U, requiredPlanFeature: 'multiBranch', order: 2.5 },
   { id: 'godowns',                    titleKey: 'godowns',                    icon: Warehouse,       route: '/godowns',                      domain: 'administration', requiredCapabilities: ['inventory_sales'], order: 2.6 },
   { id: 'backupRestore',              titleKey: 'backupRestore',              icon: DatabaseBackup,  route: '/backup-restore',               domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 3 },
-  { id: 'multiSocietyConsolidation',  titleKey: 'multiSocietyConsolidation',  icon: Building2,       route: '/multi-society-consolidation',  domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 4 },
+  { id: 'multiSocietyConsolidation',  titleKey: 'multiSocietyConsolidation',  icon: Building2,       route: '/multi-society-consolidation',  domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], requiredPlanFeature: 'consolidation', order: 4 },
   { id: 'universalImporter',          titleKey: 'universalImporter',          icon: FileSpreadsheet, route: '/universal-importer',           domain: 'administration', requiredCapabilities: U, requiredRoles: ['admin'], order: 5 },
   // Export Center (T-16b). Open to every role: the Export Registry gates each ENTITY by
   // its own minRole and capability, so a viewer sees only what a viewer may export.

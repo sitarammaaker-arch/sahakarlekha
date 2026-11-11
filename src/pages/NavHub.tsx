@@ -1,12 +1,14 @@
 import React from 'react';
 import { Link, Navigate, NavLink, useParams } from 'react-router-dom';
-import { Search, Star } from 'lucide-react';
+import { Lock, Search, Star } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAllNavigation } from '@/hooks/useNavigation';
 import { useNavPrefs } from '@/hooks/useNavPrefs';
 import { HUBS, hubById, hubRoute, hubSections } from '@/lib/navigation';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { useSubscription } from '@/hooks/useSubscription';
+import { minPlanFor, planAllows } from '@/lib/plans';
 
 /**
  * Group page (/hub/:hubId) — the pages of one menu group as cards (compact menu, 2026-10-10). Lists ONLY what the
@@ -18,6 +20,9 @@ const NavHub: React.FC = () => {
   const { t, language } = useLanguage();
   const hi = language === 'hi';
   const visible = useAllNavigation().flatMap((g) => g.items);
+  const { loading: planLoading, plan } = useSubscription();
+  // A page the plan does not include stays listed (so the user sees what an upgrade brings) with the plan it needs.
+  const planNeeded = (f?: Parameters<typeof minPlanFor>[0]) => (f && !planLoading && !planAllows(plan, f) ? (minPlanFor(f) === 'plus' ? 'Plus' : 'Pro') : null);
   const { isFavourite, toggleFavourite } = useNavPrefs();
   const [q, setQ] = React.useState('');
   const stripRef = React.useRef<HTMLElement>(null);
@@ -93,6 +98,11 @@ const NavHub: React.FC = () => {
                   >
                     <Icon className="h-5 w-5 shrink-0 text-primary" />
                     <span className="flex-1 min-w-0 text-sm font-medium break-words">{t(m.titleKey)}</span>
+                    {planNeeded(m.requiredPlanFeature) && (
+                      <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                        <Lock className="h-3 w-3" />{planNeeded(m.requiredPlanFeature)}
+                      </span>
+                    )}
                   </Link>
                   {/* ⭐ — pin this page to the top of the menu (and to Ctrl+K) */}
                   <button
