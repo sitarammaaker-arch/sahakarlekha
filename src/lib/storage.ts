@@ -255,6 +255,7 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '2205', name: 'HRDF Payable',               nameHi: 'देय HRDF',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
   { id: '2206', name: 'Income Tax Payable',         nameHi: 'देय आयकर',                 type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
   { id: '2207', name: 'Professional Tax Payable',   nameHi: 'देय व्यावसायिक कर',        type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
+  { id: '2296', name: 'Market Fee Payable',         nameHi: 'देय मंडी शुल्क',           type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
   { id: '2208', name: 'Interest Payable',           nameHi: 'देय ब्याज',                type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
   { id: '2209', name: 'Audit Fee Payable',          nameHi: 'देय लेखा परीक्षण शुल्क',   type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
   { id: '2210', name: 'Advance from Members',       nameHi: 'सदस्यों से अग्रिम',        type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2100', subtype: 'current_liability' },
@@ -324,9 +325,11 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '4103', name: 'Consumer Goods Sales',       nameHi: 'उपभोक्ता वस्तु बिक्री',    type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4100', subtype: 'trading_income' },
   { id: '4200', name: 'Commission Income',          nameHi: 'कमीशन आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
   { id: '4201', name: 'Dami Income',                nameHi: 'दामी आय',                  type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200', subtype: 'commission_income' },
-  { id: '4202', name: 'Market Fee',                 nameHi: 'मंडी शुल्क आय',            type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200', subtype: 'commission_income' },
+  // 4202 Market Fee and 4204 HRDF are NOT income heads (removed 2026-11-11, migration 155): both are levies the
+  // society collects and passes on — market fee to the Market Committee, the rural development fee to the HRDF
+  // Board (Haryana Rural Development Act 1986 s.5(3): "the burden of fee ... is not intended to be put on the
+  // dealer"; DFPD cost sheet: "Statutory Charges"). They are held in 2296 Market Fee Payable / 2205 HRDF Payable.
   { id: '4203', name: 'Labor Charges',              nameHi: 'श्रम प्रभार आय',           type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200', subtype: 'commission_income' },
-  { id: '4204', name: 'HRDF',                       nameHi: 'HRDF आय',                  type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200', subtype: 'commission_income' },
   { id: '4205', name: 'Society Commission',         nameHi: 'समिति कमीशन',              type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200', subtype: 'commission_income' },
   { id: '4206', name: 'Procurement Commission',     nameHi: 'खरीद कमीशन',              type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200', subtype: 'commission_income' },
   { id: '4207', name: 'Storage / Cold Storage Income', nameHi: 'गोदाम / शीत भंडार आय', type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200', subtype: 'commission_income' },
@@ -380,7 +383,7 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5308', name: 'Rent',                       nameHi: 'किराया व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5309', name: 'Travelling Expenses',        nameHi: 'यात्रा व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5310', name: 'Meeting / AGM Expenses',     nameHi: 'बैठक / AGM व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
-  { id: '5311', name: 'Education Fund Contribution',nameHi: 'शिक्षा निधि अंशदान',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
+  { id: '5311', name: 'Education Fund Contribution (Appropriation)', nameHi: 'शिक्षा निधि अंशदान (अधिशेष वितरण)', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
   { id: '5312', name: 'Advertisement',              nameHi: 'विज्ञापन व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5313', name: 'Postage / Courier',          nameHi: 'डाक / कूरियर व्यय',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5314', name: 'Bank Charges',               nameHi: 'बैंक प्रभार',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
@@ -529,7 +532,7 @@ export const PACS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5308', name: 'Rent',                       nameHi: 'किराया व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5309', name: 'Travelling Expenses',        nameHi: 'यात्रा व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5310', name: 'Meeting / AGM Expenses',     nameHi: 'बैठक / AGM व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
-  { id: '5311', name: 'Education Fund Contribution',nameHi: 'शिक्षा निधि अंशदान',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
+  { id: '5311', name: 'Education Fund Contribution (Appropriation)', nameHi: 'शिक्षा निधि अंशदान (अधिशेष वितरण)', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
   { id: '5314', name: 'Bank Charges',               nameHi: 'बैंक प्रभार',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5400', name: 'Operational Expenses',       nameHi: 'परिचालन व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
   { id: '5402', name: 'Repair',                     nameHi: 'मरम्मत व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
@@ -677,7 +680,7 @@ export const CONSUMER_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5308', name: 'Rent',                       nameHi: 'किराया व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5309', name: 'Travelling Expenses',        nameHi: 'यात्रा व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5310', name: 'Meeting / AGM Expenses',     nameHi: 'बैठक / AGM व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
-  { id: '5311', name: 'Education Fund Contribution',nameHi: 'शिक्षा निधि अंशदान',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
+  { id: '5311', name: 'Education Fund Contribution (Appropriation)', nameHi: 'शिक्षा निधि अंशदान (अधिशेष वितरण)', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
   { id: '5312', name: 'Advertisement',              nameHi: 'विज्ञापन व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5314', name: 'Bank Charges',               nameHi: 'बैंक प्रभार',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5400', name: 'Operational Expenses',       nameHi: 'परिचालन व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
@@ -757,6 +760,23 @@ const ACCOUNT_PATCHES: Record<string, Partial<LedgerAccount>> = {
   // transfer to Statutory Reserve is done via a separate appropriation journal.
   '4407': { type: 'income',  openingBalanceType: 'credit', parentId: '4400', subtype: 'other_income', isSystem: false, name: 'Admission Fee', nameHi: 'प्रवेश शुल्क' },
   '5602': { name: 'Professional Tax / Local Levies', nameHi: 'व्यावसायिक कर / स्थानीय शुल्क' },
+  // 2026-11-11: the education fund contribution is a share of the year's PROFIT, not a cost of earning it —
+  // Haryana Co-operative Societies Act 1984 s.87(1)(b) ("of the profits is carried to the co-operative education
+  // fund"); MSCS Act s.63(1)(b) ("credit annually one per cent. of net profit"). Same treatment as 4406 above
+  // and 1211 Dividend Distribution. No society had posted to it (prod, 2026-11-11), so no past figure moves.
+  // Persisted by migration 155. Applied only to the head of this name (ACCOUNT_PATCH_ONLY_IF_NAME).
+  '5311': { type: 'equity',  openingBalanceType: 'debit',  parentId: '1200', subtype: 'reserve', name: 'Education Fund Contribution (Appropriation)', nameHi: 'शिक्षा निधि अंशदान (अधिशेष वितरण)' },
+};
+
+/** A patch that applies only while the account still carries one of these names (a chart may reuse the code). */
+const ACCOUNT_PATCH_ONLY_IF_NAME: Record<string, readonly string[]> = {
+  '5311': ['Education Fund Contribution', 'Education Fund Contribution (Appropriation)'],
+};
+const patchFor = (acc: LedgerAccount): Partial<LedgerAccount> | undefined => {
+  const patch = ACCOUNT_PATCHES[acc.id];
+  if (!patch) return undefined;
+  const names = ACCOUNT_PATCH_ONLY_IF_NAME[acc.id];
+  return !names || names.includes(acc.name.trim()) ? patch : undefined;
 };
 
 export const ACCOUNTS_TO_ADD: LedgerAccount[] = [
@@ -922,13 +942,42 @@ export const ACCOUNTS_TO_ADD_154_REQUIRES: Record<string, { id: string; name: st
   '2296': { id: '4202', name: 'Market Fee' },
 };
 
+/**
+ * Added with migration 155 (scripts/gen-migration-155.mjs), additive like 154: the Haryana Labour Welfare Fund
+ * contribution (hrylabour.gov.in: an employee share deducted from wages plus an employer share, paid to the
+ * Board). Whether a given society is a covered establishment is for the society to settle — the heads only
+ * give the deduction and the employer's share a place, separate from the voluntary 5205 Staff Welfare.
+ */
+export const ACCOUNTS_TO_ADD_155: LedgerAccount[] = [
+  { id: '2295', name: 'Labour Welfare Fund Payable', nameHi: 'देय श्रम कल्याण निधि', type: 'liability', openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '2200', subtype: 'statutory_liability' },
+  { id: '5299', name: 'Labour Welfare Fund Contribution', nameHi: 'श्रम कल्याण निधि अंशदान', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '5200', subtype: 'employee_expense' },
+];
+
+/**
+ * Migration 155 also RECLASSIFIES or REMOVES heads that the official texts show were misclassified. Kept here
+ * so the SQL is generated from the same definitions the app uses (scripts/gen-migration-155.mjs).
+ *   reclass — the row keeps its id (so anything pointing at it still resolves) and takes the new classification.
+ *   remove  — an income head with no valid use; deleted only where nothing was ever posted to or linked with it.
+ */
+export const CHART_CORRECTIONS_155 = {
+  reclass: [
+    // Same values as ACCOUNT_PATCHES['5311'] — the app already shows it this way on every load.
+    { id: '5311', whenName: 'Education Fund Contribution', whenType: 'expense', onlyIfUnused: false,
+      to: { type: 'equity', parentId: '1200', subtype: 'reserve', openingBalanceType: 'debit', name: 'Education Fund Contribution (Appropriation)', nameHi: 'शिक्षा निधि अंशदान (अधिशेष वितरण)' } },
+  ],
+  remove: [
+    { id: '4202', whenName: 'Market Fee', whenType: 'income' },
+    { id: '4204', whenName: 'HRDF', whenType: 'income' },
+  ],
+} as const;
+
 export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAccount[]; changed: boolean; newlyAdded: LedgerAccount[] } {
   let changed = false;
   const newlyAdded: LedgerAccount[] = [];
 
   // Step 1: Apply patches to existing accounts (local only — NOT synced back to Supabase)
   const patched = existing.map(acc => {
-    const patch = ACCOUNT_PATCHES[acc.id];
+    const patch = patchFor(acc);
     if (!patch) return acc;
     changed = true;
     return { ...acc, ...patch } as LedgerAccount;
@@ -939,11 +988,14 @@ export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAc
   // Society Shares" at 3202) + an ACCOUNTS_TO_ADD copy at 3208 create a duplicate head.
   const existingIds = new Set(patched.map(a => a.id));
   const existingNameType = new Set(patched.map(a => `${a.name.trim().toLowerCase()}|${a.type}`));
-  for (const newAcc of [...ACCOUNTS_TO_ADD, ...ACCOUNTS_TO_ADD_115, ...ACCOUNTS_TO_ADD_154, ...ACCOUNTS_TO_ADD_156]) {
-    if (existingIds.has(newAcc.id)) continue;
-    if (existingNameType.has(`${newAcc.name.trim().toLowerCase()}|${newAcc.type}`)) continue;
-    const needs = ACCOUNTS_TO_ADD_154_REQUIRES[newAcc.id];
+  for (const listed of [...ACCOUNTS_TO_ADD, ...ACCOUNTS_TO_ADD_115, ...ACCOUNTS_TO_ADD_154, ...ACCOUNTS_TO_ADD_155, ...ACCOUNTS_TO_ADD_156]) {
+    if (existingIds.has(listed.id)) continue;
+    if (existingNameType.has(`${listed.name.trim().toLowerCase()}|${listed.type}`)) continue;
+    const needs = ACCOUNTS_TO_ADD_154_REQUIRES[listed.id];
     if (needs && !patched.some(a => a.id === needs.id && a.name.trim().toLowerCase() === needs.name.toLowerCase())) continue;
+    // A head merged here gets its patch too (5311 comes from ACCOUNTS_TO_ADD for charts whose template lacks it).
+    const patch = patchFor(listed);
+    const newAcc = patch ? ({ ...listed, ...patch } as LedgerAccount) : listed;
     patched.push(newAcc);
     newlyAdded.push(newAcc);
     existingNameType.add(`${newAcc.name.trim().toLowerCase()}|${newAcc.type}`);

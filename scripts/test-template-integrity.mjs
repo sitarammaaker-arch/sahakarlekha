@@ -89,7 +89,6 @@ const KNOWN = [
   "*|id-meaning|4106",
   "*|id-meaning|4200",
   "*|id-meaning|4201",
-  "*|id-meaning|4202",
   "*|id-meaning|4207",
   "*|id-meaning|4301",
   "*|id-meaning|4302",
@@ -132,7 +131,8 @@ const CONTRA_SUBTYPES = new Set(['accumulated_dep', 'closing_stock', 'sales_retu
 // Contra heads that are intentionally on the opposite side (documented in storage.ts): accumulated depreciation 3108-3112,
 // Dividend Distribution 1211 and Patronage Rebate (Appropriation) 4406 are debit-nature equity / credit-nature assets.
 // Some templates (dairy / housing / sugar) ship them without a subtype, so they are allowed by id as well.
-const CONTRA_IDS = new Set(['3108', '3109', '3110', '3111', '3112', '1211', '4406']);
+// 5311 Education Fund Contribution (Appropriation) joined them with migration 155.
+const CONTRA_IDS = new Set(['3108', '3109', '3110', '3111', '3112', '1211', '4406', '5311']);
 
 // Ids the posting engines write to, with the type they expect (src: DataContext / loans / deposits / tax / payroll / close).
 const ENGINE_IDS = {
