@@ -1894,7 +1894,7 @@ export function generateSalarySlipPDF(
   // ── Employee details box ─────────────────────────────────────────────────
   doc.setDrawColor(200, 200, 200);
   doc.setLineWidth(0.3);
-  doc.rect(10, 40, pageW - 20, 22);
+  doc.rect(10, 40, pageW - 20, 27);
 
   doc.setFont(font, 'bold');
   doc.setFontSize(8);
@@ -1902,18 +1902,33 @@ export function generateSalarySlipPDF(
   doc.setFont(font, 'normal');
   doc.text(`Emp No : ${employee.empNo}`, 13, 52);
   doc.text(`Name   : ${employee.name}`, 13, 57);
+  doc.text(`PAN    : ${employee.pan || '-'}`, 13, 62);
   doc.text(`Designation: ${employee.designation}`, cx + 5, 52);
   doc.text(`Join Date  : ${fmtDate(employee.joinDate)}`, cx + 5, 57);
+  doc.text(`UAN: ${employee.uan || '-'}   ESI No: ${employee.esiNo || '-'}`, cx + 5, 62);
 
   // ── Earnings & Deductions table ──────────────────────────────────────────
+  // Every figure is the SAVED slip (the same numbers its accrual voucher books). When the statutory breakdown is
+  // present each deduction gets its own line; an older slip with only a lump `deductions` shows that one line.
+  const gross = (record.basicSalary || 0) + (record.allowances || 0);
+  const pfE = record.pfEmployee || 0, esiE = record.esiEmployee || 0, pt = record.pt || 0, tds = record.tds || 0;
+  const itemised = pfE + esiE + pt + tds;
+  const otherDed = Math.max(0, Math.round(((record.deductions || 0) - itemised) * 100) / 100);
+  const dedLines: [string, number][] = itemised > 0
+    ? ([['Provident Fund (PF)', pfE], ['ESI', esiE], ['Professional Tax', pt], ['Income Tax (TDS)', tds], ['Other', otherDed]] as [string, number][]).filter(([, v]) => v > 0)
+    : [['Deductions', record.deductions || 0]];
+  const earnLines: [string, number][] = [['Basic Salary', record.basicSalary || 0], ['Allowances', record.allowances || 0]];
+  const rows = Math.max(earnLines.length, dedLines.length);
+  const body: string[][] = [];
+  for (let i = 0; i < rows; i++) {
+    const e = earnLines[i], d = dedLines[i];
+    body.push([e ? e[0] : '', e ? fmt(e[1]) : '', d ? d[0] : '', d ? fmt(d[1]) : '']);
+  }
+  body.push(['Gross Salary', fmt(gross), 'Total Deductions', fmt(record.deductions || 0)]);
   autoTable(doc, {
-    startY: 66,
+    startY: 71,
     head: [['Earnings', 'Amount (Rs.)', 'Deductions', 'Amount (Rs.)']],
-    body: [
-      ['Basic Salary',   fmt(record.basicSalary), 'Deductions', fmt(record.deductions)],
-      ['Allowances',     fmt(record.allowances),  '',           ''],
-      ['Gross Salary',   fmt(record.basicSalary + record.allowances), '', ''],
-    ],
+    body,
     foot: [['Net Salary Payable', '', '', fmt(record.netSalary)]],
     styles: { fontSize: 8, cellPadding: 2, font },
     headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold', fontSize: 8 },
@@ -1933,13 +1948,26 @@ export function generateSalarySlipPDF(
     : 'Status: PENDING';
   doc.setFont(font, 'bold');
   doc.text(statusText, pageW - 12, afterTableY, { align: 'right' });
+  doc.setFont(font, 'normal');
+  let infoY = afterTableY + 5;
+  const words = doc.splitTextToSize(`In words: ${_numToWordsIN(record.netSalary || 0)}`, pageW - 24) as string[];
+  doc.text(words, 12, infoY);
+  infoY += words.length * 4;
+  const erPf = record.pfEmployer || 0, erEsi = record.esiEmployer || 0;
+  if (erPf + erEsi > 0) {
+    // Employer contributions are not deducted from the employee — shown for information (they are in the books).
+    doc.setTextColor(90);
+    doc.text(`Employer contribution (not deducted): PF ${fmt(erPf)}${erEsi > 0 ? `  ·  ESI ${fmt(erEsi)}` : ''}`, 12, infoY);
+    doc.setTextColor(0);
+    infoY += 4;
+  }
   if (employee.bankAccount) {
-    doc.setFont(font, 'normal');
-    doc.text(`Bank A/c: ${employee.bankAccount}`, 12, afterTableY + 5);
+    doc.text(`Bank A/c: ${employee.bankAccount}`, 12, infoY);
+    infoY += 4;
   }
 
   // ── Signature block ──────────────────────────────────────────────────────
-  const sigY = afterTableY + 22;
+  const sigY = infoY + 16;
   doc.setDrawColor(150, 150, 150);
   doc.setLineWidth(0.3);
   doc.line(15, sigY, 55, sigY);

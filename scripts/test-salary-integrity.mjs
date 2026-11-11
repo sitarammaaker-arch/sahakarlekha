@@ -150,5 +150,30 @@ const fn = (name) => { const a = dc.indexOf(`const ${name} = useCallback(`); ret
   ok(cols.every((c) => real.includes(c)) && real.every((r) => cols.includes(r)), `salary export columns = the salary_records columns (${cols.filter((c) => !real.includes(c)).join(',') || 'ok'})`);
 }
 
+// ── 9. Remaining gaps (2026-11-11, third pass) ───────────────────────────────
+{
+  const sm = read('src/pages/SalaryManagement.tsx');
+  ok(/uan: '',\s*esiNo: '',[\s\S]{0,200}pfApplicable: true,\s*esiApplicable: true,/.test(sm), 'employee form carries UAN, ESI no. and PF/ESI applicability (both on by default)');
+  ok((sm.match(/uan: empForm\.uan\.trim\(\) \|\| undefined,\s*esiNo: empForm\.esiNo\.trim\(\) \|\| undefined,\s*pfApplicable: empForm\.pfApplicable,\s*esiApplicable: empForm\.esiApplicable,/g) || []).length === 2, 'add AND edit save them');
+  ok(/pfApplicable: emp\.pfApplicable \?\? true,\s*esiApplicable: emp\.esiApplicable \?\? true,/.test(sm), 'edit opens with the saved values');
+  ok(/pfApplicable: row\.employee\.pfApplicable \?\? true,\s*esiApplicable: row\.employee\.esiApplicable \?\? true,/.test(sm), 'the salary run honours them');
+  ok(/!\/\^\[A-Z\]\{5\}\[0-9\]\{4\}\[A-Z\]\$\/\.test\(empForm\.pan\.trim\(\)\)/.test(sm), 'a malformed PAN is flagged');
+
+  const pdfSrc = read('src/lib/pdf.ts');
+  const slip = pdfSrc.slice(pdfSrc.indexOf('export function generateSalarySlipPDF('), pdfSrc.indexOf('// ── GST Summary PDF'));
+  ok(/\['Provident Fund \(PF\)', pfE\], \['ESI', esiE\], \['Professional Tax', pt\], \['Income Tax \(TDS\)', tds\]/.test(slip), 'slip PDF itemises PF / ESI / PT / TDS');
+  ok(/\['Gross Salary', fmt\(gross\), 'Total Deductions', fmt\(record\.deductions \|\| 0\)\]/.test(slip) && /'Net Salary Payable', '', '', fmt\(record\.netSalary\)/.test(slip), 'gross, total deductions and net are the saved figures');
+  ok(/_numToWordsIN\(record\.netSalary \|\| 0\)/.test(slip), 'net amount in words');
+  ok(/PAN    : \$\{employee\.pan \|\| '-'\}/.test(slip) && /UAN: \$\{employee\.uan \|\| '-'\}   ESI No: \$\{employee\.esiNo \|\| '-'\}/.test(slip), 'PAN, UAN and ESI no. printed');
+  ok(/Employer contribution \(not deducted\)/.test(slip), 'employer PF/ESI shown as information, not as a deduction');
+
+  ok(/Form 138 \(पहले 24Q\)/.test(sm) && /rule-219-1/.test(sm), 'the salary TDS statement is called Form 138 (formerly 24Q), with its rule-219 source');
+  ok(/form138_summary_\$\{society\.financialYear\}_\$\{q24Quarter\}\.csv/.test(sm), 'the CSV says it is a Form 138 summary');
+
+  const tr = read('src/pages/TdsRegister.tsx');
+  const summ = tr.slice(tr.indexOf('{/* Section-wise Summary */}'), tr.indexOf('{/* Section-wise Summary */}') + 2000);
+  ok(/resolveSectionRef\(sec\.value, `\$\{quarterMonths\(fy, selectedQuarter as Quarter\)\[0\]\}-01`\)/.test(summ), 'summary cards use the same section reference as the rows');
+}
+
 console.log(`salary-integrity: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

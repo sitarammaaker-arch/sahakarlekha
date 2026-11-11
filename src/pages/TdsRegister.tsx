@@ -21,7 +21,7 @@ import { FileText, Download, Plus, AlertTriangle, CheckCircle2, Clock, FileSprea
 import { useToast } from '@/hooks/use-toast';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
-import { salaryTdsWhen } from '@/lib/form24Q';
+import { salaryTdsWhen, quarterMonths, type Quarter } from '@/lib/form24Q';
 import { generate26QText, download26Q, validate26QData, entriesFor26Q, getQuarterFromDate, getQuarterDueDate } from '@/lib/tds26q';
 import { applyPercent, toMinor, toRupees } from '@/lib/money';
 import type { TdsEntry, TdsChallan, TdsChallanLink, TdsSection, TdsDeducteeType, TdsQuarter } from '@/types';
@@ -670,9 +670,15 @@ const TdsRegister: React.FC = () => {
                   {TDS_SECTIONS.map(sec => {
                     const secEntries = quarterEntries.filter(e => e.section === sec.value);
                     const secTotal = secEntries.reduce((s, e) => s + e.tdsAmount, 0);
+                    // Same reference the rows show (resolveSectionRef for a date in this quarter): from 1-4-2026 the
+                    // 2025 Act's section, with the stored 1961 key alongside — so a row reading "392" is not summed
+                    // under a card reading only "192".
+                    const ref = resolveSectionRef(sec.value, `${quarterMonths(fy, selectedQuarter as Quarter)[0]}-01`);
                     return (
                       <div key={sec.value} className={`p-3 rounded-lg border ${secTotal > 0 ? 'bg-primary/5 border-primary/20' : 'bg-muted/30'}`}>
-                        <p className="text-xs font-medium">{sec.value}</p>
+                        <p className="text-xs font-medium" title={ref.act === '2025' ? describeSectionRef(ref) : ref.cite}>
+                          {ref.act === '2025' ? `${ref.label}${!ref.verified ? ' ⚠️' : ''} (${hi ? 'पहले' : 'was'} ${sec.value})` : sec.value}
+                        </p>
                         <p className="text-sm font-bold">{fmt(secTotal)}</p>
                         <p className="text-xs text-muted-foreground">{secEntries.length} {hi ? 'एंट्रियां' : 'entries'}</p>
                       </div>
