@@ -13,6 +13,7 @@ import type { LedgerAccount } from '@/types';
 import type { LedgerEvent } from './event';
 import { resolveCurrentVouchers, type CurrentLeg } from './aggregateState';
 import { accountNature, accountGlType } from './receiptsPaymentsClassify';
+import { parentMap } from '../accounting/ancestry';
 
 export interface RPItem {
   accountId: string;
@@ -45,6 +46,7 @@ export function projectReceiptsPayments(
   opts: { openingCashMinor: number; openingBankMinor: number; asOf?: string },
 ): RPData {
   const acctById = new Map(accounts.map((a) => [a.id, a]));
+  const parentOf = parentMap(accounts);   // same nested-head rule as the voucher compute (RULE 2)
   const isCashBank = (id: string) => id === cashId || bankIds.has(id);
 
   const current = resolveCurrentVouchers(events).filter((c) => !opts.asOf || c.date <= opts.asOf);
@@ -57,7 +59,7 @@ export function projectReceiptsPayments(
     const acc = acctById.get(l.accountId);
     const name = acc?.name || 'Deleted Account';
     let item = map.get(l.accountId);
-    if (!item) { item = { accountId: l.accountId, accountName: name, accountNameHi: acc?.nameHi || name, amountMinor: 0, nature: accountNature(acc), glType: accountGlType(acc) }; map.set(l.accountId, item); }
+    if (!item) { item = { accountId: l.accountId, accountName: name, accountNameHi: acc?.nameHi || name, amountMinor: 0, nature: accountNature(acc, parentOf), glType: accountGlType(acc) }; map.set(l.accountId, item); }
     item.amountMinor += l.amountMinor;
   };
   for (const v of current) {

@@ -5,6 +5,7 @@
  * diverge (RULE 2). PURE — no React, no Supabase.
  */
 import type { LedgerAccount } from '@/types';
+import { headAbove, type ParentOf } from '../accounting/ancestry';
 
 /** Parent codes whose children are CAPITAL (share capital, reserves, long-term loans, fixed assets, investments). */
 export const CAPITAL_PARENTS: ReadonlySet<string> = new Set(['1100', '1200', '2300', '3100', '3200']);
@@ -19,11 +20,18 @@ export const CAPITAL_SUBTYPES: ReadonlySet<string> = new Set([
  * parent ⇒ capital; everything else (and an unknown account) ⇒ revenue. Byte-identical to the inline
  * `natureOf` it replaces.
  */
-export function accountNature(account: Pick<LedgerAccount, 'type' | 'subtype' | 'parentId'> | undefined): 'capital' | 'revenue' {
+export function accountNature(
+  account: Pick<LedgerAccount, 'id' | 'type' | 'subtype' | 'parentId'> | undefined,
+  parentOf?: ParentOf,
+): 'capital' | 'revenue' {
   if (!account) return 'revenue';
   if (account.type === 'equity') return 'capital';
   if (account.subtype && CAPITAL_SUBTYPES.has(account.subtype)) return 'capital';
   if (account.parentId && CAPITAL_PARENTS.has(account.parentId)) return 'capital';
+  // A ledger in a sub-group under a capital head (a fixed asset under "3100 → Plant", a loan under
+  // "2300 → Bank loans") is capital too. Callers pass the chart's parent map; without it the rule is the
+  // direct parent only, as before.
+  if (parentOf && headAbove(account, CAPITAL_PARENTS, parentOf)) return 'capital';
   return 'revenue';
 }
 

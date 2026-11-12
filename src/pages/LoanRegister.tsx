@@ -35,6 +35,7 @@ import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
 import { loanReminderMessage } from '@/lib/whatsappReminders';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 import { canHoldShares } from '@/lib/members/shareRules';
+import { loanExposureBase } from '@/lib/loanExposure';
 
 const EMPTY_FORM = {
   memberId: '',
@@ -249,15 +250,8 @@ const LoanRegister: React.FC = () => {
   // Not an Act section (Haryana s.32 = first committee); legacy "sec32" names kept.
   // Share Capital accounts: 1101–1103 (parentId 1100); Reserve accounts: parentId 1200
   const sec32Limit = (() => {
-    const tb = getTrialBalance();
-    const shareCapital = tb
-      .filter(b => b.account.parentId === '1100' && !b.account.isGroup)
-      .reduce((s, b) => s + Math.abs(b.netBalance), 0);
-    const reserves = tb
-      .filter(b => b.account.parentId === '1200' && !b.account.isGroup)
-      .reduce((s, b) => s + Math.abs(b.netBalance), 0);
-    const base = shareCapital + reserves;
-    return { base, limit: base * 10, shareCapital, reserves };
+    // One formula with the Dashboard checklist (lib/loanExposure, RULE 2); ledgers in a sub-group count.
+    return loanExposureBase(getTrialBalance(), accounts);
   })();
   const sec32Breach = sec32Limit.base > 0 && totalOutstanding > sec32Limit.limit;
 

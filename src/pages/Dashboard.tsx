@@ -24,6 +24,7 @@ import {
   PieChart, Pie, Cell,
 } from 'recharts';
 import { isCountedVoucher } from '@/lib/countedVoucher';
+import { loanExposureBase } from '@/lib/loanExposure';
 
 const MONTHS_HI = ['अप्रैल', 'मई', 'जून', 'जुलाई', 'अग.', 'सित.', 'अक्टू.', 'नव.', 'दिस.', 'जन.', 'फर.', 'मार्च'];
 const MONTHS_EN = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
@@ -97,10 +98,8 @@ const Dashboard: React.FC = () => {
 
     // 4. Loan-exposure ceiling: outstanding loans ≤ 10 × (share capital + reserves). Not tied to any
     //    Act section (Haryana s.32 = first committee) — variable names keep the legacy "sec32" prefix.
-    const shareCapital = tb.filter(b => b.account.parentId === '1100' && !b.account.isGroup).reduce((s, b) => s + Math.abs(b.netBalance), 0);
-    const reserves = tb.filter(b => b.account.parentId === '1200' && !b.account.isGroup).reduce((s, b) => s + Math.abs(b.netBalance), 0);
-    const loanBase = shareCapital + reserves;
-    const loanLimit = loanBase * 10;
+    //    One formula with the Loan Register (lib/loanExposure, RULE 2); ledgers in a sub-group under 1100 / 1200 count.
+    const { base: loanBase, limit: loanLimit } = loanExposureBase(tb, accounts);
     const totalOutstandingLoans = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + loanOutstanding(l), 0);
     const sec32Ok = loanLimit === 0 || totalOutstandingLoans <= loanLimit;
     const sec32Pct = loanLimit > 0 ? (totalOutstandingLoans / loanLimit) * 100 : 0;

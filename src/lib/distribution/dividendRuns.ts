@@ -15,6 +15,7 @@
  */
 import { linesFromBases, round2, type DistributionLine } from './engine';
 import { getVoucherLines } from '../voucherUtils';
+import { isUnder, parentMap } from '../accounting/ancestry';
 
 export type DistributionKind = 'dividend' | 'patronage' | 'bonus';
 
@@ -196,8 +197,10 @@ export function memberDividendHistory(
  *  NOT the Fund Register's `subtype: 'reserve'` set — that is "funds with a fund statement" (incl. housing
  *  sinking/repair funds), a different question (prod 2026-10-09: 50 accounts differ). */
 export function appropriationFunds<A extends { id: string; parentId?: string; isGroup?: boolean; openingBalanceType?: string }>(accounts: ReadonlyArray<A>): A[] {
+  // At any depth: a fund kept in a sub-group under 1200 is still an appropriable fund (audit 2026-11-12, F-06).
+  const parentOf = parentMap(accounts);
   return accounts
-    .filter((a) => a.parentId === '1200' && !a.isGroup && a.id !== ACC_NET_SURPLUS && a.openingBalanceType === 'credit')
+    .filter((a) => isUnder(a, '1200', parentOf) && !a.isGroup && a.id !== ACC_NET_SURPLUS && a.openingBalanceType === 'credit')
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
