@@ -43,6 +43,9 @@ export interface DisposalInput {
   cashBankAccount: string; // resolved cash/bank leg
   /** Account credited with a gain — disposalGainAccountId(accounts). Default 4410 Profit on Sale of Assets. */
   gainAccount?: string;
+  /** This chart's fixed-asset and accumulated-depreciation ledgers for the category (lib/assetHeads). Default: the conventional ids. */
+  costAccount?: string;
+  accumAccount?: string;
 }
 
 export interface DisposalLine { accountId: string; type: 'Dr' | 'Cr'; amount: number; }
@@ -65,10 +68,10 @@ export function assetDisposalPosting(input: DisposalInput): DisposalPosting {
 
   const lines: DisposalLine[] = [];
   if (proceeds > 0) lines.push({ accountId: input.cashBankAccount, type: 'Dr', amount: proceeds });
-  const accumAcc = ACCUM_DEP_ACCOUNTS[input.category];
+  const accumAcc = input.accumAccount || ACCUM_DEP_ACCOUNTS[input.category];
   if (accumDep > 0 && accumAcc) lines.push({ accountId: accumAcc, type: 'Dr', amount: accumDep });
   if (gainLoss < 0) lines.push({ accountId: LOSS_ON_SALE, type: 'Dr', amount: r2(-gainLoss) });
-  lines.push({ accountId: ASSET_ACCOUNTS[input.category], type: 'Cr', amount: cost });
+  lines.push({ accountId: input.costAccount || ASSET_ACCOUNTS[input.category], type: 'Cr', amount: cost });
   if (gainLoss > 0) lines.push({ accountId: input.gainAccount || PROFIT_ON_SALE, type: 'Cr', amount: gainLoss });
 
   const drTotal = r2(lines.filter(l => l.type === 'Dr').reduce((s, l) => s + l.amount, 0));
@@ -76,9 +79,9 @@ export function assetDisposalPosting(input: DisposalInput): DisposalPosting {
 }
 
 /** Acquisition journal — capitalize a purchased asset: Dr Fixed-Asset (category) / Cr Cash-Bank. */
-export function assetAcquisitionPosting(category: AssetCategory, cost: number, cashBankAccount: string): { assetAccount: string; amount: number; lines: DisposalLine[] } {
+export function assetAcquisitionPosting(category: AssetCategory, cost: number, cashBankAccount: string, costAccount?: string): { assetAccount: string; amount: number; lines: DisposalLine[] } {
   const amount = r2(Math.max(0, cost || 0));
-  const assetAccount = ASSET_ACCOUNTS[category];
+  const assetAccount = costAccount || ASSET_ACCOUNTS[category];   // costAccount: this chart's ledger (lib/assetHeads)
   return {
     assetAccount,
     amount,

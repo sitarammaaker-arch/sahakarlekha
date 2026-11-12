@@ -102,6 +102,7 @@ import { isRejectedQuality, procurementBusinessDate, allocateFarmerCode, canReco
 import { todayStr } from '@/lib/dateUtils';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, nextFY } from '@/lib/depreciation';
 import { assetDisposalPosting, assetAcquisitionPosting, ASSET_ACCOUNTS, disposalGainAccountId } from '@/lib/assetDisposal';
+import { resolveAssetHead, resolveAssetHeads, missingAssetHeadsText, type AssetHeadKind } from '@/lib/assetHeads';
 import { fetchAllPaged as fetchAllPagedFor } from '@/lib/supabasePaging';
 import { fetchEmptyTables, unlessEmpty } from '@/lib/emptyTables';
 import { phantomVoucherDiagnostics, type PhantomVoucherDiagnostics } from '@/lib/diagnostics/phantomVouchers';
@@ -6355,7 +6356,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // opening/historical assets stay register-only (no voucher, no double-count).
     if (opts?.capitalize && (data.cost || 0) > 0) {
       const cashBank = opts.mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
-      const posting = assetAcquisitionPosting(data.category, data.cost, cashBank);
+      // The ledger for this category in THIS chart (lib/assetHeads) — never a conventional id that means another head here.
+      const costId = resolveAssetHead('cost', data.category, accounts);
+      if (!costId) {
+        toastRef.current({ title: 'संपत्ति का खाता नहीं मिला', description: `इस chart में "${data.category}" के लिए स्थायी संपत्ति का खाता नहीं है — Ledger Heads में Fixed Assets के नीचे बनाएँ, फिर दोबारा करें। कुछ सेव नहीं हुआ। (No fixed-asset ledger for ${data.category} in this chart; nothing was saved.)`, variant: 'destructive', duration: 12000 });
+        return { ...data, id: '' } as unknown as Asset;
+      }
+      const posting = assetAcquisitionPosting(data.category, data.cost, cashBank, costId);
       const v = addVoucher({
         type: 'payment', date: data.purchaseDate || new Date().toISOString().split('T')[0],
         debitAccountId: posting.assetAccount, creditAccountId: cashBank, amount: posting.amount,
@@ -6416,12 +6423,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     while (cursor <= disposalFY && guard++ < 200) { accum += calcDepForFY(asset, cursor, accum); cursor = nextFY(cursor); }
     accum = Math.min(accum, asset.cost - (asset.residualValue || 0));
     const cashBank = opts.mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
-    const posting = assetDisposalPosting({ category: asset.category, cost: asset.cost, accumDep: accum, saleProceeds: opts.saleProceeds, cashBankAccount: cashBank, gainAccount: disposalGainAccountId(accounts) });
+    // This chart's own ledgers for the category (lib/assetHeads); refuse rather than post to a head that means something else here.
+    const heads = resolveAssetHeads(asset.category, accounts);
+    const missing: AssetHeadKind[] = [...(!heads.costId ? ['cost' as const] : []), ...(accum > 0 && !heads.accumId ? ['accumDep' as const] : [])];
+    if (missing.length) {
+      toastRef.current({ title: 'संपत्ति का खाता नहीं मिला', description: `इस chart में ये खाते नहीं हैं — ${missingAssetHeadsText(asset.category, missing, true)}। Ledger Heads में बनाएँ, फिर दोबारा करें। कुछ सेव नहीं हुआ। (Missing: ${missingAssetHeadsText(asset.category, missing, false)}; nothing was saved.)`, variant: 'destructive', duration: 12000 });
+      return false;
+    }
+    const posting = assetDisposalPosting({ category: asset.category, cost: asset.cost, accumDep: accum, saleProceeds: opts.saleProceeds, cashBankAccount: cashBank, gainAccount: disposalGainAccountId(accounts), costAccount: heads.costId!, accumAccount: heads.accumId ?? undefined });
     const firstDr = posting.lines.find(l => l.type === 'Dr');
     const firstCr = posting.lines.find(l => l.type === 'Cr');
     const voucher = addVoucher({
       type: opts.saleProceeds > 0 ? 'receipt' : 'journal', date: opts.date,
-      debitAccountId: firstDr?.accountId || cashBank, creditAccountId: firstCr?.accountId || ASSET_ACCOUNTS[asset.category], amount: posting.drTotal,
+      debitAccountId: firstDr?.accountId || cashBank, creditAccountId: firstCr?.accountId || heads.costId || ASSET_ACCOUNTS[asset.category], amount: posting.drTotal,
       lines: posting.lines.map(l => ({ id: crypto.randomUUID(), accountId: l.accountId, type: l.type, amount: l.amount })),
       narration: `Asset disposal: ${asset.assetNo} ${asset.name} — WDV ₹${posting.wdv.toLocaleString('en-IN')}, ${posting.gainLoss >= 0 ? 'profit' : 'loss'} ₹${Math.abs(posting.gainLoss).toLocaleString('en-IN')}`,
       createdBy: userRef.current?.name ?? 'System',
@@ -6491,11 +6505,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const currentVouchers = vouchersRef.current.filter(v => !v.isDeleted);
 
     let posted = 0, skipped = 0;
+    const unresolved = new Set<string>();
 
     for (const asset of assets) {
       if (asset.status !== 'active' || !asset.depreciationRate || asset.depreciationRate <= 0) { skipped++; continue; }
-      const depAcc = DEP_ACCOUNTS[asset.category];
-      if (!depAcc) { skipped++; continue; } // Land or unknown
+      if (!DEP_ACCOUNTS[asset.category]) { skipped++; continue; } // Land or unknown
+      // This chart's own ledgers for the category (lib/assetHeads). A chart where the conventional id is another
+      // head (housing 5502 = "Dep. - Lift") must not take a Furniture asset's depreciation: skip it and say so.
+      const expenseId = resolveAssetHead('depExpense', asset.category, accounts);
+      const accumId = resolveAssetHead('accumDep', asset.category, accounts);
+      if (!expenseId || !accumId) {
+        skipped++;
+        unresolved.add(missingAssetHeadsText(asset.category, [...(!expenseId ? ['depExpense' as const] : []), ...(!accumId ? ['accumDep' as const] : [])], true));
+        continue;
+      }
+      const depAcc = { expenseId, accumId };
       if (asset.depreciationPostedFY?.includes(targetFY)) { skipped++; continue; }
 
       // WDV needs THIS asset's OWN accumulated depreciation (replayed per-asset). The
@@ -6528,6 +6552,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       posted++;
     }
 
+    if (unresolved.size) {
+      toastRef.current({ title: 'कुछ संपत्तियों का ह्रास नहीं चढ़ा', description: `इस chart में ये खाते नहीं हैं — ${[...unresolved].join('; ')}। Ledger Heads में बनाएँ और ह्रास दोबारा चलाएँ; बाक़ी संपत्तियों का ह्रास चढ़ गया है। (Depreciation skipped for assets whose ledgers are missing in this chart.)`, variant: 'destructive', duration: 15000 });
+    }
     return { posted, skipped };
   // addVoucher and updateAsset are stable callbacks; assets/accounts/society/user are state
   }, [assets, accounts, society, user, addVoucher, updateAsset]); // eslint-disable-line

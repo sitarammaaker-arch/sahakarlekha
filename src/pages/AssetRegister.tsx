@@ -20,6 +20,7 @@ import { standardDepreciationRate, assetRateDeviations } from '@/lib/depreciatio
 import { capexPendingAssets } from '@/lib/capexApproval';
 import { calcSLMDepreciation, calcWDVDepreciation, DEP_ACCOUNTS } from '@/lib/depreciation';
 import { disposalGainAccountId } from '@/lib/assetDisposal';
+import { resolveAssetHeads, missingAssetHeadsText, type AssetHeadKind } from '@/lib/assetHeads';
 
 const CATEGORIES: AssetCategory[] = ['Land', 'Building', 'Furniture', 'Equipment', 'Vehicle', 'Computer', 'Other'];
 
@@ -303,8 +304,21 @@ const AssetRegister: React.FC = () => {
       const accumDep = calcAccumDep(editAsset);
       const bookValue = Math.max(0, cost - accumDep);
       const profitLoss = proceeds - bookValue;
-      const depAcc = DEP_ACCOUNTS[editAsset.category];
-      const assetAccountId = { Building: '3102', Furniture: '3103', Vehicle: '3104', Equipment: '3105', Computer: '3107', Other: '3106' }[editAsset.category];
+      // This chart's own ledgers for the category (lib/assetHeads) — the conventional ids mean other heads in the
+      // dairy / housing / sugar charts. Unresolved ⇒ no journal, and the user is told which ledger to create.
+      const heads = resolveAssetHeads(editAsset.category, accounts);
+      const assetAccountId = heads.costId;
+      const depAcc = DEP_ACCOUNTS[editAsset.category] && (accumDep <= 0 || heads.accumId) ? { accumId: heads.accumId ?? '' } : null;
+      if (DEP_ACCOUNTS[editAsset.category] && (!assetAccountId || !depAcc)) {
+        const missing: AssetHeadKind[] = [...(!assetAccountId ? ['cost' as const] : []), ...(!depAcc ? ['accumDep' as const] : [])];
+        toast({
+          title: hi ? 'निपटान की entry नहीं बनी' : 'Disposal journal not posted',
+          description: hi
+            ? `इस chart में ये खाते नहीं हैं — ${missingAssetHeadsText(editAsset.category, missing, true)}। Ledger Heads में बनाकर निपटान की journal entry हाथ से करें।`
+            : `This chart has no ledger for — ${missingAssetHeadsText(editAsset.category, missing, false)}. Create it in Ledger Heads and post the disposal journal by hand.`,
+          variant: 'destructive', duration: 12000,
+        });
+      }
 
       if (depAcc && assetAccountId) {
         const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [];

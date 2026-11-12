@@ -341,8 +341,8 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '4304', name: 'PM Kisan / DBT Income',     nameHi: 'पीएम किसान / DBT आय',      type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4300', subtype: 'scheme_income' },
   { id: '4305', name: 'FPO / Farmer Group Income', nameHi: 'FPO / कृषक समूह आय',       type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4300', subtype: 'scheme_income' },
   { id: '4400', name: 'Other Income',               nameHi: 'अन्य आय',                  type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
-  { id: '4401', name: 'Rent',                       nameHi: 'किराया आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
-  { id: '4402', name: 'Transport',                  nameHi: 'परिवहन आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
+  { id: '4401', name: 'Rent Income',                        nameHi: 'किराया आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
+  { id: '4402', name: 'Transport Income',                   nameHi: 'परिवहन आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
   { id: '4403', name: 'Interest',                   nameHi: 'ब्याज आय',                 type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
   { id: '4404', name: 'Dividend',                   nameHi: 'लाभांश आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
   { id: '4405', name: 'Misc',                       nameHi: 'विविध आय',                 type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
@@ -357,7 +357,7 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5100', name: 'Direct Expenses',            nameHi: 'प्रत्यक्ष व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
   { id: '5101', name: 'Purchase',                   nameHi: 'क्रय',                     type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
   { id: '5102', name: 'Labor',                      nameHi: 'श्रम व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
-  { id: '5103', name: 'Transport',                  nameHi: 'परिवहन व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
+  { id: '5103', name: 'Transport Expense',                   nameHi: 'परिवहन व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
   { id: '5104', name: 'Market Charges',             nameHi: 'मंडी शुल्क व्यय',          type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
   { id: '5105', name: 'Trading Expense',            nameHi: 'व्यापारिक व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
   { id: '5106', name: 'Processing Expense',         nameHi: 'प्रसंस्करण व्यय',          type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5100', subtype: 'direct_expense' },
@@ -380,7 +380,7 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5305', name: 'Legal',                      nameHi: 'कानूनी व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5306', name: 'Audit',                      nameHi: 'लेखा परीक्षण व्यय',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5307', name: 'Software',                   nameHi: 'सॉफ्टवेयर व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
-  { id: '5308', name: 'Rent',                       nameHi: 'किराया व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
+  { id: '5308', name: 'Rent Expense',                        nameHi: 'किराया व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5309', name: 'Travelling Expenses',        nameHi: 'यात्रा व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5310', name: 'Meeting / AGM Expenses',     nameHi: 'बैठक / AGM व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5311', name: 'Education Fund Contribution (Appropriation)', nameHi: 'शिक्षा निधि अंशदान (अधिशेष वितरण)', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
@@ -389,7 +389,7 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5314', name: 'Bank Charges',               nameHi: 'बैंक प्रभार',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5315', name: 'Filing / Registration Fees', nameHi: 'दाखिल / पंजीकरण शुल्क',    type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5400', name: 'Operational Expenses',       nameHi: 'परिचालन व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
-  { id: '5401', name: 'Vehicle',                    nameHi: 'वाहन व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
+  { id: '5401', name: 'Vehicle Expenses',                     nameHi: 'वाहन व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
   { id: '5402', name: 'Repair',                     nameHi: 'मरम्मत व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
   { id: '5403', name: 'Insurance',                  nameHi: 'बीमा व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
   { id: '5404', name: 'Bad Debt Written Off',       nameHi: 'अशोध्य ऋण अपलेखन',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
@@ -397,11 +397,11 @@ export const CMS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5406', name: 'Loss on Sale of Assets',     nameHi: 'संपत्ति बिक्री पर हानि',   type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
   { id: '5407', name: 'Prior Period Adjustments',   nameHi: 'पूर्व अवधि समायोजन',        type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
   { id: '5500', name: 'Depreciation',               nameHi: 'ह्रास',                    type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
-  { id: '5501', name: 'Building',                   nameHi: 'भवन ह्रास',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
-  { id: '5502', name: 'Furniture',                  nameHi: 'फर्नीचर ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
-  { id: '5503', name: 'Vehicle',                    nameHi: 'वाहन ह्रास',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
-  { id: '5504', name: 'Plant',                      nameHi: 'संयंत्र ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
-  { id: '5505', name: 'Computer / Office Equip',    nameHi: 'कंप्यूटर / उपकरण ह्रास',   type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5501', name: 'Dep. - Building',                    nameHi: 'भवन ह्रास',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5502', name: 'Dep. - Furniture',                   nameHi: 'फर्नीचर ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5503', name: 'Dep. - Vehicle',                     nameHi: 'वाहन ह्रास',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5504', name: 'Dep. - Plant',                       nameHi: 'संयंत्र ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5505', name: 'Dep. - Computer / Office Equip',     nameHi: 'कंप्यूटर / उपकरण ह्रास',   type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
   { id: '5600', name: 'Statutory Expenses',         nameHi: 'वैधानिक व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
   { id: '5601', name: 'GST',                        nameHi: 'GST व्यय',                 type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600', subtype: 'statutory_expense' },
   { id: '5602', name: 'Professional Tax / Local Levies', nameHi: 'व्यावसायिक कर / स्थानीय शुल्क', type: 'expense', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '5600', subtype: 'statutory_expense' },
@@ -529,7 +529,7 @@ export const PACS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5304', name: 'Telephone',                  nameHi: 'दूरभाष व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5305', name: 'Legal',                      nameHi: 'कानूनी व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5306', name: 'Audit',                      nameHi: 'लेखा परीक्षण व्यय',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
-  { id: '5308', name: 'Rent',                       nameHi: 'किराया व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
+  { id: '5308', name: 'Rent Expense',                        nameHi: 'किराया व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5309', name: 'Travelling Expenses',        nameHi: 'यात्रा व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5310', name: 'Meeting / AGM Expenses',     nameHi: 'बैठक / AGM व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5311', name: 'Education Fund Contribution (Appropriation)', nameHi: 'शिक्षा निधि अंशदान (अधिशेष वितरण)', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
@@ -539,11 +539,11 @@ export const PACS_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5403', name: 'Insurance',                  nameHi: 'बीमा व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
   { id: '5404', name: 'Bad Debt Written Off',       nameHi: 'अशोध्य ऋण अपलेखन',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
   { id: '5500', name: 'Depreciation',               nameHi: 'ह्रास',                    type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
-  { id: '5501', name: 'Building',                   nameHi: 'भवन ह्रास',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
-  { id: '5502', name: 'Furniture',                  nameHi: 'फर्नीचर ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5501', name: 'Dep. - Building',                    nameHi: 'भवन ह्रास',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5502', name: 'Dep. - Furniture',                   nameHi: 'फर्नीचर ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
   { id: '5503', name: 'Dep. - Vehicle',             nameHi: 'वाहन ह्रास',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
-  { id: '5504', name: 'Plant',                      nameHi: 'संयंत्र ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
-  { id: '5505', name: 'Computer / Office Equip',    nameHi: 'कंप्यूटर / उपकरण ह्रास',   type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5504', name: 'Dep. - Plant',                       nameHi: 'संयंत्र ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5505', name: 'Dep. - Computer / Office Equip',     nameHi: 'कंप्यूटर / उपकरण ह्रास',   type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
   { id: '5600', name: 'Statutory Expenses',         nameHi: 'वैधानिक व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
   { id: '5602', name: 'Professional Tax / Levies', nameHi: 'व्यावसायिक कर / शुल्क',    type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600', subtype: 'statutory_expense' },
   { id: '5603', name: 'Income Tax',                 nameHi: 'आयकर व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600', subtype: 'statutory_expense' },
@@ -650,7 +650,7 @@ export const CONSUMER_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '4207', name: 'Storage Income',             nameHi: 'भंडारण आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200', subtype: 'commission_income' },
   { id: '4208', name: 'Service Charges',            nameHi: 'सेवा प्रभार',              type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4200', subtype: 'commission_income' },
   { id: '4400', name: 'Other Income',               nameHi: 'अन्य आय',                  type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
-  { id: '4401', name: 'Rent',                       nameHi: 'किराया आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
+  { id: '4401', name: 'Rent Income',                        nameHi: 'किराया आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
   { id: '4403', name: 'Interest',                   nameHi: 'ब्याज आय',                 type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
   { id: '4404', name: 'Dividend',                   nameHi: 'लाभांश आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
   { id: '4405', name: 'Misc',                       nameHi: 'विविध आय',                 type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400', subtype: 'other_income' },
@@ -677,23 +677,23 @@ export const CONSUMER_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '5304', name: 'Telephone',                  nameHi: 'दूरभाष व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5305', name: 'Legal',                      nameHi: 'कानूनी व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5306', name: 'Audit',                      nameHi: 'लेखा परीक्षण व्यय',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
-  { id: '5308', name: 'Rent',                       nameHi: 'किराया व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
+  { id: '5308', name: 'Rent Expense',                        nameHi: 'किराया व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5309', name: 'Travelling Expenses',        nameHi: 'यात्रा व्यय',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5310', name: 'Meeting / AGM Expenses',     nameHi: 'बैठक / AGM व्यय',           type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5311', name: 'Education Fund Contribution (Appropriation)', nameHi: 'शिक्षा निधि अंशदान (अधिशेष वितरण)', type: 'equity', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '1200', subtype: 'reserve' },
   { id: '5312', name: 'Advertisement',              nameHi: 'विज्ञापन व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5314', name: 'Bank Charges',               nameHi: 'बैंक प्रभार',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5300', subtype: 'admin_expense' },
   { id: '5400', name: 'Operational Expenses',       nameHi: 'परिचालन व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
-  { id: '5401', name: 'Vehicle',                    nameHi: 'वाहन व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
+  { id: '5401', name: 'Vehicle Expenses',                     nameHi: 'वाहन व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
   { id: '5402', name: 'Repair',                     nameHi: 'मरम्मत व्यय',              type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
   { id: '5403', name: 'Insurance',                  nameHi: 'बीमा व्यय',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
   { id: '5404', name: 'Bad Debt Written Off',       nameHi: 'अशोध्य ऋण अपलेखन',         type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5400', subtype: 'operational_expense' },
   { id: '5500', name: 'Depreciation',               nameHi: 'ह्रास',                    type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
-  { id: '5501', name: 'Building',                   nameHi: 'भवन ह्रास',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
-  { id: '5502', name: 'Furniture',                  nameHi: 'फर्नीचर ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
-  { id: '5503', name: 'Vehicle',                    nameHi: 'वाहन ह्रास',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
-  { id: '5504', name: 'Plant',                      nameHi: 'संयंत्र ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
-  { id: '5505', name: 'Computer / Office Equip',    nameHi: 'कंप्यूटर / उपकरण ह्रास',   type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5501', name: 'Dep. - Building',                    nameHi: 'भवन ह्रास',                type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5502', name: 'Dep. - Furniture',                   nameHi: 'फर्नीचर ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5503', name: 'Dep. - Vehicle',                     nameHi: 'वाहन ह्रास',               type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5504', name: 'Dep. - Plant',                       nameHi: 'संयंत्र ह्रास',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
+  { id: '5505', name: 'Dep. - Computer / Office Equip',     nameHi: 'कंप्यूटर / उपकरण ह्रास',   type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5500', subtype: 'depreciation_expense' },
   { id: '5600', name: 'Statutory Expenses',         nameHi: 'वैधानिक व्यय',             type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: true,  parentId: '5000' },
   { id: '5601', name: 'GST',                        nameHi: 'GST व्यय',                 type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600', subtype: 'statutory_expense' },
   { id: '5602', name: 'Professional Tax / Levies', nameHi: 'व्यावसायिक कर / शुल्क',    type: 'expense',   openingBalance: 0, openingBalanceType: 'debit',  isSystem: false, isGroup: false, parentId: '5600', subtype: 'statutory_expense' },
@@ -772,7 +772,34 @@ const ACCOUNT_PATCHES: Record<string, Partial<LedgerAccount>> = {
 const ACCOUNT_PATCH_ONLY_IF_NAME: Record<string, readonly string[]> = {
   '5311': ['Education Fund Contribution', 'Education Fund Contribution (Appropriation)'],
 };
+/**
+ * Names that two or three ledgers of the SAME shipped chart carried (2026-11-12 chart audit, F-23): "Building"
+ * the asset and "Building" the depreciation head, "Rent" income and "Rent" expense, … A user is stopped from
+ * creating a second ledger with an existing name (Ledger Heads), yet the standard charts shipped them — and
+ * anything that finds a ledger by name (the importers) could pick the wrong one. The asset keeps its name; the
+ * expense / income head takes a name that says what it is (the "Dep. - X" form the dairy / housing / sugar
+ * charts already use). NAME ONLY — id, type, parent and every amount stay. Applied on load to a head that still
+ * carries the old name and type; persisted by migration 163 (scripts/gen-migration-163.mjs).
+ */
+export const ACCOUNT_RENAMES_163: ReadonlyArray<{ id: string; from: string; type: LedgerAccount['type']; to: string }> = [
+  { id: '5501', from: 'Building', type: 'expense', to: 'Dep. - Building' },
+  { id: '5502', from: 'Furniture', type: 'expense', to: 'Dep. - Furniture' },
+  { id: '5503', from: 'Vehicle', type: 'expense', to: 'Dep. - Vehicle' },
+  { id: '5504', from: 'Plant', type: 'expense', to: 'Dep. - Plant' },
+  { id: '5505', from: 'Computer / Office Equip', type: 'expense', to: 'Dep. - Computer / Office Equip' },
+  { id: '5401', from: 'Vehicle', type: 'expense', to: 'Vehicle Expenses' },
+  { id: '4401', from: 'Rent', type: 'income', to: 'Rent Income' },
+  { id: '5308', from: 'Rent', type: 'expense', to: 'Rent Expense' },
+  { id: '4402', from: 'Transport', type: 'income', to: 'Transport Income' },
+  { id: '5103', from: 'Transport', type: 'expense', to: 'Transport Expense' },
+];
+/** The rename for this account, when it still carries the old name and type. */
+const renameFor = (acc: LedgerAccount) =>
+  ACCOUNT_RENAMES_163.find((r) => r.id === acc.id && r.type === acc.type && acc.name.trim() === r.from);
+
 const patchFor = (acc: LedgerAccount): Partial<LedgerAccount> | undefined => {
+  const rename = renameFor(acc);
+  if (rename) return { name: rename.to };
   const patch = ACCOUNT_PATCHES[acc.id];
   if (!patch) return undefined;
   const names = ACCOUNT_PATCH_ONLY_IF_NAME[acc.id];
@@ -1004,9 +1031,13 @@ export function migrateAccounts(existing: LedgerAccount[]): { accounts: LedgerAc
   const newlyAdded: LedgerAccount[] = [];
 
   // Step 1: Apply patches to existing accounts (local only — NOT synced back to Supabase)
+  // A rename is skipped when another ledger of the same type already carries the new name (the society made
+  // its own "Rent Expense") — the rename must never CREATE a duplicate name. Migration 163 has the same guard.
+  const nameTaken = new Set(existing.map(a => `${a.name.trim().toLowerCase()}|${a.type}`));
   const patched = existing.map(acc => {
     const patch = patchFor(acc);
     if (!patch) return acc;
+    if (renameFor(acc) && nameTaken.has(`${String(patch.name).trim().toLowerCase()}|${acc.type}`)) return acc;
     changed = true;
     return { ...acc, ...patch } as LedgerAccount;
   });

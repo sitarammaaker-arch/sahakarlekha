@@ -1,3 +1,4 @@
+import { isUnder, parentMap } from './accounting/ancestry';
 /**
  * Trading Account helpers (ECR — closing-stock / procurement tie fix).
  *
@@ -81,9 +82,24 @@ export interface ClosingStock {
   replacesLedger: boolean;
 }
 
-/** Which ledger accounts are stock-in-trade: the 3400 group's leaves. */
+/** Which ledger accounts are stock-in-trade: the 3400 group's leaves (direct children only — see stockLedgerPredicate). */
 export const isStockLedgerAccount = (a: { id: string; parentId?: string; isGroup?: boolean }) =>
   !a.isGroup && (a.id === '3400' || a.parentId === '3400');
+
+/**
+ * The same question at ANY depth. A society may open a sub-group under 3400 Inventory ("Fertiliser stock") and
+ * keep its stock ledgers inside it; by direct parent those fell out of the closing stock, so Gross Profit and the
+ * Balance Sheet were both short by their value (2026-11-12 chart audit, F-04). Pass the chart; the Trading A/c
+ * (through withTradingParents) and the Balance Sheet (balanceSheetLeaves, balanceSheetLayout) use this one rule,
+ * so the two statements cannot disagree (RULE 2). Without a chart it is the direct-parent rule, as before.
+ */
+export function stockLedgerPredicate(accounts?: ReadonlyArray<{ id: string; parentId?: string }>) {
+  if (!accounts) return isStockLedgerAccount;
+  const parentOf = parentMap(accounts);
+  return (a: { id: string; parentId?: string; isGroup?: boolean }) =>
+    !a.isGroup && (a.id === STOCK_HEAD || isUnder(a, STOCK_HEAD, parentOf));
+}
+const STOCK_HEAD = '3400';
 
 export function closingStock(leaves: readonly StockLedgerLeaf[], physicalClosingStock: number, closingStockPosted: boolean): ClosingStock {
   const physical = r2(Number(physicalClosingStock) || 0);
@@ -133,6 +149,9 @@ export function withTradingParents<B extends { account: { id: string; parentId?:
   const parentOf = new Map(accounts.map(a => [a.id, a.parentId]));
   return tb.map(b => {
     const a = b.account;
+    // A stock ledger in a sub-group under 3400 is presented under 3400, so the closing-stock rule (which reads the
+    // direct parent) counts it — the same ledgers the Balance Sheet counts through stockLedgerPredicate.
+    if (a.type === 'asset' && a.parentId && a.parentId !== STOCK_HEAD && isUnder(a, STOCK_HEAD, parentOf)) return { ...b, account: { ...a, parentId: STOCK_HEAD } };
     if ((a.type !== 'income' && a.type !== 'expense') || !a.parentId || TRADING_HEADS.has(a.parentId)) return b;
     const head = tradingHeadOf(a, parentOf);
     return head ? { ...b, account: { ...a, parentId: head } } : b;

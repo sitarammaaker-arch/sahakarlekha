@@ -52,7 +52,10 @@ ok(spec.every((r, i) => r.ord === i + 1), 'ord is 1..N in order');
 
 // ── identical to a shipped definition (it invents nothing) ─────────────────────────────────────────────
 const charts = Object.values(S.SOCIETY_TEMPLATES).map((tpl) => S.migrateAccounts(tpl.map((a) => ({ ...a }))).accounts);
-const same = (r, a) => a.id === r.id && a.name === r.name && a.nameHi === r.nameHi && a.type === r.type && (a.subtype || undefined) === r.subtype
+// A head migration 100 added under its 2026-10 name may since have been renamed by ACCOUNT_RENAMES_163 (name only —
+// "5504 Plant" → "Dep. - Plant"); migration 163 renames the row it inserted, so the definitions still agree.
+const nameNow = (r) => S.ACCOUNT_RENAMES_163.find((x) => x.id === r.id && x.from === r.name && x.type === r.type)?.to ?? r.name;
+const same = (r, a) => a.id === r.id && (a.name === r.name || a.name === nameNow(r)) && a.nameHi === r.nameHi && a.type === r.type && (a.subtype || undefined) === r.subtype
   && a.openingBalanceType === r.nature && !!a.isGroup === r.isGroup && !!a.isSystem === r.isSystem && a.parentId === r.parentId;
 for (const r of spec) {
   ok(charts.some((c) => c.some((a) => same(r, a))), `${r.id} ${r.name}: identical to a definition a shipped chart already uses`);

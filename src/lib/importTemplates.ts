@@ -13,6 +13,7 @@
  * Capital, Statutory Reserve Fund, Admission Fee, Salary).
  */
 import type { LedgerAccount } from '@/types';
+import { matchImportAccount, candidateList } from '@/lib/importAccountMatch';
 
 export interface RowError {
   row: number;
@@ -124,7 +125,14 @@ export function validateVoucherRow(
 ): RowError[] {
   const errors: RowError[] = [];
   const isExample = (v?: string) => !v || v.trim() === '' || v.trim().startsWith('(');
-  const findAcc = (n: string) => accounts.find(a => !a.isGroup && a.name.toLowerCase().trim() === n.toLowerCase().trim());
+  // One rule with the commit step (lib/importAccountMatch): a code, or a name carried by exactly one ledger.
+  const accErr = (field: 'debit_account' | 'credit_account', n: string): RowError | null => {
+    const m = matchImportAccount(n, accounts);
+    if (m.status === 'ok') return null;
+    if (m.status === 'ambiguous') return { row: rowNum, field, message: `Row ${rowNum}: ${field} "${n}" नाम के ${m.candidates.length} खाते हैं — नाम की जगह खाते का कोड लिखें: ${candidateList(m.candidates)}` };
+    if (m.status === 'group') return { row: rowNum, field, message: `Row ${rowNum}: ${field} "${n}" एक समूह (parent) खाता है — उसके नीचे का खाता लिखें` };
+    return { row: rowNum, field, message: `Row ${rowNum}: ${field} "${n}" system में नहीं मिला (Ledger Heads से exact नाम या कोड लें)` };
+  };
 
   const d = (row.date || '').trim();
   if (isExample(d)) errors.push({ row: rowNum, field: 'date', message: `Row ${rowNum}: date खाली/example है (YYYY-MM-DD चाहिए)` });
@@ -138,10 +146,14 @@ export function validateVoucherRow(
   const dn = (row.debit_account || '').trim();
   const cn = (row.credit_account || '').trim();
   if (isExample(dn)) errors.push({ row: rowNum, field: 'debit_account', message: `Row ${rowNum}: debit_account खाली/example है` });
-  else if (!findAcc(dn)) errors.push({ row: rowNum, field: 'debit_account', message: `Row ${rowNum}: debit_account "${dn}" system में नहीं मिला (Ledger Heads से exact नाम लें)` });
+  else { const e = accErr('debit_account', dn); if (e) errors.push(e); }
   if (isExample(cn)) errors.push({ row: rowNum, field: 'credit_account', message: `Row ${rowNum}: credit_account खाली/example है` });
-  else if (!findAcc(cn)) errors.push({ row: rowNum, field: 'credit_account', message: `Row ${rowNum}: credit_account "${cn}" system में नहीं मिला` });
-  if (!isExample(dn) && !isExample(cn) && dn.toLowerCase().trim() === cn.toLowerCase().trim())
+  else { const e = accErr('credit_account', cn); if (e) errors.push(e); }
+  // Same ledger on both sides — compared by the RESOLVED account, so "5308" and "Rent Expense" count as one.
+  const dm = isExample(dn) ? null : matchImportAccount(dn, accounts);
+  const cm = isExample(cn) ? null : matchImportAccount(cn, accounts);
+  if ((dm?.status === 'ok' && cm?.status === 'ok' && dm.account.id === cm.account.id)
+    || (!isExample(dn) && !isExample(cn) && dn.toLowerCase().trim() === cn.toLowerCase().trim()))
     errors.push({ row: rowNum, field: 'credit_account', message: `Row ${rowNum}: debit और credit खाता एक ही नहीं हो सकते` });
 
   const amt = parseFloat(row.amount);
@@ -234,10 +246,13 @@ export function validateObRow(row: Record<string, string>, accounts: LedgerAccou
   if (!row.account_name || row.account_name.startsWith('('))
     errors.push({ row: rowNum, field: 'account_name', message: `Row ${rowNum}: account_name खाली है या example row है` });
   else {
-    // a leaf is preferred if a group happens to share the name; an opening can NEVER go on a group (reports ignore it)
-    const sameName = accounts.filter(a => a.name.toLowerCase().trim() === row.account_name.toLowerCase().trim());
-    const found = sameName.find(a => !a.isGroup) ?? sameName[0];
-    if (found && found.isGroup)
+    // One rule with the commit step (lib/importAccountMatch): a code, or a name carried by exactly one ledger.
+    // An opening can NEVER go on a group (reports ignore it), and never on a guess between two same-named ledgers.
+    const m = matchImportAccount(row.account_name, accounts);
+    const found = m.status === 'ok' || m.status === 'group' ? m.account : m.status === 'ambiguous' ? m.candidates[0] : undefined;
+    if (m.status === 'ambiguous')
+      errors.push({ row: rowNum, field: 'account_name', message: `Row ${rowNum}: "${row.account_name}" नाम के ${m.candidates.length} खाते हैं — नाम की जगह खाते का कोड लिखें: ${candidateList(m.candidates)}` });
+    else if (found && found.isGroup)
       errors.push({ row: rowNum, field: 'account_name', message: `Row ${rowNum}: "${row.account_name}" एक समूह (parent) खाता है — इस पर शुरुआती बाक़ी नहीं डाल सकते (Trial Balance / Balance Sheet इसे गिनते ही नहीं)। इसके नीचे का असली खाता लिखें` });
     else if (!found)
       errors.push({ row: rowNum, field: 'account_name', message: `Row ${rowNum}: account "${row.account_name}" system में नहीं मिला — पहले Ledger Heads में account बनाएं या नाम check करें` });

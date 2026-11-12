@@ -17,8 +17,8 @@
  *    is unchanged.
  */
 import type { AccountBalance } from '@/types';
-import { closingStock, isStockLedgerAccount } from '@/lib/tradingAccount';
-import { isAccumulatedDepreciation } from '@/lib/accountRoles';
+import { closingStock, stockLedgerPredicate } from '@/lib/tradingAccount';
+import { isAccumulatedDepreciation, isAppropriationContra, isSurplusAccount } from '@/lib/accountRoles';
 export { isAccumulatedDepreciation };
 
 export interface BalanceSheetLeaves {
@@ -37,22 +37,31 @@ export interface BalanceSheetLeaves {
 export function balanceSheetLeaves(
   trialBalance: readonly AccountBalance[],
   opts: { closingStockPosted: boolean; physicalClosingStock: number; netProfit: number },
+  /** The chart — so a stock ledger in a sub-group under 3400 counts (stockLedgerPredicate). Omit ⇒ direct children only. */
+  accounts?: ReadonlyArray<{ id: string; parentId?: string }>,
 ): BalanceSheetLeaves {
+  const isStockLedgerAccount = stockLedgerPredicate(accounts);
   // RULE 2: THE closing-stock rule shared with the Trading A/c (lib/tradingAccount.closingStock).
   const stockLeaves = trialBalance.filter(b => isStockLedgerAccount(b.account));
   const cs = closingStock(stockLeaves.map(b => ({ name: b.account.name, nameHi: b.account.nameHi, netBalance: b.netBalance, openingDebit: b.openingDebit, openingCredit: b.openingCredit })),
     opts.physicalClosingStock, opts.closingStockPosted);
   const unpostedStock = cs.replacesLedger ? cs.total : 0;
   const isStock = (b: AccountBalance) => cs.replacesLedger && isStockLedgerAccount(b.account);
+  // A Dr balance on the P&L account (a brought-forward deficit) or on an appropriation contra (dividend / rebate /
+  // education-fund contribution already given out) is a DEDUCTION from Reserves & Surplus, not an asset: it stays on
+  // the capital side with a negative amount. Before, it was carried to the asset side, so both totals were overstated
+  // by it and the Audit Schedules (built from these leaves) disagreed with the Balance Sheet page, which nets the
+  // deficit (2026-11-12 chart audit, F-08 / F-09). Every reader of these leaves now shows the same figure (RULE 2).
+  const staysOnCapitalSide = (b: AccountBalance) => isSurplusAccount(b.account) || isAppropriationContra(b.account);
   const typeAssetLeaf = trialBalance.filter(b => b.account.type === 'asset' && !b.account.isGroup);
   const typeCapLiabLeaf = trialBalance.filter(b => (b.account.type === 'liability' || b.account.type === 'equity') && !b.account.isGroup);
   const allAssetLeaf = [
     ...typeAssetLeaf.filter(b => b.netBalance >= 0 || isAccumulatedDepreciation(b.account)),   // Dr assets + depreciation contra (net block)
-    ...typeCapLiabLeaf.filter(b => b.netBalance > 0),  // a liability/equity gone Dr → shown as an asset
+    ...typeCapLiabLeaf.filter(b => b.netBalance > 0 && !staysOnCapitalSide(b)),  // a liability/equity gone Dr → shown as an asset
   ];
   // A replaced stock leaf leaves BOTH sides (a Cr-gone stock ledger is inside `unpostedStock` too).
   const capLiabLeaves = [
-    ...typeCapLiabLeaf.filter(b => b.netBalance <= 0), // liabilities/equity with a normal Cr balance
+    ...typeCapLiabLeaf.filter(b => b.netBalance <= 0 || staysOnCapitalSide(b)), // liabilities/equity with a normal Cr balance + the Dr deductions of reserves
     ...typeAssetLeaf.filter(b => b.netBalance < 0 && !isStock(b) && !isAccumulatedDepreciation(b.account)),    // an asset gone Cr (e.g. ARTHIYA) → shown as a liability
   ];
   const assetLeaves = allAssetLeaf.filter(b => !isStock(b));
