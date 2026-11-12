@@ -17,7 +17,7 @@
  *    is unchanged.
  */
 import type { AccountBalance } from '@/types';
-import { closingStock, isStockLedgerAccount } from '@/lib/tradingAccount';
+import { closingStock, stockLedgerPredicate } from '@/lib/tradingAccount';
 import { isAccumulatedDepreciation } from '@/lib/accountRoles';
 export { isAccumulatedDepreciation };
 
@@ -37,7 +37,10 @@ export interface BalanceSheetLeaves {
 export function balanceSheetLeaves(
   trialBalance: readonly AccountBalance[],
   opts: { closingStockPosted: boolean; physicalClosingStock: number; netProfit: number },
+  /** The chart — so a stock ledger in a sub-group under 3400 counts (stockLedgerPredicate). Omit ⇒ direct children only. */
+  accounts?: ReadonlyArray<{ id: string; parentId?: string }>,
 ): BalanceSheetLeaves {
+  const isStockLedgerAccount = stockLedgerPredicate(accounts);
   // RULE 2: THE closing-stock rule shared with the Trading A/c (lib/tradingAccount.closingStock).
   const stockLeaves = trialBalance.filter(b => isStockLedgerAccount(b.account));
   const cs = closingStock(stockLeaves.map(b => ({ name: b.account.name, nameHi: b.account.nameHi, netBalance: b.netBalance, openingDebit: b.openingDebit, openingCredit: b.openingCredit })),

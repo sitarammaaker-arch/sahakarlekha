@@ -84,7 +84,7 @@ const BalanceSheet: React.FC = () => {
   // Auto-reclassify by balance SIGN + the closing-stock rule — the ONE shared rule
   // (src/lib/balanceSheetLeaves.ts), also used by the NABARD CAS Balance Sheet (RULE 2).
   const { assetLeaves, capLiabLeaves: allCapLiabLeaf, unpostedStock, totalAssets: leafAssets, totalLiabilities: leafLiabilities } =
-    balanceSheetLeaves(trialBalance, { closingStockPosted, physicalClosingStock, netProfit });
+    balanceSheetLeaves(trialBalance, { closingStockPosted, physicalClosingStock, netProfit }, accounts);
 
   // ── Balance health diagnostic ──────────────────────────────────────────────
   // When the sheet doesn't tie, the root cause is almost always a ledger that
