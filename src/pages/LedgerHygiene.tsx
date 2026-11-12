@@ -17,6 +17,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { analyzeLedgerHygiene, hygieneSummary, type HygieneCategory, type HygieneSeverity, type LedgerUsage } from '@/lib/ledgerHygiene';
 import type { LedgerParitySnapshot } from '@/lib/ledger/reportParity';
 import DomainAccountsCard from '@/components/DomainAccountsCard';
+import { headAbove, parentMap } from '@/lib/accounting/ancestry';
 
 const SEV_CLS: Record<HygieneSeverity, string> = {
   error: 'bg-red-100 text-red-800 border-red-300',
@@ -78,7 +79,9 @@ const LedgerHygiene: React.FC = () => {
     const linkedParty: Record<string, string> = {};
     for (const s of suppliers) if (s.accountId) linkedParty[s.accountId] = `Supplier: ${s.name}`;
     for (const c of customers) if (c.accountId) linkedParty[c.accountId] = `Customer: ${c.name}`;
-    for (const a of accounts) if ((a.parentId === '2101' || a.parentId === '3303') && !linkedParty[a.id]) linkedParty[a.id] = 'Sub-ledger';
+    const partyHeads = new Set(['2101', '3303']);
+    const parentOf = parentMap(accounts);
+    for (const a of accounts) if (!a.isGroup && headAbove(a, partyHeads, parentOf) && !linkedParty[a.id]) linkedParty[a.id] = 'Sub-ledger';
     return { voucherRefCount, balance, linkedParty };
   }, [accounts, vouchers, suppliers, customers, getAccountBalance]);
 

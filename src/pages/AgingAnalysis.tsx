@@ -30,6 +30,7 @@ import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 import { fyStartOf, societyFyStart } from '@/lib/fyPeriod';
+import { ledgerIdsUnder } from '@/lib/accounting/ancestry';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface AgingRow {
@@ -213,8 +214,8 @@ const AgingAnalysis: React.FC = () => {
     const ids = new Set<string>();
     ids.add('3303');
     customers.filter(c => c.accountId).forEach(c => ids.add(c.accountId));   // a deactivated customer can still owe
-    // Also include any account under 3303 group
-    accounts.filter(a => !a.isGroup && a.parentId === '3303').forEach(a => ids.add(a.id));
+    // Also include any account under the 3303 group, at any depth (a debtor kept in a sub-group still owes)
+    ledgerIdsUnder(accounts, '3303').forEach(id => ids.add(id));
     return [...ids];
   }, [customers, accounts]);
 
@@ -223,7 +224,7 @@ const AgingAnalysis: React.FC = () => {
     const ids = new Set<string>();
     ids.add('2101');
     suppliers.filter(s => s.accountId).forEach(s => ids.add(s.accountId));   // a deactivated supplier can still be owed
-    accounts.filter(a => !a.isGroup && a.parentId === '2101').forEach(a => ids.add(a.id));
+    ledgerIdsUnder(accounts, '2101').forEach(id => ids.add(id));   // any depth: a creditor in a sub-group is still owed
     return [...ids];
   }, [suppliers, accounts]);
 

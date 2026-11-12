@@ -11,6 +11,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { toMinor, toRupees, addMinor } from '@/lib/money';
 import { ACCOUNT_IDS, getBankAccountIds, isBankAccount } from '@/lib/storage';
 import { accountNature, accountGlType } from '@/lib/ledger/receiptsPaymentsClassify';
+import { parentMap } from '@/lib/accounting/ancestry';
 
 export interface ReceiptsPaymentsInput {
   accounts: LedgerAccount[];
@@ -50,7 +51,8 @@ export function computeReceiptsPayments({ accounts, vouchers, asOnDate, openings
   // trade debtors/creditors). Everything else defaults to Revenue.
   // Capital/Revenue + GL-head classification (NCDC Annexure VII) — extracted to a pure lib so this
   // compute and the ledger projection (projectReceiptsPayments, T-09) can never diverge (RULE 2).
-  const natureOf = (accId: string): 'capital' | 'revenue' => accountNature(accounts.find(a => a.id === accId));
+  const parentOf = parentMap(accounts);
+  const natureOf = (accId: string): 'capital' | 'revenue' => accountNature(accounts.find(a => a.id === accId), parentOf);
   const glTypeOf = (accId: string): string => accountGlType(accounts.find(a => a.id === accId));
 
   type RPEntry = { name: string; nameHi: string; amount: number; nature: 'capital' | 'revenue'; glType: string };
