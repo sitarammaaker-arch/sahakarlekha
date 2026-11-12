@@ -22,6 +22,7 @@ import {
   ACCOUNTS_TEMPLATE, membersTemplate, OPENING_BALANCES_TEMPLATE, vouchersTemplate, parseCSV,
   validateAccountRow, resolveParentGroup, validateMemberRow, validateObRow, validateVoucherRow, type RowError,
 } from '@/lib/importTemplates';
+import { matchImportAccount } from '@/lib/importAccountMatch';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -477,8 +478,12 @@ const UniversalImporter: React.FC = () => {
       const ref = (row.data.reference || '').trim();
       const hasRef = ref !== '' && !ref.startsWith('(');
       if (hasRef && seen.has(ref)) { skipped++; continue; }
-      const dr = accounts.find(a => !a.isGroup && a.name.toLowerCase().trim() === row.data.debit_account.toLowerCase().trim());
-      const cr = accounts.find(a => !a.isGroup && a.name.toLowerCase().trim() === row.data.credit_account.toLowerCase().trim());
+      // Same rule as the preview (lib/importAccountMatch): a code, or a name exactly one ledger carries — never
+      // "the first ledger with that name" (a rent PAYMENT used to land on the Rent INCOME head).
+      const drM = matchImportAccount(row.data.debit_account, accounts);
+      const crM = matchImportAccount(row.data.credit_account, accounts);
+      const dr = drM.status === 'ok' ? drM.account : undefined;
+      const cr = crM.status === 'ok' ? crM.account : undefined;
       if (!dr || !cr) { failed++; continue; }
       const v = addVoucher({
         type: row.data.type.toLowerCase() as VoucherType,

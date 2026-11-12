@@ -256,6 +256,7 @@
     "test:migration-156": "node scripts/test-migration-156.mjs",
     "test:migration-157": "node scripts/test-migration-157.mjs",
     "test:nested-group-readers": "node scripts/test-nested-group-readers.mjs",
+    "test:migration-163": "node scripts/test-migration-163.mjs",
     "test:gst-ledgers": "node scripts/test-gst-ledgers.mjs",
     "test:rcm-posting": "node scripts/test-rcm-posting.mjs",
     "test:round-off-cash-discount": "node scripts/test-round-off-cash-discount.mjs",

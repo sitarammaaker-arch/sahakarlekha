@@ -94,7 +94,7 @@ export const DAIRY_SOCIETY_ACCOUNTS: LedgerAccount[] = [
   { id: '4301', name: 'NABARD Dairy Subsidy',       nameHi: 'नाबार्ड डेयरी अनुदान',     type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4300' },
   { id: '4302', name: 'Govt Dairy Scheme',          nameHi: 'सरकारी डेयरी योजना',       type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4300' },
   { id: '4400', name: 'Other Income',               nameHi: 'अन्य आय',                  type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: true,  parentId: '4000' },
-  { id: '4401', name: 'Rent',                       nameHi: 'किराया आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
+  { id: '4401', name: 'Rent Income',                        nameHi: 'किराया आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
   { id: '4403', name: 'Interest Income',            nameHi: 'ब्याज आय',                 type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
   { id: '4404', name: 'Dividend',                   nameHi: 'लाभांश आय',                type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },
   { id: '4405', name: 'Miscellaneous Income',       nameHi: 'विविध आय',                 type: 'income',    openingBalance: 0, openingBalanceType: 'credit', isSystem: false, isGroup: false, parentId: '4400' },

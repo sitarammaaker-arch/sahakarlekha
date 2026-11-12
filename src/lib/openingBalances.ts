@@ -6,6 +6,7 @@
  * deterministic → unit-tested by scripts/test-opening-balances.mjs.
  */
 import { isLegitContraSide, naturalOpeningSide } from './accountRoles';
+import { matchImportAccount } from './importAccountMatch';
 
 export interface OpeningEntry {
   accountId: string;
@@ -79,17 +80,19 @@ const normName = (s: string): string => (s || '').toLowerCase().trim();
  */
 export function mapImportedOpenings(
   rows: ImportedOpeningRow[],
-  accounts: { id: string; name: string; isGroup?: boolean }[]
+  accounts: { id: string; name: string; isGroup?: boolean; type?: string; code?: string }[]
 ): { entries: OpeningEntry[]; unmatched: string[] } {
   // An opening can NEVER go on a GROUP account — Trial Balance / Balance Sheet count ledger (leaf) accounts only, so the money would vanish
   // (the Opening Balances page blocks it too). A row that names a group is returned as unmatched, never silently written.
-  const byName = new Map<string, string>();
-  for (const a of accounts) if (!a.isGroup) byName.set(normName(a.name), a.id);
+  // Nor on a GUESS: a name two ledgers share ("Building" the asset and "Building" the depreciation head) used to
+  // resolve to whichever came last, so an asset's opening landed on an expense head. Same rule as the preview
+  // (lib/importAccountMatch): a code, or a name exactly one ledger carries; anything else is unmatched.
   const resolved = new Map<string, OpeningEntry>();
   const unmatched: string[] = [];
 
   for (const row of rows) {
-    const id = byName.get(normName(row.account_name));
+    const m = matchImportAccount(row.account_name, accounts);
+    const id = m.status === 'ok' ? m.account.id : undefined;
     if (!id) { unmatched.push(row.account_name); continue; }
     const amount = Math.round((parseFloat(row.opening_balance) || 0) * 100) / 100;
     const type = normName(row.balance_type) === 'credit' ? 'credit' : 'debit';
