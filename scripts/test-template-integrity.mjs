@@ -115,7 +115,6 @@ const KNOWN = [
   "*|id-meaning|5401",
   "*|id-meaning|5402",
   "*|id-meaning|5404",
-  "*|id-meaning|5501",
   "*|id-meaning|5502",
   "*|id-meaning|5503",
   "*|id-meaning|5504",

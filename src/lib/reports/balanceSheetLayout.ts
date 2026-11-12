@@ -22,6 +22,7 @@
 import type { AccountBalance, LedgerAccount } from '@/types';
 import { isAbnormalBalance } from '@/lib/abnormalBalance';
 import { isAccumulatedDepreciation } from '@/lib/balanceSheetLeaves';
+import { isAppropriationContra } from '@/lib/accountRoles';
 import { stockLedgerPredicate } from '@/lib/tradingAccount';
 
 export interface BsRow {
@@ -111,7 +112,10 @@ function buildSide(
     const contra = direct.filter((b) => !liab && isAccumulatedDepreciation(b.account) && b.netBalance <= 0);
     for (const b of direct.filter((x) => !contra.includes(x))) {
       captured.add(b.account.id);
-      rows.push({ key: `l-${b.account.id}`, kind: 'line', ...nameOf(b.account), amount: amt(b), py: pyOf(b.account.id), depth: 0, accountId: b.account.id });
+      // An appropriation contra with a Dr balance (dividend / rebate / education-fund contribution given out) is a
+      // deduction of this head: a negative amount, labelled "Less:".
+      const less = liab && isAppropriationContra(b.account) && amt(b) < 0;
+      rows.push({ key: `l-${b.account.id}`, kind: 'line', ...(less ? { tone: 'less' as const, ...lessLabel(b.account) } : nameOf(b.account)), amount: amt(b), py: pyOf(b.account.id), depth: 0, accountId: b.account.id });
     }
     // Sub-groups — one line each (the subtotal), its ledgers as details.
     for (const g of kids(group.id)) {

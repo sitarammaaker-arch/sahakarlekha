@@ -18,7 +18,9 @@ import { toMinor, toRupees, addMinor, sumMinor, type Minor } from '@/lib/money';
 
 /** A fund is a non-group reserve account (sinking / repair / statutory / education / building funds). */
 export function isFundAccount(a: LedgerAccount): boolean {
-  return !a.isGroup && a.subtype === 'reserve';
+  // Not an appropriation contra (1211 Dividend Distribution, 4406, 5311 — debit-nature): those record profit given
+  // out, they are not funds and have no fund statement (2026-11-12 chart audit, F-07).
+  return !a.isGroup && a.subtype === 'reserve' && a.openingBalanceType !== 'debit';
 }
 
 export type FundRowKind = 'contribution' | 'interest' | 'utilisation';

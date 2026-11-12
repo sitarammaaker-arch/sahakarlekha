@@ -182,7 +182,7 @@ ok(trBad === 0, `400 random books: CAS Trading gross profit exact; both sides eq
 
 // ── 4. Wiring ──
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
-ok(/balanceSheetLeaves\(trialBalance, \{ closingStockPosted, physicalClosingStock, netProfit \}\)/.test(read('src/pages/BalanceSheet.tsx')) && !/const typeAssetLeaf/.test(read('src/pages/BalanceSheet.tsx')), 'BalanceSheet page uses the shared leaves rule (no private copy)');
+ok(/balanceSheetLeaves\(trialBalance, \{ closingStockPosted, physicalClosingStock, netProfit \}, accounts\)/.test(read('src/pages/BalanceSheet.tsx')) && !/const typeAssetLeaf/.test(read('src/pages/BalanceSheet.tsx')), 'BalanceSheet page uses the shared leaves rule (no private copy)');
 const as = read('src/pages/AuditSchedules.tsx');
 ok(/const isPacs = society\.societyType === 'pacs'/.test(as) && /isPacs && view === 'cas' \? <CasStatements/.test(as), 'CAS view offered to PACS societies only');
 ok(/statutoryLimits\(society\.state,/.test(as) && /scheduleLimitsLine\(society, limits, format, hi\)/.test(as), 'Audit Schedules shows the text-verified statutory limits (RULE 2)');
