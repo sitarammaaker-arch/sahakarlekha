@@ -9,7 +9,7 @@
  *   - no contribution when the wage is above the ESI wage limit (₹21,000 from 2017-01-01);
  *   - the employee's share is WAIVED when the average daily wage is at or below the exemption (₹176/day) — the employer still
  *     pays his share (that is the employer-share work, not this function);
- *   - otherwise  wage × employee rate (0.75%), rounded like the Salary page (money.applyPercent).
+ *   - otherwise  wage × employee rate (0.75%), rounded UP to the next rupee like the Salary page (ESI (Central) Rules r.51).
  * The rows behind these numbers are `verified: false` until a person has read the ESIC notification text; this function applies
  * them, it does not claim them. ESI is OFF for everyone until an admin turns it on for an employee (`esi-set`): no component is
  * bound, so no payslip line, no deduction — the same switch pattern as salary TDS.
@@ -66,6 +66,6 @@ export function makeEsiEmployee(ctx: EsiContext): (wage: unknown, paidDays: unkn
     if (typeof paidDays !== 'number' || !Number.isFinite(paidDays)) refuse('PAY-DSL-TYPE-015', 'esi_employee: paid days must be a Number');
     if (w.minor <= 0 || w.minor > limitMinor) return makeMoney(0, ctx.currency);
     if (paidDays > 0 && w.minor / 100 / paidDays <= dailyExempt) return makeMoney(0, ctx.currency);   // average daily wage at or below the exemption
-    return makeMoney(applyPercent(w.minor, ratePct).minor, ctx.currency);
+    return makeMoney(Math.ceil(applyPercent(w.minor, ratePct).minor / 100) * 100, ctx.currency);  // next higher rupee: ESI (Central) Rules r.51, same as the Salary page
   };
 }

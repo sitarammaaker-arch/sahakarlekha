@@ -84,9 +84,13 @@ export function computeStatutory(input: StatutoryInput): StatutoryResult {
   const pfEmployeeMinor = override(input.pfApplicable ? applyPercent(pfWageMinor, law.pfEmployeeRate).minor : 0, input.pfEmployeeOverride);
   const pfEmployerMinor = override(input.pfApplicable ? applyPercent(pfWageMinor, law.pfEmployerRate).minor : 0, input.pfEmployerOverride);
 
+  // ESI contributions are "rounded to the next higher rupee" — ESI (Central) Rules 1950, rule 51(a) and (b)
+  // (https://indiankanoon.org/doc/162594543/, read 2026-11-12; that copy shows the pre-2019 rates, the rounding words are
+  // the same). The labour PF/ESI run already rounds up (LabourDataContext); the Salary path used half-up paise — RULE 2.
   const esiEligible = !!input.esiApplicable && grossMinor > 0 && grossMinor <= toMinor(esiThreshold);
-  const esiEmployeeMinor = override(esiEligible ? applyPercent(grossMinor, law.esiEmployeeRate).minor : 0, input.esiEmployeeOverride);
-  const esiEmployerMinor = override(esiEligible ? applyPercent(grossMinor, law.esiEmployerRate).minor : 0, input.esiEmployerOverride);
+  const upToRupee = (minor: number) => Math.ceil(minor / 100) * 100;
+  const esiEmployeeMinor = override(esiEligible ? upToRupee(applyPercent(grossMinor, law.esiEmployeeRate).minor) : 0, input.esiEmployeeOverride);
+  const esiEmployerMinor = override(esiEligible ? upToRupee(applyPercent(grossMinor, law.esiEmployerRate).minor) : 0, input.esiEmployerOverride);
 
   const ptMinor = toMinor(Math.max(0, Number(input.pt) || 0));
   const tdsMinor = toMinor(Math.max(0, Number(input.tds) || 0));

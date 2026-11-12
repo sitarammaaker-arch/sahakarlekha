@@ -1726,7 +1726,7 @@ var PARAMS = {
       value: 25e3,
       effectiveFrom: "2026-09-17",
       verified: false,
-      cite: 'EPFO "Frequently Asked Questions \u2014 Revision of EPFO Statutory Wage Ceiling, from \u20B915,000 to \u20B925,000 per month" (the document linked from https://unifiedportal-emp.epfindia.gov.in/epfo/ , whose own page says "FAQs related to recent revision of EPFO wage ceiling from Rs. 15,000 to Rs. 25,000"). Its header table: "S.O. 5109(E) dated 17 September 2026 | Effective Date 17 September 2026 | Revised Wage Ceiling \u20B925,000 per month | Earlier \u20B915,000". Read 2026-10-06 from the copy the founder supplied (EPFO_Wage_Ceiling.pdf, 13 pages, sha256 12e6074fd6f031d5412a511d6598ad24d3c8f80ee062abe6eac9994bb16fd591). Applies to EPF, EPS and EDLI (Q5). A part-month is split by days at 17.09.2026 (Q7, Q9). Above the ceiling the statutory contribution is generally restricted to the ceiling unless the employee already contributes on higher wages (Q21, Q22). PF wages = Basic + DA + Retaining Allowance, not gross (Q24-Q26). NOT yet read: the Gazette text of S.O. 5109(E) itself \u2014 a person must confirm against it before this is marked verified.'
+      cite: 'EPFO "Frequently Asked Questions \u2014 Revision of EPFO Statutory Wage Ceiling, from \u20B915,000 to \u20B925,000 per month" (the document linked from https://unifiedportal-emp.epfindia.gov.in/epfo/ , whose own page says "FAQs related to recent revision of EPFO wage ceiling from Rs. 15,000 to Rs. 25,000"). Its header table: "S.O. 5109(E) dated 17 September 2026 | Effective Date 17 September 2026 | Revised Wage Ceiling \u20B925,000 per month | Earlier \u20B915,000". Read 2026-10-06 from the copy the founder supplied (EPFO_Wage_Ceiling.pdf, 13 pages, sha256 12e6074fd6f031d5412a511d6598ad24d3c8f80ee062abe6eac9994bb16fd591). Applies to EPF, EPS and EDLI (Q5). A part-month is split by days at 17.09.2026 (Q7, Q9). Above the ceiling the statutory contribution is generally restricted to the ceiling unless the employee already contributes on higher wages (Q21, Q22). PF wages = Basic + DA + Retaining Allowance, not gross (Q24-Q26). GAZETTE READ 2026-11-12: Gazette of India Extraordinary No. 4918, Part II Sec. 3(ii), 17 September 2026 \u2014 "S.O. 5109(E).\u2014 In exercise of the powers conferred by clause (89) of section 2 of the Code on Social Security, 2020 (36 of 2020) and in supersession of \u2026 S.O. 2702(E) dated 29th May 2026 \u2026 the Central Government hereby notifies rupees twenty-five thousand (25,000) per month as the wage ceiling for the purposes of Chapter III of the said Code, with effect from the date of publication of this notification in the Official Gazette." Copy published by EPFO at https://pmvbry-cdn.epfindia.gov.in/wp-content/uploads/2026/09/Wage-Ceiling-Circular-28.09.2026.pdf (linked from https://www.epfo.gov.in/notices/wage-ceiling-circular-28-09-2026/). Figure and date agree with this row. Still verified:false until a person signs it off (see the header).'
     },
     {
       value: 15e3,
@@ -1898,7 +1898,7 @@ function makeEsiEmployee(ctx) {
     if (typeof paidDays !== "number" || !Number.isFinite(paidDays)) refuse3("PAY-DSL-TYPE-015", "esi_employee: paid days must be a Number");
     if (w.minor <= 0 || w.minor > limitMinor) return makeMoney(0, ctx.currency);
     if (paidDays > 0 && w.minor / 100 / paidDays <= dailyExempt) return makeMoney(0, ctx.currency);
-    return makeMoney(applyPercent(w.minor, ratePct).minor, ctx.currency);
+    return makeMoney(Math.ceil(applyPercent(w.minor, ratePct).minor / 100) * 100, ctx.currency);
   };
 }
 
@@ -1934,7 +1934,7 @@ function makeEsiEmployer(ctx) {
     if (w.currency !== ctx.currency) refuse4("PAY-DSL-TYPE-011", `esi_employer: currency mismatch (${w.currency} vs ${ctx.currency})`);
     if (typeof paidDays !== "number" || !Number.isFinite(paidDays)) refuse4("PAY-DSL-TYPE-015", "esi_employer: paid days must be a Number");
     if (w.minor <= 0 || w.minor > limitMinor) return makeMoney(0, ctx.currency);
-    return makeMoney(applyPercent(w.minor, ratePct).minor, ctx.currency);
+    return makeMoney(Math.ceil(applyPercent(w.minor, ratePct).minor / 100) * 100, ctx.currency);
   };
 }
 export {

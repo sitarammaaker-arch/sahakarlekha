@@ -51,14 +51,14 @@ const esi = (wage, paidDays, month = '2026-10') => E.makeEsiEmployee({ asOf: `${
 
 console.log('\n1. the function — limit, daily exemption, rate');
 ok(esi(16000, 30) === 120, 'wage ₹16,000 → 0.75% = ₹120');
-ok(esi(21000, 30) === 157.5, 'wage exactly ₹21,000 (the limit) is covered → ₹157.50');
+ok(esi(21000, 30) === 158, 'wage exactly ₹21,000 (the limit) is covered → ₹157.50 → ₹158 (next rupee, r.51)');
 ok(esi(21000.01, 30) === 0, 'wage ₹21,000.01 is above the limit → 0');
 ok(esi(100000, 30) === 0, 'wage ₹1,00,000 → 0');
 ok(esi(0, 30) === 0, 'no wage → 0');
 ok(esi(5000, 30) === 0, 'average daily wage ₹166.67 (≤ ₹176) → the employee share is waived');
 ok(esi(5280, 30) === 0, 'average daily wage exactly ₹176 → waived');
-ok(esi(5310, 30) === 39.83, 'average daily wage just above ₹176 → 0.75% of ₹5,310 = ₹39.83');
-ok(esi(3000, 15) === 22.5, '₹3,000 over 15 paid days (₹200/day) is NOT exempt → ₹22.50');
+ok(esi(5310, 30) === 40, 'average daily wage just above ₹176 → 0.75% of ₹5,310 = ₹39.83 → ₹40');
+ok(esi(3000, 15) === 23, '₹3,000 over 15 paid days (₹200/day) is NOT exempt → ₹22.50 → ₹23');
 
 console.log('\n2. parity with the Salary page (computeStatutory) — same wage, same ESI, paisa for paisa');
 {
@@ -97,9 +97,9 @@ const val = (o, k) => (o[k] ? o[k].minor / 100 : 0);
   const dep = [{ code: 'DA', source: f('DA') }, { code: 'LOP_DEP', source: f('LOP_DEP') }, { code: 'ESI_DEP', source: E.ESI_FORMULAS.ESI_DEP }];
   ok(val(run(dep, { BASIC: 10000, DEP_ALLOW: 2000 }, 0), 'ESI_DEP') === 105, 'deputation: basic ₹10,000 + DA ₹2,000 + allowance ₹2,000 = ₹14,000 → ESI ₹105');
   const con = [{ code: 'LOP_CONSOL', source: f('LOP_CONSOL') }, { code: 'ESI_CONSOL', source: E.ESI_FORMULAS.ESI_CONSOL }];
-  ok(val(run(con, { CONSOLIDATED: 15000 }, 0), 'ESI_CONSOL') === 112.5, 'contract: consolidated ₹15,000 → ESI ₹112.50');
+  ok(val(run(con, { CONSOLIDATED: 15000 }, 0), 'ESI_CONSOL') === 113, 'contract: consolidated ₹15,000 → ESI ₹112.50 → ₹113');
   const stp = [{ code: 'LOP_STIPEND', source: f('LOP_STIPEND') }, { code: 'ESI_STIPEND', source: E.ESI_FORMULAS.ESI_STIPEND }];
-  ok(val(run(stp, { STIPEND: 9000 }, 0), 'ESI_STIPEND') === 67.5, 'apprentice: stipend ₹9,000 → ESI ₹67.50');
+  ok(val(run(stp, { STIPEND: 9000 }, 0), 'ESI_STIPEND') === 68, 'apprentice: stipend ₹9,000 → ESI ₹67.50 → ₹68');
 }
 
 console.log('\n4. wiring — the code maps, the posting bucket, the server, the bundle');

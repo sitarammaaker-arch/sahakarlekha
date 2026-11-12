@@ -64,6 +64,6 @@ export function makeEsiEmployer(ctx: EsiEmployerContext): (wage: unknown, paidDa
     if (w.currency !== ctx.currency) refuse('PAY-DSL-TYPE-011', `esi_employer: currency mismatch (${w.currency} vs ${ctx.currency})`);
     if (typeof paidDays !== 'number' || !Number.isFinite(paidDays)) refuse('PAY-DSL-TYPE-015', 'esi_employer: paid days must be a Number');
     if (w.minor <= 0 || w.minor > limitMinor) return makeMoney(0, ctx.currency);   // above the wage limit: no ESI at all
-    return makeMoney(applyPercent(w.minor, ratePct).minor, ctx.currency);          // no daily-wage exemption for the employer
+    return makeMoney(Math.ceil(applyPercent(w.minor, ratePct).minor / 100) * 100, ctx.currency);          // no daily-wage exemption for the employer  // next higher rupee: ESI (Central) Rules r.51, same as the Salary page
   };
 }

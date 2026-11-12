@@ -50,9 +50,9 @@ const erEsi = (wage, paidDays, month = '2026-10') => ER.makeEsiEmployer({ asOf: 
 
 console.log('\n1. esi_employer — limit, rate, NO daily-wage exemption');
 ok(erEsi(16000, 30) === 520, 'wage ₹16,000 → 3.25% = ₹520');
-ok(erEsi(21000, 30) === 682.5, 'wage exactly ₹21,000 (the limit) is covered → ₹682.50');
+ok(erEsi(21000, 30) === 683, 'wage exactly ₹21,000 (the limit) is covered → ₹682.50 → ₹683 (next rupee, r.51)');
 ok(erEsi(21000.01, 30) === 0 && erEsi(100000, 30) === 0 && erEsi(0, 30) === 0, 'above the limit / no wage → 0');
-ok(erEsi(5000, 30) === 162.5, 'average daily wage ₹166.67 (≤ ₹176): the employee share is waived but the EMPLOYER still pays 3.25% = ₹162.50');
+ok(erEsi(5000, 30) === 163, 'average daily wage ₹166.67 (≤ ₹176): the employee share is waived but the EMPLOYER still pays 3.25% = ₹162.50 → ₹163');
 ok(E.makeEsiEmployee({ asOf: '2026-10-01', currency: 'INR' })(money(5000), 30).minor === 0, '…while the employee share for the same wage is 0 (the two functions really differ)');
 
 console.log('\n2. parity with the Salary page (computeStatutory)');
@@ -104,9 +104,9 @@ const val = (o, k) => (o[k] ? o[k].minor / 100 : 0);
   const dep = [{ code: 'DA', source: f('DA') }, { code: 'LOP_DEP', source: f('LOP_DEP') }, { code: 'ER_ESI_DEP', source: ER.ER_FORMULAS.ER_ESI_DEP }];
   ok(val(run(dep, { BASIC: 10000, DEP_ALLOW: 2000 }, 0), 'ER_ESI_DEP') === 455, 'deputation: ₹14,000 → ₹455');
   const con = [{ code: 'LOP_CONSOL', source: f('LOP_CONSOL') }, { code: 'ER_ESI_CONSOL', source: ER.ER_FORMULAS.ER_ESI_CONSOL }];
-  ok(val(run(con, { CONSOLIDATED: 15000 }, 0), 'ER_ESI_CONSOL') === 487.5, 'contract: ₹15,000 → ₹487.50');
+  ok(val(run(con, { CONSOLIDATED: 15000 }, 0), 'ER_ESI_CONSOL') === 488, 'contract: ₹15,000 → ₹487.50 → ₹488');
   const stp = [{ code: 'LOP_STIPEND', source: f('LOP_STIPEND') }, { code: 'ER_ESI_STIPEND', source: ER.ER_FORMULAS.ER_ESI_STIPEND }];
-  ok(val(run(stp, { STIPEND: 9000 }, 0), 'ER_ESI_STIPEND') === 292.5, 'apprentice: ₹9,000 → ₹292.50');
+  ok(val(run(stp, { STIPEND: 9000 }, 0), 'ER_ESI_STIPEND') === 293, 'apprentice: ₹9,000 → ₹292.50 → ₹293');
 }
 
 console.log('\n4. codes — the ER_ family is never mistaken for the employee ESI / PF');
