@@ -33,8 +33,11 @@ console.log('\n1. the carried-over values are EXACTLY what the code used before 
   ok(R.resolveParam('edli.rate', '2026-10-01').value === 0.5, 'Payroll seed: EDLI 0.5%');
   const row = R.PARAMS['pf.wageCeiling'][0];
   ok(row.value === 25000 && row.effectiveFrom === '2026-09-17', 'the ₹25,000 row takes effect on 2026-09-17');
-  ok(row.verified === false, 'it is still NOT marked verified (the Gazette text of S.O. 5109(E) has not been read by a person)');
-  ok(/S\.O\. 5109\(E\)/.test(row.cite) && /sha256 12e6074f/.test(row.cite) && /Gazette text/.test(row.cite), 'its cite names the notification, the exact file read (sha256) and what is still unread');
+  ok(row.verified === false, 'it is still NOT marked verified (no person has signed it off)');
+  ok(/S\.O\. 5109\(E\)/.test(row.cite) && /sha256 12e6074f/.test(row.cite), 'its cite names the notification and the exact FAQ file read (sha256)');
+  ok(/GAZETTE READ 2026-11-12/.test(row.cite) && /clause \(89\) of section 2 of the Code on Social Security/.test(row.cite)
+    && /https:\/\/pmvbry-cdn\.epfindia\.gov\.in\/wp-content\/uploads\/2026\/09\/Wage-Ceiling-Circular-28\.09\.2026\.pdf/.test(row.cite),
+    'and the Gazette text itself — quoted, with the EPFO-published copy URL (2026-11-12)');
   ok(R.PARAMS['pf.wageCeiling'].length === 2 && R.PARAMS['pf.wageCeiling'][1].value === 15000, 'the old ₹15,000 row is kept — a slip for an older month still gets its own law');
 }
 

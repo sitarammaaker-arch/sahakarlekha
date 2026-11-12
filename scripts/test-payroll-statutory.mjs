@@ -83,6 +83,13 @@ ok(p(g.pfEmployee) + p(g.esiEmployee) + p(g.pt) + p(g.tds) === p(g.totalEmployee
 ok(p(g.gross) - p(g.totalEmployeeDeductions) === p(g.netSalary), 'netSalary = gross − deductions to the paisa');
 ok(p(g.pfEmployer) + p(g.esiEmployer) === p(g.employerContributions), 'employer contributions sum exactly');
 
+// 8b. ESI is rounded to the NEXT HIGHER RUPEE — ESI (Central) Rules 1950 r.51 (same as the labour run).
+//     gross 17007: 0.75% = 127.55 → 128; 3.25% = 552.73 → 553. An exact rupee stays put (gross 12000 → 90 / 390).
+ok(g.esiEmployee === 128 && g.esiEmployer === 553, 'ESI rounded up to the next rupee (128 / 553 on ₹17,007)');
+ok(a.esiEmployee === 90 && a.esiEmployer === 390, 'a whole-rupee ESI is not bumped');
+const tiny = computeStatutory({ asOf: ASOF, basic: 1001, allowances: 0, pfApplicable: false, esiApplicable: true });
+ok(tiny.esiEmployee === 8 && tiny.esiEmployer === 33, 'ESI 7.5075 → 8 and 32.5325 → 33 (any fraction goes up)');
+
 // 9. Manual overrides — the society fine-tunes a statutory figure; the override REPLACES the auto
 //    amount and flows into totals/net; a null override leaves auto untouched.
 const base = computeStatutory({ asOf: ASOF, basic: 30000, allowances: 5000, pfApplicable: true, esiApplicable: true });
@@ -123,7 +130,10 @@ ok(ovZero.pfEmployee === 0 && ovZero.netSalary === 35000, 'a 0 override waives t
     const pfWage = Math.min(bm, toMinor(15000));
     const pfEe = pf ? applyPercent(pfWage, 12).minor : 0, pfEr = pf ? applyPercent(pfWage, 13).minor : 0;
     const el = esi && gm > 0 && gm <= toMinor(21000);
-    return { pfEe: toRupees(pfEe), pfEr: toRupees(pfEr), esiEe: toRupees(el ? applyPercent(gm, 0.75).minor : 0), esiEr: toRupees(el ? applyPercent(gm, 3.25).minor : 0), elig: el };
+    // 2026-11-12: ESI deliberately moved to "next higher rupee" (ESI (Central) Rules r.51) — the one intended change;
+    // PF, thresholds and eligibility must still match the old constants exactly.
+    const up = (m) => Math.ceil(m / 100) * 100;
+    return { pfEe: toRupees(pfEe), pfEr: toRupees(pfEr), esiEe: toRupees(el ? up(applyPercent(gm, 0.75).minor) : 0), esiEr: toRupees(el ? up(applyPercent(gm, 3.25).minor) : 0), elig: el };
   };
   let n = 0, bad = 0;
   const basics = [0, 1, 4999.99, 8000, 12500, 14999.99, 15000, 15000.01, 15001, 18000, 20000, 20999.99, 21000, 21001, 24999, 25000, 25001, 40000, 90000];
