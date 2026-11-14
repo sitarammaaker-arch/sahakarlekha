@@ -6,7 +6,7 @@
  *   • Commissions: one row per invoice of a referred society; cancel with a reason (e.g. the payment was refunded in
  *     Razorpay — the product has no automatic refund flow). "Sync" records anything the invoice trigger missed.
  * All reads/writes go through SECURITY DEFINER RPCs gated on is_platform_admin(); the list is re-read after every
- * write, so nothing on screen changes unless the server said ok. No payouts here — that is slice 4.
+ * write, so nothing on screen changes unless the server said ok. Payouts, TDS and clawback are the Payouts tab (167).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -236,6 +236,7 @@ export default function AdminCommissionsPanel() {
             <CardTitle className="text-base">Commission ({rows.length})</CardTitle>
             <Badge className="bg-green-100 text-green-900">पक्का: {formatPaise(sum.eligible)}</Badge>
             <Badge className="bg-amber-100 text-amber-900">Refund अवधि में: {formatPaise(sum.hold)}</Badge>
+            {sum.paid > 0 && <Badge className="bg-blue-100 text-blue-900">भुगतान हो गया: {formatPaise(sum.paid)}</Badge>}
             {sum.noRuleCount > 0 && <Badge variant="outline">दर बाकी: {sum.noRuleCount}</Badge>}
             <div className="ml-auto flex gap-1">
               <Button size="sm" variant="ghost" className="gap-1" onClick={exportCsv} disabled={rows.length === 0}><FileSpreadsheet className="h-3.5 w-3.5" /> CSV</Button>
@@ -341,6 +342,7 @@ export default function AdminCommissionsPanel() {
             <DialogDescription>
               {cancelTarget?.partner_name} · {cancelTarget?.society_name} · {formatPaise(cancelTarget?.commission_paise)}। रद्द करना वापस नहीं होता;
               कारण partner को भी दिखेगा।
+              {cancelTarget?.status === 'paid' && ' इसका भुगतान हो चुका है — इतनी रकम clawback बनकर partner के अगले भुगतान से कटेगी।'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1">
