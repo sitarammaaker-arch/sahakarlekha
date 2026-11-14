@@ -146,5 +146,53 @@ ok(/Referral partner — Partner Program/.test(privacy) && /नाम, ज़ि
 const admin = read('src/pages/SuperAdminPartners.tsx');
 ok(/rpc\('admin_referral_events'/.test(admin) && /rpc\('admin_partner_rotate_token'/.test(admin) && /downloadCSV\(/.test(admin), 'admin page wires history, new link and CSV export');
 
+// ── 5. slice 3: commission accrual (migration 166) ──────────────────────────────────────────────────────────────
+ok(R.formatPaise(59980) === '₹599.80' && R.formatPaise(12345678) === '₹1,23,456.78' && R.formatPaise(0) === '₹0.00' && R.formatPaise(5) === '₹0.05', 'paise format, Indian grouping');
+ok(R.formatPaise('34995') === '₹349.95' && R.formatPaise(null) === '₹0.00' && R.formatPaise(-100) === '−₹1.00', 'string / null / negative paise');
+const C = (status, eligible, basis, paise) => ({ status, eligible, basis, commission_paise: paise });
+ok(R.commissionStage(C('pending', true, 'first_year', 1)) === 'eligible' && R.commissionStage(C('pending', false, 'renewal', 1)) === 'hold', 'eligible vs hold');
+ok(R.commissionStage(C('no_rule', false, 'first_year', 0)) === 'no_rule' && R.commissionStage(C('cancelled', true, 'first_year', 9)) === 'cancelled' && R.commissionStage(C('pending', true, 'none', 0)) === 'none', 'no_rule / cancelled / none');
+const cs = R.summarizeCommissions([C('pending', true, 'first_year', 59980), C('pending', false, 'renewal', 69990), C('no_rule', false, 'first_year', 0), C('cancelled', true, 'first_year', 10000), C('pending', true, 'none', 0)]);
+ok(cs.eligible === 59980 && cs.hold === 69990 && cs.noRuleCount === 1 && cs.cancelled === 10000, 'totals in paise; cancelled never counts as owed');
+
+const up166 = read('supabase/migrations/166_partner_commissions.sql');
+const down166 = read('supabase/migrations/166_partner_commissions_down.sql');
+const c166 = up166.replace(/--.*$/gm, '');
+for (const t of ['partner_commission_rules', 'partner_commissions']) {
+  ok(new RegExp(`alter table public\\.${t}\\s+enable row level security`).test(c166) && new RegExp(`revoke all on table public\\.${t}\\s+from anon, authenticated`).test(c166), `${t}: RLS on, client grants revoked`);
+  ok(new RegExp(`drop table if exists public\\.${t};`).test(down166), `down drops ${t}`);
+}
+ok(!/create policy/i.test(c166), '166 adds no policy');
+ok(/invoice_id\s+uuid not null unique references public\.invoices\(id\)/.test(c166), 'one commission per invoice (unique), tied to a real invoice — so only live, paid orders earn');
+ok(/create trigger trg_invoice_partner_commission\s+after insert on public\.invoices/.test(c166), 'commission is recorded when an invoice is issued');
+const trg = c166.slice(c166.indexOf('function public.tg_invoice_partner_commission('), c166.indexOf('$$;', c166.indexOf('function public.tg_invoice_partner_commission(')));
+ok(/exception when others then/.test(trg) && /return new;/.test(trg), 'the trigger can never block the tax invoice');
+ok(/drop trigger if exists trg_invoice_partner_commission on public\.invoices;/.test(down166), 'down removes the trigger (invoices keep working)');
+const price = c166.slice(c166.indexOf('function public._partner_commission_price('));
+ok(/i\.taxable_paise \* v_rate \/ 100/.test(price), 'commission = taxable value (GST excluded) × rate');
+ok(/interval '12 months'/.test(price) && /make_interval\(years => 1 \+ r\.renewal_years\)/.test(price), 'first year = 12 months from the first invoice; renewals for renewal_years after');
+ok(/effective_from <= i\.invoice_date order by cr\.effective_from desc limit 1/.test(price), 'the rule in force on the invoice date applies');
+ok(/'no_rule'::text/.test(price), 'no rule → recorded as no_rule, not dropped');
+ok(/check \(first_year_pct between 0 and 50\)/.test(c166) && /check \(hold_days between 0 and 90\)/.test(c166), 'rates and hold are bounded in the table too');
+ok(!/update public\.partner_commission_rules/.test(c166) && !/delete from public\.partner_commission_rules/.test(c166), 'rules are append-only (no function edits or deletes one)');
+for (const f of ['admin_commission_rules_list()', 'admin_commissions_list()', 'admin_commission_cancel(bigint, text)', 'admin_commission_sync()', 'admin_commission_rule_add(date, numeric, numeric, integer, integer, text)']) {
+  const name = f.split('(')[0];
+  const body = c166.slice(c166.indexOf(`function public.${name}(`), c166.indexOf('$$;', c166.indexOf(`function public.${name}(`)));
+  ok(/if not public\.is_platform_admin\(\) then\s+raise exception 'not authorized'/.test(body) && /security definer/.test(body), `${name} refuses a non-admin`);
+  ok(new RegExp(`revoke execute on function public\\.${name}\\([^)]*\\)\\s+from public, anon;`).test(c166), `${name}: anon cannot execute`);
+  ok(new RegExp(`drop function if exists public\\.${name}\\(`).test(down166), `down drops ${name}`);
+}
+ok(/'reason_required'/.test(c166.slice(c166.indexOf('function public.admin_commission_cancel('))), 'cancelling needs a reason');
+ok(/grant execute on function public\.partner_commissions\(uuid\) to anon, authenticated;/.test(c166) && /--\s*anon-exec:\s*partner_commissions\b/.test(up166), 'partner view is anon-callable with its reason recorded');
+const pview = c166.slice(c166.indexOf('function public.partner_commissions('), c166.indexOf('$$;', c166.indexOf('function public.partner_commissions(')));
+ok(/c\.partner_id = v\.id/.test(pview) && !/invoice_no|society_id\s*,/.test(pview.replace(/s\.id::text = c\.society_id/, '')), 'partner sees only own rows, no invoice number or society id');
+ok(/values \('166', 'partner_commissions'\)/.test(c166) && /where version = '166'/.test(down166), 'app_migrations 166 added and removed');
+
+const page3 = read('src/pages/PartnerProgram.tsx');
+ok(/rpc\('partner_commissions'/.test(page3) && /Commission का हिसाब लोड नहीं हो सका/.test(page3), 'partner page loads commissions and shows a load failure');
+const panel = read('src/components/partners/AdminCommissionsPanel.tsx');
+ok(['admin_commission_rules_list', 'admin_commissions_list', 'admin_commission_rule_add', 'admin_commission_cancel', 'admin_commission_sync'].every((f) => panel.includes(`rpc('${f}'`)), 'admin panel wires every commission RPC');
+ok(/AdminCommissionsPanel/.test(read('src/pages/SuperAdminPartners.tsx')), 'Commission tab is on the partners admin page');
+
 console.log(`referral: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
