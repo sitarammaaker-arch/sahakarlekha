@@ -137,14 +137,15 @@ ok(/drop function if exists public\.partner_dashboard\(uuid\);/.test(down165) &&
 ok(/values \('165', 'referral_partner_dashboard'\)/.test(c165) && /where version = '165'/.test(down165), 'app_migrations 165 added and removed');
 
 const page = read('src/pages/PartnerProgram.tsx');
-ok(page.indexOf("rpc('partner_dashboard'") > page.indexOf("st.status === 'approved'"), 'the page asks for the dashboard only once the partner is approved');
-ok(/setSocieties\(dash\.error \|\| !d\.ok \? 'error'/.test(page) && /सूची लोड नहीं हो सकी/.test(page), 'a dashboard load failure is shown, never shown as "0 societies"');
+const portalPage = read('src/pages/PartnerPortal.tsx');
+ok(/p\.status === 'approved' && <PartnerSocieties/.test(portalPage), 'the portal shows societies only to an approved partner');
+ok(/data\.dashboard\?\.ok \? \(data\.dashboard\.societies \?\? \[\]\) : 'error'/.test(portalPage) && /सूची लोड नहीं हो सकी/.test(page), 'a dashboard load failure is shown, never shown as "0 societies"');
 ok(/timeZone: 'Asia\/Kolkata'/.test(page), 'dates on the dashboard are IST calendar dates');
 ok(/उस partner को आपकी समिति का नाम, ज़िला और plan की स्थिति दिखेगी/.test(reg), 'Register tells the society what the partner will see');
 const privacy = read('src/pages/PrivacyPolicy.tsx');
 ok(/Referral partner — Partner Program/.test(privacy) && /नाम, ज़िला,\s*जुड़ने की तारीख़ और plan की स्थिति/.test(privacy), 'Privacy Policy discloses what partners see');
 const admin = read('src/pages/SuperAdminPartners.tsx');
-ok(/rpc\('admin_referral_events'/.test(admin) && /rpc\('admin_partner_rotate_token'/.test(admin) && /downloadCSV\(/.test(admin), 'admin page wires history, new link and CSV export');
+ok(/rpc\('admin_referral_events'/.test(admin) && /downloadCSV\(/.test(admin), 'admin page wires history and CSV export');
 
 // ── 5. slice 3: commission accrual (migration 166) ──────────────────────────────────────────────────────────────
 ok(R.formatPaise(59980) === '₹599.80' && R.formatPaise(12345678) === '₹1,23,456.78' && R.formatPaise(0) === '₹0.00' && R.formatPaise(5) === '₹0.05', 'paise format, Indian grouping');
@@ -189,7 +190,7 @@ ok(/c\.partner_id = v\.id/.test(pview) && !/invoice_no|society_id\s*,/.test(pvie
 ok(/values \('166', 'partner_commissions'\)/.test(c166) && /where version = '166'/.test(down166), 'app_migrations 166 added and removed');
 
 const page3 = read('src/pages/PartnerProgram.tsx');
-ok(/rpc\('partner_commissions'/.test(page3) && /Commission का हिसाब लोड नहीं हो सका/.test(page3), 'partner page loads commissions and shows a load failure');
+ok(/data\.commissions\?\.ok \? \(data\.commissions\.rows \?\? \[\]\) : 'error'/.test(portalPage) && /Commission का हिसाब लोड नहीं हो सका/.test(page3), 'the portal shows commissions and a load failure');
 const panel = read('src/components/partners/AdminCommissionsPanel.tsx');
 ok(['admin_commission_rules_list', 'admin_commissions_list', 'admin_commission_rule_add', 'admin_commission_cancel', 'admin_commission_sync'].every((f) => panel.includes(`rpc('${f}'`)), 'admin panel wires every commission RPC');
 ok(/AdminCommissionsPanel/.test(read('src/pages/SuperAdminPartners.tsx')), 'Commission tab is on the partners admin page');
@@ -246,9 +247,80 @@ ok(/s\.397\(2\)\(b\)\(i\)/.test(payPanel) && /section-397-5 \(read 2026-11-14\)/
 ok(/402\(37\)/.test(payPanel) && /₹1 करोड़/.test(payPanel), 'the TDS dialog states the s.402(37) applicability test for a proprietor payer');
 ok(/p_expected_net_paise: preview\.net_paise/.test(payPanel), 'the admin records exactly the previewed net');
 const page4 = read('src/pages/PartnerProgram.tsx');
-ok(/rpc\('partner_payouts'/.test(page4) && /भुगतान का हिसाब लोड नहीं हो सका/.test(page4), 'partner page loads payouts and shows a load failure');
+ok(/data\.payouts\?\.ok \? data\.payouts : 'error'/.test(portalPage) && /भुगतान का हिसाब लोड नहीं हो सका/.test(page4), 'the portal shows payouts and a load failure');
 ok(/AdminPayoutsPanel/.test(read('src/pages/SuperAdminPartners.tsx')), 'Payouts tab is on the partners admin page');
 ok(/PAN, बैंक खाता \/ UPI और GSTIN/.test(read('src/pages/PrivacyPolicy.tsx')), 'Privacy Policy discloses PAN/bank collection for payouts');
+
+// ── 7. partner portal: email OTP login, own session, change requests (migration 168) ───────────────────────────
+const S = await import('../src/lib/referral/partnerSession.ts');
+const E = await import('../supabase/functions/_shared/partner-email.mjs');
+const TOKEN = 'a'.repeat(64);
+const st = mem();
+ok(S.savePartnerSession(st, TOKEN) && S.loadPartnerSession(st) === TOKEN, 'session saved and read back');
+ok(!S.savePartnerSession(st, 'short') && S.loadPartnerSession({ getItem: () => 'not-a-token' }) === null, 'only a 64-hex session is accepted');
+ok(S.loadPartnerSession(throwing) === null && S.savePartnerSession({ setItem: () => { throw new Error('x'); } }, TOKEN) === false, 'blocked storage never throws');
+S.clearPartnerSession({ removeItem: (k) => st.m.delete(k) });
+ok(S.loadPartnerSession(st) === null, 'logout clears the session');
+ok(S.isLoginEmail(' A@B.co ') && !S.isLoginEmail('a@b') && S.isLoginCode('012345') && !S.isLoginCode('12345'), 'email / code shapes');
+ok(S.loginErrorText('too_many_attempts').includes('नया कोड') && S.loginErrorText('zzz').length > 0, 'login error text');
+
+ok(E.parsePartnerAuthRequest({ action: 'start', email: ' A@B.Co ' }).email === 'a@b.co', 'function: start parses + normalises the email');
+ok(!E.parsePartnerAuthRequest({ action: 'start', email: 'nope' }).ok && !E.parsePartnerAuthRequest(null).ok && !E.parsePartnerAuthRequest({ action: 'drop' }).ok, 'function: junk refused');
+ok(E.parsePartnerAuthRequest({ action: 'welcome', partner_id: '11111111-2222-3333-4444-555555555555' }).ok && !E.parsePartnerAuthRequest({ action: 'welcome', partner_id: 'x' }).ok, 'function: welcome needs a uuid');
+const otp = E.buildOtpEmail({ name: '<b>Ram</b>', code: '012345' });
+ok(otp.subject.startsWith('012345') && otp.html.includes('012345') && otp.text.includes('012345') && !otp.html.includes('<b>Ram</b>') && otp.html.includes('&lt;b&gt;'), 'OTP email carries the code and escapes the name');
+ok((() => { try { E.buildOtpEmail({ code: '12ab56' }); return false; } catch { return true; } })(), 'OTP email refuses a malformed code');
+const wel = E.buildWelcomeEmail({ name: 'Ramesh', code: 'SL-7KQ2MD' });
+ok(wel.html.includes('https://sahakarlekha.com/?ref=SL-7KQ2MD') && wel.html.includes('https://sahakarlekha.com/partner/login') && wel.text.includes('SL-7KQ2MD'), 'welcome email: code, referral link, portal');
+ok(E.welcomeWhatsAppText({ name: 'Ramesh', code: 'SL-7KQ2MD' }) === R.partnerWelcomeWhatsAppText('Ramesh', 'SL-7KQ2MD'), 'WhatsApp text: Edge Function and app agree');
+ok(R.partnerWelcomeWhatsAppUrl('9876543210', 'R', 'SL-7KQ2MD').startsWith('https://wa.me/919876543210?text=') && R.partnerWelcomeWhatsAppUrl('123', 'R', 'SL-7KQ2MD').startsWith('https://wa.me/?text='), 'wa.me goes to the partner\'s own number');
+{
+  const calls = [];
+  const fakeFetch = async (url, init) => { calls.push({ url, init }); return { ok: true, status: 200, text: async () => '' }; };
+  const r1 = await E.sendViaResend('a@b.co', otp, { apiKey: 'k', from: 'SahakarLekha <noreply@sahakarlekha.com>', fetch: fakeFetch });
+  ok(r1.ok && calls[0].url === 'https://api.resend.com/emails' && JSON.parse(calls[0].init.body).to[0] === 'a@b.co', 'Resend call shape');
+  ok((await E.sendViaResend('a@b.co', otp, { apiKey: '', from: '' })).error === 'not_configured', 'no key → not_configured, no call');
+  const r3 = await E.sendViaResend('a@b.co', otp, { apiKey: 'k', from: 'f', fetch: async () => { throw new Error('net down'); } });
+  ok(!r3.ok && /net down/.test(r3.error), 'a network failure never throws');
+}
+const fn = read('supabase/functions/partner-auth/index.ts');
+ok(/rpc\('partner_login_issue'/.test(fn) && /createClient\(url, svcKey/.test(fn), 'function issues the code with the service role');
+ok((fn.match(/return json\(\{ ok: true \}\)/g) || []).length >= 2 && !/no_partner/.test(fn), 'start answers the same for every email (no enumeration)');
+ok(/rpc\('admin_partner_welcome_info'/.test(fn) && /Authorization: `Bearer \$\{bearer\}`/.test(fn), 'welcome runs as the calling admin (RPC checks is_platform_admin)');
+
+const up168 = read('supabase/migrations/168_partner_portal_otp.sql');
+const down168 = read('supabase/migrations/168_partner_portal_otp_down.sql');
+const c168 = up168.replace(/--.*$/gm, '');
+for (const t of ['partner_login_codes', 'partner_sessions', 'partner_detail_requests']) {
+  ok(new RegExp(`alter table public\\.${t}\\s+enable row level security`).test(c168) && new RegExp(`revoke all on table public\\.${t}\\s+from anon, authenticated`).test(c168), `${t}: RLS on, client grants revoked`);
+  ok(new RegExp(`drop table if exists public\\.${t};`).test(down168), `down drops ${t}`);
+}
+ok(!/create policy/i.test(c168), '168 adds no policy');
+ok(/revoke execute on function public\.partner_login_issue\(text\) from public, anon, authenticated;/.test(c168) && /grant execute on function public\.partner_login_issue\(text\) to service_role;/.test(c168), 'only the service role can issue a code');
+const issue = c168.slice(c168.indexOf('function public.partner_login_issue('), c168.indexOf('$$;', c168.indexOf('function public.partner_login_issue(')));
+ok(/interval '10 minutes'/.test(issue) && /digest\(v\.id::text \|\| ':' \|\| v_code, 'sha256'\)/.test(issue), 'code: 10 minutes, stored as a hash');
+ok(/>= 3/.test(issue) && />= 10/.test(issue) && />= 300/.test(issue) && /status <> 'rejected'/.test(issue), 'code: 3 per 15 min, 10 per day, 300 per hour overall; never to a rejected partner');
+const ver = c168.slice(c168.indexOf('function public.partner_login_verify('), c168.indexOf('$$;', c168.indexOf('function public.partner_login_verify(')));
+ok(/c\.attempts >= 5/.test(ver) && /used_at = now\(\)/.test(ver) && /interval '30 days'/.test(ver), 'verify: 5 tries, single use, 30-day session');
+ok(/digest\(v_session, 'sha256'\)/.test(ver) && !/auth\.users/.test(c168), 'session stored hashed; no Supabase Auth user is created');
+const det168 = c168.slice(c168.indexOf('function public.partner_details_request('), c168.indexOf('$$;', c168.indexOf('function public.partner_details_request(')));
+ok(/insert into public\.partner_detail_requests/.test(det168) && !/partner_payment_details/.test(det168), 'a partner\'s request never writes payment details directly');
+const portal168 = c168.slice(c168.indexOf('function public.partner_portal('), c168.indexOf('$$;', c168.indexOf('function public.partner_portal(')));
+ok(/'pan_masked'/.test(portal168) && /'account_masked'/.test(portal168) && !/'pan', d\.pan|'account_no', d\.account_no/.test(portal168), 'portal returns payment details masked only');
+ok(/'phone_masked'/.test(portal168) && !/'token'/.test(portal168), 'portal never returns the phone or the old token');
+for (const f of ['partner_status', 'partner_dashboard', 'partner_commissions', 'partner_payouts']) {
+  ok(new RegExp(`revoke execute on function public\\.${f}\\(uuid\\)\\s+from public, anon, authenticated;`).test(c168), `old status-link RPC ${f} closed to clients`);
+}
+ok(/'email_required'/.test(c168) && /uq_partners_email_live/.test(c168), 'email required on apply, one live partner per email');
+ok(/update public\.partner_sessions set revoked_at = now\(\) where partner_id = p_id/.test(c168), 'changing the email ends open sessions');
+ok(/values \('168', 'partner_portal_otp'\)/.test(c168) && /where version = '168'/.test(down168), 'app_migrations 168 added and removed');
+const appTsx = read('src/App.tsx');
+ok(appTsx.includes('<Route path="/partner/login" element={<PartnerLogin />} />') && appTsx.includes('<Route path="/partner/portal" element={<PartnerPortalHome />} />'), 'portal routes exist');
+ok(/rpc\('partner_login_verify'/.test(portalPage) && /functions\.invoke\('partner-auth'/.test(portalPage) && /rpc\('partner_portal'/.test(portalPage) && /rpc\('partner_details_request'/.test(portalPage) && /rpc\('partner_logout'/.test(portalPage), 'portal wires login, data, change request and logout');
+ok(/useNoIndex\(\)/.test(portalPage) && /autoComplete="one-time-code"/.test(portalPage), 'portal pages are noindex; the code field is one-time-code');
+ok(!/rpc\('partner_status'|rpc\('partner_dashboard'|rpc\('partner_commissions'|rpc\('partner_payouts'/.test(read('src/pages/PartnerProgram.tsx') + portalPage), 'no page calls the old token RPCs');
+ok(/sendWelcome\(approved\)/.test(admin) && /admin_partner_set_email/.test(admin) && /AdminDetailRequests/.test(admin), 'admin: welcome email on approval, set email, change requests');
+ok(/admin_detail_request_decide/.test(read('src/components/partners/AdminDetailRequests.tsx')), 'admin can approve / reject a change request');
 
 console.log(`referral: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

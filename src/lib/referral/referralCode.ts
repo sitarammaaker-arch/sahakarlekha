@@ -249,6 +249,24 @@ export function payoutErrorText(code: string | undefined | null): string {
   return (code && PAYOUT_ERROR_TEXT[code]) || 'भुगतान दर्ज नहीं हुआ — दोबारा कोशिश करें।';
 }
 
+// ── partner portal hand-out (migration 168) ───────────────────────────────────────────────────────────────────
+
+export const PARTNER_PORTAL_URL = 'https://sahakarlekha.com/partner/login';
+
+/** The message the admin sends on WhatsApp after approval (mirrors welcomeWhatsAppText in _shared/partner-email.mjs). */
+export function partnerWelcomeWhatsAppText(name: string, code: string): string {
+  return `नमस्ते ${name}, आपका सहकार लेखा partner आवेदन मंज़ूर हो गया है।\n` +
+    `Referral code: ${code}\nReferral link: https://sahakarlekha.com/?ref=${code}\n` +
+    `Partner portal (आपके ईमेल से login): ${PARTNER_PORTAL_URL}`;
+}
+
+/** wa.me link straight to the partner's own number (stored as 10 digits). */
+export function partnerWelcomeWhatsAppUrl(phone: string, name: string, code: string): string {
+  const digits = String(phone ?? '').replace(/\D/g, '');
+  const to = /^[6-9][0-9]{9}$/.test(digits) ? `91${digits}` : '';
+  return `https://wa.me/${to}?text=${encodeURIComponent(partnerWelcomeWhatsAppText(name, code))}`;
+}
+
 // ── storage wrappers (never throw: private windows / blocked storage just mean "no code") ─────────────────────
 
 export function loadReferral(storage: Pick<Storage, 'getItem'> | null | undefined, now: number): StoredReferral | null {

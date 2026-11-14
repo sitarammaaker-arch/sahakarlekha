@@ -19,12 +19,13 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, RefreshCw, Handshake, Copy, AlertTriangle, History, FileSpreadsheet, KeyRound } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Handshake, AlertTriangle, History, FileSpreadsheet, Mail, MessageCircle, AtSign } from 'lucide-react';
 import { fmtDateTime } from '@/lib/dateUtils';
 import { downloadCSV } from '@/lib/exportUtils';
-import { referralErrorText, normalizeReferralCode, PARTNER_CATEGORIES } from '@/lib/referral/referralCode';
+import { referralErrorText, normalizeReferralCode, PARTNER_CATEGORIES, partnerWelcomeWhatsAppUrl } from '@/lib/referral/referralCode';
 import AdminCommissionsPanel from '@/components/partners/AdminCommissionsPanel';
 import AdminPayoutsPanel from '@/components/partners/AdminPayoutsPanel';
+import AdminDetailRequests from '@/components/partners/AdminDetailRequests';
 
 interface PartnerRow {
   id: string;
@@ -110,7 +111,8 @@ export default function SuperAdminPartners() {
   const [setReason, setSetReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [history, setHistory] = useState<{ societyName: string; rows: EventRow[] | 'error' | null } | null>(null);
-  const [rotateTarget, setRotateTarget] = useState<PartnerRow | null>(null);
+  const [emailTarget, setEmailTarget] = useState<PartnerRow | null>(null);
+  const [emailValue, setEmailValue] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -158,22 +160,41 @@ export default function SuperAdminPartners() {
     }
   };
 
-  const submitRotate = async () => {
-    if (!rotateTarget) return;
-    setSaving(true);
+  /** Partner portal welcome email (Edge Function partner-auth, action 'welcome'). Never throws; returns a toast. */
+  const sendWelcome = async (p: { id: string; name: string }, quiet = false) => {
     try {
-      const { data, error: err } = await supabase.rpc('admin_partner_rotate_token', { p_id: rotateTarget.id });
-      const res = (data ?? {}) as { ok?: boolean; token?: string; error_code?: string };
-      if (err || !res.ok || !res.token) {
-        toast({ title: 'नया link नहीं बना', description: err?.message ?? 'दोबारा कोशिश करें।', variant: 'destructive', duration: 10000 });
+      const { data, error: err } = await supabase.functions.invoke('partner-auth', { body: { action: 'welcome', partner_id: p.id } });
+      const res = (data ?? {}) as { ok?: boolean; sent?: boolean; reason?: string };
+      if (err || !res.ok) {
+        const why = res.reason === 'no_email' ? 'इस partner का ईमेल दर्ज नहीं — "ईमेल" बटन से जोड़ें।'
+          : res.reason === 'email_not_configured' ? 'Email भेजने की सेटिंग (RESEND) नहीं मिली।'
+          : res.reason === 'not_approved' ? 'Partner मंज़ूर नहीं है।'
+          : 'Email नहीं गया — partner-auth function deploy हुआ है, यह जाँचें। WhatsApp बटन से भेज सकते हैं।';
+        toast({ title: 'स्वागत email नहीं गया', description: why, variant: 'destructive', duration: 12000 });
         return;
       }
-      await copy(`${window.location.origin}/partner/status?t=${res.token}`);
-      toast({ title: 'नया link बन गया और कॉपी हो गया ✓', description: 'पुराना link अब काम नहीं करेगा। नया link partner को WhatsApp करें।' });
-      setRotateTarget(null);
+      if (!quiet) toast({ title: `स्वागत email भेज दिया ✓`, description: `${p.name} को code, referral link और portal का पता भेजा गया।` });
+    } catch {
+      toast({ title: 'स्वागत email नहीं गया', description: 'इंटरनेट जाँचें। WhatsApp बटन से भेज सकते हैं।', variant: 'destructive', duration: 12000 });
+    }
+  };
+
+  const saveEmail = async () => {
+    if (!emailTarget) return;
+    setSaving(true);
+    try {
+      const { data, error: err } = await supabase.rpc('admin_partner_set_email', { p_id: emailTarget.id, p_email: emailValue.trim() });
+      const res = (data ?? {}) as { ok?: boolean; error_code?: string };
+      if (err || !res.ok) {
+        const why = res.error_code === 'duplicate_email' ? 'यह ईमेल किसी दूसरे partner का है।' : res.error_code === 'invalid_email' ? 'ईमेल सही नहीं है।' : err?.message ?? 'दोबारा कोशिश करें।';
+        toast({ title: 'ईमेल सेव नहीं हुआ', description: why, variant: 'destructive', duration: 10000 });
+        return;
+      }
+      toast({ title: 'ईमेल सेव हो गया ✓', description: 'Partner अब इसी ईमेल से portal पर login करेगा।' });
+      setEmailTarget(null);
       await load();
     } catch {
-      toast({ title: 'नया link नहीं बना', description: 'इंटरनेट जाँचें।', variant: 'destructive', duration: 10000 });
+      toast({ title: 'ईमेल सेव नहीं हुआ', description: 'इंटरनेट जाँचें।', variant: 'destructive', duration: 10000 });
     } finally {
       setSaving(false);
     }
@@ -203,9 +224,12 @@ export default function SuperAdminPartners() {
         return;
       }
       toast({ title: 'सेव हो गया ✓', description: res.code && decide.status === 'approved' ? `Code: ${res.code}` : undefined });
+      const approved = decide.status === 'approved' ? decide.partner : null;
       setDecide(null);
       setDecideNote('');
       await load();
+      // Approval → the partner gets their code, referral link and portal address by email at once.
+      if (approved && approved.email) await sendWelcome(approved);
     } catch {
       toast({ title: 'बदलाव सेव नहीं हुआ', description: 'इंटरनेट जाँचें।', variant: 'destructive', duration: 10000 });
     } finally {
@@ -324,13 +348,22 @@ export default function SuperAdminPartners() {
                           {p.status === 'approved' && (
                             <Button size="sm" variant="outline" onClick={() => { setDecide({ partner: p, status: 'suspended' }); setDecideNote(''); }}>रोकें</Button>
                           )}
-                          <Button size="sm" variant="ghost" className="gap-1" title="Partner का स्थिति-पेज link (WhatsApp पर भेजें)"
-                            onClick={() => void copy(`${window.location.origin}/partner/status?t=${p.token}`)}>
-                            <Copy className="h-3.5 w-3.5" /> स्थिति link
-                          </Button>
-                          <Button size="sm" variant="ghost" className="gap-1" title="पुराना link बंद करके नया link बनाएँ (link लीक होने पर)"
-                            onClick={() => setRotateTarget(p)}>
-                            <KeyRound className="h-3.5 w-3.5" /> नया link
+                          {p.status === 'approved' && p.code && p.email && (
+                            <Button size="sm" variant="ghost" className="gap-1" title="Code, referral link और portal का पता ईमेल पर दोबारा भेजें"
+                              onClick={() => void sendWelcome(p)}>
+                              <Mail className="h-3.5 w-3.5" /> स्वागत email
+                            </Button>
+                          )}
+                          {p.status === 'approved' && p.code && (
+                            <a href={partnerWelcomeWhatsAppUrl(p.phone, p.name, p.code)} target="_blank" rel="noopener noreferrer">
+                              <Button size="sm" variant="ghost" className="gap-1" title="तैयार संदेश के साथ partner का WhatsApp खोलें">
+                                <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+                              </Button>
+                            </a>
+                          )}
+                          <Button size="sm" variant="ghost" className="gap-1" title="Portal login का ईमेल जोड़ें / बदलें"
+                            onClick={() => { setEmailTarget(p); setEmailValue(p.email ?? ''); }}>
+                            <AtSign className="h-3.5 w-3.5" /> ईमेल
                           </Button>
                         </div>
                       </TableCell>
@@ -409,7 +442,7 @@ export default function SuperAdminPartners() {
       )}
 
       {tab === 'commissions' && <AdminCommissionsPanel />}
-      {tab === 'payouts' && <AdminPayoutsPanel />}
+      {tab === 'payouts' && (<><AdminDetailRequests /><AdminPayoutsPanel /></>)}
 
       {/* approve / reject / suspend */}
       <Dialog open={!!decide} onOpenChange={(o) => { if (!o) setDecide(null); }}>
@@ -468,18 +501,22 @@ export default function SuperAdminPartners() {
         </DialogContent>
       </Dialog>
 
-      {/* new status link */}
-      <Dialog open={!!rotateTarget} onOpenChange={(o) => { if (!o) setRotateTarget(null); }}>
+      {/* portal login email */}
+      <Dialog open={!!emailTarget} onOpenChange={(o) => { if (!o) setEmailTarget(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>नया स्थिति link बनाएँ</DialogTitle>
+            <DialogTitle>Portal login ईमेल — {emailTarget?.name}</DialogTitle>
             <DialogDescription>
-              {rotateTarget?.name} का पुराना link तुरंत बंद हो जाएगा। यह तभी करें जब link किसी और तक पहुँच गया हो। उनका referral code नहीं बदलेगा।
+              Partner इसी ईमेल पर आए कोड से portal पर login करेगा। ईमेल बदलने पर उसके सारे खुले login बंद हो जाएँगे।
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-1">
+            <Label htmlFor="partner-email">ईमेल</Label>
+            <Input id="partner-email" type="email" value={emailValue} onChange={(e) => setEmailValue(e.target.value)} autoComplete="off" />
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRotateTarget(null)}>रद्द</Button>
-            <Button onClick={() => void submitRotate()} disabled={saving}>{saving ? 'बन रहा है…' : 'नया link बनाएँ'}</Button>
+            <Button variant="outline" onClick={() => setEmailTarget(null)}>रद्द</Button>
+            <Button onClick={() => void saveEmail()} disabled={saving || !emailValue.trim()}>{saving ? 'सेव हो रहा है…' : 'सेव करें'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
