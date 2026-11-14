@@ -221,7 +221,7 @@ export default function WorkerMaster() {
           </div>
           <div className="space-y-2">
             <Label>PAN</Label>
-            <Input value={f.pan} onChange={e => s('pan', e.target.value)} placeholder="ABCDE1234F" maxLength={10} className="uppercase" />
+            <Input value={f.pan} onChange={e => s('pan', e.target.value.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} className="font-mono" />
           </div>
           <div className="space-y-2">
             <Label>{hi ? 'बैंक खाता संख्या' : 'Bank account no.'}</Label>
@@ -229,7 +229,7 @@ export default function WorkerMaster() {
           </div>
           <div className="space-y-2">
             <Label>IFSC</Label>
-            <Input value={f.ifsc} onChange={e => s('ifsc', e.target.value)} placeholder="SBIN0001234" maxLength={11} className="uppercase" />
+            <Input value={f.ifsc} onChange={e => s('ifsc', e.target.value.toUpperCase())} placeholder="SBIN0001234" maxLength={11} className="font-mono" />
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label>{hi ? 'स्थायी पता' : 'Permanent address'}</Label>
