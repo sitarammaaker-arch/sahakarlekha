@@ -141,6 +141,70 @@ export function summarizePartnerSocieties(rows: readonly Pick<PartnerSocietyRow,
   return out;
 }
 
+// ── commissions (migration 166) ───────────────────────────────────────────────────────────────────────────────
+
+export interface CommissionRow {
+  id: number;
+  society_name: string | null;
+  invoice_date: string;
+  kind: string;
+  basis: 'first_year' | 'renewal' | 'none';
+  taxable_paise: number;
+  rate_pct: number | string | null;
+  commission_paise: number;
+  status: 'no_rule' | 'pending' | 'cancelled';
+  hold_until: string;
+  eligible: boolean;
+  cancel_reason: string | null;
+}
+
+/** Paise → "₹1,234.50" (Indian grouping). Integer paise in, never floats in the sum. */
+export function formatPaise(paise: number | string | null | undefined): string {
+  const p = Math.round(Number(paise ?? 0));
+  const neg = p < 0;
+  const abs = Math.abs(p);
+  const rupees = Math.floor(abs / 100);
+  const rest = String(abs % 100).padStart(2, '0');
+  return `${neg ? '−' : ''}₹${rupees.toLocaleString('en-IN')}.${rest}`;
+}
+
+export type CommissionStage = 'eligible' | 'hold' | 'no_rule' | 'cancelled' | 'none';
+
+export function commissionStage(r: Pick<CommissionRow, 'status' | 'eligible' | 'basis'>): CommissionStage {
+  if (r.status === 'cancelled') return 'cancelled';
+  if (r.status === 'no_rule') return 'no_rule';
+  if (r.basis === 'none') return 'none';
+  return r.eligible ? 'eligible' : 'hold';
+}
+
+export const COMMISSION_STAGE_TEXT: Record<CommissionStage, { label: string; cls: string }> = {
+  eligible: { label: 'पक्का (भुगतान योग्य)', cls: 'bg-green-100 text-green-900' },
+  hold: { label: 'Refund अवधि चल रही', cls: 'bg-amber-100 text-amber-900' },
+  no_rule: { label: 'दर तय होनी बाकी', cls: 'bg-muted text-foreground' },
+  cancelled: { label: 'रद्द', cls: 'bg-red-100 text-red-900' },
+  none: { label: 'Commission अवधि पूरी', cls: 'bg-muted text-foreground' },
+};
+
+export const COMMISSION_BASIS_TEXT: Record<CommissionRow['basis'], string> = {
+  first_year: 'पहला साल',
+  renewal: 'Renewal',
+  none: 'अवधि के बाद',
+};
+
+/** Totals in integer paise. Cancelled and no-rule rows never count as money owed. */
+export function summarizeCommissions(rows: readonly Pick<CommissionRow, 'status' | 'eligible' | 'basis' | 'commission_paise'>[]) {
+  const out = { eligible: 0, hold: 0, noRuleCount: 0, cancelled: 0 };
+  for (const r of rows) {
+    const s = commissionStage(r);
+    const p = Math.round(Number(r.commission_paise) || 0);
+    if (s === 'eligible') out.eligible += p;
+    else if (s === 'hold') out.hold += p;
+    else if (s === 'no_rule') out.noRuleCount += 1;
+    else if (s === 'cancelled') out.cancelled += p;
+  }
+  return out;
+}
+
 // ── storage wrappers (never throw: private windows / blocked storage just mean "no code") ─────────────────────
 
 export function loadReferral(storage: Pick<Storage, 'getItem'> | null | undefined, now: number): StoredReferral | null {

@@ -23,7 +23,10 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { trackEvent } from '@/lib/analytics';
 import { INDIAN_STATES } from '@/lib/constants';
-import { PARTNER_CATEGORIES, societyStage, summarizePartnerSocieties, SOCIETY_STAGE_TEXT, type PartnerSocietyRow } from '@/lib/referral/referralCode';
+import {
+  PARTNER_CATEGORIES, societyStage, summarizePartnerSocieties, SOCIETY_STAGE_TEXT, type PartnerSocietyRow,
+  commissionStage, summarizeCommissions, formatPaise, COMMISSION_STAGE_TEXT, COMMISSION_BASIS_TEXT, type CommissionRow,
+} from '@/lib/referral/referralCode';
 import { Handshake, Link2, ShieldCheck, Copy, MessageCircle, CheckCircle2, Clock, XCircle, PauseCircle, Users } from 'lucide-react';
 
 const APPLY_ERRORS: Record<string, string> = {
@@ -336,7 +339,61 @@ const PartnerSocieties: React.FC<{ societies: PartnerSocietyRow[] | 'error' | nu
         </ul>
       )}
       <p className="text-xs text-muted-foreground">
-        यहाँ सिर्फ़ समिति का नाम, ज़िला और plan की स्थिति दिखती है — समिति का कोई हिसाब-किताब नहीं। Commission का हिसाब जल्द यहीं जुड़ेगा।
+        यहाँ सिर्फ़ समिति का नाम, ज़िला और plan की स्थिति दिखती है — समिति का कोई हिसाब-किताब नहीं। 
+      </p>
+    </div>
+  );
+};
+
+const PartnerCommissions: React.FC<{ rows: CommissionRow[] | 'error' | null }> = ({ rows }) => {
+  if (rows === null) return <p className="text-sm text-muted-foreground">Commission का हिसाब लोड हो रहा है…</p>;
+  if (rows === 'error') return <p className="text-sm text-destructive" role="alert">Commission का हिसाब लोड नहीं हो सका — पेज दोबारा खोलें।</p>;
+  const sum = summarizeCommissions(rows);
+  return (
+    <div className="space-y-3">
+      <h2 className="text-lg font-semibold text-foreground">आपका commission</h2>
+      <div className="grid grid-cols-2 gap-2 text-center">
+        <div className="rounded-lg border p-3">
+          <div className="text-xl font-bold text-green-700">{formatPaise(sum.eligible)}</div>
+          <div className="text-xs text-muted-foreground">पक्का (भुगतान योग्य)</div>
+        </div>
+        <div className="rounded-lg border p-3">
+          <div className="text-xl font-bold text-foreground">{formatPaise(sum.hold)}</div>
+          <div className="text-xs text-muted-foreground">Refund अवधि में</div>
+        </div>
+      </div>
+      {sum.noRuleCount > 0 && (
+        <p className="text-xs text-muted-foreground">{sum.noRuleCount} भुगतान पर commission की दर अभी तय होनी है — तय होते ही यहाँ रकम दिखेगी।</p>
+      )}
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">अभी किसी समिति का भुगतान नहीं आया। समिति के भुगतान करते ही commission यहाँ दिखेगा।</p>
+      ) : (
+        <ul className="divide-y rounded-lg border">
+          {rows.map((r) => {
+            const st = COMMISSION_STAGE_TEXT[commissionStage(r)];
+            return (
+              <li key={r.id} className="p-3 flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-medium text-foreground break-words">{r.society_name ?? '—'}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {istDate(r.invoice_date)} · {COMMISSION_BASIS_TEXT[r.basis]}
+                    {r.rate_pct != null ? ` · ${Number(r.rate_pct)}% of ${formatPaise(r.taxable_paise)}` : ''}
+                    {commissionStage(r) === 'hold' ? ` · पक्का होगा: ${istDate(r.hold_until)}` : ''}
+                  </div>
+                  {r.status === 'cancelled' && r.cancel_reason && <div className="text-xs text-red-700">कारण: {r.cancel_reason}</div>}
+                </div>
+                <div className="text-right">
+                  <div className={`font-semibold ${r.status === 'cancelled' ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{formatPaise(r.commission_paise)}</div>
+                  <Badge className={st.cls}>{st.label}</Badge>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Commission GST के बिना की रकम (taxable value) पर बनता है। भुगतान की refund अवधि बीतने पर वह पक्का होता है; भुगतान और TDS
+        का हिसाब Partner Agreement के अनुसार होगा।
       </p>
     </div>
   );
@@ -370,6 +427,7 @@ export const PartnerStatus: React.FC = () => {
   const [loadError, setLoadError] = useState(false);
   // null = not loaded (or not approved); 'error' = the list could not be read (shown, never faked as empty)
   const [societies, setSocieties] = useState<PartnerSocietyRow[] | 'error' | null>(null);
+  const [commissions, setCommissions] = useState<CommissionRow[] | 'error' | null>(null);
 
   useEffect(() => {
     if (!validToken) return;
@@ -377,6 +435,7 @@ export const PartnerStatus: React.FC = () => {
     setResult(null);
     setLoadError(false);
     setSocieties(null);
+    setCommissions(null);
     (async () => {
       try {
         const { data, error } = await supabase.rpc('partner_status', { p_token: token });
@@ -389,6 +448,12 @@ export const PartnerStatus: React.FC = () => {
           if (cancelled) return;
           const d = (dash.data ?? {}) as { ok?: boolean; societies?: PartnerSocietyRow[] };
           setSocieties(dash.error || !d.ok ? 'error' : (d.societies ?? []));
+        }
+        if (st.ok && (st.status === 'approved' || st.status === 'suspended')) {
+          const com = await supabase.rpc('partner_commissions', { p_token: token });
+          if (cancelled) return;
+          const c = (com.data ?? {}) as { ok?: boolean; rows?: CommissionRow[] };
+          setCommissions(com.error || !c.ok ? 'error' : (c.rows ?? []));
         }
       } catch {
         if (!cancelled) setLoadError(true);
@@ -440,6 +505,9 @@ export const PartnerStatus: React.FC = () => {
         )}
         {result.status === 'approved' ? (
           <PartnerSocieties societies={societies} />
+        ) : null}
+        {result.status === 'approved' || result.status === 'suspended' ? (
+          <PartnerCommissions rows={commissions} />
         ) : (
           <div className="rounded-lg border p-4 flex items-center gap-3">
             <Users className="h-5 w-5 text-primary" />
