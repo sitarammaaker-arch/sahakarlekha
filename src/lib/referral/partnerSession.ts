@@ -46,8 +46,16 @@ export const LOGIN_ERROR_TEXT: Record<string, string> = {
   session_expired: 'आपका login समाप्त हो गया — दोबारा login करें।',
 };
 
-export const loginErrorText = (code: string | undefined | null): string =>
-  (code && LOGIN_ERROR_TEXT[code]) || 'Login नहीं हो सका — दोबारा कोशिश करें।';
+export const LOGIN_ERROR_TEXT_EN: Record<string, string> = {
+  invalid_code: 'The code is not right — check the 6-digit code in the email again.',
+  code_expired: 'The code has expired or was already used — ask for a new code.',
+  too_many_attempts: 'Too many wrong codes — ask for a new code.',
+  session_expired: 'Your login has ended — please log in again.',
+};
+
+export const loginErrorText = (code: string | undefined | null, lang: 'hi' | 'en' = 'hi'): string => (lang === 'en'
+  ? (code && LOGIN_ERROR_TEXT_EN[code]) || 'Could not log in — try again.'
+  : (code && LOGIN_ERROR_TEXT[code]) || 'Login नहीं हो सका — दोबारा कोशिश करें।');
 
 /** Masked details the portal shows — never the full PAN / account (the server masks; this only formats). */
 export interface MaskedDetails {

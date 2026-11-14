@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/lib/supabase';
 import { LogOut, Mail, KeyRound, CheckCircle2, Clock, PauseCircle, MessageCircle, ShieldCheck } from 'lucide-react';
 import {
@@ -26,7 +27,7 @@ import {
 } from '@/lib/referral/partnerSession';
 import { payoutErrorText, type PartnerSocietyRow, type CommissionRow } from '@/lib/referral/referralCode';
 import {
-  CopyRow, referralLink, istDate, PartnerSocieties, PartnerCommissions, PartnerPayouts, type PartnerPayoutsData,
+  CopyRow, referralLink, istDate, PartnerSocieties, PartnerCommissions, PartnerPayouts, PartnerLangToggle, type PartnerPayoutsData,
 } from '@/pages/PartnerProgram';
 
 const storage = (): Storage | null => { try { return window.localStorage; } catch { return null; } };
@@ -34,6 +35,8 @@ const storage = (): Storage | null => { try { return window.localStorage; } catc
 // ── /partner/login ─────────────────────────────────────────────────────────────────────────────────────────────
 export const PartnerLogin: React.FC = () => {
   useNoIndex();
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   useDocumentMeta({ title: 'Partner login — SahakarLekha', description: 'SahakarLekha partner portal login.', canonicalPath: '/partner/login' });
   const navigate = useNavigate();
   const [step, setStep] = useState<'email' | 'code'>('email');
@@ -48,15 +51,18 @@ export const PartnerLogin: React.FC = () => {
   const sendCode = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setError(''); setInfo('');
-    if (!isLoginEmail(email)) { setError('सही ईमेल लिखें।'); return; }
+    if (!isLoginEmail(email)) { setError(L('सही ईमेल लिखें।', 'Please enter a valid email.')); return; }
     setBusy(true);
     try {
       const { error: fnErr } = await supabase.functions.invoke('partner-auth', { body: { action: 'start', email: normalizeLoginEmail(email) } });
-      if (fnErr) { setError('कोड भेजा नहीं जा सका — थोड़ी देर बाद फिर कोशिश करें।'); return; }
+      if (fnErr) { setError(L('कोड भेजा नहीं जा सका — थोड़ी देर बाद फिर कोशिश करें।', 'Could not send the code — please try again in a little while.')); return; }
       setStep('code');
-      setInfo('अगर यह ईमेल किसी partner का है, तो उस पर 6 अंकों का कोड भेज दिया गया है (10 मिनट तक चलेगा)। Spam फ़ोल्डर भी देखें।');
+      setInfo(L(
+        'अगर यह ईमेल किसी partner का है, तो उस पर 6 अंकों का कोड भेज दिया गया है (10 मिनट तक चलेगा)। Spam फ़ोल्डर भी देखें।',
+        'If this email belongs to a partner, a 6-digit code has been sent to it (valid for 10 minutes). Check your Spam folder too.',
+      ));
     } catch {
-      setError('कोड भेजा नहीं जा सका — इंटरनेट जाँचें।');
+      setError(L('कोड भेजा नहीं जा सका — इंटरनेट जाँचें।', 'Could not send the code — check your internet.'));
     } finally {
       setBusy(false);
     }
@@ -65,22 +71,22 @@ export const PartnerLogin: React.FC = () => {
   const verify = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!isLoginCode(code)) { setError('ईमेल में आया 6 अंकों का कोड लिखें।'); return; }
+    if (!isLoginCode(code)) { setError(L('ईमेल में आया 6 अंकों का कोड लिखें।', 'Enter the 6-digit code from the email.')); return; }
     setBusy(true);
     try {
       const { data, error: rpcErr } = await supabase.rpc('partner_login_verify', { p_email: normalizeLoginEmail(email), p_code: code.trim() });
       const res = (data ?? {}) as { ok?: boolean; session?: string; error_code?: string; attempts_left?: number };
       if (rpcErr || !res.ok || !res.session) {
-        setError(loginErrorText(res.error_code) + (res.attempts_left != null ? ` (${res.attempts_left} कोशिश बाकी)` : ''));
+        setError(loginErrorText(res.error_code, language) + (res.attempts_left != null ? ` (${res.attempts_left} ${L('कोशिश बाकी', 'attempts left')})` : ''));
         return;
       }
       if (!savePartnerSession(storage(), res.session)) {
-        setError('यह browser login याद नहीं रख पा रहा (private/incognito mode?) — सामान्य window में खोलें।');
+        setError(L('यह browser login याद नहीं रख पा रहा (private/incognito mode?) — सामान्य window में खोलें।', 'This browser cannot remember the login (private/incognito mode?) — open it in a normal window.'));
         return;
       }
       navigate('/partner/portal', { replace: true });
     } catch {
-      setError('Login नहीं हो सका — इंटरनेट जाँचें।');
+      setError(L('Login नहीं हो सका — इंटरनेट जाँचें।', 'Could not log in — check your internet.'));
     } finally {
       setBusy(false);
     }
@@ -93,36 +99,39 @@ export const PartnerLogin: React.FC = () => {
           <Card>
             <CardContent className="p-6 sm:p-8 space-y-5">
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Partner portal</h1>
-                <p className="text-sm text-muted-foreground mt-1">आवेदन वाले ईमेल से login करें — हर बार ईमेल पर कोड आएगा, कोई password नहीं।</p>
+                <div className="flex items-start justify-between gap-3">
+                  <h1 className="text-2xl font-bold text-foreground">Partner portal</h1>
+                  <PartnerLangToggle />
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">{L('आवेदन वाले ईमेल से login करें — हर बार ईमेल पर कोड आएगा, कोई password नहीं।', 'Log in with the email you applied with — a code is emailed to you each time, no password.')}</p>
               </div>
               {step === 'email' ? (
                 <form onSubmit={sendCode} className="space-y-4" noValidate>
                   <div className="space-y-2">
-                    <Label htmlFor="pl-email">ईमेल</Label>
+                    <Label htmlFor="pl-email">{L('ईमेल', 'Email')}</Label>
                     <Input id="pl-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" inputMode="email" />
                   </div>
                   {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-                  <Button type="submit" className="w-full gap-2" disabled={busy}><Mail className="h-4 w-4" /> {busy ? 'भेजा जा रहा है…' : 'कोड भेजें'}</Button>
+                  <Button type="submit" className="w-full gap-2" disabled={busy}><Mail className="h-4 w-4" /> {busy ? L('भेजा जा रहा है…', 'Sending…') : L('कोड भेजें', 'Send code')}</Button>
                 </form>
               ) : (
                 <form onSubmit={verify} className="space-y-4" noValidate>
                   {info && <p className="text-sm text-muted-foreground" role="status">{info}</p>}
                   <div className="space-y-2">
-                    <Label htmlFor="pl-code">6 अंकों का कोड</Label>
+                    <Label htmlFor="pl-code">{L('6 अंकों का कोड', '6-digit code')}</Label>
                     <Input id="pl-code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                       inputMode="numeric" autoComplete="one-time-code" className="font-mono text-xl tracking-[0.4em]" />
                   </div>
                   {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-                  <Button type="submit" className="w-full gap-2" disabled={busy}><KeyRound className="h-4 w-4" /> {busy ? 'जाँच हो रही है…' : 'Login करें'}</Button>
+                  <Button type="submit" className="w-full gap-2" disabled={busy}><KeyRound className="h-4 w-4" /> {busy ? L('जाँच हो रही है…', 'Checking…') : L('Login करें', 'Log in')}</Button>
                   <div className="flex justify-between text-sm">
-                    <button type="button" className="text-primary hover:underline" onClick={() => { setStep('email'); setCode(''); setError(''); setInfo(''); }}>ईमेल बदलें</button>
-                    <button type="button" className="text-primary hover:underline disabled:opacity-50" disabled={busy} onClick={() => void sendCode()}>कोड दोबारा भेजें</button>
+                    <button type="button" className="text-primary hover:underline" onClick={() => { setStep('email'); setCode(''); setError(''); setInfo(''); }}>{L('ईमेल बदलें', 'Change email')}</button>
+                    <button type="button" className="text-primary hover:underline disabled:opacity-50" disabled={busy} onClick={() => void sendCode()}>{L('कोड दोबारा भेजें', 'Resend code')}</button>
                   </div>
                 </form>
               )}
               <p className="text-xs text-muted-foreground border-t pt-3">
-                अभी partner नहीं हैं? <Link to="/partner" className="text-primary hover:underline">आवेदन करें</Link>
+                {L('अभी partner नहीं हैं?', 'Not a partner yet?')} <Link to="/partner" className="text-primary hover:underline">{L('आवेदन करें', 'Apply')}</Link>
               </p>
             </CardContent>
           </Card>
@@ -145,10 +154,10 @@ interface PortalData {
   last_decision: { status: 'approved' | 'rejected'; admin_note: string | null; decided_at: string } | null;
 }
 
-const STATUS_BADGE: Record<string, { label: string; icon: React.ElementType; cls: string }> = {
-  pending: { label: 'जाँच चल रही है', icon: Clock, cls: 'bg-amber-100 text-amber-900' },
-  approved: { label: 'मंज़ूर', icon: CheckCircle2, cls: 'bg-green-100 text-green-900' },
-  suspended: { label: 'रोका गया', icon: PauseCircle, cls: 'bg-muted text-foreground' },
+const STATUS_BADGE: Record<string, { label: string; labelEn: string; icon: React.ElementType; cls: string }> = {
+  pending: { label: 'जाँच चल रही है', labelEn: 'Under review', icon: Clock, cls: 'bg-amber-100 text-amber-900' },
+  approved: { label: 'मंज़ूर', labelEn: 'Approved', icon: CheckCircle2, cls: 'bg-green-100 text-green-900' },
+  suspended: { label: 'रोका गया', labelEn: 'Suspended', icon: PauseCircle, cls: 'bg-muted text-foreground' },
 };
 
 const EMPTY_FORM = { pan: '', pan_name: '', account_name: '', account_no: '', ifsc: '', upi_id: '', gstin: '' };
@@ -160,6 +169,8 @@ export const PartnerPortalHome: React.FC = () => {
   useDocumentMeta({ title: 'Partner portal — SahakarLekha', description: 'SahakarLekha partner portal.', canonicalPath: '/partner/portal' });
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const [data, setData] = useState<PortalData | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -204,18 +215,18 @@ export const PartnerPortalHome: React.FC = () => {
       const res = (d ?? {}) as { ok?: boolean; error_code?: string };
       if (error || !res.ok) {
         if (res.error_code === 'session_expired') { signOutLocal(); return; }
-        const msg = res.error_code === 'nothing_to_save' ? 'कम से कम PAN, बैंक खाता या UPI में से एक भरें।'
-          : res.error_code === 'rate_limited' ? 'आज बहुत बार बदलाव माँगा गया — कल फिर कोशिश करें।'
-          : payoutErrorText(res.error_code);
-        toast({ title: 'जानकारी भेजी नहीं गई', description: msg, variant: 'destructive', duration: 10000 });
+        const msg = res.error_code === 'nothing_to_save' ? L('कम से कम PAN, बैंक खाता या UPI में से एक भरें।', 'Fill in at least one of PAN, bank account or UPI.')
+          : res.error_code === 'rate_limited' ? L('आज बहुत बार बदलाव माँगा गया — कल फिर कोशिश करें।', 'Too many change requests today — please try again tomorrow.')
+          : payoutErrorText(res.error_code, language);
+        toast({ title: L('जानकारी भेजी नहीं गई', 'Details not sent'), description: msg, variant: 'destructive', duration: 10000 });
         return;
       }
-      toast({ title: 'जानकारी भेज दी गई ✓', description: 'जाँच के बाद लागू होगी। तब तक पुरानी जानकारी ही चलेगी।' });
+      toast({ title: L('जानकारी भेज दी गई ✓', 'Details sent ✓'), description: L('जाँच के बाद लागू होगी। तब तक पुरानी जानकारी ही चलेगी।', 'They will apply after review. Until then your old details stay in use.') });
       setEditing(false);
       setForm(EMPTY_FORM);
       await load();
     } catch {
-      toast({ title: 'जानकारी भेजी नहीं गई', description: 'इंटरनेट जाँचें।', variant: 'destructive', duration: 10000 });
+      toast({ title: L('जानकारी भेजी नहीं गई', 'Details not sent'), description: L('इंटरनेट जाँचें।', 'Check your internet.'), variant: 'destructive', duration: 10000 });
     } finally {
       setSaving(false);
     }
@@ -225,12 +236,13 @@ export const PartnerPortalHome: React.FC = () => {
   if (loadError) {
     body = (
       <div className="space-y-3">
-        <p className="text-destructive" role="alert">Portal लोड नहीं हो सका — इंटरनेट जाँचकर दोबारा कोशिश करें।</p>
-        <Button variant="outline" onClick={() => void load()}>दोबारा कोशिश करें</Button>
+        <div className="flex justify-end"><PartnerLangToggle /></div>
+        <p className="text-destructive" role="alert">{L('Portal लोड नहीं हो सका — इंटरनेट जाँचकर दोबारा कोशिश करें।', 'Could not load the portal — check your internet and try again.')}</p>
+        <Button variant="outline" onClick={() => void load()}>{L('दोबारा कोशिश करें', 'Try again')}</Button>
       </div>
     );
   } else if (!data) {
-    body = <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" aria-label="लोड हो रहा है" />;
+    body = <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" aria-label={L('लोड हो रहा है', 'Loading')} />;
   } else {
     const p = data.partner;
     const badge = STATUS_BADGE[p.status] ?? STATUS_BADGE.pending;
@@ -242,28 +254,34 @@ export const PartnerPortalHome: React.FC = () => {
     body = (
       <div className="space-y-6">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold text-foreground">नमस्ते, {p.name}</h1>
-          <Badge className={`${badge.cls} gap-1`}><Icon className="h-3.5 w-3.5" /> {badge.label}</Badge>
-          <Button variant="ghost" size="sm" className="ml-auto gap-1" onClick={() => void logout()}><LogOut className="h-4 w-4" /> Logout</Button>
+          <h1 className="text-2xl font-bold text-foreground">{L('नमस्ते', 'Hello')}, {p.name}</h1>
+          <Badge className={`${badge.cls} gap-1`}><Icon className="h-3.5 w-3.5" /> {L(badge.label, badge.labelEn)}</Badge>
+          <div className="ml-auto flex items-center gap-1">
+            <PartnerLangToggle />
+            <Button variant="ghost" size="sm" className="gap-1" onClick={() => void logout()}><LogOut className="h-4 w-4" /> Logout</Button>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground -mt-4">{p.email} · मोबाइल {p.phone_masked} · आवेदन {istDate(p.applied_at)}</p>
+        <p className="text-xs text-muted-foreground -mt-4">{p.email} · {L('मोबाइल', 'Mobile')} {p.phone_masked} · {L('आवेदन', 'Applied')} {istDate(p.applied_at)}</p>
 
-        {p.status === 'pending' && <p className="text-muted-foreground">आपका आवेदन मिल गया है। मंज़ूरी मिलते ही यहाँ आपका referral code दिखेगा और ईमेल भी आएगा।</p>}
-        {p.status === 'suspended' && <p className="text-muted-foreground">आपका code अभी रोका गया है। जानकारी के लिए हमें WhatsApp करें। आपका पिछला हिसाब नीचे है।</p>}
+        {p.status === 'pending' && <p className="text-muted-foreground">{L('आपका आवेदन मिल गया है। मंज़ूरी मिलते ही यहाँ आपका referral code दिखेगा और ईमेल भी आएगा।', 'We have received your application. Once it is approved, your referral code will show here and you will also get an email.')}</p>}
+        {p.status === 'suspended' && <p className="text-muted-foreground">{L('आपका code अभी रोका गया है। जानकारी के लिए हमें WhatsApp करें। आपका पिछला हिसाब नीचे है।', 'Your code is suspended for now. WhatsApp us for details. Your past record is below.')}</p>}
 
         {p.status === 'approved' && p.code && (
           <div className="space-y-3">
             <div>
-              <Label>आपका referral code</Label>
+              <Label>{L('आपका referral code', 'Your referral code')}</Label>
               <p className="mt-1 text-3xl font-mono font-bold tracking-wider text-primary">{p.code}</p>
             </div>
             <div className="space-y-2">
-              <Label>आपका referral link (समितियों को भेजें)</Label>
+              <Label>{L('आपका referral link (समितियों को भेजें)', 'Your referral link (send it to societies)')}</Label>
               <CopyRow value={referralLink(p.code)} label="referral link" />
             </div>
-            <a href={`https://wa.me/?text=${encodeURIComponent(`SahakarLekha — सहकारी समितियों के लिए बना हिसाब-किताब software। इस link से जुड़ें: ${referralLink(p.code)} (Referral code: ${p.code})`)}`}
+            <a href={`https://wa.me/?text=${encodeURIComponent(L(
+              `SahakarLekha — सहकारी समितियों के लिए बना हिसाब-किताब software। इस link से जुड़ें: ${referralLink(p.code)} (Referral code: ${p.code})`,
+              `SahakarLekha — accounting software made for cooperative societies. Join through this link: ${referralLink(p.code)} (Referral code: ${p.code})`,
+            ))}`}
               target="_blank" rel="noopener noreferrer">
-              <Button className="gap-2"><MessageCircle className="h-4 w-4" /> WhatsApp पर भेजें</Button>
+              <Button className="gap-2"><MessageCircle className="h-4 w-4" /> {L('WhatsApp पर भेजें', 'Share on WhatsApp')}</Button>
             </a>
           </div>
         )}
@@ -278,35 +296,41 @@ export const PartnerPortalHome: React.FC = () => {
 
         {(p.status === 'approved' || p.status === 'suspended') && (
           <div className="space-y-3 border-t pt-5">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /> भुगतान की जानकारी</h2>
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /> {L('भुगतान की जानकारी', 'Payment details')}</h2>
             {det ? (
               <div className="grid gap-1 text-sm sm:grid-cols-2">
                 <div>PAN: <span className="font-mono">{det.pan_masked ?? '—'}</span>{det.pan_name ? ` (${det.pan_name})` : ''}</div>
-                <div>बैंक खाता: <span className="font-mono">{det.account_masked ?? '—'}</span>{det.ifsc ? ` · ${det.ifsc}` : ''}</div>
+                <div>{L('बैंक खाता', 'Bank account')}: <span className="font-mono">{det.account_masked ?? '—'}</span>{det.ifsc ? ` · ${det.ifsc}` : ''}</div>
                 <div>UPI: <span className="font-mono">{det.upi_masked ?? '—'}</span></div>
                 <div>GSTIN: <span className="font-mono">{det.gstin ?? '—'}</span></div>
               </div>
             ) : (
-              <p className="text-sm text-amber-800 bg-amber-50 rounded p-2">अभी आपकी भुगतान जानकारी दर्ज नहीं है। PAN न होने पर TDS ऊँची दर से कटता है।</p>
+              <p className="text-sm text-amber-800 bg-amber-50 rounded p-2">{L('अभी आपकी भुगतान जानकारी दर्ज नहीं है। PAN न होने पर TDS ऊँची दर से कटता है।', 'Your payment details are not on record yet. Without a PAN, TDS is deducted at a higher rate.')}</p>
             )}
             {data.pending_request && (
-              <p className="text-sm text-blue-900 bg-blue-50 rounded p-2">आपकी भेजी जानकारी ({istDate(data.pending_request.created_at)}) जाँच में है — मंज़ूरी के बाद लागू होगी।</p>
+              <p className="text-sm text-blue-900 bg-blue-50 rounded p-2">
+                {language === 'hi'
+                  ? <>आपकी भेजी जानकारी ({istDate(data.pending_request.created_at)}) जाँच में है — मंज़ूरी के बाद लागू होगी।</>
+                  : <>The details you sent ({istDate(data.pending_request.created_at)}) are under review — they will apply after approval.</>}
+              </p>
             )}
             {!data.pending_request && data.last_decision?.status === 'rejected' && (
-              <p className="text-sm text-red-800 bg-red-50 rounded p-2">पिछली भेजी जानकारी मंज़ूर नहीं हुई{data.last_decision.admin_note ? `: ${data.last_decision.admin_note}` : ''}।</p>
+              <p className="text-sm text-red-800 bg-red-50 rounded p-2">{L('पिछली भेजी जानकारी मंज़ूर नहीं हुई', 'The details you sent last time were not approved')}{data.last_decision.admin_note ? `: ${data.last_decision.admin_note}` : ''}{L('।', '.')}</p>
             )}
             {!editing ? (
-              <Button variant="outline" onClick={() => setEditing(true)}>{det ? 'जानकारी बदलें' : 'जानकारी भरें'}</Button>
+              <Button variant="outline" onClick={() => setEditing(true)}>{det ? L('जानकारी बदलें', 'Change details') : L('जानकारी भरें', 'Add details')}</Button>
             ) : (
               <form onSubmit={submitDetails} className="space-y-3" noValidate>
                 <p className="text-xs text-muted-foreground">
-                  सुरक्षा के लिए बदलाव तुरंत लागू नहीं होता — हम जाँचकर मंज़ूर करेंगे। PAN card और cancelled cheque / passbook की फ़ोटो WhatsApp पर भेजें।
-                  जो खाना नहीं बदलना, उसे ख़ाली छोड़ दें।
+                  {L(
+                    'सुरक्षा के लिए बदलाव तुरंत लागू नहीं होता — हम जाँचकर मंज़ूर करेंगे। PAN card और cancelled cheque / passbook की फ़ोटो WhatsApp पर भेजें। जो खाना नहीं बदलना, उसे ख़ाली छोड़ दें।',
+                    'For safety, changes do not apply at once — we will review and approve them. Send a photo of your PAN card and a cancelled cheque / passbook on WhatsApp. Leave blank any box you do not want to change.',
+                  )}
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {([
-                    ['pan', 'PAN', 'ABCDE1234F'], ['pan_name', 'PAN पर नाम', ''], ['account_name', 'खाताधारक का नाम', ''],
-                    ['account_no', 'खाता नंबर', ''], ['ifsc', 'IFSC', 'SBIN0001234'], ['upi_id', 'UPI ID', 'name@okaxis'], ['gstin', 'GSTIN (अगर है)', ''],
+                    ['pan', 'PAN', 'ABCDE1234F'], ['pan_name', L('PAN पर नाम', 'Name on PAN'), ''], ['account_name', L('खाताधारक का नाम', 'Account holder name'), ''],
+                    ['account_no', L('खाता नंबर', 'Account number'), ''], ['ifsc', 'IFSC', 'SBIN0001234'], ['upi_id', 'UPI ID', 'name@okaxis'], ['gstin', L('GSTIN (अगर है)', 'GSTIN (if any)'), ''],
                   ] as [keyof typeof EMPTY_FORM, string, string][]).map(([k, label, ph]) => (
                     <div key={k} className="space-y-1">
                       <Label htmlFor={`pd-${k}`}>{label}</Label>
@@ -316,8 +340,8 @@ export const PartnerPortalHome: React.FC = () => {
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <Button type="submit" disabled={saving}>{saving ? 'भेजा जा रहा है…' : 'जाँच के लिए भेजें'}</Button>
-                  <Button type="button" variant="outline" onClick={() => { setEditing(false); setForm(EMPTY_FORM); }}>रद्द</Button>
+                  <Button type="submit" disabled={saving}>{saving ? L('भेजा जा रहा है…', 'Sending…') : L('जाँच के लिए भेजें', 'Send for review')}</Button>
+                  <Button type="button" variant="outline" onClick={() => { setEditing(false); setForm(EMPTY_FORM); }}>{L('रद्द', 'Cancel')}</Button>
                 </div>
               </form>
             )}

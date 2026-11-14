@@ -68,14 +68,22 @@ export function parseStoredReferral(raw: string | null): StoredReferral | null {
 }
 
 /** Must match the CHECK on public.partners.category (migration 164). */
-export const PARTNER_CATEGORIES: { value: string; label: string }[] = [
-  { value: 'creator', label: 'YouTube / सोशल मीडिया creator' },
-  { value: 'accountant', label: 'लेखाकार (Accountant)' },
-  { value: 'ca', label: 'CA / टैक्स सलाहकार' },
-  { value: 'consultant', label: 'Software / IT सलाहकार' },
-  { value: 'retired', label: 'सेवानिवृत्त (रिटायर्ड) कर्मचारी' },
-  { value: 'other', label: 'अन्य' },
+export const PARTNER_CATEGORIES: { value: string; label: string; labelEn: string }[] = [
+  { value: 'creator', label: 'YouTube / सोशल मीडिया creator', labelEn: 'YouTube / social media creator' },
+  { value: 'accountant', label: 'लेखाकार (Accountant)', labelEn: 'Accountant' },
+  { value: 'ca', label: 'CA / टैक्स सलाहकार', labelEn: 'CA / tax consultant' },
+  { value: 'consultant', label: 'Software / IT सलाहकार', labelEn: 'Software / IT consultant' },
+  { value: 'retired', label: 'सेवानिवृत्त (रिटायर्ड) कर्मचारी', labelEn: 'Retired employee' },
+  { value: 'other', label: 'अन्य', labelEn: 'Other' },
 ];
+
+/** The app's two languages (LanguageContext). Hindi is the default everywhere below. */
+export type Lang = 'hi' | 'en';
+
+export function categoryLabel(value: string, lang: Lang = 'hi'): string {
+  const c = PARTNER_CATEGORIES.find((x) => x.value === value);
+  return c ? (lang === 'en' ? c.labelEn : c.label) : value;
+}
 
 /** Messages for attach_referral_at_signup / admin_referral_set error codes (Hindi first). */
 export const REFERRAL_ERROR_TEXT: Record<string, string> = {
@@ -91,7 +99,21 @@ export const REFERRAL_ERROR_TEXT: Record<string, string> = {
   unchanged: 'यही partner पहले से दर्ज है।',
 };
 
-export function referralErrorText(code: string | undefined | null): string {
+export const REFERRAL_ERROR_TEXT_EN: Record<string, string> = {
+  invalid_code: 'This referral code is not valid (or the partner is not approved yet).',
+  too_late: 'The society was created a while ago — only the admin can add a code now.',
+  already_attributed: 'This society already has a referral code.',
+  self_referral: 'A partner cannot use their own code on their own society.',
+  not_found: 'Society not found.',
+  society_not_found: 'Society not found.',
+  reason_required: 'A reason is required (at least 5 characters).',
+  locked_after_payment: 'This society has paid — its partner can no longer be changed.',
+  nothing_to_remove: 'This society has no partner.',
+  unchanged: 'This partner is already set.',
+};
+
+export function referralErrorText(code: string | undefined | null, lang: Lang = 'hi'): string {
+  if (lang === 'en') return (code && REFERRAL_ERROR_TEXT_EN[code]) || 'The referral code could not be recorded.';
   return (code && REFERRAL_ERROR_TEXT[code]) || 'Referral code दर्ज नहीं हो सका।';
 }
 
@@ -121,12 +143,12 @@ export function societyStage(r: Pick<PartnerSocietyRow, 'plan' | 'subscription_s
   return 'joined';
 }
 
-export const SOCIETY_STAGE_TEXT: Record<SocietyStage, { label: string; cls: string }> = {
-  paid: { label: 'भुगतान हुआ', cls: 'bg-green-100 text-green-900' },
-  trial: { label: 'Trial पर', cls: 'bg-blue-100 text-blue-900' },
-  expired: { label: 'Trial/plan ख़त्म', cls: 'bg-amber-100 text-amber-900' },
-  free: { label: 'पुराना मुफ़्त plan', cls: 'bg-muted text-foreground' },
-  joined: { label: 'जुड़ी', cls: 'bg-muted text-foreground' },
+export const SOCIETY_STAGE_TEXT: Record<SocietyStage, { label: string; labelEn: string; cls: string }> = {
+  paid: { label: 'भुगतान हुआ', labelEn: 'Paid', cls: 'bg-green-100 text-green-900' },
+  trial: { label: 'Trial पर', labelEn: 'On trial', cls: 'bg-blue-100 text-blue-900' },
+  expired: { label: 'Trial/plan ख़त्म', labelEn: 'Trial/plan ended', cls: 'bg-amber-100 text-amber-900' },
+  free: { label: 'पुराना मुफ़्त plan', labelEn: 'Old free plan', cls: 'bg-muted text-foreground' },
+  joined: { label: 'जुड़ी', labelEn: 'Joined', cls: 'bg-muted text-foreground' },
 };
 
 export function summarizePartnerSocieties(rows: readonly Pick<PartnerSocietyRow, 'plan' | 'subscription_status' | 'first_paid_at'>[]) {
@@ -178,13 +200,13 @@ export function commissionStage(r: Pick<CommissionRow, 'status' | 'eligible' | '
   return r.eligible ? 'eligible' : 'hold';
 }
 
-export const COMMISSION_STAGE_TEXT: Record<CommissionStage, { label: string; cls: string }> = {
-  eligible: { label: 'पक्का (भुगतान योग्य)', cls: 'bg-green-100 text-green-900' },
-  hold: { label: 'Refund अवधि चल रही', cls: 'bg-amber-100 text-amber-900' },
-  no_rule: { label: 'दर तय होनी बाकी', cls: 'bg-muted text-foreground' },
-  cancelled: { label: 'रद्द', cls: 'bg-red-100 text-red-900' },
-  none: { label: 'Commission अवधि पूरी', cls: 'bg-muted text-foreground' },
-  paid: { label: 'भुगतान हो गया', cls: 'bg-blue-100 text-blue-900' },
+export const COMMISSION_STAGE_TEXT: Record<CommissionStage, { label: string; labelEn: string; cls: string }> = {
+  eligible: { label: 'पक्का (भुगतान योग्य)', labelEn: 'Confirmed (payable)', cls: 'bg-green-100 text-green-900' },
+  hold: { label: 'Refund अवधि चल रही', labelEn: 'In refund window', cls: 'bg-amber-100 text-amber-900' },
+  no_rule: { label: 'दर तय होनी बाकी', labelEn: 'Rate not set yet', cls: 'bg-muted text-foreground' },
+  cancelled: { label: 'रद्द', labelEn: 'Cancelled', cls: 'bg-red-100 text-red-900' },
+  none: { label: 'Commission अवधि पूरी', labelEn: 'Commission period over', cls: 'bg-muted text-foreground' },
+  paid: { label: 'भुगतान हो गया', labelEn: 'Paid out', cls: 'bg-blue-100 text-blue-900' },
 };
 
 export const COMMISSION_BASIS_TEXT: Record<CommissionRow['basis'], string> = {
@@ -192,6 +214,16 @@ export const COMMISSION_BASIS_TEXT: Record<CommissionRow['basis'], string> = {
   renewal: 'Renewal',
   none: 'अवधि के बाद',
 };
+
+export const COMMISSION_BASIS_TEXT_EN: Record<CommissionRow['basis'], string> = {
+  first_year: 'First year',
+  renewal: 'Renewal',
+  none: 'After the period',
+};
+
+/** label of a { label, labelEn } entry in the chosen language */
+export const tl = (x: { label: string; labelEn: string }, lang: Lang = 'hi'): string => (lang === 'en' ? x.labelEn : x.label);
+export const basisText = (b: CommissionRow['basis'], lang: Lang = 'hi'): string => (lang === 'en' ? COMMISSION_BASIS_TEXT_EN[b] : COMMISSION_BASIS_TEXT[b]);
 
 /** Totals in integer paise. Cancelled and no-rule rows never count as money owed. */
 export function summarizeCommissions(rows: readonly Pick<CommissionRow, 'status' | 'eligible' | 'basis' | 'commission_paise'>[]) {
@@ -245,7 +277,28 @@ export const PAYOUT_ERROR_TEXT: Record<string, string> = {
   out_of_range: 'दर 0–30%, PAN बिना दर 0–40%, सीमा 0 या ज़्यादा।',
 };
 
-export function payoutErrorText(code: string | undefined | null): string {
+export const PAYOUT_ERROR_TEXT_EN: Record<string, string> = {
+  date_required: 'Enter the payment date.',
+  future_date: 'A payment cannot be recorded for a future date.',
+  no_tds_rule: 'No TDS rule is in force on this date — add one first (a 0% rule with its reason if TDS does not apply).',
+  nothing_payable: 'Nothing is payable (or the clawback is equal or larger).',
+  commission_not_payable: 'None of the chosen commissions is payable — check the list again.',
+  stale_preview: 'The amount changed — make the preview again and check it.',
+  utr_required: 'Enter the UTR / reference number (at least 6 characters).',
+  invalid_method: 'Choose the payment method.',
+  invalid_pan: 'PAN is not valid (e.g. ABCDE1234F).',
+  invalid_account: 'Account number: digits only, 6–20 digits.',
+  invalid_ifsc: 'IFSC is not valid (e.g. SBIN0001234).',
+  invalid_upi: 'UPI ID is not valid (e.g. name@okaxis).',
+  invalid_gstin: 'GSTIN is not valid.',
+  account_needs_ifsc: 'Fill account number and IFSC together.',
+  source_required: 'Enter both the section and the source — a TDS rule needs a source.',
+  duplicate_date: 'A rule for this date already exists.',
+  out_of_range: 'Rate 0–30%, rate without PAN 0–40%, threshold 0 or more.',
+};
+
+export function payoutErrorText(code: string | undefined | null, lang: Lang = 'hi'): string {
+  if (lang === 'en') return (code && PAYOUT_ERROR_TEXT_EN[code]) || 'The payment was not recorded — try again.';
   return (code && PAYOUT_ERROR_TEXT[code]) || 'भुगतान दर्ज नहीं हुआ — दोबारा कोशिश करें।';
 }
 
