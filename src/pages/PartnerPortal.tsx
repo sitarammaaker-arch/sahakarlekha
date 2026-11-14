@@ -152,6 +152,8 @@ const STATUS_BADGE: Record<string, { label: string; icon: React.ElementType; cls
 };
 
 const EMPTY_FORM = { pan: '', pan_name: '', account_name: '', account_no: '', ifsc: '', upi_id: '', gstin: '' };
+/** PAN, IFSC and GSTIN are always capital letters, whatever case is typed. */
+const UPPERCASE_FIELDS: string[] = ['pan', 'ifsc', 'gstin'];
 
 export const PartnerPortalHome: React.FC = () => {
   useNoIndex();
@@ -309,7 +311,7 @@ export const PartnerPortalHome: React.FC = () => {
                     <div key={k} className="space-y-1">
                       <Label htmlFor={`pd-${k}`}>{label}</Label>
                       <Input id={`pd-${k}`} value={form[k]} placeholder={ph} autoComplete="off"
-                        onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} className={['pan', 'account_no', 'ifsc', 'gstin'].includes(k) ? 'font-mono' : ''} />
+                        onChange={(e) => setForm((f) => ({ ...f, [k]: UPPERCASE_FIELDS.includes(k) ? e.target.value.toUpperCase() : e.target.value }))} className={['pan', 'account_no', 'ifsc', 'gstin'].includes(k) ? 'font-mono' : ''} />
                     </div>
                   ))}
                 </div>

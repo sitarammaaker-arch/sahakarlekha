@@ -125,7 +125,7 @@ export default function DepartmentMaster() {
       </div>
       <div className="space-y-2">
         <Label>GSTIN</Label>
-        <Input value={f.gstin} onChange={e => s('gstin', e.target.value)} placeholder={hi ? 'वैकल्पिक' : 'optional'} />
+        <Input value={f.gstin} onChange={e => s('gstin', e.target.value.toUpperCase())} placeholder={hi ? 'वैकल्पिक' : 'optional'} maxLength={15} className="font-mono" />
       </div>
       <div className="space-y-2">
         <Label>{hi ? 'आरंभिक बकाया (₹)' : 'Opening balance (₹)'}</Label>

@@ -474,7 +474,7 @@ export default function AdminPayoutsPanel() {
               <div key={k} className="space-y-1">
                 <Label htmlFor={`d-${k}`}>{label}</Label>
                 <Input id={`d-${k}`} value={details[k]} placeholder={ph} autoComplete="off"
-                  onChange={(e) => setDetails((d) => ({ ...d, [k]: e.target.value }))} className={['pan', 'account_no', 'ifsc', 'gstin'].includes(k) ? 'font-mono' : ''} />
+                  onChange={(e) => setDetails((d) => ({ ...d, [k]: ['pan', 'ifsc', 'gstin'].includes(k) ? e.target.value.toUpperCase() : e.target.value }))} className={['pan', 'account_no', 'ifsc', 'gstin'].includes(k) ? 'font-mono' : ''} />
               </div>
             ))}
           </div>
