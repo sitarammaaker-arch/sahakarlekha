@@ -27,6 +27,7 @@ import { AlertTriangle, FileSpreadsheet, Plus, Wallet, IdCard } from 'lucide-rea
 import { fmtDate, fmtDateTime } from '@/lib/dateUtils';
 import { downloadCSV } from '@/lib/exportUtils';
 import { TDS_RULES } from '@/lib/rules/tax';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { formatPaise, financialYearOf, rupeesToPaise, payoutErrorText } from '@/lib/referral/referralCode';
 
 interface PartnerLite { id: string; name: string; code: string | null; status: string; phone: string }
@@ -84,14 +85,20 @@ function commissionTdsSuggestion() {
   };
 }
 
-const METHOD_LABEL: Record<string, string> = { bank: 'Bank (NEFT/IMPS)', upi: 'UPI', other: 'अन्य' };
+const METHOD_LABEL: Record<string, { hi: string; en: string }> = {
+  bank: { hi: 'Bank (NEFT/IMPS)', en: 'Bank (NEFT/IMPS)' },
+  upi: { hi: 'UPI', en: 'UPI' },
+  other: { hi: 'अन्य', en: 'Other' },
+};
 
 export default function AdminPayoutsPanel() {
   const { toast } = useToast();
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const [partners, setPartners] = useState<PartnerLite[]>([]);
   const [rules, setRules] = useState<TdsRule[]>([]);
   const [payouts, setPayouts] = useState<PayoutRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ hi: string; en: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
   // payout form
@@ -128,15 +135,18 @@ export default function AdminPayoutsPanel() {
       if (p.error || r.error || o.error) {
         const msg = (p.error ?? r.error ?? o.error)?.message ?? '';
         setError(/function .* does not exist|schema cache/i.test(msg)
-          ? 'Migration 167 अभी नहीं चली — Supabase SQL Editor में 167_partner_payouts.sql चलाएँ।'
-          : `लोड नहीं हुआ: ${msg}`);
+          ? {
+            hi: 'Migration 167 अभी नहीं चली — Supabase SQL Editor में 167_partner_payouts.sql चलाएँ।',
+            en: 'Migration 167 has not run yet — run 167_partner_payouts.sql in the Supabase SQL Editor.',
+          }
+          : { hi: `लोड नहीं हुआ: ${msg}`, en: `Could not load: ${msg}` });
         return;
       }
       setPartners(((p.data ?? []) as PartnerLite[]).filter((x) => x.status === 'approved' || x.status === 'suspended'));
       setRules((r.data ?? []) as TdsRule[]);
       setPayouts((o.data ?? []) as PayoutRow[]);
     } catch {
-      setError('लोड नहीं हुआ — इंटरनेट जाँचें।');
+      setError({ hi: 'लोड नहीं हुआ — इंटरनेट जाँचें।', en: 'Could not load — check your internet connection.' });
     }
   }, []);
 
@@ -151,10 +161,10 @@ export default function AdminPayoutsPanel() {
     setPreview(null);
     try {
       const { data, error: err } = await supabase.rpc('admin_payout_preview', { p_partner_id: partnerId, p_payout_date: payDate });
-      if (err) { toast({ title: 'Preview नहीं बना', description: err.message, variant: 'destructive', duration: 10000 }); return; }
+      if (err) { toast({ title: L('Preview नहीं बना', 'Preview failed'), description: err.message, variant: 'destructive', duration: 10000 }); return; }
       setPreview(data as Preview);
     } catch {
-      toast({ title: 'Preview नहीं बना', description: 'इंटरनेट जाँचें।', variant: 'destructive', duration: 10000 });
+      toast({ title: L('Preview नहीं बना', 'Preview failed'), description: L('इंटरनेट जाँचें।', 'Check your internet connection.'), variant: 'destructive', duration: 10000 });
     }
   };
 
@@ -168,15 +178,22 @@ export default function AdminPayoutsPanel() {
       });
       const res = (data ?? {}) as { ok?: boolean; error_code?: string; net_paise?: number };
       if (err || !res.ok) {
-        toast({ title: 'भुगतान दर्ज नहीं हुआ', description: err?.message ?? payoutErrorText(res.error_code), variant: 'destructive', duration: 12000 });
+        toast({ title: L('भुगतान दर्ज नहीं हुआ', 'Payment not recorded'), description: err?.message ?? payoutErrorText(res.error_code, language), variant: 'destructive', duration: 12000 });
         if (res.error_code === 'stale_preview') await runPreview();
         return;
       }
-      toast({ title: 'भुगतान दर्ज हो गया ✓', description: `शुद्ध रकम ${formatPaise(res.net_paise)} · UTR ${utr.trim()}` });
+      toast({
+        title: L('भुगतान दर्ज हो गया ✓', 'Payment recorded ✓'),
+        description: L(`शुद्ध रकम ${formatPaise(res.net_paise)} · UTR ${utr.trim()}`, `Net amount ${formatPaise(res.net_paise)} · UTR ${utr.trim()}`),
+      });
       setPreview(null); setUtr(''); setNote('');
       await load();
     } catch {
-      toast({ title: 'भुगतान दर्ज नहीं हुआ', description: 'इंटरनेट जाँचें। पैसा भेज दिया हो तो दोबारा दर्ज करने से पहले सूची देखें।', variant: 'destructive', duration: 12000 });
+      toast({
+        title: L('भुगतान दर्ज नहीं हुआ', 'Payment not recorded'),
+        description: L('इंटरनेट जाँचें। पैसा भेज दिया हो तो दोबारा दर्ज करने से पहले सूची देखें।', 'Check your internet connection. If the money was already sent, check the list before recording it again.'),
+        variant: 'destructive', duration: 12000,
+      });
     } finally {
       setSaving(false);
     }
@@ -186,7 +203,7 @@ export default function AdminPayoutsPanel() {
     const threshold = rupeesToPaise(tThreshold);
     const rate = Number(tRate), noPan = Number(tNoPan);
     if (!tFrom || tRate === '' || tNoPan === '' || threshold == null || !Number.isFinite(rate) || !Number.isFinite(noPan)) {
-      toast({ title: 'अधूरी जानकारी', description: 'तारीख़, दोनों दरें और सीमा (₹) भरें।', variant: 'destructive' });
+      toast({ title: L('अधूरी जानकारी', 'Incomplete details'), description: L('तारीख़, दोनों दरें और सीमा (₹) भरें।', 'Fill in the date, both rates and the threshold (₹).'), variant: 'destructive' });
       return;
     }
     setSaving(true);
@@ -197,14 +214,14 @@ export default function AdminPayoutsPanel() {
       });
       const res = (data ?? {}) as { ok?: boolean; error_code?: string };
       if (err || !res.ok) {
-        toast({ title: 'TDS नियम सेव नहीं हुआ', description: err?.message ?? payoutErrorText(res.error_code), variant: 'destructive', duration: 10000 });
+        toast({ title: L('TDS नियम सेव नहीं हुआ', 'TDS rule not saved'), description: err?.message ?? payoutErrorText(res.error_code, language), variant: 'destructive', duration: 10000 });
         return;
       }
-      toast({ title: 'TDS नियम सेव हो गया ✓' });
+      toast({ title: L('TDS नियम सेव हो गया ✓', 'TDS rule saved ✓') });
       setRuleOpen(false);
       await load();
     } catch {
-      toast({ title: 'TDS नियम सेव नहीं हुआ', description: 'इंटरनेट जाँचें।', variant: 'destructive', duration: 10000 });
+      toast({ title: L('TDS नियम सेव नहीं हुआ', 'TDS rule not saved'), description: L('इंटरनेट जाँचें।', 'Check your internet connection.'), variant: 'destructive', duration: 10000 });
     } finally {
       setSaving(false);
     }
@@ -215,14 +232,14 @@ export default function AdminPayoutsPanel() {
     setDetails(EMPTY_DETAILS);
     try {
       const { data, error: err } = await supabase.rpc('admin_partner_payment_details_get', { p_partner_id: p.id });
-      if (err) { toast({ title: 'जानकारी लोड नहीं हुई', description: err.message, variant: 'destructive' }); return; }
+      if (err) { toast({ title: L('जानकारी लोड नहीं हुई', 'Could not load details'), description: err.message, variant: 'destructive' }); return; }
       const d = (data as { details?: Record<string, string | null> | null })?.details;
       if (d) setDetails({
         pan: d.pan ?? '', pan_name: d.pan_name ?? '', account_name: d.account_name ?? '', account_no: d.account_no ?? '',
         ifsc: d.ifsc ?? '', upi_id: d.upi_id ?? '', gstin: d.gstin ?? '',
       });
     } catch {
-      toast({ title: 'जानकारी लोड नहीं हुई', description: 'इंटरनेट जाँचें।', variant: 'destructive' });
+      toast({ title: L('जानकारी लोड नहीं हुई', 'Could not load details'), description: L('इंटरनेट जाँचें।', 'Check your internet connection.'), variant: 'destructive' });
     }
   };
 
@@ -236,24 +253,25 @@ export default function AdminPayoutsPanel() {
       });
       const res = (data ?? {}) as { ok?: boolean; error_code?: string };
       if (err || !res.ok) {
-        toast({ title: 'सेव नहीं हुआ', description: err?.message ?? payoutErrorText(res.error_code), variant: 'destructive', duration: 10000 });
+        toast({ title: L('सेव नहीं हुआ', 'Not saved'), description: err?.message ?? payoutErrorText(res.error_code, language), variant: 'destructive', duration: 10000 });
         return;
       }
-      toast({ title: 'भुगतान जानकारी सेव हो गई ✓' });
+      toast({ title: L('भुगतान जानकारी सेव हो गई ✓', 'Payment details saved ✓') });
       setDetailsFor(null);
       if (preview && partnerId === detailsFor.id) await runPreview();
     } catch {
-      toast({ title: 'सेव नहीं हुआ', description: 'इंटरनेट जाँचें।', variant: 'destructive', duration: 10000 });
+      toast({ title: L('सेव नहीं हुआ', 'Not saved'), description: L('इंटरनेट जाँचें।', 'Check your internet connection.'), variant: 'destructive', duration: 10000 });
     } finally {
       setSaving(false);
     }
   };
 
   const exportRegister = () => downloadCSV(
-    ['Payout date', 'FY', 'Partner', 'Code', 'PAN', 'Section', 'Commission credited (₹)', 'Clawback (₹)', 'Base (₹)', 'TDS rate %', 'TDS (₹)', 'Net paid (₹)', 'Method', 'UTR'],
-    fyPayouts.map((p) => [fmtDate(p.payout_date), p.fy, p.partner_name, p.code ?? '', p.pan_at_payout ?? 'PAN नहीं', p.section_ref,
+    [L('भुगतान की तारीख़', 'Payout date'), 'FY', 'Partner', 'Code', 'PAN', L('धारा', 'Section'), L('जमा commission (₹)', 'Commission credited (₹)'),
+      'Clawback (₹)', L('आधार (₹)', 'Base (₹)'), L('TDS दर %', 'TDS rate %'), 'TDS (₹)', L('भेजी गई शुद्ध रकम (₹)', 'Net paid (₹)'), L('तरीका', 'Method'), 'UTR'],
+    fyPayouts.map((p) => [fmtDate(p.payout_date), p.fy, p.partner_name, p.code ?? '', p.pan_at_payout ?? L('PAN नहीं', 'No PAN'), p.section_ref,
       (p.credit_paise / 100).toFixed(2), (p.clawback_paise / 100).toFixed(2), (p.base_paise / 100).toFixed(2), Number(p.tds_rate_pct),
-      (p.tds_paise / 100).toFixed(2), (p.net_paise / 100).toFixed(2), METHOD_LABEL[p.method] ?? p.method, p.utr]),
+      (p.tds_paise / 100).toFixed(2), (p.net_paise / 100).toFixed(2), METHOD_LABEL[p.method]?.[language] ?? p.method, p.utr]),
     `partner-tds-register-${fy}`,
   );
 
@@ -264,7 +282,7 @@ export default function AdminPayoutsPanel() {
     <div className="space-y-5">
       {error && (
         <Card className="border-destructive/50">
-          <CardContent className="p-4 flex items-start gap-2 text-destructive"><AlertTriangle className="h-4 w-4 mt-0.5" /> {error}</CardContent>
+          <CardContent className="p-4 flex items-start gap-2 text-destructive"><AlertTriangle className="h-4 w-4 mt-0.5" /> {error[language]}</CardContent>
         </Card>
       )}
 
@@ -272,26 +290,43 @@ export default function AdminPayoutsPanel() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center gap-2">
-            <CardTitle className="text-base">TDS नियम</CardTitle>
-            <Button size="sm" className="ml-auto gap-1" onClick={() => setRuleOpen(true)}><Plus className="h-3.5 w-3.5" /> नया TDS नियम</Button>
+            <CardTitle className="text-base">{L('TDS नियम', 'TDS rules')}</CardTitle>
+            <Button size="sm" className="ml-auto gap-1" onClick={() => setRuleOpen(true)}><Plus className="h-3.5 w-3.5" /> {L('नया TDS नियम', 'New TDS rule')}</Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {currentRule ? (
-            <p>
-              आज लागू: PAN होने पर <strong>{Number(currentRule.rate_pct)}%</strong>, PAN न होने पर <strong>{Number(currentRule.no_pan_rate_pct)}%</strong>,
-              साल की सीमा <strong>{formatPaise(currentRule.fy_threshold_paise)}</strong> — {currentRule.section_ref}
-              <span className="block text-xs text-muted-foreground">स्रोत: {currentRule.source_ref}</span>
-            </p>
+            language === 'hi' ? (
+              <p>
+                आज लागू: PAN होने पर <strong>{Number(currentRule.rate_pct)}%</strong>, PAN न होने पर <strong>{Number(currentRule.no_pan_rate_pct)}%</strong>,
+                साल की सीमा <strong>{formatPaise(currentRule.fy_threshold_paise)}</strong> — {currentRule.section_ref}
+                <span className="block text-xs text-muted-foreground">स्रोत: {currentRule.source_ref}</span>
+              </p>
+            ) : (
+              <p>
+                In force today: with PAN <strong>{Number(currentRule.rate_pct)}%</strong>, without PAN <strong>{Number(currentRule.no_pan_rate_pct)}%</strong>,
+                yearly threshold <strong>{formatPaise(currentRule.fy_threshold_paise)}</strong> — {currentRule.section_ref}
+                <span className="block text-xs text-muted-foreground">Source: {currentRule.source_ref}</span>
+              </p>
+            )
           ) : (
             <p className="text-amber-800 bg-amber-50 rounded p-2">
-              अभी कोई TDS नियम नहीं है, इसलिए भुगतान दर्ज नहीं होगा। आप पर (payer पर) commission का TDS लागू है या नहीं, यह CA से पक्का करें; लागू न
-              हो तो 0% का नियम, कारण को स्रोत में लिखकर जोड़ें।
+              {L(
+                'अभी कोई TDS नियम नहीं है, इसलिए भुगतान दर्ज नहीं होगा। आप पर (payer पर) commission का TDS लागू है या नहीं, यह CA से पक्का करें; लागू न हो तो 0% का नियम, कारण को स्रोत में लिखकर जोड़ें।',
+                'There is no TDS rule yet, so no payout can be recorded. Confirm with a CA whether TDS on commission applies to you (the payer); if it does not, add a 0% rule with that reason written as the source.',
+              )}
             </p>
           )}
           {rules.length > 1 && (
             <ul className="text-xs text-muted-foreground list-disc pl-5">
-              {rules.map((r) => <li key={r.id}>{fmtDate(r.effective_from)} से: {Number(r.rate_pct)}% / बिना PAN {Number(r.no_pan_rate_pct)}% / सीमा {formatPaise(r.fy_threshold_paise)} — {r.section_ref}</li>)}
+              {rules.map((r) => (
+                <li key={r.id}>
+                  {L(
+                    `${fmtDate(r.effective_from)} से: ${Number(r.rate_pct)}% / बिना PAN ${Number(r.no_pan_rate_pct)}% / सीमा ${formatPaise(r.fy_threshold_paise)} — ${r.section_ref}`,
+                    `From ${fmtDate(r.effective_from)}: ${Number(r.rate_pct)}% / without PAN ${Number(r.no_pan_rate_pct)}% / threshold ${formatPaise(r.fy_threshold_paise)} — ${r.section_ref}`,
+                  )}
+                </li>
+              ))}
             </ul>
           )}
         </CardContent>
@@ -299,30 +334,30 @@ export default function AdminPayoutsPanel() {
 
       {/* make a payout */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Wallet className="h-4 w-4" /> भुगतान करें</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Wallet className="h-4 w-4" /> {L('भुगतान करें', 'Make a payout')}</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] items-end">
             <div className="space-y-1">
               <Label>Partner</Label>
               <Select value={partnerId} onValueChange={(v) => { setPartnerId(v); setPreview(null); }}>
-                <SelectTrigger aria-label="Partner"><SelectValue placeholder="Partner चुनें" /></SelectTrigger>
+                <SelectTrigger aria-label="Partner"><SelectValue placeholder={L('Partner चुनें', 'Choose a partner')} /></SelectTrigger>
                 <SelectContent>
-                  {partners.map((p) => <SelectItem key={p.id} value={p.id}>{p.name} · {p.code ?? '—'}{p.status === 'suspended' ? ' (रोका गया)' : ''}</SelectItem>)}
+                  {partners.map((p) => <SelectItem key={p.id} value={p.id}>{p.name} · {p.code ?? '—'}{p.status === 'suspended' ? L(' (रोका गया)', ' (suspended)') : ''}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="pay-date">भुगतान की तारीख़</Label>
+              <Label htmlFor="pay-date">{L('भुगतान की तारीख़', 'Payout date')}</Label>
               <Input id="pay-date" type="date" value={payDate} max={todayIst()} onChange={(e) => { setPayDate(e.target.value); setPreview(null); }} />
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" disabled={!selected} onClick={() => selected && void openDetails(selected)} className="gap-1"><IdCard className="h-4 w-4" /> PAN / बैंक</Button>
+              <Button variant="outline" disabled={!selected} onClick={() => selected && void openDetails(selected)} className="gap-1"><IdCard className="h-4 w-4" /> {L('PAN / बैंक', 'PAN / bank')}</Button>
               <Button disabled={!partnerId} onClick={() => void runPreview()}>Preview</Button>
             </div>
           </div>
 
           {preview && !preview.ok && (
-            <p className="text-sm text-destructive" role="alert">{payoutErrorText(preview.error_code)}</p>
+            <p className="text-sm text-destructive" role="alert">{payoutErrorText(preview.error_code, language)}</p>
           )}
           {preview && (preview.commissions.length > 0 || preview.clawbacks.length > 0) && (
             <div className="space-y-3">
@@ -344,42 +379,50 @@ export default function AdminPayoutsPanel() {
                   <div className="grid gap-1 text-sm sm:max-w-md">
                     <div className="flex justify-between"><span>Commission</span><span>{formatPaise(preview.credit_paise)}</span></div>
                     {Number(preview.clawback_paise) > 0 && <div className="flex justify-between"><span>Clawback</span><span>−{formatPaise(preview.clawback_paise)}</span></div>}
-                    <div className="flex justify-between font-medium"><span>आधार रकम</span><span>{formatPaise(preview.base_paise)}</span></div>
+                    <div className="flex justify-between font-medium"><span>{L('आधार रकम', 'Base amount')}</span><span>{formatPaise(preview.base_paise)}</span></div>
                     <div className="flex justify-between">
-                      <span>TDS {Number(preview.tds_rate_pct)}% {preview.pan_on_file ? '' : '(PAN नहीं — ऊँची दर)'}</span>
+                      <span>TDS {Number(preview.tds_rate_pct)}% {preview.pan_on_file ? '' : L('(PAN नहीं — ऊँची दर)', '(no PAN — higher rate)')}</span>
                       <span>−{formatPaise(preview.tds_paise)}</span>
                     </div>
-                    <div className="flex justify-between text-lg font-bold border-t pt-1"><span>भेजनी है</span><span>{formatPaise(preview.net_paise)}</span></div>
+                    <div className="flex justify-between text-lg font-bold border-t pt-1"><span>{L('भेजनी है', 'To send')}</span><span>{formatPaise(preview.net_paise)}</span></div>
                     <p className="text-xs text-muted-foreground">
-                      इस साल ({preview.fy}) पहले: आधार {formatPaise(preview.fy_base_before_paise)}, TDS {formatPaise(preview.fy_tds_before_paise)} · सीमा {formatPaise(preview.fy_threshold_paise)} · {preview.section_ref}
+                      {L(
+                        `इस साल (${preview.fy}) पहले: आधार ${formatPaise(preview.fy_base_before_paise)}, TDS ${formatPaise(preview.fy_tds_before_paise)} · सीमा ${formatPaise(preview.fy_threshold_paise)} · ${preview.section_ref}`,
+                        `Earlier this year (${preview.fy}): base ${formatPaise(preview.fy_base_before_paise)}, TDS ${formatPaise(preview.fy_tds_before_paise)} · threshold ${formatPaise(preview.fy_threshold_paise)} · ${preview.section_ref}`,
+                      )}
                     </p>
                   </div>
                   <div className="rounded bg-muted/50 p-2 text-sm">
                     {preview.details && (preview.details.account_no || preview.details.upi_id) ? (
-                      <>भेजें: {preview.details.account_name ?? ''} {preview.details.account_no ? `· खाता ${preview.details.account_no} · ${preview.details.ifsc}` : ''} {preview.details.upi_id ? `· UPI ${preview.details.upi_id}` : ''}</>
+                      <>{L('भेजें', 'Send to')}: {preview.details.account_name ?? ''} {preview.details.account_no ? `· ${L('खाता', 'A/c')} ${preview.details.account_no} · ${preview.details.ifsc}` : ''} {preview.details.upi_id ? `· UPI ${preview.details.upi_id}` : ''}</>
                     ) : (
-                      <span className="text-amber-800">इस partner का बैंक/UPI दर्ज नहीं — "PAN / बैंक" से जोड़ें।</span>
+                      <span className="text-amber-800">{L('इस partner का बैंक/UPI दर्ज नहीं — "PAN / बैंक" से जोड़ें।', 'No bank/UPI on file for this partner — add it from "PAN / bank".')}</span>
                     )}
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="space-y-1">
-                      <Label>तरीका</Label>
+                      <Label>{L('तरीका', 'Method')}</Label>
                       <Select value={method} onValueChange={(v) => setMethod(v as 'bank' | 'upi' | 'other')}>
-                        <SelectTrigger aria-label="भुगतान का तरीका"><SelectValue /></SelectTrigger>
-                        <SelectContent>{Object.entries(METHOD_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+                        <SelectTrigger aria-label={L('भुगतान का तरीका', 'Payment method')}><SelectValue /></SelectTrigger>
+                        <SelectContent>{Object.entries(METHOD_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v[language]}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="utr">UTR / reference (ज़रूरी)</Label>
+                      <Label htmlFor="utr">{L('UTR / reference (ज़रूरी)', 'UTR / reference (required)')}</Label>
                       <Input id="utr" value={utr} onChange={(e) => setUtr(e.target.value)} maxLength={40} className="font-mono" />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="pay-note">नोट</Label>
+                      <Label htmlFor="pay-note">{L('नोट', 'Note')}</Label>
                       <Input id="pay-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} />
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">पहले अपने बैंक/UPI से ठीक {formatPaise(preview.net_paise)} भेजें, फिर UTR लिखकर दर्ज करें। सिस्टम पैसा नहीं भेजता।</p>
-                  <Button onClick={() => void record()} disabled={saving || utr.trim().length < 6}>{saving ? 'दर्ज हो रहा है…' : 'भुगतान दर्ज करें'}</Button>
+                  <p className="text-xs text-muted-foreground">
+                    {L(
+                      `पहले अपने बैंक/UPI से ठीक ${formatPaise(preview.net_paise)} भेजें, फिर UTR लिखकर दर्ज करें। सिस्टम पैसा नहीं भेजता।`,
+                      `First send exactly ${formatPaise(preview.net_paise)} from your bank/UPI, then record it with the UTR. The system does not send money.`,
+                    )}
+                  </p>
+                  <Button onClick={() => void record()} disabled={saving || utr.trim().length < 6}>{saving ? L('दर्ज हो रहा है…', 'Recording…') : L('भुगतान दर्ज करें', 'Record payment')}</Button>
                 </>
               )}
             </div>
@@ -391,14 +434,14 @@ export default function AdminPayoutsPanel() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center gap-2">
-            <CardTitle className="text-base">भुगतान और TDS register</CardTitle>
+            <CardTitle className="text-base">{L('भुगतान और TDS register', 'Payouts and TDS register')}</CardTitle>
             <Select value={fy} onValueChange={setFy}>
-              <SelectTrigger className="w-32" aria-label="वित्त वर्ष"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-32" aria-label={L('वित्त वर्ष', 'Financial year')}><SelectValue /></SelectTrigger>
               <SelectContent>{fyOptions.map((f) => <SelectItem key={f} value={f}>FY {f}</SelectItem>)}</SelectContent>
             </Select>
-            <Badge variant="outline">आधार {formatPaise(fyTotals.base)}</Badge>
+            <Badge variant="outline">{L('आधार', 'Base')} {formatPaise(fyTotals.base)}</Badge>
             <Badge variant="outline">TDS {formatPaise(fyTotals.tds)}</Badge>
-            <Badge variant="outline">भेजा {formatPaise(fyTotals.net)}</Badge>
+            <Badge variant="outline">{L('भेजा', 'Sent')} {formatPaise(fyTotals.net)}</Badge>
             <Button size="sm" variant="ghost" className="ml-auto gap-1" onClick={exportRegister} disabled={fyPayouts.length === 0}>
               <FileSpreadsheet className="h-3.5 w-3.5" /> TDS register CSV
             </Button>
@@ -406,24 +449,24 @@ export default function AdminPayoutsPanel() {
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {fyPayouts.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-6 text-center">इस वित्त वर्ष में कोई भुगतान नहीं।</p>
+            <p className="text-sm text-muted-foreground py-6 text-center">{L('इस वित्त वर्ष में कोई भुगतान नहीं।', 'No payouts in this financial year.')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>तारीख़</TableHead><TableHead>Partner / PAN</TableHead><TableHead className="text-right">आधार</TableHead>
-                  <TableHead className="text-right">TDS</TableHead><TableHead className="text-right">भेजा</TableHead><TableHead>UTR</TableHead>
+                  <TableHead>{L('तारीख़', 'Date')}</TableHead><TableHead>Partner / PAN</TableHead><TableHead className="text-right">{L('आधार', 'Base')}</TableHead>
+                  <TableHead className="text-right">TDS</TableHead><TableHead className="text-right">{L('भेजा', 'Sent')}</TableHead><TableHead>UTR</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {fyPayouts.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell className="align-top">{fmtDate(p.payout_date)}<div className="text-xs text-muted-foreground">{p.commission_count} commission</div></TableCell>
-                    <TableCell className="align-top">{p.partner_name}<div className="text-xs font-mono text-muted-foreground">{p.pan_at_payout ?? 'PAN नहीं'}</div></TableCell>
+                    <TableCell className="align-top">{p.partner_name}<div className="text-xs font-mono text-muted-foreground">{p.pan_at_payout ?? L('PAN नहीं', 'No PAN')}</div></TableCell>
                     <TableCell className="align-top text-right">{formatPaise(p.base_paise)}{Number(p.clawback_paise) > 0 && <div className="text-xs text-red-700">clawback −{formatPaise(p.clawback_paise)}</div>}</TableCell>
                     <TableCell className="align-top text-right">{formatPaise(p.tds_paise)}<div className="text-xs text-muted-foreground">{Number(p.tds_rate_pct)}%</div></TableCell>
                     <TableCell className="align-top text-right font-medium">{formatPaise(p.net_paise)}</TableCell>
-                    <TableCell className="align-top text-xs"><span className="font-mono">{p.utr}</span><div className="text-muted-foreground">{METHOD_LABEL[p.method]} · {p.created_by} · {fmtDateTime(p.created_at)}</div></TableCell>
+                    <TableCell className="align-top text-xs"><span className="font-mono">{p.utr}</span><div className="text-muted-foreground">{METHOD_LABEL[p.method]?.[language] ?? p.method} ·{p.created_by} · {fmtDateTime(p.created_at)}</div></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -436,25 +479,30 @@ export default function AdminPayoutsPanel() {
       <Dialog open={ruleOpen} onOpenChange={setRuleOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>नया TDS नियम</DialogTitle>
+            <DialogTitle>{L('नया TDS नियम', 'New TDS rule')}</DialogTitle>
             <DialogDescription>
-              नीचे की values Act के पाठ से भरी हैं: दर 2% और सीमा ₹20,000 — धारा 393(1) Table Sl. No. 1(ii); PAN न होने पर 20% — धारा 397(2)(b)(i)।
-              पहले देख लें कि आप पर TDS लागू है: धारा 402(37) के अनुसार proprietor/HUF payer पर तभी, जब पिछले वित्त वर्ष का turnover ₹1 करोड़
-              (business) या ₹50 लाख (profession) से ज़्यादा था — न हो तो 0% का नियम, यही कारण स्रोत में लिखकर। नियम बाद में बदला नहीं जा सकता।
+              {L(
+                'नीचे की values Act के पाठ से भरी हैं: दर 2% और सीमा ₹20,000 — धारा 393(1) Table Sl. No. 1(ii); PAN न होने पर 20% — धारा 397(2)(b)(i)। ' +
+                'पहले देख लें कि आप पर TDS लागू है: धारा 402(37) के अनुसार proprietor/HUF payer पर तभी, जब पिछले वित्त वर्ष का turnover ₹1 करोड़ ' +
+                '(business) या ₹50 लाख (profession) से ज़्यादा था — न हो तो 0% का नियम, यही कारण स्रोत में लिखकर। नियम बाद में बदला नहीं जा सकता।',
+                'The values below are filled from the text of the Act: rate 2% and threshold ₹20,000 — section 393(1) Table Sl. No. 1(ii); 20% without PAN — section 397(2)(b)(i). ' +
+                'First check that TDS applies to you: under section 402(37) a proprietor/HUF payer must deduct only if the previous financial year\'s turnover was above ₹1 crore ' +
+                '(business) or ₹50 lakh (profession) — if not, add a 0% rule with that reason written as the source. A rule cannot be changed later.',
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1"><Label htmlFor="t-from">किस तारीख़ से लागू</Label><Input id="t-from" type="date" value={tFrom} onChange={(e) => setTFrom(e.target.value)} /></div>
-            <div className="space-y-1"><Label htmlFor="t-th">साल की सीमा (₹)</Label><Input id="t-th" value={tThreshold} onChange={(e) => setTThreshold(e.target.value)} inputMode="decimal" /></div>
-            <div className="space-y-1"><Label htmlFor="t-rate">दर, PAN होने पर (%)</Label><Input id="t-rate" type="number" min={0} max={30} step="0.01" value={tRate} onChange={(e) => setTRate(e.target.value)} /></div>
-            <div className="space-y-1"><Label htmlFor="t-nopan">दर, PAN न होने पर (%)</Label><Input id="t-nopan" type="number" min={0} max={40} step="0.01" value={tNoPan} onChange={(e) => setTNoPan(e.target.value)} /></div>
-            <div className="space-y-1 sm:col-span-2"><Label htmlFor="t-sec">धारा (ज़रूरी)</Label><Input id="t-sec" value={tSection} onChange={(e) => setTSection(e.target.value)} /></div>
-            <div className="space-y-1 sm:col-span-2"><Label htmlFor="t-src">स्रोत — Act / circular का link या नंबर (ज़रूरी)</Label><Input id="t-src" value={tSource} onChange={(e) => setTSource(e.target.value)} /></div>
-            <div className="space-y-1 sm:col-span-2"><Label htmlFor="t-note">नोट</Label><Input id="t-note" value={tNote} onChange={(e) => setTNote(e.target.value)} placeholder="जैसे: CA श्री … की सलाह, दिनांक …" /></div>
+            <div className="space-y-1"><Label htmlFor="t-from">{L('किस तारीख़ से लागू', 'Effective from')}</Label><Input id="t-from" type="date" value={tFrom} onChange={(e) => setTFrom(e.target.value)} /></div>
+            <div className="space-y-1"><Label htmlFor="t-th">{L('साल की सीमा (₹)', 'Yearly threshold (₹)')}</Label><Input id="t-th" value={tThreshold} onChange={(e) => setTThreshold(e.target.value)} inputMode="decimal" /></div>
+            <div className="space-y-1"><Label htmlFor="t-rate">{L('दर, PAN होने पर (%)', 'Rate with PAN (%)')}</Label><Input id="t-rate" type="number" min={0} max={30} step="0.01" value={tRate} onChange={(e) => setTRate(e.target.value)} /></div>
+            <div className="space-y-1"><Label htmlFor="t-nopan">{L('दर, PAN न होने पर (%)', 'Rate without PAN (%)')}</Label><Input id="t-nopan" type="number" min={0} max={40} step="0.01" value={tNoPan} onChange={(e) => setTNoPan(e.target.value)} /></div>
+            <div className="space-y-1 sm:col-span-2"><Label htmlFor="t-sec">{L('धारा (ज़रूरी)', 'Section (required)')}</Label><Input id="t-sec" value={tSection} onChange={(e) => setTSection(e.target.value)} /></div>
+            <div className="space-y-1 sm:col-span-2"><Label htmlFor="t-src">{L('स्रोत — Act / circular का link या नंबर (ज़रूरी)', 'Source — link or number of the Act / circular (required)')}</Label><Input id="t-src" value={tSource} onChange={(e) => setTSource(e.target.value)} /></div>
+            <div className="space-y-1 sm:col-span-2"><Label htmlFor="t-note">{L('नोट', 'Note')}</Label><Input id="t-note" value={tNote} onChange={(e) => setTNote(e.target.value)} placeholder={L('जैसे: CA श्री … की सलाह, दिनांक …', 'e.g. Advice of CA Mr …, dated …')} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRuleOpen(false)}>रद्द</Button>
-            <Button onClick={() => void addRule()} disabled={saving}>{saving ? 'सेव हो रहा है…' : 'TDS नियम सेव करें'}</Button>
+            <Button variant="outline" onClick={() => setRuleOpen(false)}>{L('रद्द', 'Cancel')}</Button>
+            <Button onClick={() => void addRule()} disabled={saving}>{saving ? L('सेव हो रहा है…', 'Saving…') : L('TDS नियम सेव करें', 'Save TDS rule')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -463,13 +511,18 @@ export default function AdminPayoutsPanel() {
       <Dialog open={!!detailsFor} onOpenChange={(o) => { if (!o) setDetailsFor(null); }}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>भुगतान जानकारी — {detailsFor?.name}</DialogTitle>
-            <DialogDescription>PAN न होने पर TDS ऊँची दर से कटेगा। यह जानकारी सिर्फ़ admin देख सकते हैं; partner को केवल "PAN दर्ज है/नहीं" दिखता है।</DialogDescription>
+            <DialogTitle>{L('भुगतान जानकारी', 'Payment details')} — {detailsFor?.name}</DialogTitle>
+            <DialogDescription>
+              {L(
+                'PAN न होने पर TDS ऊँची दर से कटेगा। यह जानकारी सिर्फ़ admin देख सकते हैं; partner को केवल "PAN दर्ज है/नहीं" दिखता है।',
+                'Without a PAN, TDS is deducted at the higher rate. Only admins can see these details; the partner sees only "PAN on file / not on file".',
+              )}
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
             {([
-              ['pan', 'PAN', 'ABCDE1234F'], ['pan_name', 'PAN पर नाम', ''], ['account_name', 'खाताधारक का नाम', ''],
-              ['account_no', 'खाता नंबर', ''], ['ifsc', 'IFSC', 'SBIN0001234'], ['upi_id', 'UPI ID', 'name@okaxis'], ['gstin', 'GSTIN (अगर है)', ''],
+              ['pan', 'PAN', 'ABCDE1234F'], ['pan_name', L('PAN पर नाम', 'Name on PAN'), ''], ['account_name', L('खाताधारक का नाम', 'Account holder name'), ''],
+              ['account_no', L('खाता नंबर', 'Account number'), ''], ['ifsc', 'IFSC', 'SBIN0001234'], ['upi_id', 'UPI ID', 'name@okaxis'], ['gstin', L('GSTIN (अगर है)', 'GSTIN (if any)'), ''],
             ] as [keyof Details, string, string][]).map(([k, label, ph]) => (
               <div key={k} className="space-y-1">
                 <Label htmlFor={`d-${k}`}>{label}</Label>
@@ -479,8 +532,8 @@ export default function AdminPayoutsPanel() {
             ))}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDetailsFor(null)}>रद्द</Button>
-            <Button onClick={() => void saveDetails()} disabled={saving}>{saving ? 'सेव हो रहा है…' : 'सेव करें'}</Button>
+            <Button variant="outline" onClick={() => setDetailsFor(null)}>{L('रद्द', 'Cancel')}</Button>
+            <Button onClick={() => void saveDetails()} disabled={saving}>{saving ? L('सेव हो रहा है…', 'Saving…') : L('सेव करें', 'Save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
