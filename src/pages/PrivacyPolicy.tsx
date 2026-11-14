@@ -199,7 +199,8 @@ const SECTIONS = [
           <strong>Partner बनने वालों से:</strong> आवेदन में दिया गया नाम, मोबाइल नंबर, ईमेल (वैकल्पिक), काम, ज़िला/राज्य और
           आपकी घोषणा हम आवेदन की जाँच, आपसे संपर्क और आपके code से जुड़ी समितियों का रिकॉर्ड रखने के लिए सुरक्षित रखते हैं।
           Commission भेजने के लिए आप जो PAN, बैंक खाता / UPI और GSTIN देते हैं, वे सिर्फ़ भुगतान, TDS और कर-रिकॉर्ड के लिए
-          रखे जाते हैं और केवल SahakarLekha का admin उन्हें देख सकता है। आपका स्थिति-पेज link निजी है — उसे किसी और को न दें।
+          रखे जाते हैं और केवल SahakarLekha का admin उन्हें देख सकता है; portal पर ये अधूरे (masked) दिखते हैं। Partner portal पर
+          login आपके ईमेल पर भेजे गए कोड से होता है — कोड किसी को न बताएँ।
         </p>
         <p className="mt-3 text-muted-foreground leading-relaxed">
           <strong>समितियों से:</strong> पंजीकरण के समय referral code देने पर उस partner को आपकी समिति का <strong>नाम, ज़िला,
@@ -210,7 +211,7 @@ const SECTIONS = [
           Partners: we keep the name, mobile, optional email, occupation, district/state and declaration you submit, to review
           the application, contact you and record the societies that joined with your code; the PAN, bank / UPI details and
           GSTIN you give for commission payments are used only for payment, TDS and tax records, and only our admin can see
-          them. Societies: if you enter a referral
+          them (the portal shows them masked). Partner portal sign-in is by a code emailed to you — never share it. Societies: if you enter a referral
           code at sign-up, that partner sees your society's name, district, joining date and plan status only — never your
           accounts, members, vouchers or contact details. Entering a code is optional.
         </p>

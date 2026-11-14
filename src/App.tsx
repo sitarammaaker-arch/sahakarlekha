@@ -232,6 +232,8 @@ const SuperAdminEmails = lazyWithRetry(() => import("./pages/SuperAdminEmails"))
 const SuperAdminPartners = lazyWithRetry(() => import("./pages/SuperAdminPartners"));
 const PartnerApply = lazyWithRetry(() => import("./pages/PartnerProgram").then((m) => ({ default: m.PartnerApply })));
 const PartnerStatus = lazyWithRetry(() => import("./pages/PartnerProgram").then((m) => ({ default: m.PartnerStatus })));
+const PartnerLogin = lazyWithRetry(() => import("./pages/PartnerPortal").then((m) => ({ default: m.PartnerLogin })));
+const PartnerPortalHome = lazyWithRetry(() => import("./pages/PartnerPortal").then((m) => ({ default: m.PartnerPortalHome })));
 import { SuperAdminRoute } from "@/components/SuperAdminRoute";
 
 import { staticSnapshotFor } from '@/lib/staticSnapshot';
@@ -291,6 +293,8 @@ const AppRoutes = () => {
       <Route path="/contact" element={<ContactUs />} />
       <Route path="/partner" element={<PartnerApply />} />
       <Route path="/partner/status" element={<PartnerStatus />} />
+      <Route path="/partner/login" element={<PartnerLogin />} />
+      <Route path="/partner/portal" element={<PartnerPortalHome />} />
       <Route path="/about" element={<AboutUs />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsConditions />} />
