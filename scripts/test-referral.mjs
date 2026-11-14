@@ -241,7 +241,9 @@ ok(/values \('167', 'partner_payouts'\)/.test(c167) && /where version = '167'/.t
 const payPanel = read('src/components/partners/AdminPayoutsPanel.tsx');
 ok(['admin_tds_rules_list', 'admin_tds_rule_add', 'admin_payout_preview', 'admin_payout_record', 'admin_payouts_list', 'admin_partner_payment_details_get', 'admin_partner_payment_details_set'].every((f) => payPanel.includes(`rpc('${f}'`)), 'payouts panel wires every payout RPC');
 ok(/TDS_RULES\[key\]/.test(payPanel) && /tds\.194h\.rate_pct/.test(payPanel) && /tds\.194h\.threshold/.test(payPanel), 'the TDS form is pre-filled from the source-verified rule file, not a new literal');
-ok(/const \[tNoPan, setTNoPan\] = useState\(''\)/.test(payPanel), 'the no-PAN rate is NOT pre-filled (no source read for it)');
+ok(/const \[tNoPan, setTNoPan\] = useState\(sug\.noPan\)/.test(payPanel) && /export const NO_PAN_RATE_PCT = 20;/.test(payPanel), 'the no-PAN rate is pre-filled at 20%');
+ok(/s\.397\(2\)\(b\)\(i\)/.test(payPanel) && /section-397-5 \(read 2026-11-14\)/.test(payPanel) && /20% in any other case/.test(payPanel), 'the no-PAN rate carries its section, the quoted words and the source page');
+ok(/402\(37\)/.test(payPanel) && /₹1 करोड़/.test(payPanel), 'the TDS dialog states the s.402(37) applicability test for a proprietor payer');
 ok(/p_expected_net_paise: preview\.net_paise/.test(payPanel), 'the admin records exactly the previewed net');
 const page4 = read('src/pages/PartnerProgram.tsx');
 ok(/rpc\('partner_payouts'/.test(page4) && /भुगतान का हिसाब लोड नहीं हो सका/.test(page4), 'partner page loads payouts and shows a load failure');

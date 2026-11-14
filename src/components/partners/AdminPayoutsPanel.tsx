@@ -2,9 +2,10 @@
  * AdminPayoutsPanel — the Payouts tab of /super-admin/partners (migration 167, slice 4).
  *
  *   • TDS rules: TDS is DATA with a required section + source. The form is pre-filled from the repo's own
- *     source-verified rule for commission (lib/rules/tax.ts `tds.194h.*`, read against s.393(1) Table Sl. No. 1(ii));
- *     the rate without PAN is NOT pre-filled — no source for it has been read here. Whether TDS applies to this
- *     payer at all is for the CA; if it does not, record a 0% rule with that reason as the source.
+ *     source-verified rule for commission (lib/rules/tax.ts `tds.194h.*`, read against s.393(1) Table Sl. No. 1(ii)),
+ *     and the no-PAN rate from s.397(2)(b)(i) (NO_PAN_SOURCE below — read 2026-11-14). Whether TDS applies to this
+ *     payer at all turns on s.402(37) (an individual / HUF payer only above ₹1 crore business or ₹50 lakh profession
+ *     turnover in the preceding tax year); if it does not, record a 0% rule with that reason as the source.
  *   • Make a payout: pick a partner + date → the server previews every eligible commission and open clawback, the
  *     PAN state and the TDS; the money is sent OUTSIDE the app; the admin records it with the UTR. The server
  *     re-computes and refuses a stale preview.
@@ -57,6 +58,18 @@ const EMPTY_DETAILS: Details = { pan: '', pan_name: '', account_name: '', accoun
 
 const todayIst = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
+/**
+ * s.397(2)(b)(i), read on the department's own page on 2026-11-14: where the payee does not furnish a valid PAN, "tax
+ * shall be deducted at the higher of the following rates:— (a) at the rate specified in the relevant provision of this
+ * Act; or (b) at the rate or rates in force; or (c) at the rate of 5% where tax is required to be deducted under section
+ * 393(1) [Table: Sl. No. 8(ii) or 8(v)]; or 20% in any other case". Commission (Sl. No. 1(ii), 2%) → the higher is 20%.
+ * Kept here (a form suggestion the admin saves with its source), not in lib/rules/tax.ts, whose catalog hash is pinned.
+ */
+export const NO_PAN_RATE_PCT = 20;
+export const NO_PAN_SOURCE =
+  'Income-tax Act 2025 s.397(2)(b)(i) — no valid PAN: "higher of … the rate specified in the relevant provision … or ' +
+  'the rate or rates in force; or … 20% in any other case". SOURCE: incometaxindia.gov.in/web/guest/w/section-397-5 (read 2026-11-14).';
+
 /** The repo's source-verified commission TDS values (rate, threshold) and their citations — a suggestion only. */
 function commissionTdsSuggestion() {
   const v = (key: string) => TDS_RULES[key]?.byJurisdiction['']?.[0] as { value?: number; cite?: string } | undefined;
@@ -65,8 +78,9 @@ function commissionTdsSuggestion() {
   return {
     rate: rate?.value != null ? String(rate.value) : '',
     thresholdRupees: threshold?.value != null ? String(threshold.value) : '',
-    section: 'Income-tax Act 2025 s.393(1) Table Sl. No. 1(ii) [1961: s.194H] — commission',
-    source: [rate?.cite, threshold?.cite].filter(Boolean).join(' | '),
+    noPan: String(NO_PAN_RATE_PCT),
+    section: 'Income-tax Act 2025 s.393(1) Table Sl. No. 1(ii) [1961: s.194H] — commission; no PAN: s.397(2)(b)(i)',
+    source: [rate?.cite, threshold?.cite, NO_PAN_SOURCE].filter(Boolean).join(' | '),
   };
 }
 
@@ -93,7 +107,7 @@ export default function AdminPayoutsPanel() {
   const [ruleOpen, setRuleOpen] = useState(false);
   const [tFrom, setTFrom] = useState('2026-04-01');
   const [tRate, setTRate] = useState(sug.rate);
-  const [tNoPan, setTNoPan] = useState('');
+  const [tNoPan, setTNoPan] = useState(sug.noPan);
   const [tThreshold, setTThreshold] = useState(sug.thresholdRupees);
   const [tSection, setTSection] = useState(sug.section);
   const [tSource, setTSource] = useState(sug.source);
@@ -424,15 +438,16 @@ export default function AdminPayoutsPanel() {
           <DialogHeader>
             <DialogTitle>नया TDS नियम</DialogTitle>
             <DialogDescription>
-              दर और सीमा नीचे repo के उस नियम से भरी हैं जो Act के पाठ (धारा 393(1) Table Sl. No. 1(ii)) से मिलाया गया है। "PAN न होने पर दर" का स्रोत
-              यहाँ नहीं पढ़ा गया — वह CA से पूछकर, स्रोत सहित भरें। आप पर TDS लागू है या नहीं, यह भी CA से पक्का करें। नियम बाद में बदला नहीं जा सकता।
+              नीचे की values Act के पाठ से भरी हैं: दर 2% और सीमा ₹20,000 — धारा 393(1) Table Sl. No. 1(ii); PAN न होने पर 20% — धारा 397(2)(b)(i)।
+              पहले देख लें कि आप पर TDS लागू है: धारा 402(37) के अनुसार proprietor/HUF payer पर तभी, जब पिछले वित्त वर्ष का turnover ₹1 करोड़
+              (business) या ₹50 लाख (profession) से ज़्यादा था — न हो तो 0% का नियम, यही कारण स्रोत में लिखकर। नियम बाद में बदला नहीं जा सकता।
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1"><Label htmlFor="t-from">किस तारीख़ से लागू</Label><Input id="t-from" type="date" value={tFrom} onChange={(e) => setTFrom(e.target.value)} /></div>
             <div className="space-y-1"><Label htmlFor="t-th">साल की सीमा (₹)</Label><Input id="t-th" value={tThreshold} onChange={(e) => setTThreshold(e.target.value)} inputMode="decimal" /></div>
             <div className="space-y-1"><Label htmlFor="t-rate">दर, PAN होने पर (%)</Label><Input id="t-rate" type="number" min={0} max={30} step="0.01" value={tRate} onChange={(e) => setTRate(e.target.value)} /></div>
-            <div className="space-y-1"><Label htmlFor="t-nopan">दर, PAN न होने पर (%)</Label><Input id="t-nopan" type="number" min={0} max={40} step="0.01" value={tNoPan} onChange={(e) => setTNoPan(e.target.value)} placeholder="CA से पूछें" /></div>
+            <div className="space-y-1"><Label htmlFor="t-nopan">दर, PAN न होने पर (%)</Label><Input id="t-nopan" type="number" min={0} max={40} step="0.01" value={tNoPan} onChange={(e) => setTNoPan(e.target.value)} /></div>
             <div className="space-y-1 sm:col-span-2"><Label htmlFor="t-sec">धारा (ज़रूरी)</Label><Input id="t-sec" value={tSection} onChange={(e) => setTSection(e.target.value)} /></div>
             <div className="space-y-1 sm:col-span-2"><Label htmlFor="t-src">स्रोत — Act / circular का link या नंबर (ज़रूरी)</Label><Input id="t-src" value={tSource} onChange={(e) => setTSource(e.target.value)} /></div>
             <div className="space-y-1 sm:col-span-2"><Label htmlFor="t-note">नोट</Label><Input id="t-note" value={tNote} onChange={(e) => setTNote(e.target.value)} placeholder="जैसे: CA श्री … की सलाह, दिनांक …" /></div>
