@@ -8,10 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, AlertCircle, CheckCircle, Eye, EyeOff, Languages } from 'lucide-react';
+import { Building2, AlertCircle, CheckCircle, Eye, EyeOff, Languages, Gift } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { fullChartForType } from '@/lib/storage';
 import type { SocietyType } from '@/types';
+import { loadReferral, isReferralCodeShape, normalizeReferralCode, referralErrorText, REF_STORAGE_KEY } from '@/lib/referral/referralCode';
 
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
 import { presetsForState, presetChoice, resolveTypeChoice, typeChoiceOf, type SocietyVariant } from '@/lib/societyPresets';
@@ -80,6 +81,13 @@ const Register: React.FC = () => {
   const [adminPassword, setAdminPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Partner program (migration 164): a code remembered from a ?ref= link pre-fills this field.
+  const [linkReferral] = useState(() => {
+    try { return loadReferral(window.localStorage, Date.now()); } catch { return null; }
+  });
+  const [referralCode, setReferralCode] = useState(linkReferral?.code ?? '');
+  const [referralResult, setReferralResult] = useState<{ ok: boolean; text: string } | null>(null);
+
   const handleStep1 = (e: React.FormEvent) => {
     e.preventDefault();
     if (!societyName || !registrationNo || !district || !state || !societyType) {
@@ -102,6 +110,11 @@ const Register: React.FC = () => {
     }
     if (adminPassword.length < 6) {
       setError(L('पासवर्ड कम से कम 6 अक्षर का होना चाहिए', 'Password must be at least 6 characters'));
+      return;
+    }
+    const refCode = normalizeReferralCode(referralCode);
+    if (refCode && !isReferralCodeShape(refCode)) {
+      setError(L('Referral code ग़लत लिखा है — यह SL-ABC234 जैसा होता है। न हो तो खाना ख़ाली छोड़ दें।', 'Referral code looks wrong — it looks like SL-ABC234. Leave it empty if you have none.'));
       return;
     }
 
@@ -170,6 +183,26 @@ const Register: React.FC = () => {
         return;
       }
 
+      // The society exists now. Link the partner who referred it — a failure here never undoes the registration,
+      // but it is shown on the success screen (not hidden) so the society can tell us and an admin can attach it.
+      if (refCode) {
+        try {
+          const source = linkReferral && linkReferral.code === refCode ? 'link' : 'code';
+          const { data: refData, error: refErr } = await supabase.rpc('attach_referral_at_signup', {
+            p_society_id: newSocietyId, p_code: refCode, p_source: source,
+          });
+          const ref = (refData ?? {}) as { ok?: boolean; error_code?: string };
+          if (!refErr && ref.ok) {
+            setReferralResult({ ok: true, text: L(`Referral code ${refCode} दर्ज हो गया।`, `Referral code ${refCode} recorded.`) });
+            try { window.localStorage.removeItem(REF_STORAGE_KEY); } catch { /* ignore */ }
+          } else {
+            setReferralResult({ ok: false, text: `${referralErrorText(ref.error_code)} ${L('समिति का पंजीकरण पूरा है — code जुड़वाने के लिए हमें WhatsApp या संपर्क पेज पर बताएँ।', 'Your society is registered — contact us to have the code attached.')}` });
+          }
+        } catch {
+          setReferralResult({ ok: false, text: L('Referral code दर्ज नहीं हो सका (इंटरनेट)। समिति का पंजीकरण पूरा है — code जुड़वाने के लिए हमसे संपर्क करें।', 'Could not record the referral code (network). Your society is registered — contact us to have it attached.') });
+        }
+      }
+
       setSuccess(true);
       // GOS-20: the #1 conversion event of the whole funnel (no PII in params).
       trackEvent('sign_up', { method: 'email' });
@@ -197,6 +230,11 @@ const Register: React.FC = () => {
             <p className="text-sm text-muted-foreground mb-8">
               {L('इस ईमेल से लॉगिन करें:', 'Login with:')} <strong className="text-primary">{adminEmail}</strong>
             </p>
+            {referralResult && (
+              <p className={`text-sm mb-6 -mt-4 ${referralResult.ok ? 'text-green-700' : 'text-amber-700'}`} role="status">
+                {referralResult.text}
+              </p>
+            )}
             <Button className="w-full" size="lg" onClick={() => navigate('/login')}>
               {L('लॉगिन पर जाएँ →', 'Go to Login →')}
             </Button>
@@ -463,6 +501,32 @@ const Register: React.FC = () => {
                     placeholder={L('पासवर्ड दोबारा लिखें', 'Repeat password')}
                     required
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="referral-code" className="flex items-center gap-1.5">
+                    <Gift className="h-3.5 w-3.5 text-primary" />
+                    {L('Referral code (वैकल्पिक)', 'Referral code (optional)')}
+                  </Label>
+                  <Input
+                    id="referral-code"
+                    value={referralCode}
+                    onChange={e => setReferralCode(e.target.value.toUpperCase())}
+                    placeholder="SL-ABC234"
+                    autoComplete="off"
+                    maxLength={12}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {linkReferral && normalizeReferralCode(referralCode) === linkReferral.code
+                      ? L('यह code आपके खोले गए link से आया है।', 'This code came from the link you opened.')
+                      : L('किसी ने SahakarLekha के बारे में बताया हो तो उनका code लिखें।', 'If someone told you about SahakarLekha, enter their code.')}
+                  </p>
+                  {normalizeReferralCode(referralCode) && (
+                    <p className="text-xs text-muted-foreground">
+                      {L('Code देने पर उस partner को आपकी समिति का नाम, ज़िला और plan की स्थिति दिखेगी — आपका हिसाब-किताब कभी नहीं।',
+                        'With a code, that partner sees your society\'s name, district and plan status — never your accounts.')}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex gap-3">

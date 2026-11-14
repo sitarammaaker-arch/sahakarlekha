@@ -9,7 +9,7 @@
 export const PUBLIC_SEGMENTS: ReadonlySet<string> = new Set([
   '',                       // landing page
   'login', 'register', 'reset-password', 'verify-email', 'email-unsubscribe',
-  'about', 'contact', 'faq', 'pricing', 'privacy', 'terms', 'editorial-policy',
+  'about', 'contact', 'faq', 'pricing', 'privacy', 'terms', 'editorial-policy', 'partner',
   'blog', 'author', 'guide', 'glossary', 'help', 'cookbook', 'tools', 'downloads',
   'software', 'cooperative-software',
   'search', 'ask', 'verify-backup',
