@@ -152,7 +152,7 @@ export interface CommissionRow {
   taxable_paise: number;
   rate_pct: number | string | null;
   commission_paise: number;
-  status: 'no_rule' | 'pending' | 'cancelled';
+  status: 'no_rule' | 'pending' | 'cancelled' | 'paid';
   hold_until: string;
   eligible: boolean;
   cancel_reason: string | null;
@@ -168,10 +168,11 @@ export function formatPaise(paise: number | string | null | undefined): string {
   return `${neg ? '−' : ''}₹${rupees.toLocaleString('en-IN')}.${rest}`;
 }
 
-export type CommissionStage = 'eligible' | 'hold' | 'no_rule' | 'cancelled' | 'none';
+export type CommissionStage = 'eligible' | 'hold' | 'no_rule' | 'cancelled' | 'none' | 'paid';
 
 export function commissionStage(r: Pick<CommissionRow, 'status' | 'eligible' | 'basis'>): CommissionStage {
   if (r.status === 'cancelled') return 'cancelled';
+  if (r.status === 'paid') return 'paid';
   if (r.status === 'no_rule') return 'no_rule';
   if (r.basis === 'none') return 'none';
   return r.eligible ? 'eligible' : 'hold';
@@ -183,6 +184,7 @@ export const COMMISSION_STAGE_TEXT: Record<CommissionStage, { label: string; cls
   no_rule: { label: 'दर तय होनी बाकी', cls: 'bg-muted text-foreground' },
   cancelled: { label: 'रद्द', cls: 'bg-red-100 text-red-900' },
   none: { label: 'Commission अवधि पूरी', cls: 'bg-muted text-foreground' },
+  paid: { label: 'भुगतान हो गया', cls: 'bg-blue-100 text-blue-900' },
 };
 
 export const COMMISSION_BASIS_TEXT: Record<CommissionRow['basis'], string> = {
@@ -193,7 +195,7 @@ export const COMMISSION_BASIS_TEXT: Record<CommissionRow['basis'], string> = {
 
 /** Totals in integer paise. Cancelled and no-rule rows never count as money owed. */
 export function summarizeCommissions(rows: readonly Pick<CommissionRow, 'status' | 'eligible' | 'basis' | 'commission_paise'>[]) {
-  const out = { eligible: 0, hold: 0, noRuleCount: 0, cancelled: 0 };
+  const out = { eligible: 0, hold: 0, noRuleCount: 0, cancelled: 0, paid: 0 };
   for (const r of rows) {
     const s = commissionStage(r);
     const p = Math.round(Number(r.commission_paise) || 0);
@@ -201,8 +203,50 @@ export function summarizeCommissions(rows: readonly Pick<CommissionRow, 'status'
     else if (s === 'hold') out.hold += p;
     else if (s === 'no_rule') out.noRuleCount += 1;
     else if (s === 'cancelled') out.cancelled += p;
+    else if (s === 'paid') out.paid += p;
   }
   return out;
+}
+
+// ── payouts (migration 167) ───────────────────────────────────────────────────────────────────────────────────
+
+/** Indian financial year label of a YYYY-MM-DD date — mirrors public._partner_fy(). */
+export function financialYearOf(isoDate: string): string {
+  const [y, m] = isoDate.split('-').map(Number);
+  const start = m >= 4 ? y : y - 1;
+  return `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
+}
+
+/** Rupees typed by a person ("20,000" / "20000.50") → integer paise, or null when it is not a number. */
+export function rupeesToPaise(raw: string): number | null {
+  const t = raw.replace(/[,\s₹]/g, '');
+  if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
+  const [r, p = ''] = t.split('.');
+  return Number(r) * 100 + Number((p + '00').slice(0, 2));
+}
+
+export const PAYOUT_ERROR_TEXT: Record<string, string> = {
+  date_required: 'भुगतान की तारीख़ भरें।',
+  future_date: 'आगे की तारीख़ का भुगतान दर्ज नहीं होता।',
+  no_tds_rule: 'इस तारीख़ पर कोई TDS नियम नहीं है — पहले TDS नियम जोड़ें (TDS लागू न हो तो 0% का नियम कारण सहित)।',
+  nothing_payable: 'भुगतान योग्य रकम नहीं है (या clawback बराबर/ज़्यादा है)।',
+  commission_not_payable: 'चुने गए commission में से कोई भुगतान योग्य नहीं है — सूची दोबारा देखें।',
+  stale_preview: 'रकम बदल गई है — preview दोबारा बनाकर जाँचें।',
+  utr_required: 'UTR / reference नंबर लिखें (कम से कम 6 अक्षर)।',
+  invalid_method: 'भुगतान का तरीका चुनें।',
+  invalid_pan: 'PAN सही नहीं है (जैसे ABCDE1234F)।',
+  invalid_account: 'खाता नंबर सिर्फ़ अंकों में, 6–20 अंक।',
+  invalid_ifsc: 'IFSC सही नहीं है (जैसे SBIN0001234)।',
+  invalid_upi: 'UPI ID सही नहीं है (जैसे name@okaxis)।',
+  invalid_gstin: 'GSTIN सही नहीं है।',
+  account_needs_ifsc: 'खाता नंबर और IFSC दोनों साथ भरें।',
+  source_required: 'धारा और स्रोत दोनों लिखें — बिना स्रोत के TDS नियम नहीं बनता।',
+  duplicate_date: 'इस तारीख़ का नियम पहले से है।',
+  out_of_range: 'दर 0–30%, PAN बिना दर 0–40%, सीमा 0 या ज़्यादा।',
+};
+
+export function payoutErrorText(code: string | undefined | null): string {
+  return (code && PAYOUT_ERROR_TEXT[code]) || 'भुगतान दर्ज नहीं हुआ — दोबारा कोशिश करें।';
 }
 
 // ── storage wrappers (never throw: private windows / blocked storage just mean "no code") ─────────────────────

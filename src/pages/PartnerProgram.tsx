@@ -399,6 +399,61 @@ const PartnerCommissions: React.FC<{ rows: CommissionRow[] | 'error' | null }> =
   );
 };
 
+interface PartnerPayoutsData {
+  pan_on_file: boolean;
+  payouts: { id: number; payout_date: string; fy: string; credit_paise: number; clawback_paise: number; base_paise: number;
+    tds_rate_pct: number | string; tds_paise: number; net_paise: number; method: string; utr: string }[];
+  clawbacks: { amount_paise: number; reason: string; created_at: string }[];
+}
+
+const PartnerPayouts: React.FC<{ data: PartnerPayoutsData | 'error' | null }> = ({ data }) => {
+  if (data === null) return <p className="text-sm text-muted-foreground">भुगतान का हिसाब लोड हो रहा है…</p>;
+  if (data === 'error') return <p className="text-sm text-destructive" role="alert">भुगतान का हिसाब लोड नहीं हो सका — पेज दोबारा खोलें।</p>;
+  const totalNet = data.payouts.reduce((a, p) => a + Number(p.net_paise), 0);
+  const totalTds = data.payouts.reduce((a, p) => a + Number(p.tds_paise), 0);
+  return (
+    <div className="space-y-3">
+      <h2 className="text-lg font-semibold text-foreground">आपको भुगतान</h2>
+      {!data.pan_on_file && (
+        <p className="text-sm rounded bg-amber-50 text-amber-900 p-2">
+          आपका PAN हमारे पास दर्ज नहीं है। PAN न होने पर TDS ऊँची दर से कटता है — अपना PAN और बैंक/UPI की जानकारी हमें WhatsApp पर भेजें।
+        </p>
+      )}
+      {data.clawbacks.length > 0 && (
+        <div className="text-sm rounded border border-red-200 p-2 text-red-800">
+          {data.clawbacks.map((k, i) => (
+            <div key={i}>अगले भुगतान से कटेगा: {formatPaise(k.amount_paise)} — {k.reason}</div>
+          ))}
+        </div>
+      )}
+      {data.payouts.length === 0 ? (
+        <p className="text-sm text-muted-foreground">अभी कोई भुगतान नहीं हुआ।</p>
+      ) : (
+        <>
+          <p className="text-sm text-foreground">अब तक भेजा गया: <strong>{formatPaise(totalNet)}</strong> · कटा TDS: {formatPaise(totalTds)}</p>
+          <ul className="divide-y rounded-lg border">
+            {data.payouts.map((p) => (
+              <li key={p.id} className="p-3 flex flex-wrap items-start justify-between gap-2 text-sm">
+                <div className="min-w-0">
+                  <div className="font-medium text-foreground">{istDate(p.payout_date)}</div>
+                  <div className="text-xs text-muted-foreground">
+                    Commission {formatPaise(p.credit_paise)}
+                    {Number(p.clawback_paise) > 0 ? ` − clawback ${formatPaise(p.clawback_paise)}` : ''}
+                    {` − TDS ${Number(p.tds_rate_pct)}% ${formatPaise(p.tds_paise)}`}
+                  </div>
+                  <div className="text-xs text-muted-foreground font-mono break-all">UTR: {p.utr}</div>
+                </div>
+                <div className="font-semibold text-foreground">{formatPaise(p.net_paise)}</div>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-muted-foreground">TDS कटा हो तो उसका प्रमाणपत्र (TDS certificate) नियम के अनुसार आपको भेजा जाएगा।</p>
+        </>
+      )}
+    </div>
+  );
+};
+
 // ── /partner/status ────────────────────────────────────────────────────────────────────────────────────────────
 interface StatusResult {
   ok: boolean;
@@ -428,6 +483,7 @@ export const PartnerStatus: React.FC = () => {
   // null = not loaded (or not approved); 'error' = the list could not be read (shown, never faked as empty)
   const [societies, setSocieties] = useState<PartnerSocietyRow[] | 'error' | null>(null);
   const [commissions, setCommissions] = useState<CommissionRow[] | 'error' | null>(null);
+  const [payouts, setPayouts] = useState<PartnerPayoutsData | 'error' | null>(null);
 
   useEffect(() => {
     if (!validToken) return;
@@ -436,6 +492,7 @@ export const PartnerStatus: React.FC = () => {
     setLoadError(false);
     setSocieties(null);
     setCommissions(null);
+    setPayouts(null);
     (async () => {
       try {
         const { data, error } = await supabase.rpc('partner_status', { p_token: token });
@@ -454,6 +511,10 @@ export const PartnerStatus: React.FC = () => {
           if (cancelled) return;
           const c = (com.data ?? {}) as { ok?: boolean; rows?: CommissionRow[] };
           setCommissions(com.error || !c.ok ? 'error' : (c.rows ?? []));
+          const pay = await supabase.rpc('partner_payouts', { p_token: token });
+          if (cancelled) return;
+          const pd = (pay.data ?? {}) as PartnerPayoutsData & { ok?: boolean };
+          setPayouts(pay.error || !pd.ok ? 'error' : pd);
         }
       } catch {
         if (!cancelled) setLoadError(true);
@@ -507,7 +568,10 @@ export const PartnerStatus: React.FC = () => {
           <PartnerSocieties societies={societies} />
         ) : null}
         {result.status === 'approved' || result.status === 'suspended' ? (
-          <PartnerCommissions rows={commissions} />
+          <>
+            <PartnerCommissions rows={commissions} />
+            <PartnerPayouts data={payouts} />
+          </>
         ) : (
           <div className="rounded-lg border p-4 flex items-center gap-3">
             <Users className="h-5 w-5 text-primary" />

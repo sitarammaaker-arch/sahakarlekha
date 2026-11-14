@@ -194,5 +194,59 @@ const panel = read('src/components/partners/AdminCommissionsPanel.tsx');
 ok(['admin_commission_rules_list', 'admin_commissions_list', 'admin_commission_rule_add', 'admin_commission_cancel', 'admin_commission_sync'].every((f) => panel.includes(`rpc('${f}'`)), 'admin panel wires every commission RPC');
 ok(/AdminCommissionsPanel/.test(read('src/pages/SuperAdminPartners.tsx')), 'Commission tab is on the partners admin page');
 
+// ── 6. slice 4: payouts, TDS, clawback (migration 167) ──────────────────────────────────────────────────────────
+ok(R.financialYearOf('2026-11-14') === '2026-27' && R.financialYearOf('2027-03-31') === '2026-27' && R.financialYearOf('2027-04-01') === '2027-28' && R.financialYearOf('2099-12-31') === '2099-00', 'FY label (mirrors _partner_fy)');
+ok(R.rupeesToPaise('20,000') === 2000000 && R.rupeesToPaise('₹ 15000.5') === 1500050 && R.rupeesToPaise('0') === 0 && R.rupeesToPaise('12.345') === null && R.rupeesToPaise('abc') === null && R.rupeesToPaise('') === null, 'rupees → paise, no float drift, junk refused');
+ok(R.commissionStage(C('paid', false, 'first_year', 5)) === 'paid' && R.summarizeCommissions([C('paid', false, 'first_year', 700)]).paid === 700, 'paid stage and total');
+ok(R.payoutErrorText('stale_preview').includes('preview') && R.payoutErrorText('no_tds_rule').includes('TDS') && R.payoutErrorText('zzz').length > 0, 'payout error text');
+
+const up167 = read('supabase/migrations/167_partner_payouts.sql');
+const down167 = read('supabase/migrations/167_partner_payouts_down.sql');
+const c167 = up167.replace(/--.*$/gm, '');
+const T167 = ['partner_payment_details', 'partner_tds_rules', 'partner_payouts', 'partner_payout_items', 'partner_clawbacks'];
+for (const t of T167) {
+  ok(new RegExp(`alter table public\\.${t}\\s+enable row level security`).test(c167) && new RegExp(`revoke all on table public\\.${t}\\s+from anon, authenticated`).test(c167), `${t}: RLS on, client grants revoked`);
+  ok(new RegExp(`drop table if exists public\\.${t};`).test(down167), `down drops ${t}`);
+}
+ok(!/create policy/i.test(c167), '167 adds no policy');
+ok(/section_ref\s+text not null check/.test(c167) && /source_ref\s+text not null check/.test(c167), 'a TDS rule cannot exist without its section and source');
+ok(!/\b(194H|2\.00|20000|2000000)\b/.test(c167.replace(/check \(rate_pct between 0 and 30\)|check \(no_pan_rate_pct between 0 and 40\)/g, '')), 'no statutory rate or threshold is hard-coded in the migration');
+ok(/utr\s+text not null check \(char_length\(btrim\(utr\)\) >= 6\)/.test(c167), 'every payout carries a UTR');
+ok(/commission_id\s+bigint not null unique references public\.partner_commissions/.test(c167), 'a commission is paid at most once');
+ok(/check \(base_paise = credit_paise - clawback_paise\)/.test(c167) && /check \(net_paise = base_paise - tds_paise\)/.test(c167), 'payout arithmetic is enforced by the table');
+const calc = c167.slice(c167.indexOf('function public._partner_payout_calc('), c167.indexOf('$$;', c167.indexOf('function public._partner_payout_calc(')));
+ok(/when v_pan is null then r\.no_pan_rate_pct else r\.rate_pct/.test(calc), 'no PAN on file → the no-PAN rate');
+ok(/v_fy_base \+ v_base > r\.fy_threshold_paise/.test(calc) && /\(v_fy_base \+ v_base\) \* v_rate \/ 100\)::bigint - v_fy_tds/.test(calc), 'threshold on the FY aggregate; TDS on the whole FY base less TDS already deducted');
+ok(/'no_tds_rule'/.test(calc) && /'nothing_payable'/.test(calc) && /'future_date'/.test(calc) && /'commission_not_payable'/.test(calc), 'refuses: no TDS rule, nothing payable, future date, unpayable commission');
+ok(/c\.hold_until > p_payout_date/.test(calc), 'a commission still inside its refund hold cannot be paid');
+const recd = c167.slice(c167.indexOf('function public.admin_payout_record('), c167.indexOf('$$;', c167.indexOf('function public.admin_payout_record(')));
+ok(/'stale_preview'/.test(recd) && /p_expected_net_paise/.test(recd), 'recording re-computes and refuses a stale preview');
+ok(/for update/.test(recd), 'recording locks the partner\'s rows (no double payout)');
+const canc = c167.slice(c167.indexOf('function public.admin_commission_cancel('), c167.indexOf('$$;', c167.indexOf('function public.admin_commission_cancel(')));
+ok(/c\.status = 'paid'/.test(canc) && /insert into public\.partner_clawbacks/.test(canc), 'cancelling a PAID commission creates a clawback');
+for (const f of ['admin_partner_payment_details_get(uuid)', 'admin_partner_payment_details_set(uuid, text, text, text, text, text, text, text)', 'admin_tds_rules_list()',
+  'admin_tds_rule_add(date, numeric, numeric, bigint, text, text, text)', 'admin_payout_preview(uuid, date)', 'admin_payout_record(uuid, date, bigint[], bigint, text, text, text)',
+  'admin_payouts_list()', 'admin_commission_cancel(bigint, text)']) {
+  const name = f.split('(')[0];
+  const body = c167.slice(c167.indexOf(`function public.${name}(`), c167.indexOf('$$;', c167.indexOf(`function public.${name}(`)));
+  ok(/if not public\.is_platform_admin\(\) then\s+raise exception 'not authorized'/.test(body) && /security definer/.test(body), `${name} refuses a non-admin`);
+  ok(new RegExp(`revoke execute on function public\\.${name}\\([^)]*\\)\\s+from public, anon;`).test(c167), `${name}: anon cannot execute`);
+}
+const pp = c167.slice(c167.indexOf('function public.partner_payouts('), c167.indexOf('$$;', c167.indexOf('function public.partner_payouts(')));
+ok(/'pan_on_file', exists/.test(pp) && !/'pan',|account_no|ifsc|upi_id/.test(pp), 'partner view: "PAN on file" only — never the PAN or bank details');
+ok(/grant execute on function public\.partner_payouts\(uuid\) to anon, authenticated;/.test(c167) && /--\s*anon-exec:\s*partner_payouts\b/.test(up167), 'partner payouts view is anon-callable with its reason');
+ok(/check \(status in \('no_rule','pending','cancelled'\)\)/.test(down167) && /166's cancel, verbatim/.test(down167), 'down restores 166 (and refuses while paid rows exist)');
+ok(/values \('167', 'partner_payouts'\)/.test(c167) && /where version = '167'/.test(down167), 'app_migrations 167 added and removed');
+
+const payPanel = read('src/components/partners/AdminPayoutsPanel.tsx');
+ok(['admin_tds_rules_list', 'admin_tds_rule_add', 'admin_payout_preview', 'admin_payout_record', 'admin_payouts_list', 'admin_partner_payment_details_get', 'admin_partner_payment_details_set'].every((f) => payPanel.includes(`rpc('${f}'`)), 'payouts panel wires every payout RPC');
+ok(/TDS_RULES\[key\]/.test(payPanel) && /tds\.194h\.rate_pct/.test(payPanel) && /tds\.194h\.threshold/.test(payPanel), 'the TDS form is pre-filled from the source-verified rule file, not a new literal');
+ok(/const \[tNoPan, setTNoPan\] = useState\(''\)/.test(payPanel), 'the no-PAN rate is NOT pre-filled (no source read for it)');
+ok(/p_expected_net_paise: preview\.net_paise/.test(payPanel), 'the admin records exactly the previewed net');
+const page4 = read('src/pages/PartnerProgram.tsx');
+ok(/rpc\('partner_payouts'/.test(page4) && /भुगतान का हिसाब लोड नहीं हो सका/.test(page4), 'partner page loads payouts and shows a load failure');
+ok(/AdminPayoutsPanel/.test(read('src/pages/SuperAdminPartners.tsx')), 'Payouts tab is on the partners admin page');
+ok(/PAN, बैंक खाता \/ UPI और GSTIN/.test(read('src/pages/PrivacyPolicy.tsx')), 'Privacy Policy discloses PAN/bank collection for payouts');
+
 console.log(`referral: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

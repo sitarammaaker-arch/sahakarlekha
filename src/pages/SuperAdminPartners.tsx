@@ -24,6 +24,7 @@ import { fmtDateTime } from '@/lib/dateUtils';
 import { downloadCSV } from '@/lib/exportUtils';
 import { referralErrorText, normalizeReferralCode, PARTNER_CATEGORIES } from '@/lib/referral/referralCode';
 import AdminCommissionsPanel from '@/components/partners/AdminCommissionsPanel';
+import AdminPayoutsPanel from '@/components/partners/AdminPayoutsPanel';
 
 interface PartnerRow {
   id: string;
@@ -95,7 +96,7 @@ type SetTarget = { societyId: string; societyName: string; currentCode: string |
 
 export default function SuperAdminPartners() {
   const { toast } = useToast();
-  const [tab, setTab] = useState<'partners' | 'societies' | 'commissions'>('partners');
+  const [tab, setTab] = useState<'partners' | 'societies' | 'commissions' | 'payouts'>('partners');
   const [partners, setPartners] = useState<PartnerRow[]>([]);
   const [referrals, setReferrals] = useState<ReferralRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -258,6 +259,7 @@ export default function SuperAdminPartners() {
         <Button variant={tab === 'partners' ? 'default' : 'outline'} size="sm" onClick={() => setTab('partners')}>Partners ({partners.length})</Button>
         <Button variant={tab === 'societies' ? 'default' : 'outline'} size="sm" onClick={() => setTab('societies')}>समितियाँ ({referrals.length})</Button>
         <Button variant={tab === 'commissions' ? 'default' : 'outline'} size="sm" onClick={() => setTab('commissions')}>Commission</Button>
+        <Button variant={tab === 'payouts' ? 'default' : 'outline'} size="sm" onClick={() => setTab('payouts')}>भुगतान / TDS</Button>
       </div>
 
       {tab === 'partners' && (
@@ -407,6 +409,7 @@ export default function SuperAdminPartners() {
       )}
 
       {tab === 'commissions' && <AdminCommissionsPanel />}
+      {tab === 'payouts' && <AdminPayoutsPanel />}
 
       {/* approve / reject / suspend */}
       <Dialog open={!!decide} onOpenChange={(o) => { if (!o) setDecide(null); }}>
