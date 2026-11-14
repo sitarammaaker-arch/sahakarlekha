@@ -12,6 +12,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePageTracking } from "@/lib/analytics";
 import { reloadOnceForStaleChunk } from "@/lib/chunkReload";
 import { needsAppData } from "@/lib/appDataPaths";
+import { captureReferral } from "@/lib/referral/referralCode";
 
 // Auto-recover from stale-chunk errors after a new deploy. When the app has stayed
 // open across a deploy, an old hashed chunk filename can 404 on the CDN and the
@@ -228,6 +229,9 @@ const SuperAdminDashboard = lazyWithRetry(() => import("./pages/SuperAdminDashbo
 const SuperAdminFeedback = lazyWithRetry(() => import("./pages/SuperAdminFeedback"));
 const SuperAdminInvoices = lazyWithRetry(() => import("./pages/SuperAdminInvoices"));
 const SuperAdminEmails = lazyWithRetry(() => import("./pages/SuperAdminEmails"));
+const SuperAdminPartners = lazyWithRetry(() => import("./pages/SuperAdminPartners"));
+const PartnerApply = lazyWithRetry(() => import("./pages/PartnerProgram").then((m) => ({ default: m.PartnerApply })));
+const PartnerStatus = lazyWithRetry(() => import("./pages/PartnerProgram").then((m) => ({ default: m.PartnerStatus })));
 import { SuperAdminRoute } from "@/components/SuperAdminRoute";
 
 import { staticSnapshotFor } from '@/lib/staticSnapshot';
@@ -263,7 +267,14 @@ const PageLoader = () => {
 
 const AppRoutes = () => {
   usePageTracking();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  // Partner program: remember a ?ref=SL-XXXXXX code (first touch, 90 days) for the Register page. Never throws.
+  useEffect(() => {
+    if (!search) return;
+    let storage: Storage | null = null;
+    try { storage = window.localStorage; } catch { /* blocked storage → no referral */ }
+    captureReferral(search, storage, Date.now());
+  }, [search]);
   return (
     <ErrorBoundary resetKey={pathname} homeHref="/">
     <Suspense fallback={<PageLoader />}>
@@ -278,6 +289,8 @@ const AppRoutes = () => {
       {/* Public Landing Page */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/contact" element={<ContactUs />} />
+      <Route path="/partner" element={<PartnerApply />} />
+      <Route path="/partner/status" element={<PartnerStatus />} />
       <Route path="/about" element={<AboutUs />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsConditions />} />
@@ -469,6 +482,7 @@ const AppRoutes = () => {
       <Route path="/super-admin/feedback" element={<SuperAdminRoute><MainLayout><SuperAdminFeedback /></MainLayout></SuperAdminRoute>} />
       <Route path="/super-admin/invoices" element={<SuperAdminRoute><MainLayout><SuperAdminInvoices /></MainLayout></SuperAdminRoute>} />
       <Route path="/super-admin/emails" element={<SuperAdminRoute><MainLayout><SuperAdminEmails /></MainLayout></SuperAdminRoute>} />
+      <Route path="/super-admin/partners" element={<SuperAdminRoute><MainLayout><SuperAdminPartners /></MainLayout></SuperAdminRoute>} />
 
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />

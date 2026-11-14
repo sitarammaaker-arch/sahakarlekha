@@ -27,7 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import {
   Building2, Shield, Users, CreditCard, RefreshCw, Lock, Unlock,
-  AlertTriangle, CheckCircle2, Clock, Search, Edit2, BarChart3, Inbox, FileText, Mail,
+  AlertTriangle, CheckCircle2, Clock, Search, Edit2, BarChart3, Inbox, FileText, Mail, Handshake,
 } from 'lucide-react';
 import { MfaSetupDialog } from '@/components/security/MfaSetupDialog';
 
@@ -293,6 +293,11 @@ const SuperAdminDashboard: React.FC = () => {
           <Link to="/super-admin/emails">
             <Button variant="outline" size="sm" className="gap-2">
               <Mail className="h-3.5 w-3.5" /> Emails
+            </Button>
+          </Link>
+          <Link to="/super-admin/partners">
+            <Button variant="outline" size="sm" className="gap-2">
+              <Handshake className="h-3.5 w-3.5" /> Partners
             </Button>
           </Link>
           <Button variant={mfaEnrolled ? 'outline' : 'default'} size="sm" className="gap-2" onClick={() => setMfaOpen(true)}>
