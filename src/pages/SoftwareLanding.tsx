@@ -21,6 +21,7 @@ import HindiOnlyNotice from '@/components/HindiOnlyNotice';
 import { PLAN_CATALOG, TRIAL_DAYS, priceLabel } from '@/lib/plans';
 import { softwareModuleGroups } from '@/content/softwareModules';
 import { softwareFaq, softwareFaqLd } from '@/content/softwareFaq';
+import { softwareShots, softwareShotSrc } from '@/content/softwareShots';
 
 const SITE = 'https://sahakarlekha.com';
 
@@ -213,6 +214,26 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
             <Link to="/pricing" className="text-primary font-medium hover:underline">{L('सभी plans देखें', 'See all plans')}</Link>
           </p>
         </div>
+
+        {/* Screens: the real app with a demo society's data (content/softwareShots). */}
+        {softwareShots(data.slug).length > 0 && (
+          <section className="mt-10">
+            <h2 className="text-xl md:text-2xl font-bold text-foreground">{L('app अंदर से कैसा दिखता है', 'What the app looks like inside')}</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {L('ये असली app के screen हैं, एक demo समिति के data के साथ।', "These are screens of the real app, with a demo society's data.")}
+            </p>
+            <div className="grid md:grid-cols-3 gap-4 mt-4">
+              {softwareShots(data.slug).map((s) => (
+                <figure key={s.file} className="rounded-xl border overflow-hidden bg-white">
+                  <a href={softwareShotSrc(s)} target="_blank" rel="noopener noreferrer">
+                    <img src={softwareShotSrc(s)} alt={L(s.hi, s.en)} width={s.width} height={s.height} loading="lazy" decoding="async" className="w-full h-auto block" />
+                  </a>
+                  <figcaption className="px-3 py-2 text-xs text-muted-foreground border-t">{L(s.hi, s.en)}</figcaption>
+                </figure>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* What this society type gets: the app's own menu for the type, never a hand-written list. */}
         {groups.length > 0 && (

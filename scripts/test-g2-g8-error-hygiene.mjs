@@ -33,12 +33,15 @@ const spaRules = (vercel.rewrites || []).filter(r => r.destination === '/index.h
 const toRe = (source) => new RegExp('^' + source.replace('/:path*', '(/.*)?') + '$');
 const spaRes = spaRules.map(r => toRe(r.source));
 const re = spaRes.length ? { test: (p) => spaRes.some(x => x.test(p)) } : null;
-ok('SPA rewrite still serves app routes', !!re && re.test('/dashboard') && re.test('/login') && re.test('/guide/any-chapter') && re.test('/members/123'));
+ok('SPA rewrite still serves app routes', !!re && re.test('/dashboard') && re.test('/login') && re.test('/members/123') && re.test('/en/guide/any-chapter'));
 ok('SPA rewrite does not answer an unknown top-level path (a real 404, not a soft one)', !!re && !re.test('/no-such-page') && !re.test('/PRICING') && !re.test('/manifest.json') && !re.test('/wp-login.php'));
 ok('SPA rewrite never serves index.html for /assets/* (missing chunk ⇒ 404)', !!re && !re.test('/assets/BlogIndex-NHzHmXeZ.js'));
 ok('…nor for /api/*', !!re && !re.test('/api/x'));
 // /blog/<slug> pages are all prerendered files; an unknown one must reach 404.html with a real 404
 ok('…nor for /blog/* (unknown article ⇒ 404)', !!re && !re.test('/blog/x') && !re.test('/blog/category/x'));
+// The other fully prerendered sections follow /blog (scripts/spa-rewrite.mjs NOT_REWRITTEN): an unknown slug
+// used to answer 200 with the home page's HTML and canonical "/".
+ok('…nor for the other prerendered sections (unknown slug ⇒ 404)', !!re && ['/guide/any-chapter', '/guide', '/software/x', '/glossary/x', '/help/x', '/cookbook/x', '/tools/x', '/author/x', '/cooperative-software/x'].every((p) => !re.test(p)));
 
 console.log(`\nG2/G8 error hygiene: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -7,7 +7,7 @@
 //   - no menu label falls back to a raw translation key;
 //   - the questions carry the public plan prices from lib/plans (never a stale number).
 // Run: node scripts/test-software-pages.mjs   (npm run test:software-pages)
-import { mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -17,7 +17,7 @@ mkdirSync(dirname(out), { recursive: true });
 const esbuild = await import('esbuild');
 await esbuild.build({
   stdin: {
-    contents: `export * from './src/content/softwareModules'; export * from './src/content/softwareFaq'; export { PLAN_CATALOG, priceLabel } from './src/lib/plans';`,
+    contents: `export * from './src/content/softwareModules'; export * from './src/content/softwareFaq'; export * from './src/content/softwareShots'; export { PLAN_CATALOG, priceLabel } from './src/lib/plans';`,
     resolveDir: ROOT,
     loader: 'ts',
   },
@@ -47,6 +47,11 @@ for (const s of slugs.filter((x) => m.SOFTWARE_SLUG_TYPE[x])) {
   ok(`${s}: no settings screens or dashboards in the list`, !domains.includes('administration') && !groups.some((g) => g.items.some((i) => /^(Dashboard|My Dashboard|Analytics)$/.test(i.en))));
   const raw = groups.flatMap((g) => g.items).filter((i) => /^[a-z]+[A-Z]/.test(i.hi) || /^[a-z]+[A-Z]/.test(i.en));
   ok(`${s}: every label is translated`, raw.length === 0, raw.map((i) => i.en).join(', '));
+
+  const shots = m.softwareShots(s);
+  ok(`${s}: three screenshots with captions in both languages`, shots.length === 3 && shots.every((x) => x.hi && x.en && x.width === 1200 && x.height > 0), String(shots.length));
+  const missing = shots.filter((x) => !existsSync(resolve(ROOT, 'public', 'software-shots', `${x.file}.webp`)));
+  ok(`${s}: every screenshot file exists in public/software-shots`, missing.length === 0, missing.map((x) => x.file).join(', '));
 
   const faq = m.softwareFaq(s, 'नाम', 'Name');
   ok(`${s}: questions exist with answers in both languages`, faq.length >= 5 && faq.every((q) => q.qHi && q.qEn && q.aHi.length > 20 && q.aEn.length > 20), String(faq.length));
