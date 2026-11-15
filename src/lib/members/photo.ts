@@ -5,6 +5,7 @@
  * society's own users read it and its writers change it. Pure path + validation helpers, plus a browser-only
  * downscale to a small JPEG so a phone photo (3–8 MB) becomes ~30–80 KB. Tested: scripts/test-member-m6.mjs.
  */
+import { tr } from '../uiLang.ts';
 export const MEMBER_PHOTO_BUCKET = 'member-photos';
 export const MEMBER_PHOTO_MAX_INPUT_BYTES = 10 * 1024 * 1024;
 export const MEMBER_PHOTO_MAX_SIDE = 480;
@@ -20,12 +21,12 @@ export function memberPhotoPath(societyId: string, memberRowId: string): string 
  * most browsers cannot decode it, so the downscale would fail later with no useful message.
  */
 export function photoFileError(file: { type?: string; size?: number; name?: string } | undefined): string | null {
-  if (!file) return 'फ़ोटो चुनें। (Choose a photo.)';
+  if (!file) return tr('फ़ोटो चुनें। (Choose a photo.)', 'Choose a photo.');
   if (/^image\/hei[cf]/i.test(file.type || '') || /\.hei[cf]$/i.test(file.name || '')) {
-    return 'HEIC/HEIF फ़ोटो यहाँ नहीं खुलती। iPhone में Settings → Camera → Formats → "Most Compatible" चुनें, या फ़ोटो का screenshot लेकर JPG चुनें। (HEIC is not supported — use JPG / PNG.)';
+    return tr('HEIC/HEIF फ़ोटो यहाँ नहीं खुलती। iPhone में Settings → Camera → Formats → "Most Compatible" चुनें, या फ़ोटो का screenshot लेकर JPG चुनें। (HEIC is not supported — use JPG / PNG.)', 'HEIC/HEIF photos do not open here. On iPhone choose Settings → Camera → Formats → "Most Compatible", or take a screenshot of the photo and choose the JPG.');
   }
-  if (!/^image\/(jpeg|png|webp)$/i.test(file.type || '')) return 'सिर्फ़ फ़ोटो (JPG / PNG / WEBP) चुनें। (Images only.)';
-  if ((file.size || 0) > MEMBER_PHOTO_MAX_INPUT_BYTES) return 'फ़ोटो 10 MB से छोटी होनी चाहिए। (Max 10 MB.)';
+  if (!/^image\/(jpeg|png|webp)$/i.test(file.type || '')) return tr('सिर्फ़ फ़ोटो (JPG / PNG / WEBP) चुनें। (Images only.)', 'Choose an image only (JPG / PNG / WEBP).');
+  if ((file.size || 0) > MEMBER_PHOTO_MAX_INPUT_BYTES) return tr('फ़ोटो 10 MB से छोटी होनी चाहिए। (Max 10 MB.)', 'The photo must be smaller than 10 MB.');
   return null;
 }
 

@@ -18,6 +18,7 @@
  */
 import { applyPercent, isValidMinor, type Minor } from '../money';
 import { verifiedValue, resolveTaxRule, TDS_RULES, type TaxContext } from '../rules/tax';
+import { tr } from '../uiLang';
 
 export interface TdsInput {
   /** The section, e.g. '194q'. Lower-case; it is a rule-key fragment, not a display string. */
@@ -70,7 +71,7 @@ export function computeTds(input: TdsInput): TdsOutcome {
   const missing: string[] = [];
 
   if (!isValidMinor(input.aggregateMinor)) {
-    return { applicable: false, refused: true, reason: 'राशि पैसे (integer) में चाहिए', missing: ['aggregateMinor'] };
+    return { applicable: false, refused: true, reason: tr('राशि पैसे (integer) में चाहिए', 'Amount must be in paise (integer)'), missing: ['aggregateMinor'] };
   }
 
   // Thresholds come in KINDS. Most sections have one aggregate figure; 194C has a
@@ -98,10 +99,18 @@ export function computeTds(input: TdsInput): TdsOutcome {
       applicable: false,
       refused: true,
       reason: needsAttr
-        ? `धारा ${s.toUpperCase()} की दर इस पर निर्भर करती है कि भुगतान किस प्रकार का है — ` +
-          `बिना यह जाने मैं गणना नहीं करूँगा। (जैसे 194J: professional या technical?)`
-        : `धारा ${s.toUpperCase()} के लिए मेरे पास प्रमाणित, तिथि-सहित नियम नहीं है — इसलिए मैं गणना नहीं करूँगा। ` +
-          `नियम जोड़ें/सत्यापित करें: src/lib/rules/tax.ts`,
+        ? tr(
+          `धारा ${s.toUpperCase()} की दर इस पर निर्भर करती है कि भुगतान किस प्रकार का है — ` +
+            `बिना यह जाने मैं गणना नहीं करूँगा। (जैसे 194J: professional या technical?)`,
+          `The rate under section ${s.toUpperCase()} depends on the type of payment — ` +
+            `I will not calculate without knowing it. (e.g. 194J: professional or technical?)`,
+        )
+        : tr(
+          `धारा ${s.toUpperCase()} के लिए मेरे पास प्रमाणित, तिथि-सहित नियम नहीं है — इसलिए मैं गणना नहीं करूँगा। ` +
+            `नियम जोड़ें/सत्यापित करें: src/lib/rules/tax.ts`,
+          `I have no verified, dated rule for section ${s.toUpperCase()} — so I will not calculate. ` +
+            `Add/verify the rule: src/lib/rules/tax.ts`,
+        ),
       missing,
     };
   }
@@ -121,7 +130,10 @@ export function computeTds(input: TdsInput): TdsOutcome {
       if (input.paymentMinor === undefined || !isValidMinor(input.paymentMinor)) {
         return {
           applicable: false, refused: true,
-          reason: `धारा ${s.toUpperCase()} में एक भुगतान की सीमा (${inr(perMinor)}) भी है — इस भुगतान की राशि बताए बिना मैं नहीं कह सकता कि TDS बनता है या नहीं।`,
+          reason: tr(
+            `धारा ${s.toUpperCase()} में एक भुगतान की सीमा (${inr(perMinor)}) भी है — इस भुगतान की राशि बताए बिना मैं नहीं कह सकता कि TDS बनता है या नहीं।`,
+            `Section ${s.toUpperCase()} also has a single-payment limit (${inr(perMinor)}) — without this payment's amount I cannot say whether TDS applies.`,
+          ),
           missing: ['paymentMinor'],
         };
       }
@@ -130,8 +142,12 @@ export function computeTds(input: TdsInput): TdsOutcome {
         basis.push({ key: `tds.${s}.threshold.per_payment`, version: perPayment.version, effectiveFrom: perPayment.effectiveFrom, cite: perPayment.cite });
         return {
           applicable: true, tdsMinor, taxableMinor: input.paymentMinor, thresholdMinor: perMinor, ratePct: rate.value,
-          explain: `यह भुगतान ${inr(input.paymentMinor)} एक भुगतान की सीमा ${inr(perMinor)} से अधिक है — पूरी राशि पर ` +
-            `${rate.value}% TDS = ${inr(tdsMinor)}। (s.393(1)(a), नियम ${perPayment.effectiveFrom} से प्रभावी)`,
+          explain: tr(
+            `यह भुगतान ${inr(input.paymentMinor)} एक भुगतान की सीमा ${inr(perMinor)} से अधिक है — पूरी राशि पर ` +
+              `${rate.value}% TDS = ${inr(tdsMinor)}। (s.393(1)(a), नियम ${perPayment.effectiveFrom} से प्रभावी)`,
+            `This payment of ${inr(input.paymentMinor)} is above the single-payment limit of ${inr(perMinor)} — on the whole amount ` +
+              `${rate.value}% TDS = ${inr(tdsMinor)}. (s.393(1)(a), rule effective from ${perPayment.effectiveFrom})`,
+          ),
           basis,
         };
       }
@@ -142,7 +158,10 @@ export function computeTds(input: TdsInput): TdsOutcome {
       taxableMinor: 0 as Minor,
       thresholdMinor,
       ratePct: rate.value,
-      explain: `कुल ${inr(input.aggregateMinor)} — धारा ${s.toUpperCase()} की सीमा ${inr(thresholdMinor)} से अधिक नहीं, इसलिए TDS नहीं कटेगा।`,
+      explain: tr(
+        `कुल ${inr(input.aggregateMinor)} — धारा ${s.toUpperCase()} की सीमा ${inr(thresholdMinor)} से अधिक नहीं, इसलिए TDS नहीं कटेगा।`,
+        `Total ${inr(input.aggregateMinor)} — not above the section ${s.toUpperCase()} limit of ${inr(thresholdMinor)}, so no TDS will be deducted.`,
+      ),
       basis,
     };
   }
@@ -157,9 +176,14 @@ export function computeTds(input: TdsInput): TdsOutcome {
     return {
       applicable: false,
       refused: true,
-      reason: `कुल ${inr(input.aggregateMinor)} धारा ${s.toUpperCase()} की सीमा ${inr(thresholdMinor)} से अधिक है, ` +
-        `पर इस धारा में TDS पूरी राशि पर लगता है या केवल सीमा से ऊपर की राशि पर — इसका प्रमाणित नियम मेरे पास नहीं है, ` +
-        `इसलिए मैं राशि नहीं बताऊँगा। नियम जोड़ें: tds.${s}.charge_on_excess_only (src/lib/rules/tax.ts)`,
+      reason: tr(
+        `कुल ${inr(input.aggregateMinor)} धारा ${s.toUpperCase()} की सीमा ${inr(thresholdMinor)} से अधिक है, ` +
+          `पर इस धारा में TDS पूरी राशि पर लगता है या केवल सीमा से ऊपर की राशि पर — इसका प्रमाणित नियम मेरे पास नहीं है, ` +
+          `इसलिए मैं राशि नहीं बताऊँगा। नियम जोड़ें: tds.${s}.charge_on_excess_only (src/lib/rules/tax.ts)`,
+        `Total ${inr(input.aggregateMinor)} is above the section ${s.toUpperCase()} limit of ${inr(thresholdMinor)}, ` +
+          `but I have no verified rule on whether TDS under this section applies to the whole amount or only the excess over the limit, ` +
+          `so I will not state an amount. Add the rule: tds.${s}.charge_on_excess_only (src/lib/rules/tax.ts)`,
+      ),
       missing: [`tds.${s}.charge_on_excess_only`],
     };
   }
@@ -175,10 +199,18 @@ export function computeTds(input: TdsInput): TdsOutcome {
     thresholdMinor,
     ratePct: rate.value,
     explain: onExcess
-      ? `कुल ${inr(input.aggregateMinor)} में से सीमा ${inr(thresholdMinor)} घटाकर ${inr(taxableMinor)} पर ` +
-        `${rate.value}% TDS = ${inr(tdsMinor)}। (नियम ${thr.effectiveFrom} से प्रभावी)`
-      : `कुल ${inr(input.aggregateMinor)} सीमा ${inr(thresholdMinor)} से अधिक है — पूरी राशि पर ` +
-        `${rate.value}% TDS = ${inr(tdsMinor)}। (s.393(1)(a), नियम ${thr.effectiveFrom} से प्रभावी)`,
+      ? tr(
+        `कुल ${inr(input.aggregateMinor)} में से सीमा ${inr(thresholdMinor)} घटाकर ${inr(taxableMinor)} पर ` +
+          `${rate.value}% TDS = ${inr(tdsMinor)}। (नियम ${thr.effectiveFrom} से प्रभावी)`,
+        `Total ${inr(input.aggregateMinor)} minus the limit ${inr(thresholdMinor)} = ${inr(taxableMinor)}, on which ` +
+          `${rate.value}% TDS = ${inr(tdsMinor)}. (rule effective from ${thr.effectiveFrom})`,
+      )
+      : tr(
+        `कुल ${inr(input.aggregateMinor)} सीमा ${inr(thresholdMinor)} से अधिक है — पूरी राशि पर ` +
+          `${rate.value}% TDS = ${inr(tdsMinor)}। (s.393(1)(a), नियम ${thr.effectiveFrom} से प्रभावी)`,
+        `Total ${inr(input.aggregateMinor)} is above the limit ${inr(thresholdMinor)} — on the whole amount ` +
+          `${rate.value}% TDS = ${inr(tdsMinor)}. (s.393(1)(a), rule effective from ${thr.effectiveFrom})`,
+      ),
     basis,
   };
 }

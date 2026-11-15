@@ -59,7 +59,7 @@ const GuideSearch: React.FC = () => {
           aria-label={t('hub.search.placeholder')}
         />
         {q && (
-          <button onClick={() => { setQ(''); setOpen(false); }} aria-label="साफ़ करें" className="text-muted-foreground hover:text-foreground">
+          <button onClick={() => { setQ(''); setOpen(false); }} aria-label={lang === 'en' ? 'Clear' : 'साफ़ करें'} className="text-muted-foreground hover:text-foreground">
             <X className="h-4 w-4" />
           </button>
         )}

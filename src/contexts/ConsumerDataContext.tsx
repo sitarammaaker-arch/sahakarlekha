@@ -13,6 +13,7 @@
  *
  * C2 exposes the 'member' tier in the UI; 'wholesale'/'promo' are schema-ready for later slices.
  */
+import { tr } from '@/lib/uiLang';
 import { resolveDiscountReceivedAccountId } from '@/lib/invoiceAdjustments';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
@@ -38,6 +39,10 @@ import { threeWayMatch, hasBlockingVariance, blockingReasons, type MatchReason }
 const VARIANCE_LABEL: Record<MatchReason, string> = {
   'short-delivery': 'कम डिलीवरी', 'over-delivery': 'ज़्यादा डिलीवरी', 'over-billed-qty': 'ज़्यादा बिल (मात्रा)',
   'under-billed-qty': 'कम बिल (मात्रा)', 'price-variance': 'दर अंतर', 'unbilled': 'बिल नहीं', 'extra-invoice-line': 'अतिरिक्त बिल पंक्ति',
+};
+const VARIANCE_LABEL_EN: Record<MatchReason, string> = {
+  'short-delivery': 'short delivery', 'over-delivery': 'over-delivery', 'over-billed-qty': 'over-billed (quantity)',
+  'under-billed-qty': 'under-billed (quantity)', 'price-variance': 'rate difference', 'unbilled': 'not billed', 'extra-invoice-line': 'extra bill line',
 };
 import { getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
 import { salesReturnCreditAccountId } from '@/lib/consumer/salesReturnAccount';
@@ -131,7 +136,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (societyRef.current?.fyLocked) {
       toastRef.current({
         title: 'FY Locked',
-        description: 'Cannot modify data while the Financial Year is audit-locked. (वित्तीय वर्ष लॉक है)',
+        description: tr('Cannot modify data while the Financial Year is audit-locked. (वित्तीय वर्ष लॉक है)', 'Cannot modify data while the Financial Year is audit-locked. (FY is locked)'),
         variant: 'destructive',
       });
       return true;
@@ -152,7 +157,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Consumer price save error:', error.message); reportError('consumer-save', error.message);
         setPricesState(prev => { const r = prev.filter(x => x.id !== rec.id); storage.setConsumerPrices(r); return r; });
-        toastRef.current({ title: 'मूल्य सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का consumer_price_lists block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('मूल्य सेव नहीं हुआ', 'Price not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का consumer_price_lists block चलाएँ।)`, `Not saved to the cloud — ${error.message}. Refresh will not leave anything wrong. (First time: run the consumer_price_lists block of supabase-tables.sql.)`), variant: 'destructive', duration: 12000 });
       }
     });
     return rec;
@@ -166,7 +171,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     supabase.from('consumer_price_lists').delete().eq('id', id).eq('society_id', societyId).then(({ error }) => {
       if (error) {
         setPricesState(prev => { const u = [...prev, before]; storage.setConsumerPrices(u); return u; });
-        toastRef.current({ title: 'मूल्य हटा नहीं', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('मूल्य हटा नहीं', 'Price not deleted'), description: tr(`क्लाउड से हटाना नहीं हुआ — ${error.message}. Refresh करने पर वापस दिखेगा।`, `Not deleted from the cloud — ${error.message}. It will show again on Refresh.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [consumerPrices, societyId]);
@@ -204,8 +209,8 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
 
   const recordMemberRecovery = useCallback((data: { memberId: string; memberName: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; note?: string }): Voucher | null => {
     if (guardFYLocked()) return null;
-    if (!(data.amount > 0)) { toastRef.current({ title: 'मान्य राशि दर्ज करें', variant: 'destructive' }); return null; }
-    if (!memberReceivableAccountId) { toastRef.current({ title: 'सदस्य प्राप्य खाता नहीं मिला', description: 'Member receivable account missing — Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', variant: 'destructive' }); return null; }
+    if (!(data.amount > 0)) { toastRef.current({ title: tr('मान्य राशि दर्ज करें', 'Enter a valid amount'), variant: 'destructive' }); return null; }
+    if (!memberReceivableAccountId) { toastRef.current({ title: tr('सदस्य प्राप्य खाता नहीं मिला', 'Member receivable account not found'), description: tr('Member receivable account missing — Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', 'Member receivable account missing — run "Create domain accounts" on the Ledger Hygiene page (admin).'), variant: 'destructive' }); return null; }
     const debit = data.mode === 'cash' ? CASH_ACCOUNT : (data.bankAccountId || defaultBankAccountId(accounts));
     return addVoucher({
       type: 'receipt',
@@ -240,47 +245,47 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         console.error('Patronage save error:', error.message); reportError('consumer-save', error.message);
         setPatronageRunsState(prev => { const u = revertTo ? prev.map(r => r.id === next.id ? revertTo : r) : prev.filter(r => r.id !== next.id); storage.setConsumerPatronageRuns(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'रिबेट रन सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh par purana data. (पहली बार: consumer_patronage_runs block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('रिबेट रन सेव नहीं हुआ', 'Rebate run not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh par purana data. (पहली बार: consumer_patronage_runs block चलाएँ।)`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back. (First time: run the consumer_patronage_runs block.)`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [societyId]);
 
   const createPatronageRun = useCallback((args: { from: string; to: string; ratePct: number; fyLabel?: string }): PatronageRun | null => {
     if (guardFYLocked()) return null;
-    if (!(args.ratePct > 0)) { toastRef.current({ title: 'दर ज़रूरी', description: 'धनात्मक रिबेट % डालें।', variant: 'destructive' }); return null; }
+    if (!(args.ratePct > 0)) { toastRef.current({ title: tr('दर ज़रूरी', 'Rate is required'), description: tr('धनात्मक रिबेट % डालें।', 'Enter a positive rebate %.'), variant: 'destructive' }); return null; }
     const lines = computePatronageLines(sales, members, { from: args.from, to: args.to, ratePct: args.ratePct }, activeReturns);
-    if (lines.length === 0) { toastRef.current({ title: 'कोई राशि नहीं', description: 'इस अवधि में किसी सक्रिय सदस्य की खरीद नहीं।', variant: 'destructive' }); return null; }
+    if (lines.length === 0) { toastRef.current({ title: tr('कोई राशि नहीं', 'No amount'), description: tr('इस अवधि में किसी सक्रिय सदस्य की खरीद नहीं।', 'No active member made purchases in this period.'), variant: 'destructive' }); return null; }
     const total = patronageTotal(lines);
     const run: PatronageRun = { id: crypto.randomUUID(), kind: 'patronage', from: args.from, to: args.to, ratePct: args.ratePct, fyLabel: args.fyLabel, resolutionNo: '', lines, total, status: 'draft', amountPaid: 0, createdAt: new Date().toISOString() };
     commitPatronageRun(run, null);
-    toastRef.current({ title: 'रिबेट रन बनाया (draft)', description: `${lines.length} सदस्य · कुल ₹${total.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr('रिबेट रन बनाया (draft)', 'Rebate run created (draft)'), description: tr(`${lines.length} सदस्य · कुल ₹${total.toLocaleString('en-IN')}`, `${lines.length} members · total ₹${total.toLocaleString('en-IN')}`) });
     return run;
   }, [sales, members, activeReturns, guardFYLocked, commitPatronageRun]);
 
   const createDividendRun = useCallback((args: { ratePct: number; fyLabel?: string }): PatronageRun | null => {
     if (guardFYLocked()) return null;
-    if (!(args.ratePct > 0)) { toastRef.current({ title: 'दर ज़रूरी', description: 'धनात्मक लाभांश % डालें।', variant: 'destructive' }); return null; }
+    if (!(args.ratePct > 0)) { toastRef.current({ title: tr('दर ज़रूरी', 'Rate is required'), description: tr('धनात्मक लाभांश % डालें।', 'Enter a positive dividend %.'), variant: 'destructive' }); return null; }
     const lines = computeDividendLines(members, args.ratePct);
-    if (lines.length === 0) { toastRef.current({ title: 'कोई राशि नहीं', description: 'किसी सक्रिय सदस्य की शेयर पूंजी नहीं।', variant: 'destructive' }); return null; }
+    if (lines.length === 0) { toastRef.current({ title: tr('कोई राशि नहीं', 'No amount'), description: tr('किसी सक्रिय सदस्य की शेयर पूंजी नहीं।', 'No active member has share capital.'), variant: 'destructive' }); return null; }
     const total = patronageTotal(lines);
     const run: PatronageRun = { id: crypto.randomUUID(), kind: 'dividend', from: '', to: '', ratePct: args.ratePct, fyLabel: args.fyLabel, resolutionNo: '', lines, total, status: 'draft', amountPaid: 0, createdAt: new Date().toISOString() };
     commitPatronageRun(run, null);
-    toastRef.current({ title: 'लाभांश रन बनाया (draft)', description: `${lines.length} सदस्य · कुल ₹${total.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr('लाभांश रन बनाया (draft)', 'Dividend run created (draft)'), description: tr(`${lines.length} सदस्य · कुल ₹${total.toLocaleString('en-IN')}`, `${lines.length} members · total ₹${total.toLocaleString('en-IN')}`) });
     return run;
   }, [members, guardFYLocked, commitPatronageRun]);
 
   const approvePatronageRun = useCallback((args: { runId: string; resolutionNo: string; resolutionDate?: string }): PatronageRun | null => {
     if (guardFYLocked()) return null;
     const cur = patronageRuns.find(r => r.id === args.runId);
-    if (!cur || cur.status !== 'draft') { toastRef.current({ title: 'पहले से approved', variant: 'destructive' }); return null; }
-    if (!args.resolutionNo || !args.resolutionNo.trim()) { toastRef.current({ title: 'प्रस्ताव संख्या आवश्यक', description: 'रिबेट वितरण के लिए सभा/बोर्ड प्रस्ताव संख्या ज़रूरी है।', variant: 'destructive', duration: 10000 }); return null; }
+    if (!cur || cur.status !== 'draft') { toastRef.current({ title: tr('पहले से approved', 'Already approved'), variant: 'destructive' }); return null; }
+    if (!args.resolutionNo || !args.resolutionNo.trim()) { toastRef.current({ title: tr('प्रस्ताव संख्या आवश्यक', 'Resolution number is required'), description: tr('रिबेट वितरण के लिए सभा/बोर्ड प्रस्ताव संख्या ज़रूरी है।', 'A general body/board resolution number is required for rebate distribution.'), variant: 'destructive', duration: 10000 }); return null; }
     const isDiv = cur.kind === 'dividend';
     const label = isDiv ? 'लाभांश' : 'संरक्षण रिबेट';
     const distAcc = isDiv ? resolveDividendDistributionAccountId(accounts) : resolvePatronageDistributionAccountId(accounts);
     const payAcc = isDiv ? resolveDividendPayableAccountId(accounts) : resolveRebatePayableAccountId(accounts);
-    if (!distAcc || !payAcc) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Distribution / payable ledger missing — Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', variant: 'destructive', duration: 12000 }); return null; }
+    if (!distAcc || !payAcc) { toastRef.current({ title: tr('खाते नहीं मिले', 'Accounts not found'), description: tr('Distribution / payable ledger missing — Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', 'Distribution / payable ledger missing — run "Create domain accounts" on the Ledger Hygiene page (admin).'), variant: 'destructive', duration: 12000 }); return null; }
     const legs = patronageLegs(cur.total, distAcc, payAcc);
-    if (legs.length === 0) { toastRef.current({ title: 'पोस्ट नहीं हुआ', variant: 'destructive' }); return null; }
+    if (legs.length === 0) { toastRef.current({ title: tr('पोस्ट नहीं हुआ', 'Not posted'), variant: 'destructive' }); return null; }
     const voucher = addVoucher({
       type: 'journal', date: args.resolutionDate || new Date().toISOString().slice(0, 10),
       debitAccountId: distAcc, creditAccountId: payAcc, amount: cur.total,
@@ -292,20 +297,20 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (!voucher?.id) return null;
     const next: PatronageRun = { ...cur, status: 'approved', resolutionNo: args.resolutionNo.trim(), resolutionDate: args.resolutionDate, voucherId: voucher.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
     commitPatronageRun(next, cur, () => cancelVoucher(voucher.id, `${label} approval rolled back (cloud save failed)`, user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: `✅ ${label} approved`, description: `प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}` });
+    toastRef.current({ title: `✅ ${label} approved`, description: tr(`प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}`, `Resolution ${args.resolutionNo} — total ₹${cur.total.toLocaleString('en-IN')}`) });
     return next;
   }, [patronageRuns, accounts, addVoucher, cancelVoucher, guardFYLocked, commitPatronageRun, user]);
 
   const recordPatronagePayment = useCallback((args: { runId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }): Voucher | null => {
     if (guardFYLocked()) return null;
     const cur = patronageRuns.find(r => r.id === args.runId);
-    if (!cur || cur.status !== 'approved') { toastRef.current({ title: 'पहले approve करें', variant: 'destructive' }); return null; }
+    if (!cur || cur.status !== 'approved') { toastRef.current({ title: tr('पहले approve करें', 'Approve it first'), variant: 'destructive' }); return null; }
     const outstandingAmt = +(cur.total - cur.amountPaid).toFixed(2);
     const amount = +Math.min(args.amount, outstandingAmt).toFixed(2);
-    if (!(amount > 0)) { toastRef.current({ title: 'कुछ बकाया नहीं', variant: 'destructive' }); return null; }
+    if (!(amount > 0)) { toastRef.current({ title: tr('कुछ बकाया नहीं', 'Nothing outstanding'), variant: 'destructive' }); return null; }
     const isDiv = cur.kind === 'dividend';
     const payAcc = isDiv ? resolveDividendPayableAccountId(accounts) : resolveRebatePayableAccountId(accounts);
-    if (!payAcc) { toastRef.current({ title: 'देय खाता नहीं मिला', description: 'Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', variant: 'destructive', duration: 12000 }); return null; }
+    if (!payAcc) { toastRef.current({ title: tr('देय खाता नहीं मिला', 'Payable account not found'), description: tr('Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', 'Run "Create domain accounts" on the Ledger Hygiene page (admin).'), variant: 'destructive', duration: 12000 }); return null; }
     const creditAcc = args.mode === 'bank' ? (args.bankAccountId || defaultBankAccountId(accounts)) : CASH_ACCOUNT;
     const voucher = addVoucher({
       type: 'payment', date: args.date,
@@ -318,7 +323,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (!voucher?.id) return null;
     const next: PatronageRun = { ...cur, amountPaid: +(cur.amountPaid + amount).toFixed(2) };
     commitPatronageRun(next, cur, () => cancelVoucher(voucher.id, 'Patronage payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: '✅ भुगतान दर्ज', description: `₹${amount.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr('✅ भुगतान दर्ज', '✅ Payment recorded'), description: `₹${amount.toLocaleString('en-IN')}` });
     return voucher;
   }, [patronageRuns, accounts, addVoucher, cancelVoucher, guardFYLocked, commitPatronageRun, user]);
 
@@ -326,7 +331,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return;
     const cur = patronageRuns.find(r => r.id === runId);
     if (!cur) return;
-    if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले भुगतान reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
+    if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: tr('भुगतान मौजूद', 'Payment exists'), description: tr('पहले भुगतान reverse करें, फिर हटाएँ।', 'Reverse the payment first, then delete.'), variant: 'destructive' }); return; }
     // H / RULE 3: never mark the run deleted while its voucher stays live (lock / permission refusal).
     if (cur.status === 'approved' && cur.voucherId && !cancelVoucher(cur.voucherId, 'Patronage run deleted', user?.name || 'System', { viaParent: true })) return;
     commitPatronageRun({ ...cur, isDeleted: true }, cur);
@@ -336,7 +341,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   const [purchaseOrders, setPOState] = useState<PurchaseOrder[]>(() => storage.getConsumerPurchaseOrders());
   // H / RULE 3: vouchers these documents carry are cancelled through the document, not alone.
   const ownerGroupsRef = useRef<OwnerGroup[]>([]);
-  ownerGroupsRef.current = [{ label: 'बिक्री वापसी (Sales Return)', docs: salesReturns }, { label: 'ख़रीद वापसी (Purchase Return)', docs: purchaseReturns }, { label: 'संरक्षण लाभांश (Patronage)', docs: patronageRuns }, { label: 'Purchase Order', docs: purchaseOrders }];
+  ownerGroupsRef.current = [{ label: tr('बिक्री वापसी (Sales Return)', 'Sales Return'), docs: salesReturns }, { label: tr('ख़रीद वापसी (Purchase Return)', 'Purchase Return'), docs: purchaseReturns }, { label: tr('संरक्षण लाभांश (Patronage)', 'Patronage dividend'), docs: patronageRuns }, { label: 'Purchase Order', docs: purchaseOrders }];
   useEffect(() => registerVoucherOwner('consumer', id => findVoucherOwner(ownerGroupsRef.current, id)), [registerVoucherOwner]);
   // J5: these five tables used to load in five separate effects — five React commits after login, each
   // re-rendering every consumer. applyLoadsTogether applies them in one commit; each table keeps its own
@@ -372,7 +377,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         console.error('PO save error:', error.message); reportError('consumer-save', error.message);
         setPOState(prev => { const u = revertTo ? prev.map(p => p.id === next.id ? revertTo : p) : prev.filter(p => p.id !== next.id); storage.setConsumerPurchaseOrders(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'खरीद ऑर्डर सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: consumer_purchase_orders block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('खरीद ऑर्डर सेव नहीं हुआ', 'Purchase order not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: consumer_purchase_orders block चलाएँ।)`, `Not saved to the cloud — ${error.message}. (First time: run the consumer_purchase_orders block.)`), variant: 'destructive', duration: 12000 });
         return;
       }
       if (varianceStatus || varianceReason || varianceApprovedBy) {
@@ -385,8 +390,8 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   const createPurchaseOrder = useCallback((data: { supplierId?: string; supplierName: string; supplierPhone?: string; date: string; expectedDate?: string; items: PurchaseOrderItem[]; notes?: string }): PurchaseOrder | null => {
     if (guardFYLocked()) return null;
     const items = data.items.filter(i => i.itemId && i.qty > 0);
-    if (items.length === 0) { toastRef.current({ title: 'कोई वस्तु नहीं', description: 'कम-से-कम एक वस्तु + मात्रा डालें।', variant: 'destructive' }); return null; }
-    if (!data.supplierName?.trim()) { toastRef.current({ title: 'आपूर्तिकर्ता चुनें', variant: 'destructive' }); return null; }
+    if (items.length === 0) { toastRef.current({ title: tr('कोई वस्तु नहीं', 'No item'), description: tr('कम-से-कम एक वस्तु + मात्रा डालें।', 'Enter at least one item + quantity.'), variant: 'destructive' }); return null; }
+    if (!data.supplierName?.trim()) { toastRef.current({ title: tr('आपूर्तिकर्ता चुनें', 'Select a supplier'), variant: 'destructive' }); return null; }
     const fy = society.financialYear;
     const seq = purchaseOrders.filter(p => p.poNo?.includes(fy)).reduce((m, p) => { const x = p.poNo?.match(/\/(\d+)$/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0) + 1;
     const po: PurchaseOrder = {
@@ -395,36 +400,36 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       expectedDate: data.expectedDate, items, total: poTotal(items), status: 'draft', notes: data.notes, createdAt: new Date().toISOString(),
     };
     commitPO(po, null);
-    toastRef.current({ title: `खरीद ऑर्डर बना — ${po.poNo}`, description: `${items.length} वस्तु · ₹${po.total.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr(`खरीद ऑर्डर बना — ${po.poNo}`, `Purchase order created — ${po.poNo}`), description: tr(`${items.length} वस्तु · ₹${po.total.toLocaleString('en-IN')}`, `${items.length} items · ₹${po.total.toLocaleString('en-IN')}`) });
     return po;
   }, [purchaseOrders, society.financialYear, guardFYLocked, commitPO]);
 
   const approvePurchaseOrder = useCallback((id: string, data: { resolutionNo?: string }): PurchaseOrder | null => {
     if (guardFYLocked()) return null;
     const cur = purchaseOrders.find(p => p.id === id);
-    if (!cur || cur.status !== 'draft') { toastRef.current({ title: 'केवल draft ऑर्डर approve होगा', variant: 'destructive' }); return null; }
+    if (!cur || cur.status !== 'draft') { toastRef.current({ title: tr('केवल draft ऑर्डर approve होगा', 'Only a draft order can be approved'), variant: 'destructive' }); return null; }
     const next: PurchaseOrder = { ...cur, status: 'approved', approvedBy: user?.name || 'admin', approvedAt: new Date().toISOString(), resolutionNo: data.resolutionNo?.trim() || undefined };
     commitPO(next, cur);
-    toastRef.current({ title: `✅ ऑर्डर approved — ${cur.poNo}` });
+    toastRef.current({ title: tr(`✅ ऑर्डर approved — ${cur.poNo}`, `✅ Order approved — ${cur.poNo}`) });
     return next;
   }, [purchaseOrders, guardFYLocked, commitPO, user]);
 
   const receivePurchaseOrder = useCallback((id: string, data: { receivedQty?: Record<string, number>; billedRate?: Record<string, number>; gstPct?: number; interState?: boolean; varianceApproved?: boolean; varianceReason?: string; paymentMode: 'cash' | 'bank' | 'credit'; bankAccountId?: string; date: string }): Purchase | null => {
     if (guardFYLocked()) return null;
     const cur = purchaseOrders.find(p => p.id === id);
-    if (!cur || cur.status !== 'approved') { toastRef.current({ title: 'पहले ऑर्डर approve करें', variant: 'destructive' }); return null; }
+    if (!cur || cur.status !== 'approved') { toastRef.current({ title: tr('पहले ऑर्डर approve करें', 'Approve the order first'), variant: 'destructive' }); return null; }
     const items: PurchaseOrderItem[] = cur.items.map(i => ({ ...i, receivedQty: data.receivedQty?.[i.itemId] ?? i.qty }));
     // ECR-21 Phase 2: value the invoice at the supplier's actual billed rate (default PO rate)
     // + real GST split, so input credit posts and the 3-way match sees a genuine variance.
     const invoice = buildGrnInvoice(items, { billedRate: data.billedRate, gstPct: data.gstPct, interState: data.interState });
-    if (invoice.items.length === 0) { toastRef.current({ title: 'कोई माल प्राप्त नहीं', description: 'कम-से-कम एक वस्तु की received मात्रा डालें।', variant: 'destructive' }); return null; }
+    if (invoice.items.length === 0) { toastRef.current({ title: tr('कोई माल प्राप्त नहीं', 'No goods received'), description: tr('कम-से-कम एक वस्तु की received मात्रा डालें।', 'Enter the received quantity for at least one item.'), variant: 'destructive' }); return null; }
     // ECR-21 Phase 3: 3-way match gate. A payment-risk exception (e.g. billed rate beyond
     // tolerance) HOLDS the receipt until the user explicitly approves the variance.
     const match = threeWayMatch(items, invoice.items);
     const blocked = hasBlockingVariance(match);
     if (blocked && !data.varianceApproved) {
-      const reasons = blockingReasons(match).map(r => VARIANCE_LABEL[r]).join(', ');
-      toastRef.current({ title: 'अंतर मिला — approve ज़रूरी', description: `PO ${cur.poNo}: ${reasons}. यह अंतर approve करके ही माल प्राप्ति दर्ज होगी।`, variant: 'destructive', duration: 12000 });
+      const reasons = blockingReasons(match).map(r => tr(VARIANCE_LABEL[r], VARIANCE_LABEL_EN[r])).join(', ');
+      toastRef.current({ title: tr('अंतर मिला — approve ज़रूरी', 'Difference found — approval required'), description: tr(`PO ${cur.poNo}: ${reasons}. यह अंतर approve करके ही माल प्राप्ति दर्ज होगी।`, `PO ${cur.poNo}: ${reasons}. The goods receipt will be recorded only after this difference is approved.`), variant: 'destructive', duration: 12000 });
       return null;
     }
     try {
@@ -451,10 +456,10 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         // non-admins, i.e. no worse than before, and PO receipt is an admin/manager flow in practice.)
         deletePurchase(purchase.id);
       });
-      toastRef.current({ title: `✅ माल प्राप्त — ${purchase.purchaseNo}`, description: blocked ? 'अंतर approve सहित दर्ज' : 'स्टॉक अपडेट + खरीद दर्ज' });
+      toastRef.current({ title: tr(`✅ माल प्राप्त — ${purchase.purchaseNo}`, `✅ Goods received — ${purchase.purchaseNo}`), description: blocked ? tr('अंतर approve सहित दर्ज', 'Recorded with difference approval') : tr('स्टॉक अपडेट + खरीद दर्ज', 'Stock updated + purchase recorded') });
       return purchase;
     } catch (err) {
-      toastRef.current({ title: 'माल प्राप्ति दर्ज नहीं हुई', description: err instanceof Error ? err.message : undefined, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('माल प्राप्ति दर्ज नहीं हुई', 'Goods receipt not recorded'), description: err instanceof Error ? err.message : undefined, variant: 'destructive', duration: 10000 });
       return null;
     }
   }, [purchaseOrders, guardFYLocked, commitPO, addPurchase, deletePurchase, user]);
@@ -463,7 +468,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return;
     const cur = purchaseOrders.find(p => p.id === id);
     if (!cur) return;
-    if (cur.status === 'received') { toastRef.current({ title: 'माल प्राप्त हो चुका', description: 'received ऑर्डर cancel नहीं होगा।', variant: 'destructive' }); return; }
+    if (cur.status === 'received') { toastRef.current({ title: tr('माल प्राप्त हो चुका', 'Goods already received'), description: tr('received ऑर्डर cancel नहीं होगा।', 'A received order cannot be cancelled.'), variant: 'destructive' }); return; }
     commitPO({ ...cur, status: 'cancelled' }, cur);
   }, [purchaseOrders, guardFYLocked, commitPO]);
 
@@ -496,7 +501,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         console.error('Sales return save error:', error.message); reportError('consumer-save', error.message);
         setSalesReturnsState(prev => { const u = revertTo ? prev.map(r => r.id === row.id ? revertTo : r) : prev.filter(r => r.id !== row.id); storage.setSalesReturns(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'बिक्री वापसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: sales_returns block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('बिक्री वापसी सेव नहीं हुई', 'Sales return not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: sales_returns block चलाएँ।)`, `Not saved to the cloud — ${error.message}. (First time: run the sales_returns block.)`), variant: 'destructive', duration: 12000 });
       });
     };
     attempt(next, 0);
@@ -505,7 +510,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   const addSalesReturn = useCallback((data: { originalSaleId: string; items: SalesReturnItem[]; refundMode: SalesReturnRefund; bankAccountId?: string; date: string }): SalesReturn | null => {
     if (guardFYLocked()) return null;
     const sale = sales.find(s => s.id === data.originalSaleId && !(s as { isDeleted?: boolean }).isDeleted);
-    if (!sale) { toastRef.current({ title: 'मूल बिक्री नहीं मिली', variant: 'destructive' }); return null; }
+    if (!sale) { toastRef.current({ title: tr('मूल बिक्री नहीं मिली', 'Original sale not found'), variant: 'destructive' }); return null; }
     // Self-heal: a society (e.g. marketing, or a consumer one not yet provisioned) using Sales
     // Return can lack this account — which used to make every sale-return bail here. Create it on
     // demand, inside this explicit user save (never at load time).
@@ -514,15 +519,15 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       const created = addAccount({ name: 'Sales Return', nameHi: 'बिक्री वापसी', type: 'income', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '4100', subtype: SALES_RETURN_SUBTYPE });
       salesReturnAccId = created?.id || null;
     }
-    if (!salesReturnAccId) { toastRef.current({ title: 'बिक्री वापसी खाता नहीं बना', description: 'Sales Return account could not be created — दोबारा कोशिश करें, या Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ (admin).', variant: 'destructive', duration: 12000 }); return null; }
+    if (!salesReturnAccId) { toastRef.current({ title: tr('बिक्री वापसी खाता नहीं बना', 'Sales return account not created'), description: tr('Sales Return account could not be created — दोबारा कोशिश करें, या Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ (admin).', 'Sales Return account could not be created — try again, or run "Create domain accounts" on Ledger Hygiene (admin).'), variant: 'destructive', duration: 12000 }); return null; }
     const items = data.items.filter(i => i.itemId && i.qty > 0).map(i => ({ ...i, amount: round2(i.qty * i.rate) }));
-    if (items.length === 0) { toastRef.current({ title: 'कोई मात्रा नहीं', description: 'कम-से-कम एक वस्तु की वापसी मात्रा डालें।', variant: 'destructive' }); return null; }
+    if (items.length === 0) { toastRef.current({ title: tr('कोई मात्रा नहीं', 'No quantity'), description: tr('कम-से-कम एक वस्तु की वापसी मात्रा डालें।', 'Enter the return quantity for at least one item.'), variant: 'destructive' }); return null; }
     // Cap: returned qty (incl. prior returns) must not exceed sold qty.
     const priorByItem = new Map<string, number>();
     salesReturns.filter(r => !r.isDeleted && r.originalSaleId === sale.id).forEach(r => r.items.forEach(it => priorByItem.set(it.itemId, (priorByItem.get(it.itemId) || 0) + it.qty)));
     for (const it of items) {
       const sold = sale.items.find(si => si.itemId === it.itemId)?.qty || 0;
-      if (it.qty + (priorByItem.get(it.itemId) || 0) > sold) { toastRef.current({ title: 'बेची गई मात्रा से अधिक वापसी नहीं', description: it.itemName, variant: 'destructive' }); return null; }
+      if (it.qty + (priorByItem.get(it.itemId) || 0) > sold) { toastRef.current({ title: tr('बेची गई मात्रा से अधिक वापसी नहीं', 'Cannot return more than the quantity sold'), description: it.itemName, variant: 'destructive' }); return null; }
     }
     const netAmount = round2(items.reduce((s, i) => s + i.amount, 0));
     // Proportional GST reversal from the original sale.
@@ -532,7 +537,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const igstAmount = round2((sale.igstAmount || 0) * ratio);
     const taxAmount = round2(cgstAmount + sgstAmount + igstAmount);
     const grandTotal = round2(netAmount + taxAmount);
-    if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
+    if (!(grandTotal > 0)) { toastRef.current({ title: tr('वापसी राशि शून्य', 'Return amount is zero'), variant: 'destructive' }); return null; }
     const fy = society.financialYear;
     const seq = salesReturns.filter(r => r.returnNo?.includes(fy)).reduce((m, r) => { const x = r.returnNo?.match(/\/(\d+)$/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0) + 1;
     const returnNo = `SRET/${fy}/${String(seq).padStart(3, '0')}`;
@@ -571,7 +576,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       // else a failed cloud save leaves phantom inventory with no return record — mirrors deleteSalesReturn.
       items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: `${returnNo}/REV`, narration: `Sales return rolled back ${sale.saleNo}` }));
     });
-    toastRef.current({ title: `✅ वापसी दर्ज — ${returnNo}`, description: `स्टॉक वापस + ₹${grandTotal.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr(`✅ वापसी दर्ज — ${returnNo}`, `✅ Return recorded — ${returnNo}`), description: tr(`स्टॉक वापस + ₹${grandTotal.toLocaleString('en-IN')}`, `Stock back + ₹${grandTotal.toLocaleString('en-IN')}`) });
     return ret;
   }, [sales, salesReturns, accounts, vouchers, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, gstLegs, user]);
 
@@ -580,23 +585,23 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   const updateSalesReturn = useCallback((id: string, data: { originalSaleId: string; items: SalesReturnItem[]; refundMode: SalesReturnRefund; bankAccountId?: string; date: string }): SalesReturn | null => {
     if (guardFYLocked()) return null;
     const cur = salesReturns.find(r => r.id === id);
-    if (!cur || cur.isDeleted) { toastRef.current({ title: 'वापसी नहीं मिली', variant: 'destructive' }); return null; }
+    if (!cur || cur.isDeleted) { toastRef.current({ title: tr('वापसी नहीं मिली', 'Return not found'), variant: 'destructive' }); return null; }
     const sale = sales.find(s => s.id === data.originalSaleId && !(s as { isDeleted?: boolean }).isDeleted);
-    if (!sale) { toastRef.current({ title: 'मूल बिक्री नहीं मिली', variant: 'destructive' }); return null; }
+    if (!sale) { toastRef.current({ title: tr('मूल बिक्री नहीं मिली', 'Original sale not found'), variant: 'destructive' }); return null; }
     let salesReturnAccId = resolveSalesReturnAccountId(accounts);
     if (!salesReturnAccId) {
       const created = addAccount({ name: 'Sales Return', nameHi: 'बिक्री वापसी', type: 'income', openingBalance: 0, openingBalanceType: 'debit', isSystem: false, isGroup: false, parentId: '4100', subtype: SALES_RETURN_SUBTYPE });
       salesReturnAccId = created?.id || null;
     }
-    if (!salesReturnAccId) { toastRef.current({ title: 'बिक्री वापसी खाता नहीं बना', variant: 'destructive', duration: 12000 }); return null; }
+    if (!salesReturnAccId) { toastRef.current({ title: tr('बिक्री वापसी खाता नहीं बना', 'Sales return account not created'), variant: 'destructive', duration: 12000 }); return null; }
     const items = data.items.filter(i => i.itemId && i.qty > 0).map(i => ({ ...i, amount: round2(i.qty * i.rate) }));
-    if (items.length === 0) { toastRef.current({ title: 'कोई मात्रा नहीं', description: 'कम-से-कम एक वस्तु की वापसी मात्रा डालें।', variant: 'destructive' }); return null; }
+    if (items.length === 0) { toastRef.current({ title: tr('कोई मात्रा नहीं', 'No quantity'), description: tr('कम-से-कम एक वस्तु की वापसी मात्रा डालें।', 'Enter the return quantity for at least one item.'), variant: 'destructive' }); return null; }
     // Cap: total returned (OTHER live returns of this sale, excluding THIS one) + new qty ≤ sold.
     const priorByItem = new Map<string, number>();
     salesReturns.filter(r => !r.isDeleted && r.originalSaleId === sale.id && r.id !== id).forEach(r => r.items.forEach(it => priorByItem.set(it.itemId, (priorByItem.get(it.itemId) || 0) + it.qty)));
     for (const it of items) {
       const sold = sale.items.find(si => si.itemId === it.itemId)?.qty || 0;
-      if (it.qty + (priorByItem.get(it.itemId) || 0) > sold) { toastRef.current({ title: 'बेची गई मात्रा से अधिक वापसी नहीं', description: it.itemName, variant: 'destructive' }); return null; }
+      if (it.qty + (priorByItem.get(it.itemId) || 0) > sold) { toastRef.current({ title: tr('बेची गई मात्रा से अधिक वापसी नहीं', 'Cannot return more than the quantity sold'), description: it.itemName, variant: 'destructive' }); return null; }
     }
     const netAmount = round2(items.reduce((s, i) => s + i.amount, 0));
     const ratio = (sale.netAmount || 0) > 0 ? netAmount / sale.netAmount : 0;
@@ -605,7 +610,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const igstAmount = round2((sale.igstAmount || 0) * ratio);
     const taxAmount = round2(cgstAmount + sgstAmount + igstAmount);
     const grandTotal = round2(netAmount + taxAmount);
-    if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
+    if (!(grandTotal > 0)) { toastRef.current({ title: tr('वापसी राशि शून्य', 'Return amount is zero'), variant: 'destructive' }); return null; }
 
     // 1) Reverse the OLD return: cancel its voucher + compensating −qty stock (mirrors delete).
     // H4: abort if the old voucher could not be cancelled (lock/permission) — else two live postings.
@@ -641,7 +646,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: voucher.id,
     };
     commitSalesReturn(updated, cur);
-    toastRef.current({ title: `✅ वापसी संशोधित — ${cur.returnNo}`, description: `नई राशि ₹${grandTotal.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr(`✅ वापसी संशोधित — ${cur.returnNo}`, `✅ Return revised — ${cur.returnNo}`), description: tr(`नई राशि ₹${grandTotal.toLocaleString('en-IN')}`, `New amount ₹${grandTotal.toLocaleString('en-IN')}`) });
     return updated;
   }, [sales, salesReturns, accounts, vouchers, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, gstLegs, user]);
 
@@ -677,7 +682,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         console.error('Purchase return save error:', error.message); reportError('consumer-save', error.message);
         setPurchaseReturnsState(prev => { const u = revertTo ? prev.map(r => r.id === row.id ? revertTo : r) : prev.filter(r => r.id !== row.id); storage.setPurchaseReturns(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'खरीद वापसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: purchase_returns block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('खरीद वापसी सेव नहीं हुई', 'Purchase return not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: purchase_returns block चलाएँ।)`, `Not saved to the cloud — ${error.message}. (First time: run the purchase_returns block.)`), variant: 'destructive', duration: 12000 });
       });
     };
     attempt(next, 0);
@@ -686,15 +691,15 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   const addPurchaseReturn = useCallback((data: { originalPurchaseId: string; items: PurchaseReturnItem[]; refundMode: PurchaseReturnRefund; bankAccountId?: string; date: string }): PurchaseReturn | null => {
     if (guardFYLocked()) return null;
     const purchase = purchases.find(p => p.id === data.originalPurchaseId && !(p as { isDeleted?: boolean }).isDeleted);
-    if (!purchase) { toastRef.current({ title: 'मूल खरीद नहीं मिली', variant: 'destructive' }); return null; }
+    if (!purchase) { toastRef.current({ title: tr('मूल खरीद नहीं मिली', 'Original purchase not found'), variant: 'destructive' }); return null; }
     const items = data.items.filter(i => i.itemId && i.qty > 0).map(i => ({ ...i, amount: round2(i.qty * i.rate) }));
-    if (items.length === 0) { toastRef.current({ title: 'कोई मात्रा नहीं', description: 'कम-से-कम एक वस्तु की वापसी मात्रा डालें।', variant: 'destructive' }); return null; }
+    if (items.length === 0) { toastRef.current({ title: tr('कोई मात्रा नहीं', 'No quantity'), description: tr('कम-से-कम एक वस्तु की वापसी मात्रा डालें।', 'Enter the return quantity for at least one item.'), variant: 'destructive' }); return null; }
     // Cap: returned qty (incl. prior returns) must not exceed purchased qty.
     const priorByItem = new Map<string, number>();
     purchaseReturns.filter(r => !r.isDeleted && r.originalPurchaseId === purchase.id).forEach(r => r.items.forEach(it => priorByItem.set(it.itemId, (priorByItem.get(it.itemId) || 0) + it.qty)));
     for (const it of items) {
       const bought = purchase.items.find(pi => pi.itemId === it.itemId)?.qty || 0;
-      if (it.qty + (priorByItem.get(it.itemId) || 0) > bought) { toastRef.current({ title: 'खरीदी गई मात्रा से अधिक वापसी नहीं', description: it.itemName, variant: 'destructive' }); return null; }
+      if (it.qty + (priorByItem.get(it.itemId) || 0) > bought) { toastRef.current({ title: tr('खरीदी गई मात्रा से अधिक वापसी नहीं', 'Cannot return more than the quantity purchased'), description: it.itemName, variant: 'destructive' }); return null; }
     }
     const netAmount = round2(items.reduce((s, i) => s + i.amount, 0));
     // Proportional GST-ITC reversal from the original purchase.
@@ -710,7 +715,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     // GST, so the return takes back the value only and reverses the tax against that same payable head.
     const rcmAccId = taxAmount > 0 ? voucherRcmAccountId(purchase.voucherId ? vouchers.find(v => v.id === purchase.voucherId) : null, accounts) : null;
     const grandTotal = round2(netAmount + (rcmAccId ? 0 : taxAmount) - cashDiscShare);
-    if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
+    if (!(grandTotal > 0)) { toastRef.current({ title: tr('वापसी राशि शून्य', 'Return amount is zero'), variant: 'destructive' }); return null; }
     const fy = society.financialYear;
     const seq = purchaseReturns.filter(r => r.returnNo?.includes(fy)).reduce((m, r) => { const x = r.returnNo?.match(/\/(\d+)$/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0) + 1;
     const returnNo = `PRET/${fy}/${String(seq).padStart(3, '0')}`;
@@ -759,7 +764,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       // else a failed cloud save leaves inventory understated with no return record — mirrors deletePurchaseReturn.
       items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: `${returnNo}/REV`, narration: `Purchase return rolled back ${purchase.purchaseNo}` }));
     });
-    toastRef.current({ title: `✅ खरीद वापसी दर्ज — ${returnNo}`, description: `स्टॉक कम + ₹${grandTotal.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr(`✅ खरीद वापसी दर्ज — ${returnNo}`, `✅ Purchase return recorded — ${returnNo}`), description: tr(`स्टॉक कम + ₹${grandTotal.toLocaleString('en-IN')}`, `Stock reduced + ₹${grandTotal.toLocaleString('en-IN')}`) });
     return ret;
   }, [purchases, purchaseReturns, suppliers, stockItems, accounts, vouchers, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitPurchaseReturn, gstLegs, user]);
 
@@ -768,17 +773,17 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   const updatePurchaseReturn = useCallback((id: string, data: { originalPurchaseId: string; items: PurchaseReturnItem[]; refundMode: PurchaseReturnRefund; bankAccountId?: string; date: string }): PurchaseReturn | null => {
     if (guardFYLocked()) return null;
     const cur = purchaseReturns.find(r => r.id === id);
-    if (!cur || cur.isDeleted) { toastRef.current({ title: 'वापसी नहीं मिली', variant: 'destructive' }); return null; }
+    if (!cur || cur.isDeleted) { toastRef.current({ title: tr('वापसी नहीं मिली', 'Return not found'), variant: 'destructive' }); return null; }
     const purchase = purchases.find(p => p.id === data.originalPurchaseId && !(p as { isDeleted?: boolean }).isDeleted);
-    if (!purchase) { toastRef.current({ title: 'मूल खरीद नहीं मिली', variant: 'destructive' }); return null; }
+    if (!purchase) { toastRef.current({ title: tr('मूल खरीद नहीं मिली', 'Original purchase not found'), variant: 'destructive' }); return null; }
     const items = data.items.filter(i => i.itemId && i.qty > 0).map(i => ({ ...i, amount: round2(i.qty * i.rate) }));
-    if (items.length === 0) { toastRef.current({ title: 'कोई मात्रा नहीं', description: 'कम-से-कम एक वस्तु की वापसी मात्रा डालें।', variant: 'destructive' }); return null; }
+    if (items.length === 0) { toastRef.current({ title: tr('कोई मात्रा नहीं', 'No quantity'), description: tr('कम-से-कम एक वस्तु की वापसी मात्रा डालें।', 'Enter the return quantity for at least one item.'), variant: 'destructive' }); return null; }
     // Cap: OTHER live returns of this purchase (excluding THIS one) + new qty ≤ purchased.
     const priorByItem = new Map<string, number>();
     purchaseReturns.filter(r => !r.isDeleted && r.originalPurchaseId === purchase.id && r.id !== id).forEach(r => r.items.forEach(it => priorByItem.set(it.itemId, (priorByItem.get(it.itemId) || 0) + it.qty)));
     for (const it of items) {
       const bought = purchase.items.find(pi => pi.itemId === it.itemId)?.qty || 0;
-      if (it.qty + (priorByItem.get(it.itemId) || 0) > bought) { toastRef.current({ title: 'खरीदी गई मात्रा से अधिक वापसी नहीं', description: it.itemName, variant: 'destructive' }); return null; }
+      if (it.qty + (priorByItem.get(it.itemId) || 0) > bought) { toastRef.current({ title: tr('खरीदी गई मात्रा से अधिक वापसी नहीं', 'Cannot return more than the quantity purchased'), description: it.itemName, variant: 'destructive' }); return null; }
     }
     const netAmount = round2(items.reduce((s, i) => s + i.amount, 0));
     const ratio = (purchase.netAmount || 0) > 0 ? netAmount / purchase.netAmount : 0;
@@ -793,7 +798,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     // GST, so the return takes back the value only and reverses the tax against that same payable head.
     const rcmAccId = taxAmount > 0 ? voucherRcmAccountId(purchase.voucherId ? vouchers.find(v => v.id === purchase.voucherId) : null, accounts) : null;
     const grandTotal = round2(netAmount + (rcmAccId ? 0 : taxAmount) - cashDiscShare);
-    if (!(grandTotal > 0)) { toastRef.current({ title: 'वापसी राशि शून्य', variant: 'destructive' }); return null; }
+    if (!(grandTotal > 0)) { toastRef.current({ title: tr('वापसी राशि शून्य', 'Return amount is zero'), variant: 'destructive' }); return null; }
 
     // 1) Reverse the OLD return: cancel its voucher + restore the stock it removed (+qty).
     if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Purchase return edited', user?.name || 'System', { viaParent: true })) return null;
@@ -838,7 +843,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: voucher.id,
     };
     commitPurchaseReturn(updated, cur);
-    toastRef.current({ title: `✅ खरीद वापसी संशोधित — ${cur.returnNo}`, description: `नई राशि ₹${grandTotal.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr(`✅ खरीद वापसी संशोधित — ${cur.returnNo}`, `✅ Purchase return revised — ${cur.returnNo}`), description: tr(`नई राशि ₹${grandTotal.toLocaleString('en-IN')}`, `New amount ₹${grandTotal.toLocaleString('en-IN')}`) });
     return updated;
   }, [purchases, purchaseReturns, suppliers, stockItems, accounts, vouchers, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitPurchaseReturn, gstLegs, user]);
 

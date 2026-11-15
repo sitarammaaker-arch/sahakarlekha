@@ -202,7 +202,7 @@ const BankBook: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>{language === 'hi' ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
-                  <Input value={bankForm.nameHi} onChange={e => setBankForm(f => ({ ...f, nameHi: e.target.value }))} placeholder="जैसे SBI — मुख्य शाखा" />
+                  <Input value={bankForm.nameHi} onChange={e => setBankForm(f => ({ ...f, nameHi: e.target.value }))} placeholder={language === 'hi' ? 'जैसे SBI — मुख्य शाखा' : 'e.g. SBI — main branch (in Hindi)'} />
                 </div>
                 <div className="space-y-2">
                   <Label>{language === 'hi' ? 'ओपनिंग बैलेंस (₹)' : 'Opening Balance (₹)'}</Label>

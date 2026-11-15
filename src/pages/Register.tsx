@@ -257,13 +257,15 @@ const Register: React.FC = () => {
             <Building2 className="h-12 w-12" />
           </div>
           <h1 className="text-4xl font-bold text-center mb-4">
-            नई समिति पंजीकरण
+            {L('नई समिति पंजीकरण', 'New Society Registration')}
           </h1>
-          <p className="text-xl text-center text-primary-foreground/80 mb-2">
-            New Society Registration
-          </p>
+          {language === 'hi' && (
+            <p className="text-xl text-center text-primary-foreground/80 mb-2">
+              New Society Registration
+            </p>
+          )}
           <p className="text-center text-primary-foreground/60 max-w-md">
-            अपनी सहकारी समिति का पंजीकरण करें और लेखा प्रणाली का उपयोग शुरू करें
+            {L('अपनी सहकारी समिति का पंजीकरण करें और लेखा प्रणाली का उपयोग शुरू करें', 'Register your cooperative society and start using the accounting system')}
           </p>
 
           {/* Step indicators */}
@@ -295,7 +297,7 @@ const Register: React.FC = () => {
           <div className="h-14 w-14 rounded-xl bg-primary text-primary-foreground flex items-center justify-center mx-auto mb-3">
             <Building2 className="h-7 w-7" />
           </div>
-          <h1 className="text-xl font-bold">नई समिति पंजीकरण</h1>
+          <h1 className="text-xl font-bold">{L('नई समिति पंजीकरण', 'New Society Registration')}</h1>
         </div>
 
         <Card className="w-full max-w-md shadow-lg">
@@ -412,7 +414,7 @@ const Register: React.FC = () => {
                       {SOCIETY_TYPES.filter(t => t.value !== 'other').map(t => (
                         <SelectItem key={t.value} value={t.value}>
                           <span>{t.label}</span>
-                          <span className="ml-1 text-xs text-muted-foreground">— {t.labelHi}</span>
+                          {language === 'hi' && <span className="ml-1 text-xs text-muted-foreground">— {t.labelHi}</span>}
                         </SelectItem>
                       ))}
                       {presetsForState(state).map(p => (
@@ -422,7 +424,7 @@ const Register: React.FC = () => {
                       ))}
                       <SelectItem value="other">
                         <span>Other</span>
-                        <span className="ml-1 text-xs text-muted-foreground">— अन्य</span>
+                        {language === 'hi' && <span className="ml-1 text-xs text-muted-foreground">— अन्य</span>}
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -562,7 +564,7 @@ const Register: React.FC = () => {
         </Card>
 
         <p className="mt-6 text-xs text-muted-foreground text-center">
-          © {new Date().getFullYear()} सहकार लेखा (SahakarLekha) | {L('सभी अधिकार सुरक्षित', 'All rights reserved')}
+          © {new Date().getFullYear()} {L('सहकार लेखा (SahakarLekha)', 'SahakarLekha')} | {L('सभी अधिकार सुरक्षित', 'All rights reserved')}
         </p>
       </div>
     </div>

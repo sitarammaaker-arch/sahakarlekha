@@ -10,6 +10,7 @@
  * Persistence mirrors the proven Member pattern: optimistic local + localStorage + Supabase
  * upsert, with RULE-1 rollback on cloud failure and a RULE-6 FY-lock guard on every mutation.
  */
+import { tr } from '@/lib/uiLang';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
 import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
@@ -113,7 +114,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   const guardFYLocked = (): boolean => {
     if (refuseIfWriteBlocked(toastRef.current)) return true; // F1: online-only entry (shared rule)
     if (society?.fyLocked) {
-      toastRef.current({ title: 'FY Locked', description: 'Financial Year audit-locked है — डेटा बदला नहीं जा सकता।', variant: 'destructive' });
+      toastRef.current({ title: 'FY Locked', description: tr('Financial Year audit-locked है — डेटा बदला नहीं जा सकता।', 'Financial Year is audit-locked — data cannot be changed.'), variant: 'destructive' });
       return true;
     }
     return false;
@@ -126,7 +127,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   const [pfEsiRuns, setPfEsiRunsState] = useState<PfEsiRun[]>(() => storage.getPfEsiRuns());
   // H / RULE 3: vouchers these documents carry are cancelled through the document, not alone.
   const ownerGroupsRef = useRef<OwnerGroup[]>([]);
-  ownerGroupsRef.current = [{ label: 'विभाग बिल', docs: departmentBills }, { label: 'श्रमिक अग्रिम', docs: workerAdvances }, { label: 'PF/ESI', docs: pfEsiRuns }];
+  ownerGroupsRef.current = [{ label: tr('विभाग बिल', 'Department bill'), docs: departmentBills }, { label: tr('श्रमिक अग्रिम', 'Worker advance'), docs: workerAdvances }, { label: 'PF/ESI', docs: pfEsiRuns }];
   useEffect(() => registerVoucherOwner('labour', id => findVoucherOwner(ownerGroupsRef.current, id)), [registerVoucherOwner]);
 
   // Load when the society changes; Supabase is SSOT, localStorage is offline fallback.
@@ -163,7 +164,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Worker save error:', error.message);
         setWorkersState(prev => { const r = prev.filter(x => x.id !== w.id); storage.setWorkers(r); return r; });
-        toastRef.current({ title: 'श्रमिक सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('श्रमिक सेव नहीं हुआ', 'Worker not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Refreshing will not cause any problem; please add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return w;
@@ -179,7 +180,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Worker update error:', error.message);
         setWorkersState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setWorkers(u); return u; });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [workers, society, user]);
@@ -190,7 +191,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     // rows (and their recovery vouchers) against a gone workerId. Block and point at the dependents.
     const liveAdvances = workerAdvances.filter(a => !a.isDeleted && a.workerId === id).length;
     if (liveAdvances > 0) {
-      toastRef.current({ title: 'कर्मचारी डिलीट नहीं हो सकता', description: `इस कर्मचारी के ${liveAdvances} live advance(s) हैं — पहले Worker Advances में वे delete करें, फिर कर्मचारी हटाएँ।`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('कर्मचारी डिलीट नहीं हो सकता', 'Worker cannot be deleted'), description: tr(`इस कर्मचारी के ${liveAdvances} live advance(s) हैं — पहले Worker Advances में वे delete करें, फिर कर्मचारी हटाएँ।`, `This worker has ${liveAdvances} live advance(s) — delete them in Worker Advances first, then remove the worker.`), variant: 'destructive', duration: 10000 });
       return;
     }
     const old = workers.find(x => x.id === id);
@@ -199,7 +200,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Worker delete error:', error.message);
         if (old) setWorkersState(prev => { const u = [...prev, old]; storage.setWorkers(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [workers, workerAdvances, society, user]);
@@ -227,7 +228,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('Department save error:', error.message);
         setDepartmentsState(prev => { const r = prev.filter(d => d.id !== dep.id); storage.setDepartments(r); return r; });
         deleteAccount(account.id);   // roll back the orphan sub-ledger (brand new, no refs)
-        toastRef.current({ title: 'विभाग सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('विभाग सेव नहीं हुआ', 'Department not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Refreshing will not cause any problem; please add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return dep;
@@ -245,7 +246,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('Department update error:', error.message);
         setDepartmentsState(prev => { const u = prev.map(d => d.id === id ? old : d); storage.setDepartments(u); return u; });
         if (data.name && data.name !== old.name) updateAccount(old.accountId, { name: old.name, nameHi: old.name });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [departments, society, user, updateAccount]);
@@ -259,7 +260,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     // mirroring Housing's deleteHousingFlat.
     const liveBills = departmentBills.filter(b => !b.isDeleted && b.departmentId === id).length;
     if (liveBills > 0) {
-      toastRef.current({ title: 'विभाग डिलीट नहीं हो सकता', description: `इस विभाग के ${liveBills} live bill(s) हैं — पहले Department Billing में वे delete करें, फिर विभाग हटाएँ।`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('विभाग डिलीट नहीं हो सकता', 'Department cannot be deleted'), description: tr(`इस विभाग के ${liveBills} live bill(s) हैं — पहले Department Billing में वे delete करें, फिर विभाग हटाएँ।`, `This department has ${liveBills} live bill(s) — delete them in Department Billing first, then remove the department.`), variant: 'destructive', duration: 10000 });
       return;
     }
     // Tally-style (परत 1): if the sub-ledger is NOT referenced by any live voucher but still carries
@@ -269,7 +270,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const referenced = vouchers.some(v => !v.isDeleted && (v.debitAccountId === old.accountId || v.creditAccountId === old.accountId || (v.lines || []).some(l => l.accountId === old.accountId)));
     if (!referenced && Math.abs(getAccountBalance(old.accountId)) >= 0.005) {
       const abs = Math.abs(getAccountBalance(old.accountId)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      toastRef.current({ title: 'पहले बैलेंस settle करें', description: `विभाग "${old.name}" के खाते पर ₹${abs} बाकी है — पहले इसे settle करें या journal से दूसरे खाते में भेजें, तभी delete होगा।`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('पहले बैलेंस settle करें', 'Settle the balance first'), description: tr(`विभाग "${old.name}" के खाते पर ₹${abs} बाकी है — पहले इसे settle करें या journal से दूसरे खाते में भेजें, तभी delete होगा।`, `₹${abs} is still pending on the account of department "${old.name}" — settle it first or move it to another account by journal; only then can it be deleted.`), variant: 'destructive', duration: 12000 });
       return;
     }
     setDepartmentsState(prev => { const u = prev.filter(d => d.id !== id); storage.setDepartments(u); return u; });
@@ -277,7 +278,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Department delete error:', error.message);
         setDepartmentsState(prev => { const u = [...prev, old]; storage.setDepartments(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
         return;
       }
       // Preserve audit tie-out: rename the sub-ledger if any voucher references it, else drop it.
@@ -293,8 +294,8 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '', billNo: '', departmentId: data.departmentId, billType: data.billType, date: data.date, amount: 0, paidAmount: 0, status: 'unpaid', createdAt: '' } as DepartmentBill;
     if (guardFYLocked()) return sentinel;
     const dept = departments.find(d => d.id === data.departmentId);
-    if (!dept) { toastRef.current({ title: 'विभाग नहीं मिला', description: 'Department not found', variant: 'destructive', duration: 8000 }); return sentinel; }
-    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि दर्ज करें', description: 'बिल राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!dept) { toastRef.current({ title: tr('विभाग नहीं मिला', 'Department not found'), description: 'Department not found', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!(data.amount > 0)) { toastRef.current({ title: tr('राशि दर्ज करें', 'Enter an amount'), description: tr('बिल राशि 0 से अधिक होनी चाहिए।', 'Bill amount must be more than 0.'), variant: 'destructive', duration: 8000 }); return sentinel; }
     const id = crypto.randomUUID();
     const maxNum = departmentBills.reduce((max, b) => { const m = b.billNo?.match(/DB\/(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max; }, 0);
     const billNo = `DB/${String(maxNum + 1).padStart(4, '0')}`;
@@ -318,10 +319,10 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('Department bill save error:', error.message);
         setDepartmentBillsState(prev => { const r = prev.filter(b => b.id !== bill.id); storage.setDepartmentBills(r); return r; });
         cancelVoucher(voucher.id, 'Department bill rolled back (save failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'बिल सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. बिल वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('बिल सेव नहीं हुआ', 'Bill not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. बिल वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The bill has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
       }
     });
-    toastRef.current({ title: 'विभाग बिल दर्ज हुआ', description: `${billNo} · ${dept.name} · ₹${data.amount}`, duration: 6000 });
+    toastRef.current({ title: tr('विभाग बिल दर्ज हुआ', 'Department bill recorded'), description: `${billNo} · ${dept.name} · ₹${data.amount}`, duration: 6000 });
     return bill;
   }, [departments, departmentBills, society, user, addVoucher, cancelVoucher]);
 
@@ -329,16 +330,16 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '', voucherNo: '', type: 'receipt', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     const bill = departmentBills.find(b => b.id === data.billId && !b.isDeleted);
-    if (!bill) { toastRef.current({ title: 'बिल नहीं मिला', description: 'Bill not found', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!bill) { toastRef.current({ title: tr('बिल नहीं मिला', 'Bill not found'), description: 'Bill not found', variant: 'destructive', duration: 8000 }); return sentinel; }
     const dept = departments.find(d => d.id === bill.departmentId);
-    if (!dept) { toastRef.current({ title: 'विभाग नहीं मिला', description: 'Department not found', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!dept) { toastRef.current({ title: tr('विभाग नहीं मिला', 'Department not found'), description: 'Department not found', variant: 'destructive', duration: 8000 }); return sentinel; }
     const outstanding = +(bill.amount - bill.paidAmount).toFixed(2);
-    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'वसूली राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
-    if (data.amount > outstanding + 0.005) { toastRef.current({ title: 'राशि बकाया से अधिक', description: `वसूली ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकती।`, variant: 'destructive', duration: 9000 }); return sentinel; }
+    if (!(data.amount > 0)) { toastRef.current({ title: tr('राशि डालें', 'Enter an amount'), description: tr('वसूली राशि 0 से अधिक होनी चाहिए।', 'Collection amount must be more than 0.'), variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (data.amount > outstanding + 0.005) { toastRef.current({ title: tr('राशि बकाया से अधिक', 'Amount is more than the outstanding'), description: tr(`वसूली ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकती।`, `Collection ₹${data.amount} cannot be more than the outstanding ₹${outstanding}.`), variant: 'destructive', duration: 9000 }); return sentinel; }
     // TDS deducted by the department on the gross settled amount → our receivable (3307).
     const tds = +(data.tdsAmount || 0).toFixed(2);
     // TDS may equal the gross (100%-withheld settlement → netCash 0); only > gross is invalid.
-    if (tds < 0 || tds > data.amount + 0.005) { toastRef.current({ title: 'TDS राशि गलत', description: 'TDS 0 से कम या वसूली-राशि से अधिक नहीं हो सकता।', variant: 'destructive', duration: 9000 }); return sentinel; }
+    if (tds < 0 || tds > data.amount + 0.005) { toastRef.current({ title: tr('TDS राशि गलत', 'Wrong TDS amount'), description: tr('TDS 0 से कम या वसूली-राशि से अधिक नहीं हो सकता।', 'TDS cannot be less than 0 or more than the collection amount.'), variant: 'destructive', duration: 9000 }); return sentinel; }
     const netCash = +(data.amount - tds).toFixed(2);
     const debitAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.defaultBankAccountId(accounts) || storage.ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
@@ -368,10 +369,10 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('Department collection bill-update error:', error.message);
         setDepartmentBillsState(prev => { const u = prev.map(b => b.id === bill.id ? bill : b); storage.setDepartmentBills(u); return u; });
         cancelVoucher(voucher.id, 'Department collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'वसूली सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('वसूली सेव नहीं हुई', 'Collection not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The receipt has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
       }
     });
-    toastRef.current({ title: 'वसूली दर्ज हुई', description: `${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'पूर्ण' : 'आंशिक'}`, duration: 6000 });
+    toastRef.current({ title: tr('वसूली दर्ज हुई', 'Collection recorded'), description: tr(`${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'पूर्ण' : 'आंशिक'}`, `${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'full' : 'partial'}`), duration: 6000 });
     return voucher;
   }, [departmentBills, departments, accounts, society, user, addVoucher, cancelVoucher]);
 
@@ -384,14 +385,14 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Department bill delete error:', error.message);
         setDepartmentBillsState(prev => { const u = [...prev, old]; storage.setDepartmentBills(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
         return;
       }
       // Cascade (RULE-3): cancel the bill voucher + all its collection vouchers.
       // H / RULE 3: the row is already gone — a refused cancel must not be silent.
       const okBill = !old.voucherId || cancelVoucher(old.voucherId, 'Department bill deleted', user?.name || 'System', { viaParent: true });
       const okColl = vouchers.filter(v => !v.isDeleted && v.refType === 'dept.collection' && v.refId === old.id).map(v => cancelVoucher(v.id, 'Department bill deleted (collection reversed)', user?.name || 'System', { viaParent: true })).every(Boolean);
-      if (!okBill || !okColl) toastRef.current({ title: 'वाउचर रद्द नहीं हुआ', description: 'रिकॉर्ड हट गया, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', variant: 'destructive', duration: 15000 });
+      if (!okBill || !okColl) toastRef.current({ title: tr('वाउचर रद्द नहीं हुआ', 'Voucher not cancelled'), description: tr('रिकॉर्ड हट गया, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', 'The record was removed, but its voucher could not be cancelled (lock / permission). Cancel it from the Voucher screen — it is now an orphan, so it will cancel.'), variant: 'destructive', duration: 15000 });
     });
   }, [departmentBills, vouchers, society, user, cancelVoucher]);
 
@@ -401,8 +402,8 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '', advanceNo: '', workerId: data.workerId, date: data.date, amount: 0, recovered: 0, status: 'open', mode: data.mode, createdAt: '' } as WorkerAdvance;
     if (guardFYLocked()) return sentinel;
     const worker = workers.find(w => w.id === data.workerId);
-    if (!worker) { toastRef.current({ title: 'श्रमिक नहीं मिला', description: 'Worker not found', variant: 'destructive', duration: 8000 }); return sentinel; }
-    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि दर्ज करें', description: 'अग्रिम राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!worker) { toastRef.current({ title: tr('श्रमिक नहीं मिला', 'Worker not found'), description: 'Worker not found', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!(data.amount > 0)) { toastRef.current({ title: tr('राशि दर्ज करें', 'Enter an amount'), description: tr('अग्रिम राशि 0 से अधिक होनी चाहिए।', 'Advance amount must be more than 0.'), variant: 'destructive', duration: 8000 }); return sentinel; }
     const id = crypto.randomUUID();
     const maxNum = workerAdvances.reduce((m, a) => { const x = a.advanceNo?.match(/ADV\/(\d+)/); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0);
     const advanceNo = `ADV/${String(maxNum + 1).padStart(3, '0')}`;
@@ -427,10 +428,10 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('Worker advance save error:', error.message);
         setWorkerAdvancesState(prev => { const r = prev.filter(a => a.id !== adv.id); storage.setWorkerAdvances(r); return r; });
         cancelVoucher(voucher.id, 'Worker advance rolled back (save failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'अग्रिम सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अग्रिम सेव नहीं हुआ', 'Advance not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. It has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
       }
     });
-    toastRef.current({ title: 'श्रमिक अग्रिम दर्ज हुआ', description: `${advanceNo} · ${worker.name} · ₹${data.amount}`, duration: 6000 });
+    toastRef.current({ title: tr('श्रमिक अग्रिम दर्ज हुआ', 'Worker advance recorded'), description: `${advanceNo} · ${worker.name} · ₹${data.amount}`, duration: 6000 });
     return adv;
   }, [workers, workerAdvances, accounts, society, user, addVoucher, cancelVoucher]);
 
@@ -438,11 +439,11 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '', voucherNo: '', type: 'receipt', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     const adv = workerAdvances.find(a => a.id === data.advanceId && !a.isDeleted);
-    if (!adv) { toastRef.current({ title: 'अग्रिम नहीं मिला', description: 'Advance not found', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!adv) { toastRef.current({ title: tr('अग्रिम नहीं मिला', 'Advance not found'), description: 'Advance not found', variant: 'destructive', duration: 8000 }); return sentinel; }
     const worker = workers.find(w => w.id === adv.workerId);
     const outstanding = +(adv.amount - adv.recovered).toFixed(2);
-    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'वसूली 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
-    if (data.amount > outstanding + 0.005) { toastRef.current({ title: 'राशि बकाया से अधिक', description: `वसूली ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकती।`, variant: 'destructive', duration: 9000 }); return sentinel; }
+    if (!(data.amount > 0)) { toastRef.current({ title: tr('राशि डालें', 'Enter an amount'), description: tr('वसूली 0 से अधिक होनी चाहिए।', 'Recovery must be more than 0.'), variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (data.amount > outstanding + 0.005) { toastRef.current({ title: tr('राशि बकाया से अधिक', 'Amount is more than the outstanding'), description: tr(`वसूली ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकती।`, `Recovery ₹${data.amount} cannot be more than the outstanding ₹${outstanding}.`), variant: 'destructive', duration: 9000 }); return sentinel; }
     const debitAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.defaultBankAccountId(accounts) || storage.ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
     const voucher = addVoucher({
@@ -465,10 +466,10 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('Advance recovery update error:', error.message);
         setWorkerAdvancesState(prev => { const u = prev.map(a => a.id === adv.id ? adv : a); storage.setWorkerAdvances(u); return u; });
         cancelVoucher(voucher.id, 'Advance recovery rolled back (update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'वसूली सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('वसूली सेव नहीं हुई', 'Recovery not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The receipt has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
       }
     });
-    toastRef.current({ title: 'अग्रिम वसूली दर्ज हुई', description: `${adv.advanceNo} · ₹${data.amount} · ${next.status === 'cleared' ? 'पूर्ण' : 'आंशिक'}`, duration: 6000 });
+    toastRef.current({ title: tr('अग्रिम वसूली दर्ज हुई', 'Advance recovery recorded'), description: tr(`${adv.advanceNo} · ₹${data.amount} · ${next.status === 'cleared' ? 'पूर्ण' : 'आंशिक'}`, `${adv.advanceNo} · ₹${data.amount} · ${next.status === 'cleared' ? 'full' : 'partial'}`), duration: 6000 });
     return voucher;
   }, [workerAdvances, workers, accounts, society, user, addVoucher, cancelVoucher]);
 
@@ -481,12 +482,12 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Worker advance delete error:', error.message);
         setWorkerAdvancesState(prev => { const u = [...prev, old]; storage.setWorkerAdvances(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
         return;
       }
       const okAdv = !old.voucherId || cancelVoucher(old.voucherId, 'Worker advance deleted', user?.name || 'System', { viaParent: true });   // H / RULE 3
       const okRec = vouchers.filter(v => !v.isDeleted && v.refType === 'worker.advance.recovery' && v.refId === old.id).map(v => cancelVoucher(v.id, 'Worker advance deleted (recovery reversed)', user?.name || 'System', { viaParent: true })).every(Boolean);
-      if (!okAdv || !okRec) toastRef.current({ title: 'वाउचर रद्द नहीं हुआ', description: 'रिकॉर्ड हट गया, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', variant: 'destructive', duration: 15000 });
+      if (!okAdv || !okRec) toastRef.current({ title: tr('वाउचर रद्द नहीं हुआ', 'Voucher not cancelled'), description: tr('रिकॉर्ड हट गया, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', 'The record was removed, but its voucher could not be cancelled (lock / permission). Cancel it from the Voucher screen — it is now an orphan, so it will cancel.'), variant: 'destructive', duration: 15000 });
     });
   }, [workerAdvances, vouchers, society, user, cancelVoucher]);
 
@@ -529,12 +530,12 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   const postPfEsi = useCallback((period: string, cfg: PfEsiConfig, date: string): PfEsiRun => {
     const sentinel = { id: '', period, grossWages: 0, epfEmployee: 0, epfEmployer: 0, esiEmployee: 0, esiEmployer: 0, status: 'posted', createdAt: '' } as PfEsiRun;
     if (guardFYLocked()) return sentinel;
-    if (pfEsiRuns.some(r => !r.isDeleted && r.period === period)) { toastRef.current({ title: 'पहले से दर्ज', description: `${period} की EPF/ESI देयता पहले ही पोस्ट हो चुकी है।`, variant: 'destructive', duration: 9000 }); return sentinel; }
+    if (pfEsiRuns.some(r => !r.isDeleted && r.period === period)) { toastRef.current({ title: tr('पहले से दर्ज', 'Already recorded'), description: tr(`${period} की EPF/ESI देयता पहले ही पोस्ट हो चुकी है।`, `The EPF/ESI liability for ${period} has already been posted.`), variant: 'destructive', duration: 9000 }); return sentinel; }
     const c = computePfEsi(period, cfg);
     const empShare = +(c.epfEmployee + c.esiEmployee).toFixed(2);
     const epfTotal = +(c.epfEmployee + c.epfEmployer + c.epfAdminEdli).toFixed(2);   // A/c 1+10 + A/c 21+2
     const esiTotal = +(c.esiEmployee + c.esiEmployer).toFixed(2);
-    if (epfTotal + esiTotal <= 0) { toastRef.current({ title: 'कुछ दर्ज करने को नहीं', description: 'इस महीने की मज़दूरी/अंशदान शून्य है।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (epfTotal + esiTotal <= 0) { toastRef.current({ title: tr('कुछ दर्ज करने को नहीं', 'Nothing to record'), description: tr('इस महीने की मज़दूरी/अंशदान शून्य है।', 'Wages/contributions for this month are zero.'), variant: 'destructive', duration: 8000 }); return sentinel; }
     const id = crypto.randomUUID();
     const lid = () => crypto.randomUUID();
     const lines = [
@@ -561,10 +562,10 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('PF/ESI run save error:', error.message);
         setPfEsiRunsState(prev => { const r = prev.filter(x => x.id !== run.id); storage.setPfEsiRuns(r); return r; });
         cancelVoucher(voucher.id, 'PF/ESI run rolled back (save failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'EPF/ESI सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('EPF/ESI सेव नहीं हुआ', 'EPF/ESI not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. It has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
       }
     });
-    toastRef.current({ title: 'EPF/ESI देयता दर्ज हुई', description: `${period} · EPF ₹${epfTotal} · ESI ₹${esiTotal}`, duration: 6000 });
+    toastRef.current({ title: tr('EPF/ESI देयता दर्ज हुई', 'EPF/ESI liability recorded'), description: `${period} · EPF ₹${epfTotal} · ESI ₹${esiTotal}`, duration: 6000 });
     return run;
   }, [pfEsiRuns, computePfEsi, society, user, addVoucher, cancelVoucher]);
 
@@ -572,8 +573,8 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '', voucherNo: '', type: 'payment', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     const run = pfEsiRuns.find(r => r.id === data.runId && !r.isDeleted);
-    if (!run) { toastRef.current({ title: 'रन नहीं मिला', variant: 'destructive', duration: 8000 }); return sentinel; }
-    if (run.status === 'deposited') { toastRef.current({ title: 'पहले ही जमा', description: 'इस माह की EPF/ESI पहले ही जमा हो चुकी है।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!run) { toastRef.current({ title: tr('रन नहीं मिला', 'Run not found'), variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (run.status === 'deposited') { toastRef.current({ title: tr('पहले ही जमा', 'Already deposited'), description: tr('इस माह की EPF/ESI पहले ही जमा हो चुकी है।', 'EPF/ESI for this month has already been deposited.'), variant: 'destructive', duration: 8000 }); return sentinel; }
     const epfTotal = +(run.epfEmployee + run.epfEmployer + (run.epfAdminEdli || 0)).toFixed(2);
     const esiTotal = +(run.esiEmployee + run.esiEmployer).toFixed(2);
     const total = +(epfTotal + esiTotal).toFixed(2);
@@ -599,10 +600,10 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         console.error('PF/ESI deposit update error:', error.message);
         setPfEsiRunsState(prev => { const u = prev.map(r => r.id === run.id ? run : r); storage.setPfEsiRuns(u); return u; });
         cancelVoucher(voucher.id, 'PF/ESI deposit rolled back (update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'जमा सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('जमा सेव नहीं हुई', 'Deposit not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया।`, `Not saved to the cloud — ${error.message}. It has been withdrawn.`), variant: 'destructive', duration: 12000 });
       }
     });
-    toastRef.current({ title: 'EPF/ESI जमा दर्ज हुई', description: `${run.period} · ₹${total}`, duration: 6000 });
+    toastRef.current({ title: tr('EPF/ESI जमा दर्ज हुई', 'EPF/ESI deposit recorded'), description: `${run.period} · ₹${total}`, duration: 6000 });
     return voucher;
   }, [pfEsiRuns, accounts, society, user, addVoucher, cancelVoucher]);
 
@@ -615,12 +616,12 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('PF/ESI run delete error:', error.message);
         setPfEsiRunsState(prev => { const u = [...prev, old]; storage.setPfEsiRuns(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
         return;
       }
       const okRun = !old.voucherId || cancelVoucher(old.voucherId, 'PF/ESI run deleted', user?.name || 'System', { viaParent: true });   // H / RULE 3
       const okDep = !old.depositVoucherId || cancelVoucher(old.depositVoucherId, 'PF/ESI run deleted (deposit reversed)', user?.name || 'System', { viaParent: true });
-      if (!okRun || !okDep) toastRef.current({ title: 'वाउचर रद्द नहीं हुआ', description: 'रिकॉर्ड हट गया, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', variant: 'destructive', duration: 15000 });
+      if (!okRun || !okDep) toastRef.current({ title: tr('वाउचर रद्द नहीं हुआ', 'Voucher not cancelled'), description: tr('रिकॉर्ड हट गया, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', 'The record was removed, but its voucher could not be cancelled (lock / permission). Cancel it from the Voucher screen — it is now an orphan, so it will cancel.'), variant: 'destructive', duration: 15000 });
     });
   }, [pfEsiRuns, society, user, cancelVoucher]);
 

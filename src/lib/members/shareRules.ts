@@ -10,6 +10,7 @@
  *  • Rules r.21 — the number of nominees shall not exceed the number of shares held.
  * Data rules that ARE enforced (not law): shares go only to an active, approved member.
  */
+import { tr } from '../uiLang.ts';
 
 export const SHARE_CAP_FRACTION = 1 / 5;
 export const SHARE_CAP_RUPEES = 500_000;
@@ -28,7 +29,7 @@ export function shareCapWarning(memberCapitalAfter: number, totalCapitalAfter: n
   const limit = shareHoldingLimit(totalCapitalAfter);
   if (memberCapitalAfter <= limit + 0.005) return null;
   const byRupees = limit >= SHARE_CAP_RUPEES - 0.005;
-  return `इस सदस्य की शेयर पूँजी ₹${memberCapitalAfter.toLocaleString('en-IN')} हो जाएगी — सीमा ₹${limit.toLocaleString('en-IN')} (${byRupees ? '₹5 लाख' : 'कुल शेयर पूँजी का 1/5'}) से ज़्यादा। हरियाणा अधिनियम धारा 6: कोई सदस्य (सरकार/समिति को छोड़) 1/5 या ₹5 लाख, जो कम हो, से अधिक शेयर नहीं रख सकता।`;
+  return tr(`इस सदस्य की शेयर पूँजी ₹${memberCapitalAfter.toLocaleString('en-IN')} हो जाएगी — सीमा ₹${limit.toLocaleString('en-IN')} (${byRupees ? '₹5 लाख' : 'कुल शेयर पूँजी का 1/5'}) से ज़्यादा। हरियाणा अधिनियम धारा 6: कोई सदस्य (सरकार/समिति को छोड़) 1/5 या ₹5 लाख, जो कम हो, से अधिक शेयर नहीं रख सकता।`, `This member's share capital will become ₹${memberCapitalAfter.toLocaleString('en-IN')} — more than the limit of ₹${limit.toLocaleString('en-IN')} (${byRupees ? '₹5 lakh' : '1/5 of total share capital'}). Haryana Act s.6: no member (other than the government/a society) can hold more than 1/5 or ₹5 lakh of shares, whichever is less.`);
 }
 
 const isIso = (d?: string): d is string => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d);
@@ -45,7 +46,7 @@ export function transferHoldingWarning(heldSince: string | undefined, transferDa
   if (!isIso(heldSince) || !isIso(transferDate)) return null;
   const eligible = addTwoYears(heldSince);
   if (transferDate >= eligible) return null;
-  return `शेयर ${heldSince.split('-').reverse().join('/')} से रखे हैं — 2 साल ${eligible.split('-').reverse().join('/')} को पूरे होंगे। हरियाणा अधिनियम धारा 22: कम से कम 2 साल रखे शेयर ही हस्तांतरित हो सकते हैं।`;
+  return tr(`शेयर ${heldSince.split('-').reverse().join('/')} से रखे हैं — 2 साल ${eligible.split('-').reverse().join('/')} को पूरे होंगे। हरियाणा अधिनियम धारा 22: कम से कम 2 साल रखे शेयर ही हस्तांतरित हो सकते हैं।`, `Shares held since ${heldSince.split('-').reverse().join('/')} — 2 years will be complete on ${eligible.split('-').reverse().join('/')}. Haryana Act s.22: only shares held for at least 2 years can be transferred.`);
 }
 
 /** The date a member's shares are held from: the admission date, else the register's date of entry. */
@@ -69,13 +70,13 @@ export function refundLimitWarning(opts: { paidUpOnBaseDate: number; refundedThi
   const limit = r2(Math.max(0, opts.paidUpOnBaseDate) * 0.05);
   const total = r2(opts.refundedThisYear + opts.thisRefund);
   if (!(opts.paidUpOnBaseDate > 0) || total <= limit + 0.005) return null;
-  return `इस वर्ष की कुल शेयर वापसी ₹${total.toLocaleString('en-IN')} हो जाएगी — ${opts.baseDate.split('-').reverse().join('/')} की चुकता पूँजी (₹${opts.paidUpOnBaseDate.toLocaleString('en-IN')}) के 5% (₹${limit.toLocaleString('en-IN')}) से ज़्यादा। हरियाणा नियम 18(3): सीमित दायित्व समिति में वापसी सिर्फ़ शेयर-हस्तांतरण कोष से और 5% तक।`;
+  return tr(`इस वर्ष की कुल शेयर वापसी ₹${total.toLocaleString('en-IN')} हो जाएगी — ${opts.baseDate.split('-').reverse().join('/')} की चुकता पूँजी (₹${opts.paidUpOnBaseDate.toLocaleString('en-IN')}) के 5% (₹${limit.toLocaleString('en-IN')}) से ज़्यादा। हरियाणा नियम 18(3): सीमित दायित्व समिति में वापसी सिर्फ़ शेयर-हस्तांतरण कोष से और 5% तक।`, `This year's total share refund will become ₹${total.toLocaleString('en-IN')} — more than 5% (₹${limit.toLocaleString('en-IN')}) of the paid-up capital on ${opts.baseDate.split('-').reverse().join('/')} (₹${opts.paidUpOnBaseDate.toLocaleString('en-IN')}). Haryana r.18(3): in a limited-liability society refunds come only from the share-transfer fund and up to 5%.`);
 }
 
 /** r.21 warning: more nominees than shares held. */
 export function nomineeCountWarning(nomineeCount: number, shareCount: number | undefined): string | null {
   if (!(shareCount && shareCount > 0) || nomineeCount <= shareCount) return null;
-  return `${nomineeCount} नामांकित हैं पर शेयर सिर्फ़ ${shareCount} — नियम 21: नामांकितों की संख्या शेयरों की संख्या से ज़्यादा नहीं हो सकती।`;
+  return tr(`${nomineeCount} नामांकित हैं पर शेयर सिर्फ़ ${shareCount} — नियम 21: नामांकितों की संख्या शेयरों की संख्या से ज़्यादा नहीं हो सकती।`, `There are ${nomineeCount} nominees but only ${shareCount} shares — r.21: the number of nominees cannot be more than the number of shares.`);
 }
 
 /**
@@ -123,3 +124,6 @@ export function touchesShareCapital(v: { debitAccountId?: string; creditAccountI
 }
 
 export const MANUAL_MEMBER_SHARE_VOUCHER_MESSAGE = 'सदस्य के नाम पर शेयर पूँजी (1102) का वाउचर यहाँ से नहीं बनता — सदस्य का शेयर "शेयर रजिस्टर" से ख़रीदें/वापस करें/हस्तांतरित करें, ताकि सदस्य की शेयर राशि और बही साथ बदलें। (Member share moves go through the Share Register.)';
+export const MANUAL_MEMBER_SHARE_VOUCHER_MESSAGE_EN = 'A share capital (1102) voucher in a member\'s name cannot be made here — buy / refund / transfer the member\'s shares from the "Share Register", so the member\'s share amount and the books change together.';
+/** The refusal text in the reader's language (the Hindi constant above stays for existing callers / tests). */
+export const manualMemberShareVoucherMessage = (): string => tr(MANUAL_MEMBER_SHARE_VOUCHER_MESSAGE, MANUAL_MEMBER_SHARE_VOUCHER_MESSAGE_EN);

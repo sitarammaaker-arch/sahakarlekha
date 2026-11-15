@@ -9,6 +9,7 @@
 import type { LedgerAccount, Voucher } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { toMinor, toRupees, addMinor } from '@/lib/money';
+import { tr } from '@/lib/uiLang';
 
 // ── 1. Business date ────────────────────────────────────────────────────────────────────────────
 // Procurement-side vouchers (the posting, the settlement deductions, the commission) belong to the
@@ -321,12 +322,13 @@ export function lotCancelBlockers(x: {
   return out;
 }
 
+// Getters: each text follows the reader's language when it is read (the refusal toast is built at event time).
 export const LOT_CANCEL_BLOCKER_TEXT: Record<LotCancelBlocker, string> = {
-  already_cancelled: 'यह लॉट पहले ही रद्द है।',
-  no_reason: 'रद्द करने का कारण लिखें।',
-  farmer_paid: 'इस लॉट पर किसान को भुगतान हो चुका है — पहले वह भुगतान वाउचर (Vouchers पेज से) रद्द करें, फिर लॉट रद्द करें।',
-  agency_receipts: 'एजेंसी से इतनी रसीद आ चुकी है कि यह लॉट हटाने पर MSP प्राप्य शून्य से नीचे जाएगा — पहले "एजेंसी रसीद" पेज पर संबंधित रसीद रद्द करें।',
-  commission_received: 'इस लॉट का कमीशन एजेंसी से मिल चुका है — पहले "एजेंसी रसीद" पेज पर कमीशन रसीद रद्द करें।',
+  get already_cancelled() { return tr('यह लॉट पहले ही रद्द है।', 'This lot is already cancelled.'); },
+  get no_reason() { return tr('रद्द करने का कारण लिखें।', 'Enter the reason for cancelling.'); },
+  get farmer_paid() { return tr('इस लॉट पर किसान को भुगतान हो चुका है — पहले वह भुगतान वाउचर (Vouchers पेज से) रद्द करें, फिर लॉट रद्द करें।', 'The farmer has already been paid for this lot — first cancel that payment voucher (from the Vouchers page), then cancel the lot.'); },
+  get agency_receipts() { return tr('एजेंसी से इतनी रसीद आ चुकी है कि यह लॉट हटाने पर MSP प्राप्य शून्य से नीचे जाएगा — पहले "एजेंसी रसीद" पेज पर संबंधित रसीद रद्द करें।', 'So much has been received from the agency that removing this lot would take the MSP receivable below zero — first cancel the related receipt on the "Agency Receipts" page.'); },
+  get commission_received() { return tr('इस लॉट का कमीशन एजेंसी से मिल चुका है — पहले "एजेंसी रसीद" पेज पर कमीशन रसीद रद्द करें।', 'The commission for this lot has already been received from the agency — first cancel the commission receipt on the "Agency Receipts" page.'); },
 };
 
 // ── 11. Posting legs by NET per account (D1) ─────────────────────────────────────────────────────

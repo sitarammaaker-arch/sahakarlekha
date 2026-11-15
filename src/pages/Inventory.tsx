@@ -172,7 +172,7 @@ const ItemForm: React.FC<ItemFormProps> = ({ itemForm, setItemForm, hi, onSubmit
         <Input
           value={itemForm.nameHi}
           onChange={e => setItemForm(f => ({ ...f, nameHi: e.target.value }))}
-          placeholder="जैसे गेहूं"
+          placeholder={hi ? 'जैसे गेहूं' : 'e.g. गेहूं'}
         />
       </div>
     </div>
@@ -926,7 +926,7 @@ const Inventory: React.FC = () => {
           {hi ? 'माल भंडार' : 'Inventory'}
         </h1>
         <p className="text-muted-foreground text-sm">
-          {hi ? 'स्टॉक वस्तुओं और आवाजाही का प्रबंधन' : 'Manage stock items and movements / माल भंडार'}
+          {hi ? 'स्टॉक वस्तुओं और आवाजाही का प्रबंधन' : 'Manage stock items and movements'}
         </p>
       </div>
       {/* E1: FCO authorisation / Form O expiring or lapsed — selling then contravenes the Order. */}

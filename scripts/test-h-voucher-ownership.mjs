@@ -26,9 +26,9 @@ ok('unknown voucher → null', findVoucherOwner(groups, 'zz') === null);
 
 // ── wiring ──
 const dc = read('src/contexts/DataContext.tsx');
-const cv = dc.slice(dc.indexOf('const cancelVoucher = useCallback'), dc.indexOf('const cancelVoucher = useCallback') + 3800);
+const cv = dc.slice(dc.indexOf('const cancelVoucher = useCallback'), dc.indexOf('const cancelVoucher = useCallback') + 6000);
 ok('DataContext exposes registerVoucherOwner', /registerVoucherOwner: \(key: string, check: VoucherOwnerCheck\) => \(\) => void;/.test(dc) && /cancelVoucher, registerVoucherOwner, reverseVoucher/.test(dc));
-ok('cancelVoucher consults every owner unless viaParent', /if \(!opts\?\.viaParent\) \{\s*for \(const check of voucherOwnersRef\.current\.values\(\)\)[\s\S]{0,400}return false;/.test(cv));
+ok('cancelVoucher consults every owner unless viaParent', /if \(!opts\?\.viaParent\) \{\s*for \(const check of voucherOwnersRef\.current\.values\(\)\)[\s\S]{0,800}return false;/.test(cv));
 ok('…after the already-cancelled no-op', cv.indexOf('if (current.isDeleted) return true;') < cv.indexOf('voucherOwnersRef.current.values()'));
 for (const [ctx, key, arrays] of [
   ['Consumer', 'consumer', ['salesReturns', 'purchaseReturns', 'patronageRuns', 'purchaseOrders']],

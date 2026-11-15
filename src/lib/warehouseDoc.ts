@@ -8,7 +8,10 @@
  * co-op godowns issue these by hand. Pure data model — the page turns it into printable HTML.
  *
  * Pure module: no React, no I/O — unit-tested by scripts/test-warehouse-doc.mjs.
+ * Language: chosen when the document is built (tr) — Hindi mode prints the bilingual labels unchanged.
  */
+import { tr } from './uiLang.ts';
+
 export type WarehouseDocKind = 'WHR' | 'GatePass';
 
 export interface WarehouseDocInput {
@@ -30,7 +33,7 @@ export interface WarehouseDocField {
 
 export interface WarehouseDoc {
   kind: WarehouseDocKind;
-  title: string;          // Hindi document title
+  title: string;          // document title (Hindi-first; English in English mode)
   docNo: string;
   societyName: string;
   fields: WarehouseDocField[];
@@ -48,28 +51,28 @@ export function buildWarehouseDoc(input: WarehouseDocInput): WarehouseDoc {
   const kind = warehouseDocKind(input.movementType, input.qty);
   const qtyStr = `${Math.abs(input.qty)}${input.itemUnit ? ' ' + input.itemUnit : ''}`;
   const common: WarehouseDocField[] = [
-    { label: 'दिनांक (Date)', value: input.date || '' },
-    { label: 'वस्तु (Item)', value: input.itemName },
-    { label: 'मात्रा (Qty)', value: qtyStr },
-    { label: 'गोदाम (Godown)', value: input.godownName },
-    { label: 'संदर्भ (Ref)', value: input.referenceNo || '—' },
+    { label: tr('दिनांक (Date)', 'Date'), value: input.date || '' },
+    { label: tr('वस्तु (Item)', 'Item'), value: input.itemName },
+    { label: tr('मात्रा (Qty)', 'Qty'), value: qtyStr },
+    { label: tr('गोदाम (Godown)', 'Godown'), value: input.godownName },
+    { label: tr('संदर्भ (Ref)', 'Ref'), value: input.referenceNo || '—' },
   ];
   if (kind === 'WHR') {
     return {
       kind,
-      title: 'गोदाम रसीद (Warehouse Receipt)',
+      title: tr('गोदाम रसीद (Warehouse Receipt)', 'Warehouse Receipt'),
       docNo: input.docNo,
       societyName: input.societyName,
       fields: common,
-      manualFields: ['जमाकर्ता (Depositor)', 'श्रेणी/किस्म (Grade)', 'बोरे/पैकेट (Bags)', 'भंडारण शुल्क (Storage charge)', 'प्राप्तकर्ता के हस्ताक्षर (Received by)'],
+      manualFields: [tr('जमाकर्ता (Depositor)', 'Depositor'), tr('श्रेणी/किस्म (Grade)', 'Grade'), tr('बोरे/पैकेट (Bags)', 'Bags'), tr('भंडारण शुल्क (Storage charge)', 'Storage charge'), tr('प्राप्तकर्ता के हस्ताक्षर (Received by)', 'Received by')],
     };
   }
   return {
     kind,
-    title: 'निकासी पर्ची (Gate Pass)',
+    title: tr('निकासी पर्ची (Gate Pass)', 'Gate Pass'),
     docNo: input.docNo,
     societyName: input.societyName,
     fields: common,
-    manualFields: ['प्राप्तकर्ता (Issued to)', 'वाहन संख्या (Vehicle no.)', 'गंतव्य (Destination)', 'चालक (Driver)', 'अधिकृत हस्ताक्षर (Authorised by)'],
+    manualFields: [tr('प्राप्तकर्ता (Issued to)', 'Issued to'), tr('वाहन संख्या (Vehicle no.)', 'Vehicle no.'), tr('गंतव्य (Destination)', 'Destination'), tr('चालक (Driver)', 'Driver'), tr('अधिकृत हस्ताक्षर (Authorised by)', 'Authorised by')],
   };
 }

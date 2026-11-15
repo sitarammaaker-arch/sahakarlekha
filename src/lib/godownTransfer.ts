@@ -12,6 +12,8 @@
  *
  * Pure module: no React, no I/O — unit-tested by scripts/test-godown-transfer.mjs.
  */
+import { tr } from './uiLang.ts';
+
 export interface TransferValidateInput {
   fromGodownId: string;
   toGodownId: string;
@@ -26,10 +28,10 @@ export interface TransferValidation {
 
 /** Validate a transfer request (Hindi-first error). */
 export function validateTransfer(input: TransferValidateInput): TransferValidation {
-  if (!input.fromGodownId || !input.toGodownId) return { ok: false, error: 'स्रोत और गंतव्य गोदाम चुनें।' };
-  if (input.fromGodownId === input.toGodownId) return { ok: false, error: 'स्रोत और गंतव्य गोदाम अलग होने चाहिए।' };
-  if (!(input.qty > 0)) return { ok: false, error: 'मात्रा 0 से अधिक होनी चाहिए।' };
-  if (input.qty > input.availableQty) return { ok: false, error: `स्रोत गोदाम में केवल ${input.availableQty} उपलब्ध है।` };
+  if (!input.fromGodownId || !input.toGodownId) return { ok: false, error: tr('स्रोत और गंतव्य गोदाम चुनें।', 'Choose the source and destination godowns.') };
+  if (input.fromGodownId === input.toGodownId) return { ok: false, error: tr('स्रोत और गंतव्य गोदाम अलग होने चाहिए।', 'Source and destination godowns must be different.') };
+  if (!(input.qty > 0)) return { ok: false, error: tr('मात्रा 0 से अधिक होनी चाहिए।', 'Quantity must be more than 0.') };
+  if (input.qty > input.availableQty) return { ok: false, error: tr(`स्रोत गोदाम में केवल ${input.availableQty} उपलब्ध है।`, `Only ${input.availableQty} available in the source godown.`) };
   return { ok: true };
 }
 

@@ -216,7 +216,7 @@ const BankReconciliation: React.FC = () => {
       if (error) {
         console.error('BRS save error:', error.message);
         persistRecords(prev); // RULE-1 rollback
-        toast({ title: hi ? 'समाधान सेव नहीं हुआ' : 'Reconciliation not saved', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: bank_reconciliations block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toast({ title: hi ? 'समाधान सेव नहीं हुआ' : 'Reconciliation not saved', description: hi ? `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: bank_reconciliations block चलाएँ।)` : `Not saved to the cloud — ${error.message}. (First time: run the bank_reconciliations block.)`, variant: 'destructive', duration: 12000 });
       } else {
         toast({ title: hi ? '✅ समाधान सहेजा गया' : '✅ Reconciliation saved', description: rec.isReconciled ? (hi ? 'समाधित' : 'Reconciled') : (hi ? `अंतर ${fmt(Math.abs(rec.difference))}` : `Difference ${fmt(Math.abs(rec.difference))}`) });
       }
@@ -228,7 +228,7 @@ const BankReconciliation: React.FC = () => {
     const prev = records;
     persistRecords(records.filter(r => r.id !== id));
     // RULE 1 (TAX-02): RLS can refuse with 0 rows and NO error — count the rows, not just the error.
-    const fail = (msg: string) => { persistRecords(prev); reportError('brs-delete', msg, { id }); toast({ title: hi ? 'हटाया नहीं गया' : 'Delete failed', description: `${msg} — बदलाव वापस लिया गया।`, variant: 'destructive', duration: 12000 }); };
+    const fail = (msg: string) => { persistRecords(prev); reportError('brs-delete', msg, { id }); toast({ title: hi ? 'हटाया नहीं गया' : 'Delete failed', description: hi ? `${msg} — बदलाव वापस लिया गया।` : `${msg} — the change was rolled back.`, variant: 'destructive', duration: 12000 }); };
     supabase.from('bank_reconciliations').update({ isDeleted: true }).eq('id', id).select('id').then(({ data, error }) => {
       if (error || !data?.length) fail(error?.message ?? (hi ? 'अनुमति नहीं' : 'not permitted'));
       else toast({ title: hi ? 'समाधान हटाया गया' : 'Reconciliation deleted' });

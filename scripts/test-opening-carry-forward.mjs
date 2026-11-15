@@ -153,7 +153,7 @@ ok(earlierYearVoucherCount(vouchers, undefined) === 0, 'unknown FY → 0');
   const ua = dc.slice(dc.indexOf('const updateAccount = useCallback('), dc.indexOf('const deleteAccountRow'));
   ok(/opts\?\.onFailed\?\.\(error\.message\);\s*return;\s*\}\s*opts\?\.onSaved\?\.\(\);/.test(ua), 'updateAccount: onFailed after rollback, onSaved after success');
   ok(/else opts\?\.onFailed\?\.\('account not found'\);/.test(ua), 'updateAccount: a missing account settles as failed (no hang)');
-  ok(/title: 'तारीख़ चालू वित्त वर्ष से बाहर \/ Date Outside Financial Year'/.test(dc), 'out-of-FY warning is Hindi-first (RULE 7)');
+  ok(/title: tr\('तारीख़ चालू वित्त वर्ष से बाहर \/ Date Outside Financial Year', 'Date Outside Financial Year'\)/.test(dc), 'out-of-FY warning is Hindi-first (RULE 7)');
 }
 
 console.log(`\nopening-carry-forward: ${pass} passed, ${fail} failed`);

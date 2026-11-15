@@ -17,6 +17,7 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const { login, verifyMfaCode, verifyRecoveryCode, cancelMfa, sendPasswordReset } = useAuth();
   const { language, setLanguage, t } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -141,23 +142,23 @@ const Login: React.FC = () => {
             Cooperative Society Accounting System
           </p>
           <p className="text-center text-primary-foreground/60 max-w-md">
-            भारतीय सहकारी समितियों के लिए विशेष रूप से डिज़ाइन किया गया
-            क्लाउड-आधारित लेखा सॉफ्टवेयर
+            {L('भारतीय सहकारी समितियों के लिए विशेष रूप से डिज़ाइन किया गया क्लाउड-आधारित लेखा सॉफ्टवेयर',
+              'Cloud-based accounting software designed especially for Indian cooperative societies')}
           </p>
           {/* What the product IS — no usage / uptime numbers (the old society / member / uptime figures
               were not true; public-claims rule, founder 2026-10-09). */}
           <div className="mt-12 grid grid-cols-3 gap-8 text-center">
             <div>
-              <p className="text-2xl font-bold">हिंदी</p>
-              <p className="text-sm text-primary-foreground/70">और English में</p>
+              <p className="text-2xl font-bold">{L('हिंदी', 'Hindi')}</p>
+              <p className="text-sm text-primary-foreground/70">{L('और English में', 'and English')}</p>
             </div>
             <div>
-              <p className="text-2xl font-bold">डबल-एंट्री</p>
-              <p className="text-sm text-primary-foreground/70">लेखा</p>
+              <p className="text-2xl font-bold">{L('डबल-एंट्री', 'Double-entry')}</p>
+              <p className="text-sm text-primary-foreground/70">{L('लेखा', 'accounting')}</p>
             </div>
             <div>
-              <p className="text-2xl font-bold">ऑडिट</p>
-              <p className="text-sm text-primary-foreground/70">के लिए तैयार रिपोर्ट</p>
+              <p className="text-2xl font-bold">{L('ऑडिट', 'Audit')}</p>
+              <p className="text-sm text-primary-foreground/70">{L('के लिए तैयार रिपोर्ट', 'ready reports')}</p>
             </div>
           </div>
         </div>

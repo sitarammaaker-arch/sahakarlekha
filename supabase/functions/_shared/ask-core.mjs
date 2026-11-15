@@ -724,6 +724,12 @@ function verifiedValue(key, ctx) {
   return r && r.verified ? r : null;
 }
 
+// src/lib/uiLang.ts
+var current = "hi";
+function tr(hi, en) {
+  return current === "en" ? en : hi;
+}
+
 // src/lib/rules/tdsSections.ts
 var ACT_2025_FROM = "2026-04-01";
 var NATURE = {
@@ -986,11 +992,11 @@ function resolveCurrentVouchers(events) {
 // src/lib/ledger/cashBook.ts
 function projectCashBook(events, accountId, accounts, opts) {
   const acctName = new Map(accounts.map((a) => [a.id, a.name]));
-  const current = resolveCurrentVouchers(events);
-  current.sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || "").localeCompare(b.voucherNo || "") || a.id.localeCompare(b.id));
+  const current2 = resolveCurrentVouchers(events);
+  current2.sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || (a.voucherNo || "").localeCompare(b.voucherNo || "") || a.id.localeCompare(b.id));
   let running = opts.openingMinor;
   const rows = [];
-  for (const c of current) {
+  for (const c of current2) {
     if (opts.toDate && c.date > opts.toDate) continue;
     const cashLegs = c.legs.filter((l) => l.accountId === accountId);
     if (cashLegs.length === 0) continue;
@@ -1480,7 +1486,7 @@ function computeTds(input) {
   const s = input.section.toLowerCase().replace(/^section\s*/, "").trim();
   const missing = [];
   if (!isValidMinor(input.aggregateMinor)) {
-    return { applicable: false, refused: true, reason: "\u0930\u093E\u0936\u093F \u092A\u0948\u0938\u0947 (integer) \u092E\u0947\u0902 \u091A\u093E\u0939\u093F\u090F", missing: ["aggregateMinor"] };
+    return { applicable: false, refused: true, reason: tr("\u0930\u093E\u0936\u093F \u092A\u0948\u0938\u0947 (integer) \u092E\u0947\u0902 \u091A\u093E\u0939\u093F\u090F", "Amount must be in paise (integer)"), missing: ["aggregateMinor"] };
   }
   const thr = verifiedValue(`tds.${s}.threshold`, input.ctx) ?? verifiedValue(`tds.${s}.threshold.annual`, input.ctx) ?? verifiedValue(`tds.${s}.threshold.per_month`, input.ctx);
   const rate = verifiedValue(`tds.${s}.rate_pct`, input.ctx);
@@ -1492,7 +1498,13 @@ function computeTds(input) {
     return {
       applicable: false,
       refused: true,
-      reason: needsAttr ? `\u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0940 \u0926\u0930 \u0907\u0938 \u092A\u0930 \u0928\u093F\u0930\u094D\u092D\u0930 \u0915\u0930\u0924\u0940 \u0939\u0948 \u0915\u093F \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u093F\u0938 \u092A\u094D\u0930\u0915\u093E\u0930 \u0915\u093E \u0939\u0948 \u2014 \u092C\u093F\u0928\u093E \u092F\u0939 \u091C\u093E\u0928\u0947 \u092E\u0948\u0902 \u0917\u0923\u0928\u093E \u0928\u0939\u0940\u0902 \u0915\u0930\u0942\u0901\u0917\u093E\u0964 (\u091C\u0948\u0938\u0947 194J: professional \u092F\u093E technical?)` : `\u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0947 \u0932\u093F\u090F \u092E\u0947\u0930\u0947 \u092A\u093E\u0938 \u092A\u094D\u0930\u092E\u093E\u0923\u093F\u0924, \u0924\u093F\u0925\u093F-\u0938\u0939\u093F\u0924 \u0928\u093F\u092F\u092E \u0928\u0939\u0940\u0902 \u0939\u0948 \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0917\u0923\u0928\u093E \u0928\u0939\u0940\u0902 \u0915\u0930\u0942\u0901\u0917\u093E\u0964 \u0928\u093F\u092F\u092E \u091C\u094B\u0921\u093C\u0947\u0902/\u0938\u0924\u094D\u092F\u093E\u092A\u093F\u0924 \u0915\u0930\u0947\u0902: src/lib/rules/tax.ts`,
+      reason: needsAttr ? tr(
+        `\u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0940 \u0926\u0930 \u0907\u0938 \u092A\u0930 \u0928\u093F\u0930\u094D\u092D\u0930 \u0915\u0930\u0924\u0940 \u0939\u0948 \u0915\u093F \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u093F\u0938 \u092A\u094D\u0930\u0915\u093E\u0930 \u0915\u093E \u0939\u0948 \u2014 \u092C\u093F\u0928\u093E \u092F\u0939 \u091C\u093E\u0928\u0947 \u092E\u0948\u0902 \u0917\u0923\u0928\u093E \u0928\u0939\u0940\u0902 \u0915\u0930\u0942\u0901\u0917\u093E\u0964 (\u091C\u0948\u0938\u0947 194J: professional \u092F\u093E technical?)`,
+        `The rate under section ${s.toUpperCase()} depends on the type of payment \u2014 I will not calculate without knowing it. (e.g. 194J: professional or technical?)`
+      ) : tr(
+        `\u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0947 \u0932\u093F\u090F \u092E\u0947\u0930\u0947 \u092A\u093E\u0938 \u092A\u094D\u0930\u092E\u093E\u0923\u093F\u0924, \u0924\u093F\u0925\u093F-\u0938\u0939\u093F\u0924 \u0928\u093F\u092F\u092E \u0928\u0939\u0940\u0902 \u0939\u0948 \u2014 \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0917\u0923\u0928\u093E \u0928\u0939\u0940\u0902 \u0915\u0930\u0942\u0901\u0917\u093E\u0964 \u0928\u093F\u092F\u092E \u091C\u094B\u0921\u093C\u0947\u0902/\u0938\u0924\u094D\u092F\u093E\u092A\u093F\u0924 \u0915\u0930\u0947\u0902: src/lib/rules/tax.ts`,
+        `I have no verified, dated rule for section ${s.toUpperCase()} \u2014 so I will not calculate. Add/verify the rule: src/lib/rules/tax.ts`
+      ),
       missing
     };
   }
@@ -1509,7 +1521,10 @@ function computeTds(input) {
         return {
           applicable: false,
           refused: true,
-          reason: `\u0927\u093E\u0930\u093E ${s.toUpperCase()} \u092E\u0947\u0902 \u090F\u0915 \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u0940 \u0938\u0940\u092E\u093E (${inr2(perMinor)}) \u092D\u0940 \u0939\u0948 \u2014 \u0907\u0938 \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u0940 \u0930\u093E\u0936\u093F \u092C\u0924\u093E\u090F \u092C\u093F\u0928\u093E \u092E\u0948\u0902 \u0928\u0939\u0940\u0902 \u0915\u0939 \u0938\u0915\u0924\u093E \u0915\u093F TDS \u092C\u0928\u0924\u093E \u0939\u0948 \u092F\u093E \u0928\u0939\u0940\u0902\u0964`,
+          reason: tr(
+            `\u0927\u093E\u0930\u093E ${s.toUpperCase()} \u092E\u0947\u0902 \u090F\u0915 \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u0940 \u0938\u0940\u092E\u093E (${inr2(perMinor)}) \u092D\u0940 \u0939\u0948 \u2014 \u0907\u0938 \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u0940 \u0930\u093E\u0936\u093F \u092C\u0924\u093E\u090F \u092C\u093F\u0928\u093E \u092E\u0948\u0902 \u0928\u0939\u0940\u0902 \u0915\u0939 \u0938\u0915\u0924\u093E \u0915\u093F TDS \u092C\u0928\u0924\u093E \u0939\u0948 \u092F\u093E \u0928\u0939\u0940\u0902\u0964`,
+            `Section ${s.toUpperCase()} also has a single-payment limit (${inr2(perMinor)}) \u2014 without this payment's amount I cannot say whether TDS applies.`
+          ),
           missing: ["paymentMinor"]
         };
       }
@@ -1522,7 +1537,10 @@ function computeTds(input) {
           taxableMinor: input.paymentMinor,
           thresholdMinor: perMinor,
           ratePct: rate.value,
-          explain: `\u092F\u0939 \u092D\u0941\u0917\u0924\u093E\u0928 ${inr2(input.paymentMinor)} \u090F\u0915 \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u0940 \u0938\u0940\u092E\u093E ${inr2(perMinor)} \u0938\u0947 \u0905\u0927\u093F\u0915 \u0939\u0948 \u2014 \u092A\u0942\u0930\u0940 \u0930\u093E\u0936\u093F \u092A\u0930 ${rate.value}% TDS = ${inr2(tdsMinor2)}\u0964 (s.393(1)(a), \u0928\u093F\u092F\u092E ${perPayment.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940)`,
+          explain: tr(
+            `\u092F\u0939 \u092D\u0941\u0917\u0924\u093E\u0928 ${inr2(input.paymentMinor)} \u090F\u0915 \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u0940 \u0938\u0940\u092E\u093E ${inr2(perMinor)} \u0938\u0947 \u0905\u0927\u093F\u0915 \u0939\u0948 \u2014 \u092A\u0942\u0930\u0940 \u0930\u093E\u0936\u093F \u092A\u0930 ${rate.value}% TDS = ${inr2(tdsMinor2)}\u0964 (s.393(1)(a), \u0928\u093F\u092F\u092E ${perPayment.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940)`,
+            `This payment of ${inr2(input.paymentMinor)} is above the single-payment limit of ${inr2(perMinor)} \u2014 on the whole amount ${rate.value}% TDS = ${inr2(tdsMinor2)}. (s.393(1)(a), rule effective from ${perPayment.effectiveFrom})`
+          ),
           basis
         };
       }
@@ -1533,7 +1551,10 @@ function computeTds(input) {
       taxableMinor: 0,
       thresholdMinor,
       ratePct: rate.value,
-      explain: `\u0915\u0941\u0932 ${inr2(input.aggregateMinor)} \u2014 \u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0940 \u0938\u0940\u092E\u093E ${inr2(thresholdMinor)} \u0938\u0947 \u0905\u0927\u093F\u0915 \u0928\u0939\u0940\u0902, \u0907\u0938\u0932\u093F\u090F TDS \u0928\u0939\u0940\u0902 \u0915\u091F\u0947\u0917\u093E\u0964`,
+      explain: tr(
+        `\u0915\u0941\u0932 ${inr2(input.aggregateMinor)} \u2014 \u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0940 \u0938\u0940\u092E\u093E ${inr2(thresholdMinor)} \u0938\u0947 \u0905\u0927\u093F\u0915 \u0928\u0939\u0940\u0902, \u0907\u0938\u0932\u093F\u090F TDS \u0928\u0939\u0940\u0902 \u0915\u091F\u0947\u0917\u093E\u0964`,
+        `Total ${inr2(input.aggregateMinor)} \u2014 not above the section ${s.toUpperCase()} limit of ${inr2(thresholdMinor)}, so no TDS will be deducted.`
+      ),
       basis
     };
   }
@@ -1542,7 +1563,10 @@ function computeTds(input) {
     return {
       applicable: false,
       refused: true,
-      reason: `\u0915\u0941\u0932 ${inr2(input.aggregateMinor)} \u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0940 \u0938\u0940\u092E\u093E ${inr2(thresholdMinor)} \u0938\u0947 \u0905\u0927\u093F\u0915 \u0939\u0948, \u092A\u0930 \u0907\u0938 \u0927\u093E\u0930\u093E \u092E\u0947\u0902 TDS \u092A\u0942\u0930\u0940 \u0930\u093E\u0936\u093F \u092A\u0930 \u0932\u0917\u0924\u093E \u0939\u0948 \u092F\u093E \u0915\u0947\u0935\u0932 \u0938\u0940\u092E\u093E \u0938\u0947 \u090A\u092A\u0930 \u0915\u0940 \u0930\u093E\u0936\u093F \u092A\u0930 \u2014 \u0907\u0938\u0915\u093E \u092A\u094D\u0930\u092E\u093E\u0923\u093F\u0924 \u0928\u093F\u092F\u092E \u092E\u0947\u0930\u0947 \u092A\u093E\u0938 \u0928\u0939\u0940\u0902 \u0939\u0948, \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0930\u093E\u0936\u093F \u0928\u0939\u0940\u0902 \u092C\u0924\u093E\u090A\u0901\u0917\u093E\u0964 \u0928\u093F\u092F\u092E \u091C\u094B\u0921\u093C\u0947\u0902: tds.${s}.charge_on_excess_only (src/lib/rules/tax.ts)`,
+      reason: tr(
+        `\u0915\u0941\u0932 ${inr2(input.aggregateMinor)} \u0927\u093E\u0930\u093E ${s.toUpperCase()} \u0915\u0940 \u0938\u0940\u092E\u093E ${inr2(thresholdMinor)} \u0938\u0947 \u0905\u0927\u093F\u0915 \u0939\u0948, \u092A\u0930 \u0907\u0938 \u0927\u093E\u0930\u093E \u092E\u0947\u0902 TDS \u092A\u0942\u0930\u0940 \u0930\u093E\u0936\u093F \u092A\u0930 \u0932\u0917\u0924\u093E \u0939\u0948 \u092F\u093E \u0915\u0947\u0935\u0932 \u0938\u0940\u092E\u093E \u0938\u0947 \u090A\u092A\u0930 \u0915\u0940 \u0930\u093E\u0936\u093F \u092A\u0930 \u2014 \u0907\u0938\u0915\u093E \u092A\u094D\u0930\u092E\u093E\u0923\u093F\u0924 \u0928\u093F\u092F\u092E \u092E\u0947\u0930\u0947 \u092A\u093E\u0938 \u0928\u0939\u0940\u0902 \u0939\u0948, \u0907\u0938\u0932\u093F\u090F \u092E\u0948\u0902 \u0930\u093E\u0936\u093F \u0928\u0939\u0940\u0902 \u092C\u0924\u093E\u090A\u0901\u0917\u093E\u0964 \u0928\u093F\u092F\u092E \u091C\u094B\u0921\u093C\u0947\u0902: tds.${s}.charge_on_excess_only (src/lib/rules/tax.ts)`,
+        `Total ${inr2(input.aggregateMinor)} is above the section ${s.toUpperCase()} limit of ${inr2(thresholdMinor)}, but I have no verified rule on whether TDS under this section applies to the whole amount or only the excess over the limit, so I will not state an amount. Add the rule: tds.${s}.charge_on_excess_only (src/lib/rules/tax.ts)`
+      ),
       missing: [`tds.${s}.charge_on_excess_only`]
     };
   }
@@ -1556,7 +1580,13 @@ function computeTds(input) {
     taxableMinor,
     thresholdMinor,
     ratePct: rate.value,
-    explain: onExcess ? `\u0915\u0941\u0932 ${inr2(input.aggregateMinor)} \u092E\u0947\u0902 \u0938\u0947 \u0938\u0940\u092E\u093E ${inr2(thresholdMinor)} \u0918\u091F\u093E\u0915\u0930 ${inr2(taxableMinor)} \u092A\u0930 ${rate.value}% TDS = ${inr2(tdsMinor)}\u0964 (\u0928\u093F\u092F\u092E ${thr.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940)` : `\u0915\u0941\u0932 ${inr2(input.aggregateMinor)} \u0938\u0940\u092E\u093E ${inr2(thresholdMinor)} \u0938\u0947 \u0905\u0927\u093F\u0915 \u0939\u0948 \u2014 \u092A\u0942\u0930\u0940 \u0930\u093E\u0936\u093F \u092A\u0930 ${rate.value}% TDS = ${inr2(tdsMinor)}\u0964 (s.393(1)(a), \u0928\u093F\u092F\u092E ${thr.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940)`,
+    explain: onExcess ? tr(
+      `\u0915\u0941\u0932 ${inr2(input.aggregateMinor)} \u092E\u0947\u0902 \u0938\u0947 \u0938\u0940\u092E\u093E ${inr2(thresholdMinor)} \u0918\u091F\u093E\u0915\u0930 ${inr2(taxableMinor)} \u092A\u0930 ${rate.value}% TDS = ${inr2(tdsMinor)}\u0964 (\u0928\u093F\u092F\u092E ${thr.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940)`,
+      `Total ${inr2(input.aggregateMinor)} minus the limit ${inr2(thresholdMinor)} = ${inr2(taxableMinor)}, on which ${rate.value}% TDS = ${inr2(tdsMinor)}. (rule effective from ${thr.effectiveFrom})`
+    ) : tr(
+      `\u0915\u0941\u0932 ${inr2(input.aggregateMinor)} \u0938\u0940\u092E\u093E ${inr2(thresholdMinor)} \u0938\u0947 \u0905\u0927\u093F\u0915 \u0939\u0948 \u2014 \u092A\u0942\u0930\u0940 \u0930\u093E\u0936\u093F \u092A\u0930 ${rate.value}% TDS = ${inr2(tdsMinor)}\u0964 (s.393(1)(a), \u0928\u093F\u092F\u092E ${thr.effectiveFrom} \u0938\u0947 \u092A\u094D\u0930\u092D\u093E\u0935\u0940)`,
+      `Total ${inr2(input.aggregateMinor)} is above the limit ${inr2(thresholdMinor)} \u2014 on the whole amount ${rate.value}% TDS = ${inr2(tdsMinor)}. (s.393(1)(a), rule effective from ${thr.effectiveFrom})`
+    ),
     basis
   };
 }

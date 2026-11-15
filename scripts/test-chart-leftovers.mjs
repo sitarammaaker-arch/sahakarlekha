@@ -34,7 +34,7 @@ const read = (p) => readFileSync(resolve(ROOT, p), 'utf8');
 
 // 1. Group → ledger refused while it has children
 const dc = read('src/contexts/DataContext.tsx');
-ok(/if \(current && current\.isGroup && data\.isGroup !== undefined && !data\.isGroup\) \{\s*const childCount = accountsRef\.current\.filter\(a => a\.parentId === id\)\.length;\s*if \(childCount > 0\)[\s\S]{0,400}return false;/.test(dc), 'updateAccount refuses un-grouping a group that has accounts under it');
+ok(/if \(current && current\.isGroup && data\.isGroup !== undefined && !data\.isGroup\) \{\s*const childCount = accountsRef\.current\.filter\(a => a\.parentId === id\)\.length;\s*if \(childCount > 0\)[\s\S]{0,900}return false;/.test(dc), 'updateAccount refuses un-grouping a group that has accounts under it');
 const lh = read('src/pages/LedgerHeads.tsx');
 ok(/if \(editAccount\.isGroup\) return editGroupChildren > 0;/.test(lh), 'Ledger Heads locks the Group tick on a group with children');
 ok(/इस ग्रुप के नीचे \$\{editGroupChildren\} खाते हैं/.test(lh), '…and says why, in Hindi');

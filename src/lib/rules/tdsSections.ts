@@ -30,6 +30,7 @@
  * than an obviously stale one.
  */
 import type { TdsSection } from '@/types';
+import { tr } from '../uiLang.ts';
 
 /** The Act a reference belongs to. Both are live: 1961 for earlier tax years. */
 export type TaxAct = '1961' | '2025';
@@ -123,8 +124,11 @@ export function resolveSectionRef(stored: TdsSection | string, asOf: string): Se
 
 /** PURE — one honest line for a UI (RULE 7: Hindi-first). */
 export function describeSectionRef(ref: SectionRef): string {
-  if (ref.act === '1961') return `धारा ${ref.label} (अधिनियम 1961)`;
-  return `धारा ${ref.label} (अधिनियम 2025) — ⚠️ सत्यापित नहीं, दाख़िल करने से पहले CA से पुष्टि करें`;
+  if (ref.act === '1961') return tr(`धारा ${ref.label} (अधिनियम 1961)`, `Section ${ref.label} (Act 1961)`);
+  return tr(
+    `धारा ${ref.label} (अधिनियम 2025) — ⚠️ सत्यापित नहीं, दाख़िल करने से पहले CA से पुष्टि करें`,
+    `Section ${ref.label} (Act 2025) — ⚠️ not verified, confirm with your CA before filing`,
+  );
 }
 
 /** PURE — is this date governed by the 2025 Act? */

@@ -88,8 +88,8 @@ ok(app.includes('if (submitting) return;') && app.includes('disabled={submitting
 
 // ── M-6: new loans / deposit accounts only for a live member ──
 ok(dc.includes('const refuseNonLiveMember = (memberId: string | undefined, what: string): boolean =>'), 'refuseNonLiveMember helper exists');
-ok(between(dc, 'const addLoan = useCallback(', 'const loanNo').includes("refuseNonLiveMember(data.memberId, 'ऋण')"), 'addLoan refuses a non-live member');
-ok(between(dc, 'const addDepositAccount = useCallback(', 'const { openingAmount').includes("refuseNonLiveMember(data.memberId, 'जमा खाता')"), 'addDepositAccount refuses a non-live member');
+ok(between(dc, 'const addLoan = useCallback(', 'const loanNo').includes("refuseNonLiveMember(data.memberId, tr('ऋण',"), 'addLoan refuses a non-live member');
+ok(between(dc, 'const addDepositAccount = useCallback(', 'const { openingAmount').includes("refuseNonLiveMember(data.memberId, tr('जमा खाता',"), 'addDepositAccount refuses a non-live member');
 const lr = read('src/pages/LoanRegister.tsx');
 ok(lr.includes('members={lendableMembers} onSubmit={handleAdd}') && lr.includes('if (!created.id) return;'), 'Loan Register: add form lists live members only; no "added" toast on a refusal');
 ok(read('src/pages/Deposits.tsx').includes('approvedMembers.filter(canHoldShares).map('), 'Deposits: new-account picker lists live members only');

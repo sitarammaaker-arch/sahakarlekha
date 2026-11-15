@@ -2,6 +2,7 @@
  * Year-close helpers for the client (Phase-2 C; server: close_financial_year, migration 091). Pure.
  * Unit-tested by scripts/test-fy-close-client.mjs.
  */
+import { tr } from './uiLang.ts';
 
 /** 31 March closing a financial-year label 'YYYY-YY' (undefined for anything else). */
 export function fyEndOf(label: string): string | undefined {
@@ -25,6 +26,6 @@ export function closeFyMessage(raw: string): string {
   const m = /close_fy:[a-z_]+ — ([^\n]+)/.exec(raw || '');
   if (m) return m[1];
   const pv = /post_voucher:([a-z_]+)/.exec(raw || '');
-  if (pv) return `वाउचर पोस्ट नहीं हुआ (${pv[1]}) — support से संपर्क करें।`;
-  return raw || 'अज्ञात त्रुटि';
+  if (pv) return tr(`वाउचर पोस्ट नहीं हुआ (${pv[1]}) — support से संपर्क करें।`, `Voucher not posted (${pv[1]}) — please contact support.`);
+  return raw || tr('अज्ञात त्रुटि', 'Unknown error');
 }

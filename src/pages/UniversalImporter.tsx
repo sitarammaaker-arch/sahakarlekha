@@ -19,7 +19,7 @@ import { fyStartFromLabel } from '@/lib/fyPeriod';
 import { planJoiningReceipts, summariseJoiningPlans, joiningKindLabel, type JoiningReceiptPlan } from '@/lib/members/joiningReceipts';
 import { getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
 import {
-  ACCOUNTS_TEMPLATE, membersTemplate, OPENING_BALANCES_TEMPLATE, vouchersTemplate, parseCSV,
+  accountsTemplate, membersTemplate, openingBalancesTemplate, vouchersTemplate, parseCSV,
   validateAccountRow, resolveParentGroup, validateMemberRow, validateObRow, validateVoucherRow, type RowError,
 } from '@/lib/importTemplates';
 import { matchImportAccount } from '@/lib/importAccountMatch';
@@ -694,7 +694,7 @@ const UniversalImporter: React.FC = () => {
                     variant="outline"
                     size="sm"
                     className="gap-2"
-                    onClick={() => downloadExcelTemplate('accounts_template.xlsx', ACCOUNTS_TEMPLATE)}
+                    onClick={() => downloadExcelTemplate('accounts_template.xlsx', accountsTemplate())}
                   >
                     <Download className="h-4 w-4" />
                     {L('Excel (.xlsx) Download करें', 'Download Excel (.xlsx)')}
@@ -703,7 +703,7 @@ const UniversalImporter: React.FC = () => {
                     variant="outline"
                     size="sm"
                     className="gap-2 text-muted-foreground"
-                    onClick={() => downloadTemplate('accounts_template.csv', ACCOUNTS_TEMPLATE)}
+                    onClick={() => downloadTemplate('accounts_template.csv', accountsTemplate())}
                   >
                     <Download className="h-4 w-4" />
                     {L('CSV Download करें', 'Download CSV')}
@@ -978,7 +978,7 @@ const UniversalImporter: React.FC = () => {
                     variant="outline"
                     size="sm"
                     className="gap-2"
-                    onClick={() => downloadExcelTemplate('opening_balances_template.xlsx', OPENING_BALANCES_TEMPLATE)}
+                    onClick={() => downloadExcelTemplate('opening_balances_template.xlsx', openingBalancesTemplate())}
                   >
                     <Download className="h-4 w-4" />
                     {L('Excel (.xlsx) Download करें', 'Download Excel (.xlsx)')}
@@ -987,7 +987,7 @@ const UniversalImporter: React.FC = () => {
                     variant="outline"
                     size="sm"
                     className="gap-2 text-muted-foreground"
-                    onClick={() => downloadTemplate('opening_balances_template.csv', OPENING_BALANCES_TEMPLATE)}
+                    onClick={() => downloadTemplate('opening_balances_template.csv', openingBalancesTemplate())}
                   >
                     <Download className="h-4 w-4" />
                     {L('CSV Download करें', 'Download CSV')}

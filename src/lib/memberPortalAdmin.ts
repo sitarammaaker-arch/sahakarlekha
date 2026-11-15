@@ -6,6 +6,7 @@
  * dialog's state for the moment it is shown; nothing here stores it.
  */
 import { supabase } from '@/lib/supabase';
+import { tr } from '@/lib/uiLang';
 
 export type PortalAction = 'list' | 'issue' | 'reset_pin' | 'revoke';
 
@@ -41,6 +42,6 @@ export async function callMemberPortalAdmin<T>(action: PortalAction, memberId?: 
   return {
     ok: false,
     reason: body?.reason ?? 'network',
-    message: body?.message ?? 'सर्वर से संपर्क नहीं हो सका — इंटरनेट जाँचें और फिर कोशिश करें। / Could not reach the server.',
+    message: body?.message ?? tr('सर्वर से संपर्क नहीं हो सका — इंटरनेट जाँचें और फिर कोशिश करें। / Could not reach the server.', 'Could not reach the server — check the internet and try again.'),
   };
 }

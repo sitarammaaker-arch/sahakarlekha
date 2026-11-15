@@ -6,6 +6,7 @@
  * scripts/test-share-certificate.mjs.
  */
 import type { ShareCertStatus } from '@/types';
+import { tr } from './uiLang.ts';
 
 export interface CertInput {
   status: ShareCertStatus;
@@ -27,11 +28,11 @@ export interface CertValidation {
 export function validateCertificate(input: CertInput): CertValidation {
   const { status, certNo, count, reason } = input;
   if (status === 'issued' || status === 'reissued') {
-    if (!certNo?.trim()) return { ok: false, error: 'प्रमाणपत्र संख्या ज़रूरी है / Certificate number required' };
-    if (!(Number(count) > 0)) return { ok: false, error: 'शेयर संख्या 0 से ज़्यादा होनी चाहिए / Share count must be greater than 0' };
+    if (!certNo?.trim()) return { ok: false, error: tr('प्रमाणपत्र संख्या ज़रूरी है / Certificate number required', 'Certificate number required') };
+    if (!(Number(count) > 0)) return { ok: false, error: tr('शेयर संख्या 0 से ज़्यादा होनी चाहिए / Share count must be greater than 0', 'Share count must be greater than 0') };
   }
   if ((status === 'reissued' || status === 'cancelled') && !reason?.trim()) {
-    return { ok: false, error: 'कारण ज़रूरी है / Reason required' };
+    return { ok: false, error: tr('कारण ज़रूरी है / Reason required', 'Reason required') };
   }
   return { ok: true };
 }

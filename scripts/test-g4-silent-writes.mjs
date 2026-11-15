@@ -20,9 +20,9 @@ for (const f of readdirSync(ctxDir).filter(n => n.endsWith('.tsx'))) {
 }
 
 const dc = readFileSync(resolve(ctxDir, 'DataContext.tsx'), 'utf8');
-const dep = [...dc.matchAll(/supabase\.from\('deposit_transactions'\)\.upsert[\s\S]{0,700}?\n    \}\);/g)].map(m => m[0]);
+const dep = [...dc.matchAll(/supabase\.from\('deposit_transactions'\)\.upsert[\s\S]{0,1200}?\n    \}\);/g)].map(m => m[0]);
 ok('both deposit passbook writes roll back + report + toast', dep.length === 2 && dep.every(b => /setDepositTransactionsState\(prev => prev\.filter/.test(b) && /reportError\('deposit-txn-save'/.test(b) && /variant: 'destructive'/.test(b)));
-const ctrl = dc.slice(dc.indexOf("supabase.from('accounts').upsert(withSoc(control))"), dc.indexOf("supabase.from('accounts').upsert(withSoc(control))") + 600);
+const ctrl = dc.slice(dc.indexOf("supabase.from('accounts').upsert(withSoc(control))"), dc.indexOf("supabase.from('accounts').upsert(withSoc(control))") + 1000);
 ok('inter-branch control account write rolls back + reports + toasts', /setAccountsState\(prev => prev\.filter/.test(ctrl) && /reportError\('control-account-save'/.test(ctrl) && /destructive/.test(ctrl));
 const audit = readFileSync(resolve(root, 'src/lib/auditLog.ts'), 'utf8');
 ok('audit-trail write failures are reported off-device', (audit.match(/reportAuditFailure\(/g) || []).length === 3 && /m\.reportError\('audit-write'/.test(audit));

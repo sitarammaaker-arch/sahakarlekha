@@ -23,6 +23,7 @@
  * Adding FY 2025-26 / 2026-27: append a SlabSet with its effectiveFrom, cite the
  * Finance Act, verify it, done. No code change — that is the entire point of ADR-0008.
  */
+import { tr } from '../uiLang.ts';
 
 export type TaxRegime = 'new' | 'old';
 
@@ -184,7 +185,7 @@ export function resolveTaxBasis(asOf: string): TaxBasis {
 
 /** PURE — one honest line for the UI (RULE 7: Hindi-first). */
 export function describeBasis(b: TaxBasis): string {
-  if (b.stale) return `⚠️ गणना ${b.set.fy} के slab से — यह अवधि उस वर्ष की नहीं है। आँकड़ा सही न हो सकता है।`;
-  if (!b.set.verified) return `${b.set.fy} के slab से — अभी सत्यापित नहीं।`;
-  return `${b.set.fy} के slab से।`;
+  if (b.stale) return tr(`⚠️ गणना ${b.set.fy} के slab से — यह अवधि उस वर्ष की नहीं है। आँकड़ा सही न हो सकता है।`, `⚠️ Worked out on the ${b.set.fy} slabs — this period is not in that year. The figure may not be right.`);
+  if (!b.set.verified) return tr(`${b.set.fy} के slab से — अभी सत्यापित नहीं।`, `On the ${b.set.fy} slabs — not verified yet.`);
+  return tr(`${b.set.fy} के slab से।`, `On the ${b.set.fy} slabs.`);
 }

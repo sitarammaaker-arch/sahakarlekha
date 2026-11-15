@@ -75,7 +75,7 @@ const LanguageSwitch: React.FC<{ className?: string }> = ({ className = '' }) =>
   return (
     <div
       role="group"
-      aria-label="भाषा / Language"
+      aria-label={language === 'hi' ? 'भाषा / Language' : 'Language'}
       className={`inline-flex items-center rounded-md border border-input bg-background p-0.5 text-xs font-medium ${className}`}
     >
       {options.map((o) => {

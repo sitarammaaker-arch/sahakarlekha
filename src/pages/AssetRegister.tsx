@@ -441,7 +441,7 @@ const AssetRegister: React.FC = () => {
           <span className="text-muted-foreground">{hi ? 'रजिस्टर लागत' : 'Register cost'}: <span className="font-medium text-foreground">{fmt(assetRecon.registerTotal)}</span></span>
           <span className="text-muted-foreground">{hi ? 'स्थायी-संपत्ति लेजर' : 'Fixed-asset ledger'}: <span className="font-medium text-foreground">{fmt(assetRecon.controlBalance)}</span></span>
           {rateDeviations.length > 0 && (
-            <span className="flex items-center gap-1.5 text-amber-700" title={rateDeviations.map(d => `${d.name}: ${d.rate}% (मानक ${d.standard}%)`).join('\n')}>
+            <span className="flex items-center gap-1.5 text-amber-700" title={rateDeviations.map(d => (hi ? `${d.name}: ${d.rate}% (मानक ${d.standard}%)` : `${d.name}: ${d.rate}% (standard ${d.standard}%)`)).join('\n')}>
               <AlertTriangle className="h-3.5 w-3.5" />{hi ? `${rateDeviations.length} संपत्ति गैर-मानक ह्रास दर पर` : `${rateDeviations.length} asset(s) on a non-standard rate`}
             </span>
           )}

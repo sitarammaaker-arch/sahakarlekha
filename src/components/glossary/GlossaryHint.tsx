@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom';
 import { HelpCircle, ArrowRight, BookOpen } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { findTerm, shortDefinition } from '@/content/glossary';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Props {
   slug: string;
@@ -22,6 +23,8 @@ interface Props {
 }
 
 const GlossaryHint: React.FC<Props> = ({ slug, label, className }) => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const term = findTerm(slug);
   if (!term) return null;
 
@@ -32,7 +35,7 @@ const GlossaryHint: React.FC<Props> = ({ slug, label, className }) => {
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={`${term.englishName} — इसका क्या मतलब है?`}
+          aria-label={L(`${term.englishName} — इसका क्या मतलब है?`, `${term.englishName} — what does this mean?`)}
           className={
             className ??
             'inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors'
@@ -53,7 +56,7 @@ const GlossaryHint: React.FC<Props> = ({ slug, label, className }) => {
             to={`/glossary/${term.slug}`}
             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
           >
-            शब्दकोश में पूरा पढ़ें <ArrowRight className="h-3 w-3" />
+            {L('शब्दकोश में पूरा पढ़ें', 'Read more in the glossary')} <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
       </PopoverContent>

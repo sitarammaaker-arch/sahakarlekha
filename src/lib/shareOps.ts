@@ -10,6 +10,7 @@
  *  redeem    — buy back redeemable shares:      Dr SHARE_CAP → Cr cash/bank (−)
  *  surrender — member voluntarily gives up:     Dr SHARE_CAP → Cr cash/bank (−)
  */
+import { tr } from './uiLang.ts';
 export type ShareOpType = 'bonus' | 'forfeit' | 'redeem' | 'surrender';
 
 export interface ShareOpAccounts {
@@ -42,9 +43,9 @@ export interface ShareOpValidation {
 
 /** Validate the amount: positive, and (for decrease ops) not more than the member holds. */
 export function validateShareOp(type: ShareOpType, amount: number, currentShareCapital: number): ShareOpValidation {
-  if (!(amount > 0)) return { ok: false, error: 'राशि 0 से ज़्यादा होनी चाहिए / Amount must be greater than 0' };
+  if (!(amount > 0)) return { ok: false, error: tr('राशि 0 से ज़्यादा होनी चाहिए / Amount must be greater than 0', 'Amount must be greater than 0') };
   if (type !== 'bonus' && amount > currentShareCapital) {
-    return { ok: false, error: `राशि सदस्य की शेयर पूंजी (₹${currentShareCapital}) से ज़्यादा नहीं हो सकती / Amount cannot exceed the member's share capital (₹${currentShareCapital})` };
+    return { ok: false, error: tr(`राशि सदस्य की शेयर पूंजी (₹${currentShareCapital}) से ज़्यादा नहीं हो सकती / Amount cannot exceed the member's share capital (₹${currentShareCapital})`, `Amount cannot exceed the member's share capital (₹${currentShareCapital})`) };
   }
   return { ok: true };
 }

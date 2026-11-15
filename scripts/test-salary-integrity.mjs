@@ -39,8 +39,8 @@ const fn = (name) => { const a = dc.indexOf(`const ${name} = useCallback(`); ret
 // ── 2. Both salary vouchers are owned by the slip ────────────────────────────
 {
   ok(/const guardSalaryVoucher = \(id: string, what: string\): boolean => \{\s+const slip = salaryRecordsRef\.current\.find\(r => r\.voucherId === id \|\| r\.accrualVoucherId === id\);/.test(dc), 'guard knows the payment AND the accrual voucher');
-  ok(/if \(!opts\?\.viaParent && guardSalaryVoucher\(id, 'बदला'\)\) return false;/.test(fn('updateVoucher')), 'edit from the Vouchers page refused');
-  ok(/if \(!opts\?\.viaParent && guardSalaryVoucher\(id, 'रद्द'\)\) return false;/.test(fn('cancelVoucher')), 'cancel from the Vouchers page refused');
+  ok(/if \(!opts\?\.viaParent && guardSalaryVoucher\(id, tr\('बदला', '[^']*'\)\)\) return false;/.test(fn('updateVoucher')), 'edit from the Vouchers page refused');
+  ok(/if \(!opts\?\.viaParent && guardSalaryVoucher\(id, tr\('रद्द', '[^']*'\)\)\) return false;/.test(fn('cancelVoucher')), 'cancel from the Vouchers page refused');
   ok(/if \(guardSalaryVoucher\(id, 'reverse'\)\) return null;/.test(fn('reverseVoucher')), 'reverse refused');
   ok(!/linkedSalary = salaryRecordsRef\.current\.find\(r => r\.voucherId === id\)/.test(dc), 'the old payment-only check is gone');
   const up = fn('updateSalaryRecord');

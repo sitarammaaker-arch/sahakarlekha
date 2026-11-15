@@ -52,6 +52,14 @@ export const EXCLUSION_LABEL: Record<ExclusionReason, string> = {
   ceased: 'सदस्यता समाप्त (त्यागपत्र/निष्कासन/मृत्यु/अयोग्यता)',
   defaulter: 'बक़ायादार — मत का अधिकार नहीं (धारा 20(d))',
 };
+/** English twin of EXCLUSION_LABEL — pick at render time by the page's language. */
+export const EXCLUSION_LABEL_EN: Record<ExclusionReason, string> = {
+  not_approved: 'Application not approved',
+  nominal: 'Nominal / associate member — no right to vote (s.18/20)',
+  not_yet_member: 'Not yet a member on that date',
+  ceased: 'Membership ceased (resignation/expulsion/death/disqualification)',
+  defaulter: 'Defaulter — no right to vote (s.20(d))',
+};
 
 export interface VoterRoll<T extends M> {
   asOf: string;

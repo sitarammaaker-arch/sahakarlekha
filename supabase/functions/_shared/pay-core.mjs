@@ -1248,11 +1248,11 @@ var EVENT_TO_STATE = {
   cancelled: "cancelled",
   reversed: "rolled_back"
 };
-function stateAfterEvent(current, event) {
+function stateAfterEvent(current2, event) {
   const target = EVENT_TO_STATE[event];
-  if (target === void 0) return current;
-  if (current === target) return current;
-  assertTransition(current, target);
+  if (target === void 0) return current2;
+  if (current2 === target) return current2;
+  assertTransition(current2, target);
   return target;
 }
 
@@ -1514,6 +1514,12 @@ function makePostVoucherPayload(i) {
   return { p_voucher, p_lines, p_event };
 }
 
+// src/lib/uiLang.ts
+var current = "hi";
+function uiLanguage() {
+  return current;
+}
+
 // src/lib/ledger/postVoucherMessages.ts
 function postVoucherErrorCode(message) {
   const m = String(message ?? "").match(/post_voucher:(\w+)/);
@@ -1545,9 +1551,37 @@ var MESSAGES = {
   self_approval: "\u0906\u092A \u0905\u092A\u0928\u093E \u0939\u0940 \u092C\u0928\u093E\u092F\u093E \u0935\u093E\u0909\u091A\u0930 approve \u0928\u0939\u0940\u0902 \u0915\u0930 \u0938\u0915\u0924\u0947 \u2014 \u0915\u094B\u0908 \u0926\u0942\u0938\u0930\u093E \u0905\u0927\u093F\u0915\u093E\u0930\u0940 approve \u0915\u0930\u0947\u0964",
   not_pending: "\u092F\u0939 \u0935\u093E\u0909\u091A\u0930 \u0938\u094D\u0935\u0940\u0915\u0943\u0924\u093F \u0915\u0947 \u0932\u093F\u090F \u0930\u0941\u0915\u093E \u0939\u0941\u0906 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964"
 };
+var MESSAGES_EN = {
+  not_a_society_user: "Your login is not linked to any society.",
+  no_role_claim: "Your role could not be found \u2014 log out once and log in again.",
+  role_cannot_write: "Your role is not allowed to create vouchers.",
+  fy_locked: "The financial year is audit-locked \u2014 the voucher cannot be created.",
+  period_locked: "This date falls in a locked period \u2014 the voucher cannot be created.",
+  no_open_fy_for_date: "This date is not in the current (open) financial year.",
+  unbalanced: "Debit (Dr) and Credit (Cr) are not equal.",
+  too_few_legs: "A voucher needs at least two lines.",
+  negative_amount: "The amount cannot be negative.",
+  legs_do_not_match_voucher: "The total of the lines does not match the voucher amount.",
+  event_lines_differ: "The voucher lines and the ledger entry do not match.",
+  bad_event: "The ledger entry was not built correctly.",
+  pending_not_supported: "A voucher waiting for approval cannot be created this way yet.",
+  voucher_id_taken: "This voucher id already belongs to another voucher.",
+  role_cannot_delete: "Your role is not allowed to cancel vouchers.",
+  group_account: "A group account cannot take entries \u2014 choose a ledger account under it.",
+  voucher_not_found: "This voucher was not found on the cloud \u2014 refresh the page.",
+  voucher_cancelled: "This voucher is already cancelled \u2014 it cannot be changed.",
+  voucher_reversed: "This voucher has been reversed \u2014 it cannot be changed or cancelled.",
+  voucher_is_reversal: "This is a reversal voucher \u2014 it must match the original voucher and cannot be edited.",
+  engine_voucher: "System (engine) voucher \u2014 it can be corrected only by a reversal.",
+  voucher_in_closed_fy: "This voucher belongs to a closed financial year \u2014 it cannot be changed or cancelled.",
+  self_approval: "You cannot approve a voucher you created \u2014 another officer must approve it.",
+  not_pending: "This voucher is not waiting for approval."
+};
 function postVoucherMessage(code, raw) {
-  const hi = code && MESSAGES[code];
-  return hi ? `${hi} (${code})` : `Cloud \u0928\u0947 \u0935\u093E\u0909\u091A\u0930 \u092E\u0928\u093E \u0915\u093F\u092F\u093E \u2014 ${raw ?? "unknown error"}`;
+  const en = uiLanguage() === "en";
+  const msg = code && (en ? MESSAGES_EN[code] : MESSAGES[code]);
+  if (msg) return `${msg} (${code})`;
+  return en ? `The cloud refused the voucher \u2014 ${raw ?? "unknown error"}` : `Cloud \u0928\u0947 \u0935\u093E\u0909\u091A\u0930 \u092E\u0928\u093E \u0915\u093F\u092F\u093E \u2014 ${raw ?? "unknown error"}`;
 }
 
 // src/lib/rules/incomeTax.ts

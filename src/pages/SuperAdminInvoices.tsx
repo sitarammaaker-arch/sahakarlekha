@@ -24,6 +24,7 @@ import { invoiceView, type SubscriptionInvoice } from '@/lib/billing/invoiceView
 import { buildGstr1Rows, GSTR1_HEADERS, gstr1FileStem } from '@/lib/billing/gstr1Csv';
 import { downloadCSV } from '@/lib/exportUtils';
 import { fmtDate, fmtDateTime } from '@/lib/dateUtils';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface PendingRow {
   order_id: string;
@@ -39,24 +40,26 @@ interface PendingRow {
   is_test?: boolean | null;
 }
 
-/** Why an order has no invoice yet, in plain Hindi. */
-function pendingReasonHi(reason: string | null): string {
-  if (!reason) return 'अभी कोशिश दर्ज नहीं (migration 131 से पहले का भुगतान, या webhook ने invoice तक पहुँचा ही नहीं)';
-  if (reason === 'seller_incomplete') return 'Seller की जानकारी अधूरी — billing_seller में नाम/GSTIN/पता/राज्य/SAC/दर भरें';
-  if (reason === 'buyer_state_unknown') return 'समिति का राज्य/GSTIN नहीं मिला — समिति सेटअप में राज्य भरवाएँ';
-  if (reason === 'test_mode') return 'Test-mode payment — इस पर कभी invoice नहीं बनेगा';
-  if (reason === 'mode_unknown') return 'Payment test था या live, दर्ज नहीं — invoice नहीं बनेगा (Razorpay dashboard से जाँचकर orders.is_test भरें)';
-  return `त्रुटि: ${reason}`;
+/** Why an order has no invoice yet, in plain Hindi (or English when hi = false). */
+function pendingReasonHi(reason: string | null, hi = true): string {
+  const L = (h: string, e: string) => (hi ? h : e);
+  if (!reason) return L('अभी कोशिश दर्ज नहीं (migration 131 से पहले का भुगतान, या webhook ने invoice तक पहुँचा ही नहीं)', 'No attempt recorded yet (payment from before migration 131, or the webhook never reached the invoice step)');
+  if (reason === 'seller_incomplete') return L('Seller की जानकारी अधूरी — billing_seller में नाम/GSTIN/पता/राज्य/SAC/दर भरें', 'Seller details incomplete — fill name/GSTIN/address/state/SAC/rate in billing_seller');
+  if (reason === 'buyer_state_unknown') return L('समिति का राज्य/GSTIN नहीं मिला — समिति सेटअप में राज्य भरवाएँ', 'Society state/GSTIN not found — get the state filled in Society Setup');
+  if (reason === 'test_mode') return L('Test-mode payment — इस पर कभी invoice नहीं बनेगा', 'Test-mode payment — an invoice will never be made for it');
+  if (reason === 'mode_unknown') return L('Payment test था या live, दर्ज नहीं — invoice नहीं बनेगा (Razorpay dashboard से जाँचकर orders.is_test भरें)', 'Whether the payment was test or live is not recorded — no invoice will be made (check the Razorpay dashboard and fill orders.is_test)');
+  return L(`त्रुटि: ${reason}`, `Error: ${reason}`);
 }
 
-/** The invoice email's state in plain Hindi (migration 134). */
-function emailReasonHi(reason: string | null | undefined): string {
-  if (!reason) return 'अभी भेजा नहीं गया';
-  if (reason === 'not_configured') return 'Email setup नहीं — Supabase secrets में RESEND_API_KEY और RESEND_FROM डालें';
-  if (reason === 'no_recipient') return 'भेजने के लिए email नहीं मिला — न payer का, न समिति के admin का';
-  if (reason === 'not_migrated') return 'Migration 134 अभी नहीं चली — email नहीं भेजा जाता';
-  if (reason === 'no_invoice') return 'Invoice नहीं मिला';
-  return `त्रुटि: ${reason}`;
+/** The invoice email's state in plain Hindi (or English when hi = false) (migration 134). */
+function emailReasonHi(reason: string | null | undefined, hi = true): string {
+  const L = (h: string, e: string) => (hi ? h : e);
+  if (!reason) return L('अभी भेजा नहीं गया', 'Not sent yet');
+  if (reason === 'not_configured') return L('Email setup नहीं — Supabase secrets में RESEND_API_KEY और RESEND_FROM डालें', 'Email not set up — add RESEND_API_KEY and RESEND_FROM to Supabase secrets');
+  if (reason === 'no_recipient') return L('भेजने के लिए email नहीं मिला — न payer का, न समिति के admin का', 'No email address to send to — neither the payer\'s nor the society admin\'s');
+  if (reason === 'not_migrated') return L('Migration 134 अभी नहीं चली — email नहीं भेजा जाता', 'Migration 134 has not been run — the email is not sent');
+  if (reason === 'no_invoice') return L('Invoice नहीं मिला', 'Invoice not found');
+  return L(`त्रुटि: ${reason}`, `Error: ${reason}`);
 }
 
 const inr = (n: number) => '₹' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -75,6 +78,9 @@ async function functionError(error: unknown, data: { error?: string } | null): P
 
 export default function SuperAdminInvoices() {
   const { toast } = useToast();
+  const { language } = useLanguage();
+  const hi = language === 'hi';
+  const L = (h: string, e: string) => (hi ? h : e);
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(today);
   const [rows, setRows] = useState<SubscriptionInvoice[]>([]);
@@ -103,15 +109,15 @@ export default function SuperAdminInvoices() {
     const { data, error: fnErr } = await supabase.functions.invoke('admin-retry-invoice', { body: { order_id: orderId } });
     setRetrying(null);
     if (fnErr) {
-      toast({ title: 'Retry नहीं हुआ', description: await functionError(fnErr, data), variant: 'destructive', duration: 10000 });
+      toast({ title: L('Retry नहीं हुआ', 'Retry failed'), description: await functionError(fnErr, data), variant: 'destructive', duration: 10000 });
       return;
     }
     if (data?.status === 'issued' || data?.status === 'already') {
-      const mail = data.email?.status === 'sent' ? ` · email भेजा: ${(data.email.to ?? []).join(', ')}`
-        : data.email && data.email.status !== 'already_sent' ? ` · email नहीं गया: ${emailReasonHi(data.email.error ? `${data.email.status}: ${data.email.error}` : data.email.status)}` : '';
-      toast({ title: 'Invoice बन गया', description: `${data.invoice_no}${mail}` });
+      const mail = data.email?.status === 'sent' ? ` · ${L('email भेजा', 'email sent')}: ${(data.email.to ?? []).join(', ')}`
+        : data.email && data.email.status !== 'already_sent' ? ` · ${L('email नहीं गया', 'email not sent')}: ${emailReasonHi(data.email.error ? `${data.email.status}: ${data.email.error}` : data.email.status, hi)}` : '';
+      toast({ title: L('Invoice बन गया', 'Invoice created'), description: `${data.invoice_no}${mail}` });
     } else {
-      toast({ title: 'Invoice अभी भी pending', description: pendingReasonHi(data?.error ? `${data.status}: ${data.error}` : data?.status ?? null), variant: 'destructive', duration: 10000 });
+      toast({ title: L('Invoice अभी भी pending', 'Invoice still pending'), description: pendingReasonHi(data?.error ? `${data.status}: ${data.error}` : data?.status ?? null, hi), variant: 'destructive', duration: 10000 });
     }
     load();
   };
@@ -121,14 +127,14 @@ export default function SuperAdminInvoices() {
     const { data, error: fnErr } = await supabase.functions.invoke('admin-retry-invoice', { body: { order_id: inv.order_id, resend_email: true } });
     setMailing(null);
     if (fnErr) {
-      toast({ title: 'Email नहीं गया', description: await functionError(fnErr, data), variant: 'destructive', duration: 10000 });
+      toast({ title: L('Email नहीं गया', 'Email not sent'), description: await functionError(fnErr, data), variant: 'destructive', duration: 10000 });
       return;
     }
     const mail = data?.email;
     if (mail?.status === 'sent') {
-      toast({ title: 'Email भेज दिया', description: `${inv.invoice_no} → ${(mail.to ?? []).join(', ')}` });
+      toast({ title: L('Email भेज दिया', 'Email sent'), description: `${inv.invoice_no} → ${(mail.to ?? []).join(', ')}` });
     } else {
-      toast({ title: 'Email नहीं गया', description: emailReasonHi(mail?.error ? `${mail.status}: ${mail.error}` : mail?.status ?? data?.status), variant: 'destructive', duration: 10000 });
+      toast({ title: L('Email नहीं गया', 'Email not sent'), description: emailReasonHi(mail?.error ? `${mail.status}: ${mail.error}` : mail?.status ?? data?.status, hi), variant: 'destructive', duration: 10000 });
     }
     load();
   };
@@ -138,7 +144,7 @@ export default function SuperAdminInvoices() {
       const { generateSubscriptionInvoicePDF } = await import('@/lib/pdf');
       generateSubscriptionInvoicePDF(inv);
     } catch (e) {
-      toast({ title: 'PDF नहीं बना', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
+      toast({ title: L('PDF नहीं बना', 'PDF not created'), description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
     }
   };
 
@@ -152,7 +158,7 @@ export default function SuperAdminInvoices() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
       <Link to="/super-admin" className="text-sm text-muted-foreground inline-flex items-center gap-1 hover:text-primary">
-        <ArrowLeft className="h-4 w-4" /> डैशबोर्ड
+        <ArrowLeft className="h-4 w-4" /> {L('डैशबोर्ड', 'Dashboard')}
       </Link>
       <div className="flex items-center gap-2 flex-wrap">
         <FileText className="h-6 w-6 text-primary" />
@@ -164,7 +170,7 @@ export default function SuperAdminInvoices() {
 
       {error && (
         <p className="text-sm text-destructive flex items-start gap-1.5">
-          <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" /> लोड नहीं हुआ: {error}
+          <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" /> {L('लोड नहीं हुआ', 'Could not load')}: {error}
         </p>
       )}
 
@@ -177,18 +183,18 @@ export default function SuperAdminInvoices() {
         </CardHeader>
         <CardContent className="p-0">
           {pending.length === 0 ? (
-            <p className="px-4 pb-4 text-sm text-muted-foreground">हर paid order का invoice बन चुका है।</p>
+            <p className="px-4 pb-4 text-sm text-muted-foreground">{L('हर paid order का invoice बन चुका है।', 'Every paid order has its invoice.')}</p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>समिति</TableHead>
+                    <TableHead>{L('समिति', 'Society')}</TableHead>
                     <TableHead>Order</TableHead>
                     <TableHead>Plan</TableHead>
-                    <TableHead className="text-right">राशि</TableHead>
-                    <TableHead>भुगतान</TableHead>
-                    <TableHead>कारण</TableHead>
+                    <TableHead className="text-right">{L('राशि', 'Amount')}</TableHead>
+                    <TableHead>{L('भुगतान', 'Paid')}</TableHead>
+                    <TableHead>{L('कारण', 'Reason')}</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
@@ -201,12 +207,12 @@ export default function SuperAdminInvoices() {
                       <TableCell className="text-right">{inr(p.amount)}</TableCell>
                       <TableCell className="text-xs">{fmtDateTime(p.paid_at)}</TableCell>
                       <TableCell className="text-xs max-w-xs">
-                        {p.is_test === null ? pendingReasonHi('mode_unknown') : pendingReasonHi(p.invoice_error)}
-                        {p.invoice_tried_at && <span className="block text-muted-foreground">आख़िरी कोशिश: {fmtDateTime(p.invoice_tried_at)}</span>}
+                        {p.is_test === null ? pendingReasonHi('mode_unknown', hi) : pendingReasonHi(p.invoice_error, hi)}
+                        {p.invoice_tried_at && <span className="block text-muted-foreground">{L('आख़िरी कोशिश', 'Last attempt')}: {fmtDateTime(p.invoice_tried_at)}</span>}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button size="sm" variant="outline" className="gap-1" disabled={retrying === p.order_id || p.is_test === null} onClick={() => retry(p.order_id)}>
-                          <RotateCcw className={`h-4 w-4 ${retrying === p.order_id ? 'animate-spin' : ''}`} /> फिर से
+                          <RotateCcw className={`h-4 w-4 ${retrying === p.order_id ? 'animate-spin' : ''}`} /> {L('फिर से', 'Retry')}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -221,14 +227,14 @@ export default function SuperAdminInvoices() {
       {/* Issued */}
       <Card>
         <CardHeader className="pb-2 space-y-3">
-          <CardTitle className="text-base">जारी invoices</CardTitle>
+          <CardTitle className="text-base">{L('जारी invoices', 'Issued invoices')}</CardTitle>
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
-              <Label htmlFor="inv-from" className="text-xs">से</Label>
+              <Label htmlFor="inv-from" className="text-xs">{L('से', 'From')}</Label>
               <Input id="inv-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40" />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="inv-to" className="text-xs">तक</Label>
+              <Label htmlFor="inv-to" className="text-xs">{L('तक', 'To')}</Label>
               <Input id="inv-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" />
             </div>
             <Button size="sm" variant="outline" className="gap-2 ml-auto" disabled={rows.length === 0}
@@ -237,24 +243,24 @@ export default function SuperAdminInvoices() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            CSV एक working sheet है (B2B invoice-wise, B2C summary, कुल) — GSTN offline tool का upload template नहीं। Filing से पहले CA से मिलान कराएँ।
+            {L('CSV एक working sheet है (B2B invoice-wise, B2C summary, कुल) — GSTN offline tool का upload template नहीं। Filing से पहले CA से मिलान कराएँ।', 'The CSV is a working sheet (B2B invoice-wise, B2C summary, total) — not the GSTN offline tool upload template. Get it matched by a CA before filing.')}
           </p>
         </CardHeader>
         <CardContent className="p-0">
           {rows.length === 0 ? (
-            <p className="px-4 pb-4 text-sm text-muted-foreground">{loading ? 'लोड हो रहा है…' : 'इस अवधि में कोई invoice नहीं।'}</p>
+            <p className="px-4 pb-4 text-sm text-muted-foreground">{loading ? L('लोड हो रहा है…', 'Loading…') : L('इस अवधि में कोई invoice नहीं।', 'No invoices in this period.')}</p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Invoice No.</TableHead>
-                    <TableHead>तारीख</TableHead>
-                    <TableHead>खरीदार</TableHead>
+                    <TableHead>{L('तारीख', 'Date')}</TableHead>
+                    <TableHead>{L('खरीदार', 'Buyer')}</TableHead>
                     <TableHead>GSTIN</TableHead>
                     <TableHead>Place of Supply</TableHead>
                     <TableHead className="text-right">GST</TableHead>
-                    <TableHead className="text-right">कुल</TableHead>
+                    <TableHead className="text-right">{L('कुल', 'Total')}</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead />
                   </TableRow>
@@ -274,11 +280,11 @@ export default function SuperAdminInvoices() {
                         <TableCell className="text-xs max-w-[14rem]">
                           {inv.emailed_at && !inv.email_error ? (
                             <span className="text-emerald-700" title={inv.emailed_to ?? undefined}>
-                              भेजा · {fmtDateTime(inv.emailed_at)}
+                              {L('भेजा', 'Sent')} · {fmtDateTime(inv.emailed_at)}
                               {inv.emailed_to && <span className="block text-muted-foreground break-all">{inv.emailed_to}</span>}
                             </span>
                           ) : (
-                            <span className={inv.email_error ? 'text-destructive' : 'text-muted-foreground'}>{emailReasonHi(inv.email_error)}</span>
+                            <span className={inv.email_error ? 'text-destructive' : 'text-muted-foreground'}>{emailReasonHi(inv.email_error, hi)}</span>
                           )}
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap space-x-1">
@@ -286,15 +292,15 @@ export default function SuperAdminInvoices() {
                             <Download className="h-4 w-4" />PDF
                           </Button>
                           <Button size="sm" variant="outline" className="gap-1" disabled={mailing === inv.order_id}
-                            title={inv.emailed_at && !inv.email_error ? 'Email फिर भेजें' : 'Email भेजें'} onClick={() => resendEmail(inv)}>
-                            <Mail className={`h-4 w-4 ${mailing === inv.order_id ? 'animate-pulse' : ''}`} />{inv.emailed_at && !inv.email_error ? 'फिर भेजें' : 'भेजें'}
+                            title={inv.emailed_at && !inv.email_error ? L('Email फिर भेजें', 'Send email again') : L('Email भेजें', 'Send email')} onClick={() => resendEmail(inv)}>
+                            <Mail className={`h-4 w-4 ${mailing === inv.order_id ? 'animate-pulse' : ''}`} />{inv.emailed_at && !inv.email_error ? L('फिर भेजें', 'Send again') : L('भेजें', 'Send')}
                           </Button>
                         </TableCell>
                       </TableRow>
                     );
                   })}
                   <TableRow className="font-semibold">
-                    <TableCell colSpan={5}>कुल ({totals.n})</TableCell>
+                    <TableCell colSpan={5}>{L('कुल', 'Total')} ({totals.n})</TableCell>
                     <TableCell className="text-right">{inr(totals.tax / 100)}</TableCell>
                     <TableCell className="text-right">{inr(totals.total / 100)}</TableCell>
                     <TableCell colSpan={2} />

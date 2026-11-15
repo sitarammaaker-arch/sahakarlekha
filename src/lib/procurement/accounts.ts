@@ -90,3 +90,11 @@ export const PROCUREMENT_ROLE_LABEL_HI: Record<ProcurementAccountRole, string> =
   commissionReceivable: 'प्राप्य कमीशन',
   commissionIncome: 'खरीद कमीशन',
 };
+
+/** English names of the same accounts, for messages shown in English mode. */
+export const PROCUREMENT_ROLE_LABEL_EN: Record<ProcurementAccountRole, string> = {
+  agencyReceivable: 'MSP receivable',
+  farmerPayable: 'MSP payable to farmers',
+  commissionReceivable: 'Commission receivable',
+  commissionIncome: 'Procurement commission',
+};

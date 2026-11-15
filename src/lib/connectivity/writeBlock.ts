@@ -11,6 +11,7 @@
  * (DataContext + the five domain contexts), so they always agree (RULE 2). Pure decision +
  * a tiny external store (useSyncExternalStore-compatible); no React import.
  */
+import { tr, uiLanguage } from '../uiLang.ts';
 
 /** Load parts whose failure blocks entry: the books every entry is validated / numbered against. */
 export const CORE_PARTS = [
@@ -23,6 +24,14 @@ export const PART_LABEL_HI: Record<string, string> = {
   loans: 'ऋण', assets: 'संपत्ति', audit_objections: 'ऑडिट आपत्तियाँ', employees: 'कर्मचारी',
   salary_records: 'वेतन', suppliers: 'सप्लायर', customers: 'ग्राहक', kcc_loans: 'KCC ऋण',
   recoverables: 'वसूली योग्य', kachi_aarat_entries: 'कच्ची आढ़त', p7_entries: 'P7',
+};
+
+export const PART_LABEL_EN: Record<string, string> = {
+  vouchers: 'vouchers', accounts: 'accounts', members: 'members', society_settings: 'society settings',
+  stock_items: 'stock', stock_movements: 'stock movements', sales: 'sales', purchases: 'purchases',
+  loans: 'loans', assets: 'assets', audit_objections: 'audit objections', employees: 'employees',
+  salary_records: 'salary', suppliers: 'suppliers', customers: 'customers', kcc_loans: 'KCC loans',
+  recoverables: 'recoverables', kachi_aarat_entries: 'kachi aarat', p7_entries: 'P7',
 };
 
 export type BlockReason = 'offline' | 'incomplete' | 'account' | null;
@@ -61,19 +70,27 @@ export function decideWriteBlock(s: ConnectivityState): WriteBlockDecision {
 export function blockMessage(d: WriteBlockDecision): { title: string; description: string } {
   if (d.reason === 'account') {
     return {
-      title: 'दूसरे tab में दूसरा account — entry बंद',
-      description: 'इसी browser के किसी दूसरे tab में किसी और account से login हुआ है। यह page पुराने account का data दिखा रहा है — page दोबारा खोलें। कुछ सेव नहीं हुआ। (Another account signed in in another tab — reload this page.)',
+      title: tr('दूसरे tab में दूसरा account — entry बंद', 'Another account in another tab — entry paused'),
+      description: tr(
+        'इसी browser के किसी दूसरे tab में किसी और account से login हुआ है। यह page पुराने account का data दिखा रहा है — page दोबारा खोलें। कुछ सेव नहीं हुआ। (Another account signed in in another tab — reload this page.)',
+        "Another account has signed in in another tab of this browser. This page is showing the old account's data — reload the page. Nothing was saved.",
+      ),
     };
   }
   if (d.reason === 'offline') {
     return {
-      title: 'इंटरनेट नहीं है — entry बंद',
-      description: 'इंटरनेट आने पर entry अपने-आप चालू हो जाएगी। आपका data cloud में सुरक्षित है। (Offline — entry is paused; nothing was saved.)',
+      title: tr('इंटरनेट नहीं है — entry बंद', 'No internet — entry paused'),
+      description: tr(
+        'इंटरनेट आने पर entry अपने-आप चालू हो जाएगी। आपका data cloud में सुरक्षित है। (Offline — entry is paused; nothing was saved.)',
+        'Entry will resume by itself when the internet is back. Your data is safe in the cloud. Nothing was saved.',
+      ),
     };
   }
   return {
-    title: 'Data पूरा load नहीं हुआ — entry बंद',
-    description: `load नहीं हुआ: ${d.failedCore.map(p => PART_LABEL_HI[p] ?? p).join(', ')}। ऊपर "फिर से load करें" दबाएँ। आपका data cloud में सुरक्षित है। (Data incomplete — entry is paused.)`,
+    title: tr('Data पूरा load नहीं हुआ — entry बंद', 'Data did not load fully — entry paused'),
+    description: uiLanguage() === 'en'
+      ? `Not loaded: ${d.failedCore.map(p => PART_LABEL_EN[p] ?? p).join(', ')}. Press "Reload" at the top. Your data is safe in the cloud.`
+      : `load नहीं हुआ: ${d.failedCore.map(p => PART_LABEL_HI[p] ?? p).join(', ')}। ऊपर "फिर से load करें" दबाएँ। आपका data cloud में सुरक्षित है। (Data incomplete — entry is paused.)`,
   };
 }
 

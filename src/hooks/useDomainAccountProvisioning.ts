@@ -14,6 +14,7 @@
  *      shows a destructive toast when the cloud save fails (RULE 1).
  * An in-flight lock stops a double click from racing two plans.
  */
+import { tr } from '@/lib/uiLang';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -46,16 +47,16 @@ export function useDomainAccountProvisioning(): DomainAccountProvisioning {
   const provision = useCallback(async () => {
     if (inFlight.current) return;
     if (society.fyLocked) {
-      toast({ title: 'FY Locked', description: 'वित्तीय वर्ष audit-locked है — खाते नहीं बन सकते। (Cannot modify data while Financial Year is audit-locked.)', variant: 'destructive' });
+      toast({ title: 'FY Locked', description: tr('वित्तीय वर्ष audit-locked है — खाते नहीं बन सकते। (Cannot modify data while Financial Year is audit-locked.)', 'Financial Year is audit-locked — accounts cannot be created. (Cannot modify data while Financial Year is audit-locked.)'), variant: 'destructive' });
       return;
     }
     const sid = user?.societyId;
     if (!sid || isSuperAdmin) {
-      toast({ title: 'समिति login ज़रूरी', description: 'डोमेन खाते केवल समिति के अपने login से बन सकते हैं, super-admin से नहीं।', variant: 'destructive', duration: 10000 });
+      toast({ title: tr('समिति login ज़रूरी', 'Society login required'), description: tr('डोमेन खाते केवल समिति के अपने login से बन सकते हैं, super-admin से नहीं।', 'Domain accounts can only be created from the society\'s own login, not from super-admin.'), variant: 'destructive', duration: 10000 });
       return;
     }
     if (!can('config')) {
-      toast({ title: 'अनुमति नहीं', description: 'आपकी भूमिका को खाते बनाने (config) की अनुमति नहीं है।', variant: 'destructive', duration: 8000 });
+      toast({ title: tr('अनुमति नहीं', 'No permission'), description: tr('आपकी भूमिका को खाते बनाने (config) की अनुमति नहीं है।', 'Your role does not have permission to create accounts (config).'), variant: 'destructive', duration: 8000 });
       return;
     }
 
@@ -64,7 +65,7 @@ export function useDomainAccountProvisioning(): DomainAccountProvisioning {
     try {
       const { data: dbAccounts, error } = await fetchAllPaged<LedgerAccount>('accounts', sid);
       if (error) {
-        toast({ title: 'खाते जाँचे नहीं जा सके', description: `Cloud से chart नहीं पढ़ा गया — ${error.message}. कोई खाता नहीं बनाया गया; थोड़ी देर बाद दोबारा कोशिश करें।`, variant: 'destructive', duration: 12000 });
+        toast({ title: tr('खाते जाँचे नहीं जा सके', 'Accounts could not be checked'), description: tr(`Cloud से chart नहीं पढ़ा गया — ${error.message}. कोई खाता नहीं बनाया गया; थोड़ी देर बाद दोबारा कोशिश करें।`, `Could not read the chart from the cloud — ${error.message}. No account was created; please try again after a while.`), variant: 'destructive', duration: 12000 });
         return;
       }
       const byId = new Map<string, LedgerAccount>();
@@ -72,7 +73,7 @@ export function useDomainAccountProvisioning(): DomainAccountProvisioning {
       for (const a of accounts) if (!byId.has(a.id)) byId.set(a.id, a);
       const plan = planMissingDomainAccounts([...byId.values()], capabilities);
       if (plan.length === 0) {
-        toast({ title: 'सभी डोमेन खाते मौजूद हैं', description: 'कोई नया खाता बनाने की ज़रूरत नहीं। (All domain accounts already exist.)' });
+        toast({ title: tr('सभी डोमेन खाते मौजूद हैं', 'All domain accounts exist'), description: tr('कोई नया खाता बनाने की ज़रूरत नहीं। (All domain accounts already exist.)', 'No new account needs to be created. (All domain accounts already exist.)') });
         return;
       }
       // Conventional id (e.g. 3308) when the cloud chart does not use it; parent re-homed when this
@@ -81,8 +82,8 @@ export function useDomainAccountProvisioning(): DomainAccountProvisioning {
       const created = plan.map(spec => { const m = materialiseDomainAccount(spec, chart); return addAccount(m.template, m.id ? { id: m.id } : undefined); }).filter(a => !!a.id);
       if (created.length === 0) return; // addAccount bailed on a guard and already toasted
       toast({
-        title: `${created.length} डोमेन खाते जोड़े गए`,
-        description: `${created.map(a => a.nameHi || a.name).join(', ')}. क्लाउड में सेव न हो तो लाल चेतावनी आएगी और वह खाता हट जाएगा।`,
+        title: tr(`${created.length} डोमेन खाते जोड़े गए`, `${created.length} domain accounts added`),
+        description: tr(`${created.map(a => a.nameHi || a.name).join(', ')}. क्लाउड में सेव न हो तो लाल चेतावनी आएगी और वह खाता हट जाएगा।`, `${created.map(a => a.nameHi || a.name).join(', ')}. If it is not saved to the cloud, a red warning will appear and that account will be removed.`),
         duration: 10000,
       });
     } finally {
