@@ -23,8 +23,8 @@ export const BLOG_EN_B4G2: Record<string, BlogPostEn> = {
     excerpt: 'State Act + Multi-State Act 2002 + bye-laws: the three layers that decide how a society runs.',
   },
   'office-bearers-chairman-secretary-treasurer': {
-    metaTitle: 'What Do the Chairman, Secretary and Treasurer Do — Cooperative Society | SahakarLekha',
-    metaDescription: 'Chairman, secretary and treasurer in a cooperative society: each one\'s work and responsibility, who answers to whom, and how they differ — a full list in plain words.',
+    metaTitle: 'Chairman, Secretary, Treasurer: Duties, Who Is Senior, Who Is Responsible | SahakarLekha',
+    metaDescription: 'The chairman runs the meeting, the secretary handles daily work and records, the treasurer watches the money. Each one\'s duties, how they differ, and a straight answer to "who is senior".',
     title: 'Office-bearers of a society: chairman, secretary and treasurer',
     shortTitle: 'Chairman, secretary and treasurer',
     excerpt: 'Each office-bearer has a separate role: presiding, day-to-day administration/records, and oversight of funds.',

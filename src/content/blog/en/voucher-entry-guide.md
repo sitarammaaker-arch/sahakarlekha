@@ -1,5 +1,7 @@
 # How to Do Voucher Entry: A Step-by-Step Guide
 
+> **Short answer:** A voucher is the written proof of one transaction: who paid whom, how much, and under which head. Money came in — a receipt voucher; money went out — a payment voucher; a movement between cash and bank — a contra; and a journal for every other adjustment.
+
 Every record in a cooperative society's accounting starts with one thing — the **voucher**. If the voucher is right, your cash book, ledger, Trial Balance and Balance Sheet will all come out right; if the voucher is wrong, every report is wrong. So understanding **voucher entry** properly is the most important skill. This guide explains all four types of vouchers, the step-by-step method for each, compound entries, narration and common mistakes — all with examples.
 
 ## What is a voucher?

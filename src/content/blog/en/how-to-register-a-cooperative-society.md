@@ -1,5 +1,7 @@
 # How to register a cooperative society
 
+> **Short answer:** To form a cooperative society you apply to the Registrar of Cooperative Societies (RCS) of your state. Broadly there are five steps: bring together the group of members (the minimum number depends on the state, often 10), settle the name and objects, prepare the bye-laws, submit the application with the documents, and receive the registration certificate after the RCS has examined it.
+
 The first legal step in starting a new cooperative society is **registration**. The moment it is registered, the society gets a separate legal identity. This article explains **how to register a cooperative society**: why it is needed, where to apply, the main steps, the documents you need, Haryana's online portal, and the first steps after registration, all in simple language.
 
 > 💡 Note: this article explains the general process. The exact rules, minimum members, fees and forms depend on your state's cooperative Act. Always confirm with your state's RCS/portal.
