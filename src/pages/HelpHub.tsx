@@ -8,6 +8,7 @@ import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { HELP_TASKS, HELP_CATEGORIES } from '@/content/help';
+import { localizeHelpTask, helpCategoryLabel } from '@/content/help/en';
 import { LifeBuoy, Clock, ArrowRight, Search as SearchIcon } from 'lucide-react';
 import { HUB_META } from '@/content/hubMeta';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -64,9 +65,9 @@ const HelpHub: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 space-y-10">
           {HELP_CATEGORIES.map((cat) => (
             <div key={cat}>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-primary mb-4">{cat}</h2>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-primary mb-4">{helpCategoryLabel(cat, language)}</h2>
               <div className="grid sm:grid-cols-2 gap-4">
-                {HELP_TASKS.filter((t) => t.category === cat).map((t) => (
+                {HELP_TASKS.filter((t) => t.category === cat).map((raw) => localizeHelpTask(raw, language)).map((t) => (
                   <Link key={t.slug} to={`/help/${t.slug}`} className="block">
                     <Card className="h-full hover:border-primary/40 hover:bg-primary/5 transition-colors">
                       <CardContent className="p-5">

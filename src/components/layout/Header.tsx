@@ -348,7 +348,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
             <Button
               variant="ghost" size="icon"
               className={cn('hidden sm:flex relative', ctxHelp && 'text-primary')}
-              title={ctxHelp ? `कैसे करें: ${ctxHelp.title}` : (language === 'hi' ? 'मदद केंद्र' : 'Help Center')}
+              title={ctxHelp ? (language === 'hi' ? `कैसे करें: ${ctxHelp.title}` : 'Help for this screen') : (language === 'hi' ? 'मदद केंद्र' : 'Help Center')}
               onClick={() => window.open(ctxHelp ? `/help/${ctxHelp.slug}` : '/help', '_blank', 'noopener')}
             >
               <HelpCircle className="h-5 w-5" />

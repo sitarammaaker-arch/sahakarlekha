@@ -18,8 +18,10 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { trackEvent } from '@/lib/analytics';
 import { findTerm } from '@/content/glossary';
 import { relatedCalculators, type CalcConfig } from '@/content/calculators';
+import { localizeCalculator } from '@/content/calculators/en';
 import { cookbookForCalc } from '@/content/relatedContent';
 import { COOKBOOK_ENTRIES } from '@/content/cookbook';
+import { localizeCookbookEntry } from '@/content/cookbook/en';
 import { useLanguage } from '@/contexts/LanguageContext';
 import HindiOnlyNotice from '@/components/HindiOnlyNotice';
 import {
@@ -42,8 +44,10 @@ const Section: React.FC<{ icon: React.ReactNode; title: string; children: React.
   </section>
 );
 
-const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
+const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config: rawConfig }) => {
   const { language } = useLanguage();
+  // English overlay: same maths, English words (falls back to Hindi + notice when a calculator isn't translated yet).
+  const config = React.useMemo(() => localizeCalculator(rawConfig, language), [rawConfig, language]);
   const L = React.useCallback((hi: string, en: string) => (language === 'hi' ? hi : en), [language]);
   // Form state — keep raw values so the user can clear/type; compute coerces.
   const [values, setValues] = React.useState<Record<string, number | string>>(() =>
@@ -68,13 +72,13 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
     setValues((p) => ({ ...p, [key]: val }));
   };
 
-  const url = `${SITE}/tools/${config.slug}`;
+  const url = `${SITE}/tools/${rawConfig.slug}`;
   const jsonLd = [
     {
       '@context': 'https://schema.org',
       '@type': 'WebApplication',
-      name: `${config.hindiName} (${config.englishName})`,
-      description: config.metaDescription,
+      name: `${rawConfig.hindiName} (${rawConfig.englishName})`,
+      description: rawConfig.metaDescription,
       url,
       applicationCategory: 'FinanceApplication',
       operatingSystem: 'Web',
@@ -89,33 +93,33 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'होम', item: SITE },
         { '@type': 'ListItem', position: 2, name: 'कैलकुलेटर', item: `${SITE}/tools` },
-        { '@type': 'ListItem', position: 3, name: config.englishName, item: url },
+        { '@type': 'ListItem', position: 3, name: rawConfig.englishName, item: url },
       ],
     },
     // HowTo — how to use this calculator (steps from its inputs)
     {
       '@context': 'https://schema.org',
       '@type': 'HowTo',
-      name: `${config.hindiName} कैसे इस्तेमाल करें`,
+      name: `${rawConfig.hindiName} कैसे इस्तेमाल करें`,
       inLanguage: 'hi',
       step: [
-        ...config.inputs.map((inp, i) => ({ '@type': 'HowToStep', position: i + 1, name: `${inp.label} भरें`, text: `${inp.label}${inp.sub ? ' — ' + inp.sub : ''}।` })),
-        { '@type': 'HowToStep', position: config.inputs.length + 1, name: 'परिणाम देखें', text: 'परिणाम तुरंत दिख जाता है — कोई बटन दबाने की ज़रूरत नहीं।' },
+        ...rawConfig.inputs.map((inp, i) => ({ '@type': 'HowToStep', position: i + 1, name: `${inp.label} भरें`, text: `${inp.label}${inp.sub ? ' — ' + inp.sub : ''}।` })),
+        { '@type': 'HowToStep', position: rawConfig.inputs.length + 1, name: 'परिणाम देखें', text: 'परिणाम तुरंत दिख जाता है — कोई बटन दबाने की ज़रूरत नहीं।' },
       ],
     },
     // FAQPage — for rich results + People Also Ask
-    ...(config.faqs && config.faqs.length
+    ...(rawConfig.faqs && rawConfig.faqs.length
       ? [{
           '@context': 'https://schema.org',
           '@type': 'FAQPage',
-          mainEntity: config.faqs.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+          mainEntity: rawConfig.faqs.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
         }]
       : []),
   ];
 
   useDocumentMeta({
-    title: L(config.metaTitle, `${config.englishName} — Free Calculator | SahakarLekha`),
-    description: L(config.metaDescription, `Free ${config.englishName} for cooperative societies — instant result with the formula, explanation and a worked example.`),
+    title: L(rawConfig.metaTitle, config.translated ? config.metaTitle : `${config.englishName} — Free Calculator | SahakarLekha`),
+    description: L(rawConfig.metaDescription, config.translated ? config.metaDescription : `Free ${config.englishName} for cooperative societies — instant result with the formula, explanation and a worked example.`),
     canonicalPath: `/tools/${config.slug}`,
     jsonLd,
   });
@@ -142,7 +146,7 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
           <Badge variant="outline" className="gap-1"><CalcIcon className="h-3 w-3" /> {L('मुफ्त कैलकुलेटर', 'Free calculator')}</Badge>
         </div>
         <h1 className="text-2xl md:text-3xl font-bold text-foreground leading-tight mt-1">{L(config.title, config.englishName)}</h1>
-        <HindiOnlyNotice className="mt-3" what="This calculator's description, field names and result text" />
+        {!config.translated && <HindiOnlyNotice className="mt-3" what="This calculator's description, field names and result text" />}
         <p className="text-muted-foreground mt-1">{config.intro}</p>
 
         {config.nev && (
@@ -254,7 +258,7 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
         )}
 
         {/* Formula / Explanation / Example / Mistakes */}
-        <HindiOnlyNotice className="mt-8" what="This explanation" />
+        {!config.translated && <HindiOnlyNotice className="mt-8" what="This explanation" />}
         <Section icon={<Sigma className="h-4 w-4 text-violet-500" />} title={L('सूत्र', 'Formula')}><GuideMarkdown source={config.formula} /></Section>
         <Section icon={<BookOpen className="h-4 w-4 text-primary" />} title={L('समझाइश', 'Explanation')}><GuideMarkdown source={config.explanation} /></Section>
         <Section icon={<Lightbulb className="h-4 w-4 text-amber-500" />} title={L('उदाहरण', 'Example')}><GuideMarkdown source={config.example} /></Section>
@@ -280,7 +284,7 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
             <div className="flex flex-wrap gap-2">
               {glossaryTerms.map((t) => (
                 <Link key={t.slug} to={`/glossary/${t.slug}`} className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-full border bg-card hover:border-primary/50 hover:text-primary transition-colors">
-                  {t.hindiName || t.title} <ArrowRight className="h-3 w-3" />
+                  {language === 'en' ? t.title : t.hindiName || t.title} <ArrowRight className="h-3 w-3" />
                 </Link>
               ))}
             </div>
@@ -302,7 +306,8 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
         {(() => {
           const entries = cookbookForCalc(config.slug)
             .map((s) => COOKBOOK_ENTRIES.find((e) => e.slug === s))
-            .filter((e): e is NonNullable<typeof e> => e != null);
+            .filter((e): e is NonNullable<typeof e> => e != null)
+            .map((e) => localizeCookbookEntry(e, language));
           if (!entries.length) return null;
           return (
             <Section icon={<BookOpen className="h-4 w-4 text-amber-600" />} title={L('एंट्री कैसे दर्ज करें (कुकबुक)', 'How to record the entry (Cookbook)')}>

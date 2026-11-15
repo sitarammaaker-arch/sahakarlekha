@@ -22,6 +22,7 @@ import PublicLayout from '@/components/PublicLayout';
 import Testimonials from '@/components/Testimonials';
 import EmailCapture from '@/components/EmailCapture';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { localizePost } from '@/content/blog/en';
 import { SOCIAL_CHANNELS, SocialIcon, WHATSAPP_NUMBER } from '@/lib/socials';
 import { trackEvent } from '@/lib/analytics';
 import { publishedOrder, readingMinutes } from '@/content/blog';
@@ -617,7 +618,7 @@ const LandingPage: React.FC = () => {
             </Link>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {publishedOrder().slice(0, 3).map((post) => (
+            {publishedOrder().slice(0, 3).map((p) => localizePost(p, language)).map((post) => (
               <Link key={post.slug} to={`/blog/${post.slug}`} className="group block h-full">
                 <Card className="h-full flex flex-col transition-all hover:shadow-md hover:border-primary/40">
                   <CardContent className="p-5 flex flex-col flex-1">

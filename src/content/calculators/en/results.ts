@@ -1,0 +1,53 @@
+/**
+ * English for the strings compute() returns (stat labels, values with words, table heads, notes). Keys are the
+ * Hindi string with every number (₹ amounts included) replaced by {#}; the English keeps the same number of {#},
+ * filled back in order. scripts/test-content-en.mjs runs every calculator and checks each Hindi string has a key.
+ */
+export const CALC_RESULT_EN: Record<string, string> = {
+  'कुल डेप्रिसिएशन': 'Total depreciation',
+  'अंतिम बही मूल्य': 'Final book value',
+  'वर्ष': 'Year',
+  'प्रारंभिक': 'Opening',
+  'डेप्रिसिएशन': 'Depreciation',
+  'अंतिम': 'Closing',
+  'SLM — हर साल मूल लागत पर बराबर डेप्रिसिएशन।': 'SLM — equal depreciation on the original cost every year.',
+  'WDV — हर साल घटते बही मूल्य पर दर लगती है।': 'WDV — the rate is applied to the falling book value every year.',
+  'कृपया सभी मान सही (धनात्मक) भरें।': 'Please enter all values correctly (positive).',
+  'ब्याज': 'Interest',
+  'कुल राशि (मूलधन + ब्याज)': 'Total amount (principal + interest)',
+  'कंपाउंड इंटरेस्ट': 'Compound interest',
+  'कुल राशि': 'Total amount',
+  'राशि': 'Amount',
+  'कुल ब्याज': 'Total interest',
+  'ऑथराइज़्ड कैपिटल': 'Authorised capital',
+  'इश्यूड कैपिटल': 'Issued capital',
+  'सब्सक्राइब्ड कैपिटल': 'Subscribed capital',
+  'पेड-अप कैपिटल': 'Paid-up capital',
+  'शैक्षिक गणना — सब्सक्राइब्ड = निर्गमित मानी गई है (आम सहकारी स्थिति)।':
+    'Educational calculation — subscribed is taken as equal to issued (the usual cooperative position).',
+  'आधार राशि': 'Base amount',
+  'कुल GST': 'Total GST',
+  'दी गई राशि पर GST जोड़ा गया।': 'GST added on the amount given.',
+  'दी गई राशि में GST शामिल माना गया।': 'GST taken as included in the amount given.',
+  'TDS कटौती': 'TDS deduction',
+  'शुद्ध भुगतान': 'Net payment',
+  'मासिक EMI': 'Monthly EMI',
+  'कुल भुगतान': 'Total payment',
+  'मूलधन चुकाया': 'Principal repaid',
+  'शेष': 'Balance',
+  'कमी (Short)': 'Short',
+  'अंतर मिला — तुरंत जाँचें; यह गलती या रिसाव का संकेत है।':
+    'Difference found — check immediately; it signals an error or leakage.',
+  'अधिकता (Excess)': 'Excess',
+  'वृद्धि के बाद मान': 'Value after increase',
+  'जुड़ी राशि': 'Amount added',
+  'कमी के बाद मान': 'Value after decrease',
+  'घटी राशि': 'Amount reduced',
+  'प्रतिशत अंतर (A→B)': 'Percentage difference (A→B)',
+  'मान में बदलाव': 'Change in value',
+  'वर्किंग कैपिटल': 'Working capital',
+  'करंट रेशियो (Current Ratio)': 'Current ratio',
+  'धनात्मक वर्किंग कैपिटल — अल्पकालीन स्थिति ठीक।': 'Positive working capital — short-term position is fine.',
+  'ऋणात्मक वर्किंग कैपिटल — करंट लायबिलिटी एसेट से ज़्यादा; नकदी पर ध्यान दें।':
+    'Negative working capital — current liabilities exceed assets; watch the cash.',
+};

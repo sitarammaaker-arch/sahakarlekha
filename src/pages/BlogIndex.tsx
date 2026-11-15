@@ -20,19 +20,22 @@ import { useBlogSearch } from '@/lib/useBlogSearch';
 import { ArrowRight, Eye, Rss, ArrowUpRight, Flame } from 'lucide-react';
 import { HUB_META } from '@/content/hubMeta';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { localizePost } from '@/content/blog/en';
 
 const SITE = 'https://sahakarlekha.com';
 
 /** First few sentences of the article body (markdown stripped) for the hero card — computed at build
  *  time (J2: src/content/blog/mdMeta.ts), so the index no longer ships every article body. */
-function introPreview(post: BlogPost): string {
+function introPreview(post: BlogPost & { translated?: boolean }, language: 'hi' | 'en'): string {
+  // The build-time intro is Hindi; a translated post in English mode uses its English excerpt instead.
+  if (language === 'en' && post.translated) return post.excerpt;
   return blogIntro(post.slug) || post.excerpt;
 }
 
 const BlogIndex: React.FC = () => {
-  const posts = React.useMemo(() => publishedOrder(), []);
-  const { input, setInput, query, results, searching } = useBlogSearch(posts, 'all');
   const { language } = useLanguage();
+  const posts = React.useMemo(() => publishedOrder().map((p) => localizePost(p, language)), [language]);
+  const { input, setInput, query, results, searching } = useBlogSearch(posts, 'all');
   const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   useDocumentMeta({
     title: L(HUB_META.blog.title, 'SahakarLekha Blog — cooperative society accounting, audit & management'),
@@ -126,7 +129,7 @@ const BlogIndex: React.FC = () => {
                   </div>
                   <CardContent className="p-5 flex flex-col flex-1">
                     <h2 className="font-serif text-xl md:text-2xl font-bold text-foreground leading-tight group-hover:text-primary transition-colors">{featured.title}</h2>
-                    <p className="text-sm md:text-base text-muted-foreground mt-3 leading-relaxed">{introPreview(featured)}</p>
+                    <p className="text-sm md:text-base text-muted-foreground mt-3 leading-relaxed">{introPreview(featured, language)}</p>
                     <Meta post={featured} views={views[featured.slug]} className="mt-4" />
                   </CardContent>
                 </Card>

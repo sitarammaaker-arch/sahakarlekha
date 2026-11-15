@@ -8,6 +8,7 @@ import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { COOKBOOK_ENTRIES, COOKBOOK_CATEGORIES } from '@/content/cookbook';
+import { localizeCookbookEntry, cookbookCategoryLabel } from '@/content/cookbook/en';
 import { BookOpenCheck, ArrowRight } from 'lucide-react';
 import { HUB_META } from '@/content/hubMeta';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -53,9 +54,9 @@ const CookbookHub: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 space-y-10">
           {COOKBOOK_CATEGORIES.map((cat) => (
             <div key={cat}>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-primary mb-4">{cat}</h2>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-primary mb-4">{cookbookCategoryLabel(cat, language)}</h2>
               <div className="grid sm:grid-cols-2 gap-4">
-                {COOKBOOK_ENTRIES.filter((e) => e.category === cat).map((e) => (
+                {COOKBOOK_ENTRIES.filter((e) => e.category === cat).map((raw) => localizeCookbookEntry(raw, language)).map((e) => (
                   <Link key={e.slug} to={`/cookbook/${e.slug}`} className="block">
                     <Card className="h-full hover:border-primary/40 hover:bg-primary/5 transition-colors">
                       <CardContent className="p-5">
