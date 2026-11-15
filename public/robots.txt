@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /login
 Disallow: /dashboard
 Disallow: /society-setup
 Disallow: /backup-restore

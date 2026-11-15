@@ -30,6 +30,10 @@
       gtag('js', new Date());
       gtag('config', 'G-PB8FG0M5ET', { send_page_view: false });
       (function () {
+        // A browser driven by automation (headless crawlers, link scanners, our own e2e runs) reports
+        // navigator.webdriver = true. For those the library is never fetched, so nothing queued above is sent
+        // and they do not show up as visitors. Nov 2026: about 80% of "users" were such bots from US data centres.
+        if (navigator.webdriver) return;
         var done = false;
         var events = ['pointerdown', 'keydown', 'scroll', 'touchstart'];
         function load() {
