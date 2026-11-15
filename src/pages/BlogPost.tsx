@@ -19,6 +19,7 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { findPost, loadBlogRaw, readingMinutes, relatedPosts, publishedOrder, isPublished, isScheduledBlogHref } from '@/content/blog';
 import { staticSnapshotFor } from '@/lib/staticSnapshot';
 import { getAuthor, authorInitials } from '@/content/blog/authors';
+import { localizePost, hasEnglishPost, loadBlogRawEn } from '@/content/blog/en';
 import { categoryHref } from '@/content/blog/categories';
 import { EDITORIAL_POLICY_PATH, TRUST_NOTE, TRUST_NOTE_CATEGORIES } from '@/content/editorialPolicy';
 import { incrementBlogView, fetchBlogViewCount, formatViews } from '@/lib/blogViews';
@@ -26,6 +27,7 @@ import { guideForBlog } from '@/content/crossLinks';
 import { calculatorForArticle } from '@/content/calculators';
 import { helpForBlog } from '@/content/relatedContent';
 import { HELP_TASKS } from '@/content/help';
+import { localizeHelpTask } from '@/content/help/en';
 import { ACCENTS } from '@/components/blog/blogTheme';
 import { categoryLabel, blogDate } from '@/components/blog/BlogCards';
 import HindiOnlyNotice from '@/components/HindiOnlyNotice';
@@ -247,8 +249,11 @@ const ShareBar: React.FC<{ url: string; title: string }> = ({ url, title }) => {
 
 const BlogPost: React.FC = () => {
   const { slug = '' } = useParams();
-  const post = findPost(slug);
   const { language } = useLanguage();
+  const basePost = findPost(slug);
+  const post = basePost ? localizePost(basePost, language) : null;
+  // English body only when this post has been translated; otherwise the Hindi body + HindiOnlyNotice.
+  const english = language === 'en' && hasEnglishPost(slug);
   const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   // J2: the article body is its own lazy chunk — load it for this slug. undefined = loading, null = none.
   const [raw, setRaw] = React.useState<string | null | undefined>(undefined);
@@ -257,7 +262,7 @@ const BlogPost: React.FC = () => {
     let live = true;
     setRaw(undefined);
     setLoadFailed(false);
-    loadBlogRaw(slug).then(
+    (english ? loadBlogRawEn(slug) : loadBlogRaw(slug)).then(
       (r) => { if (live) setRaw(r); },
       // L1: a body chunk that fails to load (stale after a deploy, or a weak network) is NOT a missing
       // post — it used to set null and silently bounce the reader to /blog. Reload once to pick up the
@@ -270,7 +275,7 @@ const BlogPost: React.FC = () => {
       },
     );
     return () => { live = false; };
-  }, [slug]);
+  }, [slug, english]);
 
   // Parse structured blocks out of the body (H1 stripped first) so the summary
   // and FAQ render as real UI + FAQ schema, not duplicated prose. A section is
@@ -278,11 +283,11 @@ const BlogPost: React.FC = () => {
   // an off-convention post never silently loses content.
   const rawBody = (raw ?? '').replace(/^#\s+.*(\r?\n)+/, '');
 
-  const tkSlice = sliceSection(rawBody, /##\s+तीन बातें याद रखें[^\n]*\r?\n/);
+  const tkSlice = sliceSection(rawBody, /##\s+(तीन बातें याद रखें|Three things to remember)[^\n]*\r?\n/);
   const keyTakeaways = parseBullets(tkSlice.inner);
   const bodyAfterTk = keyTakeaways.length ? tkSlice.rest : rawBody;
 
-  const faqSlice = sliceSection(bodyAfterTk, /##\s+(अक्सर पूछे जाने वाले प्रश्न|सामान्य सवाल|प्रश्नोत्तर|FAQ)[^\n]*\r?\n/);
+  const faqSlice = sliceSection(bodyAfterTk, /##\s+(अक्सर पूछे जाने वाले प्रश्न|सामान्य सवाल|प्रश्नोत्तर|FAQ|Frequently asked questions)[^\n]*\r?\n/);
   const parsedFaq = parseFaqs(faqSlice.inner);
   const faqs = parsedFaq.faqs;
   const faqExtra = parsedFaq.extra;
@@ -291,7 +296,7 @@ const BlogPost: React.FC = () => {
   // A hand-written "## इस लेख में" outline (plain numbered list, no links — 14 posts) is replaced by the
   // page's own clickable TOC (sidebar on desktop, collapsible on mobile); kept as prose it showed twice
   // and listed itself in the TOC. Lifted out only when every line is a list item — otherwise kept.
-  const ownTocSlice = sliceSection(bodyAfterFaq, /##\s+इस लेख में[^\n]*\r?\n/);
+  const ownTocSlice = sliceSection(bodyAfterFaq, /##\s+(इस लेख में|In this article)[^\n]*\r?\n/);
   const ownTocIsList = ownTocSlice.inner !== '' && ownTocSlice.inner.split('\n').every((l) => !l.trim() || /^\s*(\d+[.)]|[-*])\s+/.test(l));
   const cleanBody = ownTocIsList ? ownTocSlice.rest : bodyAfterFaq;
 
@@ -328,7 +333,7 @@ const BlogPost: React.FC = () => {
       '@type': 'BlogPosting',
       headline: post.title,
       description: post.metaDescription,
-      inLanguage: 'hi',
+      inLanguage: post.translated && language === 'en' ? 'en' : 'hi',
       url,
       mainEntityOfPage: url,
       datePublished: post.date,
@@ -418,17 +423,18 @@ const BlogPost: React.FC = () => {
   const bodyTop = midPos > 0 ? body.slice(0, midPos) : body;
   const bodyBottom = midPos > 0 ? body.slice(midPos) : '';
 
-  const related = relatedPosts(slug, 3);
+  const related = relatedPosts(slug, 3).map((r) => localizePost(r, language));
   const deepGuide = guideForBlog(slug);
   const pairedCalc = calculatorForArticle(slug);
   // GOS-11: narrative → task edge ("पढ़ा, अब करें") — the help layer converts.
   const helpTasks = helpForBlog(slug)
     .map((s) => HELP_TASKS.find((t) => t.slug === s))
-    .filter((t): t is NonNullable<typeof t> => t != null);
+    .filter((t): t is NonNullable<typeof t> => t != null)
+    .map((t) => localizeHelpTask(t, language));
   const pub = publishedOrder();
   const idx = pub.findIndex((p) => p.slug === slug);
-  const prev = idx > 0 ? pub[idx - 1] : null;
-  const next = idx >= 0 && idx < pub.length - 1 ? pub[idx + 1] : null;
+  const prev = idx > 0 ? localizePost(pub[idx - 1], language) : null;
+  const next = idx >= 0 && idx < pub.length - 1 ? localizePost(pub[idx + 1], language) : null;
 
   return (
     <PublicLayout>
@@ -496,7 +502,7 @@ const BlogPost: React.FC = () => {
           {/* Main */}
           <main className="min-w-0 max-w-3xl">
             {/* English mode only: the article below (takeaways, body, FAQ) is in Hindi */}
-            <HindiOnlyNotice className="mb-4" what="This article" />
+            {!post.translated && <HindiOnlyNotice className="mb-4" what="This article" />}
             <div className="flex items-center justify-between flex-wrap gap-3 pb-5 mb-6 border-b">
               <div className="flex flex-wrap gap-2">
                 {post.tags.map((t) => (
@@ -550,7 +556,7 @@ const BlogPost: React.FC = () => {
                 <Card className="border-sky-300/50 bg-sky-50 dark:bg-sky-950/20 hover:bg-sky-100 dark:hover:bg-sky-950/40 transition-colors">
                   <CardContent className="p-5">
                     <p className="text-xs font-semibold text-sky-700 dark:text-sky-300 uppercase tracking-wide">🧮 {L('तुरंत गणना करें · कैलकुलेटर', 'Calculate instantly · Calculator')}</p>
-                    <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{pairedCalc.hindiName} <ArrowRight className="h-4 w-4" /></p>
+                    <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{L(pairedCalc.hindiName, pairedCalc.englishName)} <ArrowRight className="h-4 w-4" /></p>
                   </CardContent>
                 </Card>
               </Link>

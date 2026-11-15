@@ -11,6 +11,7 @@ import { BLOG_CATEGORIES, categoryByName } from '@/content/blog/categories';
 import { catColor, formatDate } from '@/components/blog/blogTheme';
 import { formatViews } from '@/lib/blogViews';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { localizePost } from '@/content/blog/en';
 import { Calendar, Clock, Eye, Search, X } from 'lucide-react';
 
 /** English display labels for the blog categories (keyed by slug). Display only — the Hindi
@@ -59,8 +60,9 @@ export const PostMeta: React.FC<{ post: BlogPost; views?: number; className?: st
   );
 };
 
-export const PostGridCard: React.FC<{ post: BlogPost; views?: number }> = ({ post, views }) => {
+export const PostGridCard: React.FC<{ post: BlogPost; views?: number }> = ({ post: rawPost, views }) => {
   const { language } = useLanguage();
+  const post = localizePost(rawPost, language);
   return (
     <Link to={`/blog/${post.slug}`} className="group block h-full">
       <Card className="h-full flex flex-col transition-all hover:shadow-md hover:border-primary/40">

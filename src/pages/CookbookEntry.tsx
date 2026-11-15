@@ -13,9 +13,12 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { useAuth } from '@/contexts/AuthContext';
 import { trackEvent } from '@/lib/analytics';
 import { findCookbookEntry, relatedCookbookEntries } from '@/content/cookbook';
+import { localizeCookbookEntry } from '@/content/cookbook/en';
 import { findEntry } from '@/content/guide';
+import { ENTRY_EN } from '@/content/guide/i18n';
 import { helpForCookbook } from '@/content/relatedContent';
 import { HELP_TASKS } from '@/content/help';
+import { localizeHelpTask } from '@/content/help/en';
 import { Home, ChevronRight, ArrowRight, BookOpen, AlertTriangle } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import HindiOnlyNotice from '@/components/HindiOnlyNotice';
@@ -27,7 +30,8 @@ const CookbookEntry: React.FC = () => {
   const { language } = useLanguage();
   const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const { slug = '' } = useParams();
-  const entry = findCookbookEntry(slug);
+  const rawEntry = findCookbookEntry(slug);
+  const entry = rawEntry ? localizeCookbookEntry(rawEntry, language) : null;
   const { isAuthenticated } = useAuth();
 
   React.useEffect(() => { window.scrollTo({ top: 0 }); }, [slug]);
@@ -43,7 +47,7 @@ const CookbookEntry: React.FC = () => {
         '@type': 'Article',
         headline: entry.title,
         description: entry.metaDescription,
-        inLanguage: 'hi',
+        inLanguage: entry.translated && language === 'en' ? 'en' : 'hi',
         url,
         publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
       },
@@ -61,11 +65,12 @@ const CookbookEntry: React.FC = () => {
   if (!entry) return <Navigate to="/cookbook" replace />;
 
   const guide = entry.guideSlug ? findEntry(entry.guideSlug) : null;
-  const related = relatedCookbookEntries(slug);
+  const related = relatedCookbookEntries(slug).map((r) => localizeCookbookEntry(r, language));
   // GOS-11: reverse edge — the help task(s) whose flow produces this entry
   const helpTasks = helpForCookbook(slug)
     .map((s) => HELP_TASKS.find((t) => t.slug === s))
-    .filter((t): t is NonNullable<typeof t> => t != null);
+    .filter((t): t is NonNullable<typeof t> => t != null)
+    .map((t) => localizeHelpTask(t, language));
   const ctaTo = entry.deepLink
     ? (isAuthenticated ? entry.deepLink.route : `/register?next=${encodeURIComponent(entry.deepLink.route)}`)
     : null;
@@ -81,7 +86,7 @@ const CookbookEntry: React.FC = () => {
           <span className="text-foreground font-medium line-clamp-1">{entry.title}</span>
         </nav>
 
-        <HindiOnlyNotice className="mb-4" what="This guide" />
+        {!entry.translated && <HindiOnlyNotice className="mb-4" what="This guide" />}
 
         <span className="text-xs font-semibold uppercase tracking-wide text-primary">{entry.category}</span>
         <h1 className="text-2xl md:text-3xl font-bold text-foreground mt-1">{entry.title}</h1>
@@ -207,7 +212,7 @@ const CookbookEntry: React.FC = () => {
             <Card className="border-primary/30 hover:bg-primary/5 transition-colors">
               <CardContent className="p-5">
                 <p className="text-xs font-semibold text-primary uppercase tracking-wide flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> {L('पूरा गहराई से समझें · गाइड', 'Understand it in depth · Guide')}</p>
-                <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{guide.shortTitle} <ArrowRight className="h-4 w-4" /></p>
+                <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{language === 'en' ? ENTRY_EN[guide.slug]?.shortTitle ?? guide.shortTitle : guide.shortTitle} <ArrowRight className="h-4 w-4" /></p>
               </CardContent>
             </Card>
           </Link>

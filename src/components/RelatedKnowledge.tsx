@@ -9,40 +9,46 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { type SurfaceLinks } from '@/content/relatedContent';
 import { HELP_TASKS } from '@/content/help';
+import { localizeHelpTask } from '@/content/help/en';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { COOKBOOK_ENTRIES } from '@/content/cookbook';
+import { localizeCookbookEntry } from '@/content/cookbook/en';
 import { BookOpen, Newspaper, ListChecks, NotebookPen, ArrowRight } from 'lucide-react';
 
 interface Item { href: string; title: string; kind: string; icon: React.ReactNode }
 
-const RelatedKnowledge: React.FC<{ links: SurfaceLinks; heading?: string }> = ({ links, heading = 'और सीखें — आपकी समिति के लिए' }) => {
+const RelatedKnowledge: React.FC<{ links: SurfaceLinks; heading?: string }> = ({ links, heading }) => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const items: Item[] = [
     ...(links.guide || []).map((r) => ({
-      href: `/guide/${r.slug}`, title: r.title, kind: 'गाइड',
+      href: `/guide/${r.slug}`, title: r.title, kind: L('गाइड', 'Guide'),
       icon: <BookOpen className="h-4 w-4 text-primary" />,
     })),
     ...(links.blog || []).map((r) => ({
-      href: `/blog/${r.slug}`, title: r.title, kind: 'ब्लॉग',
+      href: `/blog/${r.slug}`, title: r.title, kind: L('ब्लॉग', 'Blog'),
       icon: <Newspaper className="h-4 w-4 text-sky-600" />,
     })),
     ...(links.help || [])
       .map((s) => HELP_TASKS.find((t) => t.slug === s))
       .filter((t): t is NonNullable<typeof t> => t != null)
       .map((t) => ({
-        href: `/help/${t.slug}`, title: t.title, kind: 'मदद',
+        href: `/help/${t.slug}`, title: localizeHelpTask(t, language).title, kind: L('मदद', 'Help'),
         icon: <ListChecks className="h-4 w-4 text-emerald-600" />,
       })),
     ...(links.cookbook || [])
       .map((s) => COOKBOOK_ENTRIES.find((e) => e.slug === s))
       .filter((e): e is NonNullable<typeof e> => e != null)
+      .map((e) => localizeCookbookEntry(e, language))
       .map((e) => ({
-        href: `/cookbook/${e.slug}`, title: e.title, kind: 'एंट्री',
+        href: `/cookbook/${e.slug}`, title: e.title, kind: L('एंट्री', 'Entry'),
         icon: <NotebookPen className="h-4 w-4 text-amber-600" />,
       })),
   ];
   if (!items.length) return null;
   return (
     <section className="mt-10">
-      <h2 className="text-lg font-bold text-foreground mb-3">{heading}</h2>
+      <h2 className="text-lg font-bold text-foreground mb-3">{heading ?? L('और सीखें — आपकी समिति के लिए', 'Learn more — for your society')}</h2>
       <div className="grid sm:grid-cols-2 gap-3">
         {items.map((it) => (
           <Link key={it.href} to={it.href} className="group block">

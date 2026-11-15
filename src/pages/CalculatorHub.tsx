@@ -10,10 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { CALCULATORS } from '@/content/calculators';
+import { localizeCalculator } from '@/content/calculators/en';
 import { Home, ChevronRight, Search, Calculator as CalcIcon, ArrowRight, Sparkles } from 'lucide-react';
 import { HUB_META } from '@/content/hubMeta';
 import { useLanguage } from '@/contexts/LanguageContext';
-import HindiOnlyNotice from '@/components/HindiOnlyNotice';
 
 const SITE = 'https://sahakarlekha.com';
 
@@ -84,7 +84,6 @@ const CalculatorHub: React.FC = () => {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-10">
-        <HindiOnlyNotice className="mb-4" what="Each calculator's short description" />
         {filtered.length === 0 && <p className="text-sm text-muted-foreground mb-4">{L(`“${q}” के लिए कोई कैलकुलेटर नहीं मिला।`, `No calculator found for “${q}”.`)}</p>}
         <div className="grid sm:grid-cols-2 gap-3">
           {filtered.map((c) => (
@@ -98,7 +97,7 @@ const CalculatorHub: React.FC = () => {
                     </div>
                     <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary flex-shrink-0 mt-1" />
                   </div>
-                  <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{c.intro}</p>
+                  <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{localizeCalculator(c, language).intro}</p>
                   <span className="inline-block mt-2 text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{L(c.category, CATEGORY_EN[c.category] ?? c.category)}</span>
                 </CardContent>
               </Card>

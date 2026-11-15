@@ -15,9 +15,12 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { useAuth } from '@/contexts/AuthContext';
 import { trackEvent } from '@/lib/analytics';
 import { findHelpTask, relatedHelpTasks } from '@/content/help';
+import { localizeHelpTask } from '@/content/help/en';
 import { findEntry } from '@/content/guide';
+import { ENTRY_EN } from '@/content/guide/i18n';
 import { cookbookForHelp } from '@/content/relatedContent';
 import { COOKBOOK_ENTRIES } from '@/content/cookbook';
+import { localizeCookbookEntry } from '@/content/cookbook/en';
 import { Home, ChevronRight, Clock, BarChart3, ArrowRight, BookOpen, AlertTriangle, ListChecks } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import HindiOnlyNotice from '@/components/HindiOnlyNotice';
@@ -40,7 +43,8 @@ const HelpArticle: React.FC = () => {
   const { language } = useLanguage();
   const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const { slug = '' } = useParams();
-  const task = findHelpTask(slug);
+  const rawTask = findHelpTask(slug);
+  const task = rawTask ? localizeHelpTask(rawTask, language) : null;
   const { isAuthenticated } = useAuth();
 
   React.useEffect(() => { window.scrollTo({ top: 0 }); }, [slug]);
@@ -56,7 +60,7 @@ const HelpArticle: React.FC = () => {
         '@type': 'Article',
         headline: task.title,
         description: task.metaDescription,
-        inLanguage: 'hi',
+        inLanguage: task.translated && language === 'en' ? 'en' : 'hi',
         url,
         publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
       },
@@ -81,12 +85,13 @@ const HelpArticle: React.FC = () => {
   if (!task) return <Navigate to="/help" replace />;
 
   const guide = task.guideSlug ? findEntry(task.guideSlug) : null;
-  const related = relatedHelpTasks(slug);
+  const related = relatedHelpTasks(slug).map((r) => localizeHelpTask(r, language));
   const ctaTo = isAuthenticated ? task.deepLink.route : `/register?next=${encodeURIComponent(task.deepLink.route)}`;
   // GOS-11: task → the journal entry it produces (cookbook edge)
   const cookbookLinks = cookbookForHelp(slug)
     .map((s) => COOKBOOK_ENTRIES.find((e) => e.slug === s))
-    .filter((e): e is NonNullable<typeof e> => e != null);
+    .filter((e): e is NonNullable<typeof e> => e != null)
+    .map((e) => localizeCookbookEntry(e, language));
 
   return (
     <PublicLayout>
@@ -100,7 +105,7 @@ const HelpArticle: React.FC = () => {
           <span className="text-foreground font-medium line-clamp-1">{task.title}</span>
         </nav>
 
-        <HindiOnlyNotice className="mb-4" what="This guide" />
+        {!task.translated && <HindiOnlyNotice className="mb-4" what="This guide" />}
 
         <span className="text-xs font-semibold uppercase tracking-wide text-primary">{task.category}</span>
         <h1 className="text-2xl md:text-3xl font-bold text-foreground mt-1">{task.title}</h1>
@@ -193,7 +198,7 @@ const HelpArticle: React.FC = () => {
             <Card className="border-primary/30 hover:bg-primary/5 transition-colors">
               <CardContent className="p-5">
                 <p className="text-xs font-semibold text-primary uppercase tracking-wide flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> {L('पूरा गहराई से समझें · गाइड', 'Understand it in depth · Guide')}</p>
-                <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{guide.shortTitle} <ArrowRight className="h-4 w-4" /></p>
+                <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{language === 'en' ? ENTRY_EN[guide.slug]?.shortTitle ?? guide.shortTitle : guide.shortTitle} <ArrowRight className="h-4 w-4" /></p>
               </CardContent>
             </Card>
           </Link>

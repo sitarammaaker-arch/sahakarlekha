@@ -12,6 +12,7 @@ import { AUTHORS, DEFAULT_AUTHOR_SLUG, authorInitials, type Author } from '@/con
 import { publishedOrder, readingMinutes } from '@/content/blog';
 import { categoryLabel, blogDate } from '@/components/blog/BlogCards';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { localizePost } from '@/content/blog/en';
 import { GraduationCap, Briefcase, ArrowUpRight, Calendar, Clock, Home, ChevronRight } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
@@ -68,7 +69,7 @@ const AuthorProfile: React.FC = () => {
 
   if (!author) return <Navigate to="/blog" replace />;
 
-  const posts = postsFor(author);
+  const posts = postsFor(author).map((p) => localizePost(p, language));
 
   return (
     <PublicLayout>
