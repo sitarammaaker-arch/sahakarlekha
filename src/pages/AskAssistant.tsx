@@ -47,7 +47,9 @@ const AskAssistant: React.FC = () => {
   const typeLabel = language === 'hi' ? TYPE_LABEL : TYPE_LABEL_EN;
 
   useDocumentMeta({
-    title: q ? `"${q}" — पूछें | SahakarLekha` : 'पूछें (Ask SahakarLekha) — सहकारी समिति लेखांकन सहायक',
+    // The question is deliberately NOT in the title: GA attaches the document title to every event it sends,
+    // and a question can name a member.
+    title: 'पूछें (Ask SahakarLekha) — सहकारी समिति लेखांकन सहायक',
     description: 'सहकारी समिति लेखांकन का कोई भी सवाल पूछें — मदद, एंट्री कुकबुक, गाइड व FAQ से सीधा, स्रोत-सहित जवाब। कोई अनुमान नहीं, सिर्फ़ असली जानकारी।',
     canonicalPath: '/ask',
   });
@@ -80,7 +82,8 @@ const AskAssistant: React.FC = () => {
     return () => { live = false; };
   }, [q]);
 
-  React.useEffect(() => { if (q) trackEvent('ask_query', { q, results: results.length }); /* eslint-disable-line */ }, [q]);
+  // GA gets the length of the question, never its text: a question can name a member.
+  React.useEffect(() => { if (q) trackEvent('ask_query', { q_length: q.length, results: results.length }); /* eslint-disable-line */ }, [q]);
 
   const ask = (value: string) => { const v = value.trim(); setParams(v ? { q: v } : {}); };
   const submit = (e: React.FormEvent) => { e.preventDefault(); ask(input); };
