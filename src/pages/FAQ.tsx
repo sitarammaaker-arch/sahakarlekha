@@ -3,9 +3,10 @@
  * Public page, no auth required
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Accordion,
@@ -44,10 +45,10 @@ const FAQ: React.FC = () => {
     return L(parts.hi, parts.en);
   };
   useDocumentMeta({
-    title: L('अक्सर पूछे जाने वाले प्रश्न (FAQ) — SahakarLekha', 'Frequently Asked Questions (FAQ) — SahakarLekha'),
+    title: L('अक्सर पूछे जाने वाले प्रश्न (FAQ) — SahakarLekha', PAGE_META_EN.faq.title),
     description: L(
       'क्या यह वाकई मुफ़्त है? ऑडिटर रिपोर्ट स्वीकार करेंगे? डेटा सुरक्षित है? Tally से कैसे आएँ? — SahakarLekha के सभी सामान्य प्रश्नों के उत्तर हिंदी व English में.',
-      'Is it really free? Will auditors accept the reports? Is my data safe? How do I move from Tally? — answers to all common SahakarLekha questions, in Hindi and English.',
+      PAGE_META_EN.faq.description,
     ),
     canonicalPath: '/faq',
     // FAQPage structured data (all Q&As) → eligible for Google's FAQ rich result.

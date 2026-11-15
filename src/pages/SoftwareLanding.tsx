@@ -5,7 +5,8 @@
  * Hindi-first, bilingual, with per-type meta + structured data. Uses PublicLayout.
  */
 import React from 'react';
-import { Link, useParams, Navigate } from 'react-router-dom';
+import { useParams, Navigate } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

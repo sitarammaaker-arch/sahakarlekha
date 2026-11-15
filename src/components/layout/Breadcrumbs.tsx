@@ -8,7 +8,8 @@
  * render nothing — graceful, never wrong.
  */
 import React from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { ChevronRight, Home, Star } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { MODULE_CATALOG } from '@/lib/navigation/moduleCatalog';

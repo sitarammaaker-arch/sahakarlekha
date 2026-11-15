@@ -165,9 +165,83 @@ for (const child of smIndex.matchAll(/<loc>([^<]+)<\/loc>/g)) {
     const canon = (html.match(/<link rel="canonical" href="([^"]+)"/) || [])[1];
     if (canon !== loc) errors.push(`${name}: ${path} canonical is ${canon}`);
     const title = (html.match(/<title>([\s\S]*?)<\/title>/) || [])[1];
-    if (path !== '/' && title === homeTitle) errors.push(`${name}: ${path} carries the homepage <title>`);
+    // '/en' is the home's English twin: the home <title> is already English, so the two share it
+    if (path !== '/' && path !== '/en' && title === homeTitle) errors.push(`${name}: ${path} carries the homepage <title>`);
   }
 }
+// 3b. English twins (batch E1). Every English sitemap URL (/en…) has its own file with lang="en-IN"; every page that
+//     carries hreflang names exactly hi-IN / en-IN / x-default, x-default is the Hindi URL, the page is one of the
+//     two, and the other twin's file names the same pair (reciprocal); the sitemap alternates match the page's.
+const hreflangOf = (html) => {
+  const m = {};
+  for (const l of html.matchAll(/<link rel="alternate" hreflang="([^"]+)" href="([^"]+)"[^>]*>/g)) {
+    if (m[l[1]]) m.dup = true;
+    m[l[1]] = l[2];
+  }
+  return m;
+};
+const pathOfUrl = (u) => u.replace(SITE, '') || '/';
+let enLocs = 0, pairsChecked = 0;
+const smPaths = new Set();
+for (const child of smIndex.matchAll(/<loc>([^<]+)<\/loc>/g)) {
+  const name = child[1].replace(SITE + '/', '');
+  const xml = existsSync(resolve(DIST, name)) ? readFileSync(resolve(DIST, name), 'utf-8') : '';
+  if (/<xhtml:link/.test(xml) && !/xmlns:xhtml="http:\/\/www\.w3\.org\/1999\/xhtml"/.test(xml)) errors.push(`${name}: xhtml:link used without xmlns:xhtml`);
+  for (const u of xml.matchAll(/<url>([\s\S]*?)<\/url>/g)) {
+    const loc = (u[1].match(/<loc>([^<]+)<\/loc>/) || [])[1] || '';
+    const path = pathOfUrl(loc);
+    smPaths.add(path);
+    const isEn = path === '/en' || path.startsWith('/en/');
+    const f = fileFor(path);
+    if (!existsSync(f)) continue; // reported above
+    const html = readFileSync(f, 'utf-8');
+    if (isEn) {
+      enLocs++;
+      if (!/<html lang="en-IN">/.test(html)) errors.push(`${name}: ${path} is an English URL but its file is not <html lang="en-IN">`);
+    }
+    const alts = {};
+    for (const x of u[1].matchAll(/<xhtml:link rel="alternate" hreflang="([^"]+)" href="([^"]+)"/g)) alts[x[1]] = x[2];
+    const page = hreflangOf(html);
+    if (isEn && !page['en-IN']) errors.push(`${name}: ${path} (English) carries no hreflang`);
+    if (Object.keys(alts).length || page['en-IN']) {
+      for (const l of ['hi-IN', 'en-IN', 'x-default']) {
+        if (alts[l] !== page[l]) errors.push(`${name}: ${path} sitemap hreflang ${l}=${alts[l]} but the page says ${page[l]}`);
+      }
+    }
+  }
+}
+for (const p of prerendered) {
+  const f = fileFor(p);
+  if (!existsSync(f)) continue;
+  const html = readFileSync(f, 'utf-8');
+  const h = hreflangOf(html);
+  const isEn = p === '/en' || p.startsWith('/en/');
+  if (isEn && !/<html lang="en-IN">/.test(html)) errors.push(`${p}: English page without <html lang="en-IN">`);
+  if (!isEn && !/<html lang="hi-IN">/.test(html)) errors.push(`${p}: Hindi page without <html lang="hi-IN">`);
+  if (!Object.keys(h).length) continue;
+  pairsChecked++;
+  if (h.dup) errors.push(`${p}: duplicate hreflang links`);
+  if (!h['hi-IN'] || !h['en-IN'] || !h['x-default']) { errors.push(`${p}: hreflang set incomplete (${Object.keys(h).join(', ')})`); continue; }
+  if (h['x-default'] !== h['hi-IN']) errors.push(`${p}: x-default ${h['x-default']} is not the Hindi URL ${h['hi-IN']}`);
+  const self = SITE + (p === '/' ? '/' : p);
+  const canon = (html.match(/<link rel="canonical" href="([^"]+)"/) || [])[1];
+  if (canon !== self) errors.push(`${p}: canonical ${canon} is not itself`);
+  if (self !== (isEn ? h['en-IN'] : h['hi-IN'])) errors.push(`${p}: its own hreflang ${isEn ? 'en-IN' : 'hi-IN'} is ${isEn ? h['en-IN'] : h['hi-IN']}, not ${self}`);
+  const other = pathOfUrl(isEn ? h['hi-IN'] : h['en-IN']);
+  const of = fileFor(other);
+  if (!existsSync(of)) { errors.push(`${p}: hreflang twin ${other} has no file`); continue; }
+  const oh = hreflangOf(readFileSync(of, 'utf-8'));
+  if (oh['hi-IN'] !== h['hi-IN'] || oh['en-IN'] !== h['en-IN'] || oh['x-default'] !== h['x-default']) errors.push(`${p}: hreflang not reciprocal with ${other}`);
+}
+if (enLocs < 10) errors.push(`sitemap lists only ${enLocs} English (/en) URLs — the English twins went missing`);
+// 3c. (batch E2) A noindex page — a scheduled drip post's stub, Hindi or English — is never sitemapped and names no
+//     language twin: before its date neither the post nor its English twin exists for a search engine.
+for (const p of noindexPages) {
+  if (smPaths.has(p)) errors.push(`${p}: noindex page is listed in the sitemap`);
+  const f = fileFor(p);
+  if (existsSync(f) && Object.keys(hreflangOf(readFileSync(f, 'utf-8'))).length) errors.push(`${p}: noindex page carries hreflang`);
+}
+
 // 4. Private app routes never reach the sitemap or a prerendered file (they carry X-Robots-Tag: noindex —
 //    vercel.json, kept in sync by scripts/private-noindex.mjs).
 const vercelCfg = JSON.parse(readFileSync(resolve(ROOT, 'vercel.json'), 'utf-8'));
@@ -220,4 +294,4 @@ if (errors.length) {
   if (errors.length > 30) console.error(`  … and ${errors.length - 30} more`);
   process.exit(1);
 }
-console.log(`[test-dist] ✓ ${pagesChecked} pages · ${locsChecked} sitemap URLs map to their own file · ${linksChecked} internal links resolve · ${ldChecked} JSON-LD blocks valid · entry chunk ${entryKb} KB.`);
+console.log(`[test-dist] ✓ ${pagesChecked} pages · ${locsChecked} sitemap URLs map to their own file (${enLocs} English, lang en-IN) · ${pairsChecked} hreflang pages reciprocal · ${linksChecked} internal links resolve · ${ldChecked} JSON-LD blocks valid · entry chunk ${entryKb} KB.`);

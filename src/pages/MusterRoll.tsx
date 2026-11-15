@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { useData } from '@/contexts/DataContext';
 import { useLabourData } from '@/contexts/LabourDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';

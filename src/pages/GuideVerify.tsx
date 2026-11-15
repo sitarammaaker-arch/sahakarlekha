@@ -3,12 +3,14 @@
  * Looks up the server registry first, then falls back to the self-validating code.
  */
 import React from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import LangToggle from '@/components/guide/LangToggle';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { useGuideLang, useGuideT } from '@/lib/guideLang';
 import { verifyCertNumber, formatCertDate } from '@/lib/guideCertId';
 import { supabase } from '@/lib/supabase';
@@ -19,10 +21,10 @@ const GuideVerify: React.FC = () => {
   const t = useGuideT();
 
   useDocumentMeta({
-    title: lang === 'en' ? 'Certificate Verification — SahakarLekha Guide' : 'प्रमाणपत्र सत्यापन — सहकार लेखा गाइड',
+    title: lang === 'en' ? PAGE_META_EN.verify.title : 'प्रमाणपत्र सत्यापन — सहकार लेखा गाइड',
     description: lang === 'en'
-      ? 'Verify a SahakarLekha guide completion certificate by its number and holder name.'
-      : 'सहकार लेखा गाइड के पूर्णता प्रमाणपत्र को क्रमांक व नाम से सत्यापित करें।',
+      ? PAGE_META_EN.verify.description
+      :'सहकार लेखा गाइड के पूर्णता प्रमाणपत्र को क्रमांक व नाम से सत्यापित करें।',
     canonicalPath: '/guide/verify',
   });
 

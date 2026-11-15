@@ -7,7 +7,7 @@
  * No email or sign-up is asked for.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

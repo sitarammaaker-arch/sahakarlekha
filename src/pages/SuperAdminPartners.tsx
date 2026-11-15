@@ -9,7 +9,7 @@
  * no row changes on screen unless the server said ok (the list is re-read after every write — RULE 1).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

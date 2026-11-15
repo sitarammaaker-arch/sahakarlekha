@@ -28,6 +28,21 @@ check(`guide description says ${parts} भाग`, HUB_META.guide.description.in
 check(`guide description says ${chapters} अध्याय`, HUB_META.guide.description.includes(`${chapters} अध्याय`), HUB_META.guide.description);
 const en = read('src/pages/GuideHub.tsx');
 check(`GuideHub English copy says ${chapters} chapters (no stale count)`, en.includes(`${chapters} chapters`) && !/\b(?!35\b)\d+ chapters/.test(en.replace(`${chapters} chapters`, '')));
+
+// Batch E1 · PAGE_META_EN (src/content/pageMetaEn) — the English twin of HUB_META, read by the English branch of each
+// page AND by the prerender's /en/… pages.
+const { PAGE_META_EN } = await import(pathToFileURL(pathResolve(ROOT, 'src/content/pageMetaEn.ts')).href);
+check(`English guide description says ${parts} parts, ${chapters} chapters`, PAGE_META_EN.guide.description.includes(`${parts} parts, ${chapters} chapters`), PAGE_META_EN.guide.description);
+for (const [key, file] of [['guide', 'GuideHub'], ['help', 'HelpHub'], ['cookbook', 'CookbookHub'], ['tools', 'CalculatorHub'], ['faq', 'FAQ'],
+  ['pricing', 'Pricing'], ['about', 'AboutUs'], ['contact', 'ContactUs'], ['privacy', 'PrivacyPolicy'], ['terms', 'TermsConditions'],
+  ['quickStart', 'UserGuide'], ['certificate', 'GuideCertificate'], ['verify', 'GuideVerify']]) {
+  const src = read(`src/pages/${file}.tsx`);
+  check(`${file} uses PAGE_META_EN.${key}`, src.includes(`PAGE_META_EN.${key}.title`) && src.includes(`PAGE_META_EN.${key}.description`));
+  const d = PAGE_META_EN[key].description;
+  // a string literal that STARTS with the English description (some Hindi descriptions end with an English sentence)
+  check(`${file} keeps no private copy of the English description`, ![`'${d}`, `'${d.replace(/'/g, "\\'")}`, `"${d}`, `\`${d}`].some((s) => src.includes(s)));
+}
+check('prerender loads pageMetaEn for the /en pages', read('scripts/prerender-guide.mjs').includes("resolve(ROOT, 'src', 'content', 'pageMetaEn.ts')"));
 for (const [key, file] of [['guide', 'GuideHub'], ['blog', 'BlogIndex'], ['help', 'HelpHub'], ['cookbook', 'CookbookHub'], ['glossary', 'Glossary'], ['tools', 'CalculatorHub']]) {
   const src = read(`src/pages/${file}.tsx`);
   check(`${file} uses HUB_META.${key}.title + .description`, src.includes(`HUB_META.${key}.title`) && src.includes(`HUB_META.${key}.description`));

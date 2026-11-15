@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { MemberPicker } from '@/components/MemberPicker';
 import { BankAccountSelect } from '@/components/BankAccountSelect';
 import { useLanguage } from '@/contexts/LanguageContext';

@@ -6,7 +6,7 @@
  * mobile and dark mode. Adding a calculator needs NO new component — just a registry entry.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -73,7 +73,49 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config: rawConfig }
   };
 
   const url = `${SITE}/tools/${rawConfig.slug}`;
-  const jsonLd = [
+  // English twin (/en/tools/…): English JSON-LD, same as its prerendered copy; Hindi page unchanged.
+  const ldEn = language === 'en' && config.translated;
+  const jsonLd = ldEn ? [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebApplication',
+      name: config.englishName,
+      description: config.metaDescription,
+      url: `${SITE}/en/tools/${config.slug}`,
+      applicationCategory: 'FinanceApplication',
+      operatingSystem: 'Web',
+      inLanguage: 'en',
+      isAccessibleForFree: true,
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR' },
+      publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE}/en` },
+        { '@type': 'ListItem', position: 2, name: 'Calculators', item: `${SITE}/en/tools` },
+        { '@type': 'ListItem', position: 3, name: config.englishName, item: `${SITE}/en/tools/${config.slug}` },
+      ],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'HowTo',
+      name: `How to use the ${config.englishName}`,
+      inLanguage: 'en',
+      step: [
+        ...config.inputs.map((inp, i) => ({ '@type': 'HowToStep', position: i + 1, name: `Enter ${inp.label}`, text: `${inp.label}${inp.sub ? ' — ' + inp.sub : ''}.` })),
+        { '@type': 'HowToStep', position: config.inputs.length + 1, name: 'See the result', text: 'The result appears instantly — no button to press.' },
+      ],
+    },
+    ...(config.faqs && config.faqs.length
+      ? [{
+          '@context': 'https://schema.org',
+          '@type': 'FAQPage',
+          mainEntity: config.faqs.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+        }]
+      : []),
+  ] : [
     {
       '@context': 'https://schema.org',
       '@type': 'WebApplication',

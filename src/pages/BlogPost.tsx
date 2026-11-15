@@ -4,7 +4,8 @@
  * Body markdown is rendered with the shared GuideMarkdown styling.
  */
 import React from 'react';
-import { useParams, Link, Navigate } from 'react-router-dom';
+import { useParams, Navigate } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,7 +22,8 @@ import { staticSnapshotFor } from '@/lib/staticSnapshot';
 import { getAuthor, authorInitials } from '@/content/blog/authors';
 import { localizePost, hasEnglishPost, loadBlogRawEn } from '@/content/blog/en';
 import { categoryHref } from '@/content/blog/categories';
-import { EDITORIAL_POLICY_PATH, TRUST_NOTE, TRUST_NOTE_CATEGORIES } from '@/content/editorialPolicy';
+import { localizePath } from '@/lib/enRoutes';
+import { EDITORIAL_POLICY_PATH, TRUST_NOTE, TRUST_NOTE_EN, TRUST_NOTE_CATEGORIES } from '@/content/editorialPolicy';
 import { incrementBlogView, fetchBlogViewCount, formatViews } from '@/lib/blogViews';
 import { guideForBlog } from '@/content/crossLinks';
 import { calculatorForArticle } from '@/content/calculators';
@@ -55,22 +57,22 @@ const TrustNote: React.FC<{ post: BlogPostMeta }> = ({ post }) => {
     <div className="mt-5 rounded-lg border bg-muted/40 px-4 py-3 text-sm space-y-1.5">
       {post.jurisdiction === 'haryana' && (
         <p className="text-foreground/90">
-          <span className="mr-1.5 inline-flex items-center rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100 px-2 py-0.5 text-xs font-semibold">{L(TRUST_NOTE.haryanaBadge, '📍 Haryana')}</span>
-          {L(TRUST_NOTE.haryana, 'This article is about Haryana. Rules, schemes and procedures may differ in other states.')}
+          <span className="mr-1.5 inline-flex items-center rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100 px-2 py-0.5 text-xs font-semibold">{L(TRUST_NOTE.haryanaBadge, TRUST_NOTE_EN.haryanaBadge)}</span>
+          {L(TRUST_NOTE.haryana, TRUST_NOTE_EN.haryana)}
         </p>
       )}
       {post.reviewed ? (
         <p className="flex gap-1.5 text-foreground/90">
           <ShieldCheck className="h-4 w-4 flex-shrink-0 mt-0.5 text-primary" aria-hidden="true" />
-          <span><strong>{L(TRUST_NOTE.reviewedLabel, 'Last reviewed')}: {blogDate(post.reviewed, language)}</strong>{L('।', '.')} {L(TRUST_NOTE.reviewed, 'On this date the figures and claims in the article were checked against the original sources.')}</span>
+          <span><strong>{L(TRUST_NOTE.reviewedLabel, TRUST_NOTE_EN.reviewedLabel)}: {blogDate(post.reviewed, language)}</strong>{L('।', '.')} {L(TRUST_NOTE.reviewed, TRUST_NOTE_EN.reviewed)}</span>
         </p>
       ) : sensitive ? (
         <p className="flex gap-1.5 text-muted-foreground">
           <Info className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
-          <span>{L(TRUST_NOTE.notReviewed, 'This article is for general information. Rules, rates and schemes keep changing, so confirm with the original order or your Registrar\'s office before making a decision.')}</span>
+          <span>{L(TRUST_NOTE.notReviewed, TRUST_NOTE_EN.notReviewed)}</span>
         </p>
       ) : null}
-      <p><Link to={EDITORIAL_POLICY_PATH} className="text-xs font-medium text-primary hover:underline">{L(TRUST_NOTE.policyLink, 'How we check articles · Report a mistake')} →</Link></p>
+      <p><Link to={EDITORIAL_POLICY_PATH} className="text-xs font-medium text-primary hover:underline">{L(TRUST_NOTE.policyLink, TRUST_NOTE_EN.policyLink)} →</Link></p>
     </div>
   );
 };
@@ -326,19 +328,24 @@ const BlogPost: React.FC = () => {
     return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll); };
   }, [slug]);
 
-  const url = `${SITE}/blog/${slug}`;
+  // On the English twin (/en/blog/<slug>) the schema describes the English page: English headline/description
+  // (localizePost), inLanguage 'en', English breadcrumb names and /en/… URLs — the same as its prerendered copy.
+  const onEn = language === 'en' && !!post?.translated;
+  const twin = (path: string) => `${SITE}${onEn ? (path === '/' ? '/en' : '/en' + path) : path}`;
+  const url = twin(`/blog/${slug}`);
+  const section = post ? (onEn ? categoryLabel(post.category, 'en') : post.category) : undefined;
   const jsonLd = post ? [
     {
       '@context': 'https://schema.org',
       '@type': 'BlogPosting',
       headline: post.title,
       description: post.metaDescription,
-      inLanguage: post.translated && language === 'en' ? 'en' : 'hi',
+      inLanguage: onEn ? 'en' : 'hi',
       url,
       mainEntityOfPage: url,
       datePublished: post.date,
       dateModified: post.updated || post.date,
-      articleSection: post.category,
+      articleSection: section,
       // state-specific posts say where they apply (same as the prerendered BlogPosting)
       ...(post.jurisdiction === 'haryana' ? { spatialCoverage: { '@type': 'Place', name: 'Haryana, India' } } : {}),
       keywords: post.tags.join(', '),
@@ -352,15 +359,16 @@ const BlogPost: React.FC = () => {
       '@context': 'https://schema.org',
       '@type': 'BreadcrumbList',
       itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'होम', item: `${SITE}/` },
-        { '@type': 'ListItem', position: 2, name: 'ब्लॉग', item: `${SITE}/blog` },
-        { '@type': 'ListItem', position: 3, name: post.category, item: `${SITE}${categoryHref(post.category)}` },
+        { '@type': 'ListItem', position: 1, name: onEn ? 'Home' : 'होम', item: twin('/') },
+        { '@type': 'ListItem', position: 2, name: onEn ? 'Blog' : 'ब्लॉग', item: twin('/blog') },
+        { '@type': 'ListItem', position: 3, name: section, item: twin(categoryHref(post.category)) },
         { '@type': 'ListItem', position: 4, name: post.title, item: url },
       ],
     },
     ...(faqs.length ? [{
       '@context': 'https://schema.org',
       '@type': 'FAQPage',
+      ...(onEn ? { inLanguage: 'en' } : {}),
       mainEntity: faqs.map((f) => ({
         '@type': 'Question',
         name: f.q,
@@ -375,13 +383,13 @@ const BlogPost: React.FC = () => {
     canonicalPath: `/blog/${slug}`,
     jsonLd,
     image: post?.image,
-    article: post ? { publishedTime: post.date, modifiedTime: post.updated || post.date, section: post.category } : undefined,
+    article: post ? { publishedTime: post.date, modifiedTime: post.updated || post.date, section } : undefined,
   });
 
   // Unknown post, missing body, or a still-scheduled (future-dated) post → bounce
   // to the index. Scheduled posts stay hidden until their publish date arrives.
   if (!post || raw === null || !isPublished(post)) {
-    return <Navigate to="/blog" replace />;
+    return <Navigate to={localizePath('/blog', language)} replace />;
   }
   if (loadFailed) {
     return (
@@ -398,7 +406,8 @@ const BlogPost: React.FC = () => {
   if (raw === undefined) {
     // Body still loading (one small chunk). On the first load the prerendered article is already on
     // screen — keep showing it rather than replacing a readable page with a loading line.
-    const staticHtml = staticSnapshotFor(`/blog/${slug}`);
+    // the URL this page was served for (/blog/<slug> or its English twin /en/blog/<slug>)
+    const staticHtml = staticSnapshotFor(window.location.pathname);
     if (staticHtml) return <div dangerouslySetInnerHTML={{ __html: staticHtml }} />;
     return (
       <PublicLayout>

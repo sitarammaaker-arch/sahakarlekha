@@ -5,6 +5,7 @@
  */
 import { useEffect } from 'react';
 import { fitTitle } from './seo';
+import { isEnPath, hasEnglishRoute, toEn, hreflangAlternates } from './enRoutes';
 
 const SITE = 'https://sahakarlekha.com';
 
@@ -51,6 +52,9 @@ export function useDocumentMeta(opts: {
   // Stringify once so the effect dep is stable across re-renders (inline objects change identity each render).
   const jsonLdStr = jsonLd ? JSON.stringify(jsonLd) : undefined;
   const articleStr = article ? JSON.stringify(article) : undefined;
+  // Batch E: the English twin (/en/…) of a page is its own URL — canonical points at itself, and both twins name each
+  // other with hreflang (Hindi = x-default). canonicalPath is always the Hindi path; the URL tells which twin this is.
+  const onEn = typeof window !== 'undefined' && isEnPath(window.location.pathname);
   useEffect(() => {
     const prev: Array<[HTMLElement, string, string | null]> = [];
     const set = (el: HTMLElement, attr: string, value?: string) => {
@@ -85,8 +89,28 @@ export function useDocumentMeta(opts: {
         l.setAttribute('rel', 'canonical');
         return l;
       });
-      set(canon, 'href', SITE + canonicalPath);
-      set(metaByProp('og:url'), 'content', SITE + canonicalPath);
+      const selfPath = onEn && hasEnglishRoute(canonicalPath) ? toEn(canonicalPath) : canonicalPath;
+      set(canon, 'href', SITE + selfPath);
+      set(metaByProp('og:url'), 'content', SITE + selfPath);
+    }
+
+    // hreflang: replace the prerendered pair (if any) with ours while mounted.
+    const hreflangEls: HTMLElement[] = [];
+    const alts = canonicalPath ? hreflangAlternates(canonicalPath, SITE) : null;
+    // A page without an English twin served from another page's prerendered HTML (the SPA shell is the home page)
+    // must not keep that page's hreflang links.
+    if (canonicalPath && !alts) document.head.querySelectorAll('link[data-prerendered-hreflang]').forEach((l) => l.remove());
+    if (alts) {
+      document.head.querySelectorAll('link[rel="alternate"][hreflang]').forEach((l) => l.remove());
+      for (const [lang, href] of [['hi-IN', alts.hi], ['en-IN', alts.en], ['x-default', alts.xDefault]] as const) {
+        const l = document.createElement('link');
+        l.setAttribute('rel', 'alternate');
+        l.setAttribute('hreflang', lang);
+        l.setAttribute('href', href);
+        l.setAttribute('data-managed-hreflang', '');
+        document.head.appendChild(l);
+        hreflangEls.push(l);
+      }
     }
 
     // article:* tags belong to one article URL only — drop them (static or ours) when this page unmounts.
@@ -121,6 +145,7 @@ export function useDocumentMeta(opts: {
       document.title = prevTitle;
       if (scriptEl && scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
       articleEls.forEach((el) => el.remove());
+      hreflangEls.forEach((el) => el.remove());
       // restore changed attributes (in reverse so first-seen wins)
       for (let i = prev.length - 1; i >= 0; i--) {
         const [el, attr, old] = prev[i];
@@ -128,7 +153,7 @@ export function useDocumentMeta(opts: {
         else el.setAttribute(attr, old);
       }
     };
-  }, [title, description, canonicalPath, jsonLdStr, robots, image, articleStr]);
+  }, [title, description, canonicalPath, jsonLdStr, robots, image, articleStr, onEn]);
 }
 
 /**
@@ -140,6 +165,8 @@ export function useNoIndex() {
     const el = metaByName('robots');
     const prev = el.getAttribute('content');
     el.setAttribute('content', 'noindex');
+    // A noindex page has no language twins — drop hreflang inherited from the prerendered shell (the home page).
+    document.head.querySelectorAll('link[data-prerendered-hreflang]').forEach((l) => l.remove());
     return () => {
       if (prev == null) el.removeAttribute('content');
       else el.setAttribute('content', prev);

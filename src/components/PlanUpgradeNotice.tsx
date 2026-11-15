@@ -3,7 +3,7 @@
  * Says which plan has it and sends the admin to where a plan is bought. Nothing here writes data.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';

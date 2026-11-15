@@ -4,7 +4,7 @@
  * screenshot-based Quick Start, and offers the full PDF book.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import { useGuideQuizzes } from '@/lib/guideQuiz';
 import { useGuideLang, useGuideT } from '@/lib/guideLang';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { HUB_META } from '@/content/hubMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import {
   BookOpen, GraduationCap, Download, Rocket, ArrowRight, FileText, Layers,
   CheckCircle2, BookMarked, Award, HelpCircle, ShieldCheck,
@@ -46,12 +47,8 @@ const GuideHub: React.FC = () => {
   const t = useGuideT();
 
   useDocumentMeta({
-    title: lang === 'en'
-      ? 'SahakarLekha Guide — Complete Cooperative Accounting Course'
-      : HUB_META.guide.title,
-    description: lang === 'en'
-      ? 'A complete accounting course for cooperative societies — sales, purchases, stock, GST/TDS, final accounts, audit & year-end. 10 parts, 35 chapters, quizzes & a certificate — free.'
-      : HUB_META.guide.description,
+    title: lang === 'en' ? PAGE_META_EN.guide.title : HUB_META.guide.title,
+    description: lang === 'en' ? PAGE_META_EN.guide.description : HUB_META.guide.description,
     canonicalPath: '/guide',
     // Course structured data → eligible for Google's "Course" rich result.
     jsonLd: {

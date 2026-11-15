@@ -9,7 +9,7 @@
  * FIFO ageing of each party ledger balance (lib/reports/fifoAging), as on a chosen date.
  */
 import React, { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { fifoAging } from '@/lib/reports/fifoAging';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 import { todayStr, fmtDate } from '@/lib/dateUtils';

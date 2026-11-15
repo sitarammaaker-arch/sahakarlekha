@@ -5,7 +5,7 @@
  * statement is transparent: Closing = Opening + Purchase + Sales Return − Sale − Purchase Return.
  */
 import React, { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

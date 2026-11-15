@@ -9,7 +9,7 @@
  *  - ## / ### headings get stable slug ids so the in-chapter TOC can link to them.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { linkifyText, newLinkifyState } from '@/lib/glossaryLinkify';

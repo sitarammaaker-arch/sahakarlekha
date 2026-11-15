@@ -3,7 +3,7 @@
  * single source of truth). Reuses PublicLayout + design system + SEO.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { CALCULATORS } from '@/content/calculators';
 import { localizeCalculator } from '@/content/calculators/en';
 import { Home, ChevronRight, Search, Calculator as CalcIcon, ArrowRight, Sparkles } from 'lucide-react';
 import { HUB_META } from '@/content/hubMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 const SITE = 'https://sahakarlekha.com';
@@ -56,8 +57,8 @@ const CalculatorHub: React.FC = () => {
   ];
 
   useDocumentMeta({
-    title: L(HUB_META.tools.title, 'Cooperative Accounting Calculators — Free | SahakarLekha'),
-    description: L(HUB_META.tools.description, 'Interest, EMI, depreciation, GST, TDS, share capital, cash difference, percentage and working capital — free, easy calculators for cooperative societies, with formulas and explanations.'),
+    title: L(HUB_META.tools.title, PAGE_META_EN.tools.title),
+    description: L(HUB_META.tools.description, PAGE_META_EN.tools.description),
     canonicalPath: '/tools',
     jsonLd,
   });

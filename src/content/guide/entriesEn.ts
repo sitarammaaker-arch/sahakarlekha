@@ -1,0 +1,71 @@
+/**
+ * English titles of the guide parts and entries (chapters/appendices) — split out of ./i18n (which uses
+ * import.meta.glob) so the static prerender (scripts/prerender-guide.mjs) can load them for the /en/guide pages.
+ * Pure data, no imports. Re-exported by ./i18n, so existing imports keep working.
+ */
+
+/* ---------- English part titles ---------- */
+export const PARTS_EN: Record<string, string> = {
+  'part-1': 'Part 1 — Foundations of Accounting',
+  'part-2': 'Part 2 — Getting Started with SahakarLekha',
+  'part-3': 'Part 3 — Daily Operations',
+  'part-4': 'Part 4 — Books & Trial Balance',
+  'part-5': 'Part 5 — Final Accounts',
+  'part-6': 'Part 6 — Tax Compliance',
+  'part-7': 'Part 7 — Specialised Accounting',
+  'part-8': 'Part 8 — Year-End & Security',
+  'part-9': 'Part 9 — Reference & Practice',
+  'part-10': 'Part 10 — Voucher Entry: In-Depth Reference',
+  'parishisht': 'Appendices',
+};
+
+/* ---------- English entry (chapter/appendix) titles & summaries ---------- */
+export const ENTRY_EN: Record<string, { shortTitle: string; summary: string }> = {
+  introduction: { shortTitle: 'Introduction', summary: 'Three principles: the app is a tool, understanding is yours; small correct habits save the books; transparency is the heart of cooperation.' },
+  'accounting-foundations': { shortTitle: 'Foundations: a cooperative society’s books', summary: 'Why records matter; applying debit & credit; the five account types; the accounting equation and cycle.' },
+  'society-setup-and-roles': { shortTitle: 'Registration, society setup & roles', summary: 'Registration, society setup, the 16 roles and branch restriction, Maker-Checker, FY lock, the online-only rule and the Dashboard.' },
+  'chart-of-accounts': { shortTitle: 'Chart of Accounts', summary: 'Groups vs ledgers, type-specific codes, adding an account (type is fixed), delete guards and merging duplicates.' },
+  'opening-balances': { shortTitle: 'Opening Balances', summary: 'Entering openings once when coming onto SahakarLekha — Dr = Cr, the group-account block, stock and party openings.' },
+  'member-management': { shortTitle: 'Members & membership', summary: 'Adding members directly or via application, separate share and admission-fee receipts, old members via opening balance, share add/refund/transfer and certificate records.' },
+  'voucher-types': { shortTitle: 'Vouchers: Receipt, Payment, Journal, Contra', summary: 'The four voucher types, Easy/Expert modes, server-issued voucher numbers, maker-checker approval, and edit/cancel/reverse rules.' },
+  'sales-entries': { shortTitle: 'Sales Management', summary: 'Cash/bank/credit sales, per-item sales ledgers, GST & HSN, the stock-shortfall block, sales returns via Credit Note and net sales.' },
+  'purchase-entries': { shortTitle: 'Purchase Management', summary: 'Cash/bank/credit purchases, per-item purchase ledgers, ITC & HSN, one-time TDS (194Q conditions), purchase returns via Debit Note and net purchases.' },
+  'inventory-management': { shortTitle: 'Inventory', summary: 'Creating items (sales/purchase ledger required), stock groups, opening stock, movements, manual adjustment and the single closing-stock rule.' },
+  'bill-wise-settlement': { shortTitle: 'Bill-wise Settlement', summary: 'Applying receipts/payments against credit bills, partial and oldest-first allocation, Advance/On Account, bill ageing.' },
+  'salary-management': { shortTitle: 'Salary Management', summary: 'Salary processing with an accrual journal, payment on "Mark paid", cumulative TDS, manual PT, Form 24Q and slip PDF.' },
+  'daybook-and-ledger': { shortTitle: 'Day Book & Ledger', summary: 'Reading the Day Book and account ledger, date filters, running balances, and tracing changes in the Audit Trail.' },
+  'trial-balance': { shortTitle: 'Trial Balance', summary: 'Build & read it; why Dr = Cr matters; the NCDC two-section format; diagnosing a mismatch.' },
+  'trading-account': { shortTitle: 'Trading Account', summary: 'Gross profit; opening + purchases − closing; activity-wise breakdown; the correct closing-stock value.' },
+  'income-and-expenditure': { shortTitle: 'Income & Expenditure', summary: 'Net surplus/deficit; transfer of gross profit; direct vs indirect expenses; capital vs revenue.' },
+  'balance-sheet': { shortTitle: 'Balance Sheet', summary: 'Balance Sheet — assets = capital + liabilities, one closing-stock rule, as-on/interim date, summary vs full detail, the verification box, and Hindi/bilingual report PDFs.' },
+  'receipts-and-payments': { shortTitle: 'Receipts & Payments', summary: 'A cash-basis summary; capital vs revenue; excluding contra; opening/closing cash & bank.' },
+  'gst-management': { shortTitle: 'GST Management', summary: 'GST Summary page — GSTR-1/3B/monthly reconciliation, PDF/JSON export, HSN/SAC gaps, credit/debit notes.' },
+  'tds-and-26q': { shortTitle: 'TDS & quarterly return (26Q)', summary: 'When TDS applies and how much — the main rows of s.393 of the Income-tax Act 2025 with rates and thresholds; deduct once; depositing TDS; the TDS register and quarterly statement.' },
+  'depreciation': { shortTitle: 'Depreciation', summary: 'SLM/WDV, pro-rata first year, posting from the Asset Register, depreciation schedule, disposal entry.' },
+  'stock-valuation': { shortTitle: 'Stock Valuation', summary: 'Weighted average vs FIFO, the app\'s single rule (qty × weighted-average cost), the Stock Valuation and Closing Stock reports, diagnosing a ₹0 value.' },
+  'profit-distribution': { shortTitle: 'Profit Distribution', summary: 'Net profit (after employee bonus); reserve, bad-debt and education funds; dividend cap — Haryana figures with sources; the appropriation entries.' },
+  'statutory-returns': { shortTitle: 'Statutory returns & federation report', summary: 'The federation annual return\'s 8 sections, member/NPA/borrowings rules, other statutory forms and the compliance calendar.' },
+  'year-end-and-fy-lock': { shortTitle: 'Year-end process & FY-Lock', summary: 'The four year-end steps — checklist, FY-Lock, rollover to the new year, and closing the old year (closing stock and net surplus); openings carry forward automatically.' },
+  'audit-preparation': { shortTitle: 'Audit Preparation', summary: 'Audit file, logging objections in the Audit Register, the Audit Certificate and state-wise audit schedules, Hindi/bilingual report PDFs, and avoiding common objections.' },
+  'data-security-and-backup': { shortTitle: 'Data Security & Backup', summary: 'How society data is kept separate and safe: 16 roles and individual logins, 2FA and password reset, the online-only rule, and using Data Export, the full .slbak archive and the Restore Center.' },
+  'golden-rules': { shortTitle: 'Golden rules of cooperative accounting', summary: 'Day-to-day principles and warnings worth remembering.' },
+  'case-study-full-year': { shortTitle: 'Full case study: Rania Society (full year)', summary: 'A whole year — opening balances to final accounts and appropriation — tying out as one.' },
+  'special-registers': { shortTitle: 'Special registers & records', summary: 'Where each cooperative register lives in the app, monthly reconciliation to ledgers, export and blank formats.' },
+  'comprehensive-faq': { shortTitle: 'Comprehensive FAQ (top 30)', summary: 'The most common questions and answers in SahakarLekha — a quick reference.' },
+  'msp-procurement-entries': { shortTitle: 'Marketing/MSP society entries (HAFED, gunny bags, driage)', summary: 'MSP agent model — lot → J-Form → post (3308/2105) → settlement → payment → commission (3314/4206) → agency receipt; bardana/shortage manual.' },
+  'society-type-entries': { shortTitle: 'Society-type entries (dairy, consumer, weaver, fishery, labour, SHG)', summary: 'Entries through the dairy, consumer, labour and housing modules, plus general-voucher entries for weaver, fishery and SHG societies.' },
+  'error-rectification-entries': { shortTitle: 'Rectification & complex/tricky entries', summary: 'Classifying errors; choosing edit, cancel or reverse; rectification journals, Suspense and compound entries.' },
+  'financial-ratios-and-lifecycle': { shortTitle: 'Financial indicators, ratios & society lifecycle', summary: 'Financial ratios (educational) — recovery %, current ratio, margins, NPA, the app\'s Analytics page and calculators; entries from formation to dissolution.' },
+  'expense-dictionary': { shortTitle: 'Expense dictionary & misc cooperative activities', summary: 'The correct entry for every kind of expense; and service income such as rent, hire and storage.' },
+  'standard-chart-of-accounts': { shortTitle: 'Standard Chart of Accounts', summary: 'The main ready-made accounts — code, name, category and report.' },
+  'glossary': { shortTitle: 'Glossary', summary: 'Plain meanings of the key accounting terms used in this guide.' },
+  'report-to-statutory-form-map': { shortTitle: 'Report → statutory form map', summary: 'Which app report maps to which statutory form/use.' },
+  'quick-reference-card': { shortTitle: 'Quick-reference card', summary: 'Debit-credit, voucher choice, key formulas and due dates at a glance.' },
+  'year-end-checklist': { shortTitle: 'Year-end checklist (printable)', summary: 'A printable year-end checklist with tick boxes.' },
+  'exercise-answers': { shortTitle: 'Exercise answers (selected)', summary: 'Worked answers to selected exercises — check after solving.' },
+  'voucher-entry-quick-reference': { shortTitle: 'Voucher entry quick-reference (marketing & society types)', summary: 'The most common entries from chapters 31–35 at a glance.' },
+  'account-name-glossary': { shortTitle: 'Account-name glossary (Hindi ↔ English)', summary: 'Correct English names and categories for the accounts used in the new chapters.' },
+  'troubleshooting-guide': { shortTitle: 'Troubleshooting & tricky cases', summary: 'Problem → cause → fix table, plus the decision keys for ambiguous entries.' },
+  'society-type-quick-card': { shortTitle: 'Society-type quick card & exercise bank', summary: 'Key accounts per society type, and a bank of practice exercises.' },
+  conclusion: { shortTitle: 'Closing — a final word', summary: 'A recap of the journey and the three guiding principles of trustworthy cooperative bookkeeping.' },
+};

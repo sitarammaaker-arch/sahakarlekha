@@ -4,7 +4,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
-import { LanguageProvider } from "@/contexts/LanguageContext";
+import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
+import { isEnPath, stripEn, hasEnglishRoute, routeLanguage } from "@/lib/enRoutes";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 // The data providers, the app layout and the route guard live in ./AppDataShell and are loaded lazily
 // (see below) — importing any of them here puts the whole logged-in app in every public page's entry chunk.
@@ -269,7 +270,14 @@ const PageLoader = () => {
 
 const AppRoutes = () => {
   usePageTracking();
-  const { pathname, search } = useLocation();
+  const location = useLocation();
+  const { pathname, search } = location;
+  // Batch E: /en/<path> is the English twin of <path> — same page, matched on the path without /en; the URL fixes
+  // the language there (and on the Hindi twin), the saved choice decides everywhere else (lib/enRoutes).
+  const { setRouteLanguage } = useLanguage();
+  useEffect(() => { setRouteLanguage(routeLanguage(pathname)); }, [pathname, setRouteLanguage]);
+  const en = isEnPath(pathname);
+  const innerPath = en ? stripEn(pathname) : pathname;
   // Partner program: remember a ?ref=SL-XXXXXX code (first touch, 90 days) for the Register page. Never throws.
   useEffect(() => {
     if (!search) return;
@@ -277,10 +285,12 @@ const AppRoutes = () => {
     try { storage = window.localStorage; } catch { /* blocked storage → no referral */ }
     captureReferral(search, storage, Date.now());
   }, [search]);
+  // An /en address for a page with no English twin (yet) → its Hindi address.
+  if (en && !hasEnglishRoute(innerPath)) return <Navigate to={innerPath + search + location.hash} replace />;
   return (
     <ErrorBoundary resetKey={pathname} homeHref="/">
     <Suspense fallback={<PageLoader />}>
-    <Routes>
+    <Routes location={en ? { ...location, pathname: innerPath } : location}>
       {/* Public Routes */}
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />

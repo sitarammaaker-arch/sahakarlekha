@@ -1,6 +1,7 @@
 import { shareRefundOutstanding } from '@/lib/shares/refundPayable';
 import React, { useState, useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { ListPager, usePaged, useDebounced } from '@/components/ListPager';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';

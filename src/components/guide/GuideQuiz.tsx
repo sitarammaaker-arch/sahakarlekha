@@ -4,7 +4,7 @@
  * (≥70%) so the completion certificate can unlock.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, XCircle, RotateCcw, Award, ArrowRight } from 'lucide-react';

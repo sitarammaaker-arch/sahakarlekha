@@ -5,7 +5,7 @@
  * software-type and state pages are no longer knowledge silos.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { Card, CardContent } from '@/components/ui/card';
 import { type SurfaceLinks } from '@/content/relatedContent';
 import { HELP_TASKS } from '@/content/help';

@@ -18,6 +18,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/command';
 import { Star, History, Users, FileText, BookOpen, Landmark, Package, Building2, Receipt, MessageSquareWarning, Truck, UserCheck, ShoppingCart, PackagePlus, Boxes, HardHat, CornerDownRight } from 'lucide-react';
+import { localizePath } from '@/lib/enRoutes';
 
 interface GlobalSearchProps {
   open: boolean;
@@ -335,9 +336,9 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ open, onOpenChange }
             {(entityCount + filteredPages.length) > 0 && <CommandSeparator />}
             <CommandGroup heading={hi ? 'मदद / सीखें' : 'Help / Learn'}>
               {knowledge.map(r => (
-                <CommandItem key={r.id} value={`kb-${r.id}`} onSelect={() => go(r.url)} className="gap-2">
+                <CommandItem key={r.id} value={`kb-${r.id}`} onSelect={() => go(localizePath(r.url, language))} className="gap-2">
                   <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="truncate">{r.title}</span>
+                  <span className="truncate">{(!hi && r.titleEn) || r.title}</span>
                   <span className="text-muted-foreground text-xs ml-auto shrink-0 capitalize">{r.type}</span>
                 </CommandItem>
               ))}

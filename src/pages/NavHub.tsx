@@ -1,5 +1,6 @@
 import React from 'react';
-import { Link, Navigate, NavLink, useParams } from 'react-router-dom';
+import { Navigate, NavLink, useParams } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { Lock, Search, Star } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAllNavigation } from '@/hooks/useNavigation';

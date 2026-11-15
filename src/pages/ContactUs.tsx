@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,11 +24,11 @@ const ContactUs: React.FC = () => {
   useDocumentMeta({
     title: L(
       'संपर्क करें — SahakarLekha सहकारी लेखा सॉफ्टवेयर सहायता',
-      'Contact Us — SahakarLekha cooperative accounting software support',
+      PAGE_META_EN.contact.title,
     ),
     description: L(
       'SahakarLekha टीम से संपर्क करें — सहायता, डेमो व अपनी सहकारी समिति को ऑनबोर्ड करने के लिए. Contact us for support, a demo, or to onboard your cooperative society.',
-      'Contact the SahakarLekha team for support, a demo, or to onboard your cooperative society.',
+      PAGE_META_EN.contact.description,
     ),
     canonicalPath: '/contact',
   });

@@ -4,7 +4,7 @@
  * (KPP Wave-1A) via the glossary adapter — no hand-written entries here.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { allGlossary, filterGlossary, glossaryByLetter } from '@/content/glossary';
 import { Home, ChevronRight, Search, BookMarked, ArrowRight, Sparkles } from 'lucide-react';
 import { HUB_META } from '@/content/hubMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 const SITE = 'https://sahakarlekha.com';
@@ -29,29 +30,30 @@ const Glossary: React.FC = () => {
     {
       '@context': 'https://schema.org',
       '@type': 'DefinedTermSet',
-      name: 'सहकारी लेखांकन शब्दकोश — SahakarLekha Glossary',
-      description: 'सहकारी समिति लेखांकन, बैंकिंग व प्रबंधन के मुख्य शब्द — आसान हिन्दी व English में।',
-      inLanguage: 'hi',
-      url: `${SITE}/glossary`,
+      // English twin (/en/glossary): English names, inLanguage 'en' and /en/… URLs — same as its prerendered copy
+      name: L('सहकारी लेखांकन शब्दकोश — SahakarLekha Glossary', 'SahakarLekha Glossary — Cooperative Accounting Terms'),
+      description: L('सहकारी समिति लेखांकन, बैंकिंग व प्रबंधन के मुख्य शब्द — आसान हिन्दी व English में।', 'The key terms of cooperative society accounting, banking and management — in plain English and Hindi.'),
+      inLanguage: L('hi', 'en'),
+      url: `${SITE}${L('/glossary', '/en/glossary')}`,
       hasDefinedTerm: all.map((e) => ({
         '@type': 'DefinedTerm',
-        name: e.hindiName ? `${e.hindiName} (${e.englishName})` : e.title,
-        url: `${SITE}/glossary/${e.slug}`,
+        name: language === 'en' ? (e.hindiName ? `${e.englishName} (${e.hindiName})` : e.title) : (e.hindiName ? `${e.hindiName} (${e.englishName})` : e.title),
+        url: `${SITE}${L('', '/en')}/glossary/${e.slug}`,
       })),
     },
     {
       '@context': 'https://schema.org',
       '@type': 'BreadcrumbList',
       itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'होम', item: SITE },
-        { '@type': 'ListItem', position: 2, name: 'शब्दकोश', item: `${SITE}/glossary` },
+        { '@type': 'ListItem', position: 1, name: L('होम', 'Home'), item: L(SITE, `${SITE}/en`) },
+        { '@type': 'ListItem', position: 2, name: L('शब्दकोश', 'Glossary'), item: `${SITE}${L('/glossary', '/en/glossary')}` },
       ],
     },
   ];
 
   useDocumentMeta({
-    title: L(HUB_META.glossary.title, 'Cooperative Accounting Glossary — every term in plain words | SahakarLekha'),
-    description: L(HUB_META.glossary.description, 'From cash book to balance sheet — a plain Hindi and English glossary of the key terms in cooperative society accounting, each linked to the related guide, help and software.'),
+    title: L(HUB_META.glossary.title, PAGE_META_EN.glossary.title),
+    description: L(HUB_META.glossary.description, PAGE_META_EN.glossary.description),
     canonicalPath: '/glossary',
     jsonLd,
   });

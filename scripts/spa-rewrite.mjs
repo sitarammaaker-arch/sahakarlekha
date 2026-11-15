@@ -25,10 +25,12 @@ const vercel = JSON.parse(readFileSync(vercelPath, 'utf8'));
 
 /** Sections answered only from prerendered files — an unknown path under them is a real 404. */
 export const NOT_REWRITTEN = ['blog'];
+/** Segments routed without a <Route path> of their own — /en/<path> is the English twin of <path> (lib/enRoutes). */
+export const EXTRA_SEGMENTS = ['en'];
 
 const paths = [...app.matchAll(/<Route\s+path="([^"]+)"/g)].map((m) => m[1]);
 const seg = (p) => p.replace(/^\//, '').split('/')[0];
-export const SEGMENTS = [...new Set(paths.map(seg))]
+export const SEGMENTS = [...new Set([...paths.map(seg), ...EXTRA_SEGMENTS])]
   .filter((s) => s && s !== '*' && !s.startsWith(':') && !NOT_REWRITTEN.includes(s))
   .sort();
 

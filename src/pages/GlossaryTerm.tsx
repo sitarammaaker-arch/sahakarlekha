@@ -5,7 +5,8 @@
  * guide/FAQ/downloads, a learning path, breadcrumb and DefinedTerm JSON-LD.
  */
 import React from 'react';
-import { useParams, Link, Navigate } from 'react-router-dom';
+import { useParams, Navigate } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,11 +15,13 @@ import GuideMarkdown from '@/components/guide/GuideMarkdown';
 import HelpfulWidget from '@/components/HelpfulWidget';
 import { trackEvent } from '@/lib/analytics';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
-import { glossaryTitle } from '@/lib/seo';
+import { glossaryTitle, glossaryTitleEn } from '@/lib/seo';
+import { localizePath } from '@/lib/enRoutes';
+import { BLOG_EN_META } from '@/content/blog/en/meta';
 import { findTerm, learningPath, allGlossary } from '@/content/glossary';
 import { calculatorsForGlossary } from '@/content/calculators';
 import { blogForGlossary } from '@/content/relatedContent';
-import { glossaryMetaDescription } from '@/content/hubMeta';
+import { glossaryMetaDescription, glossaryMetaDescriptionEn } from '@/content/hubMeta';
 import {
   Home, ChevronRight, BookOpen, ArrowRight, Lightbulb, AlertTriangle, Link2,
   GraduationCap, MonitorPlay, FileText, ShieldCheck, Languages, Compass, Calculator as CalcIcon,
@@ -73,37 +76,41 @@ const GlossaryTerm: React.FC = () => {
 
   React.useEffect(() => { window.scrollTo({ top: 0 }); }, [slug]);
 
-  const url = `${SITE}/glossary/${slug}`;
+  // English twin (/en/glossary/<slug>): English-first name, English title/description, inLanguage 'en', English
+  // breadcrumbs and /en/… URLs — the same as its prerendered copy (scripts/prerender-guide.mjs).
+  const en = language === 'en';
+  const url = `${SITE}${en ? '/en' : ''}/glossary/${slug}`;
+  const nameEn = term ? (term.hindiName ? `${term.englishName || term.title} (${term.hindiName})` : term.title) : '';
   const jsonLd = term ? [
     {
       '@context': 'https://schema.org',
       '@type': 'DefinedTerm',
-      name: term.hindiName ? `${term.hindiName} (${term.englishName})` : term.title,
+      name: en ? nameEn : term.hindiName ? `${term.hindiName} (${term.englishName})` : term.title,
       description: term.definition,
-      inLanguage: 'hi',
+      inLanguage: en ? 'en' : 'hi',
       url,
       termCode: term.id,
-      inDefinedTermSet: { '@type': 'DefinedTermSet', name: 'SahakarLekha Glossary', url: `${SITE}/glossary` },
+      inDefinedTermSet: { '@type': 'DefinedTermSet', name: 'SahakarLekha Glossary', url: `${SITE}${en ? '/en' : ''}/glossary` },
     },
     {
       '@context': 'https://schema.org',
       '@type': 'BreadcrumbList',
       itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'होम', item: SITE },
-        { '@type': 'ListItem', position: 2, name: 'शब्दकोश', item: `${SITE}/glossary` },
+        { '@type': 'ListItem', position: 1, name: en ? 'Home' : 'होम', item: en ? `${SITE}/en` : SITE },
+        { '@type': 'ListItem', position: 2, name: en ? 'Glossary' : 'शब्दकोश', item: `${SITE}${en ? '/en' : ''}/glossary` },
         { '@type': 'ListItem', position: 3, name: term.englishName, item: url },
       ],
     },
   ] : undefined;
 
   useDocumentMeta({
-    title: term ? glossaryTitle(`${term.hindiName || term.title} (${term.englishName})`) : undefined,
-    description: term ? glossaryMetaDescription(term) : undefined,  // L5: Hindi first, same as the prerender
+    title: term ? (en ? glossaryTitleEn(nameEn) : glossaryTitle(`${term.hindiName || term.title} (${term.englishName})`)) : undefined,
+    description: term ? (en ? glossaryMetaDescriptionEn(term) : glossaryMetaDescription(term)) : undefined,  // L5: same rule as the prerender
     canonicalPath: `/glossary/${slug}`,
     jsonLd,
   });
 
-  if (!term) return <Navigate to="/glossary" replace />;
+  if (!term) return <Navigate to={localizePath('/glossary', language)} replace />;
 
   const path = learningPath(slug);
   const internalNonModule = term.internalLinks.filter((l) => !term.modules.includes(l));
@@ -232,14 +239,14 @@ const GlossaryTerm: React.FC = () => {
             <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors">
               <CardContent className="p-5">
                 <p className="text-xs font-semibold text-primary uppercase tracking-wide">{L('📝 पूरा लेख पढ़ें · ब्लॉग', '📝 Read the full article · Blog')}</p>
-                <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{pairedBlog.title} <ArrowRight className="h-4 w-4" /></p>
+                <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{(en && BLOG_EN_META[pairedBlog.slug]?.title) || pairedBlog.title} <ArrowRight className="h-4 w-4" /></p>
               </CardContent>
             </Card>
           </Link>
         )}
 
         {/* Related knowledge: guide/blog/faq (only real, navigable links — no dead "coming soon") */}
-        {(internalNonModule.length > 0 || term.suggestedFaq) && (
+        {(internalNonModule.length > 0 || (term.suggestedFaq && !en)) && (
           <Field icon={<FileText className="h-4 w-4 text-indigo-500" />} title={L('और पढ़ें / जुड़ी सामग्री', 'Read more / related content')}>
             <div className="space-y-2 text-sm">
               {internalNonModule.map((l) => (
@@ -247,7 +254,8 @@ const GlossaryTerm: React.FC = () => {
                   <ArrowRight className="h-3.5 w-3.5" /> {routeLabel(l, language)}
                 </Link>
               ))}
-              {term.suggestedFaq && (
+              {/* the suggested FAQ is a Hindi question — not on the English page */}
+              {term.suggestedFaq && !en && (
                 <Link to="/faq" className="flex items-center gap-2 text-primary hover:underline">
                   <ArrowRight className="h-3.5 w-3.5" /> {L('सामान्य प्रश्न: ', 'FAQ: ')}{term.suggestedFaq}
                 </Link>

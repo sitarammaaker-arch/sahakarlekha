@@ -1,4 +1,5 @@
-import { useLocation, Link, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { useEffect, useState } from "react";
 import { useDocumentMeta } from "@/lib/useDocumentMeta";
 import PublicLayout from "@/components/PublicLayout";

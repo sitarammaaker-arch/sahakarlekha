@@ -389,6 +389,7 @@
     "test:uppercase-ids": "node scripts/test-uppercase-ids.mjs",
     "test:content-en": "node scripts/test-content-en.mjs",
     "test:toast-english": "node scripts/test-toast-english.mjs",
+    "test:english-routes": "node scripts/test-english-routes.mjs",
     "test:notification-channels": "node scripts/test-notification-channels.mjs",
     "test:pigmy": "node scripts/test-pigmy.mjs",
     "test:report-comparative": "node scripts/test-report-comparative.mjs",

@@ -13,6 +13,7 @@
 import React from 'react';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -195,10 +196,10 @@ const TermsConditions: React.FC = () => {
   const { language } = useLanguage();
   const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   useDocumentMeta({
-    title: L('नियम व शर्तें — SahakarLekha | Terms & Conditions', 'Terms & Conditions — SahakarLekha'),
+    title: L('नियम व शर्तें — SahakarLekha | Terms & Conditions', PAGE_META_EN.terms.title),
     description: L(
       'SahakarLekha सहकारी लेखा प्लेटफ़ॉर्म के उपयोग की नियम व शर्तें. Terms and conditions for using the SahakarLekha cooperative accounting platform.',
-      'Terms and conditions for using the SahakarLekha cooperative accounting platform.',
+      PAGE_META_EN.terms.description,
     ),
     canonicalPath: '/terms',
   });

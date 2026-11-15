@@ -3,7 +3,8 @@
  * "kaise kare" articles by category. Distinct from /guide (LEARN) and /blog (narrative).
  */
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
@@ -11,6 +12,7 @@ import { HELP_TASKS, HELP_CATEGORIES } from '@/content/help';
 import { localizeHelpTask, helpCategoryLabel } from '@/content/help/en';
 import { LifeBuoy, Clock, ArrowRight, Search as SearchIcon } from 'lucide-react';
 import { HUB_META } from '@/content/hubMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 const SITE = 'https://sahakarlekha.com';
@@ -22,8 +24,8 @@ const HelpHub: React.FC = () => {
   const [q, setQ] = React.useState('');
   const onSearch = (e: React.FormEvent) => { e.preventDefault(); const v = q.trim(); if (v) navigate(`/search?q=${encodeURIComponent(v)}`); };
   useDocumentMeta({
-    title: L(HUB_META.help.title, 'Help Center — How to do it | SahakarLekha'),
-    description: L(HUB_META.help.description, 'Everyday cooperative society accounting tasks — how to add a member, enter opening balances, make a voucher — simple step-by-step guides with direct links into the app.'),
+    title: L(HUB_META.help.title, PAGE_META_EN.help.title),
+    description: L(HUB_META.help.description, PAGE_META_EN.help.description),
     canonicalPath: '/help',
     jsonLd: [
       {

@@ -22,6 +22,11 @@ import { FAQ_CATEGORIES } from '@/content/faq';
 import { allGlossary } from '@/content/glossary';
 import { CALCULATORS } from '@/content/calculators';
 import { norm, searchIndex } from './search/rank';
+import { localizeHelpTask, helpCategoryLabel } from '@/content/help/en';
+import { localizeCookbookEntry, cookbookCategoryLabel } from '@/content/cookbook/en';
+import { localizeCalculator } from '@/content/calculators/en';
+import { ENTRY_EN } from '@/content/guide/entriesEn';
+import { localizePost } from '@/content/blog/en';
 import { blogSearchDoc } from './blogSearch';
 import type { SearchDoc, SearchResult, SearchType } from './search/rank';
 
@@ -55,36 +60,54 @@ export function buildIndex(): SearchDoc[] {
   if (INDEX) return INDEX;
   const docs: SearchDoc[] = [];
 
+  // Batch E: every doc also carries its English title/snippet (display in English mode) and English text in the
+  // ranking (altTitle at title weight + haystack), so an English query finds the same pages.
   for (const t of HELP_TASKS) {
+    const en = localizeHelpTask(t, 'en');
+    const has = en.translated;
     docs.push({
       id: `help:${t.slug}`, type: 'help', title: t.title, url: `/help/${t.slug}`,
       snippet: t.tldr, category: t.category,
-      haystack: norm([t.title, t.intent, t.category, t.tldr].join(' ')),
+      ...(has ? { altTitle: en.title, titleEn: en.title, snippetEn: en.tldr, categoryEn: helpCategoryLabel(t.category, 'en') } : {}),
+      haystack: norm([t.title, t.intent, t.category, t.tldr, ...(has ? [en.title, en.tldr] : [])].join(' ')),
     });
   }
   for (const e of COOKBOOK_ENTRIES) {
+    const en = localizeCookbookEntry(e, 'en');
+    const has = en.translated;
     docs.push({
       id: `cookbook:${e.slug}`, type: 'cookbook', title: e.title, url: `/cookbook/${e.slug}`,
       snippet: e.scenario, category: e.category,
       lines: e.lines.map((l) => ({ account: l.account, type: l.type })),
-      haystack: norm([e.title, e.intent, e.category, e.scenario, ...e.lines.map((l) => l.account)].join(' ')),
+      ...(has ? { altTitle: en.title, titleEn: en.title, snippetEn: en.scenario, categoryEn: cookbookCategoryLabel(e.category, 'en') } : {}),
+      haystack: norm([e.title, e.intent, e.category, e.scenario, ...e.lines.map((l) => l.account), ...(has ? [en.title, en.scenario, ...en.lines.map((l) => l.account)] : [])].join(' ')),
     });
   }
   for (const g of GUIDE_ORDER) {
     const entry = findEntry(g.slug);
+    const en = ENTRY_EN[g.slug];
     docs.push({
       id: `guide:${g.slug}`, type: 'guide', title: g.shortTitle, url: `/guide/${g.slug}`,
       snippet: entry?.summary || '',
-      haystack: norm([g.shortTitle, g.title, entry?.summary || ''].join(' ')),
+      ...(en ? { altTitle: en.shortTitle, titleEn: en.shortTitle, snippetEn: en.summary } : {}),
+      haystack: norm([g.shortTitle, g.title, entry?.summary || '', ...(en ? [en.shortTitle, en.summary] : [])].join(' ')),
     });
   }
   // same per-post document as the /blog search box (blogSearch.ts), so both find the same articles
-  for (const b of BLOG_POSTS) docs.push(blogSearchDoc(b));
+  for (const b of BLOG_POSTS) {
+    const doc = blogSearchDoc(b);
+    const en = localizePost(b, 'en');
+    docs.push(en.translated ? {
+      ...doc, altTitle: en.title, titleEn: en.title, snippetEn: en.excerpt,
+      haystack: doc.haystack + ' ' + norm([en.title, en.excerpt, ...en.tags].join(' ')),
+    } : doc);
+  }
   for (const cat of FAQ_CATEGORIES) {
     cat.items.forEach((it, i) => {
       docs.push({
         id: `faq:${cat.value}-${i}`, type: 'faq', title: it.q, url: '/faq',
-        snippet: it.aHi, category: cat.label,
+        snippet: it.aHi, category: cat.label, snippetEn: it.aEn,
+        ...(it.q.includes(' / ') ? { titleEn: it.q.split(' / ').slice(-1)[0].trim() } : {}),
         haystack: norm([it.q, it.aHi, it.aEn, cat.label].join(' ')),
       });
     });
@@ -94,6 +117,7 @@ export function buildIndex(): SearchDoc[] {
     docs.push({
       id: `glossary:${g.slug}`, type: 'glossary',
       title: g.hindiName ? `${g.hindiName} · ${g.englishName}` : g.title,
+      titleEn: g.englishName || g.title,
       altTitle: g.title,   // the KI's own title — carries the acronym
       url: `/glossary/${g.slug}`,
       snippet: g.definition, category: g.category,
@@ -102,13 +126,15 @@ export function buildIndex(): SearchDoc[] {
   }
   // Calculators (Calculator Engine registry) — searchable + linked; FAQ questions deepen recall.
   for (const c of CALCULATORS) {
+    const en = localizeCalculator(c, 'en');
     docs.push({
+      titleEn: c.englishName, ...(en.translated ? { snippetEn: en.intro } : {}),
       id: `calculator:${c.slug}`, type: 'calculator',
       title: `${c.hindiName} · ${c.englishName}`,
       altTitle: c.title,   // same shape as glossary — the registry title is dropped from display
       url: `/tools/${c.slug}`,
       snippet: c.intro, category: c.category,
-      haystack: norm([c.title, c.hindiName, c.englishName, c.category, c.intro, ...c.keywords, ...(c.faqs?.map((f) => f.q) ?? [])].join(' ')),
+      haystack: norm([c.title, c.hindiName, c.englishName, c.category, c.intro, ...c.keywords, ...(c.faqs?.map((f) => f.q) ?? []), ...(en.translated ? [en.intro] : [])].join(' ')),
     });
   }
   INDEX = docs;

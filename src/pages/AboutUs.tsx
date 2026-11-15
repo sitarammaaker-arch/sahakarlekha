@@ -5,6 +5,7 @@
 import React from 'react';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -46,11 +47,11 @@ const AboutUs: React.FC = () => {
   useDocumentMeta({
     title: L(
       'हमारे बारे में — SahakarLekha | सहकारी समिति लेखा सॉफ्टवेयर',
-      'About Us — SahakarLekha | Cooperative Society Accounting Software',
+      PAGE_META_EN.about.title,
     ),
     description: L(
       'SahakarLekha भारत की सहकारी समितियों के लिए बना लेखा प्लेटफ़ॉर्म है — हमारा उद्देश्य, दृष्टि व अनुपालन (RCS, TDS, GST, NABARD). Learn about our mission to digitise cooperative society accounting across India.',
-      'SahakarLekha is an accounting platform built for India\'s cooperative societies — our mission, vision and compliance (RCS, TDS, GST, NABARD). Learn about our mission to digitise cooperative society accounting across India.',
+      PAGE_META_EN.about.description,
     ),
     canonicalPath: '/about',
   });

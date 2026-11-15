@@ -7,6 +7,7 @@
  */
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GUIDE_UI, type GuideLang } from '@/content/guide/i18n';
+import { useSwitchLanguage } from './useSwitchLanguage';
 
 export type { GuideLang };
 
@@ -19,7 +20,7 @@ export function useGuideLang(): GuideLang {
 
 /** Setter bound to the site language (the guide's हिंदी / English switch uses it). */
 export function useSetGuideLang(): (lang: GuideLang) => void {
-  return useLanguage().setLanguage;
+  return useSwitchLanguage();   // batch E: on a page with an English twin this also moves /x ⇄ /en/x
 }
 
 /** Returns a translator bound to the current guide language. */

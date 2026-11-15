@@ -2,7 +2,8 @@
  * GuideQuizPage — /guide/quiz/:partId (bilingual). Wraps GuideQuiz for one part.
  */
 import React from 'react';
-import { useParams, Link, Navigate } from 'react-router-dom';
+import { useParams, Navigate } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import GuideQuiz from '@/components/guide/GuideQuiz';
 import LangToggle from '@/components/guide/LangToggle';

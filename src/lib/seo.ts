@@ -28,6 +28,12 @@ export function glossaryTitle(name: string): string {
   return len(full) <= TITLE_MAX ? full : fitTitle(`${name} — शब्दकोश | SahakarLekha`);
 }
 
+/** English glossary term title (the /en/glossary/<slug> twin): same rule as glossaryTitle, English section label. */
+export function glossaryTitleEn(name: string): string {
+  const full = `${name} — Cooperative Accounting Glossary | SahakarLekha`;
+  return len(full) <= TITLE_MAX ? full : fitTitle(`${name} — Glossary | SahakarLekha`);
+}
+
 const PLAN_NAME: Record<'starter' | 'plus' | 'pro', string> = { starter: 'Starter', plus: 'Plus', pro: 'Pro' };
 
 /** /pricing structured data: the three public plans with their prices, read from the plan catalogue. */

@@ -6,9 +6,11 @@
 import React from 'react';
 import { Languages } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useSwitchLanguage } from '@/lib/useSwitchLanguage';
 
 const HindiOnlyNotice: React.FC<{ className?: string; what?: string }> = ({ className = '', what = 'This article' }) => {
-  const { language, setLanguage } = useLanguage();
+  const { language } = useLanguage();
+  const setLanguage = useSwitchLanguage();
   if (language !== 'en') return null;
   return (
     <div className={`flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200 ${className}`} role="note" lang="en">

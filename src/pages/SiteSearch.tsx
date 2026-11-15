@@ -3,7 +3,8 @@
  * Guide and Blog. Client-side (src/lib/siteSearch.ts), Hindi/Hinglish/typo tolerant.
  */
 import React from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
@@ -90,8 +91,8 @@ const SiteSearch: React.FC = () => {
                   <Link key={r.id} to={r.url} className="block">
                     <Card className="hover:border-primary/40 hover:bg-primary/5 transition-colors">
                       <CardContent className="p-4">
-                        <p className="font-semibold text-foreground flex items-center gap-1">{r.title} <ArrowRight className="h-3.5 w-3.5 text-primary" /></p>
-                        {r.snippet && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{r.snippet}</p>}
+                        <p className="font-semibold text-foreground flex items-center gap-1">{(language === 'en' && r.titleEn) || r.title} <ArrowRight className="h-3.5 w-3.5 text-primary" /></p>
+                        {r.snippet && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{(language === 'en' && r.snippetEn) || r.snippet}</p>}
                       </CardContent>
                     </Card>
                   </Link>

@@ -6,7 +6,8 @@
  * Items (single source of truth). Renders nothing on routes with no mapped terms.
  */
 import React from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { BookOpen, ArrowRight } from 'lucide-react';
 import { termsForRoute } from '@/content/glossary';
 import GlossaryHint from '@/components/glossary/GlossaryHint';
