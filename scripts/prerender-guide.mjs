@@ -1327,11 +1327,11 @@ function staticExtraPages(DATA) {
     body: shell({
       hero:
         `<section class="sl-hero"><div class="sl-hero-in">` +
-          `<span class="sl-badge">Cooperative-first Accounting Platform</span>` +
+          `<span class="sl-badge">सहकारी समितियों के लिए बना लेखा प्लेटफ़ॉर्म</span>` +
           `<h1>सहकारी समिति का <span>Accounting, Compliance और Control</span> — एक ही जगह।</h1>` +
           `<p class="sl-lead">PACS, dairy, marketing, consumer और अन्य cooperative societies के लिए बनाया गया — जहाँ vouchers से लेकर financial statements, GST/TDS और audit-ready reports तक एक connected system में रहते हैं।</p>` +
           `<p>Professional cooperative accounting <strong>₹2,999/year + GST से</strong>। Team व operations बढ़ें तो Plus या Pro के साथ आगे बढ़ें।</p>` +
-          `<div class="sl-ctas"><a class="sl-btn" href="/register">शुरू करें / Get Started →</a><a class="sl-btn sl-btn-o" href="/pricing">मूल्य देखें</a></div>` +
+          `<div class="sl-ctas"><a class="sl-btn" href="/register">शुरू करें →</a><a class="sl-btn sl-btn-o" href="/pricing">मूल्य देखें</a></div>` +
           `<p class="sl-ticks">✓ Unlimited Vouchers · ✓ Unlimited Members · ✓ Data Export Anytime · ✓ ₹2,999/year + GST से</p>` +
         `</div></section>`,
       html:

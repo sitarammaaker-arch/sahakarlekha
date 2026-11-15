@@ -251,7 +251,12 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(() => {
-    try { return (localStorage.getItem('sahayata_language') as Language) || 'hi'; } catch { return 'hi'; }
+    try {
+      const saved = localStorage.getItem('sahayata_language');
+      if (saved === 'hi' || saved === 'en') return saved;
+      // first visit since the guide's own choice was folded into the site language (2026-11-15)
+      return localStorage.getItem('sl_guide_lang') === 'en' ? 'en' : 'hi';
+    } catch { return 'hi'; }
   });
 
   const setLanguage = (lang: Language) => {

@@ -19,6 +19,8 @@ import { findEntry } from '@/content/guide';
 import { cookbookForHelp } from '@/content/relatedContent';
 import { COOKBOOK_ENTRIES } from '@/content/cookbook';
 import { Home, ChevronRight, Clock, BarChart3, ArrowRight, BookOpen, AlertTriangle, ListChecks } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import HindiOnlyNotice from '@/components/HindiOnlyNotice';
 
 const SITE = 'https://sahakarlekha.com';
 
@@ -30,8 +32,13 @@ function boldify(text: string): React.ReactNode {
 const DIFFICULTY_LABEL: Record<string, string> = {
   beginner: 'शुरुआती', intermediate: 'मध्यम', advanced: 'उन्नत',
 };
+const DIFFICULTY_LABEL_EN: Record<string, string> = {
+  beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced',
+};
 
 const HelpArticle: React.FC = () => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const { slug = '' } = useParams();
   const task = findHelpTask(slug);
   const { isAuthenticated } = useAuth();
@@ -87,23 +94,25 @@ const HelpArticle: React.FC = () => {
         {/* Breadcrumb */}
         <nav className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground mb-6">
           <Link to="/help" className="inline-flex items-center gap-1 hover:text-primary">
-            <Home className="h-3.5 w-3.5" /> मदद केंद्र
+            <Home className="h-3.5 w-3.5" /> {L('मदद केंद्र', 'Help Center')}
           </Link>
           <ChevronRight className="h-3.5 w-3.5" />
           <span className="text-foreground font-medium line-clamp-1">{task.title}</span>
         </nav>
 
+        <HindiOnlyNotice className="mb-4" what="This guide" />
+
         <span className="text-xs font-semibold uppercase tracking-wide text-primary">{task.category}</span>
         <h1 className="text-2xl md:text-3xl font-bold text-foreground mt-1">{task.title}</h1>
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mt-3">
           <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" /> {task.estTime}</span>
-          <span className="inline-flex items-center gap-1"><BarChart3 className="h-4 w-4" /> {DIFFICULTY_LABEL[task.difficulty]}</span>
+          <span className="inline-flex items-center gap-1"><BarChart3 className="h-4 w-4" /> {language === 'hi' ? DIFFICULTY_LABEL[task.difficulty] : DIFFICULTY_LABEL_EN[task.difficulty]}</span>
         </div>
 
         {/* TL;DR (atomic answer) */}
         <Card className="mt-6 border-primary/30 bg-primary/5">
           <CardContent className="p-5">
-            <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">संक्षेप में</p>
+            <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">{L('संक्षेप में', 'In short')}</p>
             <p className="text-foreground">{task.tldr}</p>
           </CardContent>
         </Card>
@@ -116,7 +125,7 @@ const HelpArticle: React.FC = () => {
         {/* Prerequisites */}
         {task.prerequisites && task.prerequisites.length > 0 && (
           <div className="mt-8">
-            <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5 mb-2"><ListChecks className="h-4 w-4 text-primary" /> पहले से ज़रूरी</h2>
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5 mb-2"><ListChecks className="h-4 w-4 text-primary" /> {L('पहले से ज़रूरी', 'Before you start')}</h2>
             <ul className="list-disc pl-6 text-sm text-muted-foreground space-y-1">
               {task.prerequisites.map((p, i) => <li key={i}>{p.slug ? <Link to={`/help/${p.slug}`} className="text-primary hover:underline">{p.label}</Link> : p.label}</li>)}
             </ul>
@@ -125,7 +134,7 @@ const HelpArticle: React.FC = () => {
 
         {/* Steps */}
         <div className="mt-8">
-          <h2 className="text-lg font-bold text-foreground mb-3">स्टेप्स</h2>
+          <h2 className="text-lg font-bold text-foreground mb-3">{L('स्टेप्स', 'Steps')}</h2>
           <ol className="space-y-3">
             {task.steps.map((s, i) => (
               <li key={i} className="flex gap-3">
@@ -139,7 +148,7 @@ const HelpArticle: React.FC = () => {
         {/* Common mistakes */}
         {task.commonMistakes && task.commonMistakes.length > 0 && (
           <div className="mt-8">
-            <h2 className="text-lg font-bold text-foreground flex items-center gap-1.5 mb-3"><AlertTriangle className="h-5 w-5 text-amber-500" /> आम गलतियाँ</h2>
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-1.5 mb-3"><AlertTriangle className="h-5 w-5 text-amber-500" /> {L('आम गलतियाँ', 'Common mistakes')}</h2>
             <ul className="space-y-2">
               {task.commonMistakes.map((m, i) => (
                 <li key={i} className="text-sm text-foreground bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg px-4 py-2.5">{boldify(m)}</li>
@@ -151,7 +160,7 @@ const HelpArticle: React.FC = () => {
         {/* Troubleshooting */}
         {task.troubleshooting && task.troubleshooting.length > 0 && (
           <div className="mt-8">
-            <h2 className="text-lg font-bold text-foreground mb-3">अगर दिक्कत आए</h2>
+            <h2 className="text-lg font-bold text-foreground mb-3">{L('अगर दिक्कत आए', 'If something goes wrong')}</h2>
             <div className="space-y-3">
               {task.troubleshooting.map((t, i) => (
                 <div key={i} className="rounded-lg border px-4 py-3">
@@ -166,7 +175,7 @@ const HelpArticle: React.FC = () => {
         {/* FAQs */}
         {task.faqs && task.faqs.length > 0 && (
           <div className="mt-8">
-            <h2 className="text-lg font-bold text-foreground mb-3">सामान्य सवाल</h2>
+            <h2 className="text-lg font-bold text-foreground mb-3">{L('सामान्य सवाल', 'Frequently asked questions')}</h2>
             <div className="space-y-4">
               {task.faqs.map((f, i) => (
                 <div key={i}>
@@ -183,7 +192,7 @@ const HelpArticle: React.FC = () => {
           <Link to={`/guide/${guide.slug}`} className="mt-8 block">
             <Card className="border-primary/30 hover:bg-primary/5 transition-colors">
               <CardContent className="p-5">
-                <p className="text-xs font-semibold text-primary uppercase tracking-wide flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> पूरा गहराई से समझें · गाइड</p>
+                <p className="text-xs font-semibold text-primary uppercase tracking-wide flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> {L('पूरा गहराई से समझें · गाइड', 'Understand it in depth · Guide')}</p>
                 <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{guide.shortTitle} <ArrowRight className="h-4 w-4" /></p>
               </CardContent>
             </Card>
@@ -193,7 +202,7 @@ const HelpArticle: React.FC = () => {
         {/* Cookbook edge: which journal entries this task creates (GOS-11) */}
         {cookbookLinks.length > 0 && (
           <div className="mt-8">
-            <h2 className="text-sm font-semibold text-foreground mb-3">📒 इससे जुड़ी entries (कुकबुक)</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-3">{L('📒 इससे जुड़ी entries (कुकबुक)', '📒 Related entries (Cookbook)')}</h2>
             <div className="grid sm:grid-cols-2 gap-3">
               {cookbookLinks.map((e) => (
                 <Link key={e.slug} to={`/cookbook/${e.slug}`} className="block">
@@ -209,7 +218,7 @@ const HelpArticle: React.FC = () => {
           </div>
         )}
 
-        {task.updated && <p className="mt-8 text-xs text-muted-foreground">अंतिम अपडेट: {task.updated}</p>}
+        {task.updated && <p className="mt-8 text-xs text-muted-foreground">{L('अंतिम अपडेट: ', 'Last updated: ')}{task.updated}</p>}
 
         {/* Was this helpful? */}
         <div className="mt-8"><HelpfulWidget /></div>
@@ -221,7 +230,7 @@ const HelpArticle: React.FC = () => {
 
         {related.length > 0 && (
           <div className="mt-10 pt-6 border-t">
-            <h2 className="text-sm font-semibold text-foreground mb-3">आगे ये भी करें</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-3">{L('आगे ये भी करें', 'What to do next')}</h2>
             <div className="grid sm:grid-cols-2 gap-3">
               {related.map((r) => (
                 <Link key={r.slug} to={`/help/${r.slug}`} className="block">

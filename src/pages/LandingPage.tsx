@@ -50,23 +50,23 @@ type Txt = string | { hi: string; en: string };
 const tx = (t: Txt, lang: Lang) => (typeof t === 'string' ? t : t[lang]);
 
 const FEATURES = [
-  { icon: BookOpen, title: 'Double-Entry Accounting', titleHi: 'दोहरी एंट्री लेखा', desc: 'Voucher, Cash Book, Bank Book, Day Book, Ledger — complete accounting system' },
-  { icon: BarChart3, title: 'Financial Reports', titleHi: 'वित्तीय रिपोर्ट', desc: 'Trial Balance, Balance Sheet, I&E, R&P, Trading Account — one-click PDF' },
-  { icon: FileText, title: 'TDS + GST', titleHi: 'TDS + GST', desc: 'TDS Register + quarterly TDS data export, GSTR-1/3B figures, e-Way Bill JSON — filing is done by you on the government portals' },
-  { icon: Shield, title: 'Audit Compliance', titleHi: 'ऑडिट अनुपालन', desc: 'Reserve Fund appropriation, loan-exposure check, FY Lock, Audit Certificate' },
-  { icon: Users, title: 'Member Management', titleHi: 'सदस्य प्रबंधन', desc: 'Share Register, Loan Register, Member Ledger, Profit Distribution' },
-  { icon: Globe, title: 'Hindi + English', titleHi: 'हिंदी + अंग्रेजी', desc: 'Fully bilingual interface — switch anytime. PDF reports in English.' },
+  { icon: BookOpen, title: 'Double-Entry Accounting', titleHi: 'दोहरी एंट्री लेखा', desc: 'Voucher, Cash Book, Bank Book, Day Book, Ledger — complete accounting system', descHi: 'वाउचर, कैश बुक, बैंक बुक, डे बुक, लेजर — पूरी लेखा प्रणाली' },
+  { icon: BarChart3, title: 'Financial Reports', titleHi: 'वित्तीय रिपोर्ट', desc: 'Trial Balance, Balance Sheet, I&E, R&P, Trading Account — one-click PDF', descHi: 'ट्रायल बैलेंस, बैलेंस शीट, आय-व्यय, प्राप्ति-भुगतान, ट्रेडिंग खाता — एक क्लिक में PDF' },
+  { icon: FileText, title: 'TDS + GST', titleHi: 'TDS + GST', desc: 'TDS Register + quarterly TDS data export, GSTR-1/3B figures, e-Way Bill JSON — filing is done by you on the government portals', descHi: 'TDS रजिस्टर + तिमाही TDS डेटा export, GSTR-1/3B के आँकड़े, e-Way Bill JSON — रिटर्न आप सरकारी पोर्टल पर खुद भरते हैं' },
+  { icon: Shield, title: 'Audit Compliance', titleHi: 'ऑडिट अनुपालन', desc: 'Reserve Fund appropriation, loan-exposure check, FY Lock, Audit Certificate', descHi: 'आरक्षित निधि विनियोजन, ऋण-सीमा जाँच, FY लॉक, ऑडिट प्रमाणपत्र' },
+  { icon: Users, title: 'Member Management', titleHi: 'सदस्य प्रबंधन', desc: 'Share Register, Loan Register, Member Ledger, Profit Distribution', descHi: 'शेयर रजिस्टर, ऋण रजिस्टर, सदस्य खाता, लाभ का बँटवारा' },
+  { icon: Globe, title: 'Hindi + English', titleHi: 'हिंदी + अंग्रेजी', desc: 'Fully bilingual interface — switch anytime. PDF reports in English.', descHi: 'पूरा इंटरफ़ेस हिंदी और अंग्रेज़ी दोनों में — जब चाहें बदलें। PDF रिपोर्ट अंग्रेज़ी में।' },
 ];
 
 const SOCIETY_TYPES = [
-  { icon: Wheat, name: 'Marketing Society', nameHi: 'विपणन समिति', desc: 'MSP procurement, agency commission' },
-  { icon: Landmark, name: 'PACS', nameHi: 'प्राथमिक कृषि ऋण समिति', desc: 'Member loans, DCCB/NABARD' },
-  { icon: ShoppingCart, name: 'Consumer Store', nameHi: 'उपभोक्ता भंडार', desc: 'Retail operations, inventory' },
-  { icon: Milk, name: 'Dairy Cooperative', nameHi: 'दुग्ध सहकारी', desc: 'Milk collection, BMC, cattle feed' },
-  { icon: Home, name: 'Housing Society', nameHi: 'आवास समिति', desc: 'Maintenance, sinking fund' },
-  { icon: Factory, name: 'Sugar Factory', nameHi: 'चीनी सहकारी', desc: 'Cane procurement, sugar/molasses' },
-  { icon: Hammer, name: 'Labour Society', nameHi: 'श्रमिक समिति', desc: 'Contract work, wages' },
-  { icon: Building2, name: 'Other', nameHi: 'अन्य समिति', desc: 'Fisheries, weavers, multipurpose' },
+  { icon: Wheat, name: 'Marketing Society', nameHi: 'विपणन समिति', desc: 'MSP procurement, agency commission', descHi: 'MSP खरीद, एजेंसी कमीशन' },
+  { icon: Landmark, name: 'PACS', nameHi: 'प्राथमिक कृषि ऋण समिति', desc: 'Member loans, DCCB/NABARD', descHi: 'सदस्य ऋण, DCCB/NABARD' },
+  { icon: ShoppingCart, name: 'Consumer Store', nameHi: 'उपभोक्ता भंडार', desc: 'Retail operations, inventory', descHi: 'खुदरा बिक्री, स्टॉक' },
+  { icon: Milk, name: 'Dairy Cooperative', nameHi: 'दुग्ध सहकारी', desc: 'Milk collection, BMC, cattle feed', descHi: 'दूध संग्रह, BMC, पशु आहार' },
+  { icon: Home, name: 'Housing Society', nameHi: 'आवास समिति', desc: 'Maintenance, sinking fund', descHi: 'रखरखाव, सिंकिंग फंड' },
+  { icon: Factory, name: 'Sugar Factory', nameHi: 'चीनी सहकारी', desc: 'Cane procurement, sugar/molasses', descHi: 'गन्ना खरीद, चीनी/शीरा' },
+  { icon: Hammer, name: 'Labour Society', nameHi: 'श्रमिक समिति', desc: 'Contract work, wages', descHi: 'ठेका काम, मज़दूरी' },
+  { icon: Building2, name: 'Other', nameHi: 'अन्य समिति', desc: 'Fisheries, weavers, multipurpose', descHi: 'मत्स्य, बुनकर, बहुउद्देशीय' },
 ];
 
 const STATS = [
@@ -105,8 +105,8 @@ const TALLY_ROWS: { f: Txt; tally: CompareCell; zoho: CompareCell; sl: CompareCe
   },
   { f: 'GST e-Invoice (IRN)', tally: true, zoho: { hi: 'Standard plan से', en: 'From Standard plan' }, sl: { hi: 'नहीं', en: 'Not supported' } },
   { f: 'e-Way Bill', tally: true, zoho: NV, sl: { hi: 'JSON बनता है (NIC portal पर upload)', en: 'Generates JSON (you upload on the NIC portal)' } },
-  { f: 'RCS two-section Trial Balance / Balance Sheet', tally: NV, zoho: NV, sl: true },
-  { f: 'Member share/loan register, reserve-fund appropriation', tally: NV, zoho: NV, sl: true },
+  { f: { hi: 'RCS दो-खंड ट्रायल बैलेंस / बैलेंस शीट', en: 'RCS two-section Trial Balance / Balance Sheet' }, tally: NV, zoho: NV, sl: true },
+  { f: { hi: 'सदस्य शेयर/ऋण रजिस्टर, आरक्षित निधि विनियोजन', en: 'Member share/loan register, reserve-fund appropriation' }, tally: NV, zoho: NV, sl: true },
   { f: { hi: 'हिंदी इंटरफ़ेस', en: 'Hindi interface' }, tally: NV, zoho: NV, sl: true },
   { f: { hi: 'मुफ़्त कोर्स + प्रमाणपत्र', en: 'Free learning course + certificate' }, tally: NV, zoho: NV, sl: true },
 ];
@@ -216,7 +216,7 @@ const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
           <div className="text-center lg:text-left min-w-0">
             <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-4">
-              <Sparkles className="h-3.5 w-3.5" /> Cooperative-first Accounting Platform
+              <Sparkles className="h-3.5 w-3.5" /> {L('सहकारी समितियों के लिए बना लेखा प्लेटफ़ॉर्म', 'Cooperative-first Accounting Platform')}
             </span>
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-foreground leading-tight">
               {language === 'hi' ? (
@@ -306,7 +306,7 @@ const LandingPage: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="font-semibold text-foreground">{L(f.titleHi, f.title)}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">{f.desc}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{L(f.descHi, f.desc)}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -329,7 +329,7 @@ const LandingPage: React.FC = () => {
                     <s.icon className="h-7 w-7 text-primary" />
                   </div>
                   <h3 className="font-semibold text-sm text-foreground">{L(s.nameHi, s.name)}</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">{s.desc}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{L(s.descHi, s.desc)}</p>
                 </CardContent>
               </Card>
             ))}
@@ -341,7 +341,7 @@ const LandingPage: React.FC = () => {
       <section className="py-16 bg-white" id="demo">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-2xl sm:text-3xl font-bold text-foreground">{L('90 सेकंड में देखें यह कैसे काम करता है', 'See how it works in 90 seconds')}</h2>
-          <p className="mt-2 text-muted-foreground">See a full year — opening balances → vouchers → audit-ready Balance Sheet.</p>
+          <p className="mt-2 text-muted-foreground">{L('पूरा एक साल देखें — प्रारंभिक शेष → वाउचर → ऑडिट-योग्य बैलेंस शीट।', 'See a full year — opening balances → vouchers → audit-ready Balance Sheet.')}</p>
           <div className="mt-8 rounded-xl overflow-hidden border shadow-lg bg-muted/30">
             {DEMO_VIDEO_ID ? (
               <div className="aspect-video">
@@ -419,7 +419,7 @@ const LandingPage: React.FC = () => {
               </caption>
               <thead className="bg-muted/50">
                 <tr>
-                  <th scope="col" className="text-left p-3 font-semibold">Feature</th>
+                  <th scope="col" className="text-left p-3 font-semibold">{L('सुविधा', 'Feature')}</th>
                   <th scope="col" className="p-3 font-semibold text-center w-28">TallyPrime (Silver)</th>
                   <th scope="col" className="p-3 font-semibold text-center w-28">Zoho Books (India)</th>
                   <th scope="col" className="p-3 font-semibold text-center w-28 text-primary">SahakarLekha</th>
@@ -507,15 +507,15 @@ const LandingPage: React.FC = () => {
           </p>
           <div className="mt-8 space-y-3">
             {[
-              'State-wise audit schedules — Haryana, Maharashtra, Gujarat, Karnataka, Kerala, UP and more (sections differ by state Act)',
-              'TDS register + quarterly TDS data export (legacy Form 26Q layout) — you file on the Income Tax e-Filing portal',
-              'GST — GSTR-1 / GSTR-3B figures and e-Way Bill JSON — you file on the GST / e-Way Bill portals',
-              'NABARD / DCCB-style MIS report · RCS two-section Trial Balance & Balance Sheet',
-              'Statutory Reserve Fund appropriation — % set as per your state Act / bye-laws',
+              { hi: 'राज्य-वार ऑडिट अनुसूचियाँ — हरियाणा, महाराष्ट्र, गुजरात, कर्नाटक, केरल, UP और अन्य (धाराएँ राज्य अधिनियम अनुसार अलग होती हैं)', en: 'State-wise audit schedules — Haryana, Maharashtra, Gujarat, Karnataka, Kerala, UP and more (sections differ by state Act)' },
+              { hi: 'TDS रजिस्टर + तिमाही TDS डेटा export (पुराना Form 26Q layout) — रिटर्न आप Income Tax e-Filing पोर्टल पर भरते हैं', en: 'TDS register + quarterly TDS data export (legacy Form 26Q layout) — you file on the Income Tax e-Filing portal' },
+              { hi: 'GST — GSTR-1 / GSTR-3B के आँकड़े और e-Way Bill JSON — रिटर्न आप GST / e-Way Bill पोर्टल पर भरते हैं', en: 'GST — GSTR-1 / GSTR-3B figures and e-Way Bill JSON — you file on the GST / e-Way Bill portals' },
+              { hi: 'NABARD / DCCB-शैली MIS रिपोर्ट · RCS दो-खंड ट्रायल बैलेंस व बैलेंस शीट', en: 'NABARD / DCCB-style MIS report · RCS two-section Trial Balance & Balance Sheet' },
+              { hi: 'वैधानिक आरक्षित निधि विनियोजन — % आपके राज्य अधिनियम / उपनियम के अनुसार तय', en: 'Statutory Reserve Fund appropriation — % set as per your state Act / bye-laws' },
             ].map(c => (
-              <div key={c} className="flex items-center gap-3 p-3 rounded-lg bg-success/5 border border-success/20">
+              <div key={c.en} className="flex items-center gap-3 p-3 rounded-lg bg-success/5 border border-success/20">
                 <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
-                <span className="text-sm font-medium">{c}</span>
+                <span className="text-sm font-medium">{L(c.hi, c.en)}</span>
               </div>
             ))}
           </div>
@@ -553,7 +553,7 @@ const LandingPage: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-xl sm:text-2xl font-bold text-foreground">{L('आपकी ज़रूरत के हिसाब से plan', 'A plan for every need')}</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Starter = Accounting · Plus = Team · Pro = Scale · Enterprise = Network
+            {L('Starter = लेखा · Plus = टीम · Pro = विस्तार · Enterprise = नेटवर्क', 'Starter = Accounting · Plus = Team · Pro = Scale · Enterprise = Network')}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {L(

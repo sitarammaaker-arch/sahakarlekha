@@ -12,10 +12,20 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { CALCULATORS } from '@/content/calculators';
 import { Home, ChevronRight, Search, Calculator as CalcIcon, ArrowRight, Sparkles } from 'lucide-react';
 import { HUB_META } from '@/content/hubMeta';
+import { useLanguage } from '@/contexts/LanguageContext';
+import HindiOnlyNotice from '@/components/HindiOnlyNotice';
 
 const SITE = 'https://sahakarlekha.com';
 
+/** Display-only English names for the registry's Hindi category chips. */
+const CATEGORY_EN: Record<string, string> = {
+  'ब्याज': 'Interest', 'सदस्य व शेयर': 'Members & shares', 'कर': 'Tax', 'ऋण': 'Loans', 'कैश': 'Cash',
+  'सामान्य': 'General', 'रिपोर्ट': 'Reports', 'संपत्ति': 'Assets',
+};
+
 const CalculatorHub: React.FC = () => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const [q, setQ] = React.useState('');
   const filtered = React.useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -46,8 +56,8 @@ const CalculatorHub: React.FC = () => {
   ];
 
   useDocumentMeta({
-    title: HUB_META.tools.title,
-    description: HUB_META.tools.description,
+    title: L(HUB_META.tools.title, 'Cooperative Accounting Calculators — Free | SahakarLekha'),
+    description: L(HUB_META.tools.description, 'Interest, EMI, depreciation, GST, TDS, share capital, cash difference, percentage and working capital — free, easy calculators for cooperative societies, with formulas and explanations.'),
     canonicalPath: '/tools',
     jsonLd,
   });
@@ -59,22 +69,23 @@ const CalculatorHub: React.FC = () => {
         <CalcIcon className="absolute -bottom-10 -right-6 h-56 w-56 text-white/15" aria-hidden="true" />
         <div className="relative mx-auto max-w-4xl px-4 py-12 md:py-14">
           <nav className="flex flex-wrap items-center gap-1.5 text-sm text-white/80 mb-4" aria-label="breadcrumb">
-            <Link to="/" className="inline-flex items-center gap-1 hover:text-white"><Home className="h-3.5 w-3.5" /> होम</Link>
+            <Link to="/" className="inline-flex items-center gap-1 hover:text-white"><Home className="h-3.5 w-3.5" /> {L('होम', 'Home')}</Link>
             <ChevronRight className="h-3.5 w-3.5" />
-            <span className="text-white">कैलकुलेटर</span>
+            <span className="text-white">{L('कैलकुलेटर', 'Calculators')}</span>
           </nav>
-          <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight">सहकारी लेखांकन कैलकुलेटर</h1>
-          <p className="text-white/90 text-lg mt-3 max-w-2xl">ब्याज, EMI, डेप्रिसिएशन, GST, TDS और अधिक — मुफ्त, तुरंत, सूत्र व समझाइश सहित।</p>
+          <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight">{L('सहकारी लेखांकन कैलकुलेटर', 'Cooperative Accounting Calculators')}</h1>
+          <p className="text-white/90 text-lg mt-3 max-w-2xl">{L('ब्याज, EMI, डेप्रिसिएशन, GST, TDS और अधिक — मुफ्त, तुरंत, सूत्र व समझाइश सहित।', 'Interest, EMI, depreciation, GST, TDS and more — free, instant, with formulas and explanations.')}</p>
           <div className="mt-6 relative max-w-xl">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="कैलकुलेटर खोजें — EMI, GST, ब्याज, डेप्रिसिएशन…" aria-label="कैलकुलेटर खोजें" className="pl-9 h-12 bg-white text-foreground" />
+            <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={L('कैलकुलेटर खोजें — EMI, GST, ब्याज, डेप्रिसिएशन…', 'Search calculators — EMI, GST, interest, depreciation…')} aria-label={L('कैलकुलेटर खोजें', 'Search calculators')} className="pl-9 h-12 bg-white text-foreground" />
           </div>
-          <p className="text-white/70 text-xs mt-3 inline-flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /> {CALCULATORS.length} कैलकुलेटर · कोई कानूनी दर तय नहीं (आप डालते हैं)</p>
+          <p className="text-white/70 text-xs mt-3 inline-flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /> {CALCULATORS.length} {L('कैलकुलेटर · कोई कानूनी दर तय नहीं (आप डालते हैं)', 'calculators · no legal rate is preset (you enter it)')}</p>
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-10">
-        {filtered.length === 0 && <p className="text-sm text-muted-foreground mb-4">“{q}” के लिए कोई कैलकुलेटर नहीं मिला।</p>}
+        <HindiOnlyNotice className="mb-4" what="Each calculator's short description" />
+        {filtered.length === 0 && <p className="text-sm text-muted-foreground mb-4">{L(`“${q}” के लिए कोई कैलकुलेटर नहीं मिला।`, `No calculator found for “${q}”.`)}</p>}
         <div className="grid sm:grid-cols-2 gap-3">
           {filtered.map((c) => (
             <Link key={c.slug} to={`/tools/${c.slug}`} className="group block">
@@ -82,13 +93,13 @@ const CalculatorHub: React.FC = () => {
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-semibold text-foreground leading-snug group-hover:text-primary transition-colors">{c.hindiName}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{c.englishName}</p>
+                      <p className="font-semibold text-foreground leading-snug group-hover:text-primary transition-colors">{L(c.hindiName, c.englishName)}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{L(c.englishName, c.hindiName)}</p>
                     </div>
                     <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary flex-shrink-0 mt-1" />
                   </div>
                   <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{c.intro}</p>
-                  <span className="inline-block mt-2 text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{c.category}</span>
+                  <span className="inline-block mt-2 text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{L(c.category, CATEGORY_EN[c.category] ?? c.category)}</span>
                 </CardContent>
               </Card>
             </Link>
@@ -98,13 +109,13 @@ const CalculatorHub: React.FC = () => {
         {/* Register CTA (GOS-12) */}
         <Card className="mt-10 bg-primary/5 border-primary/20">
           <CardContent className="p-6 text-center">
-            <p className="font-bold text-lg text-foreground">गणना से आगे — पूरा हिसाब अपने-आप</p>
+            <p className="font-bold text-lg text-foreground">{L('गणना से आगे — पूरा हिसाब अपने-आप', 'Beyond calculation — your full accounts, automatically')}</p>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl mx-auto">
-              SahakarLekha में ब्याज, डेप्रिसिएशन, GST/TDS की गणना एंट्री के साथ अपने-आप होती है — बिल्कुल मुफ्त।
+              {L('SahakarLekha में ब्याज, डेप्रिसिएशन, GST/TDS की गणना एंट्री के साथ अपने-आप होती है — बिल्कुल मुफ्त।', 'In SahakarLekha, interest, depreciation and GST/TDS are calculated automatically as you make entries — completely free.')}
             </p>
             <div className="flex flex-wrap gap-3 justify-center mt-4">
-              <Link to="/register"><Button className="gap-2">मुफ्त रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
-              <Link to="/cookbook"><Button variant="outline">एंट्री कुकबुक देखें</Button></Link>
+              <Link to="/register"><Button className="gap-2">{L('मुफ्त रजिस्टर करें', 'Register free')} <ArrowRight className="h-4 w-4" /></Button></Link>
+              <Link to="/cookbook"><Button variant="outline">{L('एंट्री कुकबुक देखें', 'See the entry cookbook')}</Button></Link>
             </div>
           </CardContent>
         </Card>

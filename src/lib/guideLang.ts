@@ -1,36 +1,25 @@
 /**
- * guideLang — the reader's chosen guide language (hi/en), stored in localStorage
- * and shared via a tiny external store so every guide page stays in sync.
+ * guideLang — the guide's language IS the site language (LanguageContext, key 'sahayata_language').
+ *
+ * The guide used to keep its own choice under 'sl_guide_lang', so a visitor who picked English in the site header
+ * still got the guide in Hindi (and vice versa). Since 2026-11-15 there is one choice for the whole site; the old
+ * guide key is read once by LanguageProvider as a fallback (see LanguageContext) and otherwise ignored.
  */
-import { useSyncExternalStore } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { GUIDE_UI, type GuideLang } from '@/content/guide/i18n';
 
 export type { GuideLang };
 
-const KEY = 'sl_guide_lang';
-
-function read(): GuideLang {
-  try { return localStorage.getItem(KEY) === 'en' ? 'en' : 'hi'; } catch { return 'hi'; }
-}
-
-let state: GuideLang = read();
-const listeners = new Set<() => void>();
-
-export function setGuideLang(lang: GuideLang) {
-  state = lang;
-  try { localStorage.setItem(KEY, lang); } catch { /* ignore */ }
-  listeners.forEach((l) => l());
-}
-
-function subscribe(cb: () => void) {
-  listeners.add(cb);
-  const onStorage = (e: StorageEvent) => { if (e.key === KEY) { state = read(); cb(); } };
-  window.addEventListener('storage', onStorage);
-  return () => { listeners.delete(cb); window.removeEventListener('storage', onStorage); };
-}
+/** The legacy per-guide key — only read as a first-visit fallback by LanguageProvider. */
+export const LEGACY_GUIDE_LANG_KEY = 'sl_guide_lang';
 
 export function useGuideLang(): GuideLang {
-  return useSyncExternalStore(subscribe, () => state, () => state);
+  return useLanguage().language;
+}
+
+/** Setter bound to the site language (the guide's हिंदी / English switch uses it). */
+export function useSetGuideLang(): (lang: GuideLang) => void {
+  return useLanguage().setLanguage;
 }
 
 /** Returns a translator bound to the current guide language. */

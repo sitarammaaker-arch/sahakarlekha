@@ -20,12 +20,20 @@ import { findTerm } from '@/content/glossary';
 import { relatedCalculators, type CalcConfig } from '@/content/calculators';
 import { cookbookForCalc } from '@/content/relatedContent';
 import { COOKBOOK_ENTRIES } from '@/content/cookbook';
+import { useLanguage } from '@/contexts/LanguageContext';
+import HindiOnlyNotice from '@/components/HindiOnlyNotice';
 import {
   Home, ChevronRight, Calculator as CalcIcon, ArrowRight, Sigma, BookOpen, Lightbulb,
   AlertTriangle, Link2, FileText, MonitorPlay, Printer, ShieldCheck, GraduationCap, HelpCircle,
 } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
+
+/** Display-only English names for the registry's Hindi category chips. */
+const CATEGORY_EN: Record<string, string> = {
+  'ब्याज': 'Interest', 'सदस्य व शेयर': 'Members & shares', 'कर': 'Tax', 'ऋण': 'Loans', 'कैश': 'Cash',
+  'सामान्य': 'General', 'रिपोर्ट': 'Reports', 'संपत्ति': 'Assets',
+};
 
 const Section: React.FC<{ icon: React.ReactNode; title: string; children: React.ReactNode }> = ({ icon, title, children }) => (
   <section className="mt-8">
@@ -35,6 +43,8 @@ const Section: React.FC<{ icon: React.ReactNode; title: string; children: React.
 );
 
 const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
+  const { language } = useLanguage();
+  const L = React.useCallback((hi: string, en: string) => (language === 'hi' ? hi : en), [language]);
   // Form state — keep raw values so the user can clear/type; compute coerces.
   const [values, setValues] = React.useState<Record<string, number | string>>(() =>
     Object.fromEntries(config.inputs.map((i) => [i.key, i.default])),
@@ -44,8 +54,8 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
   }, [config]);
 
   const result = React.useMemo(() => {
-    try { return config.compute(values); } catch { return { ok: false, stats: [], note: 'गणना में त्रुटि — कृपया मान जाँचें।' }; }
-  }, [config, values]);
+    try { return config.compute(values); } catch { return { ok: false, stats: [], note: L('गणना में त्रुटि — कृपया मान जाँचें।', 'Calculation error — please check the values.') }; }
+  }, [config, values, L]);
 
   // GOS-20: count real usage once per calculator visit (first input change, not page view).
   const usedRef = React.useRef(false);
@@ -104,8 +114,8 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
   ];
 
   useDocumentMeta({
-    title: config.metaTitle,
-    description: config.metaDescription,
+    title: L(config.metaTitle, `${config.englishName} — Free Calculator | SahakarLekha`),
+    description: L(config.metaDescription, `Free ${config.englishName} for cooperative societies — instant result with the formula, explanation and a worked example.`),
     canonicalPath: `/tools/${config.slug}`,
     jsonLd,
   });
@@ -120,24 +130,25 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
       <main className="mx-auto max-w-3xl px-4 py-8 md:py-10">
         {/* Breadcrumb */}
         <nav className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground mb-5" aria-label="breadcrumb">
-          <Link to="/" className="inline-flex items-center gap-1 hover:text-primary"><Home className="h-3.5 w-3.5" /> होम</Link>
+          <Link to="/" className="inline-flex items-center gap-1 hover:text-primary"><Home className="h-3.5 w-3.5" /> {L('होम', 'Home')}</Link>
           <ChevronRight className="h-3.5 w-3.5" />
-          <Link to="/tools" className="hover:text-primary">कैलकुलेटर</Link>
+          <Link to="/tools" className="hover:text-primary">{L('कैलकुलेटर', 'Calculators')}</Link>
           <ChevronRight className="h-3.5 w-3.5" />
-          <span className="text-foreground font-medium line-clamp-1">{config.hindiName}</span>
+          <span className="text-foreground font-medium line-clamp-1">{L(config.hindiName, config.englishName)}</span>
         </nav>
 
         <div className="flex items-center gap-2 mb-1">
-          <Badge variant="secondary">{config.category}</Badge>
-          <Badge variant="outline" className="gap-1"><CalcIcon className="h-3 w-3" /> मुफ्त कैलकुलेटर</Badge>
+          <Badge variant="secondary">{L(config.category, CATEGORY_EN[config.category] ?? config.category)}</Badge>
+          <Badge variant="outline" className="gap-1"><CalcIcon className="h-3 w-3" /> {L('मुफ्त कैलकुलेटर', 'Free calculator')}</Badge>
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground leading-tight mt-1">{config.title}</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground leading-tight mt-1">{L(config.title, config.englishName)}</h1>
+        <HindiOnlyNotice className="mt-3" what="This calculator's description, field names and result text" />
         <p className="text-muted-foreground mt-1">{config.intro}</p>
 
         {config.nev && (
           <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
             <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-            <span>दर/लागू होना आप स्वयं डालते हैं — यह कोई कानूनी दर नहीं सुझाता। सही दर के लिए अपने CA/नियमों से पुष्टि करें (Needs Expert Validation)।</span>
+            <span>{L('दर/लागू होना आप स्वयं डालते हैं — यह कोई कानूनी दर नहीं सुझाता। सही दर के लिए अपने CA/नियमों से पुष्टि करें (Needs Expert Validation)।', 'You enter the rate and whether it applies — this tool does not suggest any legal rate. Confirm the correct rate with your CA or the rules (Needs Expert Validation).')}</span>
           </div>
         )}
 
@@ -146,7 +157,7 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
           {/* Inputs */}
           <Card>
             <CardContent className="p-4 space-y-3.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">मान भरें</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{L('मान भरें', 'Enter values')}</p>
               {config.inputs.map((inp) => {
                 const id = `calc-${inp.key}`;
                 return (
@@ -189,9 +200,9 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
           <Card className="bg-primary/5 border-primary/20">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wide text-primary">परिणाम</p>
-                <button onClick={() => window.print()} className="no-print inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary" aria-label="परिणाम प्रिंट या सेव करें">
-                  <Printer className="h-3.5 w-3.5" /> प्रिंट / सेव
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">{L('परिणाम', 'Result')}</p>
+                <button onClick={() => window.print()} className="no-print inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary" aria-label={L('परिणाम प्रिंट या सेव करें', 'Print or save the result')}>
+                  <Printer className="h-3.5 w-3.5" /> {L('प्रिंट / सेव', 'Print / Save')}
                 </button>
               </div>
               {result.ok ? (
@@ -205,7 +216,7 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
                   {result.note && <p className="text-xs text-muted-foreground pt-1">{result.note}</p>}
                 </div>
               ) : (
-                <p className="mt-4 text-sm text-muted-foreground" aria-live="polite">{result.note || 'कृपया सभी मान भरें।'}</p>
+                <p className="mt-4 text-sm text-muted-foreground" aria-live="polite">{result.note || L('कृपया सभी मान भरें।', 'Please fill in all values.')}</p>
               )}
             </CardContent>
           </Card>
@@ -234,7 +245,7 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
               <CardContent className="p-4 flex items-center gap-3">
                 <BookOpen className="h-5 w-5 text-primary flex-shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-primary uppercase tracking-wide">पूरा गहराई से समझें · लेख</p>
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wide">{L('पूरा गहराई से समझें · लेख', 'Understand it in depth · Article')}</p>
                   <p className="font-semibold text-foreground mt-0.5 flex items-center gap-1">{paired.title} <ArrowRight className="h-4 w-4" /></p>
                 </div>
               </CardContent>
@@ -243,14 +254,15 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
         )}
 
         {/* Formula / Explanation / Example / Mistakes */}
-        <Section icon={<Sigma className="h-4 w-4 text-violet-500" />} title="सूत्र"><GuideMarkdown source={config.formula} /></Section>
-        <Section icon={<BookOpen className="h-4 w-4 text-primary" />} title="समझाइश"><GuideMarkdown source={config.explanation} /></Section>
-        <Section icon={<Lightbulb className="h-4 w-4 text-amber-500" />} title="उदाहरण"><GuideMarkdown source={config.example} /></Section>
-        <Section icon={<AlertTriangle className="h-4 w-4 text-amber-500" />} title="आम गलतियाँ"><GuideMarkdown source={config.mistakes} /></Section>
+        <HindiOnlyNotice className="mt-8" what="This explanation" />
+        <Section icon={<Sigma className="h-4 w-4 text-violet-500" />} title={L('सूत्र', 'Formula')}><GuideMarkdown source={config.formula} /></Section>
+        <Section icon={<BookOpen className="h-4 w-4 text-primary" />} title={L('समझाइश', 'Explanation')}><GuideMarkdown source={config.explanation} /></Section>
+        <Section icon={<Lightbulb className="h-4 w-4 text-amber-500" />} title={L('उदाहरण', 'Example')}><GuideMarkdown source={config.example} /></Section>
+        <Section icon={<AlertTriangle className="h-4 w-4 text-amber-500" />} title={L('आम गलतियाँ', 'Common mistakes')}><GuideMarkdown source={config.mistakes} /></Section>
 
         {/* FAQ */}
         {config.faqs && config.faqs.length > 0 && (
-          <Section icon={<HelpCircle className="h-4 w-4 text-sky-500" />} title="अक्सर पूछे जाने वाले प्रश्न">
+          <Section icon={<HelpCircle className="h-4 w-4 text-sky-500" />} title={L('अक्सर पूछे जाने वाले प्रश्न', 'Frequently asked questions')}>
             <div className="space-y-3">
               {config.faqs.map((f, i) => (
                 <div key={i} className="rounded-lg border bg-card p-3">
@@ -264,7 +276,7 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
 
         {/* Related glossary */}
         {glossaryTerms.length > 0 && (
-          <Section icon={<Link2 className="h-4 w-4 text-violet-500" />} title="जुड़े शब्द (शब्दकोश)">
+          <Section icon={<Link2 className="h-4 w-4 text-violet-500" />} title={L('जुड़े शब्द (शब्दकोश)', 'Related terms (Glossary)')}>
             <div className="flex flex-wrap gap-2">
               {glossaryTerms.map((t) => (
                 <Link key={t.slug} to={`/glossary/${t.slug}`} className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-full border bg-card hover:border-primary/50 hover:text-primary transition-colors">
@@ -277,7 +289,7 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
 
         {/* Related software module */}
         {config.relatedModules.length > 0 && (
-          <Section icon={<MonitorPlay className="h-4 w-4 text-emerald-600" />} title="इसे SahakarLekha में करें">
+          <Section icon={<MonitorPlay className="h-4 w-4 text-emerald-600" />} title={L('इसे SahakarLekha में करें', 'Do this in SahakarLekha')}>
             <div className="flex flex-wrap gap-2">
               {config.relatedModules.map((m) => (
                 <Link key={m.route} to={m.route}><Button variant="outline" size="sm" className="gap-1">{m.label} <ArrowRight className="h-3.5 w-3.5" /></Button></Link>
@@ -293,7 +305,7 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
             .filter((e): e is NonNullable<typeof e> => e != null);
           if (!entries.length) return null;
           return (
-            <Section icon={<BookOpen className="h-4 w-4 text-amber-600" />} title="एंट्री कैसे दर्ज करें (कुकबुक)">
+            <Section icon={<BookOpen className="h-4 w-4 text-amber-600" />} title={L('एंट्री कैसे दर्ज करें (कुकबुक)', 'How to record the entry (Cookbook)')}>
               <div className="grid sm:grid-cols-2 gap-3">
                 {entries.map((e) => (
                   <Link key={e.slug} to={`/cookbook/${e.slug}`} className="block">
@@ -312,7 +324,7 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
 
         {/* Related articles + help */}
         {(config.relatedArticles.length > 0 || config.relatedGuide.length > 0 || (config.relatedHelp && config.relatedHelp.length > 0)) && (
-          <Section icon={<FileText className="h-4 w-4 text-indigo-500" />} title="और पढ़ें">
+          <Section icon={<FileText className="h-4 w-4 text-indigo-500" />} title={L('और पढ़ें', 'Read more')}>
             <div className="space-y-2 text-sm">
               {config.relatedGuide.map((g) => (
                 <Link key={g.slug} to={`/guide/${g.slug}`} className="flex items-center gap-2 text-primary hover:underline"><GraduationCap className="h-3.5 w-3.5" /> {g.title}</Link>
@@ -328,27 +340,27 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
         )}
 
         {/* Learning path (cluster spine) */}
-        <Section icon={<GraduationCap className="h-4 w-4 text-teal-600" />} title="सीखने का रास्ता">
+        <Section icon={<GraduationCap className="h-4 w-4 text-teal-600" />} title={L('सीखने का रास्ता', 'Learning path')}>
           <ol className="space-y-2">
             {glossaryTerms[0] && (
               <li>
                 <Link to={`/glossary/${glossaryTerms[0].slug}`} className="group flex items-center gap-3 p-3 rounded-lg border bg-card hover:border-primary/50 transition-colors">
                   <span className="h-6 w-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
-                  <span className="text-sm text-foreground group-hover:text-primary">पहले समझें: <b>{glossaryTerms[0].hindiName || glossaryTerms[0].title}</b> (शब्दकोश)</span>
+                  <span className="text-sm text-foreground group-hover:text-primary">{L('पहले समझें', 'First understand')}: <b>{glossaryTerms[0].hindiName || glossaryTerms[0].title}</b> ({L('शब्दकोश', 'Glossary')})</span>
                 </Link>
               </li>
             )}
             <li>
               <div className="flex items-center gap-3 p-3 rounded-lg border border-primary/40 bg-primary/5">
                 <span className="h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">{glossaryTerms[0] ? 2 : 1}</span>
-                <span className="text-sm text-foreground">अभी गणना करें: <b>{config.hindiName}</b> (इसी पेज पर)</span>
+                <span className="text-sm text-foreground">{L('अभी गणना करें', 'Calculate now')}: <b>{L(config.hindiName, config.englishName)}</b> ({L('इसी पेज पर', 'on this page')})</span>
               </div>
             </li>
             {paired && (
               <li>
                 <Link to={`/blog/${paired.slug}`} className="group flex items-center gap-3 p-3 rounded-lg border bg-card hover:border-primary/50 transition-colors">
                   <span className="h-6 w-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">{glossaryTerms[0] ? 3 : 2}</span>
-                  <span className="text-sm text-foreground group-hover:text-primary">गहराई से पढ़ें: <b>{paired.title}</b></span>
+                  <span className="text-sm text-foreground group-hover:text-primary">{L('गहराई से पढ़ें', 'Read in depth')}: <b>{paired.title}</b></span>
                 </Link>
               </li>
             )}
@@ -356,7 +368,7 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
               <li>
                 <Link to={`/tools/${relatedCalcs[0].slug}`} className="group flex items-center gap-3 p-3 rounded-lg border bg-card hover:border-primary/50 transition-colors">
                   <span className="h-6 w-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">{(glossaryTerms[0] ? 1 : 0) + (paired ? 1 : 0) + 2}</span>
-                  <span className="text-sm text-foreground group-hover:text-primary">आगे आज़माएँ: <b>{relatedCalcs[0].hindiName}</b></span>
+                  <span className="text-sm text-foreground group-hover:text-primary">{L('आगे आज़माएँ', 'Try next')}: <b>{L(relatedCalcs[0].hindiName, relatedCalcs[0].englishName)}</b></span>
                 </Link>
               </li>
             )}
@@ -365,19 +377,19 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
 
         {/* Related calculators (cluster) */}
         {relatedCalcs.length > 0 && (
-          <Section icon={<CalcIcon className="h-4 w-4 text-indigo-500" />} title="जुड़े कैलकुलेटर">
+          <Section icon={<CalcIcon className="h-4 w-4 text-indigo-500" />} title={L('जुड़े कैलकुलेटर', 'Related calculators')}>
             <div className="grid sm:grid-cols-2 gap-2">
               {relatedCalcs.map((rc) => (
                 <Link key={rc.slug} to={`/tools/${rc.slug}`} className="group flex items-center justify-between gap-2 p-3 rounded-lg border bg-card hover:border-primary/50 transition-colors">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground group-hover:text-primary line-clamp-1">{rc.hindiName}</p>
-                    <p className="text-xs text-muted-foreground line-clamp-1">{rc.englishName}</p>
+                    <p className="text-sm font-medium text-foreground group-hover:text-primary line-clamp-1">{L(rc.hindiName, rc.englishName)}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-1">{L(rc.englishName, rc.hindiName)}</p>
                   </div>
                   <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
                 </Link>
               ))}
             </div>
-            <Link to="/tools" className="inline-flex items-center gap-1 text-sm text-primary hover:underline mt-3">सभी कैलकुलेटर देखें <ArrowRight className="h-3.5 w-3.5" /></Link>
+            <Link to="/tools" className="inline-flex items-center gap-1 text-sm text-primary hover:underline mt-3">{L('सभी कैलकुलेटर देखें', 'See all calculators')} <ArrowRight className="h-3.5 w-3.5" /></Link>
           </Section>
         )}
 
@@ -387,20 +399,20 @@ const CalculatorShell: React.FC<{ config: CalcConfig }> = ({ config }) => {
         {/* CTA */}
         <Card className="mt-6 bg-primary/5 border-primary/20">
           <CardContent className="p-6 text-center">
-            <p className="font-bold text-lg text-foreground">अपनी समिति का पूरा हिसाब डिजिटल कीजिए — मुफ्त</p>
-            <p className="text-sm text-muted-foreground mt-1">कैलकुलेटर से रिपोर्ट तक, सब एक जगह — सहकारी समितियों के लिए ही बना।</p>
+            <p className="font-bold text-lg text-foreground">{L('अपनी समिति का पूरा हिसाब डिजिटल कीजिए — मुफ्त', 'Keep all your society accounts digital — free')}</p>
+            <p className="text-sm text-muted-foreground mt-1">{L('कैलकुलेटर से रिपोर्ट तक, सब एक जगह — सहकारी समितियों के लिए ही बना।', 'From calculators to reports, all in one place — built only for cooperative societies.')}</p>
             <div className="flex flex-wrap gap-3 justify-center mt-4">
-              <Link to="/register"><Button className="gap-2">मुफ्त रजिस्टर करें <ArrowRight className="h-4 w-4" /></Button></Link>
-              <Link to="/tools"><Button variant="outline">सभी कैलकुलेटर</Button></Link>
+              <Link to="/register"><Button className="gap-2">{L('मुफ्त रजिस्टर करें', 'Register free')} <ArrowRight className="h-4 w-4" /></Button></Link>
+              <Link to="/tools"><Button variant="outline">{L('सभी कैलकुलेटर', 'All calculators')}</Button></Link>
             </div>
           </CardContent>
         </Card>
 
         {/* Evidence note */}
         <div className="mt-6 pt-4 border-t flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> शैक्षिक · Evidence Level A</span>
-          {config.updated && <span>अंतिम अपडेट: {config.updated}</span>}
-          {config.relatedKIs.length > 0 && <span className="font-mono opacity-70">ज्ञान-स्रोत: {config.relatedKIs.join(', ')}</span>}
+          <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> {L('शैक्षिक', 'Educational')} · Evidence Level A</span>
+          {config.updated && <span>{L('अंतिम अपडेट', 'Last updated')}: {config.updated}</span>}
+          {config.relatedKIs.length > 0 && <span className="font-mono opacity-70">{L('ज्ञान-स्रोत', 'Knowledge sources')}: {config.relatedKIs.join(', ')}</span>}
         </div>
       </main>
     </PublicLayout>
