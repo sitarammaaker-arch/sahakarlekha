@@ -1,5 +1,7 @@
 # How to do bank reconciliation (BRS): a guide for cooperative societies
 
+> **Short answer:** A BRS (Bank Reconciliation Statement) is not a new account or book. It is a matching statement that shows how the balance in your bank book and the balance in the bank statement tie up with each other.
+
 At month-end the same question often comes up — "Our books show one bank balance, and the bank statement shows another. Which one is right?" The answer is the **Bank Reconciliation Statement (BRS)**. It is the process that explains and removes the difference between the two balances. This guide explains **how to do bank reconciliation** — the causes, step by step, examples in both directions, and how to handle common items — in simple language.
 
 ## What a BRS is, and why it is necessary

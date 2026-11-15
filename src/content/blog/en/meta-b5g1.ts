@@ -30,7 +30,7 @@ export const BLOG_EN_B5G1: Record<string, BlogPostEn> = {
     excerpt: 'One equation that unlocks the whole secret of the Balance Sheet — with examples.',
   },
   'bank-reconciliation-guide': {
-    metaTitle: 'What Is Bank Reconciliation (BRS) and How to Do It — Cooperative Society | SahakarLekha',
+    metaTitle: 'What Is a BRS and How to Prepare One — Bank Reconciliation, with Examples | SahakarLekha',
     metaDescription: 'What a BRS is, why it matters and how to do it — matching the bank statement with the books, fixing differences from uncleared cheques and bank charges.',
     title: 'How to do bank reconciliation (BRS): a guide for cooperative societies',
     shortTitle: 'How to do bank reconciliation (BRS)',

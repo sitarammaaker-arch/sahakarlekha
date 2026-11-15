@@ -13,9 +13,9 @@ export const BLOG_EN_B1G5: Record<string, BlogPostEn> = {
       "A cooperative society secretary's work: preparing for a meeting in front of members, with a dashboard on a laptop, registers and audit files",
   },
   'treasurer-accounting-work-checklist': {
-    metaTitle: "Treasurer's accounting work: cash, bank, voucher checklist | SahakarLekha",
+    metaTitle: 'What a Treasurer Is and What a Treasurer Does — a Daily Checklist | SahakarLekha',
     metaDescription:
-      "A cooperative society treasurer's (Koshadhyaksh) accounting work — checklist for cash count, BRS, voucher checks, reports and audit records, with law vs practice.",
+      "The treasurer (Koshadhyaksh) watches over the safety of the society's money and the truth of its accounts. Daily, monthly and yearly work — cash count, BRS, voucher checks, reports — as a checklist.",
     title: "The treasurer's accounting work: a checklist for cash, bank, vouchers and reports",
     shortTitle: "The treasurer's accounting work",
     excerpt:
