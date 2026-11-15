@@ -12,10 +12,13 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { allGlossary, filterGlossary, glossaryByLetter } from '@/content/glossary';
 import { Home, ChevronRight, Search, BookMarked, ArrowRight, Sparkles } from 'lucide-react';
 import { HUB_META } from '@/content/hubMeta';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const SITE = 'https://sahakarlekha.com';
 
 const Glossary: React.FC = () => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const [q, setQ] = React.useState('');
   const all = React.useMemo(() => allGlossary(), []);
   const groups = React.useMemo(() => glossaryByLetter(), []);
@@ -47,8 +50,8 @@ const Glossary: React.FC = () => {
   ];
 
   useDocumentMeta({
-    title: HUB_META.glossary.title,
-    description: HUB_META.glossary.description,
+    title: L(HUB_META.glossary.title, 'Cooperative Accounting Glossary — every term in plain words | SahakarLekha'),
+    description: L(HUB_META.glossary.description, 'From cash book to balance sheet — a plain Hindi and English glossary of the key terms in cooperative society accounting, each linked to the related guide, help and software.'),
     canonicalPath: '/glossary',
     jsonLd,
   });
@@ -65,13 +68,13 @@ const Glossary: React.FC = () => {
         <BookMarked className="absolute -bottom-10 -right-6 h-56 w-56 text-white/15" aria-hidden="true" />
         <div className="relative mx-auto max-w-4xl px-4 py-12 md:py-14">
           <nav className="flex flex-wrap items-center gap-1.5 text-sm text-white/80 mb-4" aria-label="breadcrumb">
-            <Link to="/" className="inline-flex items-center gap-1 hover:text-white"><Home className="h-3.5 w-3.5" /> होम</Link>
+            <Link to="/" className="inline-flex items-center gap-1 hover:text-white"><Home className="h-3.5 w-3.5" /> {L('होम', 'Home')}</Link>
             <ChevronRight className="h-3.5 w-3.5" />
-            <span className="text-white">शब्दकोश</span>
+            <span className="text-white">{L('शब्दकोश', 'Glossary')}</span>
           </nav>
-          <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight">सहकारी लेखांकन शब्दकोश</h1>
+          <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight">{L('सहकारी लेखांकन शब्दकोश', 'Cooperative Accounting Glossary')}</h1>
           <p className="text-white/90 text-lg mt-3 max-w-2xl">
-            हर ज़रूरी शब्द — आसान हिन्दी व English में। समझें, और सीधे जुड़ी गाइड, मदद या सॉफ्टवेयर तक पहुँचें।
+            {L('हर ज़रूरी शब्द — आसान हिन्दी व English में। समझें, और सीधे जुड़ी गाइड, मदद या सॉफ्टवेयर तक पहुँचें।', 'Every key term — in plain Hindi and English. Understand it, then go straight to the related guide, help or software.')}
           </p>
           {/* Search */}
           <div className="mt-6 relative max-w-xl">
@@ -80,13 +83,13 @@ const Glossary: React.FC = () => {
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="शब्द खोजें — कैश बुक, voucher, खाता, debit…"
-              aria-label="शब्दकोश में खोजें"
+              placeholder={L('शब्द खोजें — कैश बुक, voucher, खाता, debit…', 'Search a term — cash book, voucher, ledger, debit…')}
+              aria-label={L('शब्दकोश में खोजें', 'Search the glossary')}
               className="pl-9 h-12 bg-white text-foreground"
             />
           </div>
           <p className="text-white/70 text-xs mt-3 inline-flex items-center gap-1">
-            <Sparkles className="h-3.5 w-3.5" /> {all.length} शब्द · ज्ञान-आधारित (हर शब्द एक सत्यापित Knowledge Item से)
+            <Sparkles className="h-3.5 w-3.5" /> {all.length}{L(' शब्द · ज्ञान-आधारित (हर शब्द एक सत्यापित Knowledge Item से)', ' terms · knowledge-based (every term comes from a verified Knowledge Item)')}
           </p>
         </div>
       </header>
@@ -94,9 +97,9 @@ const Glossary: React.FC = () => {
       <main className="mx-auto max-w-5xl px-4 py-10">
         {/* A–Z jump bar (hidden while searching) */}
         {!filtered && (
-          <nav className="flex flex-wrap gap-1.5 mb-8 justify-center" aria-label="अक्षर के अनुसार जाएँ">
+          <nav className="flex flex-wrap gap-1.5 mb-8 justify-center" aria-label={L('अक्षर के अनुसार जाएँ', 'Jump by letter')}>
             {letters.map((l) => (
-              <a key={l} href={`#letter-${l}`} aria-label={`अक्षर ${l} पर जाएँ`} className="h-8 w-8 rounded-md border flex items-center justify-center text-sm font-semibold text-muted-foreground hover:bg-primary hover:text-white hover:border-primary transition-colors">
+              <a key={l} href={`#letter-${l}`} aria-label={L(`अक्षर ${l} पर जाएँ`, `Jump to letter ${l}`)} className="h-8 w-8 rounded-md border flex items-center justify-center text-sm font-semibold text-muted-foreground hover:bg-primary hover:text-white hover:border-primary transition-colors">
                 {l}
               </a>
             ))}
@@ -107,14 +110,16 @@ const Glossary: React.FC = () => {
         {filtered && (
           <section aria-live="polite">
             <p className="text-sm text-muted-foreground mb-4">
-              {filtered.length > 0 ? `${filtered.length} परिणाम “${q}” के लिए` : `“${q}” के लिए कोई शब्द नहीं मिला`}
+              {filtered.length > 0
+                ? L(`${filtered.length} परिणाम “${q}” के लिए`, `${filtered.length} result${filtered.length === 1 ? '' : 's'} for “${q}”`)
+                : L(`“${q}” के लिए कोई शब्द नहीं मिला`, `No term found for “${q}”`)}
             </p>
             <div className="grid sm:grid-cols-2 gap-3">
               {filtered.map((e) => <TermCard key={e.slug} entry={e} />)}
             </div>
             {filtered.length === 0 && (
               <p className="text-sm text-muted-foreground mt-4">
-                पूरी साइट में खोजें? <Link to="/search" className="text-primary hover:underline">साइट खोज खोलें →</Link>
+                {L('पूरी साइट में खोजें? ', 'Search the whole site? ')}<Link to="/search" className="text-primary hover:underline">{L('साइट खोज खोलें →', 'Open site search →')}</Link>
               </p>
             )}
           </section>
@@ -136,16 +141,21 @@ const Glossary: React.FC = () => {
   );
 };
 
-const TermCard: React.FC<{ entry: ReturnType<typeof allGlossary>[number] }> = ({ entry }) => (
+const TermCard: React.FC<{ entry: ReturnType<typeof allGlossary>[number] }> = ({ entry }) => {
+  const { language } = useLanguage();
+  // English mode leads with the English name; Hindi mode (default, prerendered) is unchanged.
+  const primary = language === 'hi' ? (entry.hindiName || entry.title) : (entry.englishName || entry.title);
+  const secondary = language === 'hi' ? entry.englishName : entry.hindiName;
+  return (
   <Link to={`/glossary/${entry.slug}`} className="group block">
     <Card className="h-full transition-all hover:border-primary/50 hover:shadow-sm">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="font-semibold text-foreground leading-snug group-hover:text-primary transition-colors">
-              {entry.hindiName || entry.title}
+              {primary}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">{entry.englishName}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{secondary}</p>
           </div>
           <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary flex-shrink-0 mt-1" />
         </div>
@@ -156,6 +166,7 @@ const TermCard: React.FC<{ entry: ReturnType<typeof allGlossary>[number] }> = ({
       </CardContent>
     </Card>
   </Link>
-);
+  );
+};
 
 export default Glossary;

@@ -17,11 +17,15 @@ import { findEntry } from '@/content/guide';
 import { helpForCookbook } from '@/content/relatedContent';
 import { HELP_TASKS } from '@/content/help';
 import { Home, ChevronRight, ArrowRight, BookOpen, AlertTriangle } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import HindiOnlyNotice from '@/components/HindiOnlyNotice';
 
 const SITE = 'https://sahakarlekha.com';
 const inr = (n?: number) => (n == null ? '' : `₹${n.toLocaleString('en-IN')}`);
 
 const CookbookEntry: React.FC = () => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const { slug = '' } = useParams();
   const entry = findCookbookEntry(slug);
   const { isAuthenticated } = useAuth();
@@ -71,11 +75,13 @@ const CookbookEntry: React.FC = () => {
       <div className="max-w-3xl mx-auto px-4 py-8 md:py-12">
         <nav className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground mb-6">
           <Link to="/cookbook" className="inline-flex items-center gap-1 hover:text-primary">
-            <Home className="h-3.5 w-3.5" /> एंट्री कुकबुक
+            <Home className="h-3.5 w-3.5" /> {L('एंट्री कुकबुक', 'Entry Cookbook')}
           </Link>
           <ChevronRight className="h-3.5 w-3.5" />
           <span className="text-foreground font-medium line-clamp-1">{entry.title}</span>
         </nav>
+
+        <HindiOnlyNotice className="mb-4" what="This guide" />
 
         <span className="text-xs font-semibold uppercase tracking-wide text-primary">{entry.category}</span>
         <h1 className="text-2xl md:text-3xl font-bold text-foreground mt-1">{entry.title}</h1>
@@ -87,7 +93,7 @@ const CookbookEntry: React.FC = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="py-2.5 px-4 font-semibold">खाता / Account</th>
+                  <th className="py-2.5 px-4 font-semibold">{L('खाता / Account', 'Account')}</th>
                   <th className="py-2.5 px-4 font-semibold text-right w-24">Dr / Cr</th>
                 </tr>
               </thead>
@@ -109,19 +115,19 @@ const CookbookEntry: React.FC = () => {
             </table>
           </CardContent>
         </Card>
-        <p className="text-sm text-muted-foreground mt-2"><span className="font-semibold text-foreground">विवरण (narration):</span> {entry.narration}</p>
+        <p className="text-sm text-muted-foreground mt-2"><span className="font-semibold text-foreground">{L('विवरण (narration):', 'Narration:')}</span> {entry.narration}</p>
 
         {/* Worked example with real amounts */}
         {entry.example && (
           <div className="mt-8">
-            <h2 className="text-lg font-bold text-foreground mb-2">उदाहरण (₹ में)</h2>
+            <h2 className="text-lg font-bold text-foreground mb-2">{L('उदाहरण (₹ में)', 'Example (in ₹)')}</h2>
             <p className="text-sm text-foreground mb-3">{entry.example.text}</p>
             <Card>
               <CardContent className="p-0 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="py-2 px-4 font-semibold">खाता</th>
+                      <th className="py-2 px-4 font-semibold">{L('खाता', 'Account')}</th>
                       <th className="py-2 px-4 font-semibold text-right">Dr</th>
                       <th className="py-2 px-4 font-semibold text-right">Cr</th>
                     </tr>
@@ -145,13 +151,13 @@ const CookbookEntry: React.FC = () => {
           <div className="mt-6 grid sm:grid-cols-2 gap-3">
             {entry.useWhen && (
               <div className="rounded-lg border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm">
-                <p className="font-semibold text-emerald-800 dark:text-emerald-300 mb-1">✅ कब इस्तेमाल करें</p>
+                <p className="font-semibold text-emerald-800 dark:text-emerald-300 mb-1">{L('✅ कब इस्तेमाल करें', '✅ When to use')}</p>
                 <p className="text-foreground">{entry.useWhen}</p>
               </div>
             )}
             {entry.avoidWhen && (
               <div className="rounded-lg border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 px-4 py-3 text-sm">
-                <p className="font-semibold text-rose-800 dark:text-rose-300 mb-1">⛔ कब नहीं</p>
+                <p className="font-semibold text-rose-800 dark:text-rose-300 mb-1">{L('⛔ कब नहीं', '⛔ When not to')}</p>
                 <p className="text-foreground">{entry.avoidWhen}</p>
               </div>
             )}
@@ -160,20 +166,20 @@ const CookbookEntry: React.FC = () => {
 
         {entry.inApp && (
           <div className="mt-6">
-            <h2 className="text-lg font-bold text-foreground mb-2">ऐप में कैसे करें</h2>
+            <h2 className="text-lg font-bold text-foreground mb-2">{L('ऐप में कैसे करें', 'How to do it in the app')}</h2>
             <p className="text-sm text-foreground">{entry.inApp}</p>
           </div>
         )}
 
         {entry.correction && (
           <div className="mt-6">
-            <h2 className="text-lg font-bold text-foreground mb-2">गलती हो गई तो — सुधार</h2>
+            <h2 className="text-lg font-bold text-foreground mb-2">{L('गलती हो गई तो — सुधार', 'Made a mistake? — the correction')}</h2>
             <p className="text-sm text-foreground">{entry.correction}</p>
           </div>
         )}
 
         {entry.societyTypes && entry.societyTypes.length > 0 && (
-          <p className="text-xs text-muted-foreground mt-2">समिति प्रकार: {entry.societyTypes.join(' · ')}</p>
+          <p className="text-xs text-muted-foreground mt-2">{L('समिति प्रकार: ', 'Society types: ')}{entry.societyTypes.join(' · ')}</p>
         )}
 
         {/* CTA */}
@@ -186,7 +192,7 @@ const CookbookEntry: React.FC = () => {
         {/* Notes */}
         {entry.notes && entry.notes.length > 0 && (
           <div className="mt-8">
-            <h2 className="text-lg font-bold text-foreground flex items-center gap-1.5 mb-3"><AlertTriangle className="h-5 w-5 text-amber-500" /> ध्यान दें</h2>
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-1.5 mb-3"><AlertTriangle className="h-5 w-5 text-amber-500" /> {L('ध्यान दें', 'Keep in mind')}</h2>
             <ul className="space-y-2">
               {entry.notes.map((n, i) => (
                 <li key={i} className="text-sm text-foreground bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg px-4 py-2.5">{n}</li>
@@ -200,7 +206,7 @@ const CookbookEntry: React.FC = () => {
           <Link to={`/guide/${guide.slug}`} className="mt-8 block">
             <Card className="border-primary/30 hover:bg-primary/5 transition-colors">
               <CardContent className="p-5">
-                <p className="text-xs font-semibold text-primary uppercase tracking-wide flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> पूरा गहराई से समझें · गाइड</p>
+                <p className="text-xs font-semibold text-primary uppercase tracking-wide flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> {L('पूरा गहराई से समझें · गाइड', 'Understand it in depth · Guide')}</p>
                 <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{guide.shortTitle} <ArrowRight className="h-4 w-4" /></p>
               </CardContent>
             </Card>
@@ -214,7 +220,7 @@ const CookbookEntry: React.FC = () => {
               <Link key={t.slug} to={`/help/${t.slug}`} className="block">
                 <Card className="border-emerald-300/50 bg-emerald-50 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-950/40 transition-colors">
                   <CardContent className="p-4">
-                    <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">📋 स्टेप-बाय-स्टेप · मदद केंद्र</p>
+                    <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">{L('📋 स्टेप-बाय-स्टेप · मदद केंद्र', '📋 Step-by-step · Help Center')}</p>
                     <p className="font-medium text-foreground mt-1 flex items-center gap-1">{t.title} <ArrowRight className="h-3.5 w-3.5" /></p>
                   </CardContent>
                 </Card>
@@ -227,7 +233,7 @@ const CookbookEntry: React.FC = () => {
 
         {related.length > 0 && (
           <div className="mt-10 pt-6 border-t">
-            <h2 className="text-sm font-semibold text-foreground mb-3">मिलती-जुलती entries</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-3">{L('मिलती-जुलती entries', 'Similar entries')}</h2>
             <div className="grid sm:grid-cols-2 gap-3">
               {related.map((r) => (
                 <Link key={r.slug} to={`/cookbook/${r.slug}`} className="block">
@@ -242,11 +248,11 @@ const CookbookEntry: React.FC = () => {
           </div>
         )}
 
-        {entry.updated && <p className="mt-8 text-xs text-muted-foreground">अंतिम अपडेट: {entry.updated}</p>}
+        {entry.updated && <p className="mt-8 text-xs text-muted-foreground">{L('अंतिम अपडेट: ', 'Last updated: ')}{entry.updated}</p>}
 
         {/* Reference disclaimer (Constitution: education, not a ruling) */}
         <p className="mt-8 text-xs text-muted-foreground border-t pt-4">
-          यह संदर्भ-शिक्षा है, कोई कानूनी/लेखा ruling नहीं। आपकी समिति के बायलॉज़ व राज्य नियम अलग हो सकते हैं — संदेह हो तो अपने ऑडिटर/RCS से पुष्टि करें।
+          {L('यह संदर्भ-शिक्षा है, कोई कानूनी/लेखा ruling नहीं। आपकी समिति के बायलॉज़ व राज्य नियम अलग हो सकते हैं — संदेह हो तो अपने ऑडिटर/RCS से पुष्टि करें।', 'This is reference education, not a legal or accounting ruling. Your society\'s bye-laws and state rules may differ — if in doubt, confirm with your auditor or the RCS.')}
         </p>
       </div>
     </PublicLayout>

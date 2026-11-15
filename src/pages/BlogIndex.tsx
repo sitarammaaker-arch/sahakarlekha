@@ -14,11 +14,12 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { publishedOrder, blogIntro, type BlogPost } from '@/content/blog';
 import { BLOG_CATEGORIES } from '@/content/blog/categories';
 import { fetchBlogViewCounts, formatViews } from '@/lib/blogViews';
-import { PostMeta as Meta, CategoryPills, BlogSearchBox, BlogSearchResults } from '@/components/blog/BlogCards';
+import { PostMeta as Meta, CategoryPills, BlogSearchBox, BlogSearchResults, categoryLabel } from '@/components/blog/BlogCards';
 import { catColor } from '@/components/blog/blogTheme';
 import { useBlogSearch } from '@/lib/useBlogSearch';
 import { ArrowRight, Eye, Rss, ArrowUpRight, Flame } from 'lucide-react';
 import { HUB_META } from '@/content/hubMeta';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const SITE = 'https://sahakarlekha.com';
 
@@ -31,9 +32,11 @@ function introPreview(post: BlogPost): string {
 const BlogIndex: React.FC = () => {
   const posts = React.useMemo(() => publishedOrder(), []);
   const { input, setInput, query, results, searching } = useBlogSearch(posts, 'all');
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   useDocumentMeta({
-    title: HUB_META.blog.title,
-    description: HUB_META.blog.description,
+    title: L(HUB_META.blog.title, 'SahakarLekha Blog — cooperative society accounting, audit & management'),
+    description: L(HUB_META.blog.description, 'Simple articles on digital accounting, voucher entry, audit, compliance and management for cooperative societies — for PACS, marketing, consumer and multipurpose societies.'),
     canonicalPath: '/blog',
     // a ?q= result list is not a page of its own — keep it out of the index (canonical stays /blog)
     robots: searching ? 'noindex, follow' : undefined,
@@ -85,8 +88,8 @@ const BlogIndex: React.FC = () => {
         {/* Compact header (H1 for SEO) */}
         <div className="flex items-end justify-between gap-4 mb-6">
           <div>
-            <h1 className="font-serif text-2xl md:text-3xl font-bold text-foreground">सहकार लेखा ब्लॉग</h1>
-            <p className="text-sm text-muted-foreground mt-1">सहकारी लेखांकन, ऑडिट व अनुपालन — आसान भाषा में</p>
+            <h1 className="font-serif text-2xl md:text-3xl font-bold text-foreground">{L('सहकार लेखा ब्लॉग', 'SahakarLekha Blog')}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{L('सहकारी लेखांकन, ऑडिट व अनुपालन — आसान भाषा में', 'Cooperative accounting, audit and compliance — in plain language')}</p>
           </div>
         </div>
 
@@ -118,7 +121,7 @@ const BlogIndex: React.FC = () => {
                       className={featured.image ? 'absolute left-4 bottom-4 inline-flex items-center rounded-full bg-background/90 px-3 py-1 text-xs font-semibold shadow-sm' : 'inline-flex items-center rounded-full bg-background/90 px-3 py-1 text-xs font-semibold'}
                       style={{ color: catColor(featured.category) }}
                     >
-                      ✦ नवीनतम · {featured.category}
+                      ✦ {L('नवीनतम', 'Latest')} · {categoryLabel(featured.category, language)}
                     </span>
                   </div>
                   <CardContent className="p-5 flex flex-col flex-1">
@@ -133,7 +136,7 @@ const BlogIndex: React.FC = () => {
                   <Link key={post.slug} to={`/blog/${post.slug}`} className="group block">
                     <Card className="h-full transition-all hover:shadow-md hover:border-primary/40">
                       <CardContent className="p-4">
-                        <span className="text-xs font-semibold" style={{ color: catColor(post.category) }}>{post.category}</span>
+                        <span className="text-xs font-semibold" style={{ color: catColor(post.category) }}>{categoryLabel(post.category, language)}</span>
                         <h3 className="font-serif text-base font-bold text-foreground leading-snug mt-1 group-hover:text-primary transition-colors line-clamp-2">{post.shortTitle}</h3>
                         <Meta post={post} views={views[post.slug]} className="mt-2" />
                       </CardContent>
@@ -155,9 +158,9 @@ const BlogIndex: React.FC = () => {
                   <div className="flex items-center gap-2 mb-3 pb-1.5" style={{ borderBottom: `2px solid ${color}` }}>
                     <span className="h-2 w-2 rounded-full" style={{ background: color }} />
                     <h2 className="text-base font-bold text-foreground flex-1">
-                      <Link to={`/blog/category/${catSlug}`} className="hover:text-primary">{cat}</Link>
+                      <Link to={`/blog/category/${catSlug}`} className="hover:text-primary">{categoryLabel(cat, language)}</Link>
                     </h2>
-                    <Link to={`/blog/category/${catSlug}`} className="text-xs font-medium text-primary hover:underline">सभी {catPosts.length} देखें →</Link>
+                    <Link to={`/blog/category/${catSlug}`} className="text-xs font-medium text-primary hover:underline">{L(`सभी ${catPosts.length} देखें →`, `See all ${catPosts.length} →`)}</Link>
                   </div>
                   <div className="divide-y">
                     {items.map((post) => (
@@ -175,7 +178,7 @@ const BlogIndex: React.FC = () => {
             <section className="rounded-xl border bg-muted/30 p-5 self-start">
               <div className="flex items-center gap-2 mb-3">
                 <Flame className="h-4 w-4 text-orange-500" />
-                <h2 className="text-base font-bold text-foreground">सबसे ज़्यादा पढ़े गए</h2>
+                <h2 className="text-base font-bold text-foreground">{L('सबसे ज़्यादा पढ़े गए', 'Most read')}</h2>
               </div>
               <div className="space-y-3">
                 {mostRead.map((post, i) => (
@@ -184,7 +187,7 @@ const BlogIndex: React.FC = () => {
                     <div className="min-w-0">
                       <p className="text-sm text-foreground leading-snug group-hover:text-primary transition-colors line-clamp-2">{post.shortTitle}</p>
                       {(views[post.slug] ?? 0) > 0 && (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground mt-0.5"><Eye className="h-3 w-3" /> {formatViews(views[post.slug])} बार पढ़ा</span>
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground mt-0.5"><Eye className="h-3 w-3" /> {formatViews(views[post.slug])} {L('बार पढ़ा', 'reads')}</span>
                       )}
                     </div>
                   </Link>
@@ -201,15 +204,15 @@ const BlogIndex: React.FC = () => {
             <CardContent className="p-6 md:p-8 flex flex-col sm:flex-row items-center gap-5">
               <Rss className="h-10 w-10 text-primary flex-shrink-0" />
               <div className="flex-1 text-center sm:text-left">
-                <p className="font-bold text-lg text-foreground">नियमित रूप से नए लेख</p>
+                <p className="font-bold text-lg text-foreground">{L('नियमित रूप से नए लेख', 'New articles regularly')}</p>
                 <p className="text-sm text-muted-foreground">
-                  सहकारी लेखांकन की नई जानकारी सीधे पाएँ — और अपनी समिति का खाता आज ही डिजिटल कीजिए।
+                  {L('सहकारी लेखांकन की नई जानकारी सीधे पाएँ — और अपनी समिति का खाता आज ही डिजिटल कीजिए।', 'Get the latest on cooperative accounting directly — and take your society\'s accounts digital today.')}
                 </p>
               </div>
               <div className="flex flex-wrap gap-3 justify-center flex-shrink-0">
-                <Button asChild className="gap-2"><Link to="/register">शुरू करें <ArrowRight className="h-4 w-4" /></Link></Button>
+                <Button asChild className="gap-2"><Link to="/register">{L('शुरू करें', 'Get started')} <ArrowRight className="h-4 w-4" /></Link></Button>
                 <Button asChild variant="outline" className="gap-1.5">
-                  <a href="https://x.com/sahakarlekha" target="_blank" rel="noopener noreferrer">X पर फॉलो करें <ArrowUpRight className="h-3.5 w-3.5" /></a>
+                  <a href="https://x.com/sahakarlekha" target="_blank" rel="noopener noreferrer">{L('X पर फॉलो करें', 'Follow on X')} <ArrowUpRight className="h-3.5 w-3.5" /></a>
                 </Button>
               </div>
             </CardContent>

@@ -26,7 +26,10 @@ import { guideForBlog } from '@/content/crossLinks';
 import { calculatorForArticle } from '@/content/calculators';
 import { helpForBlog } from '@/content/relatedContent';
 import { HELP_TASKS } from '@/content/help';
-import { ACCENTS, formatDate } from '@/components/blog/blogTheme';
+import { ACCENTS } from '@/components/blog/blogTheme';
+import { categoryLabel, blogDate } from '@/components/blog/BlogCards';
+import HindiOnlyNotice from '@/components/HindiOnlyNotice';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   Home, ChevronRight, ChevronLeft, ChevronDown, Calendar, Clock, List, ArrowRight,
   Share2, Check, Newspaper, Lightbulb, Eye, Link2, ShieldCheck, Info,
@@ -42,28 +45,30 @@ const SITE = 'https://sahakarlekha.com';
  * /editorial-policy, which explains what the review date means and how to report a mistake.
  */
 const TrustNote: React.FC<{ post: BlogPostMeta }> = ({ post }) => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const sensitive = TRUST_NOTE_CATEGORIES.includes(post.category);
   if (!post.jurisdiction && !post.reviewed && !sensitive) return null;
   return (
     <div className="mt-5 rounded-lg border bg-muted/40 px-4 py-3 text-sm space-y-1.5">
       {post.jurisdiction === 'haryana' && (
         <p className="text-foreground/90">
-          <span className="mr-1.5 inline-flex items-center rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100 px-2 py-0.5 text-xs font-semibold">{TRUST_NOTE.haryanaBadge}</span>
-          {TRUST_NOTE.haryana}
+          <span className="mr-1.5 inline-flex items-center rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100 px-2 py-0.5 text-xs font-semibold">{L(TRUST_NOTE.haryanaBadge, '📍 Haryana')}</span>
+          {L(TRUST_NOTE.haryana, 'This article is about Haryana. Rules, schemes and procedures may differ in other states.')}
         </p>
       )}
       {post.reviewed ? (
         <p className="flex gap-1.5 text-foreground/90">
           <ShieldCheck className="h-4 w-4 flex-shrink-0 mt-0.5 text-primary" aria-hidden="true" />
-          <span><strong>{TRUST_NOTE.reviewedLabel}: {formatDate(post.reviewed)}</strong>। {TRUST_NOTE.reviewed}</span>
+          <span><strong>{L(TRUST_NOTE.reviewedLabel, 'Last reviewed')}: {blogDate(post.reviewed, language)}</strong>{L('।', '.')} {L(TRUST_NOTE.reviewed, 'On this date the figures and claims in the article were checked against the original sources.')}</span>
         </p>
       ) : sensitive ? (
         <p className="flex gap-1.5 text-muted-foreground">
           <Info className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
-          <span>{TRUST_NOTE.notReviewed}</span>
+          <span>{L(TRUST_NOTE.notReviewed, 'This article is for general information. Rules, rates and schemes keep changing, so confirm with the original order or your Registrar\'s office before making a decision.')}</span>
         </p>
       ) : null}
-      <p><Link to={EDITORIAL_POLICY_PATH} className="text-xs font-medium text-primary hover:underline">{TRUST_NOTE.policyLink} →</Link></p>
+      <p><Link to={EDITORIAL_POLICY_PATH} className="text-xs font-medium text-primary hover:underline">{L(TRUST_NOTE.policyLink, 'How we check articles · Report a mistake')} →</Link></p>
     </div>
   );
 };
@@ -126,10 +131,12 @@ function toPlain(md: string): string {
 
 /** Accordion FAQ block — one open at a time; `extra` holds trailing glossary links. */
 const FaqList: React.FC<{ items: { q: string; a: string }[]; extra?: string }> = ({ items, extra }) => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const [open, setOpen] = React.useState<number | null>(0);
   return (
     <section className="mt-12 pt-8 border-t" id="faq">
-      <h2 className="text-xl font-bold text-foreground mb-4">अक्सर पूछे जाने वाले प्रश्न</h2>
+      <h2 className="text-xl font-bold text-foreground mb-4">{L('अक्सर पूछे जाने वाले प्रश्न', 'Frequently asked questions')}</h2>
       <div className="space-y-2">
         {items.map((f, i) => {
           const isOpen = open === i;
@@ -178,6 +185,8 @@ const InIcon = (p: { className?: string }) => (
  * Picking a section closes it FIRST and then scrolls, so the collapse cannot shift the target away.
  */
 const MobileToc: React.FC<{ sections: { text: string; id: string }[] }> = ({ sections }) => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const ref = React.useRef<HTMLDetailsElement>(null);
   const go = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
@@ -189,12 +198,12 @@ const MobileToc: React.FC<{ sections: { text: string; id: string }[] }> = ({ sec
     <details ref={ref} className="group lg:hidden mb-8 rounded-xl border bg-muted/30 no-print">
       <summary className="flex items-center justify-between gap-2 cursor-pointer list-none px-4 py-3 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-1.5">
-          <List className="h-4 w-4 text-primary" aria-hidden="true" /> इस लेख में
-          <span className="font-normal text-muted-foreground">· {sections.length} हिस्से</span>
+          <List className="h-4 w-4 text-primary" aria-hidden="true" /> {L('इस लेख में', 'In this article')}
+          <span className="font-normal text-muted-foreground">· {sections.length} {L('हिस्से', 'sections')}</span>
         </span>
         <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
       </summary>
-      <nav aria-label="इस लेख में" className="px-2 pb-3">
+      <nav aria-label={L('इस लेख में', 'In this article')} className="px-2 pb-3">
         <ol className="space-y-0.5 text-sm">
           {sections.map((s, i) => (
             <li key={s.id}>
@@ -211,6 +220,8 @@ const MobileToc: React.FC<{ sections: { text: string; id: string }[] }> = ({ sec
 };
 
 const ShareBar: React.FC<{ url: string; title: string }> = ({ url, title }) => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const [copied, setCopied] = React.useState(false);
   const enc = encodeURIComponent;
   const tw = `https://twitter.com/intent/tweet?text=${enc(title)}&url=${enc(url)}`;
@@ -222,14 +233,14 @@ const ShareBar: React.FC<{ url: string; title: string }> = ({ url, title }) => {
   const base = 'h-9 w-9 rounded-full flex items-center justify-center transition-colors text-muted-foreground bg-muted hover:text-white';
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs font-medium text-muted-foreground inline-flex items-center gap-1 mr-1"><Share2 className="h-3.5 w-3.5" /> शेयर:</span>
-      <a href={wa} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp पर भेजें" className={`${base} hover:bg-green-500`}><WaIcon className="h-4 w-4" /></a>
-      <a href={tw} target="_blank" rel="noopener noreferrer" aria-label="X पर शेयर करें" className={`${base} hover:bg-black`}><XIcon className="h-4 w-4" /></a>
-      <a href={li} target="_blank" rel="noopener noreferrer" aria-label="LinkedIn पर शेयर करें" className={`${base} hover:bg-blue-600`}><InIcon className="h-4 w-4" /></a>
-      <button type="button" onClick={copy} aria-label="लेख का लिंक कॉपी करें" className={`${base} hover:bg-primary`}>
+      <span className="text-xs font-medium text-muted-foreground inline-flex items-center gap-1 mr-1"><Share2 className="h-3.5 w-3.5" /> {L('शेयर:', 'Share:')}</span>
+      <a href={wa} target="_blank" rel="noopener noreferrer" aria-label={L('WhatsApp पर भेजें', 'Send on WhatsApp')} className={`${base} hover:bg-green-500`}><WaIcon className="h-4 w-4" /></a>
+      <a href={tw} target="_blank" rel="noopener noreferrer" aria-label={L('X पर शेयर करें', 'Share on X')} className={`${base} hover:bg-black`}><XIcon className="h-4 w-4" /></a>
+      <a href={li} target="_blank" rel="noopener noreferrer" aria-label={L('LinkedIn पर शेयर करें', 'Share on LinkedIn')} className={`${base} hover:bg-blue-600`}><InIcon className="h-4 w-4" /></a>
+      <button type="button" onClick={copy} aria-label={L('लेख का लिंक कॉपी करें', 'Copy article link')} className={`${base} hover:bg-primary`}>
         {copied ? <Check className="h-4 w-4 text-green-600" /> : <Link2 className="h-4 w-4" />}
       </button>
-      <span className="sr-only" aria-live="polite">{copied ? 'लिंक कॉपी हो गया' : ''}</span>
+      <span className="sr-only" aria-live="polite">{copied ? L('लिंक कॉपी हो गया', 'Link copied') : ''}</span>
     </div>
   );
 };
@@ -237,6 +248,8 @@ const ShareBar: React.FC<{ url: string; title: string }> = ({ url, title }) => {
 const BlogPost: React.FC = () => {
   const { slug = '' } = useParams();
   const post = findPost(slug);
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   // J2: the article body is its own lazy chunk — load it for this slug. undefined = loading, null = none.
   const [raw, setRaw] = React.useState<string | null | undefined>(undefined);
   const [loadFailed, setLoadFailed] = React.useState(false);
@@ -369,9 +382,9 @@ const BlogPost: React.FC = () => {
     return (
       <PublicLayout>
         <div className="max-w-3xl mx-auto px-4 py-16 text-center space-y-4" role="alert">
-          <p className="text-foreground">लेख लोड नहीं हो पाया — शायद साइट अभी अपडेट हुई है या नेटवर्क कमज़ोर है।</p>
+          <p className="text-foreground">{L('लेख लोड नहीं हो पाया — शायद साइट अभी अपडेट हुई है या नेटवर्क कमज़ोर है।', 'The article could not load — the site may have just been updated, or the network is weak.')}</p>
           <button type="button" onClick={() => window.location.reload()} className="px-4 py-2 rounded-md bg-primary text-primary-foreground">
-            पेज फिर से लोड करें
+            {L('पेज फिर से लोड करें', 'Reload the page')}
           </button>
         </div>
       </PublicLayout>
@@ -384,7 +397,7 @@ const BlogPost: React.FC = () => {
     if (staticHtml) return <div dangerouslySetInnerHTML={{ __html: staticHtml }} />;
     return (
       <PublicLayout>
-        <div className="max-w-3xl mx-auto px-4 py-16 text-center text-muted-foreground" aria-busy="true">लेख लोड हो रहा है…</div>
+        <div className="max-w-3xl mx-auto px-4 py-16 text-center text-muted-foreground" aria-busy="true">{L('लेख लोड हो रहा है…', 'Loading article…')}</div>
       </PublicLayout>
     );
   }
@@ -427,15 +440,15 @@ const BlogPost: React.FC = () => {
       {/* Clean editorial header (Medium/Ahrefs-style, replaces the gradient hero) */}
       <header className="border-b bg-background">
         <div className="mx-auto max-w-6xl px-4 pt-8 md:pt-12 pb-6 [&>*]:max-w-3xl">
-          <nav aria-label="ब्रेडक्रम्ब" className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground mb-5">
-            <Link to="/" className="inline-flex items-center gap-1 hover:text-primary"><Home className="h-3.5 w-3.5" aria-hidden="true" /> होम</Link>
+          <nav aria-label={L('ब्रेडक्रम्ब', 'Breadcrumb')} className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground mb-5">
+            <Link to="/" className="inline-flex items-center gap-1 hover:text-primary"><Home className="h-3.5 w-3.5" aria-hidden="true" /> {L('होम', 'Home')}</Link>
             <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-            <Link to="/blog" className="hover:text-primary">ब्लॉग</Link>
+            <Link to="/blog" className="hover:text-primary">{L('ब्लॉग', 'Blog')}</Link>
             <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-            <Link to={categoryHref(post.category)} className="text-foreground/70 line-clamp-1 hover:text-primary">{post.category}</Link>
+            <Link to={categoryHref(post.category)} className="text-foreground/70 line-clamp-1 hover:text-primary">{categoryLabel(post.category, language)}</Link>
           </nav>
           <Link to={categoryHref(post.category)} className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold hover:opacity-80 ${a.chip}`}>
-            {post.category}
+            {categoryLabel(post.category, language)}
           </Link>
           <h1 className="font-serif text-3xl md:text-4xl font-bold text-foreground leading-tight mt-4">{post.title}</h1>
           <p className="text-lg text-muted-foreground mt-4">{post.excerpt}</p>
@@ -450,14 +463,14 @@ const BlogPost: React.FC = () => {
               )}
               <span className="leading-tight">
                 <span className="block font-medium text-foreground group-hover:text-primary transition-colors">{author.name}</span>
-                <span className="block text-xs text-muted-foreground">{author.designation} · सहकार लेखा</span>
+                <span className="block text-xs text-muted-foreground">{author.designation} · {L('सहकार लेखा', 'SahakarLekha')}</span>
               </span>
             </Link>
-            <span className="inline-flex items-center gap-1 text-muted-foreground"><Calendar className="h-4 w-4" /> {formatDate(post.date)}</span>
-            {post.updated && <span className="text-muted-foreground">अपडेट: {formatDate(post.updated)}</span>}
-            <span className="inline-flex items-center gap-1 text-muted-foreground"><Clock className="h-4 w-4" /> {readingMinutes(slug)} मिनट</span>
+            <span className="inline-flex items-center gap-1 text-muted-foreground"><Calendar className="h-4 w-4" /> {blogDate(post.date, language)}</span>
+            {post.updated && <span className="text-muted-foreground">{L('अपडेट', 'Updated')}: {blogDate(post.updated, language)}</span>}
+            <span className="inline-flex items-center gap-1 text-muted-foreground"><Clock className="h-4 w-4" /> {readingMinutes(slug)} {L('मिनट', 'min')}</span>
             {views != null && views > 0 && (
-              <span className="inline-flex items-center gap-1 text-muted-foreground"><Eye className="h-4 w-4" /> {formatViews(views)} बार पढ़ा</span>
+              <span className="inline-flex items-center gap-1 text-muted-foreground"><Eye className="h-4 w-4" /> {formatViews(views)} {L('बार पढ़ा', 'reads')}</span>
             )}
           </div>
           <TrustNote post={post} />
@@ -482,6 +495,8 @@ const BlogPost: React.FC = () => {
         <div className="grid lg:grid-cols-[1fr_240px] gap-8">
           {/* Main */}
           <main className="min-w-0 max-w-3xl">
+            {/* English mode only: the article below (takeaways, body, FAQ) is in Hindi */}
+            <HindiOnlyNotice className="mb-4" what="This article" />
             <div className="flex items-center justify-between flex-wrap gap-3 pb-5 mb-6 border-b">
               <div className="flex flex-wrap gap-2">
                 {post.tags.map((t) => (
@@ -495,7 +510,7 @@ const BlogPost: React.FC = () => {
             {keyTakeaways.length > 0 && (
               <div className="mb-8 rounded-xl bg-primary/5 border border-primary/20 p-5">
                 <p className="flex items-center gap-1.5 text-sm font-semibold text-primary mb-3">
-                  <Lightbulb className="h-4 w-4" /> मुख्य बातें
+                  <Lightbulb className="h-4 w-4" /> {L('मुख्य बातें', 'Key points')}
                 </p>
                 <ul className="space-y-2">
                   {keyTakeaways.map((t, i) => (
@@ -522,7 +537,7 @@ const BlogPost: React.FC = () => {
               <Link to={`/guide/${deepGuide.slug}`} className="mt-8 block">
                 <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors">
                   <CardContent className="p-5">
-                    <p className="text-xs font-semibold text-primary uppercase tracking-wide">📖 पूरा गहराई से समझें · गाइड</p>
+                    <p className="text-xs font-semibold text-primary uppercase tracking-wide">📖 {L('पूरा गहराई से समझें · गाइड', 'Understand it in depth · Guide')}</p>
                     <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{deepGuide.shortTitle} <ArrowRight className="h-4 w-4" /></p>
                   </CardContent>
                 </Card>
@@ -534,7 +549,7 @@ const BlogPost: React.FC = () => {
               <Link to={`/tools/${pairedCalc.slug}`} className="mt-6 block">
                 <Card className="border-sky-300/50 bg-sky-50 dark:bg-sky-950/20 hover:bg-sky-100 dark:hover:bg-sky-950/40 transition-colors">
                   <CardContent className="p-5">
-                    <p className="text-xs font-semibold text-sky-700 dark:text-sky-300 uppercase tracking-wide">🧮 तुरंत गणना करें · कैलकुलेटर</p>
+                    <p className="text-xs font-semibold text-sky-700 dark:text-sky-300 uppercase tracking-wide">🧮 {L('तुरंत गणना करें · कैलकुलेटर', 'Calculate instantly · Calculator')}</p>
                     <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{pairedCalc.hindiName} <ArrowRight className="h-4 w-4" /></p>
                   </CardContent>
                 </Card>
@@ -548,9 +563,9 @@ const BlogPost: React.FC = () => {
                   <Link key={t.slug} to={`/help/${t.slug}`} className="block">
                     <Card className="h-full border-emerald-300/50 bg-emerald-50 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-950/40 transition-colors">
                       <CardContent className="p-5">
-                        <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">📋 अभी करें · मदद केंद्र</p>
+                        <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">📋 {L('अभी करें · मदद केंद्र', 'Do it now · Help Center')}</p>
                         <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{t.title} <ArrowRight className="h-4 w-4" /></p>
-                        <p className="text-xs text-muted-foreground mt-1">{t.estTime} · स्टेप-बाय-स्टेप</p>
+                        <p className="text-xs text-muted-foreground mt-1">{t.estTime} · {L('स्टेप-बाय-स्टेप', 'step by step')}</p>
                       </CardContent>
                     </Card>
                   </Link>
@@ -562,13 +577,13 @@ const BlogPost: React.FC = () => {
             <Card className="mt-10 bg-primary/5 border-primary/20">
               <CardContent className="p-6 text-center">
                 <Newspaper className="h-9 w-9 text-primary mx-auto mb-2" />
-                <p className="font-bold text-lg text-foreground">अपनी समिति का खाता डिजिटल कीजिए — ₹2,999/year + GST से</p>
+                <p className="font-bold text-lg text-foreground">{L('अपनी समिति का खाता डिजिटल कीजिए — ₹2,999/year + GST से', 'Take your society\'s accounts digital — from ₹2,999/year + GST')}</p>
                 <p className="text-sm text-muted-foreground mt-1 max-w-xl mx-auto">
-                  वाउचर से बैलेंस शीट तक, सब एक क्लिक पर। सहकारी समितियों के लिए ही बना, हिन्दी-केंद्रित प्लेटफ़ॉर्म।
+                  {L('वाउचर से बैलेंस शीट तक, सब एक क्लिक पर। सहकारी समितियों के लिए ही बना, हिन्दी-केंद्रित प्लेटफ़ॉर्म।', 'From vouchers to the balance sheet, all in one click. A Hindi-first platform built just for cooperative societies.')}
                 </p>
                 <div className="flex flex-wrap gap-3 justify-center mt-4">
-                  <Button asChild className="gap-2"><Link to="/register" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'register', post: slug })}>रजिस्टर करें <ArrowRight className="h-4 w-4" /></Link></Button>
-                  <Button asChild variant="outline"><Link to="/guide" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'guide', post: slug })}>संपूर्ण गाइड पढ़ें</Link></Button>
+                  <Button asChild className="gap-2"><Link to="/register" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'register', post: slug })}>{L('रजिस्टर करें', 'Register')} <ArrowRight className="h-4 w-4" /></Link></Button>
+                  <Button asChild variant="outline"><Link to="/guide" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'guide', post: slug })}>{L('संपूर्ण गाइड पढ़ें', 'Read the complete guide')}</Link></Button>
                 </div>
               </CardContent>
             </Card>
@@ -587,7 +602,7 @@ const BlogPost: React.FC = () => {
             {/* Related */}
             {related.length > 0 && (
               <section className="mt-12 pt-8 border-t">
-                <h2 className="text-xl font-bold text-foreground mb-4">इन्हें भी पढ़ें</h2>
+                <h2 className="text-xl font-bold text-foreground mb-4">{L('इन्हें भी पढ़ें', 'Read these too')}</h2>
                 <div className="grid sm:grid-cols-2 gap-4">
                   {related.map((r) => {
                     const ra = ACCENTS[r.accent];
@@ -601,7 +616,7 @@ const BlogPost: React.FC = () => {
                             </div>
                             <div className="min-w-0">
                               <p className="font-semibold text-foreground leading-snug group-hover:text-primary transition-colors line-clamp-2">{r.shortTitle}</p>
-                              <p className="text-xs text-muted-foreground mt-1">{r.category} · {readingMinutes(r.slug)} मिनट</p>
+                              <p className="text-xs text-muted-foreground mt-1">{categoryLabel(r.category, language)} · {readingMinutes(r.slug)} {L('मिनट', 'min')}</p>
                             </div>
                           </CardContent>
                         </Card>
@@ -621,7 +636,7 @@ const BlogPost: React.FC = () => {
                       <CardContent className="p-4 flex items-center gap-3">
                         <ChevronLeft className="h-5 w-5 text-primary flex-shrink-0" />
                         <div className="min-w-0">
-                          <p className="text-xs text-muted-foreground">पिछला लेख</p>
+                          <p className="text-xs text-muted-foreground">{L('पिछला लेख', 'Previous article')}</p>
                           <p className="font-medium text-foreground line-clamp-1">{prev.shortTitle}</p>
                         </div>
                       </CardContent>
@@ -634,7 +649,7 @@ const BlogPost: React.FC = () => {
                       <CardContent className="p-4 flex items-center gap-3 sm:flex-row-reverse">
                         <ChevronRight className="h-5 w-5 text-primary flex-shrink-0" />
                         <div className="min-w-0">
-                          <p className="text-xs text-muted-foreground">अगला लेख</p>
+                          <p className="text-xs text-muted-foreground">{L('अगला लेख', 'Next article')}</p>
                           <p className="font-medium text-foreground line-clamp-1">{next.shortTitle}</p>
                         </div>
                       </CardContent>
@@ -651,7 +666,7 @@ const BlogPost: React.FC = () => {
               <Card>
                 <CardContent className="p-4">
                   <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground mb-3">
-                    <List className="h-3.5 w-3.5" /> इस लेख में
+                    <List className="h-3.5 w-3.5" /> {L('इस लेख में', 'In this article')}
                   </p>
                   <nav className="space-y-1 text-sm max-h-[60vh] overflow-y-auto">
                     {sections.map((s) => (
@@ -661,7 +676,7 @@ const BlogPost: React.FC = () => {
                     ))}
                   </nav>
                   <Button asChild variant="outline" size="sm" className="w-full mt-4 gap-1">
-                    <Link to="/blog"><ChevronLeft className="h-3.5 w-3.5" /> सभी लेख</Link>
+                    <Link to="/blog"><ChevronLeft className="h-3.5 w-3.5" /> {L('सभी लेख', 'All articles')}</Link>
                   </Button>
                 </CardContent>
               </Card>

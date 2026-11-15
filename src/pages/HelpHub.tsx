@@ -10,16 +10,19 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { HELP_TASKS, HELP_CATEGORIES } from '@/content/help';
 import { LifeBuoy, Clock, ArrowRight, Search as SearchIcon } from 'lucide-react';
 import { HUB_META } from '@/content/hubMeta';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const SITE = 'https://sahakarlekha.com';
 
 const HelpHub: React.FC = () => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const navigate = useNavigate();
   const [q, setQ] = React.useState('');
   const onSearch = (e: React.FormEvent) => { e.preventDefault(); const v = q.trim(); if (v) navigate(`/search?q=${encodeURIComponent(v)}`); };
   useDocumentMeta({
-    title: HUB_META.help.title,
-    description: HUB_META.help.description,
+    title: L(HUB_META.help.title, 'Help Center — How to do it | SahakarLekha'),
+    description: L(HUB_META.help.description, 'Everyday cooperative society accounting tasks — how to add a member, enter opening balances, make a voucher — simple step-by-step guides with direct links into the app.'),
     canonicalPath: '/help',
     jsonLd: [
       {
@@ -42,17 +45,16 @@ const HelpHub: React.FC = () => {
       <section className="bg-gradient-to-br from-primary/5 via-background to-primary/10 py-16 sm:py-20">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <LifeBuoy className="h-11 w-11 text-primary mx-auto mb-4" />
-          <h1 className="text-3xl md:text-4xl font-extrabold text-foreground">मदद केंद्र — कैसे करें</h1>
+          <h1 className="text-3xl md:text-4xl font-extrabold text-foreground">{L('मदद केंद्र — कैसे करें', 'Help Center — How to do it')}</h1>
           <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-            हर काम के लिए छोटा, सीधा स्टेप-बाय-स्टेप — और हर लेख से सीधे SahakarLekha में वही काम करने का लिंक।
+            {L('हर काम के लिए छोटा, सीधा स्टेप-बाय-स्टेप — और हर लेख से सीधे SahakarLekha में वही काम करने का लिंक।', 'A short, direct step-by-step for every task — and from every article, a link to do the same task right in SahakarLekha.')}
           </p>
           {/* Site-wide search entry */}
           <form onSubmit={onSearch} className="relative max-w-xl mx-auto mt-6">
             <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <input
               type="search" value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="खोजें: member kaise jode, ट्रायल बैलेंस, loan entry…"
-              className="w-full rounded-xl border border-border bg-background pl-12 pr-4 py-3 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              placeholder={L('खोजें: member kaise jode, ट्रायल बैलेंस, loan entry…', 'Search: add a member, trial balance, loan entry…')}              className="w-full rounded-xl border border-border bg-background pl-12 pr-4 py-3 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           </form>
         </div>
