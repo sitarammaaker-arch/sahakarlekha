@@ -13,6 +13,8 @@ import { localizeHelpTask } from '@/content/help/en';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { COOKBOOK_ENTRIES } from '@/content/cookbook';
 import { localizeCookbookEntry } from '@/content/cookbook/en';
+import { ENTRY_EN } from '@/content/guide/entriesEn';
+import { BLOG_EN_META } from '@/content/blog/en/meta';
 import { BookOpen, Newspaper, ListChecks, NotebookPen, ArrowRight } from 'lucide-react';
 
 interface Item { href: string; title: string; kind: string; icon: React.ReactNode }
@@ -22,11 +24,12 @@ const RelatedKnowledge: React.FC<{ links: SurfaceLinks; heading?: string }> = ({
   const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const items: Item[] = [
     ...(links.guide || []).map((r) => ({
-      href: `/guide/${r.slug}`, title: r.title, kind: L('गाइड', 'Guide'),
+      // The link carries its Hindi title; in English mode use the chapter's own English title when there is one.
+      href: `/guide/${r.slug}`, title: (language === 'en' && ENTRY_EN[r.slug]?.shortTitle) || r.title, kind: L('गाइड', 'Guide'),
       icon: <BookOpen className="h-4 w-4 text-primary" />,
     })),
     ...(links.blog || []).map((r) => ({
-      href: `/blog/${r.slug}`, title: r.title, kind: L('ब्लॉग', 'Blog'),
+      href: `/blog/${r.slug}`, title: (language === 'en' && BLOG_EN_META[r.slug]?.title) || r.title, kind: L('ब्लॉग', 'Blog'),
       icon: <Newspaper className="h-4 w-4 text-sky-600" />,
     })),
     ...(links.help || [])

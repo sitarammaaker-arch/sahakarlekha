@@ -17,7 +17,7 @@ import { contentForSociety } from '@/content/relatedContent';
 import RelatedKnowledge from '@/components/RelatedKnowledge';
 import { ArrowRight, CheckCircle2, AlertTriangle, GraduationCap, ShieldCheck, Home } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import HindiOnlyNotice from '@/components/HindiOnlyNotice';
+import { SOCIETY_TYPES_EN } from '@/content/societyTypesEn';
 import { PLAN_CATALOG, TRIAL_DAYS, priceLabel } from '@/lib/plans';
 import { softwareModuleGroups } from '@/content/softwareModules';
 import { softwareFaq, softwareFaqLd } from '@/content/softwareFaq';
@@ -59,7 +59,6 @@ const HubPage: React.FC = () => {
           {L('अपनी समिति का प्रकार चुनें — हर प्रकार के लिए अनुकूलित खाता-संरचना (COA), रिपोर्ट व अनुपालन।', 'Choose your society type — a chart of accounts (COA), reports and compliance tailored to each type.')}
           {language === 'hi' && <span className="block mt-1 text-sm">Cooperative society accounting software, tailored for every society type in India — from ₹2,999/year + GST.</span>}
         </p>
-        <HindiOnlyNotice className="mt-4" what="The short description on each society-type card" />
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
           {SOCIETY_TYPES.map((s) => (
@@ -71,7 +70,7 @@ const HubPage: React.FC = () => {
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-foreground group-hover:text-primary transition-colors leading-snug">{L(s.nameHi, s.nameEn)}</p>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{s.introHi}</p>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{L(s.introHi, SOCIETY_TYPES_EN[s.slug]?.intro ?? s.seoEn)}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -108,6 +107,7 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
   // The app's own menu for this society type, and the questions built from it (content/softwareModules, softwareFaq).
   const groups = React.useMemo(() => softwareModuleGroups(data.slug), [data.slug]);
   const moduleTotal = groups.reduce((n, g) => n + g.items.length, 0);
+  const en = SOCIETY_TYPES_EN[data.slug]; // English rendering of the challenges / solutions lists
   const faq = React.useMemo(() => softwareFaq(data.slug, data.nameHi, data.nameEn), [data.slug, data.nameHi, data.nameEn]);
   useDocumentMeta({
     title: L(data.metaTitle, `${data.nameEn} Accounting Software | SahakarLekha`),
@@ -167,7 +167,6 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
         </div>
 
         {/* Pains + Solves */}
-        <HindiOnlyNotice className="mt-10" what="This list of challenges and solutions" />
         <div className="grid md:grid-cols-2 gap-4 mt-10">
           <Card className="border-amber-200">
             <CardContent className="p-5">
@@ -175,7 +174,7 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
                 <AlertTriangle className="h-4 w-4 text-amber-600" /> {L(`${data.nameHi} की चुनौतियाँ`, `Challenges for ${data.nameEn}`)}
               </h2>
               <ul className="space-y-2">
-                {data.painsHi.map((p, i) => (
+                {(language === 'en' && en ? en.pains : data.painsHi).map((p, i) => (
                   <li key={i} className="text-sm text-muted-foreground flex gap-2"><span className="text-amber-600">•</span>{p}</li>
                 ))}
               </ul>
@@ -187,7 +186,7 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
                 <CheckCircle2 className="h-4 w-4 text-green-600" /> {L('SahakarLekha में समाधान', 'How SahakarLekha solves them')}
               </h2>
               <ul className="space-y-2">
-                {data.solvesHi.map((s, i) => (
+                {(language === 'en' && en ? en.solves : data.solvesHi).map((s, i) => (
                   <li key={i} className="text-sm text-muted-foreground flex gap-2"><CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />{s}</li>
                 ))}
               </ul>
