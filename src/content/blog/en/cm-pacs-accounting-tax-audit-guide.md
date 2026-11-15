@@ -41,7 +41,7 @@ Note that accounts and audit are not only for the government — they are also a
 
 Looking at the scope of a CM-PACS, activities such as fertiliser-seed supply, custom hiring centre, grading-packaging-marketing of produce, and dairy collection and processing come close to the 80P(2)(a) list — that is, a full deduction may be claimed on them, provided they are linked to members. But if activities like an LPG dealership or taxi service earn a profit of more than ₹50,000, the remaining part will come within tax.
 
-> ⚠️ Under **Section 80P(4)**, this whole section does not apply to a "cooperative bank" (except a PACS or a cooperative agriculture and rural development bank) — this exception applies from 1 April 2007. The CM-PACS Model Bye-laws do not include banking business, so generally this exception should not apply to a CM-PACS — but if a particular CM-PACS has really started deposit/banking services, the position will have to be checked separately. Keep in mind — this exception is linked to PACS (Primary Agriculture Credit Society), which is a completely different body from a CM-PACS.
+> ⚠️ Under **Section 80P(4)**, this whole section does not apply to a "cooperative bank" (except a PACS or a cooperative agriculture and rural development bank) — this exception applies from 1 April 2007. We could not find the official text of the CM-PACS Model Bye-laws in this check, so confirm from your society's registered bye-laws whether they include banking business. For a CM-PACS that does not provide deposit/banking services, this exception should generally not apply — but if a particular CM-PACS has really started deposit/banking services, the position will have to be checked separately. Keep in mind — this exception is linked to PACS (Primary Agriculture Credit Society), which is a completely different body from a CM-PACS.
 
 ## An example — activity-wise 80P
 
@@ -90,7 +90,7 @@ A cooperative audit usually looks at — whether the accounts are in the format 
 **In which format should accounts be kept?** — In the format fixed by the Registrar (Rule 78) — not a format of your own choice; financial statements within 3 months (Rule 79).
 **Is the audit only for the government?** — No; under Section 25(3)(b) the audit report is placed before members in the AGM — it is also accountability to members.
 **What is the common root of the three responsibilities?** — Clean, activity-wise accounts; this foundation makes accounts, audit and tax — all three — smooth.
-**Does the 80P(4) banking exception apply to a CM-PACS?** — Generally no, because the Model Bye-laws do not include banking; but if it really provides deposit/banking services, check the position separately (this exception is linked to PACS, which is separate from CM-PACS).
+**Does the 80P(4) banking exception apply to a CM-PACS?** — Generally no, if the society does not provide deposit/banking services (check your registered bye-laws); but if it really provides deposit/banking services, check the position separately (this exception is linked to PACS, which is separate from CM-PACS).
 
 ## In the end
 

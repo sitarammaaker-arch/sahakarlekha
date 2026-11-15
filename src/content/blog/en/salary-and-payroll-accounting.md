@@ -34,7 +34,7 @@ EPF, ESI, PT and TDS — each one is a **separate liability**, which must be dep
 
 > ⚠️ EPF/ESI/TDS rates and limits change as per the rules — confirm the **current rates** applicable to your society from the portal concerned/your CA.
 
-> 🔍 Don't confuse the net salary paid to the employee with the expense — paying net **does not reduce the expense**: the full gross salary is the expense; deductions only decide "whom to pay and when".
+> 🔍 The net salary the employee takes home is not the whole expense — **the full gross salary is the expense**; deductions only decide "whom to pay and when".
 
 ## The full payroll process — at a glance
 
