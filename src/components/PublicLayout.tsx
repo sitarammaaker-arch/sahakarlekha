@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 import { ArrowRight, Menu } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { SOCIAL_CHANNELS, SocialIcon } from '@/lib/socials';
 // import WhatsAppFab from '@/components/WhatsAppFab'; // temporarily hidden per user request (2026-08-20) — re-enable with the JSX below
 import { SOCIETY_TYPES } from '@/content/societyTypes';
@@ -18,33 +19,92 @@ interface PublicLayoutProps {
 
 // Primary public destinations, surfaced in the mobile drawer (desktop users reach
 // these from the footer / in-page sections). Kept in one place so the list stays honest.
-const MOBILE_NAV_LINKS: { to: string; label: string }[] = [
-  { to: '/pricing', label: 'मूल्य / Pricing' },
-  { to: '/guide', label: 'गाइड / Guide' },
-  { to: '/cookbook', label: 'एंट्री कुकबुक' },
-  { to: '/help', label: 'मदद केंद्र / Help' },
-  { to: '/tools', label: 'कैलकुलेटर / Calculators' },
-  { to: '/downloads', label: 'मुफ्त प्रारूप / Downloads' },
-  { to: '/blog', label: 'ब्लॉग / Blog' },
-  { to: '/faq', label: 'सामान्य प्रश्न / FAQ' },
-  { to: '/ask', label: 'पूछें / Ask' },
-  { to: '/about', label: 'हमारे बारे में / About' },
-  { to: '/contact', label: 'संपर्क / Contact' },
+const MOBILE_NAV_LINKS: { to: string; hi: string; en: string }[] = [
+  { to: '/pricing', hi: 'मूल्य', en: 'Pricing' },
+  { to: '/guide', hi: 'गाइड', en: 'Guide' },
+  { to: '/cookbook', hi: 'एंट्री कुकबुक', en: 'Entry Cookbook' },
+  { to: '/help', hi: 'मदद केंद्र', en: 'Help' },
+  { to: '/tools', hi: 'कैलकुलेटर', en: 'Calculators' },
+  { to: '/downloads', hi: 'मुफ्त प्रारूप', en: 'Downloads' },
+  { to: '/blog', hi: 'ब्लॉग', en: 'Blog' },
+  { to: '/faq', hi: 'सामान्य प्रश्न', en: 'FAQ' },
+  { to: '/ask', hi: 'पूछें', en: 'Ask' },
+  { to: '/about', hi: 'हमारे बारे में', en: 'About' },
+  { to: '/contact', hi: 'संपर्क', en: 'Contact' },
 ];
 
 // Desktop top-nav — the public site had NO top menu on desktop; blog/guide/pricing
 // were reachable only by scrolling to the footer. Kept short so the bar stays clean.
-const DESKTOP_NAV_LINKS: { to: string; label: string }[] = [
-  { to: '/pricing', label: 'मूल्य' },
-  { to: '/guide', label: 'गाइड' },
-  { to: '/blog', label: 'ब्लॉग' },
-  { to: '/help', label: 'मदद' },
+const DESKTOP_NAV_LINKS: { to: string; hi: string; en: string }[] = [
+  { to: '/pricing', hi: 'मूल्य', en: 'Pricing' },
+  { to: '/guide', hi: 'गाइड', en: 'Guide' },
+  { to: '/blog', hi: 'ब्लॉग', en: 'Blog' },
+  { to: '/help', hi: 'मदद', en: 'Help' },
 ];
+
+// Footer "Quick Links" — one label per language (these were "English / हिंदी" pairs).
+// The /ask link sits between the two lists because it is styled differently.
+const FOOTER_LINKS: { to: string; hi: string; en: string }[] = [
+  { to: '/about', hi: 'हमारे बारे में', en: 'About Us' },
+  { to: '/pricing', hi: 'मूल्य', en: 'Pricing' },
+  { to: '/guide', hi: 'उपयोग गाइड', en: 'How-To Guide' },
+  { to: '/blog', hi: 'ब्लॉग', en: 'Blog' },
+  { to: '/help', hi: 'मदद केंद्र', en: 'Help Center' },
+  { to: '/cookbook', hi: 'एंट्री कुकबुक', en: 'Entry Cookbook' },
+  { to: '/glossary', hi: 'शब्दकोश', en: 'Glossary' },
+  { to: '/tools', hi: 'कैलकुलेटर', en: 'Calculators' },
+  { to: '/search', hi: 'खोजें', en: 'Search' },
+];
+const FOOTER_LINKS_AFTER_ASK: { to: string; hi: string; en: string }[] = [
+  { to: '/faq', hi: 'सामान्य प्रश्न', en: 'FAQ' },
+  { to: '/contact', hi: 'संपर्क', en: 'Contact' },
+  { to: '/editorial-policy', hi: 'संपादकीय नीति', en: 'Editorial Policy' },
+  { to: '/privacy', hi: 'गोपनीयता', en: 'Privacy Policy' },
+  { to: '/terms', hi: 'नियम एवं शर्तें', en: 'Terms' },
+];
+
+// Two-option language switch "हिंदी | English". The choice lives in LanguageContext
+// (localStorage) and is shared with the logged-in app. Hindi stays the default, so
+// the prerendered HTML is still the Hindi page.
+const LanguageSwitch: React.FC<{ className?: string }> = ({ className = '' }) => {
+  const { language, setLanguage } = useLanguage();
+  const options: { value: 'hi' | 'en'; label: string }[] = [
+    { value: 'hi', label: 'हिंदी' },
+    { value: 'en', label: 'English' },
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="भाषा / Language"
+      className={`inline-flex items-center rounded-md border border-input bg-background p-0.5 text-xs font-medium ${className}`}
+    >
+      {options.map((o) => {
+        const active = language === o.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            lang={o.value}
+            aria-pressed={active}
+            onClick={() => setLanguage(o.value)}
+            className={`rounded px-2 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
   const { isAuthenticated } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
 
   // Scroll to top on route change
   useEffect(() => {
@@ -62,7 +122,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[70] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
       >
-        सीधे सामग्री पर जाएँ
+        {L('सीधे सामग्री पर जाएँ', 'Skip to content')}
       </a>
       {/* Navbar */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b shadow-sm overflow-hidden">
@@ -76,7 +136,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
           </Link>
 
           {/* Desktop primary nav (md+). Mobile users get the same via the drawer below. */}
-          <nav aria-label="मुख्य मेन्यू" className="hidden md:flex items-center gap-1">
+          <nav aria-label={L('मुख्य मेन्यू', 'Main menu')}className="hidden md:flex items-center gap-1">
             {DESKTOP_NAV_LINKS.map((l) => {
               const active = pathname === l.to || pathname.startsWith(l.to + '/');
               return (
@@ -87,7 +147,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                     active ? 'text-primary' : 'text-foreground/80 hover:text-primary'
                   }`}
                 >
-                  {l.label}
+                  {L(l.hi, l.en)}
                 </Link>
               );
             })}
@@ -102,11 +162,14 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
               Anonymous render stays byte-identical, so prerendered marketing HTML is unchanged
               — a crawler is never authenticated, and hydration swaps this for a real user. */}
           <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
+            {/* Language switch: in the bar from sm up. On a phone the 375px bar has no
+                room, so it sits at the top of the menu drawer and in the footer. */}
+            <LanguageSwitch className="hidden sm:inline-flex" />
             {isAuthenticated ? (
               <Button asChild size="sm" className="gap-1">
                 <Link to="/dashboard">
-                  <span className="hidden lg:inline">डैशबोर्ड / Dashboard</span>
-                  <span className="lg:hidden">डैशबोर्ड</span>
+                  <span className="hidden lg:inline">{L('डैशबोर्ड', 'Dashboard')}</span>
+                  <span className="lg:hidden">{L('डैशबोर्ड', 'Dashboard')}</span>
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
@@ -115,12 +178,12 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                 {/* Below sm the Login button moves into the drawer — on a 375px phone the four header
                     controls overflowed and the clipped menu button sat half off-screen. */}
                 <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex">
-                  <Link to="/login">Login</Link>
+                  <Link to="/login">{L('लॉगिन', 'Login')}</Link>
                 </Button>
                 <Button asChild size="sm" className="gap-1">
                   <Link to="/register">
-                    <span className="hidden lg:inline">Get Started</span>
-                    <span className="lg:hidden">Register</span>
+                    <span className="hidden lg:inline">{L('शुरू करें', 'Get Started')}</span>
+                    <span className="lg:hidden">{L('रजिस्टर', 'Register')}</span>
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
@@ -131,19 +194,22 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                 reachable only by scrolling to the footer of every page (MOBILE_AUDIT M-5). */}
             <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden" aria-label="मेन्यू / Menu">
+                <Button variant="ghost" size="icon" className="md:hidden" aria-label={L('मेन्यू', 'Menu')}>
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="w-72">
                 <SheetHeader>
-                  <SheetTitle className="text-left">सहकार लेखा</SheetTitle>
+                  <SheetTitle className="text-left">{L('सहकार लेखा', 'SahakarLekha')}</SheetTitle>
                 </SheetHeader>
-                <nav aria-label="मेन्यू" className="mt-4 flex flex-col">
+                <div className="mt-4">
+                  <LanguageSwitch />
+                </div>
+                <nav aria-label={L('मेन्यू', 'Menu')} className="mt-4 flex flex-col">
                   {!isAuthenticated && (
                     <SheetClose asChild>
                       <Link to="/login" className="sm:hidden py-3 px-1 border-b font-medium text-primary hover:underline">
-                        लॉगिन / Login
+                        {L('लॉगिन', 'Login')}
                       </Link>
                     </SheetClose>
                   )}
@@ -153,7 +219,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                         to={l.to}
                         className="py-3 px-1 border-b text-foreground hover:text-primary transition-colors"
                       >
-                        {l.label}
+                        {L(l.hi, l.en)}
                       </Link>
                     </SheetClose>
                   ))}
@@ -179,11 +245,17 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                 <span className="font-bold">SahakarLekha</span>
               </Link>
               <p className="mt-2 text-sm text-muted-foreground">
-                भारत की सहकारी समितियों के लिए एकाउंटिंग सॉफ्टवेयर — ₹2,999/year + GST से। गाइड व कोर्स मुफ़्त।
-                Cooperative society accounting software for India — from ₹2,999/year + GST. Learning guides &amp; course are free.
+                {L(
+                  'भारत की सहकारी समितियों के लिए एकाउंटिंग सॉफ्टवेयर — ₹2,999/year + GST से। गाइड व कोर्स मुफ़्त।',
+                  'Cooperative society accounting software for India — from ₹2,999/year + GST. Learning guides & course are free.',
+                )}
               </p>
               <div className="mt-4">
-                <p className="text-xs font-semibold text-foreground mb-2">हमसे जुड़ें / Follow us</p>
+                <p className="text-xs font-semibold text-foreground mb-2">{L('भाषा', 'Language')}</p>
+                <LanguageSwitch />
+              </div>
+              <div className="mt-4">
+                <p className="text-xs font-semibold text-foreground mb-2">{L('हमसे जुड़ें', 'Follow us')}</p>
                 <div className="flex items-center gap-2">
                   {SOCIAL_CHANNELS.map(s => (
                     <a
@@ -202,51 +274,49 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
               </div>
             </div>
             <div>
-              <h4 className="font-semibold text-sm mb-3">Features</h4>
+              <h4 className="font-semibold text-sm mb-3">{L('सुविधाएँ', 'Features')}</h4>
               <ul className="space-y-1 text-sm text-muted-foreground">
-                <li>Double-Entry Vouchers</li>
-                <li>Trial Balance & Balance Sheet</li>
-                <li>TDS Register & 26Q Export</li>
-                <li>GST Summary (GSTR-1/3B)</li>
-                <li>Member Share & Loan Register</li>
-                <li>Audit Certificate & Compliance</li>
+                <li>{L('डबल-एंट्री वाउचर', 'Double-Entry Vouchers')}</li>
+                <li>{L('ट्रायल बैलेंस व बैलेंस शीट', 'Trial Balance & Balance Sheet')}</li>
+                <li>{L('TDS रजिस्टर व 26Q एक्सपोर्ट', 'TDS Register & 26Q Export')}</li>
+                <li>{L('GST सारांश (GSTR-1/3B)', 'GST Summary (GSTR-1/3B)')}</li>
+                <li>{L('सदस्य शेयर व ऋण रजिस्टर', 'Member Share & Loan Register')}</li>
+                <li>{L('ऑडिट प्रमाणपत्र व अनुपालन', 'Audit Certificate & Compliance')}</li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-sm mb-3">Society Types</h4>
+              <h4 className="font-semibold text-sm mb-3">{L('समिति के प्रकार', 'Society Types')}</h4>
               <ul className="space-y-1 text-sm">
                 {SOCIETY_TYPES.map(s => (
                   <li key={s.slug}>
-                    <Link to={`/software/${s.slug}`} className="text-muted-foreground hover:text-primary transition-colors">{s.nameEn}</Link>
+                    <Link to={`/software/${s.slug}`} className="text-muted-foreground hover:text-primary transition-colors">{L(s.nameHi, s.nameEn)}</Link>
                   </li>
                 ))}
-                <li><Link to="/software" className="text-primary hover:underline">All types / सभी प्रकार →</Link></li>
+                <li><Link to="/software" className="text-primary hover:underline">{L('सभी प्रकार →', 'All types →')}</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-sm mb-3">Quick Links</h4>
+              <h4 className="font-semibold text-sm mb-3">{L('उपयोगी लिंक', 'Quick Links')}</h4>
               <ul className="space-y-1 text-sm">
-                <li><Link to="/about" className="text-muted-foreground hover:text-primary transition-colors">About Us / हमारे बारे में</Link></li>
-                <li><Link to="/pricing" className="text-muted-foreground hover:text-primary transition-colors">Pricing / मूल्य</Link></li>
-                <li><Link to="/guide" className="text-muted-foreground hover:text-primary transition-colors">How-To Guide / उपयोग गाइड</Link></li>
-                <li><Link to="/blog" className="text-muted-foreground hover:text-primary transition-colors">Blog / ब्लॉग</Link></li>
-                <li><Link to="/help" className="text-muted-foreground hover:text-primary transition-colors">Help Center / मदद केंद्र</Link></li>
-                <li><Link to="/cookbook" className="text-muted-foreground hover:text-primary transition-colors">Entry Cookbook / एंट्री कुकबुक</Link></li>
-                <li><Link to="/glossary" className="text-muted-foreground hover:text-primary transition-colors">Glossary / शब्दकोश</Link></li>
-                <li><Link to="/tools" className="text-muted-foreground hover:text-primary transition-colors">Calculators / कैलकुलेटर</Link></li>
-                <li><Link to="/search" className="text-muted-foreground hover:text-primary transition-colors">Search / खोजें</Link></li>
-                <li><Link to="/ask" className="text-primary font-medium hover:underline">Ask SahakarLekha / पूछें →</Link></li>
-                <li><Link to="/faq" className="text-muted-foreground hover:text-primary transition-colors">FAQ / सामान्य प्रश्न</Link></li>
-                <li><Link to="/contact" className="text-muted-foreground hover:text-primary transition-colors">Contact / संपर्क</Link></li>
-                <li><Link to="/editorial-policy" className="text-muted-foreground hover:text-primary transition-colors">Editorial Policy / संपादकीय नीति</Link></li>
-                <li><Link to="/privacy" className="text-muted-foreground hover:text-primary transition-colors">Privacy Policy / गोपनीयता</Link></li>
-                <li><Link to="/terms" className="text-muted-foreground hover:text-primary transition-colors">Terms / नियम एवं शर्तें</Link></li>
+                {FOOTER_LINKS.map((l) => (
+                  <li key={l.to}><Link to={l.to} className="text-muted-foreground hover:text-primary transition-colors">{L(l.hi, l.en)}</Link></li>
+                ))}
+                <li><Link to="/ask" className="text-primary font-medium hover:underline">{L('सहकार लेखा से पूछें →', 'Ask SahakarLekha →')}</Link></li>
+                {FOOTER_LINKS_AFTER_ASK.map((l) => (
+                  <li key={l.to}><Link to={l.to} className="text-muted-foreground hover:text-primary transition-colors">{L(l.hi, l.en)}</Link></li>
+                ))}
               </ul>
             </div>
           </div>
           <div className="mt-8 pt-6 border-t text-center text-xs text-muted-foreground">
-            <p>&copy; {new Date().getFullYear()} SahakarLekha (सहकार लेखा) — Bharat ki Cooperative Societies ka Accounting Platform</p>
-            <p className="mt-1">सहकारी समिति लेखा सॉफ्टवेयर | Cooperative Society Accounting Software | sahkari samiti software</p>
+            <p>
+              &copy; {new Date().getFullYear()}{' '}
+              {L(
+                'सहकार लेखा — भारत की सहकारी समितियों का लेखा प्लेटफ़ॉर्म',
+                "SahakarLekha — the accounting platform for India's cooperative societies",
+              )}
+            </p>
+            <p className="mt-1">{L('सहकारी समिति लेखा सॉफ्टवेयर | sahkari samiti software', 'Cooperative Society Accounting Software')}</p>
           </div>
         </div>
       </footer>

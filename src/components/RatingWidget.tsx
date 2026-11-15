@@ -13,11 +13,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { trackEvent } from '@/lib/analytics';
 import { Star, CheckCircle2, ArrowRight, MessageCircle } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const SHARE_TEXT = 'SahakarLekha — सहकारी समितियों के लिए आधुनिक, किफ़ायती लेखा सॉफ्टवेयर। देखें: https://sahakarlekha.com';
+const SHARE_TEXT_EN = 'SahakarLekha — modern, affordable accounting software for cooperative societies. See: https://sahakarlekha.com';
 
 const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
   const { toast } = useToast();
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [name, setName] = useState('');
@@ -30,7 +34,7 @@ const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
     e.preventDefault();
     if (company) return; // bot
     if (rating < 1) {
-      toast({ title: 'रेटिंग चुनें', description: 'कृपया 1 से 5 तारे चुनें।', variant: 'destructive' });
+      toast({ title: L('रेटिंग चुनें', 'Choose a rating'), description: L('कृपया 1 से 5 तारे चुनें।', 'Please choose 1 to 5 stars.'), variant: 'destructive' });
       return;
     }
     setSubmitting(true);
@@ -47,8 +51,8 @@ const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
       setDone(true);
     } catch {
       toast({
-        title: 'रेटिंग सेव नहीं हो सकी',
-        description: 'कृपया थोड़ी देर बाद फिर कोशिश करें।',
+        title: L('रेटिंग सेव नहीं हो सकी', 'The rating could not be saved'),
+        description: L('कृपया थोड़ी देर बाद फिर कोशिश करें।', 'Please try again in a little while.'),
         variant: 'destructive',
         duration: 9000,
       });
@@ -61,19 +65,19 @@ const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
     return (
       <div className={`text-center p-6 rounded-xl bg-primary/5 border border-primary/20 ${className}`}>
         <CheckCircle2 className="h-9 w-9 text-primary mx-auto mb-2" />
-        <p className="font-bold text-foreground">धन्यवाद! 🙏</p>
-        <p className="text-sm text-muted-foreground mt-1">आपकी रेटिंग मिल गई — समीक्षा के बाद यह यहाँ दिखेगी।</p>
+        <p className="font-bold text-foreground">{L('धन्यवाद! 🙏', 'Thank you! 🙏')}</p>
+        <p className="text-sm text-muted-foreground mt-1">{L('आपकी रेटिंग मिल गई — समीक्षा के बाद यह यहाँ दिखेगी।', 'We got your rating — it will appear here after review.')}</p>
         <div className="flex flex-wrap gap-3 justify-center mt-4">
           <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'rating_thanks', target: 'register' })}>
-            <Button size="sm" className="gap-1.5">शुरू करें <ArrowRight className="h-3.5 w-3.5" /></Button>
+            <Button size="sm" className="gap-1.5">{L('शुरू करें', 'Get started')} <ArrowRight className="h-3.5 w-3.5" /></Button>
           </Link>
           <a
-            href={`https://wa.me/?text=${encodeURIComponent(SHARE_TEXT)}`}
+            href={`https://wa.me/?text=${encodeURIComponent(language === 'hi' ? SHARE_TEXT : SHARE_TEXT_EN)}`}
             target="_blank" rel="noopener noreferrer"
             onClick={() => trackEvent('cta_click', { location: 'rating_thanks', target: 'whatsapp_share' })}
           >
             <Button size="sm" variant="outline" className="gap-1.5 border-green-300 text-green-700 hover:bg-green-50 hover:text-green-800">
-              <MessageCircle className="h-3.5 w-3.5" /> WhatsApp पर शेयर
+              <MessageCircle className="h-3.5 w-3.5" /> {L('WhatsApp पर शेयर', 'Share on WhatsApp')}
             </Button>
           </a>
         </div>
@@ -83,14 +87,14 @@ const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
 
   return (
     <form onSubmit={submit} className={`p-5 rounded-xl border bg-background ${className}`}>
-      <p className="font-semibold text-foreground mb-3">अपना अनुभव बताएँ / Rate us</p>
+      <p className="font-semibold text-foreground mb-3">{L('अपना अनुभव बताएँ', 'Rate us')}</p>
 
-      <div className="flex items-center gap-1 mb-4" role="radiogroup" aria-label="रेटिंग">
+      <div className="flex items-center gap-1 mb-4" role="radiogroup" aria-label={L('रेटिंग', 'Rating')}>
         {[1, 2, 3, 4, 5].map(n => (
           <button
             key={n}
             type="button"
-            aria-label={`${n} स्टार`}
+            aria-label={L(`${n} स्टार`, `${n} star${n > 1 ? 's' : ''}`)}
             onClick={() => setRating(n)}
             onMouseEnter={() => setHover(n)}
             onMouseLeave={() => setHover(0)}
@@ -102,15 +106,15 @@ const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
       </div>
 
       <div className="space-y-3">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="आपका नाम / समिति (वैकल्पिक)" />
-        <Textarea rows={3} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="सहकार लेखा आपके लिए कैसा रहा? (वैकल्पिक)" />
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={L('आपका नाम / समिति (वैकल्पिक)', 'Your name / society (optional)')} />
+        <Textarea rows={3} value={message} onChange={(e) => setMessage(e.target.value)} placeholder={L('सहकार लेखा आपके लिए कैसा रहा? (वैकल्पिक)', 'How has SahakarLekha been for you? (optional)')} />
         <input
           type="text" tabIndex={-1} autoComplete="off" aria-hidden="true"
           value={company} onChange={(e) => setCompany(e.target.value)}
           style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
         />
         <Button type="submit" className="w-full gap-2" disabled={submitting}>
-          <Star className="h-4 w-4" /> {submitting ? 'भेज रहे हैं…' : 'रेटिंग भेजें / Submit'}
+          <Star className="h-4 w-4" /> {submitting ? L('भेज रहे हैं…', 'Sending…') : L('रेटिंग भेजें', 'Submit rating')}
         </Button>
       </div>
     </form>

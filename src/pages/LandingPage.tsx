@@ -1,5 +1,7 @@
 /**
  * SahakarLekha Public Landing Page — conversion-optimised, bilingual, no auth.
+ * Copy follows the app language (useLanguage): Hindi by default (also what the
+ * build-time prerender shows), English when the visitor switches.
  * Section order: Hero → Trust bar → Features → Society types → Demo →
  * Product tour → Testimonials → Tally comparison → Security → Audit/compliance
  * → Academy → Why-free/Who-we-are → Referral → Final CTA → Community.
@@ -19,6 +21,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import PublicLayout from '@/components/PublicLayout';
 import Testimonials from '@/components/Testimonials';
 import EmailCapture from '@/components/EmailCapture';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { SOCIAL_CHANNELS, SocialIcon, WHATSAPP_NUMBER } from '@/lib/socials';
 import { trackEvent } from '@/lib/analytics';
 import { publishedOrder, readingMinutes } from '@/content/blog';
@@ -40,6 +43,11 @@ const handleSampleReport = async () => {
   const { generateSampleReportPDF } = await import('@/lib/sampleReport');
   generateSampleReportPDF();
 };
+
+type Lang = 'hi' | 'en';
+/** Text that is the same in both languages, or a { hi, en } pair. */
+type Txt = string | { hi: string; en: string };
+const tx = (t: Txt, lang: Lang) => (typeof t === 'string' ? t : t[lang]);
 
 const FEATURES = [
   { icon: BookOpen, title: 'Double-Entry Accounting', titleHi: 'दोहरी एंट्री लेखा', desc: 'Voucher, Cash Book, Bank Book, Day Book, Ledger — complete accounting system' },
@@ -68,26 +76,39 @@ const STATS = [
   { value: '₹2,999', label: 'Starter / year + GST', labelHi: 'से शुरू (+ GST)' },
 ];
 
+const TRUST = [
+  { e: '🏛️', hi: 'सहकारी-विशेष', en: 'Cooperative-specific', enSub: 'Built for cooperatives' },
+  { e: '💳', hi: '₹2,999/year + GST से', en: 'From ₹2,999/year + GST', enSub: 'Transparent pricing' },
+  { e: '🔒', hi: 'आपका डेटा सुरक्षित', en: 'Your data is safe', enSub: 'Your data, exportable' },
+  { e: '🇮🇳', hi: 'हिंदी + English', en: 'Hindi + English', enSub: '36 states' },
+];
+
 const TOUR = [
-  { shot: 'voucher.png', title: 'आसान वाउचर एंट्री', titleEn: 'Easy voucher entry', desc: 'रसीद, भुगतान, जर्नल, कोंट्रा — एक-क्लिक टेम्पलेट; Dr=Cr अपने-आप जाँच।' },
-  { shot: 'trial-balance.png', title: 'एक-क्लिक ट्रायल बैलेंस व रिपोर्ट', titleEn: 'One-click Trial Balance & reports', desc: 'ट्रायल बैलेंस, बैलेंस शीट, आमदनी-खर्च — RCS दो-खंड प्रारूप में, सीधे PDF।' },
-  { shot: 'member-register.png', title: 'सदस्य, शेयर व ऋण रजिस्टर', titleEn: 'Member, share & loan registers', desc: 'शेयर रजिस्टर, ऋण रजिस्टर, लाभ का बँटवारा — सहकारी नियमानुसार।' },
-  { shot: 'certificate.png', title: 'ऑडिट प्रमाणपत्र व अनुपालन', titleEn: 'Audit certificate & compliance', desc: 'रिज़र्व फंड विनियोजन (आपके राज्य अधिनियम/उपनियम अनुसार %), FY-लॉक, ऑडिट प्रमाणपत्र — ऑडिट की तैयारी।' },
+  { shot: 'voucher.png', title: 'आसान वाउचर एंट्री', titleEn: 'Easy voucher entry', desc: 'रसीद, भुगतान, जर्नल, कोंट्रा — एक-क्लिक टेम्पलेट; Dr=Cr अपने-आप जाँच।', descEn: 'Receipt, payment, journal, contra — one-click templates; Dr = Cr checked automatically.' },
+  { shot: 'trial-balance.png', title: 'एक-क्लिक ट्रायल बैलेंस व रिपोर्ट', titleEn: 'One-click Trial Balance & reports', desc: 'ट्रायल बैलेंस, बैलेंस शीट, आमदनी-खर्च — RCS दो-खंड प्रारूप में, सीधे PDF।', descEn: 'Trial Balance, Balance Sheet, Income & Expenditure — in the RCS two-section format, straight to PDF.' },
+  { shot: 'member-register.png', title: 'सदस्य, शेयर व ऋण रजिस्टर', titleEn: 'Member, share & loan registers', desc: 'शेयर रजिस्टर, ऋण रजिस्टर, लाभ का बँटवारा — सहकारी नियमानुसार।', descEn: 'Share register, loan register, profit distribution — as per cooperative rules.' },
+  { shot: 'certificate.png', title: 'ऑडिट प्रमाणपत्र व अनुपालन', titleEn: 'Audit certificate & compliance', desc: 'रिज़र्व फंड विनियोजन (आपके राज्य अधिनियम/उपनियम अनुसार %), FY-लॉक, ऑडिट प्रमाणपत्र — ऑडिट की तैयारी।', descEn: 'Reserve Fund appropriation (% as per your state Act / bye-laws), FY lock, audit certificate — ready for audit.' },
 ];
 
 /* Competitor cells carry ONLY what the vendor's own site states (checked on COMPARE_DATE,
    sources in COMPARE_SOURCES). NV = not verified from vendor docs — it does NOT mean
    "not available". Re-verify every cell before changing it; never use blanket negatives. */
 const NV = 'nv' as const;
-const COMPARE_DATE = '2 अक्टूबर 2026 / 2 Oct 2026';
-const TALLY_ROWS: { f: string; tally: boolean | string; zoho: boolean | string; sl: boolean | string }[] = [
-  { f: 'Price / मूल्य', tally: 'Silver: ₹22,500 + GST (lifetime) या ₹8,100 + GST/वर्ष (rental)', zoho: 'Free plan (revenue ≤ ₹25 लाख); paid ₹749/माह से (annual)', sl: '₹2,999/year + GST से' },
-  { f: 'GST e-Invoice (IRN)', tally: true, zoho: 'Standard plan से', sl: 'नहीं / Not supported' },
-  { f: 'e-Way Bill', tally: true, zoho: NV, sl: 'JSON बनता है (NIC portal पर upload)' },
+const COMPARE_DATE = { hi: '2 अक्टूबर 2026', en: '2 Oct 2026' };
+type CompareCell = boolean | typeof NV | Txt;
+const TALLY_ROWS: { f: Txt; tally: CompareCell; zoho: CompareCell; sl: CompareCell }[] = [
+  {
+    f: { hi: 'मूल्य', en: 'Price' },
+    tally: { hi: 'Silver: ₹22,500 + GST (lifetime) या ₹8,100 + GST/वर्ष (rental)', en: 'Silver: ₹22,500 + GST (lifetime) or ₹8,100 + GST/year (rental)' },
+    zoho: { hi: 'Free plan (revenue ≤ ₹25 लाख); paid ₹749/माह से (annual)', en: 'Free plan (revenue ≤ ₹25 lakh); paid from ₹749/month (annual)' },
+    sl: { hi: '₹2,999/year + GST से', en: 'From ₹2,999/year + GST' },
+  },
+  { f: 'GST e-Invoice (IRN)', tally: true, zoho: { hi: 'Standard plan से', en: 'From Standard plan' }, sl: { hi: 'नहीं', en: 'Not supported' } },
+  { f: 'e-Way Bill', tally: true, zoho: NV, sl: { hi: 'JSON बनता है (NIC portal पर upload)', en: 'Generates JSON (you upload on the NIC portal)' } },
   { f: 'RCS two-section Trial Balance / Balance Sheet', tally: NV, zoho: NV, sl: true },
   { f: 'Member share/loan register, reserve-fund appropriation', tally: NV, zoho: NV, sl: true },
-  { f: 'Hindi interface / हिंदी इंटरफ़ेस', tally: NV, zoho: NV, sl: true },
-  { f: 'Free learning course + certificate / मुफ़्त कोर्स + प्रमाणपत्र', tally: NV, zoho: NV, sl: true },
+  { f: { hi: 'हिंदी इंटरफ़ेस', en: 'Hindi interface' }, tally: NV, zoho: NV, sl: true },
+  { f: { hi: 'मुफ़्त कोर्स + प्रमाणपत्र', en: 'Free learning course + certificate' }, tally: NV, zoho: NV, sl: true },
 ];
 const COMPARE_SOURCES = [
   { label: 'TallyPrime — Buy Silver & Gold', href: 'https://tallysolutions.com/buy-tally/' },
@@ -95,10 +116,10 @@ const COMPARE_SOURCES = [
 ];
 
 const SECURITY = [
-  { icon: Lock, title: 'सुरक्षित व अलग डेटा', titleEn: 'Encrypted & isolated', desc: 'हर समिति का डेटा Row-Level Security (RLS) से अलग; Supabase के अनुसार डेटा AES-256 (at rest) व TLS (in transit) से एन्क्रिप्ट।' },
-  { icon: Database, title: 'स्वतः बैकअप', titleEn: 'Automatic backups', desc: 'हर हफ़्ते अपने-आप बैकअप; जब चाहें PDF/Excel में पूरा डेटा निर्यात करें।' },
-  { icon: RefreshCw, title: 'आपका डेटा, आपका अधिकार', titleEn: 'Your data, your control', desc: 'कभी भी सब कुछ डाउनलोड करें — कोई लॉक-इन नहीं, डेटा कभी बेचा नहीं जाता।' },
-  { icon: Shield, title: 'पूरा ऑडिट-ट्रेल', titleEn: 'Full audit trail', desc: 'हर एंट्री किसने/कब बनाई-बदली; रद्द भी कारण सहित — ऑडिट में पारदर्शी।' },
+  { icon: Lock, title: 'सुरक्षित व अलग डेटा', titleEn: 'Encrypted & isolated', desc: 'हर समिति का डेटा Row-Level Security (RLS) से अलग; Supabase के अनुसार डेटा AES-256 (at rest) व TLS (in transit) से एन्क्रिप्ट।', descEn: 'Each society\'s data is kept separate with Row-Level Security (RLS); per Supabase, data is encrypted with AES-256 (at rest) and TLS (in transit).' },
+  { icon: Database, title: 'स्वतः बैकअप', titleEn: 'Automatic backups', desc: 'हर हफ़्ते अपने-आप बैकअप; जब चाहें PDF/Excel में पूरा डेटा निर्यात करें।', descEn: 'Automatic weekly backups; export all your data to PDF/Excel whenever you want.' },
+  { icon: RefreshCw, title: 'आपका डेटा, आपका अधिकार', titleEn: 'Your data, your control', desc: 'कभी भी सब कुछ डाउनलोड करें — कोई लॉक-इन नहीं, डेटा कभी बेचा नहीं जाता।', descEn: 'Download everything at any time — no lock-in, and your data is never sold.' },
+  { icon: Shield, title: 'पूरा ऑडिट-ट्रेल', titleEn: 'Full audit trail', desc: 'हर एंट्री किसने/कब बनाई-बदली; रद्द भी कारण सहित — ऑडिट में पारदर्शी।', descEn: 'Who created or changed each entry, and when; cancellations carry a reason — transparent for audit.' },
 ];
 
 /* Add real, consented quotes here to activate the testimonials section.
@@ -135,53 +156,59 @@ const ShotPlaceholder: React.FC<{ label: string }> = ({ label }) => (
 );
 
 /* ─── Hero CSS mock dashboard (always looks alive before real screenshots) ─── */
-const MockDashboard: React.FC = () => (
-  <div className="rounded-xl border bg-white shadow-2xl overflow-hidden ring-1 ring-black/5">
-    <div className="flex items-center gap-1.5 px-4 py-2.5 border-b bg-muted/40">
-      <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-      <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-      <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
-      <span className="ml-3 text-[11px] text-muted-foreground">sahakarlekha.com · Dashboard</span>
-    </div>
-    <div className="p-4 grid grid-cols-3 gap-3">
-      {[['नकद · Cash', '₹ 4,09,000'], ['सदस्य · Members', '112'], ['लाभ · Surplus', '₹ 11,000']].map(([k, v]) => (
-        <div key={k} className="rounded-lg border bg-primary/5 p-3">
-          <p className="text-[10px] text-muted-foreground">{k}</p>
-          <p className="text-sm font-bold text-primary mt-1">{v}</p>
-        </div>
-      ))}
-    </div>
-    <div className="px-4 pb-4">
-      <div className="rounded-lg border p-3">
-        <p className="text-[11px] font-semibold text-foreground mb-2">मासिक बिक्री · Monthly Sales</p>
-        <div className="flex items-end gap-1.5 h-20">
-          {[40, 62, 48, 80, 55, 92, 70].map((h, i) => (
-            <div key={i} className="flex-1 rounded-t bg-primary/70" style={{ height: `${h}%` }} />
-          ))}
+const MockDashboard: React.FC = () => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
+  return (
+    <div className="rounded-xl border bg-white shadow-2xl overflow-hidden ring-1 ring-black/5">
+      <div className="flex items-center gap-1.5 px-4 py-2.5 border-b bg-muted/40">
+        <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
+        <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+        <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
+        <span className="ml-3 text-[11px] text-muted-foreground">sahakarlekha.com · {L('डैशबोर्ड', 'Dashboard')}</span>
+      </div>
+      <div className="p-4 grid grid-cols-3 gap-3">
+        {[[L('नकद', 'Cash'), '₹ 4,09,000'], [L('सदस्य', 'Members'), '112'], [L('लाभ', 'Surplus'), '₹ 11,000']].map(([k, v]) => (
+          <div key={k} className="rounded-lg border bg-primary/5 p-3">
+            <p className="text-[10px] text-muted-foreground">{k}</p>
+            <p className="text-sm font-bold text-primary mt-1">{v}</p>
+          </div>
+        ))}
+      </div>
+      <div className="px-4 pb-4">
+        <div className="rounded-lg border p-3">
+          <p className="text-[11px] font-semibold text-foreground mb-2">{L('मासिक बिक्री', 'Monthly Sales')}</p>
+          <div className="flex items-end gap-1.5 h-20">
+            {[40, 62, 48, 80, 55, 92, 70].map((h, i) => (
+              <div key={i} className="flex-1 rounded-t bg-primary/70" style={{ height: `${h}%` }} />
+            ))}
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
-const Yes = () => (
+const Yes: React.FC<{ lang: Lang }> = ({ lang }) => (
   <>
     <CheckCircle2 className="h-5 w-5 text-success mx-auto" aria-hidden="true" />
-    <span className="sr-only">समर्थित / Supported</span>
+    <span className="sr-only">{lang === 'hi' ? 'समर्थित' : 'Supported'}</span>
   </>
 );
-const No = () => (
+const No: React.FC<{ lang: Lang }> = ({ lang }) => (
   <>
     <XCircle className="h-5 w-5 text-muted-foreground/50 mx-auto" aria-hidden="true" />
-    <span className="sr-only">समर्थित नहीं / Not supported</span>
+    <span className="sr-only">{lang === 'hi' ? 'समर्थित नहीं' : 'Not supported'}</span>
   </>
 );
-const cell = (v: boolean | string) =>
-  v === true ? <Yes /> : v === false ? <No /> : v === 'nv'
-    ? <span className="text-xs text-muted-foreground italic">सत्यापित नहीं / not verified</span>
-    : <span className="text-xs text-muted-foreground">{v}</span>;
+const cell = (v: CompareCell, lang: Lang) =>
+  v === true ? <Yes lang={lang} /> : v === false ? <No lang={lang} /> : v === 'nv'
+    ? <span className="text-xs text-muted-foreground italic">{lang === 'hi' ? 'सत्यापित नहीं' : 'not verified'}</span>
+    : <span className="text-xs text-muted-foreground">{tx(v, lang)}</span>;
 
 const LandingPage: React.FC = () => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   return (
     <PublicLayout>
       {/* ───────── HERO ───────── */}
@@ -192,38 +219,51 @@ const LandingPage: React.FC = () => {
               <Sparkles className="h-3.5 w-3.5" /> Cooperative-first Accounting Platform
             </span>
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-foreground leading-tight">
-              सहकारी समिति का <span className="text-primary">Accounting, Compliance और Control</span> — एक ही जगह।
+              {language === 'hi' ? (
+                <>सहकारी समिति का <span className="text-primary">Accounting, Compliance और Control</span> — एक ही जगह।</>
+              ) : (
+                <>Your cooperative society&apos;s <span className="text-primary">accounting, compliance and control</span> — all in one place.</>
+              )}
             </h1>
             <p className="mt-4 text-base lg:text-lg text-muted-foreground max-w-xl mx-auto lg:mx-0">
-              PACS, dairy, marketing, consumer और अन्य cooperative societies के लिए बनाया गया — जहाँ vouchers से लेकर financial statements, GST/TDS और audit-ready reports तक एक connected system में रहते हैं।
+              {L(
+                'PACS, dairy, marketing, consumer और अन्य cooperative societies के लिए बनाया गया — जहाँ vouchers से लेकर financial statements, GST/TDS और audit-ready reports तक एक connected system में रहते हैं।',
+                'Built for PACS, dairy, marketing, consumer and other cooperative societies — vouchers, financial statements, GST/TDS and audit-ready reports, all in one connected system.',
+              )}
             </p>
             <p className="mt-3 text-sm text-foreground/80 max-w-xl mx-auto lg:mx-0">
-              Professional cooperative accounting ₹2,999/year + GST से। Team व operations बढ़ें तो Plus या Pro के साथ आगे बढ़ें।
+              {L(
+                'Professional cooperative accounting ₹2,999/year + GST से। Team व operations बढ़ें तो Plus या Pro के साथ आगे बढ़ें।',
+                'Professional cooperative accounting from ₹2,999/year + GST. As your team and operations grow, move up to Plus or Pro.',
+              )}
             </p>
             <div className="mt-7 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <Link to="/register">
                 <Button size="lg" className="gap-2 text-base px-8 w-full sm:w-auto">
-                  शुरू करें / Get Started <ArrowRight className="h-5 w-5" />
+                  {L('शुरू करें', 'Get Started')} <ArrowRight className="h-5 w-5" />
                 </Button>
               </Link>
               <a href="#demo">
                 <Button size="lg" variant="outline" className="gap-2 text-base px-6 w-full sm:w-auto">
-                  <Play className="h-4 w-4" /> देखें कैसे काम करता है
+                  <Play className="h-4 w-4" /> {L('देखें कैसे काम करता है', 'See how it works')}
                 </Button>
               </a>
             </div>
             <p className="mt-3 text-xs text-muted-foreground text-center lg:text-left">
-              ✓ Unlimited Vouchers · ✓ Unlimited Members · ✓ Data Export Anytime · ✓ ₹2,999/year + GST से
+              {L(
+                '✓ Unlimited Vouchers · ✓ Unlimited Members · ✓ Data Export Anytime · ✓ ₹2,999/year + GST से',
+                '✓ Unlimited Vouchers · ✓ Unlimited Members · ✓ Data Export Anytime · ✓ From ₹2,999/year + GST',
+              )}
             </p>
             {/* Ask entry — grounded answers from help/cookbook/guide, no signup needed */}
             <Link to="/ask" className="mt-5 flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors max-w-xl mx-auto lg:mx-0">
               <Sparkles className="h-4 w-4 text-primary shrink-0" />
-              <span className="truncate">कोई सवाल? पूछें — "member kaise jode", "GST जमा की एंट्री"…</span>
+              <span className="truncate">{L('कोई सवाल? पूछें — "member kaise jode", "GST जमा की एंट्री"…', 'Have a question? Ask — "how to add a member", "entry for GST payment"…')}</span>
             </Link>
           </div>
 
           <div className="relative min-w-0">
-            <Figure file="hero-dashboard.webp" alt="SahakarLekha dashboard" fallback={<MockDashboard />} priority />
+            <Figure file="hero-dashboard.webp" alt={L('सहकार लेखा डैशबोर्ड', 'SahakarLekha dashboard')} fallback={<MockDashboard />} priority />
           </div>
         </div>
 
@@ -232,7 +272,7 @@ const LandingPage: React.FC = () => {
           {STATS.map(s => (
             <div key={s.label} className="text-center">
               <p className="text-3xl font-extrabold text-primary">{s.value}</p>
-              <p className="text-sm text-muted-foreground">{s.labelHi}<br />{s.label}</p>
+              <p className="text-sm text-muted-foreground">{L(s.labelHi, s.label)}</p>
             </div>
           ))}
         </div>
@@ -241,16 +281,11 @@ const LandingPage: React.FC = () => {
       {/* ───────── TRUST BAR ───────── */}
       <section className="py-6 bg-white border-y">
         <div className="max-w-6xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-center text-sm">
-          {[
-            ['🏛️', 'सहकारी-विशेष', 'Built for cooperatives'],
-            ['💳', '₹2,999/year + GST से', 'Transparent pricing'],
-            ['🔒', 'आपका डेटा सुरक्षित', 'Your data, exportable'],
-            ['🇮🇳', 'हिंदी + English', '36 states'],
-          ].map(([e, hi, en]) => (
-            <div key={en as string} className="flex flex-col items-center">
-              <span className="text-xl">{e}</span>
-              <span className="font-semibold text-foreground mt-1">{hi}</span>
-              <span className="text-xs text-muted-foreground">{en}</span>
+          {TRUST.map(t => (
+            <div key={t.e} className="flex flex-col items-center">
+              <span className="text-xl">{t.e}</span>
+              <span className="font-semibold text-foreground mt-1">{L(t.hi, t.en)}</span>
+              {language === 'en' && <span className="text-xs text-muted-foreground">{t.enSub}</span>}
             </div>
           ))}
         </div>
@@ -259,8 +294,8 @@ const LandingPage: React.FC = () => {
       {/* ───────── FEATURES ───────── */}
       <section className="py-16 bg-white" id="features">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">सम्पूर्ण लेखा प्रणाली — Complete Accounting System</h2>
-          <p className="mt-2 text-center text-muted-foreground">Accounting → Compliance → Control — एक connected system</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">{L('सम्पूर्ण लेखा प्रणाली', 'Complete Accounting System')}</h2>
+          <p className="mt-2 text-center text-muted-foreground">{L('Accounting → Compliance → Control — एक connected system', 'Accounting → Compliance → Control — one connected system')}</p>
           <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map(f => (
               <Card key={f.title} className="hover:shadow-lg transition-shadow">
@@ -270,8 +305,7 @@ const LandingPage: React.FC = () => {
                       <f.icon className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-foreground">{f.titleHi}</h3>
-                      <p className="text-sm font-medium text-primary">{f.title}</p>
+                      <h3 className="font-semibold text-foreground">{L(f.titleHi, f.title)}</h3>
                       <p className="mt-1 text-sm text-muted-foreground">{f.desc}</p>
                     </div>
                   </div>
@@ -285,8 +319,8 @@ const LandingPage: React.FC = () => {
       {/* ───────── SOCIETY TYPES ───────── */}
       <section className="py-16 bg-muted/30" id="types">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">8 प्रकार की समितियों के लिए — For All Cooperative Types</h2>
-          <p className="mt-2 text-center text-muted-foreground">समिति का प्रकार चुनें → खाता-चार्ट ऑटो-लोड → तुरंत शुरू करें</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">{L('8 प्रकार की समितियों के लिए', 'For All Cooperative Types')}</h2>
+          <p className="mt-2 text-center text-muted-foreground">{L('समिति का प्रकार चुनें → खाता-चार्ट ऑटो-लोड → तुरंत शुरू करें', 'Pick your society type → chart of accounts loads automatically → start right away')}</p>
           <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
             {SOCIETY_TYPES.map(s => (
               <Card key={s.name} className="hover:shadow-md transition-shadow text-center">
@@ -294,8 +328,7 @@ const LandingPage: React.FC = () => {
                   <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
                     <s.icon className="h-7 w-7 text-primary" />
                   </div>
-                  <h3 className="font-semibold text-sm text-foreground">{s.nameHi}</h3>
-                  <p className="text-xs text-primary">{s.name}</p>
+                  <h3 className="font-semibold text-sm text-foreground">{L(s.nameHi, s.name)}</h3>
                   <p className="mt-1 text-xs text-muted-foreground">{s.desc}</p>
                 </CardContent>
               </Card>
@@ -307,7 +340,7 @@ const LandingPage: React.FC = () => {
       {/* ───────── DEMO ───────── */}
       <section className="py-16 bg-white" id="demo">
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold text-foreground">90 सेकंड में देखें यह कैसे काम करता है</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-foreground">{L('90 सेकंड में देखें यह कैसे काम करता है', 'See how it works in 90 seconds')}</h2>
           <p className="mt-2 text-muted-foreground">See a full year — opening balances → vouchers → audit-ready Balance Sheet.</p>
           <div className="mt-8 rounded-xl overflow-hidden border shadow-lg bg-muted/30">
             {DEMO_VIDEO_ID ? (
@@ -315,7 +348,7 @@ const LandingPage: React.FC = () => {
                 <iframe
                   className="w-full h-full"
                   src={`https://www.youtube.com/embed/${DEMO_VIDEO_ID}`}
-                  title="SahakarLekha demo"
+                  title={L('सहकार लेखा डेमो', 'SahakarLekha demo')}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
@@ -326,7 +359,7 @@ const LandingPage: React.FC = () => {
           </div>
           <div className="mt-6">
             <Button variant="outline" className="gap-2" onClick={handleSampleReport}>
-              <Download className="h-4 w-4" /> नमूना रिपोर्ट PDF डाउनलोड करें / Sample report
+              <Download className="h-4 w-4" /> {L('नमूना रिपोर्ट PDF डाउनलोड करें', 'Download sample report PDF')}
             </Button>
           </div>
         </div>
@@ -335,16 +368,15 @@ const LandingPage: React.FC = () => {
       {/* ───────── PRODUCT TOUR ───────── */}
       <section className="py-16 bg-muted/30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">अंदर एक नज़र — A look inside</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">{L('अंदर एक नज़र', 'A look inside')}</h2>
           {TOUR.map((t, i) => (
             <div key={t.shot} className={`grid md:grid-cols-2 gap-8 items-center ${i % 2 ? 'md:[direction:rtl]' : ''}`}>
               <div className="[direction:ltr]">
-                <h3 className="text-xl font-bold text-foreground">{t.title}</h3>
-                <p className="text-sm font-medium text-primary">{t.titleEn}</p>
-                <p className="mt-2 text-muted-foreground">{t.desc}</p>
+                <h3 className="text-xl font-bold text-foreground">{L(t.title, t.titleEn)}</h3>
+                <p className="mt-2 text-muted-foreground">{L(t.desc, t.descEn)}</p>
               </div>
               <div className="[direction:ltr]">
-                <Figure file={t.shot} alt={t.titleEn} fallback={<ShotPlaceholder label={t.titleEn} />} />
+                <Figure file={t.shot} alt={L(t.title, t.titleEn)} fallback={<ShotPlaceholder label={L(t.title, t.titleEn)} />} />
               </div>
             </div>
           ))}
@@ -355,13 +387,12 @@ const LandingPage: React.FC = () => {
       {TESTIMONIALS.length > 0 && (
         <section className="py-16 bg-white">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">समितियाँ क्या कहती हैं — What societies say</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">{L('समितियाँ क्या कहती हैं', 'What societies say')}</h2>
             <div className="mt-10 grid md:grid-cols-3 gap-6">
               {TESTIMONIALS.map((t) => (
                 <Card key={t.name}><CardContent className="pt-6">
                   <Quote className="h-7 w-7 text-primary/30" />
-                  <p className="mt-2 text-sm text-foreground">{t.quoteHi}</p>
-                  <p className="mt-2 text-xs text-muted-foreground italic">{t.quoteEn}</p>
+                  <p className="mt-2 text-sm text-foreground">{L(t.quoteHi, t.quoteEn)}</p>
                   <div className="mt-4 pt-4 border-t">
                     <p className="text-sm font-semibold text-foreground">{t.name}</p>
                     <p className="text-xs text-muted-foreground">{t.role} · {t.place}</p>
@@ -376,11 +407,16 @@ const LandingPage: React.FC = () => {
       {/* ───────── TALLY COMPARISON ───────── */}
       <section className="py-16 bg-white" id="compare">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">Tally / Zoho बनाम SahakarLekha</h2>
-          <p className="mt-2 text-center text-muted-foreground">सहकारी समिति के लिए जो ज़रूरी है, वही यहाँ बना-बनाया है।</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">{L('Tally / Zoho बनाम SahakarLekha', 'Tally / Zoho vs SahakarLekha')}</h2>
+          <p className="mt-2 text-center text-muted-foreground">{L('सहकारी समिति के लिए जो ज़रूरी है, वही यहाँ बना-बनाया है।', 'What a cooperative society needs comes built in here.')}</p>
           <div className="mt-8 overflow-x-auto rounded-xl border">
             <table className="w-full text-sm">
-              <caption className="sr-only">TallyPrime Silver, Zoho Books (India) और SahakarLekha की तुलना — {COMPARE_DATE}</caption>
+              <caption className="sr-only">
+                {L(
+                  `TallyPrime Silver, Zoho Books (India) और SahakarLekha की तुलना — ${COMPARE_DATE.hi}`,
+                  `Comparison of TallyPrime Silver, Zoho Books (India) and SahakarLekha — ${COMPARE_DATE.en}`,
+                )}
+              </caption>
               <thead className="bg-muted/50">
                 <tr>
                   <th scope="col" className="text-left p-3 font-semibold">Feature</th>
@@ -391,19 +427,20 @@ const LandingPage: React.FC = () => {
               </thead>
               <tbody>
                 {TALLY_ROWS.map((r) => (
-                  <tr key={r.f} className="border-t even:bg-muted/20">
-                    <td className="p-3">{r.f}</td>
-                    <td className="p-3 text-center">{cell(r.tally)}</td>
-                    <td className="p-3 text-center">{cell(r.zoho)}</td>
-                    <td className="p-3 text-center bg-primary/5 font-medium">{cell(r.sl)}</td>
+                  <tr key={tx(r.f, 'en')} className="border-t even:bg-muted/20">
+                    <td className="p-3">{tx(r.f, language)}</td>
+                    <td className="p-3 text-center">{cell(r.tally, language)}</td>
+                    <td className="p-3 text-center">{cell(r.zoho, language)}</td>
+                    <td className="p-3 text-center bg-primary/5 font-medium">{cell(r.sl, language)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            तुलना {COMPARE_DATE} को vendors की official websites से — "सत्यापित नहीं" का मतलब है कि vendor के दस्तावेज़ में हमें इसकी पुष्टि नहीं मिली, यह नहीं कि सुविधा उपलब्ध नहीं है। मूल्य बदल सकते हैं।
-            {' '}Compared on {COMPARE_DATE} using vendors' official websites; "not verified" means we could not confirm it in vendor documentation, not that it is unavailable. Prices may change. Sources:{' '}
+            {language === 'hi'
+              ? <>तुलना {COMPARE_DATE.hi} को vendors की official websites से — "सत्यापित नहीं" का मतलब है कि vendor के दस्तावेज़ में हमें इसकी पुष्टि नहीं मिली, यह नहीं कि सुविधा उपलब्ध नहीं है। मूल्य बदल सकते हैं। स्रोत:{' '}</>
+              : <>Compared on {COMPARE_DATE.en} using vendors&apos; official websites; &quot;not verified&quot; means we could not confirm it in vendor documentation, not that it is unavailable. Prices may change. Sources:{' '}</>}
             {COMPARE_SOURCES.map((s, i) => (
               <React.Fragment key={s.href}>
                 {i > 0 && ' · '}
@@ -417,17 +454,16 @@ const LandingPage: React.FC = () => {
       {/* ───────── SECURITY ───────── */}
       <section className="py-16 bg-muted/30" id="security">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">आपका डेटा, पूरी तरह सुरक्षित — Your data, fully secure</h2>
-          <p className="mt-2 text-center text-muted-foreground">सदस्य-डेटा व खातों की सुरक्षा हमारी पहली प्राथमिकता है।</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">{L('आपका डेटा, पूरी तरह सुरक्षित', 'Your data, fully secure')}</h2>
+          <p className="mt-2 text-center text-muted-foreground">{L('सदस्य-डेटा व खातों की सुरक्षा हमारी पहली प्राथमिकता है।', 'Keeping member data and accounts safe is our first priority.')}</p>
           <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {SECURITY.map(s => (
               <Card key={s.titleEn}><CardContent className="pt-6 text-center">
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-3">
                   <s.icon className="h-6 w-6 text-primary" />
                 </div>
-                <h3 className="font-semibold text-foreground">{s.title}</h3>
-                <p className="text-xs font-medium text-primary">{s.titleEn}</p>
-                <p className="mt-2 text-sm text-muted-foreground">{s.desc}</p>
+                <h3 className="font-semibold text-foreground">{L(s.title, s.titleEn)}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{L(s.desc, s.descEn)}</p>
               </CardContent></Card>
             ))}
           </div>
@@ -441,16 +477,18 @@ const LandingPage: React.FC = () => {
             <CardContent className="p-8 grid md:grid-cols-[1fr_auto] gap-6 items-center">
               <div>
                 <span className="inline-flex items-center gap-2 text-primary text-sm font-semibold">
-                  <GraduationCap className="h-4 w-4" /> मुफ्त लर्निंग एकेडमी
+                  <GraduationCap className="h-4 w-4" /> {L('मुफ्त लर्निंग एकेडमी', 'Free Learning Academy')}
                 </span>
-                <h2 className="mt-2 text-2xl font-bold text-foreground">सहकारी लेखांकन — 35 अध्याय का मुफ्त कोर्स + प्रमाणपत्र</h2>
+                <h2 className="mt-2 text-2xl font-bold text-foreground">{L('सहकारी लेखांकन — 35 अध्याय का मुफ्त कोर्स + प्रमाणपत्र', 'Cooperative accounting — free 35-chapter course + certificate')}</h2>
                 <p className="mt-2 text-muted-foreground">
-                  नींव से ऑडिट तक — सरल हिंदी व English में। क्विज़ हल करें, सत्यापन-योग्य प्रमाणपत्र पाएँ। बिना लॉगिन, बिल्कुल मुफ्त।
-                  <br /><span className="text-sm">Free 30-chapter cooperative accounting course + verifiable certificate.</span>
+                  {L(
+                    'नींव से ऑडिट तक — सरल हिंदी व English में। क्विज़ हल करें, सत्यापन-योग्य प्रमाणपत्र पाएँ। बिना लॉगिन, बिल्कुल मुफ्त।',
+                    'From the basics to audit — in simple Hindi and English. Solve the quizzes and earn a verifiable certificate. No login, completely free.',
+                  )}
                 </p>
               </div>
               <Link to="/guide" className="shrink-0">
-                <Button size="lg" className="gap-2 w-full">कोर्स शुरू करें <ArrowRight className="h-5 w-5" /></Button>
+                <Button size="lg" className="gap-2 w-full">{L('कोर्स शुरू करें', 'Start the course')} <ArrowRight className="h-5 w-5" /></Button>
               </Link>
             </CardContent>
           </Card>
@@ -460,8 +498,13 @@ const LandingPage: React.FC = () => {
       {/* ───────── AUDIT / COMPLIANCE ───────── */}
       <section className="py-16 bg-muted/30" id="compliance">
         <div className="max-w-3xl mx-auto px-4">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">अनुपालन की तैयारी — Compliance support</h2>
-          <p className="mt-2 text-center text-muted-foreground">पूरे वर्ष books व्यवस्थित रखें — ताकि audit के समय हफ़्तों का काम दिनों में सिमट सके। धाराएँ व प्रारूप राज्य अनुसार अलग होते हैं — अपने ऑडिटर/RCS से मिलाएँ।</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground">{L('अनुपालन की तैयारी', 'Compliance support')}</h2>
+          <p className="mt-2 text-center text-muted-foreground">
+            {L(
+              'पूरे वर्ष books व्यवस्थित रखें — ताकि audit के समय हफ़्तों का काम दिनों में सिमट सके। धाराएँ व प्रारूप राज्य अनुसार अलग होते हैं — अपने ऑडिटर/RCS से मिलाएँ।',
+              'Keep your books in order all year — so weeks of audit work can shrink to days. Sections and formats differ by state — check with your auditor / RCS.',
+            )}
+          </p>
           <div className="mt-8 space-y-3">
             {[
               'State-wise audit schedules — Haryana, Maharashtra, Gujarat, Karnataka, Kerala, UP and more (sections differ by state Act)',
@@ -478,7 +521,7 @@ const LandingPage: React.FC = () => {
           </div>
           <div className="mt-6 text-center">
             <button onClick={handleSampleReport} className="text-primary text-sm font-medium inline-flex items-center gap-1.5 hover:underline">
-              <Download className="h-4 w-4" /> असली RCS-प्रारूप बैलेंस शीट देखें (नमूना PDF)
+              <Download className="h-4 w-4" /> {L('असली RCS-प्रारूप बैलेंस शीट देखें (नमूना PDF)', 'See a real RCS-format Balance Sheet (sample PDF)')}
             </button>
           </div>
         </div>
@@ -488,11 +531,19 @@ const LandingPage: React.FC = () => {
       <section className="py-16 bg-white">
         <div className="max-w-3xl mx-auto px-4 text-center">
           <Heart className="h-9 w-9 text-primary mx-auto mb-3" />
-          <h2 className="text-2xl sm:text-3xl font-bold text-foreground">यह किसके लिए बना है?</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-foreground">{L('यह किसके लिए बना है?', 'Who is it built for?')}</h2>
           <p className="mt-4 text-muted-foreground leading-relaxed">
-            भारत की 8 लाख से ज़्यादा सहकारी समितियाँ ग्रामीण भारत की रीढ़ हैं — पर इनके लिए कभी कोई सॉफ्टवेयर नहीं बना; सब Tally जैसे सामान्य औज़ार को ज़बरदस्ती सहकारी प्रारूप में ढालते रहे।
-            <strong className="text-foreground"> SahakarLekha इसी को बदलने के लिए बना है</strong> — और इसे सहकारी समितियों के लिए किफायती रखा गया है, professional accounting ₹2,999/year + GST से।
-            <br /><span className="text-sm">Purpose-built for cooperative societies and priced to be affordable — professional accounting from ₹2,999/year + GST, with Plus and Pro as you grow.</span>
+            {language === 'hi' ? (
+              <>
+                भारत की 8 लाख से ज़्यादा सहकारी समितियाँ ग्रामीण भारत की रीढ़ हैं — पर इनके लिए कभी कोई सॉफ्टवेयर नहीं बना; सब Tally जैसे सामान्य औज़ार को ज़बरदस्ती सहकारी प्रारूप में ढालते रहे।
+                <strong className="text-foreground"> SahakarLekha इसी को बदलने के लिए बना है</strong> — और इसे सहकारी समितियों के लिए किफायती रखा गया है, professional accounting ₹2,999/year + GST से।
+              </>
+            ) : (
+              <>
+                India&apos;s more than 8 lakh cooperative societies are the backbone of rural India — yet no software was ever built for them; everyone kept forcing general tools like Tally into the cooperative format.
+                <strong className="text-foreground"> SahakarLekha is built to change that</strong> — purpose-built for cooperative societies and priced to be affordable: professional accounting from ₹2,999/year + GST, with Plus and Pro as you grow.
+              </>
+            )}
           </p>
         </div>
       </section>
@@ -500,14 +551,19 @@ const LandingPage: React.FC = () => {
       {/* ───────── PRICING TEASER ───────── */}
       <section className="py-12 bg-white border-t">
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <h2 className="text-xl sm:text-2xl font-bold text-foreground">आपकी ज़रूरत के हिसाब से plan</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-foreground">{L('आपकी ज़रूरत के हिसाब से plan', 'A plan for every need')}</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             Starter = Accounting · Plus = Team · Pro = Scale · Enterprise = Network
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">Professional accounting ₹2,999/year + GST से — team, automation या scale बढ़े तो upgrade करें।</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {L(
+              'Professional accounting ₹2,999/year + GST से — team, automation या scale बढ़े तो upgrade करें।',
+              'Professional accounting from ₹2,999/year + GST — upgrade as your team, automation or scale grows.',
+            )}
+          </p>
           <div className="mt-5">
             <Link to="/pricing">
-              <Button variant="outline" className="gap-2">मूल्य देखें / See pricing <ArrowRight className="h-4 w-4" /></Button>
+              <Button variant="outline" className="gap-2">{L('मूल्य देखें', 'See pricing')} <ArrowRight className="h-4 w-4" /></Button>
             </Link>
           </div>
         </div>
@@ -517,14 +573,22 @@ const LandingPage: React.FC = () => {
       <section className="py-12 bg-primary/5 border-y">
         <div className="max-w-3xl mx-auto px-4 text-center">
           <Gift className="h-8 w-8 text-primary mx-auto mb-2" />
-          <h3 className="text-xl font-bold text-foreground">किसी और समिति को बताएँ</h3>
-          <p className="mt-1 text-sm text-muted-foreground">अपनी जान-पहचान की समिति, लेखाकार या ऑडिटर को SahakarLekha के बारे में बताएँ — मिलकर सहकारिता को डिजिटल बनाएँ।</p>
+          <h3 className="text-xl font-bold text-foreground">{L('किसी और समिति को बताएँ', 'Tell another society')}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {L(
+              'अपनी जान-पहचान की समिति, लेखाकार या ऑडिटर को SahakarLekha के बारे में बताएँ — मिलकर सहकारिता को डिजिटल बनाएँ।',
+              'Tell a society, accountant or auditor you know about SahakarLekha — let us take cooperatives digital together.',
+            )}
+          </p>
           <div className="mt-4 flex flex-wrap justify-center gap-3">
             <a
-              href={`https://wa.me/?text=${encodeURIComponent('SahakarLekha — सहकारी समितियों के लिए बना accounting platform। देखें: https://sahakarlekha.com')}`}
+              href={`https://wa.me/?text=${encodeURIComponent(L(
+                'SahakarLekha — सहकारी समितियों के लिए बना accounting platform। देखें: https://sahakarlekha.com',
+                'SahakarLekha — an accounting platform built for cooperative societies. Take a look: https://sahakarlekha.com',
+              ))}`}
               target="_blank" rel="noopener noreferrer"
             >
-              <Button variant="outline" className="gap-2"><MessageCircle className="h-4 w-4" /> WhatsApp पर शेयर करें</Button>
+              <Button variant="outline" className="gap-2"><MessageCircle className="h-4 w-4" /> {L('WhatsApp पर शेयर करें', 'Share on WhatsApp')}</Button>
             </a>
           </div>
         </div>
@@ -545,11 +609,11 @@ const LandingPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex items-end justify-between gap-4 mb-8">
             <div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-foreground">ब्लॉग से नवीनतम</h2>
-              <p className="mt-1 text-muted-foreground">सहकारी लेखांकन, ऑडिट व अनुपालन पर आसान हिन्दी लेख।</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-foreground">{L('ब्लॉग से नवीनतम', 'Latest from the blog')}</h2>
+              <p className="mt-1 text-muted-foreground">{L('सहकारी लेखांकन, ऑडिट व अनुपालन पर आसान हिन्दी लेख।', 'Easy articles in Hindi on cooperative accounting, audit and compliance.')}</p>
             </div>
             <Link to="/blog" className="hidden sm:inline-flex items-center gap-1 text-primary font-medium hover:gap-2 transition-all whitespace-nowrap">
-              सभी लेख देखें <ArrowRight className="h-4 w-4" />
+              {L('सभी लेख देखें', 'See all articles')} <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -563,7 +627,7 @@ const LandingPage: React.FC = () => {
                     <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
                       <span>{formatDate(post.date)}</span>
                       <span>·</span>
-                      <span>{readingMinutes(post.slug)} मिनट पढ़ें</span>
+                      <span>{readingMinutes(post.slug)} {L('मिनट पढ़ें', 'min read')}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -572,7 +636,7 @@ const LandingPage: React.FC = () => {
           </div>
           <div className="mt-8 text-center sm:hidden">
             <Link to="/blog" className="inline-flex items-center gap-1 text-primary font-medium">
-              सभी लेख देखें <ArrowRight className="h-4 w-4" />
+              {L('सभी लेख देखें', 'See all articles')} <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </div>
@@ -581,26 +645,29 @@ const LandingPage: React.FC = () => {
       {/* ───────── FINAL CTA ───────── */}
       <section className="py-16 bg-primary text-white">
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold">आज ही शुरू करें</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold">{L('आज ही शुरू करें', 'Get started today')}</h2>
           <p className="mt-3 text-lg text-primary-foreground/80">
-            Get Started — Professional accounting ₹2,999/year + GST से, कोई छिपा शुल्क नहीं। आपका डेटा कभी भी निर्यात करें; कोई लॉक-इन नहीं।
+            {L(
+              'Professional accounting ₹2,999/year + GST से, कोई छिपा शुल्क नहीं। आपका डेटा कभी भी निर्यात करें; कोई लॉक-इन नहीं।',
+              'Professional accounting from ₹2,999/year + GST, no hidden charges. Export your data any time; no lock-in.',
+            )}
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/register">
               <Button size="lg" variant="secondary" className="gap-2 text-base px-8">
-                पंजीकरण / Register <ArrowRight className="h-5 w-5" />
+                {L('पंजीकरण', 'Register')} <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
             {WHATSAPP ? (
               <a href={`https://wa.me/${WHATSAPP}`} target="_blank" rel="noopener noreferrer">
                 <Button size="lg" variant="outline" className="gap-2 text-base px-8 bg-transparent text-white border-white/40 hover:bg-white/10">
-                  <MessageCircle className="h-4 w-4" /> WhatsApp सहायता
+                  <MessageCircle className="h-4 w-4" /> {L('WhatsApp सहायता', 'WhatsApp support')}
                 </Button>
               </a>
             ) : (
               <Link to="/contact">
                 <Button size="lg" variant="outline" className="gap-2 text-base px-8 bg-transparent text-white border-white/40 hover:bg-white/10">
-                  <MessageCircle className="h-4 w-4" /> सहायता / Support
+                  <MessageCircle className="h-4 w-4" /> {L('सहायता', 'Support')}
                 </Button>
               </Link>
             )}
@@ -612,8 +679,8 @@ const LandingPage: React.FC = () => {
       {SHOW_COMMUNITY && (
       <section className="py-12 bg-muted/30 border-t">
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <h3 className="text-xl font-bold text-foreground">हमारे समुदाय से जुड़ें / Join our community</h3>
-          <p className="mt-1 text-sm text-muted-foreground">हर नया फ़ीचर, टिप और वीडियो सबसे पहले पाएँ — Updates, tips & tutorials.</p>
+          <h3 className="text-xl font-bold text-foreground">{L('हमारे समुदाय से जुड़ें', 'Join our community')}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{L('हर नया फ़ीचर, टिप और वीडियो सबसे पहले पाएँ।', 'Updates, tips & tutorials.')}</p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             {SOCIAL_CHANNELS.map(c => (
               <a key={c.label} href={c.href} target="_blank" rel="noopener noreferrer" aria-label={c.label}
