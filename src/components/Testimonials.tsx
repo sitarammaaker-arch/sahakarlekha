@@ -6,6 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent } from '@/components/ui/card';
 import RatingWidget from '@/components/RatingWidget';
 import { Star, Quote } from 'lucide-react';
@@ -20,8 +21,8 @@ interface Review {
   created_at: string;
 }
 
-const Stars: React.FC<{ n: number }> = ({ n }) => (
-  <div className="flex gap-0.5" aria-label={`${n} स्टार`}>
+const Stars: React.FC<{ n: number; lang: 'hi' | 'en' }> = ({ n, lang }) => (
+  <div className="flex gap-0.5" aria-label={lang === 'hi' ? `${n} स्टार` : `${n} stars`}>
     {[1, 2, 3, 4, 5].map(i => (
       <Star key={i} className={`h-4 w-4 ${i <= n ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/30'}`} />
     ))}
@@ -29,6 +30,8 @@ const Stars: React.FC<{ n: number }> = ({ n }) => (
 );
 
 const Testimonials: React.FC = () => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const [reviews, setReviews] = useState<Review[]>([]);
 
   useEffect(() => {
@@ -77,13 +80,13 @@ const Testimonials: React.FC = () => {
     <section className="py-16 bg-muted/30">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-10">
-          <h2 className="text-2xl md:text-3xl font-bold text-foreground">हमारे उपयोगकर्ता क्या कहते हैं</h2>
-          <p className="mt-2 text-sm sm:text-base text-muted-foreground">सहकारी समितियों, सचिवों व लेखाकारों के असली अनुभव।</p>
+          <h2 className="text-2xl md:text-3xl font-bold text-foreground">{L('हमारे उपयोगकर्ता क्या कहते हैं', 'What our users say')}</h2>
+          <p className="mt-2 text-sm sm:text-base text-muted-foreground">{L('सहकारी समितियों, सचिवों व लेखाकारों के असली अनुभव।', 'Real experiences of cooperative societies, secretaries and accountants.')}</p>
           {rated.length > 0 && (
             <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-50 dark:bg-amber-950/30 px-4 py-1.5">
-              <Stars n={Math.round(avg)} />
+              <Stars n={Math.round(avg)} lang={language} />
               <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                {avg.toFixed(1)} / 5 · {rated.length}+ समीक्षाएँ
+                {avg.toFixed(1)} / 5 · {rated.length}+ {L('समीक्षाएँ', 'reviews')}
               </span>
             </div>
           )}
@@ -95,9 +98,9 @@ const Testimonials: React.FC = () => {
               <Card key={r.id} className="h-full">
                 <CardContent className="p-5 flex flex-col h-full">
                   <Quote className="h-6 w-6 text-primary/30 mb-2" aria-hidden="true" />
-                  {typeof r.rating === 'number' && <Stars n={r.rating} />}
+                  {typeof r.rating === 'number' && <Stars n={r.rating} lang={language} />}
                   {r.message && <p className="text-sm text-foreground/90 mt-3 flex-1">{r.message}</p>}
-                  <p className="text-sm font-semibold text-foreground mt-4">{r.name || 'एक सदस्य'}</p>
+                  <p className="text-sm font-semibold text-foreground mt-4">{r.name || L('एक सदस्य', 'A member')}</p>
                 </CardContent>
               </Card>
             ))}

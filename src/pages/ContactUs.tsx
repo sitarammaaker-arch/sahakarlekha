@@ -15,11 +15,20 @@ import { Mail, Phone, MapPin, Clock, Send } from 'lucide-react';
 import { SOCIAL_CHANNELS, SocialIcon, WHATSAPP_NUMBER } from '@/lib/socials';
 import { supabase } from '@/lib/supabase';
 import { trackEvent } from '@/lib/analytics';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const ContactUs: React.FC = () => {
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   useDocumentMeta({
-    title: 'संपर्क करें — SahakarLekha सहकारी लेखा सॉफ्टवेयर सहायता',
-    description: 'SahakarLekha टीम से संपर्क करें — सहायता, डेमो व अपनी सहकारी समिति को ऑनबोर्ड करने के लिए. Contact us for support, a demo, or to onboard your cooperative society.',
+    title: L(
+      'संपर्क करें — SahakarLekha सहकारी लेखा सॉफ्टवेयर सहायता',
+      'Contact Us — SahakarLekha cooperative accounting software support',
+    ),
+    description: L(
+      'SahakarLekha टीम से संपर्क करें — सहायता, डेमो व अपनी सहकारी समिति को ऑनबोर्ड करने के लिए. Contact us for support, a demo, or to onboard your cooperative society.',
+      'Contact the SahakarLekha team for support, a demo, or to onboard your cooperative society.',
+    ),
     canonicalPath: '/contact',
   });
   const { toast } = useToast();
@@ -34,7 +43,11 @@ const ContactUs: React.FC = () => {
     e.preventDefault();
     if (company) return; // bot filled the hidden field — silently drop
     if (!name.trim() || !email.trim() || !message.trim()) {
-      toast({ title: 'अधूरी जानकारी', description: 'कृपया नाम, ईमेल व संदेश भरें / Please fill name, email & message', variant: 'destructive' });
+      toast({
+        title: L('अधूरी जानकारी', 'Incomplete details'),
+        description: L('कृपया नाम, ईमेल व संदेश भरें', 'Please fill name, email & message'),
+        variant: 'destructive',
+      });
       return;
     }
     setSubmitting(true);
@@ -49,7 +62,10 @@ const ContactUs: React.FC = () => {
       }]);
       if (error) throw error;
       trackEvent('contact_submit', {});
-      toast({ title: 'संदेश भेज दिया गया ✓', description: 'हम 24 घंटे में जवाब देंगे। / We reply within 24 hours.' });
+      toast({
+        title: L('संदेश भेज दिया गया ✓', 'Message sent ✓'),
+        description: L('हम 24 घंटे में जवाब देंगे।', 'We reply within 24 hours.'),
+      });
       setName('');
       setEmail('');
       setSocietyName('');
@@ -58,8 +74,11 @@ const ContactUs: React.FC = () => {
       // RULE 1: never show a fake success. Tell the user it did not save and
       // give a reliable fallback channel.
       toast({
-        title: 'संदेश सेव नहीं हो सका',
-        description: 'कृपया WhatsApp +91 94679 18545 या support@sahakarlekha.com पर भेजें। / Could not send — please use WhatsApp or email.',
+        title: L('संदेश सेव नहीं हो सका', 'Message could not be saved'),
+        description: L(
+          'कृपया WhatsApp +91 94679 18545 या support@sahakarlekha.com पर भेजें।',
+          'Could not send — please use WhatsApp +91 94679 18545 or email support@sahakarlekha.com.',
+        ),
         variant: 'destructive',
         duration: 11000,
       });
@@ -74,12 +93,13 @@ const ContactUs: React.FC = () => {
       <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-primary/10 py-16 sm:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-foreground leading-tight">
-            संपर्क करें — <span className="text-primary">Contact Us</span>
+            <span className="text-primary">{L('संपर्क करें', 'Contact Us')}</span>
           </h1>
           <p className="mt-4 text-sm sm:text-base lg:text-xl text-muted-foreground max-w-2xl mx-auto">
-            हमसे जुड़ें — हम आपकी सहायता के लिए तत्पर हैं।
-            <br />
-            Reach out to us — we're here to help your cooperative society.
+            {L(
+              'हमसे जुड़ें — हम आपकी सहायता के लिए तत्पर हैं।',
+              'Reach out to us — we\'re here to help your cooperative society.',
+            )}
           </p>
         </div>
       </section>
@@ -97,8 +117,8 @@ const ContactUs: React.FC = () => {
                     <Mail className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground">Email</h3>
-                    <p className="text-sm text-muted-foreground">ईमेल द्वारा संपर्क करें</p>
+                    <h3 className="font-semibold text-foreground">{L('ईमेल', 'Email')}</h3>
+                    <p className="text-sm text-muted-foreground">{L('ईमेल द्वारा संपर्क करें', 'Write to us by email')}</p>
                     <p className="mt-1 text-sm font-medium text-foreground">support@sahakarlekha.com</p>
                   </div>
                 </CardContent>
@@ -111,8 +131,8 @@ const ContactUs: React.FC = () => {
                     <Phone className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground">WhatsApp / फोन</h3>
-                    <p className="text-sm text-muted-foreground">WhatsApp पर तुरंत संपर्क</p>
+                    <h3 className="font-semibold text-foreground">{L('WhatsApp / फोन', 'WhatsApp / Phone')}</h3>
+                    <p className="text-sm text-muted-foreground">{L('WhatsApp पर तुरंत संपर्क', 'Quick contact on WhatsApp')}</p>
                     <a href={`https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-sm font-medium text-primary hover:underline">+91 94679 18545</a>
                   </div>
                 </CardContent>
@@ -125,9 +145,9 @@ const ContactUs: React.FC = () => {
                     <MapPin className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground">Address / पता</h3>
-                    <p className="text-sm text-muted-foreground">कार्यालय पता</p>
-                    <p className="mt-1 text-sm font-medium text-foreground">India</p>
+                    <h3 className="font-semibold text-foreground">{L('पता', 'Address')}</h3>
+                    <p className="text-sm text-muted-foreground">{L('कार्यालय पता', 'Office address')}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{L('भारत', 'India')}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -139,10 +159,10 @@ const ContactUs: React.FC = () => {
                     <Clock className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground">Support Hours / सहायता समय</h3>
-                    <p className="text-sm text-muted-foreground">सहायता समय</p>
-                    <p className="mt-1 text-sm font-medium text-foreground">Monday - Saturday: 9:00 AM - 6:00 PM IST</p>
-                    <p className="text-sm font-medium text-foreground">Sunday: Closed</p>
+                    <h3 className="font-semibold text-foreground">{L('सहायता समय', 'Support Hours')}</h3>
+                    <p className="text-sm text-muted-foreground">{L('हम कब उपलब्ध हैं', 'When we are available')}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{L('सोमवार - शनिवार: सुबह 9:00 - शाम 6:00 (IST)', 'Monday - Saturday: 9:00 AM - 6:00 PM IST')}</p>
+                    <p className="text-sm font-medium text-foreground">{L('रविवार: बंद', 'Sunday: Closed')}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -152,22 +172,22 @@ const ContactUs: React.FC = () => {
             <Card>
               <CardContent className="p-6">
                 <h2 className="text-xl font-bold text-foreground mb-6">
-                  संदेश भेजें / Send a Message
+                  {L('संदेश भेजें', 'Send a Message')}
                 </h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">आपका नाम / Your Name *</Label>
+                    <Label htmlFor="name">{L('आपका नाम *', 'Your Name *')}</Label>
                     <Input
                       id="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="Enter your name"
+                      placeholder={L('अपना नाम लिखें', 'Enter your name')}
                       required
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="email">ईमेल / Email *</Label>
+                    <Label htmlFor="email">{L('ईमेल *', 'Email *')}</Label>
                     <Input
                       id="email"
                       type="email"
@@ -179,23 +199,23 @@ const ContactUs: React.FC = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="societyName">समिति का नाम / Society Name (Optional)</Label>
+                    <Label htmlFor="societyName">{L('समिति का नाम (वैकल्पिक)', 'Society Name (Optional)')}</Label>
                     <Input
                       id="societyName"
                       value={societyName}
                       onChange={(e) => setSocietyName(e.target.value)}
-                      placeholder="Your cooperative society name"
+                      placeholder={L('आपकी सहकारी समिति का नाम', 'Your cooperative society name')}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="message">संदेश / Message *</Label>
+                    <Label htmlFor="message">{L('संदेश *', 'Message *')}</Label>
                     <Textarea
                       id="message"
                       rows={5}
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
-                      placeholder="How can we help you?"
+                      placeholder={L('हम आपकी क्या मदद कर सकते हैं?', 'How can we help you?')}
                       required
                     />
                   </div>
@@ -213,7 +233,7 @@ const ContactUs: React.FC = () => {
 
                   <Button type="submit" className="w-full gap-2" disabled={submitting}>
                     <Send className="h-4 w-4" />
-                    {submitting ? 'भेज रहे हैं… / Sending…' : 'संदेश भेजें / Send Message'}
+                    {submitting ? L('भेज रहे हैं…', 'Sending…') : L('संदेश भेजें', 'Send Message')}
                   </Button>
                 </form>
               </CardContent>
@@ -225,9 +245,12 @@ const ContactUs: React.FC = () => {
       {/* Connect with us — community channels (big buttons) */}
       <section className="py-16 bg-white border-t">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-2xl md:text-3xl font-bold text-foreground">हमसे जुड़ें / Connect with us</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-foreground">{L('हमसे जुड़ें', 'Connect with us')}</h2>
           <p className="mt-2 text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto">
-            हर अपडेट, टिप और वीडियो सबसे पहले पाएँ — अपने पसंदीदा चैनल पर जुड़ें।
+            {L(
+              'हर अपडेट, टिप और वीडियो सबसे पहले पाएँ — अपने पसंदीदा चैनल पर जुड़ें।',
+              'Get every update, tip and video first — follow us on your favourite channel.',
+            )}
           </p>
           <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
             {SOCIAL_CHANNELS.map(c => (
@@ -252,10 +275,10 @@ const ContactUs: React.FC = () => {
       <section className="py-16 bg-muted/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-muted-foreground text-sm sm:text-base">
-            We typically respond within 24 hours on business days.
-          </p>
-          <p className="text-muted-foreground text-sm mt-1">
-            हम आमतौर पर कार्य दिवसों पर 24 घंटे के भीतर जवाब देते हैं।
+            {L(
+              'हम आमतौर पर कार्य दिवसों पर 24 घंटे के भीतर जवाब देते हैं।',
+              'We typically respond within 24 hours on business days.',
+            )}
           </p>
         </div>
       </section>

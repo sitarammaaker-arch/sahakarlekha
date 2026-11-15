@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
 type Language = 'hi' | 'en';
 
@@ -258,6 +258,12 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
     setLanguageState(lang);
     try { localStorage.setItem('sahayata_language', lang); } catch {}
   };
+
+  // Screen readers, browser translate prompts and fonts read <html lang>. index.html ships hi-IN (the default and the
+  // prerendered pages); follow the visitor's choice after that.
+  useEffect(() => {
+    try { document.documentElement.lang = language === 'en' ? 'en-IN' : 'hi-IN'; } catch { /* no DOM */ }
+  }, [language]);
 
   const t = (key: string): string => {
     if (translations[key]) {
