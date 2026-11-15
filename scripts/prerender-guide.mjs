@@ -36,6 +36,7 @@ const SOCIETY_TYPES = resolve(ROOT, 'src', 'content', 'societyTypes.tsx');
 const STATES_FILE = resolve(ROOT, 'src', 'content', 'states.ts');
 const SOFTWARE_MODULES_FILE = resolve(ROOT, 'src', 'content', 'softwareModules.ts'); // the app's menu per society type
 const SOFTWARE_FAQ_FILE = resolve(ROOT, 'src', 'content', 'softwareFaq.ts'); // questions built from it + reused /faq answers
+const SOFTWARE_SHOTS_FILE = resolve(ROOT, 'src', 'content', 'softwareShots.ts'); // demo-society screenshots per type
 const BLOG_FILE = resolve(ROOT, 'src', 'content', 'blog', 'index.ts');
 const BLOG_DIR = resolve(ROOT, 'src', 'content', 'blog');
 const AUTHORS_FILE = resolve(ROOT, 'src', 'content', 'blog', 'authors.ts');
@@ -325,6 +326,7 @@ async function loadData() {
     ['society', SOCIETY_TYPES, 'SOCIETY_TYPES'],
     ['softwareModules', SOFTWARE_MODULES_FILE, null], // softwareModuleGroups — the same module the live page uses
     ['softwareFaq', SOFTWARE_FAQ_FILE, null], // softwareFaq + softwareFaqLd
+    ['softwareShots', SOFTWARE_SHOTS_FILE, null], // softwareShots — demo-society screens per type
     ['states', STATES_FILE, 'STATES'],
     ['rel', RELATED_FILE, null], // whole module (edge maps + helpers), GOS-11
     ['authors', AUTHORS_FILE, null], // /author/<slug> profile pages (E-E-A-T) — AUTHORS + DEFAULT_AUTHOR_SLUG
@@ -456,7 +458,8 @@ function guidePages(DATA) {
 const SOFTWARE_PRICE_HTML =
   `<h2>दाम और trial</h2>` +
   `<p>रजिस्टर करने पर 30 दिन का मुफ़्त trial मिलता है। उसके बाद Starter ₹2,999/साल + GST, Plus ₹6,999/साल + GST (6 users) और Pro ₹14,999/साल + GST (असीमित users)। सभी रिपोर्ट हर plan में शामिल हैं। <a href="/pricing">सभी plans देखें</a>।</p>`;
-const softwareAppLd = (url, description) => ({
+const softwareAppLd = (url, description, screenshots = []) => ({
+  ...(screenshots.length ? { screenshot: screenshots } : {}),
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
   name: 'SahakarLekha',
@@ -483,6 +486,18 @@ function softwareModulesHtml(DATA, t) {
     groups.map((g) =>
       `<h3>${esc(g.hi)} (${g.items.length})</h3>` +
       `<ul>${g.items.map((it) => `<li>${esc(it.hi)}${it.hi !== it.en ? ` (${esc(it.en)})` : ''}${it.plan ? ` — ${it.plan === 'plus' ? 'Plus' : 'Pro'} plan` : ''}</li>`).join('')}</ul>`).join('')
+  );
+}
+// Screens of the real app with a demo society's data (content/softwareShots) — the same pictures the live page shows.
+const softwareShotList = (DATA, t) => (DATA.softwareShots && DATA.softwareShots.softwareShots ? DATA.softwareShots.softwareShots(t.slug) : []);
+function softwareShotsHtml(DATA, t) {
+  const shots = softwareShotList(DATA, t);
+  if (!shots.length) return '';
+  return (
+    `<h2>app अंदर से कैसा दिखता है</h2>` +
+    `<p>ये असली app के screen हैं, एक demo समिति के data के साथ।</p>` +
+    shots.map((s) =>
+      `<figure><img src="/software-shots/${s.file}.webp" alt="${esc(s.hi)}" width="${s.width}" height="${s.height}" loading="lazy" style="max-width:100%;height:auto;border:1px solid #e5e7eb;border-radius:8px" /><figcaption>${esc(s.hi)} (${esc(s.en)})</figcaption></figure>`).join('')
   );
 }
 const SOFTWARE_START_HTML = (t) =>
@@ -540,6 +555,7 @@ function softwarePages(DATA) {
               (t.solvesHi && t.solvesHi.length ? `<h2>SahakarLekha कैसे मदद करता है</h2><ul>${t.solvesHi.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : '') +
               (t.seoEn ? `<p lang="en">${esc(t.seoEn)}</p>` : '') +
               SOFTWARE_PRICE_HTML +
+              softwareShotsHtml(DATA, t) +
               softwareModulesHtml(DATA, t) +
               SOFTWARE_START_HTML(t) +
               softwareFaqHtml(softwareFaqItems(DATA, t)) +
@@ -557,7 +573,7 @@ function softwarePages(DATA) {
         jsonLd: [crumb([
           { name: 'Software', item: `${SITE}/software` },
           { name: title, item: url },
-        ]), softwareAppLd(url, description),
+        ]), softwareAppLd(url, description, t ? softwareShotList(DATA, t).map((s) => `${SITE}/software-shots/${s.file}.webp`) : []),
         ...(t && softwareFaqItems(DATA, t).length ? [DATA.softwareFaq.softwareFaqLd(softwareFaqItems(DATA, t), 'hi')] : [])],
       });
     }
