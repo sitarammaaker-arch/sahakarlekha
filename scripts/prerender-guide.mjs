@@ -2513,6 +2513,8 @@ function transform(template, page0) {
   if (page.image) {
     sub(/<meta property="og:image" [^>]*>/, `<meta property="og:image" content="${page.image}" />`);
     sub(/<meta name="twitter:image"[^>]*>/, `<meta name="twitter:image" content="${page.image}" />`);
+    // The template's alt text, file type and size describe the site-wide og-image.png, not this page's own picture.
+    html = html.replace(/\s*<meta (?:property="og:image:(?:alt|type|width|height)"|name="twitter:image:alt")[^>]*>/g, '');
   }
   sub(/<meta name="twitter:title"[^>]*>/, `<meta name="twitter:title" content="${esc(page.title)}" />`);
   sub(/<meta name="twitter:description"[^>]*>/, `<meta name="twitter:description" content="${esc(page.description)}" />`);
