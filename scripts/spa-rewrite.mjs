@@ -24,7 +24,11 @@ const vercelPath = resolve(ROOT, 'vercel.json');
 const vercel = JSON.parse(readFileSync(vercelPath, 'utf8'));
 
 /** Sections answered only from prerendered files — an unknown path under them is a real 404. */
-export const NOT_REWRITTEN = ['blog'];
+// Every valid page of these sections is a prerendered file (hub + one page per slug), so an unknown slug has
+// nothing to render. Left in the rewrite, /software/<anything> answered 200 with the home page's HTML and
+// canonical "/" — the same soft 404 /blog once had. /guide stays rewritten: certificate, verify and quiz
+// pages under it are built in the browser.
+export const NOT_REWRITTEN = ['blog', 'software', 'cooperative-software', 'glossary', 'help', 'cookbook', 'tools', 'author'];
 /** Segments routed without a <Route path> of their own — /en/<path> is the English twin of <path> (lib/enRoutes). */
 export const EXTRA_SEGMENTS = ['en'];
 
@@ -62,7 +66,7 @@ ok('no segment is rewritten that App.tsx does not route', extra.length === 0, `$
 ok('both the exact and the sub-path rule exist', rules.some((r) => !r.source.includes(':path*')) && rules.some((r) => r.source.endsWith('/:path*')));
 ok('no catch-all rewrite is left (an unknown path must be a real 404)', rules.every((r) => /^\/\([^)]+\)(\/:path\*)?$/.test(r.source)), rules.map((r) => r.source.slice(0, 40)).join(' ; '));
 for (const s of [...NOT_REWRITTEN, 'api', 'assets']) ok(`/${s} is not rewritten to the app`, !covered.has(s));
-for (const s of ['dashboard', 'login', 'register', 'reset-password', 'verify-email', 'vouchers', 'guide', 'glossary', 'member']) ok(`/${s} reaches the app`, covered.has(s));
+for (const s of ['dashboard', 'login', 'register', 'reset-password', 'verify-email', 'vouchers', 'guide', 'member']) ok(`/${s} reaches the app`, covered.has(s));
 ok('each rule stays inside Vercel\'s 4096-character source limit', rules.every((r) => r.source.length <= 4096), rules.map((r) => r.source.length).join(', '));
 const pre = readFileSync(resolve(ROOT, 'scripts/prerender-guide.mjs'), 'utf8');
 ok('the build writes dist/404.html (what an unknown path is answered with)', pre.includes("file: '404.html'"));

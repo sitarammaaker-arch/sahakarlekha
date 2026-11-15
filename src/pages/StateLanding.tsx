@@ -18,6 +18,7 @@ import RelatedKnowledge from '@/components/RelatedKnowledge';
 import { ArrowRight, CheckCircle2, GraduationCap, ShieldCheck, Home, Scale } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import HindiOnlyNotice from '@/components/HindiOnlyNotice';
+import { PLAN_CATALOG } from '@/lib/plans';
 
 const SITE = 'https://sahakarlekha.com';
 
@@ -46,7 +47,7 @@ const StateLanding: React.FC = () => {
         name: 'SahakarLekha',
         applicationCategory: 'BusinessApplication',
         operatingSystem: 'Web Browser',
-        offers: { '@type': 'Offer', price: '1499', priceCurrency: 'INR' },
+        offers: { '@type': 'AggregateOffer', priceCurrency: 'INR', lowPrice: String(PLAN_CATALOG.starter.price), highPrice: String(PLAN_CATALOG.pro.price), offerCount: 3 },
       },
       breadcrumb: {
         '@type': 'BreadcrumbList',

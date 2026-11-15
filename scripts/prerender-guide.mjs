@@ -446,6 +446,25 @@ function guidePages(DATA) {
 
 /* ---------------- software routes (registry data body; regex meta fallback) ---------------- */
 
+// Price block + SoftwareApplication node for every /software/<type> page. A buyer's first question is the
+// price, and these pages had neither the price nor a software schema (only a breadcrumb). The figures are
+// the public plans in src/lib/plans.ts and the wording follows /pricing — change all three together.
+const SOFTWARE_PRICE_HTML =
+  `<h2>दाम और trial</h2>` +
+  `<p>रजिस्टर करने पर 30 दिन का मुफ़्त trial मिलता है। उसके बाद Starter ₹2,999/साल + GST, Plus ₹6,999/साल + GST (6 users) और Pro ₹14,999/साल + GST (असीमित users)। सभी रिपोर्ट हर plan में शामिल हैं। <a href="/pricing">सभी plans देखें</a>।</p>`;
+const softwareAppLd = (url, description) => ({
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'SahakarLekha',
+  url,
+  description,
+  applicationCategory: 'BusinessApplication',
+  applicationSubCategory: 'Accounting software for cooperative societies',
+  operatingSystem: 'Web Browser',
+  inLanguage: ['hi', 'en'],
+  offers: { '@type': 'AggregateOffer', priceCurrency: 'INR', lowPrice: '2999', highPrice: '14999', offerCount: 3 },
+});
+
 function softwarePages(DATA) {
   const types = DATA.society || [];
   const pages = [
@@ -487,6 +506,7 @@ function softwarePages(DATA) {
               (t.painsHi && t.painsHi.length ? `<h2>आम चुनौतियाँ</h2><ul>${t.painsHi.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : '') +
               (t.solvesHi && t.solvesHi.length ? `<h2>SahakarLekha कैसे मदद करता है</h2><ul>${t.solvesHi.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : '') +
               (t.seoEn ? `<p lang="en">${esc(t.seoEn)}</p>` : '') +
+              SOFTWARE_PRICE_HTML +
               surfaceLinksHtml(DATA.rel && DATA.rel.SOCIETY_CONTENT && DATA.rel.SOCIETY_CONTENT[slug], DATA, `${t.nameHi} के लिए और सीखें`) +
               `<p><a href="/guide">मुफ़्त गाइड से सीखें</a> · <a href="/software">सभी समिति-प्रकार देखें</a></p>` +
               registerCta(),
@@ -501,7 +521,7 @@ function softwarePages(DATA) {
         jsonLd: [crumb([
           { name: 'Software', item: `${SITE}/software` },
           { name: title, item: url },
-        ])],
+        ]), softwareAppLd(url, description)],
       });
     }
   }
@@ -536,6 +556,7 @@ function statePages(DATA) {
                 : '') +
               (s.compliance && s.compliance.length ? `<h2>अनुपालन</h2><ul>${s.compliance.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : '') +
               (s.seoEn ? `<p lang="en">${esc(s.seoEn)}</p>` : '') +
+              SOFTWARE_PRICE_HTML +
               surfaceLinksHtml(DATA.rel && DATA.rel.STATE_CONTENT && DATA.rel.STATE_CONTENT[slug], DATA, `${s.nameHi} की समितियों के लिए और सीखें`) +
               `<p><a href="/software">सभी समिति-प्रकार</a> · <a href="/guide">मुफ़्त गाइड</a></p>` +
               registerCta(),
@@ -550,7 +571,7 @@ function statePages(DATA) {
         jsonLd: [crumb([
           { name: 'Software', item: `${SITE}/software` },
           { name: title, item: url },
-        ])],
+        ]), softwareAppLd(url, description)],
       });
     }
   }

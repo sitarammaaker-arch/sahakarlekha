@@ -18,6 +18,7 @@ import RelatedKnowledge from '@/components/RelatedKnowledge';
 import { ArrowRight, CheckCircle2, AlertTriangle, GraduationCap, ShieldCheck, Home } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import HindiOnlyNotice from '@/components/HindiOnlyNotice';
+import { PLAN_CATALOG, TRIAL_DAYS, priceLabel } from '@/lib/plans';
 
 const SITE = 'https://sahakarlekha.com';
 
@@ -118,7 +119,7 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
         name: 'SahakarLekha',
         applicationCategory: 'BusinessApplication',
         operatingSystem: 'Web Browser',
-        offers: { '@type': 'Offer', price: '1499', priceCurrency: 'INR' },
+        offers: { '@type': 'AggregateOffer', priceCurrency: 'INR', lowPrice: String(PLAN_CATALOG.starter.price), highPrice: String(PLAN_CATALOG.pro.price), offerCount: 3 },
       },
       breadcrumb: {
         '@type': 'BreadcrumbList',
@@ -193,6 +194,18 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> {L('TDS · GST सारांश', 'TDS · GST summary')}</span>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> {L('हिंदी + English', 'Hindi + English')}</span>
           <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-primary" /> {L('₹2,999/year + GST से', 'From ₹2,999/year + GST')}</span>
+        </div>
+
+        {/* Price: a buyer's first question. Figures come from lib/plans; wording follows /pricing. */}
+        <div className="mt-8 rounded-xl border p-5">
+          <h2 className="font-semibold text-foreground">{L('दाम और trial', 'Price and trial')}</h2>
+          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+            {L(
+              `रजिस्टर करने पर ${TRIAL_DAYS} दिन का मुफ़्त trial मिलता है। उसके बाद Starter ${priceLabel(PLAN_CATALOG.starter.price)}/साल + GST, Plus ${priceLabel(PLAN_CATALOG.plus.price)}/साल + GST (${PLAN_CATALOG.plus.seatsLimit} users) और Pro ${priceLabel(PLAN_CATALOG.pro.price)}/साल + GST (असीमित users)। सभी रिपोर्ट हर plan में शामिल हैं।`,
+              `Registering gives you a ${TRIAL_DAYS}-day free trial. After that: Starter ${priceLabel(PLAN_CATALOG.starter.price)}/year + GST, Plus ${priceLabel(PLAN_CATALOG.plus.price)}/year + GST (${PLAN_CATALOG.plus.seatsLimit} users) and Pro ${priceLabel(PLAN_CATALOG.pro.price)}/year + GST (unlimited users). Every report is included in every plan.`,
+            )}{' '}
+            <Link to="/pricing" className="text-primary font-medium hover:underline">{L('सभी plans देखें', 'See all plans')}</Link>
+          </p>
         </div>
 
         {/* Knowledge-graph edges: type-specific guide/blog/help/cookbook (GOS-11) */}
