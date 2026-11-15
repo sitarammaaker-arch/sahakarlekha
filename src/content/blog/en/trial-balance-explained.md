@@ -35,7 +35,7 @@ Suppose a society has some accounts like this:
 
 Both totals are equal at ₹4,80,000 → the arithmetic is correct. Now the final accounts (Profit & Loss/Income & Expenditure, Balance Sheet) are made from this.
 
-**Now suppose a mistake happened:** instead of salary ₹30,000, by mistake nothing was written in Cr and only ₹3,000 in Dr (one digit dropped) — then the Dr total will fall short by ₹27,000 and **the two columns will not match**. The difference is ₹27,000 — this is where the search starts (see below).
+**Now suppose a mistake happened:** the Salary account's Dr balance of ₹30,000 was written as ₹3,000 by mistake (one digit dropped) — then the Dr total will fall short by ₹27,000 and **the two columns will not match**. The difference is ₹27,000 — this is where the search starts (see below).
 
 ## Why the Trial Balance is necessary — benefits
 

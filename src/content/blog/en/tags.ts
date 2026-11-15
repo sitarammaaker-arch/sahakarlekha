@@ -23,12 +23,15 @@ import { BLOG_EN_TAGS_B5G3 } from './tags-b5g3';
 import { BLOG_EN_TAGS_B5G4 } from './tags-b5g4';
 import { BLOG_EN_TAGS_B5G5 } from './tags-b5g5';
 import { BLOG_EN_TAGS_B5G6 } from './tags-b5g6';
+import { BLOG_EN_TAGS_B6G1 } from './tags-b6g1';
+import { BLOG_EN_TAGS_B6G2 } from './tags-b6g2';
 
 export const BLOG_EN_TAGS: Record<string, string[]> = {
   ...BLOG_EN_TAGS_B2G1, ...BLOG_EN_TAGS_B2G2, ...BLOG_EN_TAGS_B2G3, ...BLOG_EN_TAGS_B2G4, ...BLOG_EN_TAGS_B2G5, ...BLOG_EN_TAGS_B2G6,
   ...BLOG_EN_TAGS_B3G1, ...BLOG_EN_TAGS_B3G2, ...BLOG_EN_TAGS_B3G3, ...BLOG_EN_TAGS_B3G4, ...BLOG_EN_TAGS_B3G5, ...BLOG_EN_TAGS_B3G6,
   ...BLOG_EN_TAGS_B4G1, ...BLOG_EN_TAGS_B4G2, ...BLOG_EN_TAGS_B4G3, ...BLOG_EN_TAGS_B4G4, ...BLOG_EN_TAGS_B4G5, ...BLOG_EN_TAGS_B4G6,
   ...BLOG_EN_TAGS_B5G1, ...BLOG_EN_TAGS_B5G2, ...BLOG_EN_TAGS_B5G3, ...BLOG_EN_TAGS_B5G4, ...BLOG_EN_TAGS_B5G5, ...BLOG_EN_TAGS_B5G6,
+  ...BLOG_EN_TAGS_B6G1, ...BLOG_EN_TAGS_B6G2,
   'audit-objection-reply-action-taken-report-secretary': ['Audit objection', 'Action taken report', 'Compliance', 'Secretary'],
   'share-certificate-issue-sample-secretary-checklist': ['Share certificate', 'Share certificate issue', 'Share register', 'Secretary'],
   'share-refund-on-leaving-society-haryana-rules-accounting': ['Share refund', 'Leaving membership', 'Rule 18', 'Limited liability'],
