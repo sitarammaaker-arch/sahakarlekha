@@ -198,6 +198,17 @@ for (const [slug, en] of Object.entries(blogMeta.BLOG_EN_META)) {
   }
 }
 
+// Blog categories (batch E2): every category has English name/title/description/intro — the /en/blog/category/<slug>
+// twins and the English chips read them (src/content/blog/categoriesEn.ts).
+const cats = await loadViteModule(ROOT, resolve(ROOT, 'src/content/blog/categories.ts'), 'content-en-blog-cats');
+const catsEn = await loadViteModule(ROOT, resolve(ROOT, 'src/content/blog/categoriesEn.ts'), 'content-en-blog-cats-en');
+for (const c of cats.BLOG_CATEGORIES) {
+  const e = catsEn.BLOG_CATEGORIES_EN[c.slug];
+  ok(!!e, `blog category "${c.slug}" has no English text in categoriesEn.ts`);
+  if (e) for (const k of ['name', 'metaTitle', 'description', 'intro']) ok(typeof e[k] === 'string' && e[k].trim() && !DEVANAGARI.test(e[k]), `blog category "${c.slug}".${k}: missing or not English`);
+}
+for (const slug of Object.keys(catsEn.BLOG_CATEGORIES_EN)) ok(cats.BLOG_CATEGORIES.some((c) => c.slug === slug), `categoriesEn.ts: "${slug}" is not a blog category`);
+
 const covered = Object.keys(helpEn.HELP_EN).filter((s) => tasks.has(s)).length;
 console.log(`[content-en] help ${covered}/${tasks.size} · cookbook ${Object.keys(cbEn.COOKBOOK_EN).filter((s) => entries.has(s)).length}/${entries.size} in English · tools ${Object.keys(calcEn.CALC_EN_TEXT).filter((s) => calcs.has(s)).length}/${calcs.size} · blog ${Object.keys(blogMeta.BLOG_EN_META).length}/${posts.size}`);
 console.log(`[content-en] ${pass} passed, ${fail} failed`);

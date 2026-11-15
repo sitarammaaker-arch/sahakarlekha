@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { isRoutableItemAccount } from '@/lib/itemAccountRouting';
 import { LicenceExpiryBanner } from '@/components/marketing/LicenceExpiryBanner';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { toUqc, unitLabel, unitOptions } from '@/lib/units';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';

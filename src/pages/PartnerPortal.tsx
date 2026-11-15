@@ -9,7 +9,8 @@
  * Not a Supabase Auth login: the society app's session and RLS are untouched.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta, useNoIndex } from '@/lib/useDocumentMeta';
 import { Card, CardContent } from '@/components/ui/card';

@@ -4,36 +4,22 @@
  * so every category has a shareable URL) and the search box + its results.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { Card, CardContent } from '@/components/ui/card';
 import { readingMinutes, type BlogPost } from '@/content/blog';
 import { BLOG_CATEGORIES, categoryByName } from '@/content/blog/categories';
+import { BLOG_CATEGORIES_EN } from '@/content/blog/categoriesEn';
 import { catColor, formatDate } from '@/components/blog/blogTheme';
 import { formatViews } from '@/lib/blogViews';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { localizePost } from '@/content/blog/en';
 import { Calendar, Clock, Eye, Search, X } from 'lucide-react';
 
-/** English display labels for the blog categories (keyed by slug). Display only — the Hindi
- *  `name` stays the data key everywhere (post.category, JSON-LD, URLs). */
-const CATEGORY_EN: Record<string, string> = {
-  'accounting-basics': 'Accounting basics',
-  'vouchers-daily-accounts': 'Vouchers & daily accounts',
-  'members-shares-loans': 'Members, shares, deposits & loans',
-  'reports-audit-year-end': 'Reports, audit & year-end',
-  'tax-statutory-returns': 'Tax & statutory returns',
-  'law-governance': 'Law, registration & governance',
-  'society-types': 'Types of societies',
-  'schemes-procurement': 'Schemes, procurement & government updates',
-  'cooperative-movement': 'The cooperative movement',
-  'digital-accounting': 'Digital accounting & SahakarLekha',
-};
-
 /** A category's label in the chosen language (Hindi = the name exactly as authored). */
 export function categoryLabel(name: string, language: 'hi' | 'en'): string {
   if (language === 'hi') return name;
   const c = categoryByName(name);
-  return (c && CATEGORY_EN[c.slug]) || name;
+  return (c && BLOG_CATEGORIES_EN[c.slug]?.name) || name;
 }
 
 const EN_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];

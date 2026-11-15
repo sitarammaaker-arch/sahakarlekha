@@ -11,7 +11,7 @@
  * pause itself is DataContext's guardSubscriptionExpired.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { AlertTriangle, Clock } from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useLanguage } from '@/contexts/LanguageContext';

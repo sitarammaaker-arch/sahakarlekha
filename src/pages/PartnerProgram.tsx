@@ -9,7 +9,8 @@
  * declarations are required here AND enforced by CHECK constraints in the database.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta, useNoIndex } from '@/lib/useDocumentMeta';
 import { Card, CardContent } from '@/components/ui/card';

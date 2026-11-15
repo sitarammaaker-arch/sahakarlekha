@@ -5,7 +5,7 @@
  * there as "unallocated".
  */
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { useTransportOps } from '@/contexts/TransportOpsContext';
 import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';

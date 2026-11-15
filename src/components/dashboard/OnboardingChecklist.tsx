@@ -16,6 +16,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Rocket, ChevronRight, X, CheckCircle2, Circle } from 'lucide-react';
+import { localizePath } from '@/lib/enRoutes';
 
 const DISMISS_KEY = 'sl.onboarding.dismissed';
 
@@ -92,7 +93,7 @@ const OnboardingChecklist: React.FC = () => {
         </ol>
         <p className="mt-3 text-xs text-muted-foreground">
           {hi ? 'मदद चाहिए? ' : 'Need help? '}
-          <button type="button" onClick={() => navigate('/guide')} className="text-primary hover:underline">
+          <button type="button" onClick={() => navigate(localizePath('/guide', language))} className="text-primary hover:underline">
             {hi ? 'पूरी गाइड देखें' : 'Open the full guide'}
           </button>
         </p>

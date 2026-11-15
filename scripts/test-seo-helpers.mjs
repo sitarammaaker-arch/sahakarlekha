@@ -49,7 +49,7 @@ ok('the template carries no keywords meta', !/<meta name="keywords"/.test(readFi
 
 // static shell: the footer links a crawler that runs no JavaScript needs
 ok('the static shell links About, Contact, Pricing, the policies and the state page',
-  ['/about', '/contact', '/pricing', '/privacy', '/terms', '/editorial-policy', '/cooperative-software/haryana'].every((p) => pre.includes(`['${p}',`)) && pre.includes('FOOTER_LINKS.map'));
+  ['/about', '/contact', '/pricing', '/privacy', '/terms', '/editorial-policy', '/cooperative-software/haryana'].every((p) => pre.includes(`['${p}',`)) && /\bFOOTER_LINKS\)?\.map/.test(pre));
 
 console.log(`\nseo helpers: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

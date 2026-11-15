@@ -31,9 +31,10 @@
  * Every text has a Hindi and an English form; the Hindi form is what the prerender writes.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { pricingJsonLd } from '@/lib/seo';
 import {
@@ -259,10 +260,10 @@ const Pricing: React.FC = () => {
     typeof value === 'string' ? L(value, en ?? value) : value;
 
   useDocumentMeta({
-    title: 'SahakarLekha Pricing — Starter, Plus & Pro Plans',
+    title: PAGE_META_EN.pricing.title, // same title in both languages
     description: L(
       'SahakarLekha cooperative accounting ₹2,999/साल + GST से — 30 दिन मुफ़्त trial। सभी रिपोर्ट हर plan में; staff, Payroll और Member Portal के लिए Plus; शाखाएँ, असीमित users व डेटा-migration के लिए Pro।',
-      'SahakarLekha cooperative accounting from ₹2,999/year + GST — 30-day free trial. All reports on every plan; Plus for staff, Payroll and the Member Portal; Pro for branches, unlimited users and data migration.',
+      PAGE_META_EN.pricing.description,
     ),
     canonicalPath: '/pricing',
     jsonLd: PRICING_JSON_LD,

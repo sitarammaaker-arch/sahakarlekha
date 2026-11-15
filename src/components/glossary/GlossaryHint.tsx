@@ -9,7 +9,7 @@
  *         <GlossaryHint slug="trial-balance" label="Trial Balance क्या है?" />
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { HelpCircle, ArrowRight, BookOpen } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { findTerm, shortDefinition } from '@/content/glossary';

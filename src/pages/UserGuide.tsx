@@ -7,9 +7,10 @@
  * Public page — no auth required.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -172,8 +173,8 @@ const UserGuide: React.FC = () => {
   const L = <T extends React.ReactNode>(hi: T, en: T): T => (isHi ? hi : en);
   // L2: this page had no meta of its own, so it kept the homepage's title and canonical "/" (same as its prerender).
   useDocumentMeta({
-    title: L('SahakarLekha कैसे चलाएँ? — पूर्ण उपयोग गाइड | सहकार लेखा', 'How to use SahakarLekha? — Complete User Guide | SahakarLekha'),
-    description: L('सहकारी समिति के क्लर्क, लेखाकार, प्रबंधक और ऑडिटर के लिए STEP-BY-STEP सरल हिंदी गाइड — बिना किसी ट्रेनिंग के सहकार लेखा सॉफ्टवेयर चलाएँ।', 'A simple STEP-BY-STEP guide for cooperative society clerks, accountants, managers and auditors — run the SahakarLekha software without any training.'),
+    title: L('SahakarLekha कैसे चलाएँ? — पूर्ण उपयोग गाइड | सहकार लेखा', PAGE_META_EN.quickStart.title),
+    description: L('सहकारी समिति के क्लर्क, लेखाकार, प्रबंधक और ऑडिटर के लिए STEP-BY-STEP सरल हिंदी गाइड — बिना किसी ट्रेनिंग के सहकार लेखा सॉफ्टवेयर चलाएँ।', PAGE_META_EN.quickStart.description),
     canonicalPath: '/guide/quick-start',
   });
   return (

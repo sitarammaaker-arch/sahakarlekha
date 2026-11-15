@@ -24,6 +24,7 @@ import { helpForRoute } from '@/content/help';
 import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
 import { todayStr } from '@/lib/dateUtils';
 import { usePdfLang } from '@/hooks/usePdfLang';
+import { localizePath } from '@/lib/enRoutes';
 
 interface HeaderProps {
   sidebarCollapsed: boolean;
@@ -349,7 +350,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
               variant="ghost" size="icon"
               className={cn('hidden sm:flex relative', ctxHelp && 'text-primary')}
               title={ctxHelp ? (language === 'hi' ? `कैसे करें: ${ctxHelp.title}` : 'Help for this screen') : (language === 'hi' ? 'मदद केंद्र' : 'Help Center')}
-              onClick={() => window.open(ctxHelp ? `/help/${ctxHelp.slug}` : '/help', '_blank', 'noopener')}
+              onClick={() => window.open(localizePath(ctxHelp ? `/help/${ctxHelp.slug}` : '/help', language), '_blank', 'noopener')}
             >
               <HelpCircle className="h-5 w-5" />
               {ctxHelp && <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary" />}
@@ -391,7 +392,7 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed, onMobileMenuTo
                   {language === 'hi' ? 'ईमेल verify' : 'Email verification'}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => window.open('/help', '_blank', 'noopener')}>
+                <DropdownMenuItem onClick={() => window.open(localizePath('/help', language), '_blank', 'noopener')}>
                   <HelpCircle className="h-4 w-4 mr-2" />
                   {language === 'hi' ? 'सहायता' : 'Help'}
                 </DropdownMenuItem>

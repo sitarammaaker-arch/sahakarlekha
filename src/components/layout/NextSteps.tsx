@@ -7,7 +7,8 @@
  * hide. Unmapped routes (and routes whose only next-steps are hidden) render nothing.
  */
 import React, { useMemo } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { ArrowRight } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAllNavigation } from '@/hooks/useNavigation';

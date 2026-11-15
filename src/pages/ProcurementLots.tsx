@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useMarketingData } from '@/contexts/MarketingDataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

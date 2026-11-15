@@ -5,7 +5,7 @@
  * they appear on the homepage via the public_reviews() RPC.
  */
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

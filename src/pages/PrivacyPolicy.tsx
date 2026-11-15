@@ -13,6 +13,7 @@
 import React from 'react';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -297,10 +298,10 @@ const PrivacyPolicy: React.FC = () => {
   const { language } = useLanguage();
   const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   useDocumentMeta({
-    title: L('गोपनीयता नीति — SahakarLekha | Privacy Policy', 'Privacy Policy — SahakarLekha'),
+    title: L('गोपनीयता नीति — SahakarLekha | Privacy Policy', PAGE_META_EN.privacy.title),
     description: L(
       'SahakarLekha आपकी समिति का कौन-सा डेटा रखता है और उसे कैसे सुरक्षित रखता है — society-level isolation व एन्क्रिप्शन. What data SahakarLekha holds and how it protects your cooperative society data.',
-      'What data SahakarLekha holds and how it protects your cooperative society data — society-level isolation and encryption.',
+      PAGE_META_EN.privacy.description,
     ),
     canonicalPath: '/privacy',
   });

@@ -5,7 +5,7 @@
  * with a unique, verifiable number.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { useGuideQuizzes } from '@/lib/guideQuiz';
 import { useGuideLang, useGuideT } from '@/lib/guideLang';
 import LangToggle from '@/components/guide/LangToggle';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { makeCertNumber, formatCertDate } from '@/lib/guideCertId';
 import RatingWidget from '@/components/RatingWidget';
 import { supabase } from '@/lib/supabase';
@@ -55,10 +56,10 @@ const GuideCertificate: React.FC = () => {
   const brand = lang === 'en' ? 'SahakarLekha' : 'सहकार लेखा';
 
   useDocumentMeta({
-    title: lang === 'en' ? 'Completion Certificate — SahakarLekha Guide' : 'पूर्णता प्रमाणपत्र — सहकार लेखा गाइड',
+    title: lang === 'en' ? PAGE_META_EN.certificate.title : 'पूर्णता प्रमाणपत्र — सहकार लेखा गाइड',
     description: lang === 'en'
-      ? 'Earn a uniquely-numbered, verifiable completion certificate for the SahakarLekha complete accounting course.'
-      : 'सहकार लेखा सम्पूर्ण लेखांकन कोर्स पूरा करने पर यूनीक क्रमांक वाला, सत्यापन-योग्य पूर्णता प्रमाणपत्र प्राप्त करें।',
+      ? PAGE_META_EN.certificate.description
+      :'सहकार लेखा सम्पूर्ण लेखांकन कोर्स पूरा करने पर यूनीक क्रमांक वाला, सत्यापन-योग्य पूर्णता प्रमाणपत्र प्राप्त करें।',
     canonicalPath: '/guide/certificate',
   });
 

@@ -6,7 +6,7 @@
  * box (?q=) swaps the magazine layout for a ranked result grid while it has text.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import { catColor } from '@/components/blog/blogTheme';
 import { useBlogSearch } from '@/lib/useBlogSearch';
 import { ArrowRight, Eye, Rss, ArrowUpRight, Flame } from 'lucide-react';
 import { HUB_META } from '@/content/hubMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { localizePost } from '@/content/blog/en';
 
@@ -38,25 +39,26 @@ const BlogIndex: React.FC = () => {
   const { input, setInput, query, results, searching } = useBlogSearch(posts, 'all');
   const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   useDocumentMeta({
-    title: L(HUB_META.blog.title, 'SahakarLekha Blog — cooperative society accounting, audit & management'),
-    description: L(HUB_META.blog.description, 'Simple articles on digital accounting, voucher entry, audit, compliance and management for cooperative societies — for PACS, marketing, consumer and multipurpose societies.'),
+    title: L(HUB_META.blog.title, PAGE_META_EN.blog.title),
+    description: L(HUB_META.blog.description, PAGE_META_EN.blog.description),
     canonicalPath: '/blog',
     // a ?q= result list is not a page of its own — keep it out of the index (canonical stays /blog)
     robots: searching ? 'noindex, follow' : undefined,
     jsonLd: {
       '@context': 'https://schema.org',
       '@type': 'Blog',
-      name: 'सहकार लेखा ब्लॉग',
-      description: 'सहकारी समितियों के लिए लेखांकन, ऑडिट व प्रबंधन पर लेख।',
-      url: `${SITE}/blog`,
-      inLanguage: 'hi',
+      // the English twin (/en/blog) — English name/description/inLanguage and /en/… URLs, like its prerendered copy
+      name: L('सहकार लेखा ब्लॉग', 'SahakarLekha Blog'),
+      description: L('सहकारी समितियों के लिए लेखांकन, ऑडिट व प्रबंधन पर लेख।', 'Articles on accounting, audit and management for cooperative societies.'),
+      url: `${SITE}${L('/blog', '/en/blog')}`,
+      inLanguage: L('hi', 'en'),
       publisher: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
       blogPost: posts.map((p) => ({
         '@type': 'BlogPosting',
         headline: p.title,
         description: p.metaDescription,
         datePublished: p.date,
-        url: `${SITE}/blog/${p.slug}`,
+        url: `${SITE}${L('', '/en')}/blog/${p.slug}`,
       })),
     },
   });

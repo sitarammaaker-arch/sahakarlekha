@@ -9,7 +9,7 @@
  * Every read/write is a SECURITY DEFINER RPC gated on is_platform_admin(). Nothing here sends an email.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

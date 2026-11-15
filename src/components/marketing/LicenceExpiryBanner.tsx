@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { useMarketingData } from '@/contexts/MarketingDataContext';
 import { todayStr } from '@/lib/dateUtils';
 import { licenceAlerts, LICENCE_STATUS_TEXT } from '@/lib/marketing/dealerCompliance';

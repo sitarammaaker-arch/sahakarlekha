@@ -32,6 +32,10 @@ export interface SearchDoc {
    * Display stays untouched; only ranking sees this. Measured by `npm run eval:ask`.
    */
   altTitle?: string;
+  /** English display title / snippet / category (shown when the reader is in English; ranking uses altTitle + haystack). */
+  titleEn?: string;
+  snippetEn?: string;
+  categoryEn?: string;
   /** lowercased searchable haystack */
   haystack: string;
 }

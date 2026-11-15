@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { setUiLanguage } from '@/lib/uiLang';
+import { routeLanguage } from '@/lib/enRoutes';
 
 type Language = 'hi' | 'en';
 
@@ -243,15 +244,19 @@ export const translations: Translations = {
 };
 
 interface LanguageContextType {
+  /** The language the page shows: the URL's language on public pages that have an English twin, else the saved choice. */
   language: Language;
+  /** The visitor's saved choice (what the switch changes). */
   setLanguage: (lang: Language) => void;
+  /** Router-only: the language the current URL fixes (null = the URL does not decide). See lib/enRoutes. */
+  setRouteLanguage: (lang: Language | null) => void;
   t: (key: string) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [language, setLanguageState] = useState<Language>(() => {
+  const [preference, setLanguageState] = useState<Language>(() => {
     try {
       const saved = localStorage.getItem('sahayata_language');
       if (saved === 'hi' || saved === 'en') return saved;
@@ -259,6 +264,13 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
       return localStorage.getItem('sl_guide_lang') === 'en' ? 'en' : 'hi';
     } catch { return 'hi'; }
   });
+
+  // Batch E: on public pages with an English twin the URL decides (/en/… = English, plain path = Hindi) — read it at
+  // start-up too, so a prerendered /en page never flashes Hindi. The router keeps it current (RouteLanguageSync).
+  const [routeLang, setRouteLanguage] = useState<Language | null>(() => {
+    try { return routeLanguage(window.location.pathname); } catch { return null; }
+  });
+  const language: Language = routeLang ?? preference;
 
   // Text built outside render (toasts/errors in the data contexts) reads the language from here — see lib/uiLang.
   setUiLanguage(language);
@@ -283,7 +295,7 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={{ language, setLanguage, setRouteLanguage, t }}>
       {children}
     </LanguageContext.Provider>
   );

@@ -4,7 +4,8 @@
  * articles. Emits Person + ProfilePage schema.
  */
 import React from 'react';
-import { useParams, Link, Navigate } from 'react-router-dom';
+import { useParams, Navigate } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
@@ -13,14 +14,10 @@ import { publishedOrder, readingMinutes } from '@/content/blog';
 import { categoryLabel, blogDate } from '@/components/blog/BlogCards';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { localizePost } from '@/content/blog/en';
+import { localizePath } from '@/lib/enRoutes';
 import { GraduationCap, Briefcase, ArrowUpRight, Calendar, Clock, Home, ChevronRight } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
-
-/** English one-liners for the author pages (display only; the Hindi tagline in authors.ts stays the source). */
-const TAGLINE_EN: Record<string, string> = {
-  sitaram: '26+ years of marketing and 6+ years of cooperative-sector experience.',
-};
 
 /** A "हिंदी / English" pair → only the chosen language's part; any other text unchanged. */
 function pickPair(text: string, language: 'hi' | 'en'): string {
@@ -39,7 +36,7 @@ const AuthorProfile: React.FC = () => {
   const author = AUTHORS[slug];
   const { language } = useLanguage();
   const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
-  const tagline = author ? L(author.tagline, TAGLINE_EN[author.slug] || author.tagline) : undefined;
+  const tagline = author ? L(author.tagline, author.taglineEn || author.tagline) : undefined;
 
   React.useEffect(() => { window.scrollTo({ top: 0 }); }, [slug]);
 
@@ -51,23 +48,25 @@ const AuthorProfile: React.FC = () => {
       {
         '@context': 'https://schema.org',
         '@type': 'ProfilePage',
+        // the English twin (/en/author/<slug>) describes the same Person in English
+        ...(language === 'en' ? { inLanguage: 'en', url: `${SITE}/en/author/${author.slug}` } : {}),
         mainEntity: {
           '@type': 'Person',
           name: author.name,
           jobTitle: author.designation,
-          description: author.tagline,
+          description: tagline,
           url: `${SITE}/author/${author.slug}`,
           ...(author.photo ? { image: `${SITE}${author.photo}` } : {}),
           worksFor: { '@type': 'Organization', name: 'SahakarLekha', url: SITE },
           alumniOf: author.alumniOf.map((a) => ({ '@type': 'Organization', name: a })),
-          knowsAbout: author.knowsAbout,
+          knowsAbout: language === 'en' && author.knowsAboutEn ? author.knowsAboutEn : author.knowsAbout,
           ...(author.socials?.length ? { sameAs: author.socials.map((s) => s.href) } : {}),
         },
       },
     ] : undefined,
   });
 
-  if (!author) return <Navigate to="/blog" replace />;
+  if (!author) return <Navigate to={localizePath('/blog', language)} replace />;
 
   const posts = postsFor(author).map((p) => localizePost(p, language));
 

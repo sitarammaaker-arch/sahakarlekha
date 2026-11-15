@@ -3,7 +3,8 @@
  * Extracted from LandingPage.tsx to avoid duplicating nav/footer across 7+ pages.
  */
 import React, { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 import { ArrowRight, Menu } from 'lucide-react';
@@ -12,6 +13,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { SOCIAL_CHANNELS, SocialIcon } from '@/lib/socials';
 // import WhatsAppFab from '@/components/WhatsAppFab'; // temporarily hidden per user request (2026-08-20) — re-enable with the JSX below
 import { SOCIETY_TYPES } from '@/content/societyTypes';
+import { useSwitchLanguage } from '@/lib/useSwitchLanguage';
 
 interface PublicLayoutProps {
   children: React.ReactNode;
@@ -67,7 +69,8 @@ const FOOTER_LINKS_AFTER_ASK: { to: string; hi: string; en: string }[] = [
 // (localStorage) and is shared with the logged-in app. Hindi stays the default, so
 // the prerendered HTML is still the Hindi page.
 const LanguageSwitch: React.FC<{ className?: string }> = ({ className = '' }) => {
-  const { language, setLanguage } = useLanguage();
+  const { language } = useLanguage();
+  const setLanguage = useSwitchLanguage();   // batch E: also moves between /x and /en/x
   const options: { value: 'hi' | 'en'; label: string }[] = [
     { value: 'hi', label: 'हिंदी' },
     { value: 'en', label: 'English' },

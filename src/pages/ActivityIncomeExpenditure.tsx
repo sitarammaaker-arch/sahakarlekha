@@ -5,7 +5,7 @@
  * difference to the P&L surplus (Trading stock, which no voucher carries) is shown as its own line.
  */
 import { Fragment, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { useData } from '@/contexts/DataContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

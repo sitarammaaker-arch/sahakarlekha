@@ -3,7 +3,7 @@
  * Lists "to record X, Dr/Cr this" cooperative accounting entries by category.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
@@ -11,6 +11,7 @@ import { COOKBOOK_ENTRIES, COOKBOOK_CATEGORIES } from '@/content/cookbook';
 import { localizeCookbookEntry, cookbookCategoryLabel } from '@/content/cookbook/en';
 import { BookOpenCheck, ArrowRight } from 'lucide-react';
 import { HUB_META } from '@/content/hubMeta';
+import { PAGE_META_EN } from '@/content/pageMetaEn';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 const SITE = 'https://sahakarlekha.com';
@@ -19,8 +20,8 @@ const CookbookHub: React.FC = () => {
   const { language } = useLanguage();
   const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   useDocumentMeta({
-    title: L(HUB_META.cookbook.title, 'Entry Cookbook (Accounting Entries) — which entry, and how | SahakarLekha'),
-    description: L(HUB_META.cookbook.description, 'Common journal entries for a cooperative society — cash/credit sales and purchases, share capital, loans and interest, salary, depreciation, closing stock, HAFED commission — each with a Dr/Cr example.'),
+    title: L(HUB_META.cookbook.title, PAGE_META_EN.cookbook.title),
+    description: L(HUB_META.cookbook.description, PAGE_META_EN.cookbook.description),
     canonicalPath: '/cookbook',
     jsonLd: [
       {

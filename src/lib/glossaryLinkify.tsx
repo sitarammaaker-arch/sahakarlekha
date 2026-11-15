@@ -11,7 +11,7 @@
  *   • Operates only on plain-string text nodes (callers skip headings/code/links).
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { allGlossary, findTerm, shortDefinition } from '@/content/glossary';
 
 interface Needle { re: RegExp; slug: string; }

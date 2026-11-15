@@ -16,7 +16,8 @@
  * always has. That fallback is the design (CAIOS-K1 / AI-G4), not a safety net.
  */
 import React from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
@@ -214,8 +215,8 @@ const AskAssistant: React.FC = () => {
             <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">{L('जवाब · स्रोत', 'Answer · source')}: {typeLabel[top.type]}</p>
             <Card className="border-primary/30">
               <CardContent className="p-5">
-                <p className="font-bold text-lg text-foreground">{top.title}</p>
-                {top.snippet && <p className="text-foreground mt-2 leading-relaxed">{top.snippet}</p>}
+                <p className="font-bold text-lg text-foreground">{(language === 'en' && top.titleEn) || top.title}</p>
+                {top.snippet && <p className="text-foreground mt-2 leading-relaxed">{(language === 'en' && top.snippetEn) || top.snippet}</p>}
                 {top.lines && top.lines.length > 0 && (
                   <table className="w-full text-sm mt-3 border rounded-lg overflow-hidden">
                     <tbody>
@@ -248,7 +249,7 @@ const AskAssistant: React.FC = () => {
                   <Card className="hover:border-primary/40 hover:bg-primary/5 transition-colors">
                     <CardContent className="p-3.5 flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-medium text-foreground truncate">{r.title}</p>
+                        <p className="font-medium text-foreground truncate">{(language === 'en' && r.titleEn) || r.title}</p>
                         <p className="text-xs text-muted-foreground">{typeLabel[r.type]}</p>
                       </div>
                       <ArrowRight className="h-4 w-4 text-primary shrink-0" />

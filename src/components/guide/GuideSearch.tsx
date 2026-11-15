@@ -9,6 +9,7 @@ import { searchGuide, type GuideSearchHit } from '@/lib/guideSearch';
 import { findEntry } from '@/content/guide';
 import { localizedEntry } from '@/content/guide/i18n';
 import { useGuideLang, useGuideT } from '@/lib/guideLang';
+import { localizePath } from '@/lib/enRoutes';
 
 const GuideSearch: React.FC = () => {
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ const GuideSearch: React.FC = () => {
   const go = (slug: string) => {
     setOpen(false);
     setQ('');
-    navigate(`/guide/${slug}`);
+    navigate(localizePath(`/guide/${slug}`, lang));
   };
 
   const onKey = (e: React.KeyboardEvent) => {

@@ -48,3 +48,8 @@ export function metaPlain(s: string | undefined | null): string {
 export function glossaryMetaDescription(term: { hindi?: string; definition?: string }): string {
   return (metaPlain(term.hindi) || metaPlain(term.definition)).slice(0, 158);
 }
+
+/** The English twin's description (/en/glossary/<slug>): the KI's English definition, else its English explanation. */
+export function glossaryMetaDescriptionEn(term: { definition?: string; english?: string }): string {
+  return (metaPlain(term.definition) || metaPlain(term.english)).slice(0, 158);
+}

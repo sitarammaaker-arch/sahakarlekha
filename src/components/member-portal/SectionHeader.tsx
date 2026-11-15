@@ -3,7 +3,7 @@
  * carry a link to its source page ("Loan Register में खोलें") so staff can act there — the account
  * itself stays read-only. Links are never printed.
  */
-import { Link } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 import { ExternalLink } from 'lucide-react';
 

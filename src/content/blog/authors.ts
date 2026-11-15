@@ -11,6 +11,8 @@ export interface Author {
   designation: string;
   /** one-line summary for the byline + meta description */
   tagline: string;
+  /** English tagline — the English author page (/en/author/<slug>) and its prerendered copy */
+  taglineEn?: string;
   /** qualifications, shown as a list on the profile */
   credentials: string[];
   /** experience rows */
@@ -19,6 +21,8 @@ export interface Author {
   alumniOf: string[];
   /** topics the author writes about, for schema knowsAbout */
   knowsAbout: string[];
+  /** knowsAbout in English (the English author page's schema) */
+  knowsAboutEn?: string[];
   /** optional /public image path; falls back to initials */
   photo?: string;
   /** optional external links (X, LinkedIn, website) */
@@ -31,6 +35,7 @@ export const AUTHORS: Record<string, Author> = {
     name: 'Sitaram',
     designation: 'Editor',
     tagline: '26+ वर्ष मार्केटिंग एवं 6+ वर्ष सहकारी क्षेत्र का अनुभव।',
+    taglineEn: '26+ years of marketing and 6+ years of cooperative-sector experience.',
     credentials: [
       'HDCM (Higher Diploma in Cooperative Management) — RICM, Chandigarh',
       'Certificate Course on Cooperative Law and Practice — NCUI, New Delhi',
@@ -46,6 +51,7 @@ export const AUTHORS: Record<string, Author> = {
     knowsAbout: [
       'सहकारी लेखांकन', 'Cooperative Law', 'ऑडिट व अनुपालन', 'GST', 'TDS', 'RTI Act 2005',
     ],
+    knowsAboutEn: ['Cooperative accounting', 'Cooperative Law', 'Audit and compliance', 'GST', 'TDS', 'RTI Act 2005'],
     photo: '/authors/sitaram.webp',
   },
 };
