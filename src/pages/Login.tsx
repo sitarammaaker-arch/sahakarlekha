@@ -11,7 +11,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from '@/components/ui/dialog';
-import { Lock, Mail, Eye, EyeOff, Languages, AlertCircle, KeyRound, HelpCircle, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, Languages, AlertCircle, KeyRound, HelpCircle, ShieldCheck, PlayCircle, MessageCircle } from 'lucide-react';
+import { WHATSAPP_NUMBER } from '@/lib/socials';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -348,6 +349,32 @@ const Login: React.FC = () => {
           <a href="/register" className="text-primary font-medium hover:underline">
             {language === 'hi' ? 'यहाँ पंजीकरण करें' : 'Register here'}
           </a>
+        </p>
+
+        {/* Someone who landed here without an account: show them the product and a way to ask. */}
+        <p className="mt-3 text-sm text-center text-muted-foreground flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+          <a
+            href="/#demo"
+            onClick={() => trackEvent('cta_click', { location: 'login', target: 'demo' })}
+            className="inline-flex items-center gap-1 hover:text-primary hover:underline"
+          >
+            <PlayCircle className="h-4 w-4" />
+            {language === 'hi' ? '1 मिनट का डेमो देखें' : 'Watch the 1-minute demo'}
+          </a>
+          {WHATSAPP_NUMBER && (
+            <a
+              href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(language === 'hi'
+                ? 'नमस्ते! मुझे सहकार लेखा में लॉगिन / शुरू करने में सहायता चाहिए।'
+                : 'Hello! I need help signing in to / getting started with Sahakar Lekha.')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackEvent('whatsapp_click', { location: 'login', page: '/login' })}
+              className="inline-flex items-center gap-1 hover:text-primary hover:underline"
+            >
+              <MessageCircle className="h-4 w-4" />
+              {language === 'hi' ? 'WhatsApp पर सहायता लें' : 'Get help on WhatsApp'}
+            </a>
+          )}
         </p>
 
         {/* Footer */}

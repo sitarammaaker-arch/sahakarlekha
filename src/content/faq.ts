@@ -110,8 +110,8 @@ export const FAQ_CATEGORIES: FAQCategory[] = [
       },
       {
         q: 'डेटा एक्सपोर्ट कैसे लें? / How to export data?',
-        aHi: 'Settings → डेटा एक्सपोर्ट पर जाएं। \'एक्सपोर्ट डाउनलोड करें\' बटन दबाएं — मुख्य डेटा JSON फाइल में डाउनलोड हो जाता है। ध्यान दें: यह एक्सपोर्ट है, रिस्टोर करने योग्य बैकअप नहीं। आपका असली डेटा Supabase क्लाउड में सुरक्षित रहता है; पूरा बैकअप व रिस्टोर बनाया जा रहा है।',
-        aEn: 'Go to Settings → Data Export. Click \'Download Export\' — the core data downloads as a JSON file. Note: this is an export, not a restorable backup. Your actual data lives safely in Supabase cloud; a complete backup and restore is being built.',
+        aHi: 'तीन तरीके हैं। (1) एक्सपोर्ट सेंटर — सदस्य, वाउचर जैसी कोई भी सूची अलग से डाउनलोड करें। (2) डेटा एक्सपोर्ट पेज (admin) — मुख्य डेटा की JSON फ़ाइल; यह रिकॉर्ड देखने या ऑडिटर को देने के लिए है, इससे डेटा वापस रिस्टोर नहीं होता। (3) उसी पेज पर पूर्ण डेटा आर्काइव (.slbak) — ऐप की लगभग सभी सूचियाँ एक फ़ाइल में, चाहें तो पासवर्ड से एन्क्रिप्ट करके। इस फ़ाइल को admin रिस्टोर सेंटर में जाँचकर वापस रिस्टोर कर सकता है। ध्यान दें: एन्क्रिप्ट की गई फ़ाइल का पासवर्ड हमारे पास नहीं रहता — भूल गए तो फ़ाइल नहीं खुलेगी।',
+        aEn: 'There are three ways. (1) Export Center — download any single list, such as members or vouchers. (2) The Data Export page (admin) — a JSON file of the core data; it is for inspecting records or sharing with an auditor, and data cannot be restored from it. (3) On the same page, the Full Data Archive (.slbak) — nearly every list in the app in one file, optionally encrypted with a password. An admin can verify this file in the Restore Center and restore from it. Note: we never hold the password of an encrypted file — if you forget it, the file cannot be opened.',
       },
     ],
   },
