@@ -7,7 +7,7 @@
  * → Academy → Why-free/Who-we-are → Referral → Final CTA → Community.
  *
  * ASSET TODOs (drop files in /public, set the constants below):
- *  - DEMO_VIDEO_ID : YouTube id for the 90-sec demo (empty → shows the CSS mock)
+ *  - DEMO_VIDEO_ID : YouTube id for the 1-minute demo (empty → shows the CSS mock)
  *  - WHATSAPP      : support number e.g. '919999999999' (empty → links /contact)
  *  - Screenshots   : /guide-shots/*.png (hero-dashboard, voucher, trial-balance,
  *                    balance-sheet, member-register, certificate) — auto-hide if absent
@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 
 /* ─── Config (set these as assets become available) ─── */
-const DEMO_VIDEO_ID = '';                 // e.g. 'dQw4w9WgXcQ'
+const DEMO_VIDEO_ID = 'jiY7i8JaV0M';      // "1-Minute Demo" (1:15) — youtube.com/watch?v=jiY7i8JaV0M
 const WHATSAPP = WHATSAPP_NUMBER;          // central number from socials.tsx
 const SHOW_COMMUNITY = false;              // temporarily hide the homepage community/social section (user request 2026-08-20) — flip to true to re-enable
 // Sample report is generated on-demand from a fictional demo society — no static asset.
@@ -341,14 +341,18 @@ const LandingPage: React.FC = () => {
       {/* ───────── DEMO ───────── */}
       <section className="py-16 bg-white" id="demo">
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold text-foreground">{L('90 सेकंड में देखें यह कैसे काम करता है', 'See how it works in 90 seconds')}</h2>
-          <p className="mt-2 text-muted-foreground">{L('पूरा एक साल देखें — प्रारंभिक शेष → वाउचर → ऑडिट-योग्य बैलेंस शीट।', 'See a full year — opening balances → vouchers → audit-ready Balance Sheet.')}</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-foreground">{L('1 मिनट में देखें यह कैसे काम करता है', 'See how it works in a minute')}</h2>
+          <p className="mt-2 text-muted-foreground">{L('एक मिनट के डेमो में देखें, सहकार लेखा में रोज़ का हिसाब कैसे चलता है।', 'A one-minute demo of how day-to-day accounting runs in SahakarLekha.')}</p>
           <div className="mt-8 rounded-xl overflow-hidden border shadow-lg bg-muted/30">
             {DEMO_VIDEO_ID ? (
               <div className="aspect-video">
                 <iframe
                   className="w-full h-full"
-                  src={`https://www.youtube.com/embed/${DEMO_VIDEO_ID}`}
+                  // privacy-enhanced embed: no YouTube cookies until the visitor plays it
+                  src={`https://www.youtube-nocookie.com/embed/${DEMO_VIDEO_ID}?rel=0`}
+                  loading="lazy"
+                  // YouTube needs the embedding origin (error 153 without it) — set it explicitly
+                  referrerPolicy="strict-origin-when-cross-origin"
                   title={L('सहकार लेखा डेमो', 'SahakarLekha demo')}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
