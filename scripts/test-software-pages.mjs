@@ -17,7 +17,7 @@ mkdirSync(dirname(out), { recursive: true });
 const esbuild = await import('esbuild');
 await esbuild.build({
   stdin: {
-    contents: `export * from './src/content/softwareModules'; export * from './src/content/softwareFaq'; export * from './src/content/softwareShots'; export { PLAN_CATALOG, priceLabel } from './src/lib/plans';`,
+    contents: `export * from './src/content/softwareModules'; export * from './src/content/softwareFaq'; export * from './src/content/softwareShots'; export { SOCIETY_TYPES } from './src/content/societyTypes'; export { SOCIETY_TYPES_EN } from './src/content/societyTypesEn'; export { PLAN_CATALOG, priceLabel } from './src/lib/plans';`,
     resolveDir: ROOT,
     loader: 'ts',
   },
@@ -47,6 +47,12 @@ for (const s of slugs.filter((x) => m.SOFTWARE_SLUG_TYPE[x])) {
   ok(`${s}: no settings screens or dashboards in the list`, !domains.includes('administration') && !groups.some((g) => g.items.some((i) => /^(Dashboard|My Dashboard|Analytics)$/.test(i.en))));
   const raw = groups.flatMap((g) => g.items).filter((i) => /^[a-z]+[A-Z]/.test(i.hi) || /^[a-z]+[A-Z]/.test(i.en));
   ok(`${s}: every label is translated`, raw.length === 0, raw.map((i) => i.en).join(', '));
+
+  // English lists are a line-for-line rendering of the Hindi: same number of lines, none empty, none still in Devanagari.
+  const hi = m.SOCIETY_TYPES.find((t) => t.slug === s);
+  const en = m.SOCIETY_TYPES_EN[s];
+  ok(`${s}: English challenges / solutions match the Hindi line for line`, !!en && en.intro.length > 20 && en.pains.length === hi.painsHi.length && en.solves.length === hi.solvesHi.length);
+  ok(`${s}: the English lists are in English`, !!en && [en.intro, ...en.pains, ...en.solves].every((x) => x.trim() && !/[ऀ-ॿ]/.test(x)));
 
   const shots = m.softwareShots(s);
   ok(`${s}: three screenshots with captions in both languages`, shots.length === 3 && shots.every((x) => x.hi && x.en && x.width === 1200 && x.height > 0), String(shots.length));
