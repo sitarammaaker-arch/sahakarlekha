@@ -7,6 +7,7 @@
  * lives in lib/transport/gtaGst; TransportOpsContext adds the Cr output-GST legs (lib/accounting/gstLedgers) for forward charge and only a note
  * for reverse charge.
  */
+import { tr } from '../uiLang.ts';
 
 export const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -21,8 +22,8 @@ export const tripAmount = (c: TripCharges): number =>
 /** Why a trip cannot be posted, or null. Hindi first (RULE 7). */
 export function validateTripCharges(c: TripCharges): string | null {
   const parts = [c.freight, c.loading ?? 0, c.detention ?? 0].map(Number);
-  if (parts.some(x => !Number.isFinite(x) || x < 0)) return 'राशि ऋण (negative) नहीं हो सकती।';
-  if (!(Number(c.freight) > 0)) return 'भाड़ा (freight) 0 से अधिक होना चाहिए।';
+  if (parts.some(x => !Number.isFinite(x) || x < 0)) return tr('राशि ऋण (negative) नहीं हो सकती।', 'Amounts cannot be negative.');
+  if (!(Number(c.freight) > 0)) return tr('भाड़ा (freight) 0 से अधिक होना चाहिए।', 'Freight must be more than 0.');
   return null;
 }
 
@@ -56,10 +57,10 @@ export function collectionLegs(input: {
 }): { error: string } | { legs: Leg[]; netCash: number; tds: number } {
   const amount = round2(Number(input.amount) || 0);
   const tds = round2(Number(input.tds) || 0);
-  if (!(amount > 0)) return { error: 'वसूली राशि 0 से अधिक होनी चाहिए।' };
-  if (amount > round2(input.outstanding) + 0.005) return { error: `वसूली ₹${amount} बकाया ₹${round2(input.outstanding)} से अधिक नहीं हो सकती।` };
-  if (tds < 0 || tds > amount + 0.005) return { error: 'TDS 0 से कम या वसूली-राशि से अधिक नहीं हो सकता।' };
-  if (tds > 0 && !input.tdsAccountId) return { error: 'TDS प्राप्य खाता (3307) chart में नहीं है — TDS खाली छोड़ें या पहले खाता बनाएँ।' };
+  if (!(amount > 0)) return { error: tr('वसूली राशि 0 से अधिक होनी चाहिए।', 'Collection amount must be more than 0.') };
+  if (amount > round2(input.outstanding) + 0.005) return { error: tr(`वसूली ₹${amount} बकाया ₹${round2(input.outstanding)} से अधिक नहीं हो सकती।`, `Collection ₹${amount} cannot be more than the outstanding ₹${round2(input.outstanding)}.`) };
+  if (tds < 0 || tds > amount + 0.005) return { error: tr('TDS 0 से कम या वसूली-राशि से अधिक नहीं हो सकता।', 'TDS cannot be less than 0 or more than the collection amount.') };
+  if (tds > 0 && !input.tdsAccountId) return { error: tr('TDS प्राप्य खाता (3307) chart में नहीं है — TDS खाली छोड़ें या पहले खाता बनाएँ।', 'TDS Receivable account (3307) is not in the chart — leave TDS blank or create the account first.') };
   const netCash = round2(amount - tds);
   const legs: Leg[] = [
     ...(netCash > 0 ? [{ accountId: input.cashOrBankAccountId, type: 'Dr' as const, amount: netCash }] : []),

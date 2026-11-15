@@ -6,14 +6,14 @@
  */
 import React, { useSyncExternalStore } from 'react';
 import { AlertTriangle, RefreshCw, WifiOff } from 'lucide-react';
-import { getWriteBlock, subscribeWriteBlock, PART_LABEL_HI } from '@/lib/connectivity/writeBlock';
+import { getWriteBlock, subscribeWriteBlock, PART_LABEL_HI, PART_LABEL_EN } from '@/lib/connectivity/writeBlock';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 const OfflineBanner: React.FC = () => {
   const d = useSyncExternalStore(subscribeWriteBlock, getWriteBlock, getWriteBlock);
   const { language } = useLanguage();
   const hi = language === 'hi';
-  const names = (parts: string[]) => parts.map(p => (hi ? PART_LABEL_HI[p] ?? p : p)).join(', ');
+  const names = (parts: string[]) => parts.map(p => (hi ? PART_LABEL_HI[p] ?? p : PART_LABEL_EN[p] ?? p)).join(', ');
 
   if (d.blocked && d.reason === 'account') {
     return (

@@ -1,3 +1,4 @@
+import { tr } from '@/lib/uiLang';
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -97,7 +98,7 @@ import { buildShareRefundApproval, buildShareRefundPayment, shareRefundOutstandi
 import type { FarmerInput } from '@/lib/procurement/agentFlow';
 import type { Farmer, ProcurementLot, ProcurementEvent, QualityTest, MoistureRecord, JForm, FinancialIntentRecord, PostingRequest, PostingRuleResult, AccountingProfile, Quantity, Money, FarmerSettlement, SettlementDeductionLine } from '@/lib/procurement';
 import { resolvePostingLegs, buildEngineVoucherLines } from '@/lib/procurement';
-import { procurementPostingBinding, missingProcurementRoles, PROCUREMENT_ROLE_LABEL_HI, resolveProcurementAccountId } from '@/lib/procurement/accounts';
+import { procurementPostingBinding, missingProcurementRoles, PROCUREMENT_ROLE_LABEL_HI, PROCUREMENT_ROLE_LABEL_EN, resolveProcurementAccountId } from '@/lib/procurement/accounts';
 import { isRejectedQuality, procurementBusinessDate, allocateFarmerCode, canRecordQuality, farmerPaidByEngineVoucher, withDerivedAmountPaid, FARMER_PAYMENT_REF_TYPE, agencyDirectAccounts, isLotCancelled, lotCancelBlockers, LOT_CANCEL_BLOCKER_TEXT, ENGINE_REVERSAL_REF_TYPE, COMMISSION_ACCRUAL_REF_TYPE, procurementLegsOf, isValidIfsc, isValidBankAccount } from '@/lib/procurement/agentFlow';
 import { todayStr } from '@/lib/dateUtils';
 import { calcDepForFY, DEP_ACCOUNTS, parseFY, wdvAccumulatedBefore, fyOfDate, nextFY } from '@/lib/depreciation';
@@ -111,7 +112,7 @@ import { planJoiningReceipts } from '@/lib/members/joiningReceipts';
 import { memberAuditDiff } from '@/lib/members/memberAudit';
 import { splitAdmissionFields, clearedAdmissionFields, applicationReceivedOn, MEMBER_PROFILE_FIELDS, MEMBER_CONTACT_FIELDS, MEMBER_PHOTO_FIELD, type AdmissionDecision } from '@/lib/members/admission';
 import { MEMBER_PHOTO_BUCKET, memberPhotoPath, photoFileError, downscalePhoto } from '@/lib/members/photo';
-import { canHoldShares, touchesShareCapital, MANUAL_MEMBER_SHARE_VOUCHER_MESSAGE } from '@/lib/members/shareRules';
+import { canHoldShares, touchesShareCapital, manualMemberShareVoucherMessage } from '@/lib/members/shareRules';
 import { memberWriteErrorText } from '@/lib/members/writeErrors';
 import { MEMBER_STATUS_EXTRA_FIELDS } from '@/lib/members/cessation';
 import { isCountedVoucher } from '@/lib/countedVoucher';
@@ -496,7 +497,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('members').update(patch).eq('id', id).then(({ error }) => {
       if (!error) return;
       reportError('write-partial', error.message, { at: 'member contact fields' });
-      toastRef.current({ title: 'सदस्य सेव हुआ — पर पत्राचार का पता नहीं', description: `पत्राचार का पता सेव नहीं हुआ (${error.message})। Migration 119 चलाएँ, फिर दोबारा सेव करें।`, duration: 10000 });
+      toastRef.current({ title: tr('सदस्य सेव हुआ — पर पत्राचार का पता नहीं', 'Member saved — but not the correspondence address'), description: tr(`पत्राचार का पता सेव नहीं हुआ (${error.message})। Migration 119 चलाएँ, फिर दोबारा सेव करें।`, `Correspondence address not saved (${error.message}). Run Migration 119, then save again.`), duration: 10000 });
     });
   };
   // M5 step 2: gender / date of birth in their own update (a missing 118 must not drop the admission fields).
@@ -507,7 +508,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('members').update(patch).eq('id', id).then(({ error }) => {
       if (!error) return;
       reportError('write-partial', error.message, { at: 'member profile fields' });
-      toastRef.current({ title: 'सदस्य सेव हुआ — पर लिंग/जन्मतिथि नहीं', description: `लिंग या जन्मतिथि सेव नहीं हुई (${error.message})। Migration 118 चलाएँ, फिर सदस्य को दोबारा सेव करें।`, duration: 10000 });
+      toastRef.current({ title: tr('सदस्य सेव हुआ — पर लिंग/जन्मतिथि नहीं', 'Member saved — but not gender/date of birth'), description: tr(`लिंग या जन्मतिथि सेव नहीं हुई (${error.message})। Migration 118 चलाएँ, फिर सदस्य को दोबारा सेव करें।`, `Gender or date of birth not saved (${error.message}). Run Migration 118, then save the member again.`), duration: 10000 });
     });
   };
   // RULE 1 step 2 for the admission columns: the member row is already safe; a failure here (migration 116 not run)
@@ -521,8 +522,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!error) return;
       reportError('write-partial', error.message, { at: 'member admission fields' });
       toastRef.current({
-        title: 'सदस्य सेव हुआ — पर दाख़िले की जानकारी नहीं',
-        description: `आवेदन/दाख़िला तिथि, प्रस्ताव संख्या या अस्वीकृति का कारण सेव नहीं हुआ (${error.message})। Migration 116 चलाएँ, फिर सदस्य को दोबारा सेव करें।`,
+        title: tr('सदस्य सेव हुआ — पर दाख़िले की जानकारी नहीं', 'Member saved — but not the admission details'),
+        description: tr(`आवेदन/दाख़िला तिथि, प्रस्ताव संख्या या अस्वीकृति का कारण सेव नहीं हुआ (${error.message})। Migration 116 चलाएँ, फिर सदस्य को दोबारा सेव करें।`, `Application/admission date, resolution number or rejection reason not saved (${error.message}). Run Migration 116, then save the member again.`),
         duration: 10000,
       });
     });
@@ -650,8 +651,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const fail = (msg: string) => {
       reportError('voucher-edit-journal', msg, { voucherId: voucher.id });
       toastRef.current({
-        title: '⚠ वाउचर सेव हुआ, पर Journal अपडेट नहीं हुआ',
-        description: `${voucher.voucherNo}: ${msg}. रिपोर्ट सही रहेंगी; admin को बताएँ ताकि journal ठीक किया जाए। / Voucher saved but the journal was not updated — reports stay correct; tell your admin.`,
+        title: tr('⚠ वाउचर सेव हुआ, पर Journal अपडेट नहीं हुआ', '⚠ Voucher saved, but the Journal was not updated'),
+        description: tr(`${voucher.voucherNo}: ${msg}. रिपोर्ट सही रहेंगी; admin को बताएँ ताकि journal ठीक किया जाए। / Voucher saved but the journal was not updated — reports stay correct; tell your admin.`, `${voucher.voucherNo}: ${msg}. Reports will stay correct; tell your admin so the journal can be fixed.`),
         variant: 'destructive', duration: 15000,
       });
     };
@@ -834,7 +835,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1: roll back so a failed cloud save can't silently diverge on F5
         console.error('Branch save:', error.message);
         setBranchesState(() => { cacheBranches(snapshot); return snapshot; });
-        toastRef.current({ title: 'Branch सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('Branch सेव नहीं हुआ', 'Branch not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh.`), variant: 'destructive', duration: 12000 });
       }
     });
     return branch;
@@ -854,13 +855,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1: restore prior state on failure
         console.error('Branch update:', error.message);
         setBranchesState(() => { cacheBranches(snapshot); return snapshot; });
-        toastRef.current({ title: 'Branch अपडेट नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('Branch अपडेट नहीं हुआ', 'Branch not updated'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deleteBranch = useCallback((id: string) => {
-    if (guardPermission('delete', 'शाखा मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('शाखा मिटाने', 'delete a branch'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;   // RULE 6
     let snapshot: Branch[] = [];
     setBranchesState(prev => { snapshot = prev; const next = prev.filter(b => b.id !== id); cacheBranches(next); return next; });
@@ -869,7 +870,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1: restore the deleted row on failure
         console.error('Branch delete:', error.message);
         setBranchesState(() => { cacheBranches(snapshot); return snapshot; });
-        toastRef.current({ title: 'Branch delete नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर शाखा वापस आ जाएगी।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('Branch delete नहीं हुआ', 'Branch not deleted'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर शाखा वापस आ जाएगी।`, `Not saved to the cloud — ${error.message}. On Refresh, the branch will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [setActiveBranch]);
@@ -895,7 +896,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1
         console.error('Godown save:', error.message);
         setGodownsState(() => { cacheGodowns(snapshot); return snapshot; });
-        toastRef.current({ title: 'Godown सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('Godown सेव नहीं हुआ', 'Godown not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh.`), variant: 'destructive', duration: 12000 });
       }
     });
     return g;
@@ -908,12 +909,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1
         console.error('Godown update:', error.message);
         setGodownsState(() => { cacheGodowns(snapshot); return snapshot; });
-        toastRef.current({ title: 'Godown अपडेट नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('Godown अपडेट नहीं हुआ', 'Godown not updated'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const deleteGodown = useCallback((id: string) => {
-    if (guardPermission('delete', 'गोदाम मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('गोदाम मिटाने', 'delete a godown'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;   // RULE 6
     let snapshot: Godown[] = [];
     setGodownsState(prev => { snapshot = prev; const next = prev.filter(g => g.id !== id); cacheGodowns(next); return next; });
@@ -922,7 +923,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1
         console.error('Godown delete:', error.message);
         setGodownsState(() => { cacheGodowns(snapshot); return snapshot; });
-        toastRef.current({ title: 'Godown delete नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर godown वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('Godown delete नहीं हुआ', 'Godown not deleted'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर godown वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the godown will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [setActiveGodown]);
@@ -958,8 +959,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // here, say so — mildly, not destructively: the money columns landed, only a missing
         // flag/column didn't. Silence here is exactly what hid the rcmApplicable loss.
         if (dropped.length) toastRef.current({
-          title: 'सहेजा गया — पर कुछ कॉलम इस DB में नहीं हैं',
-          description: `${label}: बाक़ी सब सेव हुआ; ये कॉलम database में नहीं हैं — बाकी migration चलाएँ: ${dropped.join(', ')}.`,
+          title: tr('सहेजा गया — पर कुछ कॉलम इस DB में नहीं हैं', 'Saved — but some columns are missing in this DB'),
+          description: tr(`${label}: बाक़ी सब सेव हुआ; ये कॉलम database में नहीं हैं — बाकी migration चलाएँ: ${dropped.join(', ')}.`, `${label}: everything else was saved; these columns are not in the database — run the pending migrations: ${dropped.join(', ')}.`),
           duration: 12000,
         });
         return;
@@ -973,8 +974,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Not a missing-column error, or nothing left to trim: surface it, never bury it.
       console.warn(`${label} (extras) update:`, error.message);
       toastRef.current({
-        title: 'कुछ फ़ील्ड सेव नहीं हुए',
-        description: `${label}: मुख्य रिकॉर्ड सुरक्षित है, पर अतिरिक्त जानकारी सेव नहीं हुई — बाकी migration चलाएँ। (${error.message})`,
+        title: tr('कुछ फ़ील्ड सेव नहीं हुए', 'Some fields were not saved'),
+        description: tr(`${label}: मुख्य रिकॉर्ड सुरक्षित है, पर अतिरिक्त जानकारी सेव नहीं हुई — बाकी migration चलाएँ। (${error.message})`, `${label}: the main record is safe, but the extra details were not saved — run the pending migrations. (${error.message})`),
         variant: 'destructive',
         duration: 14000,
       });
@@ -1019,7 +1020,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // here once — offline, or a core part of the books failed to load ⇒ refuse with a clear toast.
     if (refuseIfWriteBlocked(toastRef.current)) return true;
     if (societyRef.current?.fyLocked) {
-      toastRef.current({ title: 'वित्तीय वर्ष लॉक है', description: 'ऑडिट-लॉक वर्ष में कोई बदलाव नहीं हो सकता। (Financial Year is audit-locked.)', variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('वित्तीय वर्ष लॉक है', 'Financial Year is locked'), description: tr('ऑडिट-लॉक वर्ष में कोई बदलाव नहीं हो सकता। (Financial Year is audit-locked.)', 'No changes can be made in an audit-locked year. (Financial Year is audit-locked.)'), variant: 'destructive', duration: 10000 });
       return true;
     }
     return false;
@@ -1034,8 +1035,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const group = lines.map(l => accountsRef.current.find(a => a.id === l.accountId)).find(a => a?.isGroup);
     if (!group) return false;
     toastRef.current({
-      title: 'ग्रुप खाते में एंट्री नहीं / Cannot post to a group',
-      description: `"${group.name}" एक ग्रुप है — इसके नीचे का कोई ledger खाता चुनें। / "${group.name}" is a group; choose a ledger under it.`,
+      title: tr('ग्रुप खाते में एंट्री नहीं / Cannot post to a group', 'Cannot post to a group account'),
+      description: tr(`"${group.name}" एक ग्रुप है — इसके नीचे का कोई ledger खाता चुनें। / "${group.name}" is a group; choose a ledger under it.`, `"${group.name}" is a group — choose a ledger account under "${group.name}".`),
       variant: 'destructive', duration: 12000,
     });
     return true;
@@ -1047,8 +1048,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const lock = societyRef.current?.periodLockDate;
     if (lock && dates.some(d => isPeriodLocked(d))) {
       toastRef.current({
-        title: '🔒 अवधि लॉक / Period Locked',
-        description: `इस तारीख तक की अवधि लॉक है (${lock}) — इस अवधि में entry add/edit नहीं हो सकती। (Period up to ${lock} is locked; back-dated entries are blocked.)`,
+        title: tr('🔒 अवधि लॉक / Period Locked', '🔒 Period Locked'),
+        description: tr(`इस तारीख तक की अवधि लॉक है (${lock}) — इस अवधि में entry add/edit नहीं हो सकती। (Period up to ${lock} is locked; back-dated entries are blocked.)`, `The period up to ${lock} is locked — entries in this period cannot be added or edited. (Back-dated entries up to ${lock} are blocked.)`),
         variant: 'destructive',
         duration: 9000,
       });
@@ -1061,7 +1062,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const guardPermission = useCallback((permission: Permission, actionHi: string): boolean => {
     const role = userRef.current?.role;
     if (role && rbacCan(role, permission)) return false; // allowed
-    toastRef.current({ title: 'अनुमति नहीं', description: `आपकी भूमिका को ${actionHi} की अनुमति नहीं है। (Your role cannot ${permission}.)`, variant: 'destructive', duration: 8000 });
+    toastRef.current({ title: tr('अनुमति नहीं', 'Not allowed'), description: tr(`आपकी भूमिका को ${actionHi} की अनुमति नहीं है। (Your role cannot ${permission}.)`, `Your role is not allowed to ${actionHi}.`), variant: 'destructive', duration: 8000 });
     return true; // blocked
   }, []);
   // Tally-style ledger safety (परत 1 / RULE-3): a ledger or party whose account still carries a
@@ -1075,8 +1076,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (Math.abs(bal) < 0.005) return false; // zero within rounding → safe to remove
     const abs = Math.abs(bal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     toastRef.current({
-      title: 'पहले बैलेंस settle करें',
-      description: `${labelHi} के खाते पर ₹${abs} बाकी है — पहले इसे settle करें या journal से दूसरे खाते में भेजें, तभी delete होगा। (Ledger has a non-zero balance.)`,
+      title: tr('पहले बैलेंस settle करें', 'Settle the balance first'),
+      description: tr(`${labelHi} के खाते पर ₹${abs} बाकी है — पहले इसे settle करें या journal से दूसरे खाते में भेजें, तभी delete होगा। (Ledger has a non-zero balance.)`, `The ${labelHi} ledger still has a balance of ₹${abs} — settle it first or move it to another account by journal; only then can it be deleted. (Ledger has a non-zero balance.)`),
       variant: 'destructive',
       duration: 12000,
     });
@@ -1094,8 +1095,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const need = minPlanFor(feature) === 'plus' ? 'Plus' : 'Pro';
     const label = PLAN_FEATURE_LABEL[feature];
     toastRef.current({
-      title: `${need} plan चाहिए / ${need} plan needed`,
-      description: `${label.hi} ${need} plan में शामिल है — User Management से plan लें। आपका बाकी हिसाब पहले की तरह चलता रहेगा। / ${label.en} is part of the ${need} plan — upgrade in User Management.`,
+      title: tr(`${need} plan चाहिए / ${need} plan needed`, `${need} plan needed — upgrade to ${need}`),
+      description: tr(`${label.hi} ${need} plan में शामिल है — User Management से plan लें। आपका बाकी हिसाब पहले की तरह चलता रहेगा। / ${label.en} is part of the ${need} plan — upgrade in User Management.`, `${label.en} is part of the ${need} plan — get the ${need} plan from User Management. The rest of your accounting keeps working as before. (${label.hi})`),
       variant: 'destructive',
       duration: 12000,
     });
@@ -1105,8 +1106,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const row = subRowRef.current;
     if (!row || effectiveStatus(row.plan, row.status, row.period_end) !== 'expired') return false;
     toastRef.current({
-      title: 'प्लान समाप्त / Plan expired',
-      description: 'आपका trial / plan समाप्त हो गया है, इसलिए नई एंट्री रुकी है। आपका डेटा सुरक्षित है — रिपोर्ट और export चालू हैं। User Management से plan लेते ही एंट्री फिर शुरू हो जाएगी। / Your trial or plan has ended, so new entries are paused. Your data is safe; buy a plan in User Management to continue.',
+      title: tr('प्लान समाप्त / Plan expired', 'Plan expired'),
+      description: tr('आपका trial / plan समाप्त हो गया है, इसलिए नई एंट्री रुकी है। आपका डेटा सुरक्षित है — रिपोर्ट और export चालू हैं। User Management से plan लेते ही एंट्री फिर शुरू हो जाएगी। / Your trial or plan has ended, so new entries are paused. Your data is safe; buy a plan in User Management to continue.', 'Your trial / plan has ended, so new entries are paused. Your data is safe — reports and export still work. Entries will resume as soon as you buy a plan in User Management.'),
       variant: 'destructive',
       duration: 12000,
     });
@@ -1118,7 +1119,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // point it cannot finish. Returns true (and toasts) when BLOCKED. Every supplied date is checked, so
   // an edit can neither start from nor move into a locked period.
   const guardVoucherPostable = useCallback((...dates: (string | undefined)[]): boolean => {
-    if (guardPermission('create', 'वाउचर बनाने')) return true;
+    if (guardPermission('create', tr('वाउचर बनाने', 'create vouchers'))) return true;
     if (guardFYLocked()) return true;
     if (guardSubscriptionExpired()) return true;
     if (guardPeriodLock(...dates)) return true;
@@ -1656,12 +1657,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }) => {
     const { kind, doc, voucher, event, movements } = args;
     const docNoKey = kind === 'sale' ? 'saleNo' : 'purchaseNo';
-    const label = kind === 'sale' ? 'बिक्री' : 'खरीद';
+    const label = kind === 'sale' ? tr('बिक्री', 'sale') : tr('खरीद', 'purchase');
     const fail = (msg: string) => {
       args.rollbackVoucher();
       args.undoLocal();
       reportError(`${kind}-post-service`, msg, { documentId: doc.id });
-      toastRef.current({ title: `❌ ${label} क्लाउड में सेव नहीं हुई`, description: `${msg}. स्क्रीन से हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: tr(`❌ ${label} क्लाउड में सेव नहीं हुई`, `❌ ${label} not saved to the cloud`), description: tr(`${msg}. स्क्रीन से हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, `${msg}. Removed from the screen — nothing will go wrong on refresh.`), variant: 'destructive', duration: 15000 });
     };
     const p = buildStockDocumentPayload(kind, doc, voucher, event, movements);
     supabase.rpc('post_stock_document', p).then(({ data, error }) => {
@@ -1684,7 +1685,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const evs = mapLedgerEventRows(r.events ?? []);
       if (evs.length) ledgerEventsRef.current = [...ledgerEventsRef.current.filter(e => e.eventId !== event.eventId), ...evs];
       // The success toast carries the OFFICIAL number (the page no longer toasts the provisional one).
-      toastRef.current({ title: `✅ ${label} सहेजी गई: ${docNo}`, description: kind === 'sale' ? `Sale saved: ${docNo}` : `Purchase saved: ${docNo}` });
+      toastRef.current({ title: tr(`✅ ${label} सहेजी गई: ${docNo}`, `✅ ${label} saved: ${docNo}`), description: kind === 'sale' ? `Sale saved: ${docNo}` : `Purchase saved: ${docNo}` });
     }, (e: unknown) => fail(`Network error — ${e instanceof Error ? e.message : String(e)}`));
   };
 
@@ -1693,7 +1694,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // currentStock restored from them — all or nothing. Local state changes optimistically (the same
   // changes the old path made) and is restored wholesale if the server refuses (RULE 1).
   const cancelStockDocument = (kind: 'sale' | 'purchase', doc: Sale | Purchase, docNo: string, voucherIds: string[], reason: string) => {
-    const label = kind === 'sale' ? 'बिक्री' : 'खरीद';
+    const label = kind === 'sale' ? tr('बिक्री', 'sale') : tr('खरीद', 'purchase');
     const vTargets = vouchersRef.current.filter(v => voucherIds.includes(v.id) && !v.isDeleted && !isEngineVoucher(v));
     const vIds = new Set(vTargets.map(v => v.id));
     const movs = stockMovementsRef.current.filter(m => m.referenceNo === docNo);
@@ -1726,7 +1727,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setStockMovementsState(prev => [...prev, ...movs]);
       setStockItemsState(prev => prev.map(i => stockBefore.has(i.id) ? { ...i, currentStock: stockBefore.get(i.id)! } : i));
       reportError(`${kind}-cancel-post-service`, msg, { documentId: doc.id });
-      toastRef.current({ title: `❌ ${label} हटाना क्लाउड में सेव नहीं हुआ`, description: `${msg}. ${label} वापस दिखा दी गई — कुछ नहीं बदला।`, variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: tr(`❌ ${label} हटाना क्लाउड में सेव नहीं हुआ`, `❌ Deleting ${label} was not saved to the cloud`), description: tr(`${msg}. ${label} वापस दिखा दी गई — कुछ नहीं बदला।`, `${msg}. ${label} is shown again — nothing changed.`), variant: 'destructive', duration: 15000 });
     };
     supabase.rpc('cancel_stock_document', { p_kind: kind, p_id: doc.id, p_reason: reason, p_by: userRef.current?.name || 'System' }).then(({ data, error }) => {
       if (error) { undo(postVoucherMessage(postVoucherErrorCode(error.message), error.message)); return; }
@@ -1743,11 +1744,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     kind: 'sale' | 'purchase'; doc: Sale | Purchase; voucher: Voucher; event: LedgerEvent; movements: StockMovement[]; undo: () => void;
   }) => {
     const { kind, doc, voucher, event, movements } = args;
-    const label = kind === 'sale' ? 'बिक्री' : 'खरीद';
+    const label = kind === 'sale' ? tr('बिक्री', 'sale') : tr('खरीद', 'purchase');
     const fail = (msg: string) => {
       args.undo();
       reportError(`${kind}-edit-post-service`, msg, { documentId: doc.id });
-      toastRef.current({ title: `❌ ${label} का बदलाव क्लाउड में सेव नहीं हुआ`, description: `${msg}. बदलाव वापस ले लिया गया — ${label} पहले जैसी ही है।`, variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: tr(`❌ ${label} का बदलाव क्लाउड में सेव नहीं हुआ`, `❌ Change to ${label} not saved to the cloud`), description: tr(`${msg}. बदलाव वापस ले लिया गया — ${label} पहले जैसी ही है।`, `${msg}. The change was undone — ${label} is the same as before.`), variant: 'destructive', duration: 15000 });
     };
     const p = buildStockDocumentPayload(kind, doc, voucher, event, movements);
     supabase.rpc('update_stock_document', {
@@ -1787,7 +1788,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       vouchersRef.current = vouchersRef.current.map(x => x.id === v.id ? v : x);
       setVouchersState(prev => prev.map(x => x.id === v.id ? v : x));
       reportError('voucher-cascade-cancel', msg, { voucherId: v.id, voucherNo: v.voucherNo, reason });
-      toastRef.current({ title: '❌ जुड़ा वाउचर रद्द नहीं हुआ', description: `${v.voucherNo}: ${msg}. वाउचर अभी भी चालू है — refresh करके दोबारा देखें।`, variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: tr('❌ जुड़ा वाउचर रद्द नहीं हुआ', '❌ Linked voucher was not cancelled'), description: tr(`${v.voucherNo}: ${msg}. वाउचर अभी भी चालू है — refresh करके दोबारा देखें।`, `${v.voucherNo}: ${msg}. The voucher is still active — refresh and check again.`), variant: 'destructive', duration: 15000 });
     };
     for (const v of targets) {
       const fail = (e: unknown) => undo(v, e instanceof Error ? e.message : String(e));
@@ -1814,7 +1815,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!memberId) return false;
     const m = membersRef.current.find(x => x.id === memberId);
     if (!m || canHoldShares(m)) return false;
-    toastRef.current({ title: `${what} नहीं खुल सकता`, description: `${m.name} सक्रिय/स्वीकृत सदस्य नहीं हैं (स्थिति: ${m.approvalStatus === 'pending' || m.approvalStatus === 'rejected' ? m.approvalStatus : m.status}) — नया ${what} केवल सक्रिय सदस्य के लिए।`, variant: 'destructive', duration: 10000 });
+    toastRef.current({ title: tr(`${what} नहीं खुल सकता`, `${what} cannot be opened`), description: tr(`${m.name} सक्रिय/स्वीकृत सदस्य नहीं हैं (स्थिति: ${m.approvalStatus === 'pending' || m.approvalStatus === 'rejected' ? m.approvalStatus : m.status}) — नया ${what} केवल सक्रिय सदस्य के लिए।`, `${m.name} is not an active/approved member (status: ${m.approvalStatus === 'pending' || m.approvalStatus === 'rejected' ? m.approvalStatus : m.status}) — a new ${what} can be opened only for an active member.`), variant: 'destructive', duration: 10000 });
     return true;
   };
 
@@ -1826,8 +1827,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.error('DB sync error:', error.message); reportError('db-sync', error.message, { what });
     restore();
     toastRef.current({
-      title: `❌ ${what} — क्लाउड में सेव नहीं हुआ`,
-      description: `बदलाव वापस ले लिया गया है, दोबारा कोशिश करें। (Cloud save failed — the change was undone.) ${error.message}`,
+      title: tr(`❌ ${what} — क्लाउड में सेव नहीं हुआ`, `❌ ${what} — not saved to the cloud`),
+      description: tr(`बदलाव वापस ले लिया गया है, दोबारा कोशिश करें। (Cloud save failed — the change was undone.) ${error.message}`, `Cloud save failed — the change was undone; please try again. ${error.message}`),
       variant: 'destructive', duration: 10000,
     });
   };
@@ -1872,8 +1873,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       reportError('voucher-save', msg, { voucherId: v.id, voucherNo: (v as { voucherNo?: string }).voucherNo, isUpdate: !!opts.isUpdate });
       opts.onBaseFail();
       toastRef.current({
-        title: '❌ वाउचर क्लाउड में सेव नहीं हुआ',
-        description: `${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`,
+        title: tr('❌ वाउचर क्लाउड में सेव नहीं हुआ', '❌ Voucher not saved to the cloud'),
+        description: tr(`${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, `${msg}. The entry was removed from the screen — nothing will go wrong on refresh.`),
         variant: 'destructive',
         duration: 15000,
       });
@@ -1984,7 +1985,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // and then moves a scalar (member share capital). Those flows used to ignore addVoucher's empty return, so a
   // period-locked / role-refused / expired-plan voucher was refused while the member's share capital still changed.
   const voucherBirthBlocked = (date: string): boolean => {
-    if (guardPermission('create', 'वाउचर बनाने')) return true;
+    if (guardPermission('create', tr('वाउचर बनाने', 'create vouchers'))) return true;
     if (guardFYLocked()) return true;   // offline / core-load write block + the audit-locked year (Hindi toast)
     if (guardSubscriptionExpired()) return true;
     return guardPeriodLock(date);
@@ -1993,7 +1994,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }, opts?: { persistWith?: VoucherPersistWith; onPersisted?: (v: Voucher) => void; onSaved?: (v: Voucher) => void; onFailed?: () => void }): Voucher => {
     // ECR-06: role gate at the voucher choke point — every composite flow (sale/purchase/salary/
     // loan/reversal) and page funnels through here, so one guard covers every voucher birth.
-    if (guardPermission('create', 'वाउचर बनाने')) {
+    if (guardPermission('create', tr('वाउचर बनाने', 'create vouchers'))) {
       return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     }
     // F1: online-only entry — addVoucher carries its own FY check rather than guardFYLocked, so the
@@ -2023,7 +2024,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Final batch: a MANUAL voucher on Share Capital 1102 tagged to a member never moves member.shareCapital — the
     // register and the ledger drifted (2 members in prod). Member share moves go through the Share Register.
     if (data.origin === 'manual' && data.memberId && touchesShareCapital(data, ACCOUNT_IDS.SHARE_CAP)) {
-      toastRef.current({ title: 'शेयर रजिस्टर से करें', description: MANUAL_MEMBER_SHARE_VOUCHER_MESSAGE, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('शेयर रजिस्टर से करें', 'Use the Share Register'), description: manualMemberShareVoucherMessage(), variant: 'destructive', duration: 12000 });
       return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     }
 
@@ -2032,8 +2033,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const fyStart = societyFyStart(society);
     if (data.date && fyStart && (data.date < fyStart || data.date > fyEnd)) {
       toastRef.current({
-        title: 'तारीख़ चालू वित्त वर्ष से बाहर / Date Outside Financial Year',
-        description: `वाउचर की तारीख़ ${data.date} चालू वित्त वर्ष ${society.financialYear} (${fyStart} से ${fyEnd}) से बाहर है। एंट्री सहेजी जा रही है — कृपया तारीख़ जाँच लें। / Voucher date is outside the active FY. Entry is being saved, but please verify the date.`,
+        title: tr('तारीख़ चालू वित्त वर्ष से बाहर / Date Outside Financial Year', 'Date Outside Financial Year'),
+        description: tr(`वाउचर की तारीख़ ${data.date} चालू वित्त वर्ष ${society.financialYear} (${fyStart} से ${fyEnd}) से बाहर है। एंट्री सहेजी जा रही है — कृपया तारीख़ जाँच लें। / Voucher date is outside the active FY. Entry is being saved, but please verify the date.`, `Voucher date ${data.date} is outside the current Financial Year ${society.financialYear} (${fyStart} to ${fyEnd}). The entry is being saved — please check the date.`),
         variant: 'default',
       });
     }
@@ -2065,8 +2066,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const bal = voucherLinesBalance(lines);
       if (!bal.balanced) {
         toastRef.current({
-          title: '❌ वाउचर असंतुलित / Voucher not balanced',
-          description: `डेबिट ₹${bal.drTotal.toFixed(2)} ≠ क्रेडिट ₹${bal.crTotal.toFixed(2)} (अंतर ₹${bal.diff.toFixed(2)})। हर Dr का बराबर Cr होना चाहिए — ठीक करके दोबारा save करें।`,
+          title: tr('❌ वाउचर असंतुलित / Voucher not balanced', '❌ Voucher not balanced'),
+          description: tr(`डेबिट ₹${bal.drTotal.toFixed(2)} ≠ क्रेडिट ₹${bal.crTotal.toFixed(2)} (अंतर ₹${bal.diff.toFixed(2)})। हर Dr का बराबर Cr होना चाहिए — ठीक करके दोबारा save करें।`, `Debit ₹${bal.drTotal.toFixed(2)} ≠ Credit ₹${bal.crTotal.toFixed(2)} (difference ₹${bal.diff.toFixed(2)}). Every Dr needs an equal Cr — fix it and save again.`),
           variant: 'destructive',
           duration: 12000,
         });
@@ -2166,7 +2167,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // The append is the save — its failure IS a failed save (RULE 1). Roll back + surface loudly.
             reportError('voucher-journal-append', res.error ?? 'append failed', { voucherId: finalVoucher.id, voucherNo: finalNo });
             rollbackOptimistic();
-            toastRef.current({ title: '❌ वाउचर क्लाउड में सेव नहीं हुआ', description: `${res.error ?? 'journal append failed'}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 15000 });
+            toastRef.current({ title: tr('❌ वाउचर क्लाउड में सेव नहीं हुआ', '❌ Voucher not saved to the cloud'), description: tr(`${res.error ?? 'journal append failed'}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, `${res.error ?? 'journal append failed'}. The entry was removed from the screen — nothing will go wrong on refresh.`), variant: 'destructive', duration: 15000 });
             opts?.onFailed?.();
             return;
           }
@@ -2193,7 +2194,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const failPending = (msg: string, raw: string) => {
         reportError('voucher-pending-post-service', raw, { voucherId: newVoucher.id });
         rollbackOptimistic();
-        toastRef.current({ title: '❌ वाउचर क्लाउड में सेव नहीं हुआ', description: `${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: tr('❌ वाउचर क्लाउड में सेव नहीं हुआ', '❌ Voucher not saved to the cloud'), description: tr(`${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, `${msg}. The entry was removed from the screen — nothing will go wrong on refresh.`), variant: 'destructive', duration: 15000 });
         opts?.onFailed?.();
       };
       const pp = buildPendingVoucherPayload(newVoucher);
@@ -2226,7 +2227,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const fail = (msg: string, raw: string) => {
         reportError('voucher-post-service', raw, { voucherId: newVoucher.id, voucherNo: provisionalNo });
         rollbackOptimistic();
-        toastRef.current({ title: '❌ वाउचर क्लाउड में सेव नहीं हुआ', description: `${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: tr('❌ वाउचर क्लाउड में सेव नहीं हुआ', '❌ Voucher not saved to the cloud'), description: tr(`${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, `${msg}. The entry was removed from the screen — nothing will go wrong on refresh.`), variant: 'destructive', duration: 15000 });
         opts?.onFailed?.();
       };
       const attempt = (v: Voucher, tries: number) => {
@@ -2294,7 +2295,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const amt = toRupees(toMinor(Math.max(0, input.amount || 0)));
     if (amt <= 0 || input.fromBranchId === input.toBranchId) {
-      toastRef.current({ title: 'अमान्य ट्रांसफर', description: 'From/To शाखा अलग हों और राशि > 0 हो।', variant: 'destructive' });
+      toastRef.current({ title: tr('अमान्य ट्रांसफर', 'Invalid transfer'), description: tr('From/To शाखा अलग हों और राशि > 0 हो।', 'From and To branches must be different, and the amount must be > 0.'), variant: 'destructive' });
       return;
     }
     // Ensure the Inter-Branch Control account exists (fixed id, on-demand).
@@ -2305,7 +2306,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (error) {   // G4 / RULE 1: the transfer vouchers would reference an account the cloud lacks
           setAccountsState(prev => prev.filter(a => a.id !== control.id));
           reportError('control-account-save', error.message, { accountId: control.id });
-          toastRef.current({ title: 'अंतर-शाखा खाता सेव नहीं हुआ', description: `${error.message}. ट्रांसफर दोबारा करें; न हो तो admin को बताएँ।`, variant: 'destructive', duration: 15000 });
+          toastRef.current({ title: tr('अंतर-शाखा खाता सेव नहीं हुआ', 'Inter-branch account not saved'), description: tr(`${error.message}. ट्रांसफर दोबारा करें; न हो तो admin को बताएँ।`, `${error.message}. Do the transfer again; if it still fails, tell your admin.`), variant: 'destructive', duration: 15000 });
         }
       });
     }
@@ -2315,7 +2316,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const nameOf = (id: string) => branches.find(b => b.id === id)?.name || 'branch';
     addVoucher({ type: 'journal', date: input.date, branchId: input.fromBranchId, debitAccountId: INTER_BRANCH_CONTROL_ID, creditAccountId: acct, amount: amt, lines: t.from.lines.map(l => ({ id: lid(), ...l })), narration: input.narration || `Inter-branch transfer to ${nameOf(input.toBranchId)}`, createdBy: userRef.current?.name ?? 'System' });
     addVoucher({ type: 'journal', date: input.date, branchId: input.toBranchId, debitAccountId: acct, creditAccountId: INTER_BRANCH_CONTROL_ID, amount: amt, lines: t.to.lines.map(l => ({ id: lid(), ...l })), narration: input.narration || `Inter-branch transfer from ${nameOf(input.fromBranchId)}`, createdBy: userRef.current?.name ?? 'System' });
-    toastRef.current({ title: 'अंतर-शाखा ट्रांसफर दर्ज', description: `${nameOf(input.fromBranchId)} → ${nameOf(input.toBranchId)}: ₹${amt.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr('अंतर-शाखा ट्रांसफर दर्ज', 'Inter-branch transfer recorded'), description: `${nameOf(input.fromBranchId)} → ${nameOf(input.toBranchId)}: ₹${amt.toLocaleString('en-IN')}` });
   }, [accounts, branches, addVoucher]);
 
   // ── Bill-wise receipt (Tally "Against Reference"): a customer payment applied to
@@ -2340,7 +2341,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const onAcc = Math.max(0, +(data.onAccount || 0));
     const total = toRupees(addMinor(sumMinor(allocs.map(a => toMinor(a.amount))), toMinor(adv), toMinor(onAcc)));
     if (total <= 0) {
-      toastRef.current({ title: 'राशि डालें', description: 'कम से कम एक बिल के विरुद्ध (या अग्रिम) राशि भरें।', variant: 'destructive' });
+      toastRef.current({ title: tr('राशि डालें', 'Enter an amount'), description: tr('कम से कम एक बिल के विरुद्ध (या अग्रिम) राशि भरें।', 'Enter an amount against at least one bill (or as an advance).'), variant: 'destructive' });
       return null;
     }
     const debitAcc = data.paymentMode === 'cash'
@@ -2398,7 +2399,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const onAcc = Math.max(0, +(data.onAccount || 0));
     const total = toRupees(addMinor(sumMinor(allocs.map(a => toMinor(a.amount))), toMinor(adv), toMinor(onAcc)));
     if (total <= 0) {
-      toastRef.current({ title: 'राशि डालें', description: 'कम से कम एक बिल के विरुद्ध (या अग्रिम) राशि भरें।', variant: 'destructive' });
+      toastRef.current({ title: tr('राशि डालें', 'Enter an amount'), description: tr('कम से कम एक बिल के विरुद्ध (या अग्रिम) राशि भरें।', 'Enter an amount against at least one bill (or as an advance).'), variant: 'destructive' });
       return null;
     }
     const creditAcc = data.paymentMode === 'cash'
@@ -2442,17 +2443,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const guardSalaryVoucher = (id: string, what: string): boolean => {
     const slip = salaryRecordsRef.current.find(r => r.voucherId === id || r.accrualVoucherId === id);
     if (!slip) return false;
-    const kind = slip.accrualVoucherId === id ? 'वेतन-खर्च (accrual)' : 'भुगतान';
+    const kind = slip.accrualVoucherId === id ? tr('वेतन-खर्च (accrual)', 'salary expense (accrual)') : tr('भुगतान', 'payment');
     toastRef.current({
-      title: `वाउचर ${what} नहीं होगा`,
-      description: `यह वेतन पर्ची ${slip.slipNo} का ${kind} वाउचर है। वेतन पेज पर पर्ची बदलें या हटाएँ — वाउचर अपने-आप ठीक होगा। / This is the ${slip.accrualVoucherId === id ? 'accrual' : 'payment'} voucher of salary slip ${slip.slipNo}; change or delete the slip on the Salary page.`,
+      title: tr(`वाउचर ${what} नहीं होगा`, `Voucher cannot be ${what}`),
+      description: tr(`यह वेतन पर्ची ${slip.slipNo} का ${kind} वाउचर है। वेतन पेज पर पर्ची बदलें या हटाएँ — वाउचर अपने-आप ठीक होगा। / This is the ${slip.accrualVoucherId === id ? 'accrual' : 'payment'} voucher of salary slip ${slip.slipNo}; change or delete the slip on the Salary page.`, `This is the ${slip.accrualVoucherId === id ? 'accrual' : 'payment'} voucher (${kind}) of salary slip ${slip.slipNo}. Change or delete slip ${slip.slipNo} on the Salary page — the voucher will be fixed automatically.`),
       variant: 'destructive', duration: 10000,
     });
     return true;
   };
   const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines' | 'costCentreId'>>, opts?: { viaParent?: boolean }): boolean => {
-    if (guardPermission('update', 'वाउचर बदलने')) return false;   // ECR-06: role gate
-    if (!opts?.viaParent && guardSalaryVoucher(id, 'बदला')) return false;
+    if (guardPermission('update', tr('वाउचर बदलने', 'change vouchers'))) return false;   // ECR-06: role gate
+    if (!opts?.viaParent && guardSalaryVoucher(id, tr('बदला', 'changed'))) return false;
     if (guardFYLocked()) return false;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return false;
@@ -2462,12 +2463,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // corrections must go through a reversal, not an in-place edit.
     if (isEditLocked(current, !!societyRef.current?.approvalRequired)) {
       toastRef.current({
-        title: '🔁 सीधे edit नहीं / Use reversal',
+        title: tr('🔁 सीधे edit नहीं / Use reversal', '🔁 No direct edit — Use reversal'),
         description: current.reversedBy
-          ? 'यह वाउचर पहले ही reverse हो चुका है — edit नहीं हो सकता।'
+          ? tr('यह वाउचर पहले ही reverse हो चुका है — edit नहीं हो सकता।', 'This voucher has already been reversed — it cannot be edited.')
           : current.reversalOf
-          ? 'यह एक reversal वाउचर है — इसे मूल वाउचर के बिल्कुल बराबर रहना चाहिए, edit नहीं हो सकता। गलती हो तो इसे रद्द करके सही reversal/entry करें।'
-          : 'Approved voucher सीधे edit नहीं होता — correction के लिए इसे reverse करें (Reversal voucher बनेगा)।',
+          ? tr('यह एक reversal वाउचर है — इसे मूल वाउचर के बिल्कुल बराबर रहना चाहिए, edit नहीं हो सकता। गलती हो तो इसे रद्द करके सही reversal/entry करें।', 'This is a reversal voucher — it must stay exactly equal to the original voucher, so it cannot be edited. If it is wrong, cancel it and make the correct reversal/entry.')
+          : tr('Approved voucher सीधे edit नहीं होता — correction के लिए इसे reverse करें (Reversal voucher बनेगा)।', 'An approved voucher cannot be edited directly — reverse it to make a correction (a Reversal voucher will be created).'),
         variant: 'destructive', duration: 9000,
       });
       return false;
@@ -2479,8 +2480,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!tagChanged && 'costCentreId' in data) { data = { ...data }; delete data.costCentreId; }
     if (tagChanged && postingServiceRef.current && !activityTagEditableRef.current) {
       toastRef.current({
-        title: 'गतिविधि अभी नहीं बदल सकते / Activity not editable yet',
-        description: 'सर्वर पर migration 127 अभी नहीं चला है — गतिविधि बदली तो refresh पर पुरानी लौट आती। बाकी बदलाव गतिविधि बदले बिना save करें।',
+        title: tr('गतिविधि अभी नहीं बदल सकते / Activity not editable yet', 'Activity not editable yet'),
+        description: tr('सर्वर पर migration 127 अभी नहीं चला है — गतिविधि बदली तो refresh पर पुरानी लौट आती। बाकी बदलाव गतिविधि बदले बिना save करें।', 'Migration 127 has not been run on the server yet — if you change the activity, it would go back to the old one on refresh. Save your other changes without changing the activity.'),
         variant: 'destructive', duration: 12000,
       });
       return false;
@@ -2489,7 +2490,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (current.origin === 'manual' && (data.memberId ?? current.memberId)
         && touchesShareCapital({ debitAccountId: data.debitAccountId ?? current.debitAccountId, creditAccountId: data.creditAccountId ?? current.creditAccountId, lines: data.lines ?? current.lines }, ACCOUNT_IDS.SHARE_CAP)
         && !(current.memberId && touchesShareCapital(current, ACCOUNT_IDS.SHARE_CAP))) {
-      toastRef.current({ title: 'शेयर रजिस्टर से करें', description: MANUAL_MEMBER_SHARE_VOUCHER_MESSAGE, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('शेयर रजिस्टर से करें', 'Use the Share Register'), description: manualMemberShareVoucherMessage(), variant: 'destructive', duration: 12000 });
       return false;
     }
     // Capture edit audit snapshot — only track the fields that actually changed
@@ -2539,8 +2540,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const bal = voucherLinesBalance(updatedVoucher.lines);
       if (!bal.balanced) {
         toastRef.current({
-          title: '❌ वाउचर असंतुलित / Voucher not balanced',
-          description: `डेबिट ₹${bal.drTotal.toFixed(2)} ≠ क्रेडिट ₹${bal.crTotal.toFixed(2)} (अंतर ₹${bal.diff.toFixed(2)})। बदलाव save नहीं हुआ — Dr=Cr करें।`,
+          title: tr('❌ वाउचर असंतुलित / Voucher not balanced', '❌ Voucher not balanced'),
+          description: tr(`डेबिट ₹${bal.drTotal.toFixed(2)} ≠ क्रेडिट ₹${bal.crTotal.toFixed(2)} (अंतर ₹${bal.diff.toFixed(2)})। बदलाव save नहीं हुआ — Dr=Cr करें।`, `Debit ₹${bal.drTotal.toFixed(2)} ≠ Credit ₹${bal.crTotal.toFixed(2)} (difference ₹${bal.diff.toFixed(2)}). The change was not saved — make Dr = Cr.`),
           variant: 'destructive',
           duration: 12000,
         });
@@ -2605,7 +2606,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (error) {
           reportError('voucher-edit-post-service', error.message, { voucherId: id });
           revertEdit();
-          toastRef.current({ title: '❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', description: `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. बदलाव वापस ले लिया गया — refresh करने पर पुराना data सुरक्षित है।`, variant: 'destructive', duration: 15000 });
+          toastRef.current({ title: tr('❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', '❌ Voucher change not saved to the cloud'), description: tr(`${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. बदलाव वापस ले लिया गया — refresh करने पर पुराना data सुरक्षित है।`, `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. The change was undone — your old data is safe on refresh.`), variant: 'destructive', duration: 15000 });
           return;
         }
         const serverEvents = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
@@ -2614,7 +2615,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const msg = rejection instanceof Error ? rejection.message : String(rejection);
         reportError('voucher-edit-post-service', msg, { voucherId: id });
         revertEdit();
-        toastRef.current({ title: '❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', description: `Network error — ${msg}. बदलाव वापस ले लिया गया।`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: tr('❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', '❌ Voucher change not saved to the cloud'), description: tr(`Network error — ${msg}. बदलाव वापस ले लिया गया।`, `Network error — ${msg}. The change was undone.`), variant: 'destructive', duration: 15000 });
       });
       return true;
     }
@@ -2624,7 +2625,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const undo = (msg: string, raw: string) => {
         reportError('voucher-pending-edit-post-service', raw, { voucherId: id });
         revertEdit();
-        toastRef.current({ title: '❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', description: `${msg}. बदलाव वापस ले लिया गया — refresh करने पर पुराना data सुरक्षित है।`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: tr('❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', '❌ Voucher change not saved to the cloud'), description: tr(`${msg}. बदलाव वापस ले लिया गया — refresh करने पर पुराना data सुरक्षित है।`, `${msg}. The change was undone — your old data is safe on refresh.`), variant: 'destructive', duration: 15000 });
       };
       const p = buildEditVoucherPayload(updatedVoucher, { withActivityTag: tagChanged });
       supabase.rpc('save_pending_voucher', { p_voucher: p.p_voucher, p_lines: p.p_lines }).then(({ error }) => {
@@ -2645,7 +2646,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // The append IS the save — its failure is a failed edit (RULE 1). Revert + surface loudly.
           reportError('voucher-edit-journal-append', res.error ?? 'append failed', { voucherId: id });
           revertEdit();
-          toastRef.current({ title: '❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', description: `${res.error ?? 'journal append failed'}. बदलाव वापस ले लिया गया — refresh करने पर पुराना data सुरक्षित है।`, variant: 'destructive', duration: 15000 });
+          toastRef.current({ title: tr('❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', '❌ Voucher change not saved to the cloud'), description: tr(`${res.error ?? 'journal append failed'}. बदलाव वापस ले लिया गया — refresh करने पर पुराना data सुरक्षित है।`, `${res.error ?? 'journal append failed'}. The change was undone — your old data is safe on refresh.`), variant: 'destructive', duration: 15000 });
           return;
         }
         // Saved (journal). Project the edited row into the table best-effort — a table failure is now
@@ -2701,11 +2702,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // alone reversed the deductions in the ledger while the settlement kept its locked Net Payable. Payments,
   // agency receipts and commission vouchers stay cancellable: every procurement balance is derived from
   // the live vouchers, so cancelling one of them keeps the screens and the ledger in step.
-  useEffect(() => registerVoucherOwner('procurement', id => findVoucherOwner([{ label: 'किसान निपटान (MSP)', docs: procurementSettlementsRef.current }], id)), [registerVoucherOwner]);
+  useEffect(() => registerVoucherOwner('procurement', id => findVoucherOwner([{ label: tr('किसान निपटान (MSP)', 'Farmer settlement (MSP)'), docs: procurementSettlementsRef.current }], id)), [registerVoucherOwner]);
 
   const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean }): boolean => {
     if (guardFYLocked()) return false;
-    if (guardPermission('delete', 'वाउचर रद्द करने')) return false;   // ECR-06: role gate
+    if (guardPermission('delete', tr('वाउचर रद्द करने', 'cancel vouchers'))) return false;   // ECR-06: role gate
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return false;
     // H4: already cancelled ⇒ nothing to do. A parent cleanup (e.g. deleting a return whose voucher
@@ -2718,7 +2719,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // share balances; cancelling one half here left the other half and the balances standing (prod
     // 2026-07). Legacy transfers carry no refType, so their narration identifies them.
     if ((current.refType === 'share.transfer' || (!current.refType && (current.narration || '').startsWith('Shares transferred from '))) && !opts?.viaParent) {
-      toastRef.current({ title: 'यहाँ रद्द नहीं होगा', description: 'यह शेयर-ट्रांसफर का वाउचर है (दो वाउचरों का जोड़ा)। गलती सुधारने के लिए Share Register से उल्टा ट्रांसफर करें — तभी दोनों सदस्यों का शेयर और बही साथ ठीक रहेंगे।', variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'), description: tr('यह शेयर-ट्रांसफर का वाउचर है (दो वाउचरों का जोड़ा)। गलती सुधारने के लिए Share Register से उल्टा ट्रांसफर करें — तभी दोनों सदस्यों का शेयर और बही साथ ठीक रहेंगे।', 'This is a share-transfer voucher (a pair of two vouchers). To correct a mistake, make a reverse transfer from the Share Register — only then will both members\' shares and the ledger stay correct together.'), variant: 'destructive', duration: 10000 });
       return false;
     }
     // H / RULE 3: a voucher a LIVE module document links to (settlement, maintenance bill, worker
@@ -2727,21 +2728,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       for (const check of voucherOwnersRef.current.values()) {
         const owner = check(id);
         if (owner) {
-          toastRef.current({ title: 'यहाँ रद्द नहीं होगा', description: `यह वाउचर "${owner}" से जुड़ा है। उसी module से उसे delete करें — तभी document, बही और balances साथ ठीक रहेंगे।`, variant: 'destructive', duration: 10000 });
+          toastRef.current({ title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'), description: tr(`यह वाउचर "${owner}" से जुड़ा है। उसी module से उसे delete करें — तभी document, बही और balances साथ ठीक रहेंगे।`, `This voucher is linked to "${owner}". Delete it from that module — only then will the document, ledger and balances stay correct together.`), variant: 'destructive', duration: 10000 });
           return false;
         }
       }
     }
     if ((current.refType === 'sale.return' || current.refType === 'purchase.return') && !opts?.viaParent) {
-      const page = current.refType === 'sale.return' ? 'बिक्री वापसी (Sales Return)' : 'ख़रीद वापसी (Purchase Return)';
-      toastRef.current({ title: 'यहाँ रद्द नहीं होगा', description: `यह वाउचर ${page} से बना है। उसी page से return delete करें — तभी return, स्टॉक और बही तीनों साथ ठीक होंगे।`, variant: 'destructive', duration: 10000 });
+      const page = current.refType === 'sale.return' ? tr('बिक्री वापसी (Sales Return)', 'Sales Return') : tr('ख़रीद वापसी (Purchase Return)', 'Purchase Return');
+      toastRef.current({ title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'), description: tr(`यह वाउचर ${page} से बना है। उसी page से return delete करें — तभी return, स्टॉक और बही तीनों साथ ठीक होंगे।`, `This voucher was created from ${page}. Delete the return from that page — only then will the return, stock and ledger all stay correct together.`), variant: 'destructive', duration: 10000 });
       return false;
     }
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
     // ECR-08: a reversed voucher must not also be cancelled — its reversal would then
     // net against nothing (phantom entry). Correction already stands via the reversal.
     if (current.reversedBy) {
-      toastRef.current({ title: 'रद्द नहीं होगा', description: 'यह वाउचर reverse हो चुका है — इसकी reversal entry ही correction है। इसे cancel न करें।', variant: 'destructive', duration: 9000 });
+      toastRef.current({ title: tr('रद्द नहीं होगा', 'Cannot be cancelled'), description: tr('यह वाउचर reverse हो चुका है — इसकी reversal entry ही correction है। इसे cancel न करें।', 'This voucher has been reversed — its reversal entry is the correction. Do not cancel it.'), variant: 'destructive', duration: 9000 });
       return false;
     }
 
@@ -2754,8 +2755,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const isActive = parent && parent.voucherId === current.id;
       if (isActive) {
         toastRef.current({
-          title: 'यहाँ रद्द नहीं होगा',
-          description: 'यह वाउचर Purchase Management से बना है। इसे Purchase Management → Purchase List से delete करें — तभी stock भी सही रहेगा।',
+          title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'),
+          description: tr('यह वाउचर Purchase Management से बना है। इसे Purchase Management → Purchase List से delete करें — तभी stock भी सही रहेगा।', 'This voucher was created from Purchase Management. Delete it from Purchase Management → Purchase List — only then will the stock stay correct too.'),
           variant: 'destructive',
         });
         return false;
@@ -2767,8 +2768,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const isActive = parent && parent.voucherId === current.id;
       if (isActive) {
         toastRef.current({
-          title: 'यहाँ रद्द नहीं होगा',
-          description: 'यह वाउचर Sale Management से बना है। इसे Sale Management → Sale List से delete करें — तभी stock भी वापस आएगी।',
+          title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'),
+          description: tr('यह वाउचर Sale Management से बना है। इसे Sale Management → Sale List से delete करें — तभी stock भी वापस आएगी।', 'This voucher was created from Sale Management. Delete it from Sale Management → Sale List — only then will the stock come back too.'),
           variant: 'destructive',
         });
         return false;
@@ -2778,7 +2779,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // H12: Block cancelling auto-generated vouchers — parent record would dangle
     // Both the payment AND the accrual voucher of a salary slip (the accrual used to be cancellable here).
-    if (!opts?.viaParent && guardSalaryVoucher(id, 'रद्द')) return false;
+    if (!opts?.viaParent && guardSalaryVoucher(id, tr('रद्द', 'cancelled'))) return false;
     // Block cancelling an auto wage-accrual voucher while its muster entry is live —
     // otherwise the entry's `accrued` flag goes stale and payWages would Dr 2109 against
     // a liability that no longer exists (double-counting the expense).
@@ -2786,8 +2787,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const linkedMuster = musterEntriesRef.current.find(m => m.accrualVoucherId === id && !m.isDeleted);
       if (linkedMuster) {
         toastRef.current({
-          title: 'यहाँ रद्द नहीं होगा',
-          description: 'यह मज़दूरी-देयता (स्वतः) वाउचर मस्टर रोल से बना है। इसे Muster Roll → सम्बंधित प्रविष्टि को edit/delete करें — accrual अपने-आप उलट जाएगा।',
+          title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'),
+          description: tr('यह मज़दूरी-देयता (स्वतः) वाउचर मस्टर रोल से बना है। इसे Muster Roll → सम्बंधित प्रविष्टि को edit/delete करें — accrual अपने-आप उलट जाएगा।', 'This wage-liability (automatic) voucher was created from the Muster Roll. Edit/delete the related entry in Muster Roll — the accrual will reverse automatically.'),
           variant: 'destructive', duration: 10000,
         });
         return false;
@@ -2799,8 +2800,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // (origin 'manual') never moved the scalar, so it stays cancellable.
     if (current.memberId && current.debitAccountId === ACCOUNT_IDS.SHARE_CAP && current.origin !== 'manual' && !opts?.viaParent) {
       toastRef.current({
-        title: 'यहाँ रद्द नहीं होगा',
-        description: 'यह सदस्य की शेयर-वापसी / शेयर-संचालन का वाउचर है — इससे सदस्य की शेयर राशि घटी थी। गलती सुधारने के लिए Share Register से उल्टी entry (अतिरिक्त शेयर) करें, तभी सदस्य की राशि और बही साथ ठीक रहेंगे।',
+        title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'),
+        description: tr('यह सदस्य की शेयर-वापसी / शेयर-संचालन का वाउचर है — इससे सदस्य की शेयर राशि घटी थी। गलती सुधारने के लिए Share Register से उल्टी entry (अतिरिक्त शेयर) करें, तभी सदस्य की राशि और बही साथ ठीक रहेंगे।', 'This is a member\'s share refund / share operation voucher — it reduced the member\'s share amount. To correct a mistake, make the reverse entry (additional shares) from the Share Register; only then will the member\'s amount and the ledger stay correct together.'),
         variant: 'destructive', duration: 10000,
       });
       return false;
@@ -2808,8 +2809,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (current.memberId && (current.creditAccountId === ACCOUNT_IDS.SHARE_CAP || current.creditAccountId === ACCOUNT_IDS.ADM_FEE)) {
       const kind = current.creditAccountId === ACCOUNT_IDS.SHARE_CAP ? 'Share Capital' : 'Admission Fee';
       toastRef.current({
-        title: 'वाउचर नहीं हटाया जा सकता',
-        description: `यह सदस्य का अपने-आप बना ${kind} वाउचर है। सदस्य पेज से सदस्य को बदलें या हटाएँ।`,
+        title: tr('वाउचर नहीं हटाया जा सकता', 'Voucher cannot be deleted'),
+        description: tr(`यह सदस्य का अपने-आप बना ${kind} वाउचर है। सदस्य पेज से सदस्य को बदलें या हटाएँ।`, `This is an auto-created ${kind} voucher of a member. Change or delete the member from the Members page.`),
         variant: 'destructive',
       });
       return false;
@@ -2819,8 +2820,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const linkedAsset = assetsRef.current.find(a => current.narration.includes(a.assetNo));
       if (linkedAsset) {
         toastRef.current({
-          title: 'वाउचर नहीं हटाया जा सकता',
-          description: `यह संपत्ति ${linkedAsset.assetNo} की ह्रास (depreciation) एंट्री है। संपत्ति रजिस्टर पेज पर "Reverse Depreciation" इस्तेमाल करें।`,
+          title: tr('वाउचर नहीं हटाया जा सकता', 'Voucher cannot be deleted'),
+          description: tr(`यह संपत्ति ${linkedAsset.assetNo} की ह्रास (depreciation) एंट्री है। संपत्ति रजिस्टर पेज पर "Reverse Depreciation" इस्तेमाल करें।`, `This is the depreciation entry of asset ${linkedAsset.assetNo}. Use "Reverse Depreciation" on the Asset Register page.`),
           variant: 'destructive',
         });
         return false;
@@ -2878,7 +2879,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (error) {
           reportError('voucher-cancel-post-service', error.message, { voucherId: id });
           undoCancel();
-          toastRef.current({ title: '❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', description: `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. रद्द करना वापस ले लिया गया — वाउचर चालू और सुरक्षित है।`, variant: 'destructive', duration: 15000 });
+          toastRef.current({ title: tr('❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', '❌ Voucher cancellation not saved to the cloud'), description: tr(`${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. रद्द करना वापस ले लिया गया — वाउचर चालू और सुरक्षित है।`, `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. The cancellation was undone — the voucher is active and safe.`), variant: 'destructive', duration: 15000 });
           return;
         }
         const serverEvents = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
@@ -2887,7 +2888,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const msg = rejection instanceof Error ? rejection.message : String(rejection);
         reportError('voucher-cancel-post-service', msg, { voucherId: id });
         undoCancel();
-        toastRef.current({ title: '❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', description: `Network error — ${msg}. रद्द करना वापस ले लिया गया — वाउचर चालू है।`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: tr('❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', '❌ Voucher cancellation not saved to the cloud'), description: tr(`Network error — ${msg}. रद्द करना वापस ले लिया गया — वाउचर चालू है।`, `Network error — ${msg}. The cancellation was undone — the voucher is active.`), variant: 'destructive', duration: 15000 });
       });
       return true;
     }
@@ -2905,7 +2906,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           reportError('voucher-cancel-journal-append', res.error ?? 'append failed', { voucherId: id });
           setVouchersState(prev => prev.map(v => v.id === id ? current : v));
           ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent!.eventId);
-          toastRef.current({ title: '❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', description: `${res.error ?? 'journal append failed'}. रद्द करना वापस ले लिया गया — वाउचर चालू और सुरक्षित है।`, variant: 'destructive', duration: 15000 });
+          toastRef.current({ title: tr('❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', '❌ Voucher cancellation not saved to the cloud'), description: tr(`${res.error ?? 'journal append failed'}. रद्द करना वापस ले लिया गया — वाउचर चालू और सुरक्षित है।`, `${res.error ?? 'journal append failed'}. The cancellation was undone — the voucher is active and safe.`), variant: 'destructive', duration: 15000 });
           return;
         }
         // Saved (journal). Project the soft-delete into the table best-effort — a failure is now
@@ -2926,7 +2927,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelledVoucher.deletedAt, deletedBy, deletedReason: reason }).eq('id', id).then(({ error }) => {
       if (error) {
         // RULE 1: the cancel did not reach the cloud → the voucher is live again on screen too.
-        failedCloudWrite('वाउचर रद्द करना', error, () => setVouchersState(prev => prev.map(v => v.id === id ? current : v)));
+        failedCloudWrite(tr('वाउचर रद्द करना', 'Cancelling the voucher'), error, () => setVouchersState(prev => prev.map(v => v.id === id ? current : v)));
         // Keep the shadow ledger consistent with the un-cancelled voucher.
         if (cancelEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent!.eventId);
       } else {
@@ -2954,9 +2955,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return null;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return null;
-    if (current.isDeleted) { toastRef.current({ title: 'रद्द वाउचर', description: 'रद्द किया हुआ वाउचर reverse नहीं होता।', variant: 'destructive' }); return null; }
-    if (current.reversedBy) { toastRef.current({ title: 'पहले से reversed', description: `यह वाउचर पहले ही reverse हो चुका है।`, variant: 'destructive' }); return null; }
-    if (current.reversalOf) { toastRef.current({ title: 'यह स्वयं reversal है', description: 'Reversal entry को दोबारा reverse नहीं किया जाता।', variant: 'destructive' }); return null; }
+    if (current.isDeleted) { toastRef.current({ title: tr('रद्द वाउचर', 'Cancelled voucher'), description: tr('रद्द किया हुआ वाउचर reverse नहीं होता।', 'A cancelled voucher cannot be reversed.'), variant: 'destructive' }); return null; }
+    if (current.reversedBy) { toastRef.current({ title: tr('पहले से reversed', 'Already reversed'), description: tr(`यह वाउचर पहले ही reverse हो चुका है।`, `This voucher has already been reversed.`), variant: 'destructive' }); return null; }
+    if (current.reversalOf) { toastRef.current({ title: tr('यह स्वयं reversal है', 'This is itself a reversal'), description: tr('Reversal entry को दोबारा reverse नहीं किया जाता।', 'A reversal entry cannot be reversed again.'), variant: 'destructive' }); return null; }
     if (isEngineVoucher(current) && !opts?.engine) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return null; }
     if (guardSalaryVoucher(id, 'reverse')) return null;
     const revDate = new Date().toISOString().split('T')[0];
@@ -2973,7 +2974,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       supabase.rpc('link_voucher_reversal', { p_original_id: id, p_reversal_id: rev.id }).then(({ error }) => {
         if (!error) return;
         reportError('voucher-reversal-link', error.message, { voucherId: rev.id, originalId: id });
-        toastRef.current({ title: '⚠ Reversal पोस्ट हुआ, पर जोड़ (link) सेव नहीं हुआ', description: `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)} — दोनों entries ledger में सही हैं; दोबारा reverse न करें, admin को बताएँ।`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: tr('⚠ Reversal पोस्ट हुआ, पर जोड़ (link) सेव नहीं हुआ', '⚠ Reversal posted, but the link was not saved'), description: tr(`${postVoucherMessage(postVoucherErrorCode(error.message), error.message)} — दोनों entries ledger में सही हैं; दोबारा reverse न करें, admin को बताएँ।`, `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)} — both entries are correct in the ledger; do not reverse again, tell your admin.`), variant: 'destructive', duration: 15000 });
       }, (e: unknown) => reportError('voucher-reversal-link', e instanceof Error ? e.message : String(e), { voucherId: rev.id, originalId: id }));
     };
     const reversal = addVoucher({
@@ -3005,7 +3006,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
     }
     emitAudit({ entityType: 'voucher', entityId: id, action: 'reverse', before: { reversedBy: null }, after: { reversedBy: reversal.id }, reason });
-    toastRef.current({ title: '🔁 Reversal बन गया', description: `${current.voucherNo} के लिए reversal ${reversal.voucherNo} पोस्ट हो गया। दोनों entries ledger में दिखेंगी (net zero)।`, variant: 'default', duration: 8000 });
+    toastRef.current({ title: tr('🔁 Reversal बन गया', '🔁 Reversal created'), description: tr(`${current.voucherNo} के लिए reversal ${reversal.voucherNo} पोस्ट हो गया। दोनों entries ledger में दिखेंगी (net zero)।`, `Reversal ${reversal.voucherNo} posted for ${current.voucherNo}. Both entries will show in the ledger (net zero).`), variant: 'default', duration: 8000 });
     return reversal;
   }, [addVoucher]);
 
@@ -3035,7 +3036,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const canEditVoucherActivity = useCallback((): boolean => !postingServiceRef.current || activityTagEditableRef.current, []);
 
   const restoreVoucher = useCallback((_id: string): boolean => {
-    toastRef.current({ title: 'रद्द वाउचर वापस नहीं आता', description: 'रद्द किया गया वाउचर restore नहीं होता — ज़रूरत हो तो नया वाउचर बनाएँ।', variant: 'destructive', duration: 10000 });
+    toastRef.current({ title: tr('रद्द वाउचर वापस नहीं आता', 'A cancelled voucher cannot be brought back'), description: tr('रद्द किया गया वाउचर restore नहीं होता — ज़रूरत हो तो नया वाउचर बनाएँ।', 'A cancelled voucher cannot be restored — create a new voucher if needed.'), variant: 'destructive', duration: 10000 });
     return false;
   }, []);
 
@@ -3054,7 +3055,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
-        toastRef.current({ title: 'क्लियर सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('क्लियर सेव नहीं हुआ', 'Clear not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
@@ -3072,7 +3073,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
-        toastRef.current({ title: 'अनक्लियर सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अनक्लियर सेव नहीं हुआ', 'Unclear not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
@@ -3082,21 +3083,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // callers must NOT toast success (the false-success pattern, fixed for updateVoucher in #345).
   const approveVoucher = useCallback((id: string, approvedBy: string): boolean => {
     if (guardFYLocked()) return false;
-    if (guardPermission('approve', 'वाउचर अप्रूव करने')) return false; // SL-06: segregation of duties
+    if (guardPermission('approve', tr('वाउचर अप्रूव करने', 'approve vouchers'))) return false; // SL-06: segregation of duties
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return false;
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
     // ECR-11: uniform state machine — only a PENDING voucher may be approved. Blocks flipping a
     // rejected voucher straight to approved (which would re-post it) or double-approving.
     if (!canApprovalTransition(current.approvalStatus, 'approved')) {
-      toastRef.current({ title: 'कार्रवाई संभव नहीं', description: `वाउचर ${current.voucherNo} ${current.approvalStatus === 'approved' ? 'पहले से स्वीकृत' : current.approvalStatus === 'rejected' ? 'अस्वीकृत' : 'अनुमोदन-workflow से बाहर'} है — केवल लम्बित (pending) वाउचर ही approve किए जा सकते हैं।`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('कार्रवाई संभव नहीं', 'Action not possible'), description: tr(`वाउचर ${current.voucherNo} ${current.approvalStatus === 'approved' ? 'पहले से स्वीकृत' : current.approvalStatus === 'rejected' ? 'अस्वीकृत' : 'अनुमोदन-workflow से बाहर'} है — केवल लम्बित (pending) वाउचर ही approve किए जा सकते हैं।`, `Voucher ${current.voucherNo} is ${current.approvalStatus === 'approved' ? 'already approved' : current.approvalStatus === 'rejected' ? 'rejected' : 'outside the approval workflow'} — only pending vouchers can be approved.`), variant: 'destructive', duration: 10000 });
       return false;
     }
     // ECR-06: identity-level SoD — maker ≠ checker. A user may not approve their OWN voucher.
     // Only ever reached for opted-in maker-checker societies (pending vouchers), so it can't
     // stall a society that never enabled approval.
     if (isSelfApproval(current.createdBy, approvedBy)) {
-      toastRef.current({ title: 'स्व-अनुमोदन मना है', description: `आप अपना ही बनाया वाउचर (${current.voucherNo}) approve नहीं कर सकते। किसी अन्य अधिकृत सदस्य से approve कराएँ, या Society Setup में approval-required बंद करें।`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('स्व-अनुमोदन मना है', 'Self-approval not allowed'), description: tr(`आप अपना ही बनाया वाउचर (${current.voucherNo}) approve नहीं कर सकते। किसी अन्य अधिकृत सदस्य से approve कराएँ, या Society Setup में approval-required बंद करें।`, `You cannot approve a voucher you created yourself (${current.voucherNo}). Get it approved by another authorised member, or turn off approval-required in Society Setup.`), variant: 'destructive', duration: 12000 });
       return false;
     }
     const updated = { ...current, approvalStatus: 'approved' as const, approvedBy, approvedAt: new Date().toISOString() };
@@ -3108,7 +3109,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const undoApprove = (msg: string) => {
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));
         reportError('voucher-approve-post-service', msg, { voucherId: id });
-        toastRef.current({ title: 'अप्रूवल सेव नहीं हुआ', description: `${msg}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: tr('अप्रूवल सेव नहीं हुआ', 'Approval not saved'), description: tr(`${msg}. Refresh करने पर पुराना data वापस आ जाएगा।`, `${msg}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 15000 });
       };
       supabase.rpc('approve_voucher', { p_id: id, p_lines: buildEditVoucherPayload(updated).p_lines, p_approved_by: approvedBy }).then(({ data, error }) => {
         if (error) undoApprove(postVoucherMessage(postVoucherErrorCode(error.message), error.message));
@@ -3123,7 +3124,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
-        toastRef.current({ title: 'अप्रूवल सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अप्रूवल सेव नहीं हुआ', 'Approval not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
       else {
         syncEntries(updated); // mirror to voucher_entries so SQL reports see the approved entries
@@ -3135,13 +3136,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const rejectVoucher = useCallback((id: string, rejectedBy: string, reason: string): boolean => {
     if (guardFYLocked()) return false;
-    if (guardPermission('reject', 'वाउचर रिजेक्ट करने')) return false; // SL-06: segregation of duties
+    if (guardPermission('reject', tr('वाउचर रिजेक्ट करने', 'reject vouchers'))) return false; // SL-06: segregation of duties
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return false;
     if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
     // ECR-11: uniform state machine — only a PENDING voucher may be rejected.
     if (!canApprovalTransition(current.approvalStatus, 'rejected')) {
-      toastRef.current({ title: 'कार्रवाई संभव नहीं', description: `वाउचर ${current.voucherNo} ${current.approvalStatus === 'approved' ? 'पहले से स्वीकृत' : current.approvalStatus === 'rejected' ? 'पहले से अस्वीकृत' : 'अनुमोदन-workflow से बाहर'} है — केवल लम्बित (pending) वाउचर ही reject किए जा सकते हैं।`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('कार्रवाई संभव नहीं', 'Action not possible'), description: tr(`वाउचर ${current.voucherNo} ${current.approvalStatus === 'approved' ? 'पहले से स्वीकृत' : current.approvalStatus === 'rejected' ? 'पहले से अस्वीकृत' : 'अनुमोदन-workflow से बाहर'} है — केवल लम्बित (pending) वाउचर ही reject किए जा सकते हैं।`, `Voucher ${current.voucherNo} is ${current.approvalStatus === 'approved' ? 'already approved' : current.approvalStatus === 'rejected' ? 'already rejected' : 'outside the approval workflow'} — only pending vouchers can be rejected.`), variant: 'destructive', duration: 10000 });
       return false;
     }
     const updated = { ...current, approvalStatus: 'rejected' as const, approvalRemarks: reason, approvedBy: rejectedBy, approvedAt: new Date().toISOString() };
@@ -3153,7 +3154,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const undoReject = (msg: string) => {
         reportError('voucher-reject-post-service', msg, { voucherId: id });
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
-        toastRef.current({ title: 'रिजेक्ट सेव नहीं हुआ', description: `${msg}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: tr('रिजेक्ट सेव नहीं हुआ', 'Reject not saved'), description: tr(`${msg}. Refresh करने पर पुराना data वापस आ जाएगा।`, `${msg}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 15000 });
       };
       supabase.rpc('reject_voucher', { p_id: id, p_reason: reason, p_rejected_by: rejectedBy }).then(({ error }) => {
         if (error) undoReject(postVoucherMessage(postVoucherErrorCode(error.message), error.message));
@@ -3164,7 +3165,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));   // RULE 1: roll back
-        toastRef.current({ title: 'रिजेक्ट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('रिजेक्ट सेव नहीं हुआ', 'Reject not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
       else deleteEntries(id); // rejected vouchers shouldn't impact SQL reports
     });
@@ -3175,7 +3176,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ECR-06: audit objections are the auditor's SCOPED write (auditNote) — distinct from the
     // financial `create` guard on addVoucher, so an auditor files objections but can't post
     // vouchers, and a cashier/viewer reaching /audit-register can't file objections.
-    if (guardPermission('auditNote', 'ऑडिट आपत्ति दर्ज करने')) return { ...data, id: '' } as unknown as AuditObjection;
+    if (guardPermission('auditNote', tr('ऑडिट आपत्ति दर्ज करने', 'record audit objections'))) return { ...data, id: '' } as unknown as AuditObjection;
     if (guardFYLocked()) return { ...data, id: '' } as unknown as AuditObjection;
     const maxNum = auditObjectionsRef.current.filter(o => o.objectionNo?.includes(data.auditYear)).reduce((max, o) => {
       const m = o.objectionNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
@@ -3197,7 +3198,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           auditObjectionsRef.current = auditObjectionsRef.current.filter(o => o.id !== newObj.id);
           setAuditObjectionsState(prev => prev.filter(o => o.id !== newObj.id));   // RULE 1: roll back
-          toastRef.current({ title: 'सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('सेव नहीं हुआ', 'Not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
         }
       });
     });
@@ -3205,7 +3206,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateAuditObjection = useCallback((id: string, data: Partial<AuditObjection>) => {
-    if (guardPermission('auditNote', 'ऑडिट आपत्ति बदलने')) return;   // ECR-06: auditor-family scoped write
+    if (guardPermission('auditNote', tr('ऑडिट आपत्ति बदलने', 'change audit objections'))) return;   // ECR-06: auditor-family scoped write
     if (guardFYLocked()) return;
     const before = auditObjectionsRef.current.find(o => o.id === id);
     if (!before) return;
@@ -3215,19 +3216,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setAuditObjectionsState(prev => prev.map(o => o.id === id ? before : o));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
 
   const deleteAuditObjection = useCallback((id: string) => {
-    if (guardPermission('delete', 'ऑडिट आपत्ति मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('ऑडिट आपत्ति मिटाने', 'delete audit objections'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const removed = auditObjectionsRef.current.find(o => o.id === id);
     setAuditObjectionsState(prev => { const updated = prev.filter(o => o.id !== id); return updated; });
     // Soft-delete (P0 #2): retain the audit-objection row (isDeleted=true) — statutory
     // register must persist. Load filters isDeleted out on refresh.
-    supabase.from('audit_objections').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) failedCloudWrite('ऑडिट आपत्ति हटाना', error, () => setAuditObjectionsState(prev => putBack(prev, removed))); });
+    supabase.from('audit_objections').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) failedCloudWrite(tr('ऑडिट आपत्ति हटाना', 'Deleting the audit objection'), error, () => setAuditObjectionsState(prev => putBack(prev, removed))); });
     emitAudit({ entityType: 'auditObjection', entityId: id, action: 'delete', reason: 'Audit objection deleted' });
     console.info(`[AUDIT-DELETE] AuditObjection id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
@@ -3243,7 +3244,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         recoverablesRef.current = recoverablesRef.current.filter(r => r.id !== newRec.id);
         setRecoverablesState(prev => prev.filter(r => r.id !== newRec.id));   // RULE 1: roll back
-        toastRef.current({ title: 'सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('सेव नहीं हुआ', 'Not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
     return newRec;
@@ -3259,17 +3260,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setRecoverablesState(prev => prev.map(r => r.id === id ? before : r));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
 
   const deleteRecoverable = useCallback((id: string) => {
-    if (guardPermission('delete', 'वसूली मद मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('वसूली मद मिटाने', 'delete recoverable items'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const removed = recoverablesRef.current.find(r => r.id === id);
     setRecoverablesState(prev => prev.filter(r => r.id !== id));
-    supabase.from('recoverables').delete().eq('id', id).then(({ error }) => { if (error) failedCloudWrite('वसूली मद हटाना', error, () => setRecoverablesState(prev => putBack(prev, removed))); });
+    supabase.from('recoverables').delete().eq('id', id).then(({ error }) => { if (error) failedCloudWrite(tr('वसूली मद हटाना', 'Deleting the recoverable item'), error, () => setRecoverablesState(prev => putBack(prev, removed))); });
   }, []);
 
   // ── Kachi Aarat (HAFED Proforma 8) ─────────────────────────────────────────
@@ -3283,7 +3284,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         kachiAaratEntriesRef.current = kachiAaratEntriesRef.current.filter(e => e.id !== newEntry.id);
         setKachiAaratEntriesState(prev => prev.filter(e => e.id !== newEntry.id));   // RULE 1: roll back
-        toastRef.current({ title: 'सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('सेव नहीं हुआ', 'Not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
     return newEntry;
@@ -3299,17 +3300,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setKachiAaratEntriesState(prev => prev.map(e => e.id === id ? before : e));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
 
   const deleteKachiAaratEntry = useCallback((id: string) => {
-    if (guardPermission('delete', 'कच्ची आढ़त एंट्री मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('कच्ची आढ़त एंट्री मिटाने', 'delete Kachi Aarat entries'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const removed = kachiAaratEntriesRef.current.find(e => e.id === id);
     setKachiAaratEntriesState(prev => prev.filter(e => e.id !== id));
-    supabase.from('kachi_aarat_entries').delete().eq('id', id).then(({ error }) => { if (error) failedCloudWrite('कच्ची आढ़त एंट्री हटाना', error, () => setKachiAaratEntriesState(prev => putBack(prev, removed))); });
+    supabase.from('kachi_aarat_entries').delete().eq('id', id).then(({ error }) => { if (error) failedCloudWrite(tr('कच्ची आढ़त एंट्री हटाना', 'Deleting the Kachi Aarat entry'), error, () => setKachiAaratEntriesState(prev => putBack(prev, removed))); });
   }, []);
 
   // ── P7 Entries (HAFED Proforma 7) — one row per FY ─────────────────────────
@@ -3325,7 +3326,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return [...filtered, entry];
     });
     p7EntriesRef.current = [...p7EntriesRef.current.filter(e => e.id !== id), entry];
-    supabase.from('p7_entries').upsert(withSoc(entry)).then(({ error }) => { if (error) failedCloudWrite('P7 एंट्री सेव करना', error, () => {
+    supabase.from('p7_entries').upsert(withSoc(entry)).then(({ error }) => { if (error) failedCloudWrite(tr('P7 एंट्री सेव करना', 'Saving the P7 entry'), error, () => {
       const restore = (list: P7Entry[]) => existing ? [...list.filter(e => e.id !== id), existing] : list.filter(e => e.id !== id);
       p7EntriesRef.current = restore(p7EntriesRef.current);
       setP7EntriesState(restore);
@@ -3334,11 +3335,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteP7Entry = useCallback((id: string) => {
-    if (guardPermission('delete', 'P7 एंट्री मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('P7 एंट्री मिटाने', 'delete P7 entries'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const removed = p7EntriesRef.current.find(e => e.id === id);
     setP7EntriesState(prev => prev.filter(e => e.id !== id));
-    supabase.from('p7_entries').delete().eq('id', id).then(({ error }) => { if (error) failedCloudWrite('P7 एंट्री हटाना', error, () => setP7EntriesState(prev => putBack(prev, removed))); });
+    supabase.from('p7_entries').delete().eq('id', id).then(({ error }) => { if (error) failedCloudWrite(tr('P7 एंट्री हटाना', 'Deleting the P7 entry'), error, () => setP7EntriesState(prev => putBack(prev, removed))); });
   }, []);
 
   // Member joining receipts (share capital / admission fee) — ONE rule for add, import and approve
@@ -3356,8 +3357,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (plan.mode === 'historical') {
       if (!opts.quiet) {
         toastRef.current({
-          title: 'पुराना सदस्य — नकद रसीद नहीं बनी',
-          description: `${m.name} वर्तमान वित्तीय वर्ष से पहले जुड़े हैं, इसलिए शेयर ₹${plan.historicalShare}${plan.historicalAdmission ? ` / प्रवेश शुल्क ₹${plan.historicalAdmission}` : ''} की रसीद नहीं बनाई गई। यह राशि opening balance (शेयर पूँजी 1102) में शामिल करें। (Joined before this FY — carry it in the opening balances.)`,
+          title: tr('पुराना सदस्य — नकद रसीद नहीं बनी', 'Old member — cash receipt not created'),
+          description: tr(`${m.name} वर्तमान वित्तीय वर्ष से पहले जुड़े हैं, इसलिए शेयर ₹${plan.historicalShare}${plan.historicalAdmission ? ` / प्रवेश शुल्क ₹${plan.historicalAdmission}` : ''} की रसीद नहीं बनाई गई। यह राशि opening balance (शेयर पूँजी 1102) में शामिल करें। (Joined before this FY — carry it in the opening balances.)`, `${m.name} joined before the current Financial Year, so no receipt was created for share ₹${plan.historicalShare}${plan.historicalAdmission ? ` / admission fee ₹${plan.historicalAdmission}` : ''}. Include this amount in the opening balance (Share Capital 1102). (Joined before this FY — carry it in the opening balances.)`),
           duration: 12000,
         });
       }
@@ -3369,7 +3370,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return 'locked';
     }
     if (plan.bankFallbackToCash && !opts.quiet) {
-      toastRef.current({ title: 'बैंक खाता नहीं मिला', description: `${m.name} का भुगतान cheque/online है, पर समिति में कोई बैंक खाता नहीं — रसीद नकद में दर्ज हुई। बैंक खाता जोड़कर voucher सुधारें।`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('बैंक खाता नहीं मिला', 'Bank account not found'), description: tr(`${m.name} का भुगतान cheque/online है, पर समिति में कोई बैंक खाता नहीं — रसीद नकद में दर्ज हुई। बैंक खाता जोड़कर voucher सुधारें।`, `${m.name}'s payment is by cheque/online, but the society has no bank account — the receipt was recorded as cash. Add a bank account and correct the voucher.`), variant: 'destructive', duration: 12000 });
     }
     // B3 (Phase 2): under the posting service a joining receipt is posted by the SERVER like every
     // other voucher (addVoucher → post_voucher: row + lines + entries + journal in one transaction).
@@ -3425,7 +3426,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!canReadMemberPii(userRef.current?.role)) {
       // This role may not store PAN/Aadhaar (RLS would refuse). Never claim it saved: revert and say so (RULE 1).
       revert();
-      toastRef.current({ title: 'PAN/Aadhaar सेव नहीं हुआ', description: 'यह भूमिका PAN/Aadhaar नहीं बदल सकती — सदस्य की बाकी जानकारी सेव हो गई है। Admin/Accountant से करवाएँ.', variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('PAN/Aadhaar सेव नहीं हुआ', 'PAN/Aadhaar not saved'), description: tr('यह भूमिका PAN/Aadhaar नहीं बदल सकती — सदस्य की बाकी जानकारी सेव हो गई है। Admin/Accountant से करवाएँ.', 'This role cannot change PAN/Aadhaar — the member\'s other details were saved. Ask an Admin/Accountant to do it.'), variant: 'destructive', duration: 10000 });
       return;
     }
     const sid = societyIdRef.current;
@@ -3437,7 +3438,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!error) return;
       console.error('member_identity sync error:', error.message); reportError('db-sync', error.message);
       revert();
-      toastRef.current({ title: 'PAN/Aadhaar सेव नहीं हुआ', description: `सदस्य सेव हो गया, पर PAN/Aadhaar नहीं (${error.message})। दोबारा कोशिश करें।`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('PAN/Aadhaar सेव नहीं हुआ', 'PAN/Aadhaar not saved'), description: tr(`सदस्य सेव हो गया, पर PAN/Aadhaar नहीं (${error.message})। दोबारा कोशिश करें।`, `Member saved, but not the PAN/Aadhaar (${error.message}). Please try again.`), variant: 'destructive', duration: 12000 });
     });
   };
 
@@ -3468,7 +3469,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           setMembersState(prev => prev.filter(m => m.id !== newMember.id));   // RULE 1: roll back local state
-          toastRef.current({ title: 'सदस्य सेव नहीं हुआ', description: memberWriteErrorText(error) ?? `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('सदस्य सेव नहीं हुआ', 'Member not saved'), description: memberWriteErrorText(error) ?? tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; add it again.`), variant: 'destructive', duration: 12000 });
           opts.onFailed?.();
           return;
         }
@@ -3533,7 +3534,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const applied = updateVoucher(active.id, { amount: newAmount, lines: newLines, narration: `${kind} updated for ${updatedMember.name}` });
         if (!applied) {
           // updateVoucher already said why (FY/period lock, role, reversed…). Make the split visible.
-          toastRef.current({ title: `${kind} वाउचर नहीं बदला`, description: `सदस्य की राशि ₹${newAmount} हो गई, पर ${active.voucherNo} पुरानी राशि पर है — ऊपर बताया कारण देखें और वाउचर अलग से ठीक करें।`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr(`${kind} वाउचर नहीं बदला`, `${kind} voucher not changed`), description: tr(`सदस्य की राशि ₹${newAmount} हो गई, पर ${active.voucherNo} पुरानी राशि पर है — ऊपर बताया कारण देखें और वाउचर अलग से ठीक करें।`, `The member's amount is now ₹${newAmount}, but ${active.voucherNo} is still at the old amount — see the reason shown above and fix the voucher separately.`), variant: 'destructive', duration: 12000 });
         }
       } else {
         const cancelled = vouchersRef.current.find(v => v.memberId === id && v.creditAccountId === creditAccountId && v.isDeleted);
@@ -3559,7 +3560,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           setMembersState(prev => prev.map(m => m.id === id ? oldMember : m));   // RULE 1: roll back to prior state
-          toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: memberWriteErrorText(error) ?? `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: memberWriteErrorText(error) ?? tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
           return;
         }
         // Step 2 (PII split): only when aadhaar/pan actually changed.
@@ -3599,10 +3600,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!current) return false;
     if (!canTransitionMember(current.status, newStatus)) {
       toastRef.current({
-        title: 'बदलाव मान्य नहीं / Invalid change',
+        title: tr('बदलाव मान्य नहीं / Invalid change', 'Invalid change'),
         description: current.status === 'deceased'
-          ? 'मृत सदस्य की स्थिति नहीं बदली जा सकती। (A deceased member cannot be reactivated.)'
-          : 'यह बदलाव मान्य नहीं (वही स्थिति पहले से है)।',
+          ? tr('मृत सदस्य की स्थिति नहीं बदली जा सकती। (A deceased member cannot be reactivated.)', 'A deceased member\'s status cannot be changed. (A deceased member cannot be reactivated.)')
+          : tr('यह बदलाव मान्य नहीं (वही स्थिति पहले से है)।', 'This change is not valid (the member already has this status).'),
         variant: 'destructive', duration: 8000,
       });
       return false;
@@ -3620,12 +3621,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // a change the cloud then refused was the false-success pattern (member-area stage A, M-3).
     supabase.from('members').update({ status: newStatus }).eq('id', id).select('id').then(({ data: changed, error: err }) => {
       // Final batch (M-15): 0 rows changed (RLS / missing row) is a failure too, not a silent success.
-      const error = err ?? (!changed?.length ? { message: 'रिकॉर्ड नहीं बदला — अनुमति नहीं या रिकॉर्ड नहीं मिला (0 rows)' } : null);
+      const error = err ?? (!changed?.length ? { message: tr('रिकॉर्ड नहीं बदला — अनुमति नहीं या रिकॉर्ड नहीं मिला (0 rows)', 'Record not changed — no permission or record not found (0 rows)') } : null);
       if (error) {
         console.error('DB sync error (member status):', error.message);
         membersRef.current = membersRef.current.map(m => m.id === id ? current : m);
         setMembersState(prev => prev.map(m => m.id === id ? current : m));
-        toastRef.current({ title: 'स्थिति सेव नहीं हुई', description: memberWriteErrorText(error) ?? `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('स्थिति सेव नहीं हुई', 'Status not saved'), description: memberWriteErrorText(error) ?? tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
         return;
       }
       // Metadata (late-added columns) — the base status above is already safe, so no rollback; but the
@@ -3633,22 +3634,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       supabase.from('members').update({ statusReason: reason, statusChangedAt: changedAt }).eq('id', id).then(({ error: e1 }) => {
         if (!e1) return;
         reportError('write-partial', e1.message, { at: 'member status metadata' });
-        toastRef.current({ title: 'स्थिति सेव हुई — पर तिथि/कारण नहीं', description: `समाप्ति की तिथि और कारण सेव नहीं हुए (${e1.message})। Migration चलाएँ, फिर स्थिति दोबारा दर्ज करें।`, duration: 10000 });
+        toastRef.current({ title: tr('स्थिति सेव हुई — पर तिथि/कारण नहीं', 'Status saved — but not the date/reason'), description: tr(`समाप्ति की तिथि और कारण सेव नहीं हुए (${e1.message})। Migration चलाएँ, फिर स्थिति दोबारा दर्ज करें।`, `The end date and reason were not saved (${e1.message}). Run the Migration, then record the status again.`), duration: 10000 });
       });
       // M4: the resolution (migration 117) in its OWN update — one missing column must not drop the reason/date above.
       supabase.from('members').update({ statusResolutionNo: resolutionNo ?? null, statusResolutionDate: resolutionDate ?? null }).eq('id', id).then(({ error: e2 }) => {
         if (!e2) return;
         reportError('write-partial', e2.message, { at: 'member status resolution' });
-        if (resolutionNo || resolutionDate) toastRef.current({ title: 'स्थिति सेव हुई — पर प्रस्ताव संख्या नहीं', description: `प्रस्ताव संख्या/तिथि सेव नहीं हुई (${e2.message})। Migration 117 चलाएँ।`, duration: 10000 });
+        if (resolutionNo || resolutionDate) toastRef.current({ title: tr('स्थिति सेव हुई — पर प्रस्ताव संख्या नहीं', 'Status saved — but not the resolution number'), description: tr(`प्रस्ताव संख्या/तिथि सेव नहीं हुई (${e2.message})। Migration 117 चलाएँ।`, `Resolution number/date not saved (${e2.message}). Run Migration 117.`), duration: 10000 });
       });
       // Stage C (migration 125): the facts behind the cessation (r.14(2) proof, r.19 count, r.18 facts) — own update.
       supabase.from('members').update({ statusDetails: details ?? null }).eq('id', id).then(({ error: e3 }) => {
         if (!e3) return;
         reportError('write-partial', e3.message, { at: 'member status details' });
-        if (details) toastRef.current({ title: 'स्थिति सेव हुई — पर विवरण नहीं', description: `अयोग्यता का प्रमाण / आम सभा की गिनती / त्यागपत्र का विवरण सेव नहीं हुआ (${e3.message})। Migration 125 चलाएँ, फिर स्थिति दोबारा दर्ज करें।`, duration: 10000 });
+        if (details) toastRef.current({ title: tr('स्थिति सेव हुई — पर विवरण नहीं', 'Status saved — but not the details'), description: tr(`अयोग्यता का प्रमाण / आम सभा की गिनती / त्यागपत्र का विवरण सेव नहीं हुआ (${e3.message})। Migration 125 चलाएँ, फिर स्थिति दोबारा दर्ज करें।`, `Proof of disqualification / general meeting count / resignation details not saved (${e3.message}). Run Migration 125, then record the status again.`), duration: 10000 });
       });
       emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { status: current.status, statusChangedAt: current.statusChangedAt ?? null }, after: { status: newStatus, statusChangedAt: changedAt, resolutionNo: resolutionNo ?? null, resolutionDate: resolutionDate ?? null, details: details ?? null }, reason });
-      toastRef.current({ title: '✅ सदस्य स्थिति अपडेट', description: `${current.name}: ${current.status} → ${newStatus}`, variant: 'default', duration: 6000 });
+      toastRef.current({ title: tr('✅ सदस्य स्थिति अपडेट', '✅ Member status updated'), description: `${current.name}: ${current.status} → ${newStatus}`, variant: 'default', duration: 6000 });
     });
     return true;
   }, []);
@@ -3656,41 +3657,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // M6 (Act s.40 proviso): the member's photograph in the PRIVATE 'member-photos' bucket. Upload first; only when the
   // file is stored does photoPath move (step-2 update) — a failed upload changes nothing (RULE 1).
   const uploadMemberPhoto = useCallback(async (id: string, file: File): Promise<boolean> => {
-    if (guardPermission('update', 'सदस्य की फ़ोटो बदलने')) return false;
+    if (guardPermission('update', tr('सदस्य की फ़ोटो बदलने', 'change a member\'s photo'))) return false;
     if (guardFYLocked()) return false;
     const member = membersRef.current.find(m => m.id === id);
     if (!member) return false;
     const bad = photoFileError(file);
-    if (bad) { toastRef.current({ title: 'फ़ोटो नहीं ली जा सकी', description: bad, variant: 'destructive' }); return false; }
+    if (bad) { toastRef.current({ title: tr('फ़ोटो नहीं ली जा सकी', 'Photo could not be taken'), description: bad, variant: 'destructive' }); return false; }
     let blob: Blob;
-    try { blob = await downscalePhoto(file); } catch { toastRef.current({ title: 'फ़ोटो नहीं पढ़ी जा सकी', description: 'दूसरी फ़ोटो (JPG/PNG) आज़माएँ। (Could not read the image.)', variant: 'destructive' }); return false; }
+    try { blob = await downscalePhoto(file); } catch { toastRef.current({ title: tr('फ़ोटो नहीं पढ़ी जा सकी', 'Photo could not be read'), description: tr('दूसरी फ़ोटो (JPG/PNG) आज़माएँ। (Could not read the image.)', 'Try another photo (JPG/PNG). (Could not read the image.)'), variant: 'destructive' }); return false; }
     const path = memberPhotoPath(societyIdRef.current, id);
     const { error: upErr } = await supabase.storage.from(MEMBER_PHOTO_BUCKET).upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '60' });
     if (upErr) {
       reportError('db-sync', upErr.message, { at: 'member photo upload' });
-      toastRef.current({ title: 'फ़ोटो सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुई — ${upErr.message}. (Migration 119 चलाया है?)`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('फ़ोटो सेव नहीं हुई', 'Photo not saved'), description: tr(`क्लाउड में सेव नहीं हुई — ${upErr.message}. (Migration 119 चलाया है?)`, `Not saved to the cloud — ${upErr.message}. (Have you run Migration 119?)`), variant: 'destructive', duration: 12000 });
       return false;
     }
     const { error } = await supabase.from('members').update({ photoPath: path }).eq('id', id);
     if (error) {
       reportError('write-partial', error.message, { at: 'member photoPath' });
-      toastRef.current({ title: 'फ़ोटो सेव हुई — पर सदस्य से नहीं जुड़ी', description: `${error.message}. Migration 119 चलाएँ।`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('फ़ोटो सेव हुई — पर सदस्य से नहीं जुड़ी', 'Photo saved — but not linked to the member'), description: tr(`${error.message}. Migration 119 चलाएँ।`, `${error.message}. Run Migration 119.`), variant: 'destructive', duration: 12000 });
       return false;
     }
     membersRef.current = membersRef.current.map(m => m.id === id ? { ...m, photoPath: path } : m);
     setMembersState(prev => prev.map(m => m.id === id ? { ...m, photoPath: path } : m));
     emitAudit({ entityType: 'member', entityId: id, action: 'update', before: { photoPath: member.photoPath ? '(set)' : null }, after: { photoPath: '(changed)' }, reason: 'Member photograph updated' });
-    toastRef.current({ title: '✅ फ़ोटो सेव हुई', description: `${member.name} (${member.memberId})` });
+    toastRef.current({ title: tr('✅ फ़ोटो सेव हुई', '✅ Photo saved'), description: `${member.name} (${member.memberId})` });
     return true;
   }, []);
 
   const removeMemberPhoto = useCallback(async (id: string): Promise<boolean> => {
-    if (guardPermission('update', 'सदस्य की फ़ोटो हटाने')) return false;
+    if (guardPermission('update', tr('सदस्य की फ़ोटो हटाने', 'remove a member\'s photo'))) return false;
     if (guardFYLocked()) return false;
     const member = membersRef.current.find(m => m.id === id);
     if (!member?.photoPath) return false;
     const { error } = await supabase.from('members').update({ photoPath: null }).eq('id', id);
-    if (error) { toastRef.current({ title: 'फ़ोटो नहीं हटी', description: error.message, variant: 'destructive' }); return false; }
+    if (error) { toastRef.current({ title: tr('फ़ोटो नहीं हटी', 'Photo not removed'), description: error.message, variant: 'destructive' }); return false; }
     await supabase.storage.from(MEMBER_PHOTO_BUCKET).remove([member.photoPath]);   // best effort: the link is already gone
     membersRef.current = membersRef.current.map(m => m.id === id ? { ...m, photoPath: undefined } : m);
     setMembersState(prev => prev.map(m => m.id === id ? { ...m, photoPath: undefined } : m));
@@ -3706,7 +3707,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteMember = useCallback((id: string, domain?: MemberDomainLinkSources) => {
-    if (guardPermission('delete', 'सदस्य मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('सदस्य मिटाने', 'delete members'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     // Member-audit M1 (D3): a member with live vouchers, loans, deposit accounts or KCC loans is never deleted —
     // the dialog used to offer "Proceed anyway" and this then cancelled ALL their vouchers (share capital, loans).
@@ -3719,8 +3720,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }).filter(l => l.blocking);
     if (live.length) {
       toastRef.current({
-        title: 'सदस्य नहीं हटाया जा सकता',
-        description: `इस सदस्य के ${live.map(l => l.labelHi).join(', ')} हैं। सदस्य को हटाने के बजाय "इस्तीफ़ा / निष्कासित / मृत" स्थिति दें। (Member has live records — change the status instead.)`,
+        title: tr('सदस्य नहीं हटाया जा सकता', 'Member cannot be deleted'),
+        description: tr(`इस सदस्य के ${live.map(l => l.labelHi).join(', ')} हैं। सदस्य को हटाने के बजाय "इस्तीफ़ा / निष्कासित / मृत" स्थिति दें। (Member has live records — change the status instead.)`, `This member has ${live.map(l => l.labelHi).join(', ')}. Instead of deleting the member, set the status to "Resigned / Expelled / Deceased". (Member has live records — change the status instead.)`),
         variant: 'destructive', duration: 12000,
       });
       return;
@@ -3736,13 +3737,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Final batch (M-15): an UPDATE that RLS filters out returns no error and changes 0 rows — ask for the row back,
     // so "deleted" is said only when the cloud really has it (else the member came back on F5).
     supabase.from('members').update({ isDeleted: true }).eq('id', id).select('id').then(({ data: changed, error: err }) => {
-      const error = err ?? (!changed?.length ? { message: 'रिकॉर्ड नहीं बदला — अनुमति नहीं या रिकॉर्ड नहीं मिला (0 rows)' } : null);
-      if (error) { failedCloudWrite('सदस्य हटाना', error, () => setMembersState(prev => putBack(prev, removed))); return; }
+      const error = err ?? (!changed?.length ? { message: tr('रिकॉर्ड नहीं बदला — अनुमति नहीं या रिकॉर्ड नहीं मिला (0 rows)', 'Record not changed — no permission or record not found (0 rows)') } : null);
+      if (error) { failedCloudWrite(tr('सदस्य हटाना', 'Deleting the member'), error, () => setMembersState(prev => putBack(prev, removed))); return; }
       // RULE 3: soft-cancel the member's auto-generated vouchers (share capital /
       // admission fee) so no ghost Share Capital lingers in the Trial Balance.
       cancelLinkedVouchers(vouchersRef.current.filter(v => v.memberId === id).map(v => v.id), 'Member deleted', user?.name || 'System');
       emitAudit({ entityType: 'member', entityId: id, action: 'delete', before: removed ? { memberId: removed.memberId, name: removed.name } : undefined, reason: 'Member deleted' });
-      toastRef.current({ title: 'सदस्य हटाया गया', description: removed ? `${removed.name} (${removed.memberId})` : undefined });
+      toastRef.current({ title: tr('सदस्य हटाया गया', 'Member deleted'), description: removed ? `${removed.name} (${removed.memberId})` : undefined });
     });
   }, []);
 
@@ -3756,7 +3757,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const member = membersRef.current.find(m => m.id === memberId);
     if (!member) return;
     const refund = toRupees(toMinor(Math.max(0, Math.min(amount, member.shareCapital || 0))));
-    if (!(refund > 0)) { toastRef.current({ title: 'राशि सही नहीं है', description: 'वापसी राशि 0 से अधिक और सदस्य की वर्तमान अंश पूँजी से कम या बराबर हो। (Refund must be > 0 and ≤ current share capital.)', variant: 'destructive' }); return; }
+    if (!(refund > 0)) { toastRef.current({ title: tr('राशि सही नहीं है', 'Amount is not valid'), description: tr('वापसी राशि 0 से अधिक और सदस्य की वर्तमान अंश पूँजी से कम या बराबर हो। (Refund must be > 0 and ≤ current share capital.)', 'The refund amount must be more than 0 and not more than the member\'s current share capital. (Refund must be > 0 and ≤ current share capital.)'), variant: 'destructive' }); return; }
     const creditAcc = mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     if (voucherBirthBlocked(date)) return;
     const voucher = addVoucher({
@@ -3777,10 +3778,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
         // …and the voucher with it — a refund voucher without the reduced scalar is register ≠ ledger.
         cancelLinkedVouchers([voucher.id], 'Share refund not saved (cloud save failed)', userRef.current?.name ?? 'System');
-        toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('शेयर वापसी सेव नहीं हुई', 'Share refund not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, `Not saved to the cloud — ${error.message}. The voucher was cancelled.`), variant: 'destructive', duration: 12000 });
       } else {
         emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital || 0, shareCount: before.shareCount ?? null }, after: { shareCapital: updated.shareCapital, shareCount: updated.shareCount ?? null, voucherNo: voucher.voucherNo || voucher.id }, reason: `Share capital refunded ₹${refund}` });
-        toastRef.current({ title: '✅ शेयर पूँजी वापस', description: `₹${refund.toLocaleString('en-IN')} · ${member.name}` });
+        toastRef.current({ title: tr('✅ शेयर पूँजी वापस', '✅ Share capital refunded'), description: `₹${refund.toLocaleString('en-IN')} · ${member.name}` });
       }
     });
   }, [accounts, addVoucher, user]);
@@ -3798,7 +3799,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!payableId) { toastRef.current({ ...MISSING_HEAD_TOAST.shareRefund, variant: 'destructive', duration: 12000 }); return false; }
     const built = buildShareRefundApproval({ amount, shareCapital: member.shareCapital || 0, shareCapAccountId: ACCOUNT_IDS.SHARE_CAP, payableAccountId: payableId, resolution });
     if (built.ok === false) {
-      if (built.error !== 'no_payable_head') toastRef.current({ title: 'शेयर वापसी स्वीकृत नहीं हुई', description: SHARE_REFUND_MESSAGE[built.error], variant: 'destructive', duration: 10000 });
+      if (built.error !== 'no_payable_head') toastRef.current({ title: tr('शेयर वापसी स्वीकृत नहीं हुई', 'Share refund not approved'), description: SHARE_REFUND_MESSAGE[built.error], variant: 'destructive', duration: 10000 });
       return false;
     }
     const v = addVoucher({
@@ -3819,11 +3820,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // The cascade path, not cancelVoucher: the rollback must not depend on this user's delete right
         // nor be refused by the share-debit guard there.
         cancelLinkedVouchers([v.id], 'Share refund approval not saved (cloud save failed)', userRef.current?.name ?? 'System');
-        toastRef.current({ title: 'शेयर वापसी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('शेयर वापसी सेव नहीं हुई', 'Share refund not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, `Not saved to the cloud — ${error.message}. The voucher was cancelled.`), variant: 'destructive', duration: 12000 });
       }
     });
     emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital }, after: { shareCapital: updated.shareCapital }, reason: `share:refund-approved — ${resolution.trim()}` });
-    toastRef.current({ title: '✅ शेयर वापसी स्वीकृत', description: `${member.name} · ₹${built.amount.toLocaleString('en-IN')} देय दर्ज` });
+    toastRef.current({ title: tr('✅ शेयर वापसी स्वीकृत', '✅ Share refund approved'), description: tr(`${member.name} · ₹${built.amount.toLocaleString('en-IN')} देय दर्ज`, `${member.name} · ₹${built.amount.toLocaleString('en-IN')} recorded as payable`) });
     return true;
   }, [accounts, addVoucher]);
 
@@ -3837,7 +3838,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const cashBank = mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     const built = buildShareRefundPayment({ amount, outstanding: shareRefundOutstanding(vouchersRef.current, memberId), payableAccountId: payableId, cashBankAccountId: cashBank });
     if (built.ok === false) {
-      if (built.error !== 'no_payable_head') toastRef.current({ title: 'शेयर वापसी का भुगतान नहीं हुआ', description: SHARE_REFUND_MESSAGE[built.error], variant: 'destructive', duration: 10000 });
+      if (built.error !== 'no_payable_head') toastRef.current({ title: tr('शेयर वापसी का भुगतान नहीं हुआ', 'Share refund payment not made'), description: SHARE_REFUND_MESSAGE[built.error], variant: 'destructive', duration: 10000 });
       return false;
     }
     const v = addVoucher({
@@ -3846,7 +3847,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       refType: SHARE_REFUND_PAY_REF, refId: memberId, createdBy: userRef.current?.name ?? 'System', memberId,
     });
     if (!v?.id) return false;
-    toastRef.current({ title: '✅ शेयर वापसी का भुगतान', description: `${member.name} · ₹${built.amount.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr('✅ शेयर वापसी का भुगतान', '✅ Share refund paid'), description: `${member.name} · ₹${built.amount.toLocaleString('en-IN')}` });
     return true;
   }, [accounts, addVoucher]);
 
@@ -3861,7 +3862,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!member) return false;
     const amt = toRupees(toMinor(amount));
     const v = validateShareOp(type, amt, member.shareCapital || 0);
-    if (!v.ok) { toastRef.current({ title: 'अमान्य शेयर संचालन', description: v.error, variant: 'destructive', duration: 9000 }); return false; }
+    if (!v.ok) { toastRef.current({ title: tr('अमान्य शेयर संचालन', 'Invalid share operation'), description: v.error, variant: 'destructive', duration: 9000 }); return false; }
     const date = opts?.date || new Date().toISOString().split('T')[0];
     if (guardPeriodLock(date)) return false;
     const payout = opts?.mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
@@ -3885,11 +3886,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
         cancelLinkedVouchers([voucher.id], `Share ${type} not saved (cloud save failed)`, userRef.current?.name ?? 'System');
-        toastRef.current({ title: 'शेयर संचालन सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('शेयर संचालन सेव नहीं हुआ', 'Share operation not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, `Not saved to the cloud — ${error.message}. The voucher was cancelled.`), variant: 'destructive', duration: 12000 });
       }
     });
     emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital }, after: { shareCapital: updated.shareCapital }, reason: `share:${type}${opts?.reason ? ' — ' + opts.reason : ''}` });
-    toastRef.current({ title: '✅ शेयर संचालन दर्ज', description: `${LABELS[type]} ${member.name} · ₹${amt.toLocaleString('en-IN')}`, variant: 'default' });
+    toastRef.current({ title: tr('✅ शेयर संचालन दर्ज', '✅ Share operation recorded'), description: `${LABELS[type]} ${member.name} · ₹${amt.toLocaleString('en-IN')}`, variant: 'default' });
     return true;
   }, [accounts, addVoucher]);
 
@@ -3902,9 +3903,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const member = membersRef.current.find(m => m.id === memberId);
     if (!member) return;
     const buy = toRupees(toMinor(Math.max(0, amount)));
-    if (!(buy > 0)) { toastRef.current({ title: 'राशि सही नहीं है', description: 'राशि 0 से अधिक होनी चाहिए। (Amount must be > 0.)', variant: 'destructive' }); return; }
+    if (!(buy > 0)) { toastRef.current({ title: tr('राशि सही नहीं है', 'Amount is not valid'), description: tr('राशि 0 से अधिक होनी चाहिए। (Amount must be > 0.)', 'The amount must be more than 0. (Amount must be > 0.)'), variant: 'destructive' }); return; }
     // M3: shares are issued only to a live, approved member (never to a resigned / expelled / deceased one).
-    if (!canHoldShares(member)) { toastRef.current({ title: 'शेयर नहीं दिए जा सकते', description: `${member.name} सक्रिय/स्वीकृत सदस्य नहीं हैं (स्थिति: ${member.status}) — शेयर नहीं जोड़े जा सकते।`, variant: 'destructive', duration: 10000 }); return; }
+    if (!canHoldShares(member)) { toastRef.current({ title: tr('शेयर नहीं दिए जा सकते', 'Shares cannot be issued'), description: tr(`${member.name} सक्रिय/स्वीकृत सदस्य नहीं हैं (स्थिति: ${member.status}) — शेयर नहीं जोड़े जा सकते।`, `${member.name} is not an active/approved member (status: ${member.status}) — shares cannot be added.`), variant: 'destructive', duration: 10000 }); return; }
     const debitAcc = mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     if (voucherBirthBlocked(date)) return;
     const voucher = addVoucher({
@@ -3924,10 +3925,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
         cancelLinkedVouchers([voucher.id], 'Share purchase not saved (cloud save failed)', userRef.current?.name ?? 'System');
-        toastRef.current({ title: 'अतिरिक्त शेयर सेव नहीं हुए', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अतिरिक्त शेयर सेव नहीं हुए', 'Additional shares not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, `Not saved to the cloud — ${error.message}. The voucher was cancelled.`), variant: 'destructive', duration: 12000 });
       } else {
         emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital || 0, shareCount: before.shareCount ?? null }, after: { shareCapital: updated.shareCapital, shareCount: updated.shareCount ?? null, voucherNo: voucher.voucherNo || voucher.id }, reason: `Additional share capital ₹${buy}` });
-        toastRef.current({ title: '✅ अतिरिक्त शेयर पूँजी', description: `₹${buy.toLocaleString('en-IN')} · ${member.name}` });
+        toastRef.current({ title: tr('✅ अतिरिक्त शेयर पूँजी', '✅ Additional share capital'), description: `₹${buy.toLocaleString('en-IN')} · ${member.name}` });
       }
     });
   }, [accounts, addVoucher, user]);
@@ -3939,24 +3940,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // transferee gets Dr 9999 / Cr 1102. GL 1102 + 9999 both net to zero.
   const transferShareCapital = useCallback((fromMemberId: string, toMemberId: string, amount: number, date: string, premium = 0, opts?: { mode?: 'cash' | 'bank'; reserveAccountId?: string }) => {
     if (guardFYLocked()) return;
-    if (fromMemberId === toMemberId) { toastRef.current({ title: 'हस्तांतरण सही नहीं है', description: 'पाने वाला सदस्य अलग चुनें। (Choose a different recipient.)', variant: 'destructive' }); return; }
+    if (fromMemberId === toMemberId) { toastRef.current({ title: tr('हस्तांतरण सही नहीं है', 'Transfer is not valid'), description: tr('पाने वाला सदस्य अलग चुनें। (Choose a different recipient.)', 'Choose a different recipient member.'), variant: 'destructive' }); return; }
     const from = membersRef.current.find(m => m.id === fromMemberId);
     const to = membersRef.current.find(m => m.id === toMemberId);
     if (!from || !to) return;
     // M3: the recipient must be a live, approved member.
-    if (!canHoldShares(to)) { toastRef.current({ title: 'हस्तांतरण नहीं हो सकता', description: `${to.name} सक्रिय/स्वीकृत सदस्य नहीं हैं (स्थिति: ${to.status}) — उन्हें शेयर हस्तांतरित नहीं हो सकते।`, variant: 'destructive', duration: 10000 }); return; }
+    if (!canHoldShares(to)) { toastRef.current({ title: tr('हस्तांतरण नहीं हो सकता', 'Transfer not possible'), description: tr(`${to.name} सक्रिय/स्वीकृत सदस्य नहीं हैं (स्थिति: ${to.status}) — उन्हें शेयर हस्तांतरित नहीं हो सकते।`, `${to.name} is not an active/approved member (status: ${to.status}) — shares cannot be transferred to them.`), variant: 'destructive', duration: 10000 }); return; }
     const amt = toRupees(toMinor(Math.max(0, Math.min(amount, from.shareCapital || 0))));
-    if (!(amt > 0)) { toastRef.current({ title: 'राशि सही नहीं है', description: 'राशि 0 से अधिक और देने वाले सदस्य की अंश पूँजी से कम या बराबर हो। (Amount must be > 0 and ≤ the sender\'s share capital.)', variant: 'destructive' }); return; }
+    if (!(amt > 0)) { toastRef.current({ title: tr('राशि सही नहीं है', 'Amount is not valid'), description: tr('राशि 0 से अधिक और देने वाले सदस्य की अंश पूँजी से कम या बराबर हो। (Amount must be > 0 and ≤ the sender\'s share capital.)', 'The amount must be more than 0 and not more than the sender\'s share capital. (Amount must be > 0 and ≤ the sender\'s share capital.)'), variant: 'destructive' }); return; }
     // ECR-16 (MS-11): enforce the share-transfer premium cap (% of face value) BEFORE posting.
     const prem = toRupees(toMinor(Math.max(0, premium || 0)));
     const capPct = societyRef.current?.maxSharePremiumPercent ?? 0;
     if (!isSharePremiumAllowed(prem, amt, capPct)) {
       const cap = sharePremiumCap(amt, capPct);
       toastRef.current({
-        title: 'प्रीमियम सीमा से अधिक / Premium over cap',
+        title: tr('प्रीमियम सीमा से अधिक / Premium over cap', 'Premium over cap'),
         description: capPct > 0
-          ? `प्रीमियम ₹${prem.toLocaleString('en-IN')} अधिकतम ₹${cap.toLocaleString('en-IN')} (${capPct}% of ₹${amt.toLocaleString('en-IN')}) से ज़्यादा है।`
-          : 'इस समिति में शेयर-ट्रांसफर प्रीमियम की अनुमति नहीं है (cap 0%)। पहले "Max transfer premium %" सेट करें।',
+          ? tr(`प्रीमियम ₹${prem.toLocaleString('en-IN')} अधिकतम ₹${cap.toLocaleString('en-IN')} (${capPct}% of ₹${amt.toLocaleString('en-IN')}) से ज़्यादा है।`, `Premium ₹${prem.toLocaleString('en-IN')} is more than the maximum ₹${cap.toLocaleString('en-IN')} (${capPct}% of ₹${amt.toLocaleString('en-IN')}).`)
+          : tr('इस समिति में शेयर-ट्रांसफर प्रीमियम की अनुमति नहीं है (cap 0%)। पहले "Max transfer premium %" सेट करें।', 'Share-transfer premium is not allowed in this society (cap 0%). First set "Max transfer premium %".'),
         variant: 'destructive', duration: 10000,
       });
       return;
@@ -3985,7 +3986,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const unwind = (ids: string[], why: string) => cancelLinkedVouchers(ids, why, userRef.current?.name ?? 'System');
     if (!inHalf?.id) {
       unwind([outHalf.id], 'Share transfer incomplete (second half not posted)');
-      toastRef.current({ title: 'शेयर स्थानांतरण नहीं हुआ', description: `दूसरा वाउचर नहीं बना, इसलिए पहला वाउचर (${outHalf.voucherNo || outHalf.id}) अपने-आप रद्द कर दिया गया। सदस्यों की शेयर राशि नहीं बदली — दोबारा करें।`, variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: tr('शेयर स्थानांतरण नहीं हुआ', 'Share transfer failed'), description: tr(`दूसरा वाउचर नहीं बना, इसलिए पहला वाउचर (${outHalf.voucherNo || outHalf.id}) अपने-आप रद्द कर दिया गया। सदस्यों की शेयर राशि नहीं बदली — दोबारा करें।`, `The second voucher was not created, so the first voucher (${outHalf.voucherNo || outHalf.id}) was cancelled automatically. Members' share amounts did not change — please try again.`), variant: 'destructive', duration: 15000 });
       return;
     }
     // ECR-16 (MS-11): premium paid to the society → Dr Cash/Bank / Cr Reserve (capped above).
@@ -3999,7 +4000,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
       if (!premV?.id) {
         unwind([outHalf.id, inHalf.id], 'Share transfer premium not posted');
-        toastRef.current({ title: 'शेयर स्थानांतरण नहीं हुआ', description: 'प्रीमियम का वाउचर नहीं बना, इसलिए दोनों ट्रांसफर वाउचर रद्द कर दिए गए। सदस्यों की शेयर राशि नहीं बदली — दोबारा करें।', variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: tr('शेयर स्थानांतरण नहीं हुआ', 'Share transfer failed'), description: tr('प्रीमियम का वाउचर नहीं बना, इसलिए दोनों ट्रांसफर वाउचर रद्द कर दिए गए। सदस्यों की शेयर राशि नहीं बदली — दोबारा करें।', 'The premium voucher was not created, so both transfer vouchers were cancelled. Members\' share amounts did not change — please try again.'), variant: 'destructive', duration: 15000 });
         return;
       }
       premiumId = premV.id;
@@ -4018,7 +4019,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const rollback = () => {
       applyBoth(beforeFrom, beforeTo);
       unwind(transferVoucherIds, 'Share transfer not saved (cloud save failed)');
-      toastRef.current({ title: 'शेयर स्थानांतरण सेव नहीं हुआ', description: 'क्लाउड में सेव नहीं हुआ — स्थानांतरण और उसके वाउचर वापस ले लिए गए। दोबारा करें।', variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('शेयर स्थानांतरण सेव नहीं हुआ', 'Share transfer not saved'), description: tr('क्लाउड में सेव नहीं हुआ — स्थानांतरण और उसके वाउचर वापस ले लिए गए। दोबारा करें।', 'Not saved to the cloud — the transfer and its vouchers were undone. Please try again.'), variant: 'destructive', duration: 12000 });
     };
     supabase.from('members').upsert(memberRow(updFrom)).then(({ error }) => {
       if (error) { reportCascade('Share transfer (from) sync', error); rollback(); return; }
@@ -4029,7 +4030,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           supabase.from('members').upsert(memberRow(beforeFrom)).then(({ error: e3 }) => {
             if (e3) {
               reportCascade('Share transfer (from) restore', e3);
-              toastRef.current({ title: 'ध्यान दें: देने वाले सदस्य की राशि', description: `${beforeFrom.name} की शेयर राशि cloud में ₹${updFrom.shareCapital} रह गई हो सकती है (होनी चाहिए ₹${beforeFrom.shareCapital || 0})। Refresh करके Share Register में जाँचें।`, variant: 'destructive', duration: 15000 });
+              toastRef.current({ title: tr('ध्यान दें: देने वाले सदस्य की राशि', 'Note: the sender\'s amount'), description: tr(`${beforeFrom.name} की शेयर राशि cloud में ₹${updFrom.shareCapital} रह गई हो सकती है (होनी चाहिए ₹${beforeFrom.shareCapital || 0})। Refresh करके Share Register में जाँचें।`, `${beforeFrom.name}'s share amount in the cloud may still be ₹${updFrom.shareCapital} (it should be ₹${beforeFrom.shareCapital || 0}). Refresh and check in the Share Register.`), variant: 'destructive', duration: 15000 });
             }
           });
           rollback();
@@ -4037,7 +4038,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         else {
           emitAudit({ entityType: 'member', entityId: fromMemberId, action: 'update', before: { shareCapital: beforeFrom.shareCapital || 0 }, after: { shareCapital: updFrom.shareCapital, transferredTo: to.memberId, transferId }, reason: `Shares transferred ₹${amt} to ${to.name}` });
           emitAudit({ entityType: 'member', entityId: toMemberId, action: 'update', before: { shareCapital: beforeTo.shareCapital || 0 }, after: { shareCapital: updTo.shareCapital, transferredFrom: from.memberId, transferId }, reason: `Shares received ₹${amt} from ${from.name}` });
-          toastRef.current({ title: '✅ शेयर स्थानांतरित', description: `₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}${prem > 0 ? ` (+ प्रीमियम ₹${prem.toLocaleString('en-IN')})` : ''}` });
+          toastRef.current({ title: tr('✅ शेयर स्थानांतरित', '✅ Shares transferred'), description: tr(`₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}${prem > 0 ? ` (+ प्रीमियम ₹${prem.toLocaleString('en-IN')})` : ''}`, `₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}${prem > 0 ? ` (+ premium ₹${prem.toLocaleString('en-IN')})` : ''}`) });
         }
       });
     });
@@ -4081,7 +4082,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         setDepositTransactionsState(prev => prev.filter(t => t.id !== txn.id));
         reportError('deposit-txn-save', error.message, { depositAccountId: acct.id, voucherId: voucher.id });
-        toastRef.current({ title: 'पासबुक entry सेव नहीं हुई', description: `वाउचर ${voucher.voucherNo} बन गया, पर पासबुक की पंक्ति cloud पर नहीं गई — ${error.message}. Admin को बताएँ।`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: tr('पासबुक entry सेव नहीं हुई', 'Passbook entry not saved'), description: tr(`वाउचर ${voucher.voucherNo} बन गया, पर पासबुक की पंक्ति cloud पर नहीं गई — ${error.message}. Admin को बताएँ।`, `Voucher ${voucher.voucherNo} was created, but the passbook line did not reach the cloud — ${error.message}. Tell your admin.`), variant: 'destructive', duration: 15000 });
       }
     });
     return balanceAfter;
@@ -4089,7 +4090,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addDepositAccount = useCallback((data: Omit<DepositAccount, 'id' | 'accountNo' | 'balance' | 'status' | 'createdAt'> & { openingAmount?: number; mode?: 'cash' | 'bank' }): DepositAccount | null => {
     if (guardFYLocked()) return null;
-    if (refuseNonLiveMember(data.memberId, 'जमा खाता')) return null;
+    if (refuseNonLiveMember(data.memberId, tr('जमा खाता', 'Deposit account'))) return null;
     const { openingAmount = 0, mode = 'cash', ...rest } = data;
     // Refuse BEFORE creating anything when the chart has no liability head for this product — otherwise the account
     // would be created empty and every later deposit would fail, with a "जमा खाता खुला" toast on top of the error.
@@ -4105,7 +4106,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Deposit account sync', error);
         depositAccountsRef.current = depositAccountsRef.current.filter(d => d.id !== a.id);
         setDepositAccountsState(prev => prev.filter(d => d.id !== a.id));   // RULE 1: roll back
-        toastRef.current({ title: 'जमा खाता सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('जमा खाता सेव नहीं हुआ', 'Deposit account not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
     // Opening deposit (if any) posts a voucher + first transaction, then re-persist with the balance.
@@ -4118,13 +4119,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setDepositAccountsState(prev => prev.map(d => d.id === acct.id ? withBal : d));
         persist(withBal);
         emitAudit({ entityType: 'deposit', entityId: acct.id, action: 'create', after: { accountNo: acct.accountNo, type: acct.depositType, opening } });
-        toastRef.current({ title: '✅ जमा खाता खुला', description: `${acct.accountNo} · ₹${opening.toLocaleString('en-IN')}` });
+        toastRef.current({ title: tr('✅ जमा खाता खुला', '✅ Deposit account opened'), description: `${acct.accountNo} · ₹${opening.toLocaleString('en-IN')}` });
         return withBal;
       }
     }
     persist(acct);
     emitAudit({ entityType: 'deposit', entityId: acct.id, action: 'create', after: { accountNo: acct.accountNo, type: acct.depositType } });
-    toastRef.current({ title: '✅ जमा खाता खुला', description: acct.accountNo });
+    toastRef.current({ title: tr('✅ जमा खाता खुला', '✅ Deposit account opened'), description: acct.accountNo });
     return acct;
   }, [accounts, addVoucher]);
 
@@ -4132,10 +4133,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return false;
     const acct = depositAccountsRef.current.find(d => d.id === accountId);
     if (!acct) return false;
-    if (acct.status !== 'active') { toastRef.current({ title: 'खाता सक्रिय नहीं', description: 'Only active deposit accounts can transact.', variant: 'destructive' }); return false; }
+    if (acct.status !== 'active') { toastRef.current({ title: tr('खाता सक्रिय नहीं', 'Account not active'), description: 'Only active deposit accounts can transact.', variant: 'destructive' }); return false; }
     const amt = toRupees(toMinor(amount));
     const v = validateDepositTxn(txnType, amt, acct.balance);
-    if (!v.ok) { toastRef.current({ title: 'अमान्य लेनदेन', description: v.error, variant: 'destructive', duration: 9000 }); return false; }
+    if (!v.ok) { toastRef.current({ title: tr('अमान्य लेनदेन', 'Invalid transaction'), description: v.error, variant: 'destructive', duration: 9000 }); return false; }
     const before = acct;
     const newBal = postDepositLeg(acct, txnType, amt, mode, date);
     if (newBal === null) return false; // voucher blocked
@@ -4147,11 +4148,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Deposit txn balance sync', error);
         depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
         setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
-        toastRef.current({ title: 'लेनदेन सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('लेनदेन सेव नहीं हुआ', 'Transaction not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
     emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { balance: before.balance }, after: { balance: newBal, txn: txnType, amount: amt } });
-    toastRef.current({ title: txnType === 'deposit' ? '✅ जमा' : '✅ निकासी', description: `${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · शेष ₹${newBal.toLocaleString('en-IN')}` });
+    toastRef.current({ title: txnType === 'deposit' ? tr('✅ जमा', '✅ Deposit') : tr('✅ निकासी', '✅ Withdrawal'), description: tr(`${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · शेष ₹${newBal.toLocaleString('en-IN')}`, `${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · balance ₹${newBal.toLocaleString('en-IN')}`) });
     return true;
   }, [accounts, addVoucher]);
 
@@ -4162,9 +4163,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return false;
     const acct = depositAccountsRef.current.find(d => d.id === accountId);
     if (!acct) return false;
-    if (acct.status !== 'active') { toastRef.current({ title: 'खाता सक्रिय नहीं', description: 'Only active deposit accounts can accrue interest.', variant: 'destructive' }); return false; }
+    if (acct.status !== 'active') { toastRef.current({ title: tr('खाता सक्रिय नहीं', 'Account not active'), description: 'Only active deposit accounts can accrue interest.', variant: 'destructive' }); return false; }
     const amt = toRupees(toMinor(amount));
-    if (!(amt > 0)) { toastRef.current({ title: 'अमान्य राशि', description: 'Interest must be greater than 0.', variant: 'destructive' }); return false; }
+    if (!(amt > 0)) { toastRef.current({ title: tr('अमान्य राशि', 'Invalid amount'), description: 'Interest must be greater than 0.', variant: 'destructive' }); return false; }
     const liability = resolveDepositLiabilityAccount(acct.depositType, accounts);
     if (!liability) { toastRef.current({ ...missingDepositHeadToast(acct.depositType), variant: 'destructive', duration: 12000 }); return false; }
     const member = membersRef.current.find(m => m.id === acct.memberId);
@@ -4184,7 +4185,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Deposit interest balance sync', error);
         depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
         setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
-        toastRef.current({ title: 'ब्याज सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('ब्याज सेव नहीं हुआ', 'Interest not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
     const txn: DepositTransaction = {
@@ -4196,11 +4197,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // G4 / RULE 1 (see postDepositLeg)
         setDepositTransactionsState(prev => prev.filter(t => t.id !== txn.id));
         reportError('deposit-txn-save', error.message, { depositAccountId: accountId, voucherId: voucher.id });
-        toastRef.current({ title: 'ब्याज की पासबुक entry सेव नहीं हुई', description: `वाउचर ${voucher.voucherNo} बन गया, पर पासबुक की पंक्ति cloud पर नहीं गई — ${error.message}. Admin को बताएँ।`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: tr('ब्याज की पासबुक entry सेव नहीं हुई', 'Interest passbook entry not saved'), description: tr(`वाउचर ${voucher.voucherNo} बन गया, पर पासबुक की पंक्ति cloud पर नहीं गई — ${error.message}. Admin को बताएँ।`, `Voucher ${voucher.voucherNo} was created, but the passbook line did not reach the cloud — ${error.message}. Tell your admin.`), variant: 'destructive', duration: 15000 });
       }
     });
     emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { balance: before.balance }, after: { balance: newBal, interest: amt } });
-    toastRef.current({ title: '✅ ब्याज जमा', description: `${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · शेष ₹${newBal.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr('✅ ब्याज जमा', '✅ Interest credited'), description: tr(`${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · शेष ₹${newBal.toLocaleString('en-IN')}`, `${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · balance ₹${newBal.toLocaleString('en-IN')}`) });
     return true;
   }, [addVoucher]);
 
@@ -4210,7 +4211,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return false;
     const acct = depositAccountsRef.current.find(d => d.id === accountId);
     if (!acct) return false;
-    if (acct.status !== 'active') { toastRef.current({ title: 'खाता पहले से बंद', description: 'Account is not active.', variant: 'destructive' }); return false; }
+    if (acct.status !== 'active') { toastRef.current({ title: tr('खाता पहले से बंद', 'Account already closed'), description: 'Account is not active.', variant: 'destructive' }); return false; }
     const before = acct;
     let newBal = acct.balance;
     if (acct.balance > 0) {
@@ -4227,11 +4228,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Deposit close sync', error);
         depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
         setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
-        toastRef.current({ title: 'बंद करना सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('बंद करना सेव नहीं हुआ', 'Closing not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
     emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { status: before.status, balance: before.balance }, after: { status: newStatus, balance: newBal } });
-    toastRef.current({ title: newStatus === 'matured' ? '✅ जमा परिपक्व' : '✅ जमा खाता बंद', description: `${acct.accountNo}${acct.balance > 0 ? ` · भुगतान ₹${acct.balance.toLocaleString('en-IN')}` : ''}` });
+    toastRef.current({ title: newStatus === 'matured' ? tr('✅ जमा परिपक्व', '✅ Deposit matured') : tr('✅ जमा खाता बंद', '✅ Deposit account closed'), description: tr(`${acct.accountNo}${acct.balance > 0 ? ` · भुगतान ₹${acct.balance.toLocaleString('en-IN')}` : ''}`, `${acct.accountNo}${acct.balance > 0 ? ` · payment ₹${acct.balance.toLocaleString('en-IN')}` : ''}`) });
     return true;
   }, [accounts, addVoucher]);
 
@@ -4252,7 +4253,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Compliance filing sync:', error.message);
         complianceFilingsRef.current = complianceFilingsRef.current.filter(f => f.id !== filing.id);
         setComplianceFilingsState(prev => prev.filter(f => f.id !== filing.id));   // RULE 1: roll back
-        toastRef.current({ title: 'सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 10000 });
+        toastRef.current({ title: tr('सेव नहीं हुआ', 'Not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 10000 });
       }
     });
     emitAudit({ entityType: 'compliance', entityId: itemId, action: 'update', after: { filed: true } });
@@ -4273,7 +4274,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       reportError('write-partial', msg, { at: 'Compliance filing delete:' });
       complianceFilingsRef.current = [...complianceFilingsRef.current.filter(f => f.id !== filing.id), filing];
       setComplianceFilingsState(prev => [...prev.filter(f => f.id !== filing.id), filing]);
-      toastRef.current({ title: 'हटाया नहीं गया', description: `"फाइल हुआ" निशान क्लाउड से नहीं हटा — ${error ? error.message : 'आपकी भूमिका में हटाने की अनुमति नहीं है'}। (Could not undo "filed".)`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('हटाया नहीं गया', 'Not removed'), description: tr(`"फाइल हुआ" निशान क्लाउड से नहीं हटा — ${error ? error.message : 'आपकी भूमिका में हटाने की अनुमति नहीं है'}। (Could not undo "filed".)`, `The "filed" mark was not removed from the cloud — ${error ? error.message : 'your role is not allowed to remove it'}. (Could not undo "filed".)`), variant: 'destructive', duration: 10000 });
     });
     emitAudit({ entityType: 'compliance', entityId: itemId, action: 'update', after: { filed: false } });
   }, [guardFYLocked]);
@@ -4289,7 +4290,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Work order save error:', error.message);
         setWorkOrdersState(prev => { const r = prev.filter(w => w.id !== wo.id); storage.setWorkOrders(r); return r; });
-        toastRef.current({ title: 'कार्य आदेश सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('कार्य आदेश सेव नहीं हुआ', 'Work order not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return wo;
@@ -4305,13 +4306,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Work order update error:', error.message);
         setWorkOrdersState(prev => { const u = prev.map(w => w.id === id ? old : w); storage.setWorkOrders(u); return u; });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [workOrders]);
 
   const deleteWorkOrder = useCallback((id: string) => {
-    if (guardPermission('delete', 'वर्क ऑर्डर मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('वर्क ऑर्डर मिटाने', 'delete work orders'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const old = workOrders.find(w => w.id === id);
     setWorkOrdersState(prev => { const u = prev.filter(w => w.id !== id); storage.setWorkOrders(u); return u; });
@@ -4319,7 +4320,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Work order delete error:', error.message);
         if (old) setWorkOrdersState(prev => { const u = [...prev, old]; storage.setWorkOrders(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [workOrders]);
@@ -4362,7 +4363,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Muster entry save error:', error.message);
         setMusterEntriesState(prev => { const r = prev.filter(x => x.id !== m.id); storage.setMusterEntries(r); return r; });
         if (av.id) cancelVoucher(av.id, 'Muster entry rolled back (save failed)', user?.name || 'System');
-        toastRef.current({ title: 'हाज़िरी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('हाज़िरी सेव नहीं हुई', 'Attendance not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return m;
@@ -4372,7 +4373,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const old = musterEntries.find(x => x.id === id);
     if (!old) return;
-    if (old.paid || (old.paidAmount || 0) > 0) { toastRef.current({ title: 'भुगतान हो चुका', description: 'जिस entry की कुछ/पूरी मज़दूरी चुक चुकी है, उसे संपादित नहीं किया जा सकता। पहले भुगतान voucher रद्द करें।', variant: 'destructive', duration: 9000 }); return; }
+    if (old.paid || (old.paidAmount || 0) > 0) { toastRef.current({ title: tr('भुगतान हो चुका', 'Already paid'), description: tr('जिस entry की कुछ/पूरी मज़दूरी चुक चुकी है, उसे संपादित नहीं किया जा सकता। पहले भुगतान voucher रद्द करें।', 'An entry whose wages have been partly or fully paid cannot be edited. Cancel the payment voucher first.'), variant: 'destructive', duration: 9000 }); return; }
     const updated: MusterEntry = { ...old, ...data };
     const oldWage = (old.daysWorked || 0) * (old.dailyWage || 0);
     const newWage = (updated.daysWorked || 0) * (updated.dailyWage || 0);
@@ -4390,7 +4391,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Muster entry update error:', error.message);
         setMusterEntriesState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setMusterEntries(u); return u; });
         if (newAv.id) cancelVoucher(newAv.id, 'Muster edit rolled back (save failed)', user?.name || 'System');
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       } else if (wageChanged && old.accrualVoucherId) {
         cancelVoucher(old.accrualVoucherId, 'Wage accrual superseded (muster edited)', user?.name || 'System');
       }
@@ -4398,16 +4399,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [musterEntries, postWageAccrual, cancelVoucher, user]);
 
   const deleteMusterEntry = useCallback((id: string) => {
-    if (guardPermission('delete', 'मस्टर एंट्री मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('मस्टर एंट्री मिटाने', 'delete muster entries'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const old = musterEntries.find(x => x.id === id);
-    if (old?.paid || (old?.paidAmount || 0) > 0) { toastRef.current({ title: 'भुगतान हो चुका', description: 'जिस entry की कुछ/पूरी मज़दूरी चुक चुकी है, उसे हटाया नहीं जा सकता। पहले भुगतान voucher रद्द करें।', variant: 'destructive', duration: 9000 }); return; }
+    if (old?.paid || (old?.paidAmount || 0) > 0) { toastRef.current({ title: tr('भुगतान हो चुका', 'Already paid'), description: tr('जिस entry की कुछ/पूरी मज़दूरी चुक चुकी है, उसे हटाया नहीं जा सकता। पहले भुगतान voucher रद्द करें।', 'An entry whose wages have been partly or fully paid cannot be deleted. Cancel the payment voucher first.'), variant: 'destructive', duration: 9000 }); return; }
     setMusterEntriesState(prev => { const u = prev.filter(x => x.id !== id); storage.setMusterEntries(u); return u; });
     supabase.from('muster_entries').delete().eq('id', id).then(({ error }) => {
       if (error) {
         console.error('Muster entry delete error:', error.message);
         if (old) setMusterEntriesState(prev => { const u = [...prev, old]; storage.setMusterEntries(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       } else if (old?.accrualVoucherId) {
         cancelVoucher(old.accrualVoucherId, 'Wage accrual reversed (muster deleted)', user?.name || 'System');
       }
@@ -4429,9 +4430,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const allocs = (data.allocations || [])
       .map(a => ({ entry: musterEntries.find(m => m.id === a.entryId && !m.isDeleted && !m.paid), amount: toRupees(toMinor(+a.amount)) }))
       .filter((a): a is { entry: MusterEntry; amount: number } => !!a.entry && a.amount > 0);
-    if (allocs.length === 0) { toastRef.current({ title: 'कोई श्रमिक/राशि चुनी नहीं', description: 'कम-से-कम एक श्रमिक की भुगतान-राशि चुनें।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (allocs.length === 0) { toastRef.current({ title: tr('कोई श्रमिक/राशि चुनी नहीं', 'No worker/amount selected'), description: tr('कम-से-कम एक श्रमिक की भुगतान-राशि चुनें।', 'Choose a payment amount for at least one worker.'), variant: 'destructive', duration: 8000 }); return sentinel; }
     const over = allocs.find(a => a.amount > outstandingOf(a.entry) + 0.005);
-    if (over) { toastRef.current({ title: 'राशि बकाया से अधिक', description: `एक श्रमिक की भुगतान-राशि उसकी बकाया मज़दूरी ₹${outstandingOf(over.entry)} से अधिक नहीं हो सकती।`, variant: 'destructive', duration: 9000 }); return sentinel; }
+    if (over) { toastRef.current({ title: tr('राशि बकाया से अधिक', 'Amount more than outstanding'), description: tr(`एक श्रमिक की भुगतान-राशि उसकी बकाया मज़दूरी ₹${outstandingOf(over.entry)} से अधिक नहीं हो सकती।`, `A worker's payment cannot be more than their outstanding wages of ₹${outstandingOf(over.entry)}.`), variant: 'destructive', duration: 9000 }); return sentinel; }
     const total = toRupees(sumMinor(allocs.map(a => toMinor(a.amount))));
     const accruedPortion = toRupees(sumMinor(allocs.filter(a => a.entry.accrued).map(a => toMinor(a.amount))));
     const directPortion = toRupees(subMinor(toMinor(total), toMinor(accruedPortion)));
@@ -4468,10 +4469,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Wage payment muster-mark error:', error.message);
         setMusterEntriesState(prev => { const u = prev.map(m => snapshot.get(m.id) ?? m); storage.setMusterEntries(u); return u; });
         cancelVoucher(voucher.id, 'Wage payment rolled back (muster mark failed)', user?.name || 'System');
-        toastRef.current({ title: 'मज़दूरी भुगतान सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. भुगतान वापस ले लिया गया; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('मज़दूरी भुगतान सेव नहीं हुआ', 'Wage payment not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. भुगतान वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The payment was undone; please try again.`), variant: 'destructive', duration: 12000 });
       }
     });
-    toastRef.current({ title: 'मज़दूरी भुगतान दर्ज हुआ', description: `${wo?.workOrderNo || ''} · ${data.period} · ${allocs.length} श्रमिक · ₹${total}`, duration: 6000 });
+    toastRef.current({ title: tr('मज़दूरी भुगतान दर्ज हुआ', 'Wage payment recorded'), description: tr(`${wo?.workOrderNo || ''} · ${data.period} · ${allocs.length} श्रमिक · ₹${total}`, `${wo?.workOrderNo || ''} · ${data.period} · ${allocs.length} workers · ₹${total}`), duration: 6000 });
     return voucher;
   }, [musterEntries, workOrders, accounts, addVoucher, cancelVoucher, user]);
 
@@ -4493,7 +4494,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1: revert the approval so state matches Supabase; NO auto-vouchers on a failed approve
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setMembersState(prev => prev.map(m => m.id === id ? member : m));
-        toastRef.current({ title: 'Approve सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर सदस्य फिर से pending दिखेगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('Approve सेव नहीं हुआ', 'Approve not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर सदस्य फिर से pending दिखेगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the member will show as pending again.`), variant: 'destructive', duration: 12000 });
         return;
       }
       // Member approval is durable — ONLY now create the auto-vouchers (never before, so a
@@ -4503,7 +4504,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       persistMemberAdmission(id, approved);
       postJoiningReceipts(approved, { fallbackBranch: branchToStamp(activeBranchIdRef.current, headOfficeIdRef.current) });
       emitAudit({ entityType: 'member', entityId: id, action: 'approve', before: { approvalStatus: member.approvalStatus ?? 'pending', joinDate: member.joinDate }, after: { approvalStatus: 'approved', admissionDate, resolutionNo: approved.admissionResolutionNo ?? null, resolutionDate: approved.admissionResolutionDate ?? null, eligibilityConfirmed: decision?.eligibility ?? null } });
-      toastRef.current({ title: 'सदस्य स्वीकृत', description: `${member.name} (${member.memberId}) अब सत्यापित सदस्य है` });
+      toastRef.current({ title: tr('सदस्य स्वीकृत', 'Member approved'), description: tr(`${member.name} (${member.memberId}) अब सत्यापित सदस्य है`, `${member.name} (${member.memberId}) is now a verified member`) });
     });
   }, [postJoiningReceipts]);
 
@@ -4513,7 +4514,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!member) return;
     const why = (reason || '').trim();
     if (why.length < 5) {   // M2: r.17 — the refusal goes to the applicant with its reasons
-      toastRef.current({ title: 'कारण ज़रूरी है', description: 'अस्वीकृति का कारण लिखें (नियम 17)। (A reason is required.)', variant: 'destructive' });
+      toastRef.current({ title: tr('कारण ज़रूरी है', 'Reason required'), description: tr('अस्वीकृति का कारण लिखें (नियम 17)। (A reason is required.)', 'Write the reason for rejection (Rule 17). (A reason is required.)'), variant: 'destructive' });
       return;
     }
     const rejected: Member = { ...member, approvalStatus: 'rejected' as const, rejectionReason: why, decidedAt: new Date().toISOString().split('T')[0], applicationDate: applicationReceivedOn(member) };
@@ -4522,12 +4523,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {   // RULE 1: revert so state matches Supabase
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setMembersState(prev => prev.map(m => m.id === id ? member : m));
-        toastRef.current({ title: 'Reject सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर सदस्य फिर से pending दिखेगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('Reject सेव नहीं हुआ', 'Reject not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर सदस्य फिर से pending दिखेगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the member will show as pending again.`), variant: 'destructive', duration: 12000 });
         return;
       }
       persistMemberAdmission(id, rejected);
       emitAudit({ entityType: 'member', entityId: id, action: 'reject', before: { approvalStatus: member.approvalStatus ?? 'pending' }, after: { approvalStatus: 'rejected' }, reason: why });
-      toastRef.current({ title: 'आवेदन अस्वीकृत', description: `${member.name} (${member.memberId})` });
+      toastRef.current({ title: tr('आवेदन अस्वीकृत', 'Application rejected'), description: `${member.name} (${member.memberId})` });
     });
   }, []);
 
@@ -4558,7 +4559,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.rpc('sync_account_opening_event', { p_account_id: accountId, p_target_minor: targetMinor ?? null }).then(({ data, error }) => {
       if (error) {
         reportError('account-opening-post-service', error.message, { accountId });
-        toastRef.current({ title: '⚠ खाता सेव हुआ, पर opening बही (journal) में नहीं गई', description: `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)} — opening दोबारा सेव करें; न हो तो admin को बताएँ।`, variant: 'destructive', duration: 15000 });
+        toastRef.current({ title: tr('⚠ खाता सेव हुआ, पर opening बही (journal) में नहीं गई', '⚠ Account saved, but the opening was not posted to the ledger (journal)'), description: tr(`${postVoucherMessage(postVoucherErrorCode(error.message), error.message)} — opening दोबारा सेव करें; न हो तो admin को बताएँ।`, `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)} — save the opening again; if it still fails, tell your admin.`), variant: 'destructive', duration: 15000 });
         return;
       }
       const evs = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
@@ -4572,7 +4573,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addAccount = useCallback((data: Omit<LedgerAccount, 'id'>, opts?: { id?: string; onSaved?: (a: LedgerAccount) => void; onFailed?: () => void }): LedgerAccount => {
     if (guardFYLocked()) { opts?.onFailed?.(); return { ...data, id: '' } as LedgerAccount; }
     if (opts?.id && accountsRef.current.some(a => a.id === opts.id)) {
-      toastRef.current({ title: 'खाता पहले से है', description: `खाता संख्या ${opts.id} इस चार्ट में पहले से मौजूद है — नया नहीं बनाया।`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('खाता पहले से है', 'Account already exists'), description: tr(`खाता संख्या ${opts.id} इस चार्ट में पहले से मौजूद है — नया नहीं बनाया।`, `Account number ${opts.id} already exists in this chart — a new one was not created.`), variant: 'destructive', duration: 10000 });
       opts?.onFailed?.();
       return { ...data, id: '' } as LedgerAccount;
     }
@@ -4606,7 +4607,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           reportError('db-sync', codeErr.message);
           accountsRef.current = accountsRef.current.map(a => a.id === newAccount.id ? { ...a, code: undefined } : a);
           setAccountsState(prev => prev.map(a => a.id === newAccount.id ? { ...a, code: undefined } : a));
-          toastRef.current({ title: 'खाता सेव हुआ — पर कोड नहीं', description: `लेजर कोड सेव नहीं हुआ (${codeErr.message})। Migration 109 चलाएँ, फिर लेजर हेड पेज पर "कोड दें" dabayein.`, duration: 10000 });
+          toastRef.current({ title: tr('खाता सेव हुआ — पर कोड नहीं', 'Account saved — but not its code'), description: tr(`लेजर कोड सेव नहीं हुआ (${codeErr.message})। Migration 109 चलाएँ, फिर लेजर हेड पेज पर "कोड दें" dabayein.`, `Ledger code was not saved (${codeErr.message}). Run Migration 109, then press "Give code" on the Ledger Heads page.`), duration: 10000 });
         });
       }
       if (error) {   // RULE 1: roll back so a failed cloud save can't silently diverge on F5
@@ -4614,7 +4615,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         accountsRef.current = accountsRef.current.filter(a => a.id !== newAccount.id);
         setAccountsState(prev => prev.filter(a => a.id !== newAccount.id));
         if (openingEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== openingEvent.eventId);
-        toastRef.current({ title: 'खाता सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('खाता सेव नहीं हुआ', 'Account not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; please add it again.`), variant: 'destructive', duration: 12000 });
         opts?.onFailed?.();
         return;
       }
@@ -4642,10 +4643,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const hasEntries = vouchersRef.current.some(v => !v.isDeleted && getVoucherLines(v).some(l => l.accountId === id));
       if (hasOpening || hasEntries) {
         toastRef.current({
-          title: 'ग्रुप नहीं बन सकता / Cannot make this a group',
+          title: tr('ग्रुप नहीं बन सकता / Cannot make this a group', 'Cannot make this a group'),
           description: hasEntries
-            ? 'इस खाते में वाउचर एंट्री हैं — ग्रुप बनाने पर इसका बैलेंस रिपोर्ट से गायब हो जाएगा। नया ग्रुप अलग से बनाएँ और यह खाता उसके नीचे रखें। / This account has voucher entries; create a separate group and place this ledger under it.'
-            : 'इस खाते का Opening Balance है — पहले उसे शून्य करें या नया ग्रुप अलग से बनाएँ। / This account has an opening balance; clear it first or create a separate group.',
+            ? tr('इस खाते में वाउचर एंट्री हैं — ग्रुप बनाने पर इसका बैलेंस रिपोर्ट से गायब हो जाएगा। नया ग्रुप अलग से बनाएँ और यह खाता उसके नीचे रखें। / This account has voucher entries; create a separate group and place this ledger under it.', 'This account has voucher entries — making it a group would make its balance disappear from reports. Create a separate new group and place this ledger under it.')
+            : tr('इस खाते का Opening Balance है — पहले उसे शून्य करें या नया ग्रुप अलग से बनाएँ। / This account has an opening balance; clear it first or create a separate group.', 'This account has an Opening Balance — clear it to zero first, or create a separate new group.'),
           variant: 'destructive', duration: 12000,
         });
         return false;
@@ -4657,8 +4658,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const childCount = accountsRef.current.filter(a => a.parentId === id).length;
       if (childCount > 0) {
         toastRef.current({
-          title: 'लेजर नहीं बन सकता / Cannot make this a ledger',
-          description: `इस ग्रुप के नीचे ${childCount} खाते हैं — पहले उन्हें दूसरे ग्रुप में ले जाएँ। / This group has ${childCount} account(s) under it — move them to another group first.`,
+          title: tr('लेजर नहीं बन सकता / Cannot make this a ledger', 'Cannot make this a ledger'),
+          description: tr(`इस ग्रुप के नीचे ${childCount} खाते हैं — पहले उन्हें दूसरे ग्रुप में ले जाएँ। / This group has ${childCount} account(s) under it — move them to another group first.`, `This group has ${childCount} account(s) under it — first move these ${childCount} to another group.`),
           variant: 'destructive', duration: 12000,
         });
         return false;
@@ -4685,7 +4686,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.error('DB sync error:', error.message); reportError('db-sync', error.message);
             setAccountsState(p => p.map(a => a.id === id ? before : a));   // RULE 1: roll back to prior state
             if (openingEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== openingEvent.eventId);
-            toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+            toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh the old data will come back.`), variant: 'destructive', duration: 12000 });
             opts?.onFailed?.(error.message);
             return;
           }
@@ -4712,7 +4713,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // and reported. Codes are metadata, but RULE 6 still applies (no chart changes in a locked FY).
   const assignMissingAccountCodes = useCallback(async (): Promise<{ assigned: number; failed: number; refused?: boolean }> => {
     // A guard bail already toasted — `refused` lets the page stay silent instead of guessing why.
-    if (guardPermission('config', 'खातों को कोड देने')) return { assigned: 0, failed: 0, refused: true };
+    if (guardPermission('config', tr('खातों को कोड देने', 'assign codes to accounts'))) return { assigned: 0, failed: 0, refused: true };
     if (guardFYLocked()) return { assigned: 0, failed: 0, refused: true };
     if (refuseIfWriteBlocked(toastRef.current)) return { assigned: 0, failed: 0, refused: true };
     const plan = planMissingCodes(accountsRef.current);
@@ -4728,7 +4729,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const failedIds = new Set(failed.map(f => f.id));
       setAccountsState(prev => prev.map(a => failedIds.has(a.id) ? { ...a, code: undefined } : a));   // RULE 1: revert
       reportError('db-sync', failed[0].msg || 'account code update matched 0 rows', { failed: failed.length });
-      toastRef.current({ title: 'कुछ खातों का कोड सेव नहीं हुआ', description: `${failed.length} खाते — क्लाउड में सेव नहीं हुआ (${failed[0].msg || 'अनुमति नहीं'}). Migration 109 चला है? Refresh करने पर ये कोड नहीं रहेंगे; दोबारा कोशिश करें।`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('कुछ खातों का कोड सेव नहीं हुआ', 'Code not saved for some accounts'), description: tr(`${failed.length} खाते — क्लाउड में सेव नहीं हुआ (${failed[0].msg || 'अनुमति नहीं'}). Migration 109 चला है? Refresh करने पर ये कोड नहीं रहेंगे; दोबारा कोशिश करें।`, `${failed.length} account(s) — not saved to the cloud (${failed[0].msg || 'not permitted'}). Has Migration 109 been run? These codes will be lost on Refresh; please try again.`), variant: 'destructive', duration: 12000 });
     }
     const assigned = results.length - failed.length;
     if (assigned) emitAudit({ entityType: 'account', entityId: 'bulk', action: 'update', reason: `Assigned readable codes to ${assigned} account(s)` });
@@ -4750,24 +4751,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAccountsState(prev => prev.some(a => a.id === account.id) ? prev : [...prev, account]);
         opts.onFail?.();
         reportError(opts.context, error?.message || 'account delete removed 0 rows', { accountId: account.id, code: error?.code });
-        toastRef.current({ title: opts.failTitle || 'खाता नहीं मिटा', description: why, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: opts.failTitle || tr('खाता नहीं मिटा', 'Account not deleted'), description: why, variant: 'destructive', duration: 12000 });
       });
   }, []);
 
   const deleteAccount = useCallback((id: string): boolean => {
-    if (guardPermission('delete', 'खाता मिटाने')) return false;   // ECR-06: role gate
+    if (guardPermission('delete', tr('खाता मिटाने', 'delete accounts'))) return false;   // ECR-06: role gate
     if (guardFYLocked()) return false;
 
     // H11: Block deletion of built-in system accounts (CASH, BANK, 5101, 3403, etc.)
     const account = accounts.find(a => a.id === id);
-    if (!account) { toastRef.current({ title: 'खाता नहीं मिला', description: 'Refresh करके दोबारा देखें। (Account not found.)', variant: 'destructive' }); return false; }
+    if (!account) { toastRef.current({ title: tr('खाता नहीं मिला', 'Account not found'), description: tr('Refresh करके दोबारा देखें। (Account not found.)', 'Refresh and check again. (Account not found.)'), variant: 'destructive' }); return false; }
     if (account.isSystem) {
-      toastRef.current({ title: 'सिस्टम खाता नहीं हटेगा', description: `"${account.name}" सॉफ़्टवेयर का अपना खाता है — बिक्री/खरीद/अंतिम स्टॉक की पोस्टिंग इसी में होती है। (Built-in system account — cannot be deleted.)`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('सिस्टम खाता नहीं हटेगा', 'System account cannot be deleted'), description: tr(`"${account.name}" सॉफ़्टवेयर का अपना खाता है — बिक्री/खरीद/अंतिम स्टॉक की पोस्टिंग इसी में होती है। (Built-in system account — cannot be deleted.)`, `"${account.name}" is the software's own built-in account — sales/purchase/closing stock postings go into it. It cannot be deleted.`), variant: 'destructive', duration: 10000 });
       return false;
     }
 
     // Tally-style: an account with a non-zero balance (incl. opening-only) can never be deleted.
-    if (guardAccountBalance(id, `खाता "${account.name}"`)) return false;
+    if (guardAccountBalance(id, tr(`खाता "${account.name}"`, `Account "${account.name}"`))) return false;
 
     // H10: Block if account is referenced by active vouchers or by a supplier/customer sub-ledger
     const activeV = vouchersRef.current.filter(v => !v.isDeleted);
@@ -4776,17 +4777,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       (v.lines && v.lines.some(l => l.accountId === id))
     );
     if (usedInLines) {
-      toastRef.current({ title: 'खाता नहीं हटाया जा सकता', description: `"${account.name}" चालू वाउचरों में इस्तेमाल हुआ है — पहले वे वाउचर रद्द करें। (Used in active vouchers.)`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('खाता नहीं हटाया जा सकता', 'Account cannot be deleted'), description: tr(`"${account.name}" चालू वाउचरों में इस्तेमाल हुआ है — पहले वे वाउचर रद्द करें। (Used in active vouchers.)`, `"${account.name}" is used in active vouchers — cancel those vouchers first.`), variant: 'destructive', duration: 10000 });
       return false;
     }
     const supLinked = suppliersRef.current.find(s => s.accountId === id);
     if (supLinked) {
-      toastRef.current({ title: 'खाता नहीं हटाया जा सकता', description: `"${account.name}" आपूर्तिकर्ता "${supLinked.name}" का खाता है — आपूर्तिकर्ता पेज से आपूर्तिकर्ता हटाएँ। (Delete the supplier instead.)`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('खाता नहीं हटाया जा सकता', 'Account cannot be deleted'), description: tr(`"${account.name}" आपूर्तिकर्ता "${supLinked.name}" का खाता है — आपूर्तिकर्ता पेज से आपूर्तिकर्ता हटाएँ। (Delete the supplier instead.)`, `"${account.name}" is the account of supplier "${supLinked.name}" — delete the supplier from the Suppliers page instead.`), variant: 'destructive', duration: 10000 });
       return false;
     }
     const cusLinked = customersRef.current.find(c => c.accountId === id);
     if (cusLinked) {
-      toastRef.current({ title: 'खाता नहीं हटाया जा सकता', description: `"${account.name}" ग्राहक "${cusLinked.name}" का खाता है — ग्राहक पेज से ग्राहक हटाएँ। (Delete the customer instead.)`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('खाता नहीं हटाया जा सकता', 'Account cannot be deleted'), description: tr(`"${account.name}" ग्राहक "${cusLinked.name}" का खाता है — ग्राहक पेज से ग्राहक हटाएँ। (Delete the customer instead.)`, `"${account.name}" is the account of customer "${cusLinked.name}" — delete the customer from the Customers page instead.`), variant: 'destructive', duration: 10000 });
       return false;
     }
 
@@ -4823,34 +4824,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   //      moved, so a failed delete is not rolled back — the row is restored locally and the user is
   //      told to delete it by hand.
   const mergeAccounts = useCallback(async (keepId: string, removeId: string): Promise<AccountMergeResult | null> => {
-    if (guardPermission('delete', 'खाते merge करने')) return null;   // ECR-06: a merge deletes an account
+    if (guardPermission('delete', tr('खाते merge करने', 'merge accounts'))) return null;   // ECR-06: a merge deletes an account
     if (guardFYLocked()) return null;                                 // RULE 6
     const block = (description: string): null => {
-      toastRef.current({ title: 'मर्ज नहीं हो सकता', description, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('मर्ज नहीं हो सकता', 'Cannot merge'), description, variant: 'destructive', duration: 12000 });
       return null;
     };
-    if (!keepId || !removeId || keepId === removeId) return block('एक ही खाते को खुद में merge नहीं किया जा सकता — दो अलग खाते चुनें।');
+    if (!keepId || !removeId || keepId === removeId) return block(tr('एक ही खाते को खुद में merge नहीं किया जा सकता — दो अलग खाते चुनें।', 'An account cannot be merged into itself — choose two different accounts.'));
     const keep = accounts.find(a => a.id === keepId);
     const remove = accounts.find(a => a.id === removeId);
-    if (!keep || !remove) return block('खाता नहीं मिला — पेज refresh करके दोबारा कोशिश करें।');
-    if (remove.isSystem) return block(`"${remove.name}" सिस्टम खाता है — इसे हटाया नहीं जा सकता। इसे रखें और दूसरे खाते को इसमें merge करें।`);
-    if (keep.isGroup || remove.isGroup) return block('Group खाते merge नहीं होते — सिर्फ़ ledger खाते।');
-    if (keep.type !== remove.type) return block(`दोनों खातों का प्रकार अलग है (${keep.type} / ${remove.type}) — अलग प्रकार के खाते merge नहीं होते।`);
+    if (!keep || !remove) return block(tr('खाता नहीं मिला — पेज refresh करके दोबारा कोशिश करें।', 'Account not found — refresh the page and try again.'));
+    if (remove.isSystem) return block(tr(`"${remove.name}" सिस्टम खाता है — इसे हटाया नहीं जा सकता। इसे रखें और दूसरे खाते को इसमें merge करें।`, `"${remove.name}" is a system account — it cannot be removed. Keep it and merge the other account into it.`));
+    if (keep.isGroup || remove.isGroup) return block(tr('Group खाते merge नहीं होते — सिर्फ़ ledger खाते।', 'Group accounts cannot be merged — only ledger accounts.'));
+    if (keep.type !== remove.type) return block(tr(`दोनों खातों का प्रकार अलग है (${keep.type} / ${remove.type}) — अलग प्रकार के खाते merge नहीं होते।`, `The two accounts are of different types (${keep.type} / ${remove.type}) — accounts of different types cannot be merged.`));
     // The removed account's opening is NOT transferred automatically (Dr/Cr netting is a judgement
     // call). The user moves it by editing the openings first; then this guard passes.
     if (Math.abs(remove.openingBalance || 0) >= 0.005) {
       const ob = Math.abs(remove.openingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      return block(`"${remove.name}" पर ₹${ob} का opening balance है। पहले इसे "${keep.name}" के opening में जोड़कर इस खाते का opening 0 करें, फिर merge करें।`);
+      return block(tr(`"${remove.name}" पर ₹${ob} का opening balance है। पहले इसे "${keep.name}" के opening में जोड़कर इस खाते का opening 0 करें, फिर merge करें।`, `"${remove.name}" has an opening balance of ₹${ob}. First add it to the opening of "${keep.name}" and set this account's opening to 0, then merge.`));
     }
     // Config that routes FUTURE postings to removeId would point at a deleted account after the merge.
     const stockRefs = stockItems.filter(s => s.salesAccountId === removeId || s.purchaseAccountId === removeId);
     if (stockRefs.length > 0) {
       const names = stockRefs.slice(0, 3).map(s => s.name).join(', ') + (stockRefs.length > 3 ? ` +${stockRefs.length - 3}` : '');
-      return block(`यह खाता ${stockRefs.length} stock item का बिक्री/खरीद खाता है (${names}) — पहले Inventory में इन items का खाता "${keep.name}" करें, फिर merge करें।`);
+      return block(tr(`यह खाता ${stockRefs.length} stock item का बिक्री/खरीद खाता है (${names}) — पहले Inventory में इन items का खाता "${keep.name}" करें, फिर merge करें।`, `This account is the sales/purchase account of ${stockRefs.length} stock item(s) (${names}) — first change these items' account to "${keep.name}" in Inventory, then merge.`));
     }
     const partyOf = (id: string) => suppliersRef.current.find(s => s.accountId === id)?.name ?? customersRef.current.find(c => c.accountId === id)?.name;
     const removeParty = partyOf(removeId), keepParty = partyOf(keepId);
-    if (removeParty && keepParty) return block(`दोनों खाते अलग-अलग party के हैं ("${removeParty}" और "${keepParty}") — दो parties का ledger एक नहीं किया जा सकता।`);
+    if (removeParty && keepParty) return block(tr(`दोनों खाते अलग-अलग party के हैं ("${removeParty}" और "${keepParty}") — दो parties का ledger एक नहीं किया जा सकता।`, `The two accounts belong to different parties ("${removeParty}" and "${keepParty}") — the ledgers of two parties cannot be combined.`));
     // P0.1b: engine vouchers are immutable — never re-point their accounts; abort the WHOLE merge.
     const engineRefKind = (v: Voucher): 'Debit' | 'Credit' | 'Line' | null =>
       v.debitAccountId === removeId ? 'Debit'
@@ -4858,7 +4859,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           : (v.lines?.some(l => l.accountId === removeId) ? 'Line' : null);
     const blocker = vouchersRef.current.find(v => isEngineVoucher(v) && engineRefKind(v) !== null);
     if (blocker) {
-      return block(`इस खाते से जुड़ा सिस्टम वाउचर ${blocker.voucherNo || blocker.id} (${engineRefKind(blocker)}) है — सिस्टम वाउचर (engine-generated) के खाते बदले नहीं जा सकते। पहले reversal करें, फिर merge करें।`);
+      return block(tr(`इस खाते से जुड़ा सिस्टम वाउचर ${blocker.voucherNo || blocker.id} (${engineRefKind(blocker)}) है — सिस्टम वाउचर (engine-generated) के खाते बदले नहीं जा सकते। पहले reversal करें, फिर merge करें।`, `System voucher ${blocker.voucherNo || blocker.id} (${engineRefKind(blocker)}) is linked to this account — the accounts of a system (engine-generated) voucher cannot be changed. Reverse it first, then merge.`));
     }
     const liveMoving = vouchersRef.current.filter(v => !v.isDeleted && repointVoucher(v, keepId, removeId));
     if (guardPeriodLock(...liveMoving.map(v => v.date))) return null;   // ECR-07: no re-point inside a locked period
@@ -4887,13 +4888,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const evs = mapLedgerEventRows(r.events ?? []);
       if (evs.length) ledgerEventsRef.current = [...ledgerEventsRef.current, ...evs];
       if (r.accountDeleted) setAccountsState(prev => prev.filter(a => a.id !== removeId));
-      else toastRef.current({ title: 'Merge हो गया, पर पुराना खाता नहीं मिटा', description: `"${remove.name}" अभी किसी और जगह (जैसे account role) से जुड़ा है — उसे हटाकर यह खाता हाथ से delete करें।`, variant: 'destructive', duration: 12000 });
+      else toastRef.current({ title: tr('Merge हो गया, पर पुराना खाता नहीं मिटा', 'Merge done, but the old account was not deleted'), description: tr(`"${remove.name}" अभी किसी और जगह (जैसे account role) से जुड़ा है — उसे हटाकर यह खाता हाथ से delete करें।`, `"${remove.name}" is still linked somewhere else (for example an account role) — remove that link, then delete this account manually.`), variant: 'destructive', duration: 12000 });
       return { moved: r.moved ?? 0, journaled: r.journaled ?? 0, accountDeleted: !!r.accountDeleted };
     }
     // Sequences come from the in-memory journal — without the FULL log they would collide on the WORM
     // index and the postings would silently stay on removeId. Fail closed.
     if (!journalLoadedRef.current && liveMoving.some(v => v.approvalStatus !== 'pending')) {
-      return block('लेखा-बही (journal) अभी पूरी load नहीं हुई — पेज refresh करें, फिर merge करें।');
+      return block(tr('लेखा-बही (journal) अभी पूरी load नहीं हुई — पेज refresh करें, फिर merge करें।', 'The ledger (journal) has not fully loaded yet — refresh the page, then merge.'));
     }
 
     let plan: ReturnType<typeof planAccountMerge>;
@@ -4905,7 +4906,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         newEventId: () => crypto.randomUUID(),
       });
     } catch (e) {
-      return block(`Merge की तैयारी नहीं हो सकी — ${e instanceof Error ? e.message : String(e)}`);
+      return block(tr(`Merge की तैयारी नहीं हो सकी — ${e instanceof Error ? e.message : String(e)}`, `Could not prepare the merge — ${e instanceof Error ? e.message : String(e)}`));
     }
     // T-09: net the removed account's journal opening to zero (as deleteAccount does) — null when the
     // journal already agrees with its 0 opening.
@@ -4961,8 +4962,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const stuck = undoErrs.filter(e => e !== null).length;
       reportError('merge-accounts', msg, { keepId, removeId, phase, compensationFailures: stuck });
       toastRef.current(stuck === 0
-        ? { title: '❌ खाता merge cloud पर save नहीं हुआ', description: `${msg}. सारे बदलाव वापस ले लिए — दोनों खाते पहले जैसे हैं; refresh करने पर data lose नहीं होगा। दोबारा merge करें।`, variant: 'destructive', duration: 15000 }
-        : { title: '❌ Merge अधूरा रह गया — तुरंत ध्यान दें', description: `${msg}. ${stuck} row cloud में वापस नहीं हो सकीं। पेज refresh करके Ledger Hygiene पर जाँच करें; ज़रूरत हो तो support से संपर्क करें।`, variant: 'destructive', duration: 20000 });
+        ? { title: tr('❌ खाता merge cloud पर save नहीं हुआ', '❌ Account merge not saved to the cloud'), description: tr(`${msg}. सारे बदलाव वापस ले लिए — दोनों खाते पहले जैसे हैं; refresh करने पर data lose नहीं होगा। दोबारा merge करें।`, `${msg}. All changes were rolled back — both accounts are as they were; no data will be lost on refresh. Please merge again.`), variant: 'destructive', duration: 15000 }
+        : { title: tr('❌ Merge अधूरा रह गया — तुरंत ध्यान दें', '❌ Merge left incomplete — needs attention now'), description: tr(`${msg}. ${stuck} row cloud में वापस नहीं हो सकीं। पेज refresh करके Ledger Hygiene पर जाँच करें; ज़रूरत हो तो support से संपर्क करें।`, `${msg}. ${stuck} row(s) could not be rolled back in the cloud. Refresh the page and check on Ledger Hygiene; contact support if needed.`), variant: 'destructive', duration: 20000 });
       return null;
     };
 
@@ -4979,7 +4980,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // points at the account) it puts the row back on screen and shows a destructive toast itself.
     setAccountsState(prev => prev.filter(a => a.id !== removeId));
     const accountDeleted = await new Promise<boolean>(resolve => deleteAccountRow(remove, {
-      context: 'merge-accounts', failTitle: 'Merge हो गया, पर पुराना खाता नहीं मिटा — इसे हाथ से delete करें',
+      context: 'merge-accounts', failTitle: tr('Merge हो गया, पर पुराना खाता नहीं मिटा — इसे हाथ से delete करें', 'Merge done, but the old account was not deleted — delete it manually'),
       onSuccess: () => resolve(true), onFail: () => resolve(false),
     }));
     console.info(`[AUDIT-MERGE] Account id=${removeId} merged into ${keepId} (${plan.changed.length} vouchers, ${plan.journaledCount} journaled) by ${userRef.current?.name || 'unknown'} at ${new Date().toISOString()}`);
@@ -4990,10 +4991,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // screen showing a chart the cloud does not have. Resolves true only when the whole template
   // was written; the caller announces success only then.
   const resetAccounts = useCallback(async (templateAccounts: LedgerAccount[]): Promise<boolean> => {
-    if (guardPermission('delete', 'खाता संरचना रीसेट करने')) return false;
+    if (guardPermission('delete', tr('खाता संरचना रीसेट करने', 'reset the account structure'))) return false;
     if (guardFYLocked()) return false;
     const fail = (description: string) => {
-      toastRef.current({ title: 'खाता संरचना रीसेट नहीं हुई', description, variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: tr('खाता संरचना रीसेट नहीं हुई', 'Account structure was not reset'), description, variant: 'destructive', duration: 15000 });
       return false;
     };
     // A running society's chart is never reset: the reset zeroes every opening balance and drops every
@@ -5006,7 +5007,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       accountsWithOpening: accountsRef.current.filter(a => (Number(a.openingBalance) || 0) !== 0).length,
     });
     if (live.length > 0) {
-      return fail(`यह समिति चालू है (${live.join(', ')}), इसलिए खाता संरचना रीसेट नहीं हो सकती — रीसेट सभी opening balance शून्य कर देता और आपके बनाए खाते मिटा देता। कुछ नहीं बदला गया। (Reset is only for a society with no records.)`);
+      return fail(tr(`यह समिति चालू है (${live.join(', ')}), इसलिए खाता संरचना रीसेट नहीं हो सकती — रीसेट सभी opening balance शून्य कर देता और आपके बनाए खाते मिटा देता। कुछ नहीं बदला गया। (Reset is only for a society with no records.)`, `This society is in use (${live.join(', ')}), so the account structure cannot be reset — a reset would set every opening balance to zero and delete the accounts you created. Nothing was changed. (Reset is only for a society with no records.)`));
     }
     // An account outside the template that a voucher (incl. cancelled) or a party points at would be
     // orphaned by the reset — refuse instead (RULE 3). Template ids come back with the same id.
@@ -5015,16 +5016,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       accountsRef.current, vouchersRef.current, suppliersRef.current, customersRef.current,
     );
     if (blockers.length > 0) {
-      const list = blockers.slice(0, 5).map(b => `"${b.name}"`).join(', ') + (blockers.length > 5 ? ` और ${blockers.length - 5}` : '');
-      return fail(`${blockers.length} खाते template में नहीं हैं पर vouchers / suppliers / customers में इस्तेमाल हैं: ${list}। रीसेट से ये टूट जाते — कुछ नहीं बदला गया। (Accounts outside the template are in use.)`);
+      const list = blockers.slice(0, 5).map(b => `"${b.name}"`).join(', ') + (blockers.length > 5 ? tr(` और ${blockers.length - 5}`, ` and ${blockers.length - 5} more`) : '');
+      return fail(tr(`${blockers.length} खाते template में नहीं हैं पर vouchers / suppliers / customers में इस्तेमाल हैं: ${list}। रीसेट से ये टूट जाते — कुछ नहीं बदला गया। (Accounts outside the template are in use.)`, `${blockers.length} accounts are not in the template but are used in vouchers / suppliers / customers: ${list}. A reset would break them — nothing was changed. (Accounts outside the template are in use.)`));
     }
     const sid = societyIdRef.current;
     const { error: delErr } = await supabase.from('accounts').delete().eq('society_id', sid);
     if (delErr) {
       reportError('coa-reset', delErr.message, { phase: 'delete', code: delErr.code });
       return fail(delErr.code === '23503'
-        ? 'कुछ खाते accounting roles या दूसरे records से जुड़े हैं, इसलिए cloud ने मिटाने से मना कर दिया। कुछ नहीं बदला गया।'
-        : `Cloud ने खाते नहीं मिटाए — कुछ नहीं बदला गया। (${delErr.message})`);
+        ? tr('कुछ खाते accounting roles या दूसरे records से जुड़े हैं, इसलिए cloud ने मिटाने से मना कर दिया। कुछ नहीं बदला गया।', 'Some accounts are linked to accounting roles or other records, so the cloud refused to delete them. Nothing was changed.')
+        : tr(`Cloud ने खाते नहीं मिटाए — कुछ नहीं बदला गया। (${delErr.message})`, `The cloud did not delete the accounts — nothing was changed. (${delErr.message})`));
     }
     const BATCH = 50;
     let insertErr: string | null = null;
@@ -5038,7 +5039,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       reportError('coa-reset', insertErr, { phase: 'insert' });
       const { data } = await fetchAllPagedFor<LedgerAccount>('accounts', sid);
       setAccountsState(storage.migrateAccounts(data || []).accounts);
-      return fail(`पुराने खाते मिट गए पर template पूरा नहीं बना (${insertErr})। Screen पर अब वही खाते हैं जो cloud में हैं — दोबारा रीसेट करें।`);
+      return fail(tr(`पुराने खाते मिट गए पर template पूरा नहीं बना (${insertErr})। Screen पर अब वही खाते हैं जो cloud में हैं — दोबारा रीसेट करें।`, `The old accounts were deleted but the template was not fully created (${insertErr}). The screen now shows the same accounts as the cloud — reset again.`));
     }
     setAccountsState(templateAccounts);
     return true;
@@ -5055,7 +5056,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setSocietyState(prev => {
       const rollback = prev;
       const updated = { ...prev, ...data };
-      const failToast = (msg: string) => toastRef.current({ title: 'सेटिंग सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — refresh करने पर बदलाव नहीं रहेगा। समिति की सेटिंग सिर्फ़ admin बदल सकता है। (${msg})`, variant: 'destructive', duration: 12000 });
+      const failToast = (msg: string) => toastRef.current({ title: tr('सेटिंग सेव नहीं हुई', 'Setting not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — refresh करने पर बदलाव नहीं रहेगा। समिति की सेटिंग सिर्फ़ admin बदल सकता है। (${msg})`, `Not saved to the cloud — the change will be lost on refresh. Only an admin can change the society's settings. (${msg})`), variant: 'destructive', duration: 12000 });
       // RULE 1: society_settings is one flat row whose column set has grown over many
       // migrations. The whole state object rides in the upsert, so a SINGLE un-migrated
       // column (e.g. "fyLocked" before its migration runs) makes PostgREST reject the ENTIRE
@@ -5066,7 +5067,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('society_settings').upsert(payload).then(
           ({ error }) => {
             if (!error) {
-              if (dropped.length) toastRef.current({ title: 'सहेजा गया — पर कुछ कॉलम इस DB में नहीं हैं', description: `बाक़ी सब सेव हुआ; ये कॉलम database में नहीं हैं — बाकी migration चलाएँ: ${dropped.join(', ')}.`, duration: 12000 });
+              if (dropped.length) toastRef.current({ title: tr('सहेजा गया — पर कुछ कॉलम इस DB में नहीं हैं', 'Saved — but some columns are not in this DB'), description: tr(`बाक़ी सब सेव हुआ; ये कॉलम database में नहीं हैं — बाकी migration चलाएँ: ${dropped.join(', ')}.`, `Everything else was saved; these columns are not in the database — run the pending migrations: ${dropped.join(', ')}.`), duration: 12000 });
               opts?.onSaved?.(dropped);
               return;
             }
@@ -5104,7 +5105,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (societyRef.current?.fyCloseAuthorityRequired) {
       const verdict = authorizeFinalization({ act: 'fy_close', preparedBy: userRef.current?.name ?? '', attestation: opts?.attestation });
       if (!verdict.ok || !verdict.recorded) {
-        toastRef.current({ title: '🏛️ प्राधिकार आवश्यक', description: `${verdict.problems.join('; ')} — बोर्ड संकल्प के बिना वित्तीय वर्ष लॉक नहीं होगा। (FY close needs a recorded board resolution.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('🏛️ प्राधिकार आवश्यक', '🏛️ Authorisation required'), description: tr(`${verdict.problems.join('; ')} — बोर्ड संकल्प के बिना वित्तीय वर्ष लॉक नहीं होगा। (FY close needs a recorded board resolution.)`, `${verdict.problems.join('; ')} — the Financial Year will not be locked without a board resolution. (FY close needs a recorded board resolution.)`), variant: 'destructive', duration: 12000 });
         return false;
       }
       const r = verdict.recorded;
@@ -5127,7 +5128,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const setCapabilityHidden = useCallback((capability: Capability, hidden: boolean, meta?: { reason?: string; by?: string }) => {
     const sid = societyIdRef.current;
     const stableId = `${sid}__${capability}__admin`;
-    const failToast = (msg: string) => toastRef.current({ title: 'सेव नहीं हुआ', description: 'क्लाउड में सेव नहीं हुआ — refresh करने पर बदलाव नहीं रहेगा। (' + msg + ')', variant: 'destructive', duration: 10000 });
+    const failToast = (msg: string) => toastRef.current({ title: tr('सेव नहीं हुआ', 'Not saved'), description: tr('क्लाउड में सेव नहीं हुआ — refresh करने पर बदलाव नहीं रहेगा। (', 'Not saved to the cloud — the change will be lost on refresh. (') + msg + ')', variant: 'destructive', duration: 10000 });
     setSocietyCapabilitiesState(prev => {
       const rollback = prev;
       if (hidden) {
@@ -5137,14 +5138,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           { capability, mode: 'revoke' as const, source: 'admin' as const, expiresAt: null, grantedBy: meta?.by ?? null, createdAt: nowIso },
         ];
         supabase.from('society_capabilities').upsert({ id: stableId, society_id: sid, capability, mode: 'revoke', source: 'admin', granted_by: meta?.by ?? null, created_at: nowIso }).then(
-          ({ error }) => { if (error) { setSocietyCapabilitiesState(rollback); failToast(error.message); } else { toastRef.current({ title: 'फ़ीचर बंद किया गया', description: meta?.reason ? 'कारण: ' + meta.reason : 'सुविधा अब साइडबार में नहीं दिखेगी।' }); } },
+          ({ error }) => { if (error) { setSocietyCapabilitiesState(rollback); failToast(error.message); } else { toastRef.current({ title: tr('फ़ीचर बंद किया गया', 'Feature turned off'), description: meta?.reason ? tr('कारण: ', 'Reason: ') + meta.reason : tr('सुविधा अब साइडबार में नहीं दिखेगी।', 'This feature will no longer show in the sidebar.') }); } },
           () => { setSocietyCapabilitiesState(rollback); failToast('network'); },
         );
         return next;
       }
       const next = prev.filter(r => !(r.capability === capability && r.source === 'admin' && r.mode === 'revoke'));
       supabase.from('society_capabilities').delete().eq('society_id', sid).eq('capability', capability).eq('source', 'admin').then(
-        ({ error }) => { if (error) { setSocietyCapabilitiesState(rollback); failToast(error.message); } else { toastRef.current({ title: 'फ़ीचर चालू किया गया', description: meta?.reason ? 'कारण: ' + meta.reason : 'सुविधा अब साइडबार में दिखेगी।' }); } },
+        ({ error }) => { if (error) { setSocietyCapabilitiesState(rollback); failToast(error.message); } else { toastRef.current({ title: tr('फ़ीचर चालू किया गया', 'Feature turned on'), description: meta?.reason ? tr('कारण: ', 'Reason: ') + meta.reason : tr('सुविधा अब साइडबार में दिखेगी।', 'This feature will now show in the sidebar.') }); } },
         () => { setSocietyCapabilitiesState(rollback); failToast('network'); },
       );
       return next;
@@ -5167,12 +5168,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('procurement_farmers').update(extras).eq('id', f.id).then(({ error }) => {
       if (!error) return;
       reportError('write-partial', error.message, { at: 'procurement_farmers bank columns (migration 138)' });
-      toastRef.current({ title: 'किसान सेव हुआ, बैंक विवरण नहीं', description: `गाँव / बैंक / IFSC / पोर्टल ID क्लाउड में सेव नहीं हुए (migration 138 चलाएँ)। ${error.message}`, variant: 'default', duration: 12000 });
+      toastRef.current({ title: tr('किसान सेव हुआ, बैंक विवरण नहीं', 'Farmer saved, bank details not saved'), description: tr(`गाँव / बैंक / IFSC / पोर्टल ID क्लाउड में सेव नहीं हुए (migration 138 चलाएँ)। ${error.message}`, `Village / bank / IFSC / portal ID were not saved to the cloud (run migration 138). ${error.message}`), variant: 'default', duration: 12000 });
     });
   };
   const validFarmerBank = (d: Partial<FarmerInput>): boolean => {
-    if (!isValidIfsc(d.ifsc)) { toastRef.current({ title: 'IFSC ठीक नहीं', description: 'IFSC 11 अक्षर का होता है — 4 अक्षर, फिर 0, फिर 6 अक्षर/अंक (जैसे SBIN0001234)।', variant: 'destructive', duration: 9000 }); return false; }
-    if (!isValidBankAccount(d.bankAccountNo)) { toastRef.current({ title: 'खाता नंबर ठीक नहीं', description: 'बैंक खाता नंबर 6 से 18 अंकों का होना चाहिए।', variant: 'destructive', duration: 9000 }); return false; }
+    if (!isValidIfsc(d.ifsc)) { toastRef.current({ title: tr('IFSC ठीक नहीं', 'IFSC is not valid'), description: tr('IFSC 11 अक्षर का होता है — 4 अक्षर, फिर 0, फिर 6 अक्षर/अंक (जैसे SBIN0001234)।', 'IFSC has 11 characters — 4 letters, then 0, then 6 letters/digits (e.g. SBIN0001234).'), variant: 'destructive', duration: 9000 }); return false; }
+    if (!isValidBankAccount(d.bankAccountNo)) { toastRef.current({ title: tr('खाता नंबर ठीक नहीं', 'Account number is not valid'), description: tr('बैंक खाता नंबर 6 से 18 अंकों का होना चाहिए।', 'Bank account number must be 6 to 18 digits.'), variant: 'destructive', duration: 9000 }); return false; }
     return true;
   };
   const cleanFarmerInput = <T extends Partial<FarmerInput>>(d: T): T => ({ ...d, ifsc: d.ifsc ? d.ifsc.trim().toUpperCase() : d.ifsc, bankAccountNo: d.bankAccountNo ? d.bankAccountNo.trim() : d.bankAccountNo });
@@ -5188,7 +5189,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const taken = new Set<string>([...procurementFarmersRef.current, ...codeRows].map(f => f.farmerCode));
     const farmerCode = codeErr ? null : await allocateFarmerCode(() => nextDocNumber(sid, 'procurement.farmer', 'ALL'), taken);
     if (!farmerCode) {
-      toastRef.current({ title: 'किसान कोड नहीं मिला', description: `Cloud से किसान कोड नहीं मिल सका${codeErr ? ` — ${codeErr.message}` : ''}. इंटरनेट जाँचकर दोबारा जोड़ें; कोई किसान नहीं बना।`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('किसान कोड नहीं मिला', 'Farmer code not received'), description: tr(`Cloud से किसान कोड नहीं मिल सका${codeErr ? ` — ${codeErr.message}` : ''}. इंटरनेट जाँचकर दोबारा जोड़ें; कोई किसान नहीं बना।`, `Could not get a farmer code from the Cloud${codeErr ? ` — ${codeErr.message}` : ''}. Check your internet and add again; no farmer was created.`), variant: 'destructive', duration: 12000 });
       return blank;
     }
     const now = new Date().toISOString();
@@ -5209,7 +5210,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       {
         console.error('Farmer sync error:', error.message);
         setProcurementFarmersState(prev => { const r = prev.filter(f => f.id !== newFarmer.id); storage.setProcurementFarmers(r); return r; });
-        toastRef.current({ title: 'किसान सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('किसान सेव नहीं हुआ', 'Farmer not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; please add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return newFarmer;
@@ -5218,7 +5219,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateFarmer = useCallback((id: string, input: Partial<FarmerInput>) => {
     if (guardFYLocked()) return;
     const data = cleanFarmerInput(input);
-    if (data.farmerName !== undefined && !data.farmerName.trim()) { toastRef.current({ title: 'किसान का नाम आवश्यक है', variant: 'destructive' }); return; }
+    if (data.farmerName !== undefined && !data.farmerName.trim()) { toastRef.current({ title: tr('किसान का नाम आवश्यक है', 'Farmer name is required'), variant: 'destructive' }); return; }
     if (!validFarmerBank(data)) return;
     const before = procurementFarmersRef.current.find(f => f.id === id);
     if (!before) return;
@@ -5227,7 +5228,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.from('procurement_farmers').upsert(withSoc(farmerBase(next))).then(({ error }) => {
       if (!error) { persistFarmerExtras(next, true); return; }
       setProcurementFarmersState(prev => { const u = prev.map(f => f.id === id ? before : f); storage.setProcurementFarmers(u); return u; });
-      toastRef.current({ title: 'किसान अपडेट नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('किसान अपडेट नहीं हुआ', 'Farmer not updated'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh the old data will come back.`), variant: 'destructive', duration: 12000 });
     });
   }, []);
 
@@ -5238,7 +5239,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Batch B: the business date may be back-dated, but never into the future, a locked period or
     // another financial year — the posting voucher will carry it (same refusals as any voucher).
     if (data.lotDate) {
-      if (data.lotDate > todayStr()) { toastRef.current({ title: 'भविष्य की तारीख', description: 'लॉट की तारीख आज के बाद की नहीं हो सकती।', variant: 'destructive', duration: 8000 }); return sentinel; }
+      if (data.lotDate > todayStr()) { toastRef.current({ title: tr('भविष्य की तारीख', 'Future date'), description: tr('लॉट की तारीख आज के बाद की नहीं हो सकती।', 'Lot date cannot be after today.'), variant: 'destructive', duration: 8000 }); return sentinel; }
       if (guardVoucherPostable(data.lotDate)) return sentinel;
     }
     const now = new Date().toISOString();
@@ -5284,7 +5285,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Procurement commit error:', error.message);
         setProcurementLotsState(prev => { const r = prev.filter(l => l.id !== lot.id); storage.setProcurementLots(r); return r; });
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: 'लॉट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('लॉट सेव नहीं हुआ', 'Lot not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; please create it again.`), variant: 'destructive', duration: 12000 });
         return;
       }
       // Step 2 (RULE 1): lotDate (migration 135) and the weighment slip (migration 137) are columns the
@@ -5298,7 +5299,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (Object.keys(extras).length) supabase.from('procurement_lots').update(extras).eq('id', lot.id).then(({ error: e2 }) => {
         if (!e2) return;
         reportError('write-partial', e2.message, { at: 'procurement_lots step-2 (migrations 135/137)' });
-        toastRef.current({ title: 'लॉट सेव हुआ, कुछ विवरण नहीं', description: `लॉट की तारीख / तौल / बोरी क्लाउड में सेव नहीं हुई (migration 135 व 137 चलाएँ) — पोस्टिंग J-Form के दिन की होगी। ${e2.message}`, variant: 'default', duration: 10000 });
+        toastRef.current({ title: tr('लॉट सेव हुआ, कुछ विवरण नहीं', 'Lot saved, some details not saved'), description: tr(`लॉट की तारीख / तौल / बोरी क्लाउड में सेव नहीं हुई (migration 135 व 137 चलाएँ) — पोस्टिंग J-Form के दिन की होगी। ${e2.message}`, `Lot date / weight / bags were not saved to the cloud (run migration 135 and 137) — posting will be dated on the J-Form day. ${e2.message}`), variant: 'default', duration: 10000 });
       });
     });
     return lot;
@@ -5313,14 +5314,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Phase 2.1.1 — early validation only (NOT the business guarantee; the DB unique index on
     // lotId is). One QualityTest + one MoistureRecord per lot: reject a repeat before the RPC.
     if (procurementQualityTests.some(q => q.lotId === data.lotId) || procurementMoistureRecords.some(m => m.lotId === data.lotId)) {
-      toastRef.current({ title: 'पहले से दर्ज', description: 'इस लॉट की क्वालिटी जाँच पहले से मौजूद है। (Quality already recorded for this lot)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('पहले से दर्ज', 'Already recorded'), description: tr('इस लॉट की क्वालिटी जाँच पहले से मौजूद है। (Quality already recorded for this lot)', 'Quality check for this lot already exists. (Quality already recorded for this lot)'), variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     if (lotBlocked(data.lotId)) return sentinel;
     // Batch A (P1-3): quality is the gate BEFORE the J-Form — recording (or rejecting) it afterwards
     // stranded a posted lot (no settlement / payment, its 3308/2105 entry still booked).
     if (!canRecordQuality({ hasQualityTest: false, hasJForm: procurementJFormsRef.current.some(j => j.lotId === data.lotId) })) {
-      toastRef.current({ title: 'J-Form बन चुका है', description: 'इस लॉट का J-Form जारी हो चुका है — अब क्वालिटी जाँच दर्ज नहीं हो सकती। क्वालिटी J-Form से पहले दर्ज करें।', variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('J-Form बन चुका है', 'J-Form already issued'), description: tr('इस लॉट का J-Form जारी हो चुका है — अब क्वालिटी जाँच दर्ज नहीं हो सकती। क्वालिटी J-Form से पहले दर्ज करें।', 'The J-Form for this lot has been issued — quality check can no longer be recorded. Record quality before the J-Form.'), variant: 'destructive', duration: 10000 });
       return sentinel;
     }
     const now = new Date().toISOString();
@@ -5338,7 +5339,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementQualityTestsState(prev => { const r = prev.filter(x => x.id !== qt.id); storage.setProcurementQualityTests(r); return r; });
         setProcurementMoistureRecordsState(prev => { const r = prev.filter(x => x.id !== mr.id); storage.setProcurementMoistureRecords(r); return r; });
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== qEvent.id && e.id !== mEvent.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: 'क्वालिटी सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा दर्ज करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('क्वालिटी सेव नहीं हुई', 'Quality not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा दर्ज करें।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; please record it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return qt;
@@ -5351,11 +5352,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const lotIdOfEngineVoucher = (ev?: Voucher) =>
     ev && ev.refType === 'posting.rule.result' ? procurementPostingRuleResults.find(r => r.id === ev.refId)?.lotId : undefined;
   const toastRejectedLot = () =>
-    toastRef.current({ title: 'लॉट अस्वीकृत है', description: 'क्वालिटी जाँच में यह लॉट अस्वीकृत हुआ था — इसका J-Form, पोस्टिंग, निपटान या भुगतान नहीं हो सकता।', variant: 'destructive', duration: 10000 });
+    toastRef.current({ title: tr('लॉट अस्वीकृत है', 'Lot is rejected'), description: tr('क्वालिटी जाँच में यह लॉट अस्वीकृत हुआ था — इसका J-Form, पोस्टिंग, निपटान या भुगतान नहीं हो सकता।', 'This lot was rejected in the quality check — no J-Form, posting, settlement or payment can be made for it.'), variant: 'destructive', duration: 10000 });
   // Batch B: a CANCELLED lot is read-only as well — no J-Form, posting, settlement, payment or quality.
   const lotBlocked = (lotId?: string): boolean => {
     if (lotId && isLotCancelled(procurementLotsRef.current.find(l => l.id === lotId))) {
-      toastRef.current({ title: 'लॉट रद्द है', description: 'यह लॉट रद्द किया जा चुका है — इस पर अब कोई कार्रवाई नहीं हो सकती।', variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('लॉट रद्द है', 'Lot is cancelled'), description: tr('यह लॉट रद्द किया जा चुका है — इस पर अब कोई कार्रवाई नहीं हो सकती।', 'This lot has been cancelled — no further action can be taken on it.'), variant: 'destructive', duration: 10000 });
       return true;
     }
     if (lotIsRejected(lotId)) { toastRejectedLot(); return true; }
@@ -5371,13 +5372,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return sentinel;
     // Early validation only (NOT the business guarantee; the DB unique index on lotId is). One per lot.
     if (procurementJForms.some(j => j.lotId === data.lotId)) {
-      toastRef.current({ title: 'पहले से जारी', description: 'इस लॉट का J-Form पहले से बना है। (J-Form already generated for this lot)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('पहले से जारी', 'Already issued'), description: tr('इस लॉट का J-Form पहले से बना है। (J-Form already generated for this lot)', 'A J-Form for this lot already exists. (J-Form already generated for this lot)'), variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     if (lotBlocked(data.lotId)) return sentinel;
     // D1 (founder 2026-10-25): quality is REQUIRED before the J-Form.
     if (!procurementQualityTests.some(q => q.lotId === data.lotId)) {
-      toastRef.current({ title: 'पहले क्वालिटी जाँच', description: 'J-Form से पहले इस लॉट की क्वालिटी (परिणाम + नमी) दर्ज करें।', variant: 'destructive', duration: 9000 });
+      toastRef.current({ title: tr('पहले क्वालिटी जाँच', 'Quality check first'), description: tr('J-Form से पहले इस लॉट की क्वालिटी (परिणाम + नमी) दर्ज करें।', 'Record this lot\'s quality (result + moisture) before the J-Form.'), variant: 'destructive', duration: 9000 });
       return sentinel;
     }
     const lot = procurementLots.find(l => l.id === data.lotId);
@@ -5404,7 +5405,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementJFormsState(prev => { const r = prev.filter(x => x.id !== jf.id); storage.setProcurementJForms(r); return r; });
         procurementJFormsRef.current = procurementJFormsRef.current.filter(x => x.id !== jf.id);
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: 'J-Form सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('J-Form सेव नहीं हुआ', 'J-Form not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; please create it again.`), variant: 'destructive', duration: 12000 });
         return;
       }
       // D1(A): patch the optimistic J-Form + its event with the DB-generated documentNo from the response.
@@ -5412,7 +5413,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (gen?.documentNo) {
         setProcurementJFormsState(prev => { const u = prev.map(x => x.id === jf.id ? { ...x, documentNo: gen.documentNo } : x); storage.setProcurementJForms(u); return u; });
         setProcurementEventsState(prev => { const u = prev.map(e => e.id === event.id ? { ...e, payload: { ...(e.payload as Record<string, unknown>), documentNo: gen.documentNo } } : e); storage.setProcurementEvents(u); return u; });
-        toastRef.current({ title: 'J-Form बना', description: `${gen.documentNo} · ₹${jf.net.amount}`, duration: 6000 });
+        toastRef.current({ title: tr('J-Form बना', 'J-Form created'), description: `${gen.documentNo} · ₹${jf.net.amount}`, duration: 6000 });
       }
     });
     return jf;
@@ -5427,13 +5428,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 2. J-Form exists?
     const jform = procurementJFormsRef.current.find(j => j.id === data.jformId);
     if (!jform) {
-      toastRef.current({ title: 'J-Form नहीं मिला', description: 'पहले इस लॉट का J-Form बनाएं। (Generate the J-Form first)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('J-Form नहीं मिला', 'J-Form not found'), description: tr('पहले इस लॉट का J-Form बनाएं। (Generate the J-Form first)', 'Create the J-Form for this lot first. (Generate the J-Form first)'), variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     if (lotBlocked(jform.lotId)) return sentinel;
     // 3. Existing Financial Intent? (early validation; the DB unique index on jformId is the guarantee). One per J-Form.
     if (procurementIntentsRef.current.some(i => i.jformId === data.jformId)) {
-      toastRef.current({ title: 'पहले से बना', description: 'इस J-Form का Financial Intent पहले से मौजूद है। (Financial Intent already exists for this J-Form)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('पहले से बना', 'Already created'), description: tr('इस J-Form का Financial Intent पहले से मौजूद है। (Financial Intent already exists for this J-Form)', 'A Financial Intent for this J-Form already exists. (Financial Intent already exists for this J-Form)'), variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     const now = new Date().toISOString();
@@ -5455,11 +5456,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementFinancialIntentsState(prev => { const r = prev.filter(x => x.id !== fi.id); storage.setProcurementFinancialIntents(r); return r; });
         procurementIntentsRef.current = procurementIntentsRef.current.filter(x => x.id !== fi.id);
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: 'Financial Intent सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('Financial Intent सेव नहीं हुआ', 'Financial Intent not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; please create it again.`), variant: 'destructive', duration: 12000 });
         opts?.onFailed?.();
         return;
       }
-      toastRef.current({ title: 'खरीद दर्ज (1/4)', description: `₹${fi.amount.amount}`, duration: 4000 });
+      toastRef.current({ title: tr('खरीद दर्ज (1/4)', 'Purchase recorded (1/4)'), description: `₹${fi.amount.amount}`, duration: 4000 });
       opts?.onCommitted?.(fi);
     });
     return fi;
@@ -5475,12 +5476,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 2. Financial Intent exists?
     const intent = procurementIntentsRef.current.find(i => i.id === data.financialIntentId);
     if (!intent) {
-      toastRef.current({ title: 'Financial Intent नहीं मिला', description: 'पहले इस लॉट का Financial Intent बनाएं। (Generate the Financial Intent first)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('Financial Intent नहीं मिला', 'Financial Intent not found'), description: tr('पहले इस लॉट का Financial Intent बनाएं। (Generate the Financial Intent first)', 'Create the Financial Intent for this lot first. (Generate the Financial Intent first)'), variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     // 3. Posting Request already exists? (early validation; the DB unique index on financialIntentId is the guarantee). One per intent.
     if (procurementRequestsRef.current.some(p => p.financialIntentId === data.financialIntentId)) {
-      toastRef.current({ title: 'पहले से बना', description: 'इस Financial Intent का Posting Request पहले से मौजूद है। (Posting Request already exists for this Financial Intent)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('पहले से बना', 'Already created'), description: tr('इस Financial Intent का Posting Request पहले से मौजूद है। (Posting Request already exists for this Financial Intent)', 'A Posting Request for this Financial Intent already exists. (Posting Request already exists for this Financial Intent)'), variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     const now = new Date().toISOString();
@@ -5502,11 +5503,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementPostingRequestsState(prev => { const r = prev.filter(x => x.id !== pr.id); storage.setProcurementPostingRequests(r); return r; });
         procurementRequestsRef.current = procurementRequestsRef.current.filter(x => x.id !== pr.id);
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: 'Posting Request सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('Posting Request सेव नहीं हुआ', 'Posting Request not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; please create it again.`), variant: 'destructive', duration: 12000 });
         opts?.onFailed?.();
         return;
       }
-      toastRef.current({ title: 'पोस्टिंग अनुरोध बना (2/4)', description: `₹${pr.amount.amount}`, duration: 4000 });
+      toastRef.current({ title: tr('पोस्टिंग अनुरोध बना (2/4)', 'Posting request created (2/4)'), description: `₹${pr.amount.amount}`, duration: 4000 });
       opts?.onCommitted?.(pr);
     });
     return pr;
@@ -5522,12 +5523,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 2. PostingRequest exists?
     const request = procurementRequestsRef.current.find(p => p.id === data.postingRequestId);
     if (!request) {
-      toastRef.current({ title: 'Posting Request नहीं मिला', description: 'पहले Posting Request बनाएं। (Generate the Posting Request first)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('Posting Request नहीं मिला', 'Posting Request not found'), description: tr('पहले Posting Request बनाएं। (Generate the Posting Request first)', 'Create the Posting Request first. (Generate the Posting Request first)'), variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     // 3. PostingRuleResult already exists? (early validation; the DB unique index on postingRequestId is the guarantee). One per request.
     if (procurementRuleResultsRef.current.some(r => r.postingRequestId === data.postingRequestId)) {
-      toastRef.current({ title: 'पहले से बना', description: 'इस Posting Request का result पहले से मौजूद है। (Already resolved for this Posting Request)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('पहले से बना', 'Already created'), description: tr('इस Posting Request का result पहले से मौजूद है। (Already resolved for this Posting Request)', 'A result for this Posting Request already exists. (Already resolved for this Posting Request)'), variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     // 4. Resolve legs via the pure rule, then build the result.
@@ -5540,7 +5541,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (opts?.receivableAccountId) {
       const own = accounts.find(a => a.id === opts.receivableAccountId);
       if (!own || own.isGroup || own.type !== 'asset') {
-        toastRef.current({ title: 'एजेंसी का खाता ठीक नहीं', description: 'एजेंसी master में चुना गया प्राप्य खाता नहीं मिला या asset ledger नहीं है — Procurement Masters → एजेंसी में ठीक करें।', variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('एजेंसी का खाता ठीक नहीं', 'Agency account is not correct'), description: tr('एजेंसी master में चुना गया प्राप्य खाता नहीं मिला या asset ledger नहीं है — Procurement Masters → एजेंसी में ठीक करें।', 'The receivable account chosen in the agency master was not found or is not an asset ledger — fix it in Procurement Masters → Agency.'), variant: 'destructive', duration: 12000 });
         opts?.onFailed?.();
         return sentinel;
       }
@@ -5551,7 +5552,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (via) {
       const viaAcc = accounts.find(a => a.id === '5116' && !a.isGroup) ?? accounts.find(a => !a.isGroup && a.type === 'expense' && /govt\.? procurement purchase|सरकारी खरीद/i.test(`${a.name} ${a.nameHi || ''}`));
       if (!viaAcc) {
-        toastRef.current({ title: '5116 खाता नहीं है', description: '"5116 से होकर पोस्ट" चालू है पर चार्ट में Govt Procurement Purchase (5116) खाता नहीं है — खाता बनाएँ या setting बंद करें।', variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('5116 खाता नहीं है', 'Account 5116 does not exist'), description: tr('"5116 से होकर पोस्ट" चालू है पर चार्ट में Govt Procurement Purchase (5116) खाता नहीं है — खाता बनाएँ या setting बंद करें।', '"Post through 5116" is on, but the chart has no Govt Procurement Purchase (5116) account — create the account or turn the setting off.'), variant: 'destructive', duration: 12000 });
         opts?.onFailed?.();
         return sentinel;
       }
@@ -5561,8 +5562,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (legs.length === 0) {
       const missing = missingProcurementRoles(accounts, ['agencyReceivable', 'farmerPayable']);
       toastRef.current(missing.length > 0
-        ? { title: 'MSP खाते नहीं हैं', description: `इस समिति के चार्ट में ${missing.map(r => PROCUREMENT_ROLE_LABEL_HI[r]).join(' और ')} खाता नहीं है। "लेजर स्वच्छता" (Ledger Hygiene) पेज पर "डोमेन खाते बनाएँ" दबाएँ, फिर दोबारा पोस्ट करें।`, variant: 'destructive', duration: 15000 }
-        : { title: 'पोस्टिंग नियम नहीं', description: `इस प्रकार (${request.requestType}) की पोस्टिंग का नियम नहीं है।`, variant: 'destructive', duration: 10000 });
+        ? { title: tr('MSP खाते नहीं हैं', 'MSP accounts missing'), description: tr(`इस समिति के चार्ट में ${missing.map(r => PROCUREMENT_ROLE_LABEL_HI[r]).join(' और ')} खाता नहीं है। "लेजर स्वच्छता" (Ledger Hygiene) पेज पर "डोमेन खाते बनाएँ" दबाएँ, फिर दोबारा पोस्ट करें।`, `This society's chart has no ${missing.map(r => PROCUREMENT_ROLE_LABEL_EN[r]).join(' and ')} account. Press "Create domain accounts" on the Ledger Hygiene page, then post again.`), variant: 'destructive', duration: 15000 }
+        : { title: tr('पोस्टिंग नियम नहीं', 'No posting rule'), description: tr(`इस प्रकार (${request.requestType}) की पोस्टिंग का नियम नहीं है।`, `There is no posting rule for this type (${request.requestType}).`), variant: 'destructive', duration: 10000 });
       return sentinel;
     }
     const now = new Date().toISOString();
@@ -5583,11 +5584,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setProcurementPostingRuleResultsState(prev => { const r = prev.filter(x => x.id !== result.id); storage.setProcurementPostingRuleResults(r); return r; });
         procurementRuleResultsRef.current = procurementRuleResultsRef.current.filter(x => x.id !== result.id);
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: 'Posting Rule result सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('Posting Rule result सेव नहीं हुआ', 'Posting Rule result not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा करें।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; please do it again.`), variant: 'destructive', duration: 12000 });
         opts?.onFailed?.();
         return;
       }
-      toastRef.current({ title: 'खाते तय हुए (3/4)', description: `${legs.length} प्रविष्टियाँ`, duration: 4000 });
+      toastRef.current({ title: tr('खाते तय हुए (3/4)', 'Accounts resolved (3/4)'), description: tr(`${legs.length} प्रविष्टियाँ`, `${legs.length} entries`), duration: 4000 });
       opts?.onCommitted?.(result);
     });
     return result;
@@ -5604,19 +5605,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 2. PostingRuleResult exists?
     const result = procurementRuleResultsRef.current.find(r => r.id === data.postingRuleResultId);
     if (!result) {
-      toastRef.current({ title: 'Posting Rule result नहीं मिला', description: 'पहले Resolve करें। (Resolve the Posting Request first)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('Posting Rule result नहीं मिला', 'Posting Rule result not found'), description: tr('पहले Resolve करें। (Resolve the Posting Request first)', 'Resolve first. (Resolve the Posting Request first)'), variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     // 3. Engine voucher already exists? The Voucher itself is the authoritative one-to-one record
     //    (origin='engine' + refType='posting.rule.result' + refId=result.id). No duplicate link table.
     if (vouchersRef.current.some(v => !v.isDeleted && isEngineVoucher(v) && v.refType === 'posting.rule.result' && v.refId === result.id)) {
-      toastRef.current({ title: 'पहले से पोस्ट', description: 'इस result का Engine Voucher पहले से बना है। (Engine voucher already exists for this result)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('पहले से पोस्ट', 'Already posted'), description: tr('इस result का Engine Voucher पहले से बना है। (Engine voucher already exists for this result)', 'An Engine Voucher for this result already exists. (Engine voucher already exists for this result)'), variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     // 4. Map the frozen legs → voucher lines (uses ONLY resolvedAccountId; no binding lookup).
     const specs = buildEngineVoucherLines(result.legs);
     if (specs.length === 0) {
-      toastRef.current({ title: 'Legs resolved नहीं', description: 'इस result के legs में resolvedAccountId नहीं है — दोबारा Resolve करें। (Legs are not account-resolved)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('Legs resolved नहीं', 'Legs not resolved'), description: tr('इस result के legs में resolvedAccountId नहीं है — दोबारा Resolve करें। (Legs are not account-resolved)', 'The legs of this result have no resolvedAccountId — Resolve again. (Legs are not account-resolved)'), variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     if (lotBlocked(result.lotId)) return sentinel;
@@ -5642,10 +5643,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.warn('engine.voucher.created event commit failed:', error.message);
         setProcurementEventsState(prev => { const r = prev.filter(e => e.id !== event.id); storage.setProcurementEvents(r); return r; });
-        toastRef.current({ title: '⚠️ Audit event save नहीं हुआ', description: `वाउचर ${voucher.voucherNo} बन गया (मुख्य रिकॉर्ड); पर ऑडिट event क्लाउड में सेव नहीं हुआ: ${error.message}.`, variant: 'default', duration: 8000 });
+        toastRef.current({ title: tr('⚠️ Audit event save नहीं हुआ', '⚠️ Audit event not saved'), description: tr(`वाउचर ${voucher.voucherNo} बन गया (मुख्य रिकॉर्ड); पर ऑडिट event क्लाउड में सेव नहीं हुआ: ${error.message}.`, `Voucher ${voucher.voucherNo} was created (main record); but the audit event was not saved to the cloud: ${error.message}.`), variant: 'default', duration: 8000 });
       }
     });
-    toastRef.current({ title: 'बहीखाते में पोस्ट हुआ (4/4)', description: `वाउचर ${voucher.voucherNo} · ${voucher.date}`, duration: 6000 });
+    toastRef.current({ title: tr('बहीखाते में पोस्ट हुआ (4/4)', 'Posted to the books (4/4)'), description: tr(`वाउचर ${voucher.voucherNo} · ${voucher.date}`, `Voucher ${voucher.voucherNo} · ${voucher.date}`), duration: 6000 });
     return voucher;
   }, [user, procurementPostingRuleResults, procurementJForms, procurementLots, procurementQualityTests, addVoucher]);
 
@@ -5661,12 +5662,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return blank;
     const ev = vouchersRef.current.find(v => v.id === data.engineVoucherId && !v.isDeleted && isEngineVoucher(v));
     if (!ev) {
-      toastRef.current({ title: 'Engine Voucher नहीं मिला', description: 'पहले Post करें। (Post the engine voucher first)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('Engine Voucher नहीं मिला', 'Engine Voucher not found'), description: tr('पहले Post करें। (Post the engine voucher first)', 'Post first. (Post the engine voucher first)'), variant: 'destructive', duration: 8000 });
       return blank;
     }
     if (lotBlocked(lotIdOfEngineVoucher(ev))) return blank;
     if (procurementSettlements.some(s => !s.isDeleted && s.engineVoucherId === ev.id)) {
-      toastRef.current({ title: 'पहले से बना', description: 'इस वाउचर का निपटान पहले से मौजूद है। (Settlement already exists)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('पहले से बना', 'Already created'), description: tr('इस वाउचर का निपटान पहले से मौजूद है। (Settlement already exists)', 'A settlement for this voucher already exists. (Settlement already exists)'), variant: 'destructive', duration: 8000 });
       return blank;
     }
     const now = new Date().toISOString();
@@ -5678,7 +5679,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Settlement create error:', error.message);
         setProcurementSettlementsState(prev => { const r = prev.filter(x => x.id !== stl.id); storage.setProcurementSettlements(r); return r; });
-        toastRef.current({ title: 'निपटान सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('निपटान सेव नहीं हुआ', 'Settlement not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा बनाएँ।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; please create it again.`), variant: 'destructive', duration: 12000 });
         return;
       }
       // T-05 dual-write: mirror the money objects into typed columns (step-2, RULE 1 — the base
@@ -5686,7 +5687,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       supabase.from('procurement_settlements').update(settlementTypedColumns(stl)).eq('id', stl.id)
         .then(({ error: e2 }) => { if (e2) { console.warn('Settlement typed-money columns (run migration 017):', e2.message); reportError('write-partial', e2.message, { at: 'Settlement typed-money columns (run migration 017):' }); } });
     });
-    toastRef.current({ title: 'निपटान ड्राफ्ट बना', description: `सकल ₹${gross.amount}`, duration: 5000 });
+    toastRef.current({ title: tr('निपटान ड्राफ्ट बना', 'Settlement draft created'), description: tr(`सकल ₹${gross.amount}`, `Gross ₹${gross.amount}`), duration: 5000 });
     return stl;
   }, [user, procurementSettlements, procurementQualityTests, procurementPostingRuleResults]);
 
@@ -5697,7 +5698,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Settlement update error:', error.message);
         setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === prevStl.id ? prevStl : x); storage.setProcurementSettlements(u); return u; });
-        toastRef.current({ title: 'बदलाव सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('बदलाव सेव नहीं हुआ', 'Change not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh.`), variant: 'destructive', duration: 12000 });
         return;
       }
       // T-05 dual-write (step-2, RULE 1) — mirror the money objects into typed columns.
@@ -5710,24 +5711,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addSettlementDeductionLine = useCallback((data: { settlementId: string; deductionType: string; accountId: string; amount: number; reference?: string; remarks?: string }): void => {
     if (guardFYLocked()) return;
     const stl = procurementSettlements.find(s => s.id === data.settlementId && !s.isDeleted);
-    if (!stl) { toastRef.current({ title: 'निपटान नहीं मिला', description: 'यह निपटान अब मौजूद नहीं है — पेज refresh करें।', variant: 'destructive', duration: 8000 }); return; }
-    if (stl.status !== 'draft') { toastRef.current({ title: 'स्वीकृत निपटान', description: 'स्वीकृत निपटान में कटौती नहीं जोड़ सकते। (Cannot edit an approved settlement)', variant: 'destructive', duration: 9000 }); return; }
-    if (!data.accountId || !accounts.some(a => a.id === data.accountId)) { toastRef.current({ title: 'खाता चुनें', description: 'कटौती के लिए एक खाता चुनें। (Select a deduction account)', variant: 'destructive', duration: 8000 }); return; }
-    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'कटौती राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return; }
+    if (!stl) { toastRef.current({ title: tr('निपटान नहीं मिला', 'Settlement not found'), description: tr('यह निपटान अब मौजूद नहीं है — पेज refresh करें।', 'This settlement no longer exists — refresh the page.'), variant: 'destructive', duration: 8000 }); return; }
+    if (stl.status !== 'draft') { toastRef.current({ title: tr('स्वीकृत निपटान', 'Approved settlement'), description: tr('स्वीकृत निपटान में कटौती नहीं जोड़ सकते। (Cannot edit an approved settlement)', 'Cannot add a deduction to an approved settlement. (Cannot edit an approved settlement)'), variant: 'destructive', duration: 9000 }); return; }
+    if (!data.accountId || !accounts.some(a => a.id === data.accountId)) { toastRef.current({ title: tr('खाता चुनें', 'Select an account'), description: tr('कटौती के लिए एक खाता चुनें। (Select a deduction account)', 'Select an account for the deduction. (Select a deduction account)'), variant: 'destructive', duration: 8000 }); return; }
+    if (!(data.amount > 0)) { toastRef.current({ title: tr('राशि डालें', 'Enter amount'), description: tr('कटौती राशि 0 से अधिक होनी चाहिए।', 'Deduction amount must be more than 0.'), variant: 'destructive', duration: 8000 }); return; }
     const line: SettlementDeductionLine = { id: crypto.randomUUID(), deductionType: data.deductionType, accountId: data.accountId, amount: { amount: toRupees(toMinor(data.amount)), currency: stl.gross.currency }, reference: data.reference?.trim() || undefined, remarks: data.remarks?.trim() || undefined };
     const lines = [...stl.deductionLines, line];
     const totalDed = toRupees(sumMinor(lines.map(l => toMinor(l.amount.amount))));
-    if (totalDed > stl.gross.amount) { toastRef.current({ title: 'कटौती सकल से अधिक', description: `कुल कटौती ₹${totalDed} सकल ₹${stl.gross.amount} से अधिक नहीं हो सकती।`, variant: 'destructive', duration: 9000 }); return; }
+    if (totalDed > stl.gross.amount) { toastRef.current({ title: tr('कटौती सकल से अधिक', 'Deduction exceeds gross'), description: tr(`कुल कटौती ₹${totalDed} सकल ₹${stl.gross.amount} से अधिक नहीं हो सकती।`, `Total deduction ₹${totalDed} cannot be more than gross ₹${stl.gross.amount}.`), variant: 'destructive', duration: 9000 }); return; }
     const next: FarmerSettlement = { ...stl, deductionLines: lines, netPayable: { amount: toRupees(subMinor(toMinor(stl.gross.amount), toMinor(totalDed))), currency: stl.gross.currency }, updatedAt: new Date().toISOString() };
     persistDraftSettlement(stl, next);
-    toastRef.current({ title: 'कटौती जोड़ी', description: `${data.deductionType} · ₹${line.amount.amount}`, duration: 5000 });
+    toastRef.current({ title: tr('कटौती जोड़ी', 'Deduction added'), description: `${data.deductionType} · ₹${line.amount.amount}`, duration: 5000 });
   }, [accounts, procurementSettlements]);
 
   // Remove a deduction line from a draft settlement.
   const removeSettlementDeductionLine = useCallback((data: { settlementId: string; lineId: string }): void => {
     if (guardFYLocked()) return;
     const stl = procurementSettlements.find(s => s.id === data.settlementId && !s.isDeleted);
-    if (!stl || stl.status !== 'draft') { toastRef.current({ title: 'संभव नहीं', description: 'केवल ड्राफ्ट निपटान संपादित कर सकते हैं।', variant: 'destructive', duration: 8000 }); return; }
+    if (!stl || stl.status !== 'draft') { toastRef.current({ title: tr('संभव नहीं', 'Not possible'), description: tr('केवल ड्राफ्ट निपटान संपादित कर सकते हैं।', 'Only a draft settlement can be edited.'), variant: 'destructive', duration: 8000 }); return; }
     const lines = stl.deductionLines.filter(l => l.id !== data.lineId);
     const totalDed = toRupees(sumMinor(lines.map(l => toMinor(l.amount.amount))));
     const next: FarmerSettlement = { ...stl, deductionLines: lines, netPayable: { amount: toRupees(subMinor(toMinor(stl.gross.amount), toMinor(totalDed))), currency: stl.gross.currency }, updatedAt: new Date().toISOString() };
@@ -5743,10 +5744,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const blank = { id: '', engineVoucherId: '', status: 'draft', gross: { amount: 0, currency: 'INR' }, deductionLines: [], netPayable: { amount: 0, currency: 'INR' }, amountPaid: { amount: 0, currency: 'INR' }, createdAt: '', updatedAt: '' } as FarmerSettlement;
     if (guardFYLocked()) return blank;
     const stl = procurementSettlements.find(s => s.id === data.settlementId && !s.isDeleted);
-    if (!stl) { toastRef.current({ title: 'निपटान नहीं मिला', description: 'यह निपटान अब मौजूद नहीं है — पेज refresh करें।', variant: 'destructive', duration: 8000 }); return blank; }
-    if (stl.status !== 'draft') { toastRef.current({ title: 'पहले से स्वीकृत', description: 'यह निपटान पहले ही स्वीकृत है। (Already approved)', variant: 'destructive', duration: 8000 }); return blank; }
+    if (!stl) { toastRef.current({ title: tr('निपटान नहीं मिला', 'Settlement not found'), description: tr('यह निपटान अब मौजूद नहीं है — पेज refresh करें।', 'This settlement no longer exists — refresh the page.'), variant: 'destructive', duration: 8000 }); return blank; }
+    if (stl.status !== 'draft') { toastRef.current({ title: tr('पहले से स्वीकृत', 'Already approved'), description: tr('यह निपटान पहले ही स्वीकृत है। (Already approved)', 'This settlement is already approved. (Already approved)'), variant: 'destructive', duration: 8000 }); return blank; }
     const ev = vouchersRef.current.find(v => v.id === stl.engineVoucherId && !v.isDeleted && isEngineVoucher(v));
-    if (!ev) { toastRef.current({ title: 'पोस्टिंग वाउचर नहीं मिला', description: 'पहले लॉट को "बहीखाता में पोस्ट" करें।', variant: 'destructive', duration: 8000 }); return blank; }
+    if (!ev) { toastRef.current({ title: tr('पोस्टिंग वाउचर नहीं मिला', 'Posting voucher not found'), description: tr('पहले लॉट को "बहीखाता में पोस्ट" करें।', 'First do "Post to books" for the lot.'), variant: 'destructive', duration: 8000 }); return blank; }
     if (lotBlocked(lotIdOfEngineVoucher(ev))) return blank;
     const totalDed = toRupees(sumMinor(stl.deductionLines.map(l => toMinor(l.amount.amount))));
     const netPayable: Money = { amount: toRupees(subMinor(toMinor(stl.gross.amount), toMinor(totalDed))), currency: stl.gross.currency };
@@ -5772,14 +5773,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // viaParent: this module owns the voucher (the owner check would otherwise refuse it).
           revertLocal();
           if (settlementVoucherId) cancelVoucher(settlementVoucherId, 'Settlement approval failed (auto-rollback)', user?.name || 'System', { viaParent: true });
-          toastRef.current({ title: 'निपटान स्वीकृत नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा approve करें।`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('निपटान स्वीकृत नहीं हुआ', 'Settlement not approved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा approve करें।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; please approve again.`), variant: 'destructive', duration: 12000 });
           return;
         }
         const gen = (res as { settlements?: Array<{ id: string; settlementNo: string }> } | null)?.settlements?.find(s => s.id === stl.id);
         if (gen?.settlementNo) {
           setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? { ...x, settlementNo: gen.settlementNo } : x); storage.setProcurementSettlements(u); return u; });
           setProcurementEventsState(prev => { const u = prev.map(e => e.id === event.id ? { ...e, payload: { ...(e.payload as Record<string, unknown>), settlementNo: gen.settlementNo } } : e); storage.setProcurementEvents(u); return u; });
-          toastRef.current({ title: 'निपटान स्वीकृत', description: `${gen.settlementNo} · निवल देय ₹${netPayable.amount}`, duration: 6000 });
+          toastRef.current({ title: tr('निपटान स्वीकृत', 'Settlement approved'), description: tr(`${gen.settlementNo} · निवल देय ₹${netPayable.amount}`, `${gen.settlementNo} · Net payable ₹${netPayable.amount}`), duration: 6000 });
         }
       });
     };
@@ -5802,10 +5803,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         onSaved: () => commitApproval(),
         onFailed: () => {
           revertLocal();
-          toastRef.current({ title: 'निपटान स्वीकृत नहीं हुआ', description: 'कटौती वाउचर क्लाउड में सेव नहीं हुआ, इसलिए निपटान फिर से ड्राफ्ट है — दोबारा approve करें।', variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('निपटान स्वीकृत नहीं हुआ', 'Settlement not approved'), description: tr('कटौती वाउचर क्लाउड में सेव नहीं हुआ, इसलिए निपटान फिर से ड्राफ्ट है — दोबारा approve करें।', 'The deduction voucher was not saved to the cloud, so the settlement is back to draft — please approve again.'), variant: 'destructive', duration: 12000 });
         },
       });
-      if (!v.id) { toastRef.current({ title: 'कटौती वाउचर नहीं बना', description: 'निपटान स्वीकृत नहीं हुआ — ऊपर की चेतावनी देखें।', variant: 'destructive', duration: 9000 }); return blank; }
+      if (!v.id) { toastRef.current({ title: tr('कटौती वाउचर नहीं बना', 'Deduction voucher not created'), description: tr('निपटान स्वीकृत नहीं हुआ — ऊपर की चेतावनी देखें।', 'Settlement not approved — see the warning above.'), variant: 'destructive', duration: 9000 }); return blank; }
       settlementVoucherId = v.id;
       approved = { ...approved, settlementVoucherId };
     }
@@ -5827,23 +5828,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return sentinel;
     const ev = vouchersRef.current.find(v => v.id === data.engineVoucherId && !v.isDeleted && isEngineVoucher(v));
     if (!ev) {
-      toastRef.current({ title: 'Engine Voucher नहीं मिला', description: 'पहले Post करें। (Post the engine voucher first)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('Engine Voucher नहीं मिला', 'Engine Voucher not found'), description: tr('पहले Post करें। (Post the engine voucher first)', 'Post first. (Post the engine voucher first)'), variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     if (lotBlocked(lotIdOfEngineVoucher(ev))) return sentinel;
     const stl = procurementSettlements.find(s => !s.isDeleted && s.engineVoucherId === ev.id);
     if (!stl || stl.status !== 'approved') {
-      toastRef.current({ title: 'पहले निपटान स्वीकृत करें', description: 'भुगतान से पहले निपटान बनाकर स्वीकृत करें। (Approve the settlement before paying)', variant: 'destructive', duration: 9000 });
+      toastRef.current({ title: tr('पहले निपटान स्वीकृत करें', 'Approve the settlement first'), description: tr('भुगतान से पहले निपटान बनाकर स्वीकृत करें। (Approve the settlement before paying)', 'Create and approve the settlement before payment. (Approve the settlement before paying)'), variant: 'destructive', duration: 9000 });
       return sentinel;
     }
     const paidSoFar = farmerPaidByEngineVoucher(vouchersRef.current).get(ev.id) ?? 0;
     const outstanding = toRupees(subMinor(toMinor(stl.netPayable.amount), toMinor(paidSoFar)));
     if (!(data.amount > 0)) {
-      toastRef.current({ title: 'राशि डालें', description: 'भुगतान राशि 0 से अधिक होनी चाहिए। (Amount must be greater than 0)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('राशि डालें', 'Enter amount'), description: tr('भुगतान राशि 0 से अधिक होनी चाहिए। (Amount must be greater than 0)', 'Payment amount must be more than 0. (Amount must be greater than 0)'), variant: 'destructive', duration: 8000 });
       return sentinel;
     }
     if (data.amount > outstanding) {
-      toastRef.current({ title: 'राशि बकाया से अधिक', description: `भुगतान ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकता। (Cannot exceed outstanding)`, variant: 'destructive', duration: 9000 });
+      toastRef.current({ title: tr('राशि बकाया से अधिक', 'Amount exceeds outstanding'), description: tr(`भुगतान ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकता। (Cannot exceed outstanding)`, `Payment ₹${data.amount} cannot be more than outstanding ₹${outstanding}. (Cannot exceed outstanding)`), variant: 'destructive', duration: 9000 });
       return sentinel;
     }
     const payableAcc = procurementLegsOf(ev).payableAccountId || ev.creditAccountId;
@@ -5853,7 +5854,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const bankFallback = data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK;
     const creditAcc = resolveFarmerPaymentCredit(data.mode, { cash: ACCOUNT_IDS.CASH, bank: bankFallback, agency: data.agencyAccountId });
     if (data.mode === 'agency' && (!creditAcc || !agencyDirectAccounts(accounts, resolveProcurementAccountId(accounts, 'agencyReceivable'), [procurementLegsOf(ev).receivableAccountId]).some(a => a.id === creditAcc))) {
-      toastRef.current({ title: 'एजेंसी खाता चुनें', description: 'सीधे-एजेंसी भुगतान के लिए एजेंसी प्राप्य (MSP Receivable) खाता चुनें।', variant: 'destructive', duration: 9000 });
+      toastRef.current({ title: tr('एजेंसी खाता चुनें', 'Select agency account'), description: tr('सीधे-एजेंसी भुगतान के लिए एजेंसी प्राप्य (MSP Receivable) खाता चुनें।', 'For a direct-agency payment, select the agency receivable (MSP Receivable) account.'), variant: 'destructive', duration: 9000 });
       return sentinel;
     }
     if (!creditAcc) return sentinel;
@@ -5896,9 +5897,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // posting voucher (the only correction an engine voucher allows) → 'lot.cancelled' event.
   const cancelProcurementLot = useCallback(async (data: { lotId: string; reason: string }): Promise<boolean> => {
     if (guardFYLocked()) return false;
-    if (guardPermission('delete', 'लॉट रद्द करने')) return false;
+    if (guardPermission('delete', tr('लॉट रद्द करने', 'cancel lots'))) return false;
     const lot = procurementLotsRef.current.find(l => l.id === data.lotId);
-    if (!lot) { toastRef.current({ title: 'लॉट नहीं मिला', description: 'पेज refresh करें।', variant: 'destructive' }); return false; }
+    if (!lot) { toastRef.current({ title: tr('लॉट नहीं मिला', 'Lot not found'), description: tr('पेज refresh करें।', 'Refresh the page.'), variant: 'destructive' }); return false; }
     const reason = (data.reason || '').trim();
     const live = vouchersRef.current.filter(v => !v.isDeleted && v.approvalStatus !== 'rejected');
     const rr = procurementRuleResultsRef.current.find(r => r.lotId === lot.id);
@@ -5925,7 +5926,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       commissionAccrued: accrual && !sameLedger ? netOn(comId, [accrual]) : 0, commissionReceivable: netOn(comId, live),
     });
     if (blockers.length) {
-      toastRef.current({ title: 'लॉट रद्द नहीं हुआ', description: blockers.map(b => LOT_CANCEL_BLOCKER_TEXT[b]).join(' '), variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: tr('लॉट रद्द नहीं हुआ', 'Lot not cancelled'), description: blockers.map(b => LOT_CANCEL_BLOCKER_TEXT[b]).join(' '), variant: 'destructive', duration: 15000 });
       return false;
     }
     // The vouchers this cascade cancels must sit in an open period (the reversal posts today).
@@ -5937,7 +5938,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { data: saved, error } = await supabase.from('procurement_lots')
       .update({ cancelledAt: at, cancelledBy: by, cancelReason: reason, updatedAt: at }).eq('id', lot.id).select('id');
     if (error || !saved?.length) {
-      toastRef.current({ title: 'लॉट रद्द नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error?.message || 'लॉट नहीं मिला / अनुमति नहीं'}. (Migration 135 चलाई है?) कुछ भी बदला नहीं गया।`, variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: tr('लॉट रद्द नहीं हुआ', 'Lot not cancelled'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error?.message || 'लॉट नहीं मिला / अनुमति नहीं'}. (Migration 135 चलाई है?) कुछ भी बदला नहीं गया।`, `Not saved to the cloud — ${error?.message || 'lot not found / not permitted'}. (Has Migration 135 been run?) Nothing was changed.`), variant: 'destructive', duration: 15000 });
       return false;
     }
     const cancelledLot: ProcurementLot = { ...lot, cancelledAt: at, cancelledBy: by, cancelReason: reason, updatedAt: at };
@@ -5951,7 +5952,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const gone: FarmerSettlement = { ...stl, isDeleted: true, updatedAt: at };
       setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? gone : x); storage.setProcurementSettlements(u); return u; });
       const { error: se } = await supabase.from('procurement_settlements').upsert(withSoc(gone));
-      if (se) { reportError('write-partial', se.message, { at: 'cancelProcurementLot settlement' }); left.push(`निपटान ${stl.settlementNo || ''} (${se.message})`); }
+      if (se) { reportError('write-partial', se.message, { at: 'cancelProcurementLot settlement' }); left.push(tr(`निपटान ${stl.settlementNo || ''} (${se.message})`, `Settlement ${stl.settlementNo || ''} (${se.message})`)); }
     }
     // 3. Commission accrual.
     if (accrual && !cancelVoucher(accrual.id, `Lot cancelled — ${reason}`, by, { viaParent: true })) left.push(`कमीशन वाउचर ${accrual.voucherNo}`);
@@ -5965,9 +5966,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     if (left.length) {
-      toastRef.current({ title: '⚠ लॉट रद्द हुआ, पर कुछ बाकी है', description: `लॉट रद्द दर्ज है, लेकिन ये नहीं हो पाए: ${left.join(', ')}। ऊपर की चेतावनी देखें और इन्हें हाथ से ठीक करें (या admin को बताएँ)।`, variant: 'destructive', duration: 20000 });
+      toastRef.current({ title: tr('⚠ लॉट रद्द हुआ, पर कुछ बाकी है', '⚠ Lot cancelled, but some steps remain'), description: tr(`लॉट रद्द दर्ज है, लेकिन ये नहीं हो पाए: ${left.join(', ')}। ऊपर की चेतावनी देखें और इन्हें हाथ से ठीक करें (या admin को बताएँ)।`, `The lot is recorded as cancelled, but these could not be done: ${left.join(', ')}. See the warning above and fix them manually (or tell the admin).`), variant: 'destructive', duration: 20000 });
     } else {
-      toastRef.current({ title: 'लॉट रद्द हुआ', description: ev ? `पोस्टिंग ${ev.voucherNo} का reversal बना${stl ? ', निपटान रद्द' : ''}${accrual ? ', कमीशन रद्द' : ''}।` : 'लॉट रद्द दर्ज हुआ।', duration: 8000 });
+      toastRef.current({ title: tr('लॉट रद्द हुआ', 'Lot cancelled'), description: ev ? tr(`पोस्टिंग ${ev.voucherNo} का reversal बना${stl ? ', निपटान रद्द' : ''}${accrual ? ', कमीशन रद्द' : ''}।`, `Reversal created for posting ${ev.voucherNo}${stl ? ', settlement cancelled' : ''}${accrual ? ', commission cancelled' : ''}.`) : tr('लॉट रद्द दर्ज हुआ।', 'Lot cancellation recorded.'), duration: 8000 });
     }
     return true;
   }, [user, accounts, cancelVoucher, reverseVoucher, guardPeriodLock]);
@@ -6073,17 +6074,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const recordFundUtilisation = useCallback((data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; purpose?: string; resolutionNo?: string }): Voucher | null => {
     if (guardFYLocked()) return null;
     const fund = accounts.find(a => a.id === data.fundAccountId);
-    if (!fund || !isFundAccount(fund)) { toastRef.current({ title: 'निधि खाता नहीं मिला', description: 'Fund account not found or not a reserve fund.', variant: 'destructive', duration: 8000 }); return null; }
-    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return null; }
+    if (!fund || !isFundAccount(fund)) { toastRef.current({ title: tr('निधि खाता नहीं मिला', 'Fund account not found'), description: 'Fund account not found or not a reserve fund.', variant: 'destructive', duration: 8000 }); return null; }
+    if (!(data.amount > 0)) { toastRef.current({ title: tr('राशि डालें', 'Enter amount'), description: tr('राशि 0 से अधिक होनी चाहिए।', 'Amount must be more than 0.'), variant: 'destructive', duration: 8000 }); return null; }
     // Balance guard — never spend more than the fund currently holds (corpus).
     const corpus = buildFundStatement(fund, vouchersRef.current.filter(isCountedVoucher)).closing;
     if (data.amount > corpus + 0.005) {
-      toastRef.current({ title: 'निधि में पर्याप्त शेष नहीं', description: `${fund.nameHi || fund.name} में केवल ₹${corpus.toLocaleString('en-IN')} उपलब्ध है — इससे अधिक उपयोग नहीं हो सकता।`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('निधि में पर्याप्त शेष नहीं', 'Not enough balance in the fund'), description: tr(`${fund.nameHi || fund.name} में केवल ₹${corpus.toLocaleString('en-IN')} उपलब्ध है — इससे अधिक उपयोग नहीं हो सकता।`, `Only ₹${corpus.toLocaleString('en-IN')} is available in ${fund.nameHi || fund.name} — you cannot use more than this.`), variant: 'destructive', duration: 12000 });
       return null;
     }
     // Governance gate — large utilisation needs a resolution reference.
     if (data.amount > FUND_RESOLUTION_THRESHOLD && !data.resolutionNo?.trim()) {
-      toastRef.current({ title: 'प्रस्ताव संख्या आवश्यक', description: `₹${FUND_RESOLUTION_THRESHOLD.toLocaleString('en-IN')} से ऊपर निधि उपयोग के लिए समिति/AGM प्रस्ताव संख्या दर्ज करें।`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('प्रस्ताव संख्या आवश्यक', 'Resolution number required'), description: tr(`₹${FUND_RESOLUTION_THRESHOLD.toLocaleString('en-IN')} से ऊपर निधि उपयोग के लिए समिति/AGM प्रस्ताव संख्या दर्ज करें।`, `For fund use above ₹${FUND_RESOLUTION_THRESHOLD.toLocaleString('en-IN')}, enter the committee/AGM resolution number.`), variant: 'destructive', duration: 12000 });
       return null;
     }
     const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
@@ -6101,7 +6102,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         { id: lid(), accountId: bankAcc, type: 'Cr', amount: data.amount },
       ],
     });
-    if (v?.id) toastRef.current({ title: 'निधि उपयोग दर्ज', description: `${fund.nameHi || fund.name} · ₹${data.amount.toLocaleString('en-IN')}`, duration: 6000 });
+    if (v?.id) toastRef.current({ title: tr('निधि उपयोग दर्ज', 'Fund use recorded'), description: `${fund.nameHi || fund.name} · ₹${data.amount.toLocaleString('en-IN')}`, duration: 6000 });
     return v?.id ? v : null;
   }, [accounts, addVoucher, user]);
 
@@ -6223,7 +6224,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addLoan = useCallback((data: Omit<Loan, 'id' | 'loanNo' | 'createdAt'>): Loan => {
     if (guardFYLocked()) return { ...data, id: '' } as unknown as Loan;
-    if (refuseNonLiveMember(data.memberId, 'ऋण')) return { ...data, id: '' } as unknown as Loan;
+    if (refuseNonLiveMember(data.memberId, tr('ऋण', 'Loan'))) return { ...data, id: '' } as unknown as Loan;
     const fy = society.financialYear;
     const maxNum = loansRef.current.filter(l => l.loanNo?.includes(fy)).reduce((max, l) => {
       const m = l.loanNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
@@ -6245,7 +6246,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           loansRef.current = loansRef.current.filter(l => l.id !== newLoan.id);
           setLoansState(prev => prev.filter(l => l.id !== newLoan.id));   // RULE 1: roll back
-          toastRef.current({ title: 'ऋण सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('ऋण सेव नहीं हुआ', 'Loan not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; please add it again.`), variant: 'destructive', duration: 12000 });
         }
       });
     });
@@ -6300,13 +6301,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setLoansState(prev => prev.map(l => l.id === id ? before : l));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
 
   const deleteLoan = useCallback((id: string) => {
-    if (guardPermission('delete', 'ऋण मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('ऋण मिटाने', 'delete loans'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const loan = loansRef.current.find(l => l.id === id);
     // Data-integrity guard: a loan with posted repayments carries real receipt vouchers
@@ -6315,8 +6316,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // inconsistent. Refuse — the user must cancel the repayment vouchers first.
     if (loan && (loan.repaidAmount || 0) > 0) {
       toastRef.current({
-        title: 'ऋण नहीं हटाया जा सकता',
-        description: `इस ऋण की ₹${(loan.repaidAmount || 0).toLocaleString('en-IN')} चुकौती दर्ज है। पहले "वाउचर" पेज से चुकौती रसीदें रद्द करें, फिर ऋण मिटाएँ — ताकि बही मेल खाती रहे।`,
+        title: tr('ऋण नहीं हटाया जा सकता', 'Loan cannot be deleted'),
+        description: tr(`इस ऋण की ₹${(loan.repaidAmount || 0).toLocaleString('en-IN')} चुकौती दर्ज है। पहले "वाउचर" पेज से चुकौती रसीदें रद्द करें, फिर ऋण मिटाएँ — ताकि बही मेल खाती रहे।`, `This loan has ₹${(loan.repaidAmount || 0).toLocaleString('en-IN')} of repayment recorded. First cancel the repayment receipts from the "Vouchers" page, then delete the loan — so the books keep matching.`),
         variant: 'destructive', duration: 10000,
       });
       return;
@@ -6325,7 +6326,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Soft-delete (ECR-02 / RULE-5): retain the loan register row (isDeleted=true) for audit; the
     // loader filters it out. The linked disbursement voucher is still soft-cancelled below (RULE-3).
     supabase.from('loans').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
-      if (error) { failedCloudWrite('ऋण हटाना', error, () => setLoansState(prev => putBack(prev, loan))); return; }
+      if (error) { failedCloudWrite(tr('ऋण हटाना', 'Deleting the loan'), error, () => setLoansState(prev => putBack(prev, loan))); return; }
       emitAudit({ entityType: 'loan', entityId: id, action: 'delete', reason: 'Loan deleted' });
       // RULE 3: soft-cancel the auto-generated disbursement voucher (matched by the unique loanNo
       // in its narration) so no ghost "Loans & Advances" asset lingers in Trial Balance / Balance Sheet.
@@ -6359,7 +6360,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // The ledger for this category in THIS chart (lib/assetHeads) — never a conventional id that means another head here.
       const costId = resolveAssetHead('cost', data.category, accounts);
       if (!costId) {
-        toastRef.current({ title: 'संपत्ति का खाता नहीं मिला', description: `इस chart में "${data.category}" के लिए स्थायी संपत्ति का खाता नहीं है — Ledger Heads में Fixed Assets के नीचे बनाएँ, फिर दोबारा करें। कुछ सेव नहीं हुआ। (No fixed-asset ledger for ${data.category} in this chart; nothing was saved.)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('संपत्ति का खाता नहीं मिला', 'Asset account not found'), description: tr(`इस chart में "${data.category}" के लिए स्थायी संपत्ति का खाता नहीं है — Ledger Heads में Fixed Assets के नीचे बनाएँ, फिर दोबारा करें। कुछ सेव नहीं हुआ। (No fixed-asset ledger for ${data.category} in this chart; nothing was saved.)`, `This chart has no fixed-asset ledger for "${data.category}" — create it under Fixed Assets in Ledger Heads, then try again. Nothing was saved. (No fixed-asset ledger for ${data.category} in this chart.)`), variant: 'destructive', duration: 12000 });
         return { ...data, id: '' } as unknown as Asset;
       }
       const posting = assetAcquisitionPosting(data.category, data.cost, cashBank, costId);
@@ -6387,7 +6388,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           assetsRef.current = assetsRef.current.filter(a => a.id !== newAsset.id);
           setAssetsState(prev => prev.filter(a => a.id !== newAsset.id));   // RULE 1: roll back
-          toastRef.current({ title: 'संपत्ति सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('संपत्ति सेव नहीं हुई', 'Asset not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
         }
       });
     });
@@ -6404,7 +6405,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setAssetsState(prev => prev.map(a => a.id === id ? before : a));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
@@ -6416,7 +6417,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return false;
     const asset = assetsRef.current.find(a => a.id === id);
     if (!asset) return false;
-    if (asset.status === 'disposed') { toastRef.current({ title: 'पहले से disposed', description: 'This asset is already disposed.', variant: 'destructive' }); return false; }
+    if (asset.status === 'disposed') { toastRef.current({ title: tr('पहले से disposed', 'Already disposed'), description: 'This asset is already disposed.', variant: 'destructive' }); return false; }
     // Accumulated depreciation from purchase FY through the disposal FY (capped at cost − residual).
     const disposalFY = fyOfDate(new Date(opts.date));
     let accum = 0, cursor = fyOfDate(new Date(asset.purchaseDate)), guard = 0;
@@ -6427,7 +6428,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const heads = resolveAssetHeads(asset.category, accounts);
     const missing: AssetHeadKind[] = [...(!heads.costId ? ['cost' as const] : []), ...(accum > 0 && !heads.accumId ? ['accumDep' as const] : [])];
     if (missing.length) {
-      toastRef.current({ title: 'संपत्ति का खाता नहीं मिला', description: `इस chart में ये खाते नहीं हैं — ${missingAssetHeadsText(asset.category, missing, true)}। Ledger Heads में बनाएँ, फिर दोबारा करें। कुछ सेव नहीं हुआ। (Missing: ${missingAssetHeadsText(asset.category, missing, false)}; nothing was saved.)`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('संपत्ति का खाता नहीं मिला', 'Asset account not found'), description: tr(`इस chart में ये खाते नहीं हैं — ${missingAssetHeadsText(asset.category, missing, true)}। Ledger Heads में बनाएँ, फिर दोबारा करें। कुछ सेव नहीं हुआ। (Missing: ${missingAssetHeadsText(asset.category, missing, false)}; nothing was saved.)`, `These accounts are missing in this chart — ${missingAssetHeadsText(asset.category, missing, true)}. Create them in Ledger Heads, then try again. Nothing was saved. (Missing: ${missingAssetHeadsText(asset.category, missing, false)}.)`), variant: 'destructive', duration: 12000 });
       return false;
     }
     const posting = assetDisposalPosting({ category: asset.category, cost: asset.cost, accumDep: accum, saleProceeds: opts.saleProceeds, cashBankAccount: cashBank, gainAccount: disposalGainAccountId(accounts), costAccount: heads.costId!, accumAccount: heads.accumId ?? undefined });
@@ -6451,23 +6452,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Asset dispose sync', error);
         assetsRef.current = assetsRef.current.map(a => a.id === id ? before : a);
         setAssetsState(prev => prev.map(a => a.id === id ? before : a));   // RULE 1: roll back
-        toastRef.current({ title: 'Disposal सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('Disposal सेव नहीं हुआ', 'Disposal not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
     emitAudit({ entityType: 'asset', entityId: id, action: 'update', before: { status: 'active' }, after: { status: 'disposed', saleProceeds: opts.saleProceeds, gainLoss: posting.gainLoss } });
-    toastRef.current({ title: posting.gainLoss >= 0 ? '✅ Asset disposed (लाभ)' : '✅ Asset disposed (हानि)', description: `${asset.assetNo} · WDV ₹${posting.wdv.toLocaleString('en-IN')} · ${posting.gainLoss >= 0 ? 'लाभ' : 'हानि'} ₹${Math.abs(posting.gainLoss).toLocaleString('en-IN')}` });
+    toastRef.current({ title: posting.gainLoss >= 0 ? tr('✅ Asset disposed (लाभ)', '✅ Asset disposed (gain)') : tr('✅ Asset disposed (हानि)', '✅ Asset disposed (loss)'), description: tr(`${asset.assetNo} · WDV ₹${posting.wdv.toLocaleString('en-IN')} · ${posting.gainLoss >= 0 ? 'लाभ' : 'हानि'} ₹${Math.abs(posting.gainLoss).toLocaleString('en-IN')}`, `${asset.assetNo} · WDV ₹${posting.wdv.toLocaleString('en-IN')} · ${posting.gainLoss >= 0 ? 'gain' : 'loss'} ₹${Math.abs(posting.gainLoss).toLocaleString('en-IN')}`) });
     return true;
   }, [accounts, addVoucher]);
 
   const deleteAsset = useCallback((id: string) => {
-    if (guardPermission('delete', 'संपत्ति मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('संपत्ति मिटाने', 'delete assets'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const asset = assetsRef.current.find(a => a.id === id);
     setAssetsState(prev => { const updated = prev.filter(a => a.id !== id); return updated; });
     // Soft-delete (P0 #2): retain the asset row (isDeleted=true); dependent depreciation
     // vouchers are still soft-cancelled below. Load filters isDeleted out on refresh.
     supabase.from('assets').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
-      if (error) { failedCloudWrite('संपत्ति हटाना', error, () => setAssetsState(prev => putBack(prev, asset))); return; }
+      if (error) { failedCloudWrite(tr('संपत्ति हटाना', 'Deleting the asset'), error, () => setAssetsState(prev => putBack(prev, asset))); return; }
       // RULE 3: soft-cancel any depreciation journal(s) auto-posted for this asset (matched by its
       // unique assetNo in the narration) so no orphan depreciation expense / accumulated-dep lingers.
       if (asset) {
@@ -6553,7 +6554,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     if (unresolved.size) {
-      toastRef.current({ title: 'कुछ संपत्तियों का ह्रास नहीं चढ़ा', description: `इस chart में ये खाते नहीं हैं — ${[...unresolved].join('; ')}। Ledger Heads में बनाएँ और ह्रास दोबारा चलाएँ; बाक़ी संपत्तियों का ह्रास चढ़ गया है। (Depreciation skipped for assets whose ledgers are missing in this chart.)`, variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: tr('कुछ संपत्तियों का ह्रास नहीं चढ़ा', 'Depreciation not charged for some assets'), description: tr(`इस chart में ये खाते नहीं हैं — ${[...unresolved].join('; ')}। Ledger Heads में बनाएँ और ह्रास दोबारा चलाएँ; बाक़ी संपत्तियों का ह्रास चढ़ गया है। (Depreciation skipped for assets whose ledgers are missing in this chart.)`, `These accounts are missing in this chart — ${[...unresolved].join('; ')}. Create them in Ledger Heads and run depreciation again; depreciation for the other assets has been charged. (Depreciation skipped for assets whose ledgers are missing in this chart.)`), variant: 'destructive', duration: 15000 });
     }
     return { posted, skipped };
   // addVoucher and updateAsset are stable callbacks; assets/accounts/society/user are state
@@ -6734,11 +6735,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addStatutoryAppropriation = useCallback((opts: { date: string; narration?: string; discretionary?: { dividend?: number }; attestation: AuthorityAttestation }): Voucher | null => {
     const soc = societyRef.current;
     if (!soc?.statutoryAppropriation) {
-      toastRef.current({ title: 'सुविधा सक्रिय नहीं', description: 'इस समिति के लिए वैधानिक लाभ-विनियोजन अभी सक्षम नहीं है। (Statutory Appropriation is not enabled for this society.)', variant: 'destructive', duration: 9000 });
+      toastRef.current({ title: tr('सुविधा सक्रिय नहीं', 'Feature not active'), description: tr('इस समिति के लिए वैधानिक लाभ-विनियोजन अभी सक्षम नहीं है। (Statutory Appropriation is not enabled for this society.)', 'Statutory profit appropriation is not enabled for this society yet. (Statutory Appropriation is not enabled for this society.)'), variant: 'destructive', duration: 9000 });
       return null;
     }
     if (guardFYLocked()) return null;                                        // RULE 6
-    if (guardPermission('create', 'लाभ-विनियोजन पोस्ट करने')) return null;     // ECR-06
+    if (guardPermission('create', tr('लाभ-विनियोजन पोस्ट करने', 'post the profit appropriation'))) return null;     // ECR-06
     if (guardPeriodLock(opts.date)) return null;                             // ECR-07: no posting into a closed period
 
     // T-23 (UCAS CM-2, CL-7): a statutory appropriation is a FINALIZATION — its legality derives from
@@ -6747,7 +6748,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // stamp the attestation on the voucher so the figure ties to the governance act that authorized it.
     const authority = authorizeFinalization({ act: 'appropriation', preparedBy: userRef.current?.name ?? '', attestation: opts.attestation });
     if (!authority.ok || !authority.recorded) {
-      toastRef.current({ title: '🏛️ प्राधिकार आवश्यक', description: `${authority.problems.join('; ')} — AGM संकल्प के बिना विनियोजन पोस्ट नहीं होगा। (Appropriation needs recorded AGM authority.)`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('🏛️ प्राधिकार आवश्यक', '🏛️ Authorisation required'), description: tr(`${authority.problems.join('; ')} — AGM संकल्प के बिना विनियोजन पोस्ट नहीं होगा। (Appropriation needs recorded AGM authority.)`, `${authority.problems.join('; ')} — appropriation will not be posted without an AGM resolution. (Appropriation needs recorded AGM authority.)`), variant: 'destructive', duration: 12000 });
       return null;
     }
 
@@ -6769,12 +6770,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     if (!appr.ok) {
       // A bad plan (cap breach / over-appropriation) is refused, never posted (RULE 1).
-      toastRef.current({ title: '❌ विनियोजन पोस्ट नहीं हुआ', description: `${appr.problems.join('; ')} — कृपया सुधारें। (Appropriation refused.)`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('❌ विनियोजन पोस्ट नहीं हुआ', '❌ Appropriation not posted'), description: tr(`${appr.problems.join('; ')} — कृपया सुधारें। (Appropriation refused.)`, `${appr.problems.join('; ')} — please correct these. (Appropriation refused.)`), variant: 'destructive', duration: 12000 });
       return null;
     }
     const content = appropriationVoucherContent(appr, opts.narration);
     if (!content) {
-      toastRef.current({ title: 'कुछ विनियोजित नहीं हुआ', description: 'कोई शुद्ध अधिशेष नहीं — पोस्ट करने को कुछ नहीं। (No net surplus to appropriate.)', variant: 'destructive', duration: 9000 });
+      toastRef.current({ title: tr('कुछ विनियोजित नहीं हुआ', 'Nothing appropriated'), description: tr('कोई शुद्ध अधिशेष नहीं — पोस्ट करने को कुछ नहीं। (No net surplus to appropriate.)', 'No net surplus — nothing to post. (No net surplus to appropriate.)'), variant: 'destructive', duration: 9000 });
       return null;
     }
     // Stamp the governance authority on the voucher narration — the auditable link from the figure to
@@ -6783,7 +6784,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const authLabel = rec.kind === 'agm_adoption' ? 'AGM' : rec.kind;
     const narration = `${content.narration} · ${authLabel} ${rec.reference} (${rec.date}), अधिकृत: ${rec.authorizedBy}`;
     const v = addVoucher({ ...content, narration, date: opts.date, createdBy: userRef.current?.name ?? '' });
-    toastRef.current({ title: '✅ वैधानिक लाभ-विनियोजन पोस्ट', description: `कुल ₹${content.amount.toFixed(2)} — ${content.lines.length - 1} निधियों में। ${authLabel} ${rec.reference}. वाउचर ${v.voucherNo}.`, duration: 8000 });
+    toastRef.current({ title: tr('✅ वैधानिक लाभ-विनियोजन पोस्ट', '✅ Statutory profit appropriation posted'), description: tr(`कुल ₹${content.amount.toFixed(2)} — ${content.lines.length - 1} निधियों में। ${authLabel} ${rec.reference}. वाउचर ${v.voucherNo}.`, `Total ₹${content.amount.toFixed(2)} — into ${content.lines.length - 1} funds. ${authLabel} ${rec.reference}. Voucher ${v.voucherNo}.`), duration: 8000 });
     return v;
   }, [getProfitLoss, getShareCapitalReconciliation, addVoucher, guardFYLocked, guardPermission, guardPeriodLock, accounts]);
 
@@ -6802,7 +6803,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         opts?.onBaseFail?.();   // RULE 1: roll back local state
-        toastRef.current({ title: 'स्टॉक आइटम सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा सेव करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('स्टॉक आइटम सेव नहीं हुआ', 'Stock item not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा सेव करें।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; please save again.`), variant: 'destructive', duration: 12000 });
         return;
       }
       opts?.onBaseSuccess?.();
@@ -6837,7 +6838,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // this also stops an import / older client.
   const refuseClosingStockRouting = (d: { salesAccountId?: string; purchaseAccountId?: string }): boolean => {
     if (d.salesAccountId !== CLOSING_STOCK_CONTRA_ID && d.purchaseAccountId !== CLOSING_STOCK_CONTRA_ID) return false;
-    toastRef.current({ title: 'यह खाता नहीं चुन सकते', description: '5150 "समापन माल (व्यापार खाता)" वस्तु का खरीद/बिक्री खाता नहीं हो सकता — कोई खरीद (51xx) या बिक्री (41xx) खाता चुनें।', variant: 'destructive', duration: 10000 });
+    toastRef.current({ title: tr('यह खाता नहीं चुन सकते', 'This account cannot be chosen'), description: tr('5150 "समापन माल (व्यापार खाता)" वस्तु का खरीद/बिक्री खाता नहीं हो सकता — कोई खरीद (51xx) या बिक्री (41xx) खाता चुनें।', '5150 "Closing Stock (Trading Account)" cannot be an item\'s purchase/sales account — choose a purchase (51xx) or sales (41xx) account.'), variant: 'destructive', duration: 10000 });
     return true;
   };
 
@@ -6891,7 +6892,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteStockItem = useCallback((id: string) => {
-    if (guardPermission('delete', 'स्टॉक मद मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('स्टॉक मद मिटाने', 'delete stock items'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const item = stockItems.find(i => i.id === id);
     if (!item) return;
@@ -6901,7 +6902,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // The write-off journal and the movement clean-up run only once the item row is saved in the cloud
     // (RULE 1 + 3) — a failed delete used to post the write-off anyway and leave the item active after F5.
     supabase.from('stock_items').update({ isActive: false, currentStock: 0 }).eq('id', id).then(({ error }) => {
-      if (error) { failedCloudWrite('स्टॉक मद हटाना', error, () => setStockItemsState(prev => prev.map(i => i.id === id ? item : i))); return; }
+      if (error) { failedCloudWrite(tr('स्टॉक मद हटाना', 'Deleting the stock item'), error, () => setStockItemsState(prev => prev.map(i => i.id === id ? item : i))); return; }
       // Write-off uses the AUTHORITATIVE movement-based qty (RULE 2), not the cached
       // currentStock field — which can be stale after a purchase edit/delete and would
       // otherwise create a phantom write-off journal for stock that no longer exists.
@@ -6936,7 +6937,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .then(({ error: movErr }) => {
           if (!movErr) return;
           reportCascade('Stock-item movements cascade-delete sync', movErr);
-          toastRef.current({ title: 'वस्तु हटी, पर उसकी स्टॉक एंट्रियाँ क्लाउड से नहीं हटीं', description: `वस्तु निष्क्रिय है; बची एंट्रियाँ error log में दर्ज हैं। (Item deleted, its stock movements were not.) ${movErr.message}`, variant: 'destructive', duration: 10000 });
+          toastRef.current({ title: tr('वस्तु हटी, पर उसकी स्टॉक एंट्रियाँ क्लाउड से नहीं हटीं', 'Item deleted, but its stock entries were not removed from the cloud'), description: tr(`वस्तु निष्क्रिय है; बची एंट्रियाँ error log में दर्ज हैं। (Item deleted, its stock movements were not.) ${movErr.message}`, `The item is inactive; the remaining entries are recorded in the error log. (Item deleted, its stock movements were not.) ${movErr.message}`), variant: 'destructive', duration: 10000 });
         });
       console.info(`[AUDIT-DELETE] StockItem id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
     });
@@ -6954,7 +6955,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         stockMovementsRef.current = stockMovementsRef.current.filter(m => m.id !== movement.id);
         setStockMovementsState(prev => prev.filter(m => m.id !== movement.id));   // RULE 1: roll back
-        toastRef.current({ title: 'स्टॉक मूवमेंट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('स्टॉक मूवमेंट सेव नहीं हुआ', 'Stock movement not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
         return;
       }
       if (_mvGod) supabase.from('stock_movements').update({ godownId: _mvGod }).eq('id', movement.id).then(({ error: gErr }) => { if (gErr) { console.warn('Movement godown patch:', gErr.message); reportError('write-partial', gErr.message, { at: 'Movement godown patch:' }); } });
@@ -6972,7 +6973,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         else qty -= Math.abs(m.qty);
       }
       qty = Math.max(0, qty);
-      supabase.from('stock_items').update({ currentStock: qty }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: 'स्टॉक मात्रा क्लाउड में सेव नहीं हुई', description: `Refresh के बाद स्टॉक जाँचें। (Stock update failed.) ${error.message}`, variant: 'destructive', duration: 10000 }); } });
+      supabase.from('stock_items').update({ currentStock: qty }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: tr('स्टॉक मात्रा क्लाउड में सेव नहीं हुई', 'Stock quantity not saved to the cloud'), description: tr(`Refresh के बाद स्टॉक जाँचें। (Stock update failed.) ${error.message}`, `Check the stock after Refresh. (Stock update failed.) ${error.message}`), variant: 'destructive', duration: 10000 }); } });
       return { ...i, currentStock: qty };
     }));
   }, []);
@@ -6990,10 +6991,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const srcRow = rows.find(r => r.itemId === input.itemId && r.godownId === input.fromGodownId);
     const availableQty = srcRow?.qty ?? 0;
     const v = validateTransfer({ fromGodownId: input.fromGodownId, toGodownId: input.toGodownId, qty: input.qty, availableQty });
-    if (!v.ok) { toastRef.current({ title: 'स्थानांतरण नहीं हुआ', description: v.error, variant: 'destructive', duration: 8000 }); return false; }
+    if (!v.ok) { toastRef.current({ title: tr('स्थानांतरण नहीं हुआ', 'Transfer not done'), description: v.error, variant: 'destructive', duration: 8000 }); return false; }
 
     const rate = srcRow && srcRow.qty > 0 ? srcRow.value / srcRow.qty : 0;
-    const nameOf = (id: string) => id === UNASSIGNED_GODOWN ? 'बिना गोदाम' : (godowns.find(g => g.id === id)?.name || id);
+    const nameOf = (id: string) => id === UNASSIGNED_GODOWN ? tr('बिना गोदाम', 'No godown') : (godowns.find(g => g.id === id)?.name || id);
     const seq = new Set(movs.filter(m => (m.referenceNo || '').startsWith('TRF/')).map(m => m.referenceNo)).size + 1;
     const transferNo = `TRF/${seq}`;
     const date = input.date || new Date().toISOString().split('T')[0];
@@ -7008,7 +7009,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const rollback = (msg: string) => {
       stockMovementsRef.current = stockMovementsRef.current.filter(m => m.id !== outMv.id && m.id !== inMv.id);
       setStockMovementsState(prev => prev.filter(m => m.id !== outMv.id && m.id !== inMv.id));   // RULE 1: roll back BOTH legs
-      toastRef.current({ title: 'स्थानांतरण सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${msg}. Refresh करने पर transfer नहीं रहेगा।`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('स्थानांतरण सेव नहीं हुआ', 'Transfer not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${msg}. Refresh करने पर transfer नहीं रहेगा।`, `Not saved to the cloud — ${msg}. The transfer will be lost on Refresh.`), variant: 'destructive', duration: 12000 });
     };
     const baseOf = (m: StockMovement) => { const { godownId: _g, ...base } = m; return base; };
     Promise.all([
@@ -7022,7 +7023,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       supabase.from('stock_movements').update({ godownId: inMv.godownId }).eq('id', inMv.id).then(({ error }) => { if (error) { console.warn('Transfer IN godown patch:', error.message); reportError('write-partial', error.message, { at: 'Transfer IN godown patch:' }); } });
       emitAudit({ entityType: 'stockMovement', entityId: transferNo, action: 'create', after: { itemId: input.itemId, from: input.fromGodownId, to: input.toGodownId, qty: input.qty }, reason: `Inter-godown transfer ${transferNo}` });
     });
-    toastRef.current({ title: 'स्थानांतरण दर्ज', description: `${transferNo}: ${input.qty} ${nameOf(input.fromGodownId)} → ${nameOf(input.toGodownId)}` });
+    toastRef.current({ title: tr('स्थानांतरण दर्ज', 'Transfer recorded'), description: `${transferNo}: ${input.qty} ${nameOf(input.fromGodownId)} → ${nameOf(input.toGodownId)}` });
     return true;
   }, [godowns]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -7039,7 +7040,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .map(s => s.name);
     if (unmappedNames.length > 0) {
       throw new Error(
-        `इन वस्तुओं को पहले बिक्री खाता (group) असाइन करें: ${unmappedNames.join(', ')} — फिर बिक्री पोस्ट होगी। (Assign a Sales A/c to: ${unmappedNames.join(', ')})`
+        tr(`इन वस्तुओं को पहले बिक्री खाता (group) असाइन करें: ${unmappedNames.join(', ')} — फिर बिक्री पोस्ट होगी। (Assign a Sales A/c to: ${unmappedNames.join(', ')})`, `First assign a Sales account (group) to these items: ${unmappedNames.join(', ')} — then the sale will post. (Assign a Sales A/c to: ${unmappedNames.join(', ')})`)
       );
     }
     // Batch C: a line whose item is not in the stock list has no routing at all — it used to fall to
@@ -7112,7 +7113,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (i.id !== item.itemId) return i;
           const newStock = Math.max(0, i.currentStock - item.qty);
           if (!server) supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id)
-            .then(({ error }) => { if (error) { reportCascade('Stock sync error', error); toastRef.current({ title: 'स्टॉक एंट्री क्लाउड में सेव नहीं हुई', description: `Refresh के बाद स्टॉक जाँचें। (Stock save failed.) ${error.message}`, variant: 'destructive', duration: 10000 }); } });
+            .then(({ error }) => { if (error) { reportCascade('Stock sync error', error); toastRef.current({ title: tr('स्टॉक एंट्री क्लाउड में सेव नहीं हुई', 'Stock entry not saved to the cloud'), description: tr(`Refresh के बाद स्टॉक जाँचें। (Stock save failed.) ${error.message}`, `Check the stock after Refresh. (Stock save failed.) ${error.message}`), variant: 'destructive', duration: 10000 }); } });
           return { ...i, currentStock: newStock };
         });
         return updated;
@@ -7180,7 +7181,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Sale save failed:', error.message);
         salesRef.current = salesRef.current.filter(s => s.id !== sale.id);
         setSalesState(prev => prev.filter(s => s.id !== sale.id));
-        toastRef.current({ title: 'बिक्री सेव नहीं हुई', description: error.message, variant: 'destructive' });
+        toastRef.current({ title: tr('बिक्री सेव नहीं हुई', 'Sale not saved'), description: error.message, variant: 'destructive' });
       });
     };
     // T-03 (ADR-0005): take the OFFICIAL saleNo from the server sequence (book 'SL') at persist;
@@ -7204,13 +7205,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const guardLiveReturns = (kind: 'sale' | 'purchase', docId: string): boolean => {
     const n = vouchersRef.current.filter(v => !v.isDeleted && v.refType === `${kind}.return` && v.refId === docId).length;
     if (n === 0) return false;
-    const page = kind === 'sale' ? 'बिक्री वापसी (Sales Return)' : 'ख़रीद वापसी (Purchase Return)';
-    toastRef.current({ title: 'पहले वापसी (return) हटाएँ', description: `इस ${kind === 'sale' ? 'बिक्री' : 'ख़रीद'} की ${n} चालू वापसी है। पहले ${page} page से उसे delete करें, फिर यह बिल हटेगा।`, variant: 'destructive', duration: 10000 });
+    const page = kind === 'sale' ? tr('बिक्री वापसी (Sales Return)', 'Sales Return') : tr('ख़रीद वापसी (Purchase Return)', 'Purchase Return');
+    toastRef.current({ title: tr('पहले वापसी (return) हटाएँ', 'Delete the return first'), description: tr(`इस ${kind === 'sale' ? 'बिक्री' : 'ख़रीद'} की ${n} चालू वापसी है। पहले ${page} page से उसे delete करें, फिर यह बिल हटेगा।`, `This ${kind === 'sale' ? 'sale' : 'purchase'} has ${n} active return(s). Delete it from the ${page} page first, then this bill can be deleted.`), variant: 'destructive', duration: 10000 });
     return true;
   };
 
   const deleteSale = useCallback((id: string): boolean => {
-    if (guardPermission('delete', 'बिक्री मिटाने')) return false;   // ECR-06: role gate
+    if (guardPermission('delete', tr('बिक्री मिटाने', 'delete sales'))) return false;   // ECR-06: role gate
     if (guardFYLocked()) return false;
     if (guardLiveReturns('sale', id)) return false;
     // S3-f-2: under the posting service the whole delete is one server transaction.
@@ -7230,14 +7231,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // cloud (RULE 1 + 3) — it used to run first, so a failed delete left a live sale with its vouchers
     // cancelled and its stock reversed after F5.
     supabase.from('sales').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
-      if (error) { failedCloudWrite('बिक्री हटाना', error, () => setSalesState(prev => putBack(prev, sale))); return; }
+      if (error) { failedCloudWrite(tr('बिक्री हटाना', 'Deleting the sale'), error, () => setSalesState(prev => putBack(prev, sale))); return; }
       // Soft-delete all linked vouchers (main + GST)
       const linkedIds = ([sale.voucherId, ...(sale.gstVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
       cancelLinkedVouchers(linkedIds, `Sale ${sale.saleNo} deleted`, 'System');
       // Reverse stock deductions on stock_items.currentStock
       sale.items.forEach(item => {
         setStockItemsState(s => {
-          const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = i.currentStock + item.qty; supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: 'स्टॉक मात्रा क्लाउड में सेव नहीं हुई', description: `Refresh के बाद स्टॉक जाँचें। (Stock update failed.) ${error.message}`, variant: 'destructive', duration: 10000 }); } }); return { ...i, currentStock: newStock }; });
+          const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = i.currentStock + item.qty; supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: tr('स्टॉक मात्रा क्लाउड में सेव नहीं हुई', 'Stock quantity not saved to the cloud'), description: tr(`Refresh के बाद स्टॉक जाँचें। (Stock update failed.) ${error.message}`, `Check the stock after Refresh. (Stock update failed.) ${error.message}`), variant: 'destructive', duration: 10000 }); } }); return { ...i, currentStock: newStock }; });
           return updated;
         });
       });
@@ -7263,8 +7264,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .map(s => s.name);
     if (unmappedNames.length > 0) {
       toastRef.current({
-        title: 'बिक्री खाता आवश्यक',
-        description: `इन वस्तुओं को पहले बिक्री खाता (group) असाइन करें: ${unmappedNames.join(', ')}`,
+        title: tr('बिक्री खाता आवश्यक', 'Sales account required'),
+        description: tr(`इन वस्तुओं को पहले बिक्री खाता (group) असाइन करें: ${unmappedNames.join(', ')}`, `First assign a sales account (group) to these items: ${unmappedNames.join(', ')}`),
         variant: 'destructive',
         duration: 10000,
       });
@@ -7272,12 +7273,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     const unknownSaleU = unknownItemLines(data.items, stockItems);
     if (unknownSaleU.length > 0) {
-      toastRef.current({ title: 'वस्तु नहीं मिली', description: UNKNOWN_ITEM_MESSAGE('sale', unknownSaleU), variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('वस्तु नहीं मिली', 'Item not found'), description: UNKNOWN_ITEM_MESSAGE('sale', unknownSaleU), variant: 'destructive', duration: 10000 });
       return null;
     }
     const original = salesRef.current.find(s => s.id === id);
     if (!original) {
-      toastRef.current({ title: 'बिक्री नहीं मिली', description: 'Refresh करके दोबारा देखें। (Sale not found.)', variant: 'destructive' });
+      toastRef.current({ title: tr('बिक्री नहीं मिली', 'Sale not found'), description: tr('Refresh करके दोबारा देखें। (Sale not found.)', 'Refresh and check again. (Sale not found.)'), variant: 'destructive' });
       return null;
     }
     // RM-17: a bill whose voucher sits on the combined GST ledger stays there when edited (no history moves).
@@ -7385,7 +7386,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // document now shows in getPhantomVoucherDiagnostics() for an explicit fix.
     if (!newVoucher.id) {
       reportError('sale-edit-voucher-refused', 'replacement voucher refused after the original was cancelled', { id, no: original.saleNo });
-      toastRef.current({ title: '❌ नया वाउचर नहीं बना', description: `${original.saleNo}: पुराना वाउचर रद्द हो चुका है पर नया नहीं बना — इस entry को दोबारा edit करके save करें। (Replacement voucher was refused.)`, variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: tr('❌ नया वाउचर नहीं बना', '❌ New voucher not created'), description: tr(`${original.saleNo}: पुराना वाउचर रद्द हो चुका है पर नया नहीं बना — इस entry को दोबारा edit करके save करें। (Replacement voucher was refused.)`, `${original.saleNo}: the old voucher is cancelled but the new one was not created — edit this entry again and save. (Replacement voucher was refused.)`), variant: 'destructive', duration: 15000 });
     }
 
     // 4️⃣ Add fresh stock_movement rows for the edited sale
@@ -7435,7 +7436,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // sale ROW failed here, and the cascade can't be cleanly undone from the client. Per
           // RULE 1 we make the failure impossible to miss and tell the user to refresh and
           // re-verify. (A fully atomic sale-edit is a separate, larger redesign.)
-          toastRef.current({ title: 'बिक्री edit cloud-save fail', description: `बिक्री क्लाउड में सेव नहीं हुई — ${error.message}. Refresh करके बिक्री दोबारा जाँचें; ज़रूरत हो तो फिर से edit करें।`, variant: 'destructive', duration: 15000 });
+          toastRef.current({ title: tr('बिक्री edit cloud-save fail', 'Sale edit cloud-save failed'), description: tr(`बिक्री क्लाउड में सेव नहीं हुई — ${error.message}. Refresh करके बिक्री दोबारा जाँचें; ज़रूरत हो तो फिर से edit करें।`, `Sale not saved to the cloud — ${error.message}. Refresh and check the sale again; edit it again if needed.`), variant: 'destructive', duration: 15000 });
         } else {
           persistExtras('sales', id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound ?? 0, creditDays: sCreditDays ?? null, dueDate: sDueDate ?? null, lateFeeRule: sLateFee ?? null, customerId, bankAccountId: sBankId ?? null }, `Sale ${original.saleNo}`);
         }
@@ -7456,7 +7457,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const rcmT = rcmPurchaseTerms(data);
     const rcmAccId = rcmT.rcm ? rcmPayableAccountId(accountsRef.current, localOnlyAccountIdsRef.current) : null;
     if (rcmT.rcm && !rcmAccId) {
-      toastRef.current({ title: 'RCM देय खाता नहीं मिला', description: '"Reverse Charge GST Payable (RCM)" (2297) खाता chart में नहीं है — पहले Ledger Heads में बनाएँ, फिर यह खरीद सेव करें। कुछ भी सेव नहीं हुआ। (No reverse-charge payable ledger — nothing was saved.)', variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('RCM देय खाता नहीं मिला', 'RCM payable account not found'), description: tr('"Reverse Charge GST Payable (RCM)" (2297) खाता chart में नहीं है — पहले Ledger Heads में बनाएँ, फिर यह खरीद सेव करें। कुछ भी सेव नहीं हुआ। (No reverse-charge payable ledger — nothing was saved.)', 'The "Reverse Charge GST Payable (RCM)" (2297) account is not in the chart — create it in Ledger Heads first, then save this purchase. Nothing was saved. (No reverse-charge payable ledger — nothing was saved.)'), variant: 'destructive', duration: 12000 });
       return { ...data, id: '' } as unknown as Purchase;
     }
     if (rcmT.rcm) data = { ...data, grandTotal: rcmT.grandTotal };
@@ -7468,7 +7469,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .map(s => s.name);
     if (unmappedNames.length > 0) {
       throw new Error(
-        `इन वस्तुओं को पहले खरीद खाता (group) असाइन करें: ${unmappedNames.join(', ')} — फिर खरीद पोस्ट होगी। (Assign a Purchase A/c to: ${unmappedNames.join(', ')})`
+        tr(`इन वस्तुओं को पहले खरीद खाता (group) असाइन करें: ${unmappedNames.join(', ')} — फिर खरीद पोस्ट होगी। (Assign a Purchase A/c to: ${unmappedNames.join(', ')})`, `First assign a Purchase account (group) to these items: ${unmappedNames.join(', ')} — then the purchase will post. (Assign a Purchase A/c to: ${unmappedNames.join(', ')})`)
       );
     }
     // Batch C: an item not in the stock list has no routing — it used to fall to '5101'. Refuse it.
@@ -7555,7 +7556,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (i.id !== item.itemId) return i;
           const newStock = i.currentStock + item.qty;
           if (!server) supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: item.rate }).eq('id', i.id)
-            .then(({ error }) => { if (error) { reportCascade('Stock sync error', error); toastRef.current({ title: 'स्टॉक एंट्री क्लाउड में सेव नहीं हुई', description: `Refresh के बाद स्टॉक जाँचें। (Stock save failed.) ${error.message}`, variant: 'destructive', duration: 10000 }); } });
+            .then(({ error }) => { if (error) { reportCascade('Stock sync error', error); toastRef.current({ title: tr('स्टॉक एंट्री क्लाउड में सेव नहीं हुई', 'Stock entry not saved to the cloud'), description: tr(`Refresh के बाद स्टॉक जाँचें। (Stock save failed.) ${error.message}`, `Check the stock after Refresh. (Stock save failed.) ${error.message}`), variant: 'destructive', duration: 10000 }); } });
           return { ...i, currentStock: newStock, purchaseRate: item.rate };
         });
         return updated;
@@ -7618,7 +7619,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Purchase save failed:', error.message);
         purchasesRef.current = purchasesRef.current.filter(p => p.id !== purchase.id);
         setPurchasesState(prev => prev.filter(p => p.id !== purchase.id));
-        toastRef.current({ title: 'खरीद सेव नहीं हुई', description: error.message, variant: 'destructive' });
+        toastRef.current({ title: tr('खरीद सेव नहीं हुई', 'Purchase not saved'), description: error.message, variant: 'destructive' });
       });
     };
     // T-03 (ADR-0005): take the OFFICIAL purchaseNo from the server sequence (book 'PUR') at
@@ -7636,7 +7637,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [society.financialYear, suppliers, accounts, addVoucher, stockItems]);
 
   const deletePurchase = useCallback((id: string): boolean => {
-    if (guardPermission('delete', 'खरीद मिटाने')) return false;   // ECR-06: role gate
+    if (guardPermission('delete', tr('खरीद मिटाने', 'delete purchases'))) return false;   // ECR-06: role gate
     if (guardFYLocked()) return false;
     if (guardLiveReturns('purchase', id)) return false;
     // S3-f-2: under the posting service the whole delete is one server transaction.
@@ -7656,14 +7657,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // cloud (RULE 1 + 3) — it used to run first, so a failed delete left a live purchase with its vouchers
     // cancelled and its stock reversed after F5.
     supabase.from('purchases').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
-      if (error) { failedCloudWrite('खरीद हटाना', error, () => setPurchasesState(prev => putBack(prev, purchase))); return; }
+      if (error) { failedCloudWrite(tr('खरीद हटाना', 'Deleting the purchase'), error, () => setPurchasesState(prev => putBack(prev, purchase))); return; }
       // Cascade soft-delete: main voucher + all GST/TDS tax vouchers
       const linkedIds = ([purchase.voucherId, ...(purchase.taxVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
       cancelLinkedVouchers(linkedIds, `Purchase ${purchase.purchaseNo} deleted`, 'System');
       // Reverse stock additions on stock_items.currentStock
       purchase.items.forEach(item => {
         setStockItemsState(s => {
-          const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = Math.max(0, i.currentStock - item.qty); supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: 'स्टॉक मात्रा क्लाउड में सेव नहीं हुई', description: `Refresh के बाद स्टॉक जाँचें। (Stock update failed.) ${error.message}`, variant: 'destructive', duration: 10000 }); } }); return { ...i, currentStock: newStock }; });
+          const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = Math.max(0, i.currentStock - item.qty); supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: tr('स्टॉक मात्रा क्लाउड में सेव नहीं हुई', 'Stock quantity not saved to the cloud'), description: tr(`Refresh के बाद स्टॉक जाँचें। (Stock update failed.) ${error.message}`, `Check the stock after Refresh. (Stock update failed.) ${error.message}`), variant: 'destructive', duration: 10000 }); } }); return { ...i, currentStock: newStock }; });
           return updated;
         });
       });
@@ -7690,8 +7691,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .map(s => s.name);
     if (unmappedNames.length > 0) {
       toastRef.current({
-        title: 'खरीद खाता आवश्यक',
-        description: `इन वस्तुओं को पहले खरीद खाता (group) असाइन करें: ${unmappedNames.join(', ')}`,
+        title: tr('खरीद खाता आवश्यक', 'Purchase account required'),
+        description: tr(`इन वस्तुओं को पहले खरीद खाता (group) असाइन करें: ${unmappedNames.join(', ')}`, `First assign a purchase account (group) to these items: ${unmappedNames.join(', ')}`),
         variant: 'destructive',
         duration: 10000,
       });
@@ -7699,12 +7700,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     const unknownPurchaseU = unknownItemLines(data.items, stockItems);
     if (unknownPurchaseU.length > 0) {
-      toastRef.current({ title: 'वस्तु नहीं मिली', description: UNKNOWN_ITEM_MESSAGE('purchase', unknownPurchaseU), variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('वस्तु नहीं मिली', 'Item not found'), description: UNKNOWN_ITEM_MESSAGE('purchase', unknownPurchaseU), variant: 'destructive', duration: 10000 });
       return null;
     }
     const original = purchasesRef.current.find(p => p.id === id);
     if (!original) {
-      toastRef.current({ title: 'खरीद नहीं मिली', description: 'Refresh करके दोबारा देखें। (Purchase not found.)', variant: 'destructive' });
+      toastRef.current({ title: tr('खरीद नहीं मिली', 'Purchase not found'), description: tr('Refresh करके दोबारा देखें। (Purchase not found.)', 'Refresh and check again. (Purchase not found.)'), variant: 'destructive' });
       return null;
     }
     // RM-17: a bill whose voucher sits on the combined ITC ledger stays there when edited (no history moves).
@@ -7714,7 +7715,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const rcmT = rcmPurchaseTerms(data);
     const rcmAccId = rcmT.rcm ? rcmPayableAccountId(accountsRef.current, localOnlyAccountIdsRef.current) : null;
     if (rcmT.rcm && !rcmAccId) {
-      toastRef.current({ title: 'RCM देय खाता नहीं मिला', description: '"Reverse Charge GST Payable (RCM)" (2297) खाता chart में नहीं है — पहले Ledger Heads में बनाएँ, फिर यह खरीद सेव करें। कुछ भी सेव नहीं हुआ। (No reverse-charge payable ledger — nothing was saved.)', variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('RCM देय खाता नहीं मिला', 'RCM payable account not found'), description: tr('"Reverse Charge GST Payable (RCM)" (2297) खाता chart में नहीं है — पहले Ledger Heads में बनाएँ, फिर यह खरीद सेव करें। कुछ भी सेव नहीं हुआ। (No reverse-charge payable ledger — nothing was saved.)', 'The "Reverse Charge GST Payable (RCM)" (2297) account is not in the chart — create it in Ledger Heads first, then save this purchase. Nothing was saved. (No reverse-charge payable ledger — nothing was saved.)'), variant: 'destructive', duration: 12000 });
       return null;
     }
     if (rcmT.rcm) data = { ...data, grandTotal: rcmT.grandTotal };
@@ -7834,7 +7835,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // document now shows in getPhantomVoucherDiagnostics() for an explicit fix.
     if (!newVoucher.id) {
       reportError('purchase-edit-voucher-refused', 'replacement voucher refused after the original was cancelled', { id, no: original.purchaseNo });
-      toastRef.current({ title: '❌ नया वाउचर नहीं बना', description: `${original.purchaseNo}: पुराना वाउचर रद्द हो चुका है पर नया नहीं बना — इस entry को दोबारा edit करके save करें। (Replacement voucher was refused.)`, variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: tr('❌ नया वाउचर नहीं बना', '❌ New voucher not created'), description: tr(`${original.purchaseNo}: पुराना वाउचर रद्द हो चुका है पर नया नहीं बना — इस entry को दोबारा edit करके save करें। (Replacement voucher was refused.)`, `${original.purchaseNo}: the old voucher is cancelled but the new one was not created — edit this entry again and save. (Replacement voucher was refused.)`), variant: 'destructive', duration: 15000 });
     }
 
     // 4️⃣ Add fresh stock_movement rows for the edited purchase
@@ -7882,7 +7883,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return;
           }
           console.error('Purchase update failed:', error.message);
-          toastRef.current({ title: 'खरीद का बदलाव सेव नहीं हुआ', description: error.message, variant: 'destructive' });
+          toastRef.current({ title: tr('खरीद का बदलाव सेव नहीं हुआ', 'Purchase change not saved'), description: error.message, variant: 'destructive' });
         } else {
           persistExtras('purchases', id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc ?? 0, roundOff: pRound ?? 0, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null, supplierBillNo: pBillNo ?? null, supplierBillDate: pBillDate ?? null, creditDays: pCreditDays ?? null, dueDate: pDueDate ?? null, lateFeeRule: pLateFee ?? null }, `Purchase ${original.purchaseNo}`);
         }
@@ -7917,7 +7918,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           employeesRef.current = employeesRef.current.filter(e => e.id !== emp.id);
           setEmployeesState(prev => prev.filter(e => e.id !== emp.id));   // RULE 1: roll back
-          toastRef.current({ title: 'कर्मचारी सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('कर्मचारी सेव नहीं हुआ', 'Employee not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
         }
       });
     });
@@ -7934,25 +7935,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setEmployeesState(prev => prev.map(e => e.id === id ? before : e));   // RULE 1: roll back to prior state
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, []);
 
   const deleteEmployee = useCallback((id: string) => {
-    if (guardPermission('delete', 'कर्मचारी मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('कर्मचारी मिटाने', 'delete employees'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     // Guard (H9-style): block if the employee has salary records — deleting would orphan those
     // payslips (SalaryRecord has no denormalized name), breaking the statutory wage register.
     const linkedSlips = salaryRecordsRef.current.filter(r => r.employeeId === id).length;
     if (linkedSlips > 0) {
-      toastRef.current({ title: 'कर्मचारी हटाया नहीं जा सकता', description: `${linkedSlips} वेतन-पर्ची इस कर्मचारी से जुड़ी हैं। पहले वे हटाएँ, या कर्मचारी को रखें (वेतन रजिस्टर के लिए ज़रूरी)।`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('कर्मचारी हटाया नहीं जा सकता', 'Employee cannot be deleted'), description: tr(`${linkedSlips} वेतन-पर्ची इस कर्मचारी से जुड़ी हैं। पहले वे हटाएँ, या कर्मचारी को रखें (वेतन रजिस्टर के लिए ज़रूरी)।`, `${linkedSlips} salary slip(s) are linked to this employee. Delete them first, or keep the employee (needed for the salary register).`), variant: 'destructive', duration: 10000 });
       return;
     }
     // Soft-delete (ECR-02 / RULE-5): retain the employee row (isDeleted=true) for audit; the loader filters it out.
     const removed = employeesRef.current.find(e => e.id === id);
     setEmployeesState(prev => { const updated = prev.filter(e => e.id !== id); return updated; });
-    supabase.from('employees').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) failedCloudWrite('कर्मचारी हटाना', error, () => setEmployeesState(prev => putBack(prev, removed))); });
+    supabase.from('employees').update({ isDeleted: true }).eq('id', id).then(({ error }) => { if (error) failedCloudWrite(tr('कर्मचारी हटाना', 'Deleting the employee'), error, () => setEmployeesState(prev => putBack(prev, removed))); });
     emitAudit({ entityType: 'employee', entityId: id, action: 'delete', reason: 'Employee deleted' });
     console.info(`[AUDIT-DELETE] Employee id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
   }, []);
@@ -7977,7 +7978,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // A slip is saved only WITH its accrual voucher: a slip whose PF/ESI/PT/TDS never reach the ledger would
     // still feed 24Q, the TDS Register and Statutory Reconciliation (RULE 1/2). Net ≤ 0 cannot be booked.
     if (!((base.netSalary || 0) > 0)) {
-      toastRef.current({ title: 'वेतन पर्ची नहीं बनी / Slip not saved', description: `${slipNo}: नेट वेतन शून्य या ऋणात्मक है — कटौतियाँ (PT/TDS आदि) और कार्य-दिवस जाँचें। / Net salary is zero or negative — check the deductions and paid days.`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('वेतन पर्ची नहीं बनी / Slip not saved', 'Slip not saved'), description: tr(`${slipNo}: नेट वेतन शून्य या ऋणात्मक है — कटौतियाँ (PT/TDS आदि) और कार्य-दिवस जाँचें। / Net salary is zero or negative — check the deductions and paid days.`, `${slipNo}: Net salary is zero or negative — check the deductions (PT/TDS etc.) and paid days.`), variant: 'destructive', duration: 12000 });
       return { ...data, id: '' } as unknown as SalaryRecord;
     }
     let accrualVoucherId: string | undefined;
@@ -8002,7 +8003,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('salary_records').delete().eq('id', base.id).then(({ error }) => {
           if (error) reportError('salary-orphan-delete', error.message, { id: base.id });
         }, () => {});
-        toastRef.current({ title: 'वेतन पर्ची हटाई गई / Slip removed', description: `${slipNo}: वेतन का बही-voucher cloud में save नहीं हुआ, इसलिए पर्ची भी हटा दी गई — दोबारा प्रोसेस करें। / The salary journal was not saved in the cloud, so the slip was removed too.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('वेतन पर्ची हटाई गई / Slip removed', 'Slip removed'), description: tr(`${slipNo}: वेतन का बही-voucher cloud में save नहीं हुआ, इसलिए पर्ची भी हटा दी गई — दोबारा प्रोसेस करें। / The salary journal was not saved in the cloud, so the slip was removed too.`, `${slipNo}: The salary journal voucher was not saved in the cloud, so the slip was removed too — process it again.`), variant: 'destructive', duration: 12000 });
       };
       try {
         const av = addVoucher({
@@ -8017,7 +8018,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     if (!accrualVoucherId) {
       // addVoucher has already said why (locked period, FY lock, role, expired plan …).
-      toastRef.current({ title: 'वेतन पर्ची नहीं बनी / Slip not saved', description: `${slipNo}: वेतन का बही-voucher नहीं बन सका, इसलिए पर्ची भी save नहीं की गई — ऊपर का कारण ठीक करके फिर प्रोसेस करें। / The salary journal could not be posted, so the slip was not saved.`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('वेतन पर्ची नहीं बनी / Slip not saved', 'Slip not saved'), description: tr(`${slipNo}: वेतन का बही-voucher नहीं बन सका, इसलिए पर्ची भी save नहीं की गई — ऊपर का कारण ठीक करके फिर प्रोसेस करें। / The salary journal could not be posted, so the slip was not saved.`, `${slipNo}: The salary journal voucher could not be posted, so the slip was not saved either — fix the reason above and process again.`), variant: 'destructive', duration: 12000 });
       return { ...data, id: '' } as unknown as SalaryRecord;
     }
     const record: SalaryRecord = { ...base, accrualVoucherId };
@@ -8030,7 +8031,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSalaryRecordsState(prev => prev.filter(r => r.id !== record.id));   // RULE 1: roll back
         // …and its accrual voucher, or the ledger would carry a salary no slip explains (RULE 3).
         if (record.accrualVoucherId) cancelLinkedVouchers([record.accrualVoucherId], `Salary slip ${record.slipNo} not saved`, 'System');
-        toastRef.current({ title: 'वेतन रिकॉर्ड सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. उसका बही-voucher भी रद्द किया गया।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('वेतन रिकॉर्ड सेव नहीं हुआ', 'Salary record not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. उसका बही-voucher भी रद्द किया गया।`, `Not saved to the cloud — ${error.message}. Its journal voucher was also cancelled.`), variant: 'destructive', duration: 12000 });
       }
     });
     return record;
@@ -8061,7 +8062,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const payTouched = payV && !payV.isDeleted && (amountChanged || (data.paidDate !== undefined && data.paidDate !== oldRecord.paidDate) || (data.paymentMode !== undefined && data.paymentMode !== oldRecord.paymentMode) || bankChanged);
       for (const v of [payTouched ? payV : undefined, accV && !accV.isDeleted && !isEngineVoucher(accV) ? accV : undefined]) {
         if (v && isEditLocked(v, !!societyRef.current?.approvalRequired)) {
-          toastRef.current({ title: 'वेतन बदलाव नहीं हुआ', description: `वाउचर ${v.voucherNo} सीधे edit नहीं हो सकता (approved / reversed) — पहले उसे reverse करें, फिर वेतन बदलें।`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('वेतन बदलाव नहीं हुआ', 'Salary change not made'), description: tr(`वाउचर ${v.voucherNo} सीधे edit नहीं हो सकता (approved / reversed) — पहले उसे reverse करें, फिर वेतन बदलें।`, `Voucher ${v.voucherNo} cannot be edited directly (approved / reversed) — reverse it first, then change the salary.`), variant: 'destructive', duration: 12000 });
           return false;
         }
       }
@@ -8074,7 +8075,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return false;
         }
         if (!salaryAccrualLines(merged, payableAccCheck, lid, { ptPayable: professionalTaxAccountId(accounts) ?? undefined }).balanced) {
-          toastRef.current({ title: 'वेतन बदलाव नहीं हुआ', description: 'रकमें संतुलित नहीं हैं — (मूल वेतन + भत्ते + नियोक्ता PF/ESI) = (नेट वेतन + सभी देय कटौतियाँ) होना चाहिए। नेट वेतन और कटौतियाँ दोबारा जाँचकर डालें।', variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('वेतन बदलाव नहीं हुआ', 'Salary change not made'), description: tr('रकमें संतुलित नहीं हैं — (मूल वेतन + भत्ते + नियोक्ता PF/ESI) = (नेट वेतन + सभी देय कटौतियाँ) होना चाहिए। नेट वेतन और कटौतियाँ दोबारा जाँचकर डालें।', 'Amounts do not balance — (basic salary + allowances + employer PF/ESI) must equal (net salary + all payable deductions). Check net salary and deductions and enter them again.'), variant: 'destructive', duration: 12000 });
           return false;
         }
       }
@@ -8093,7 +8094,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // A salary "paid on credit" is not paid: it stays unpaid in Salary Payable 2103. Refuse rather than post
       // a payment out of the first bank account (non-cash modes used to map to a bank).
       if (merged.paymentMode === 'credit') {
-        toastRef.current({ title: 'भुगतान दर्ज नहीं हुआ / Not marked paid', description: 'उधार में दिया वेतन "भुगतान" नहीं है — पर्ची unpaid रहने दें, या नकद/बैंक चुनें। / Choose cash or bank.', variant: 'destructive', duration: 10000 });
+        toastRef.current({ title: tr('भुगतान दर्ज नहीं हुआ / Not marked paid', 'Not marked paid'), description: tr('उधार में दिया वेतन "भुगतान" नहीं है — पर्ची unpaid रहने दें, या नकद/बैंक चुनें। / Choose cash or bank.', 'Salary given on credit is not a "payment" — leave the slip unpaid, or choose cash/bank.'), variant: 'destructive', duration: 10000 });
         return false;
       }
       // (b) Create the payment voucher. If the salary was accrued (Cr Salary Payable 2103),
@@ -8122,13 +8123,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           supabase.from('salary_records').upsert(withSoc(back)).then(({ error }) => {
             if (error) reportError('salary-unpay-sync', error.message, { id });
           }, () => {});
-          toastRef.current({ title: 'भुगतान दर्ज नहीं हुआ / Not marked paid', description: `${oldRecord.slipNo}: भुगतान voucher cloud में save नहीं हुआ, इसलिए पर्ची फिर unpaid है। / The payment voucher was not saved, so the slip is unpaid again.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('भुगतान दर्ज नहीं हुआ / Not marked paid', 'Not marked paid'), description: tr(`${oldRecord.slipNo}: भुगतान voucher cloud में save नहीं हुआ, इसलिए पर्ची फिर unpaid है। / The payment voucher was not saved, so the slip is unpaid again.`, `${oldRecord.slipNo}: The payment voucher was not saved in the cloud, so the slip is unpaid again.`), variant: 'destructive', duration: 12000 });
         },
       });
       if (!newV.id) {
         // addVoucher said why (locked period, FY lock, role, expired plan …). A slip is never PAID without its
         // payment voucher — the liability would stay open while the slip and its PDF say PAID (RULE 1).
-        toastRef.current({ title: 'भुगतान दर्ज नहीं हुआ / Not marked paid', description: `${oldRecord.slipNo}: भुगतान का voucher नहीं बन सका, इसलिए पर्ची Paid नहीं की गई। / The payment voucher could not be posted, so the slip stays unpaid.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('भुगतान दर्ज नहीं हुआ / Not marked paid', 'Not marked paid'), description: tr(`${oldRecord.slipNo}: भुगतान का voucher नहीं बन सका, इसलिए पर्ची Paid नहीं की गई। / The payment voucher could not be posted, so the slip stays unpaid.`, `${oldRecord.slipNo}: The payment voucher could not be posted, so the slip was not marked Paid.`), variant: 'destructive', duration: 12000 });
         return false;
       }
       merged.voucherId = newV.id;
@@ -8180,14 +8181,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSalaryRecordsState(prev => prev.map(r => r.id === id ? oldRecord : r));   // RULE 1: roll back to prior state
         // A payment voucher made by THIS edit goes too — the slip is back to unpaid (RULE 3).
         if (!oldRecord.voucherId && merged.voucherId) cancelLinkedVouchers([merged.voucherId], `Salary slip ${oldRecord.slipNo} not saved`, 'System');
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
     return true;
   }, [employees, accounts, addVoucher, updateVoucher]);
 
   const deleteSalaryRecord = useCallback((id: string) => {
-    if (guardPermission('delete', 'वेतन रिकॉर्ड मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('वेतन रिकॉर्ड मिटाने', 'delete salary records'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     // H8+: Cascade-cancel BOTH the accrual and the payment vouchers so the expense,
     // liability and cash all reverse cleanly.
@@ -8198,8 +8199,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // quarter shows more deposited than deducted). Unlink it in the TDS Register first.
     const tdsEntryId = `sal-${id}`;
     const challanLinkedToast = () => toastRef.current({
-      title: 'वेतन पर्ची नहीं हटी / Slip not deleted',
-      description: `${record?.slipNo ?? ''}: इसका TDS एक जमा चालान से जुड़ा है। पहले TDS Register में इस एंट्री को चालान से अलग करें, फिर पर्ची हटाएँ। / Its TDS is linked to a deposited challan — unlink it in the TDS Register first.`,
+      title: tr('वेतन पर्ची नहीं हटी / Slip not deleted', 'Slip not deleted'),
+      description: tr(`${record?.slipNo ?? ''}: इसका TDS एक जमा चालान से जुड़ा है। पहले TDS Register में इस एंट्री को चालान से अलग करें, फिर पर्ची हटाएँ। / Its TDS is linked to a deposited challan — unlink it in the TDS Register first.`, `${record?.slipNo ?? ''}: Its TDS is linked to a deposited challan. First unlink this entry from the challan in the TDS Register, then delete the slip.`),
       variant: 'destructive', duration: 12000,
     });
     if (storage.getTdsChallanLinks().some(l => l.entryId === tdsEntryId)) { challanLinkedToast(); return; }
@@ -8215,7 +8216,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // delete used to leave the slip alive after F5 with its accrual + payment already cancelled.
     supabase.from('salary_records').delete().eq('id', id).then(({ error }) => {
       if (error) {
-        failedCloudWrite('वेतन पर्ची हटाना', error, () => {
+        failedCloudWrite(tr('वेतन पर्ची हटाना', 'Deleting the salary slip'), error, () => {
           salaryRecordsRef.current = putBack(salaryRecordsRef.current, record);
           setSalaryRecordsState(prev => putBack(prev, record));
         });
@@ -8247,8 +8248,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error(`Supplier ${opts.isUpdate ? 'update' : 'save'} failed (base):`, error.message);
         opts.onBaseFail();
         toastRef.current({
-          title: '❌ आपूर्तिकर्ता क्लाउड में सेव नहीं हुआ',
-          description: `${error.message}. स्क्रीन से हटा दी गई।`,
+          title: tr('❌ आपूर्तिकर्ता क्लाउड में सेव नहीं हुआ', '❌ Supplier not saved to the cloud'),
+          description: tr(`${error.message}. स्क्रीन से हटा दी गई।`, `${error.message}. Removed from the screen.`),
           variant: 'destructive',
           duration: 15000,
         });
@@ -8329,7 +8330,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         undoLocal();
-        toastRef.current({ title: '❌ आपूर्तिकर्ता सेव नहीं हुआ', description: `खाता क्लाउड में सेव नहीं हुआ — ${error.message}. स्क्रीन से हटा दिया गया; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('❌ आपूर्तिकर्ता सेव नहीं हुआ', '❌ Supplier not saved'), description: tr(`खाता क्लाउड में सेव नहीं हुआ — ${error.message}. स्क्रीन से हटा दिया गया; दोबारा जोड़ें।`, `Account not saved to the cloud — ${error.message}. Removed from the screen; please add again.`), variant: 'destructive', duration: 12000 });
         opts?.onFailed?.();
         return;
       }
@@ -8352,7 +8353,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         onBaseFail: () => {
           undoLocal();
           // no orphan ledger — the one rollback-aware account delete (puts it back on screen if the cloud refuses)
-          deleteAccountRow(newAccount, { context: 'party-create-rollback', failTitle: 'नया खाता हटाया नहीं जा सका' });
+          deleteAccountRow(newAccount, { context: 'party-create-rollback', failTitle: tr('नया खाता हटाया नहीं जा सका', 'The new account could not be removed') });
           opts?.onFailed?.();
         },
         onBaseSuccess: () => opts?.onSaved?.(supplier),
@@ -8393,21 +8394,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteSupplier = useCallback((id: string) => {
-    if (guardPermission('delete', 'आपूर्तिकर्ता मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('आपूर्तिकर्ता मिटाने', 'delete suppliers'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const sup = suppliers.find(s => s.id === id);
     if (!sup) return;
     // H9: Block if supplier has live purchases — otherwise sub-ledger reconciliation breaks
     const livePurchases = purchasesRef.current.filter(p => p.supplierId === id).length;
     if (livePurchases > 0) {
-      toastRef.current({ title: 'आपूर्तिकर्ता नहीं हटाया जा सकता', description: `इससे ${livePurchases} खरीद जुड़ी हैं — पहले खरीद पेज से वे हटाएँ। (${livePurchases} purchase(s) linked.)`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('आपूर्तिकर्ता नहीं हटाया जा सकता', 'Supplier cannot be deleted'), description: tr(`इससे ${livePurchases} खरीद जुड़ी हैं — पहले खरीद पेज से वे हटाएँ। (${livePurchases} purchase(s) linked.)`, `${livePurchases} purchase(s) are linked to it — delete them from the Purchases page first. (${livePurchases} purchase(s) linked.)`), variant: 'destructive', duration: 10000 });
       return;
     }
     // Tally-style: block if the linked Sundry Creditor account still carries a balance.
-    if (guardAccountBalance(sup.accountId, `आपूर्तिकर्ता "${sup.name}"`)) return;
+    if (guardAccountBalance(sup.accountId, tr(`आपूर्तिकर्ता "${sup.name}"`, `Supplier "${sup.name}"`))) return;
     setSuppliersState(prev => prev.filter(s => s.id !== id));
     supabase.from('suppliers').delete().eq('id', id).then(({ error }) => {
-      if (error) { failedCloudWrite('आपूर्तिकर्ता हटाना', error, () => { suppliersRef.current = putBack(suppliersRef.current, sup); setSuppliersState(prev => putBack(prev, sup)); }); return; }
+      if (error) { failedCloudWrite(tr('आपूर्तिकर्ता हटाना', 'Deleting the supplier'), error, () => { suppliersRef.current = putBack(suppliersRef.current, sup); setSuppliersState(prev => putBack(prev, sup)); }); return; }
       // Only hard-delete the linked Sundry Creditor account if NO vouchers (even soft-deleted) reference it
       if (sup.accountId) {
         const accountReferenced = vouchersRef.current.some(v =>
@@ -8454,8 +8455,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error(`Customer ${opts.isUpdate ? 'update' : 'save'} failed (base):`, error.message);
         opts.onBaseFail();
         toastRef.current({
-          title: '❌ ग्राहक क्लाउड में सेव नहीं हुआ',
-          description: `${error.message}. स्क्रीन से हटा दी गई।`,
+          title: tr('❌ ग्राहक क्लाउड में सेव नहीं हुआ', '❌ Customer not saved to the cloud'),
+          description: tr(`${error.message}. स्क्रीन से हटा दी गई।`, `${error.message}. Removed from the screen.`),
           variant: 'destructive',
           duration: 15000,
         });
@@ -8534,7 +8535,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         undoLocal();
-        toastRef.current({ title: '❌ ग्राहक सेव नहीं हुआ', description: `खाता क्लाउड में सेव नहीं हुआ — ${error.message}. स्क्रीन से हटा दिया गया; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('❌ ग्राहक सेव नहीं हुआ', '❌ Customer not saved'), description: tr(`खाता क्लाउड में सेव नहीं हुआ — ${error.message}. स्क्रीन से हटा दिया गया; दोबारा जोड़ें।`, `Account not saved to the cloud — ${error.message}. Removed from the screen; please add again.`), variant: 'destructive', duration: 12000 });
         opts?.onFailed?.();
         return;
       }
@@ -8557,7 +8558,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         onBaseFail: () => {
           undoLocal();
           // no orphan ledger — the one rollback-aware account delete (puts it back on screen if the cloud refuses)
-          deleteAccountRow(newAccount, { context: 'party-create-rollback', failTitle: 'नया खाता हटाया नहीं जा सका' });
+          deleteAccountRow(newAccount, { context: 'party-create-rollback', failTitle: tr('नया खाता हटाया नहीं जा सका', 'The new account could not be removed') });
           opts?.onFailed?.();
         },
         onBaseSuccess: () => opts?.onSaved?.(customer),
@@ -8598,21 +8599,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const deleteCustomer = useCallback((id: string) => {
-    if (guardPermission('delete', 'ग्राहक मिटाने')) return;   // ECR-06: role gate
+    if (guardPermission('delete', tr('ग्राहक मिटाने', 'delete customers'))) return;   // ECR-06: role gate
     if (guardFYLocked()) return;
     const cus = customers.find(c => c.id === id);
     if (!cus) return;
     // H9: Block if customer has live sales
     const liveSales = salesRef.current.filter(s => s.customerId === id).length;
     if (liveSales > 0) {
-      toastRef.current({ title: 'ग्राहक नहीं हटाया जा सकता', description: `इससे ${liveSales} बिक्री जुड़ी हैं — पहले बिक्री पेज से वे हटाएँ। (${liveSales} sale(s) linked.)`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('ग्राहक नहीं हटाया जा सकता', 'Customer cannot be deleted'), description: tr(`इससे ${liveSales} बिक्री जुड़ी हैं — पहले बिक्री पेज से वे हटाएँ। (${liveSales} sale(s) linked.)`, `${liveSales} sale(s) are linked to it — delete them from the Sales page first. (${liveSales} sale(s) linked.)`), variant: 'destructive', duration: 10000 });
       return;
     }
     // Tally-style: block if the linked Sundry Debtor account still carries a balance.
-    if (guardAccountBalance(cus.accountId, `ग्राहक "${cus.name}"`)) return;
+    if (guardAccountBalance(cus.accountId, tr(`ग्राहक "${cus.name}"`, `Customer "${cus.name}"`))) return;
     setCustomersState(prev => prev.filter(c => c.id !== id));
     supabase.from('customers').delete().eq('id', id).then(({ error }) => {
-      if (error) { failedCloudWrite('ग्राहक हटाना', error, () => { customersRef.current = putBack(customersRef.current, cus); setCustomersState(prev => putBack(prev, cus)); }); return; }
+      if (error) { failedCloudWrite(tr('ग्राहक हटाना', 'Deleting the customer'), error, () => { customersRef.current = putBack(customersRef.current, cus); setCustomersState(prev => putBack(prev, cus)); }); return; }
       if (cus.accountId) {
         const accountReferenced = vouchersRef.current.some(v =>
           v.debitAccountId === cus.accountId || v.creditAccountId === cus.accountId ||

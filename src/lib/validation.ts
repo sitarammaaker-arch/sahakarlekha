@@ -1,5 +1,6 @@
 import type { LedgerAccount, SocietySettings, VoucherType, VoucherLine } from '@/types';
 import { toMinor, toRupees, addMinor, subMinor } from '@/lib/money';
+import { tr } from '@/lib/uiLang';
 
 // Cash and Bank account IDs — same as ACCOUNT_IDS in storage.ts
 const CASH_ID = '3301';
@@ -58,38 +59,38 @@ export function validateVoucher(
   // ── Rule 4: Amount ────────────────────────────────────────────────────────
   if (!amount || isNaN(numAmount) || numAmount <= 0) {
     errors.push(
-      'राशि शून्य से अधिक होनी चाहिए / Amount must be greater than zero'
+      tr('राशि शून्य से अधिक होनी चाहिए / Amount must be greater than zero', 'Amount must be greater than zero')
     );
   }
 
   // ── Rule 1: Debit account ─────────────────────────────────────────────────
   if (!debitAccountId) {
-    errors.push('डेबिट खाता चुनें / Select debit account');
+    errors.push(tr('डेबिट खाता चुनें / Select debit account', 'Select debit account'));
   } else {
     const drAcc = accounts.find(a => a.id === debitAccountId);
     if (!drAcc) {
       errors.push(
-        `डेबिट खाता (ID: ${debitAccountId}) मौजूद नहीं — खाता हटाया जा सकता है / Debit account not found`
+        tr(`डेबिट खाता (ID: ${debitAccountId}) मौजूद नहीं — खाता हटाया जा सकता है / Debit account not found`, `Debit account (ID: ${debitAccountId}) not found — it may have been deleted`)
       );
     } else if (drAcc.isGroup) {
       errors.push(
-        `"${drAcc.name}" एक समूह खाता है — इसमें सीधे एंट्री नहीं हो सकती / "${drAcc.name}" is a group account, cannot post transactions`
+        tr(`"${drAcc.name}" एक समूह खाता है — इसमें सीधे एंट्री नहीं हो सकती / "${drAcc.name}" is a group account, cannot post transactions`, `"${drAcc.name}" is a group account, cannot post transactions`)
       );
     }
   }
 
   // ── Rule 2: Credit account ────────────────────────────────────────────────
   if (!creditAccountId) {
-    errors.push('क्रेडिट खाता चुनें / Select credit account');
+    errors.push(tr('क्रेडिट खाता चुनें / Select credit account', 'Select credit account'));
   } else {
     const crAcc = accounts.find(a => a.id === creditAccountId);
     if (!crAcc) {
       errors.push(
-        `क्रेडिट खाता (ID: ${creditAccountId}) मौजूद नहीं — खाता हटाया जा सकता है / Credit account not found`
+        tr(`क्रेडिट खाता (ID: ${creditAccountId}) मौजूद नहीं — खाता हटाया जा सकता है / Credit account not found`, `Credit account (ID: ${creditAccountId}) not found — it may have been deleted`)
       );
     } else if (crAcc.isGroup) {
       errors.push(
-        `"${crAcc.name}" एक समूह खाता है — इसमें सीधे एंट्री नहीं हो सकती / "${crAcc.name}" is a group account, cannot post transactions`
+        tr(`"${crAcc.name}" एक समूह खाता है — इसमें सीधे एंट्री नहीं हो सकती / "${crAcc.name}" is a group account, cannot post transactions`, `"${crAcc.name}" is a group account, cannot post transactions`)
       );
     }
   }
@@ -97,7 +98,7 @@ export function validateVoucher(
   // Dr ≠ Cr
   if (debitAccountId && creditAccountId && debitAccountId === creditAccountId) {
     errors.push(
-      'डेबिट और क्रेडिट खाता एक नहीं हो सकते / Debit and Credit accounts must be different'
+      tr('डेबिट और क्रेडिट खाता एक नहीं हो सकते / Debit and Credit accounts must be different', 'Debit and Credit accounts must be different')
     );
   }
 
@@ -108,21 +109,21 @@ export function validateVoucher(
     if (voucherType === 'receipt' && !CASH_BANK.includes(debitAccountId)) {
       const drAcc = accounts.find(a => a.id === debitAccountId);
       errors.push(
-        `रसीद वाउचर में डेबिट खाता "हाथ में नकद" या "बैंक खाते" होना चाहिए / Receipt voucher: Debit must be Cash or Bank (got "${drAcc?.name || debitAccountId}")`
+        tr(`रसीद वाउचर में डेबिट खाता "हाथ में नकद" या "बैंक खाते" होना चाहिए / Receipt voucher: Debit must be Cash or Bank (got "${drAcc?.name || debitAccountId}")`, `Receipt voucher: Debit must be Cash or Bank (got "${drAcc?.name || debitAccountId}")`)
       );
     }
     if (voucherType === 'payment' && !CASH_BANK.includes(creditAccountId)) {
       const crAcc = accounts.find(a => a.id === creditAccountId);
       errors.push(
-        `भुगतान वाउचर में क्रेडिट खाता "हाथ में नकद" या "बैंक खाते" होना चाहिए / Payment voucher: Credit must be Cash or Bank (got "${crAcc?.name || creditAccountId}")`
+        tr(`भुगतान वाउचर में क्रेडिट खाता "हाथ में नकद" या "बैंक खाते" होना चाहिए / Payment voucher: Credit must be Cash or Bank (got "${crAcc?.name || creditAccountId}")`, `Payment voucher: Credit must be Cash or Bank (got "${crAcc?.name || creditAccountId}")`)
       );
     }
     if (voucherType === 'contra') {
       if (!CASH_BANK.includes(debitAccountId)) {
-        errors.push('कोंट्रा वाउचर में डेबिट खाता Cash या Bank होना चाहिए / Contra: Debit must be Cash or Bank');
+        errors.push(tr('कोंट्रा वाउचर में डेबिट खाता Cash या Bank होना चाहिए / Contra: Debit must be Cash or Bank', 'Contra: Debit must be Cash or Bank'));
       }
       if (!CASH_BANK.includes(creditAccountId)) {
-        errors.push('कोंट्रा वाउचर में क्रेडिट खाता Cash या Bank होना चाहिए / Contra: Credit must be Cash or Bank');
+        errors.push(tr('कोंट्रा वाउचर में क्रेडिट खाता Cash या Bank होना चाहिए / Contra: Credit must be Cash or Bank', 'Contra: Credit must be Cash or Bank'));
       }
     }
   }
@@ -138,7 +139,7 @@ export function validateVoucher(
       const fyEnd   = `${endYear}-03-31`;
       if (date < fyStart || date > fyEnd) {
         warnings.push(
-          `तिथि (${date}) वित्तीय वर्ष ${fy} (${fyStart} से ${fyEnd}) से बाहर है / Date is outside financial year ${fy}`
+          tr(`तिथि (${date}) वित्तीय वर्ष ${fy} (${fyStart} से ${fyEnd}) से बाहर है / Date is outside financial year ${fy}`, `Date (${date}) is outside financial year ${fy} (${fyStart} to ${fyEnd})`)
         );
       }
     }
@@ -152,8 +153,11 @@ export function validateVoucher(
     const bal = voucherLinesBalance(lines);
     if (!bal.balanced) {
       errors.push(
-        `वाउचर असंतुलित है: डेबिट (₹${bal.drTotal.toFixed(2)}) ≠ क्रेडिट (₹${bal.crTotal.toFixed(2)}) / ` +
-        `Voucher not balanced: Dr ≠ Cr (difference ₹${bal.diff.toFixed(2)})`
+        tr(
+          `वाउचर असंतुलित है: डेबिट (₹${bal.drTotal.toFixed(2)}) ≠ क्रेडिट (₹${bal.crTotal.toFixed(2)}) / ` +
+          `Voucher not balanced: Dr ≠ Cr (difference ₹${bal.diff.toFixed(2)})`,
+          `Voucher not balanced: Dr (₹${bal.drTotal.toFixed(2)}) ≠ Cr (₹${bal.crTotal.toFixed(2)}) (difference ₹${bal.diff.toFixed(2)})`,
+        )
       );
     }
   }
@@ -202,9 +206,9 @@ export function accountTransactionError(
   accounts: LedgerAccount[],
   label = 'Account'
 ): string | null {
-  if (!accountId) return `${label}: खाता चुनें / Select account`;
+  if (!accountId) return tr(`${label}: खाता चुनें / Select account`, `${label}: Select account`);
   const acc = accounts.find(a => a.id === accountId);
-  if (!acc) return `${label}: खाता (${accountId}) मौजूद नहीं / Account not found`;
-  if (acc.isGroup) return `${label}: "${acc.name}" समूह खाता है / Group account not allowed`;
+  if (!acc) return tr(`${label}: खाता (${accountId}) मौजूद नहीं / Account not found`, `${label}: Account (${accountId}) not found`);
+  if (acc.isGroup) return tr(`${label}: "${acc.name}" समूह खाता है / Group account not allowed`, `${label}: "${acc.name}" is a group account — not allowed`);
   return null;
 }

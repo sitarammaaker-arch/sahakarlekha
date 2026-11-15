@@ -172,7 +172,7 @@ const GuideChapter: React.FC = () => {
               <Link to={`/blog/${quickBlog.slug}`} className="mt-8 block">
                 <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors">
                   <CardContent className="p-5">
-                    <p className="text-xs font-semibold text-primary uppercase tracking-wide">📝 क्विक how-to · ब्लॉग</p>
+                    <p className="text-xs font-semibold text-primary uppercase tracking-wide">{lang === 'en' ? '📝 Quick how-to · Blog' : '📝 क्विक how-to · ब्लॉग'}</p>
                     <p className="font-semibold text-foreground mt-1 flex items-center gap-1">{quickBlog.shortTitle} <ChevronRight className="h-4 w-4" /></p>
                   </CardContent>
                 </Card>
@@ -191,7 +191,7 @@ const GuideChapter: React.FC = () => {
               </Button>
             </div>
 
-            <p className="mt-8 text-center text-xs text-muted-foreground">अंतिम अपडेट: {guideUpdated(slug)}</p>
+            <p className="mt-8 text-center text-xs text-muted-foreground">{lang === 'en' ? 'Last updated:' : 'अंतिम अपडेट:'} {guideUpdated(slug)}</p>
 
             {/* Was this helpful? */}
             <HelpfulWidget />

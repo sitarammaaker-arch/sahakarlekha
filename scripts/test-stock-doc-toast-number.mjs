@@ -21,7 +21,7 @@ console.log('DataContext');
 ok('usesPostingService() is typed and exposed', /usesPostingService: \(\) => boolean;/.test(dc) && /const usesPostingService = useCallback\(\(\): boolean => postingServiceRef\.current, \[\]\);/.test(dc)
   && (dc.match(/restoreVoucher, usesPostingService, (canEditVoucherActivity, )?clearVoucher,/g) || []).length === 2);
 const ps = dc.slice(dc.indexOf('const postStockDocument = ('), dc.indexOf('const cancelStockDocument = ('));
-ok('postStockDocument toasts the OFFICIAL number on success', /toastRef\.current\(\{ title: `✅ \$\{label\} सहेजी गई: \$\{docNo\}`/.test(ps) && ps.indexOf('✅') > ps.indexOf('const docNo = r.docNo'));
+ok('postStockDocument toasts the OFFICIAL number on success', /toastRef\.current\(\{ title: tr\(`✅ \$\{label\} सहेजी गई: \$\{docNo\}`/.test(ps) && ps.indexOf('✅') > ps.indexOf('const docNo = r.docNo'));
 
 for (const [page, add, idState, list, noKey] of [
   ['src/pages/SaleManagement.tsx', 'addSale', 'savedSaleId', 'sales', 'saleNo'],

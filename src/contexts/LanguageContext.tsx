@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { setUiLanguage } from '@/lib/uiLang';
 
 type Language = 'hi' | 'en';
 
@@ -258,6 +259,9 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
       return localStorage.getItem('sl_guide_lang') === 'en' ? 'en' : 'hi';
     } catch { return 'hi'; }
   });
+
+  // Text built outside render (toasts/errors in the data contexts) reads the language from here — see lib/uiLang.
+  setUiLanguage(language);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);

@@ -23,7 +23,7 @@ import EntityExportButton from '@/components/export/EntityExportButton';
 import { resolveTransportAccounts } from '@/lib/transport/accounts';
 import { tripAmount } from '@/lib/transport/trips';
 import type { TransportTrip } from '@/types';
-import { gtaTax, gtaModeProblem, GTA_GST_SOURCES, RCM_RECIPIENT_CATEGORIES_HI, type GtaGstMode } from '@/lib/transport/gtaGst';
+import { gtaTax, gtaModeProblem, GTA_GST_SOURCES, RCM_RECIPIENT_CATEGORIES_HI, RCM_RECIPIENT_CATEGORIES_EN, type GtaGstMode } from '@/lib/transport/gtaGst';
 import { societyStateCode, resolveStateCode, partyGstin } from '@/lib/gstStates';
 import { INDIAN_STATES } from '@/lib/constants';
 
@@ -177,7 +177,7 @@ export default function Trips() {
             {gstMode === 'rcm' && !custGstin && (
               <label className="flex items-start gap-2 text-sm">
                 <input type="checkbox" className="mt-1" checked={rcmOk} onChange={e => setRcmOk(e.target.checked)} />
-                <span>{hi ? 'ग्राहक इनमें से है: ' : 'The customer is one of: '}{RCM_RECIPIENT_CATEGORIES_HI.join(', ')}</span>
+                <span>{hi ? 'ग्राहक इनमें से है: ' : 'The customer is one of: '}{(hi ? RCM_RECIPIENT_CATEGORIES_HI : RCM_RECIPIENT_CATEGORIES_EN).join(', ')}</span>
               </label>
             )}
             {(gstMode === 'fcm5' || gstMode === 'fcm18') && (

@@ -14,7 +14,7 @@ ok('reversed original locked', isEditLocked({ reversedBy: 'r1' }, false));
 ok('reversal voucher locked', isEditLocked({ reversalOf: 'o1' }, false));
 ok('approved under maker-checker locked; not without it', isEditLocked({ approvalStatus: 'approved' }, true) && !isEditLocked({ approvalStatus: 'approved' }, false));
 const dc = readFileSync(resolve(root, 'src/contexts/DataContext.tsx'), 'utf8');
-ok('updateVoucher explains the reversal lock in Hindi', /current\.reversalOf\s*\n\s*\? 'यह एक reversal वाउचर है/.test(dc));
+ok('updateVoucher explains the reversal lock in Hindi', /current\.reversalOf\s*\n\s*\? tr\('यह एक reversal वाउचर है/.test(dc));
 // the refusal messages live in postVoucherMessages.ts (dependency-free, shared with the payroll Edge Functions); postVoucherClient re-exports them
 const pv = readFileSync(resolve(root, 'src/lib/ledger/postVoucherMessages.ts'), 'utf8');
 ok('server code voucher_is_reversal has a Hindi message', /voucher_is_reversal: '/.test(pv));

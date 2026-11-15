@@ -25,6 +25,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   Building2, Shield, Users, CreditCard, RefreshCw, Lock, Unlock,
   AlertTriangle, CheckCircle2, Clock, Search, Edit2, BarChart3, Inbox, FileText, Mail, Handshake,
@@ -92,6 +93,7 @@ function fmtDate(d: string | null) {
 const SuperAdminDashboard: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { language } = useLanguage();
 
   const [societies, setSocieties] = useState<Society[]>([]);
   // Canonical subscriptions (055), keyed by society_id — the source of truth for tier/status/seats.
@@ -301,7 +303,7 @@ const SuperAdminDashboard: React.FC = () => {
             </Button>
           </Link>
           <Button variant={mfaEnrolled ? 'outline' : 'default'} size="sm" className="gap-2" onClick={() => setMfaOpen(true)}>
-            <Shield className="h-3.5 w-3.5" /> {mfaEnrolled ? '2FA ✓' : '2FA सेट करें'}
+            <Shield className="h-3.5 w-3.5" /> {mfaEnrolled ? '2FA ✓' : (language === 'hi' ? '2FA सेट करें' : 'Set up 2FA')}
           </Button>
           <Button variant="outline" size="sm" onClick={loadSocieties} className="gap-2">
             <RefreshCw className="h-3.5 w-3.5" /> Refresh

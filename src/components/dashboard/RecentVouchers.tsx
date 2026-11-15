@@ -13,6 +13,7 @@ interface Voucher {
   type: 'receipt' | 'payment' | 'journal';
   date: string;
   particulars: string;
+  particularsEn: string;
   amount: number;
 }
 
@@ -23,6 +24,7 @@ const demoVouchers: Voucher[] = [
     type: 'receipt',
     date: '2024-01-10',
     particulars: 'सदस्य शेयर जमा - राम प्रसाद',
+    particularsEn: 'Member share deposit - Ram Prasad',
     amount: 5000,
   },
   {
@@ -31,6 +33,7 @@ const demoVouchers: Voucher[] = [
     type: 'payment',
     date: '2024-01-10',
     particulars: 'कार्यालय किराया - जनवरी',
+    particularsEn: 'Office rent - January',
     amount: 3500,
   },
   {
@@ -39,6 +42,7 @@ const demoVouchers: Voucher[] = [
     type: 'receipt',
     date: '2024-01-09',
     particulars: 'कमीशन आय - गेहूं विक्रय',
+    particularsEn: 'Commission income - wheat sale',
     amount: 12500,
   },
   {
@@ -47,6 +51,7 @@ const demoVouchers: Voucher[] = [
     type: 'journal',
     date: '2024-01-09',
     particulars: 'समायोजन एंट्री',
+    particularsEn: 'Adjustment entry',
     amount: 2000,
   },
   {
@@ -55,18 +60,20 @@ const demoVouchers: Voucher[] = [
     type: 'payment',
     date: '2024-01-08',
     particulars: 'वेतन भुगतान - लेखापाल',
+    particularsEn: 'Salary payment - accountant',
     amount: 15000,
   },
 ];
 
 const voucherTypeStyles = {
-  receipt: { label: 'रसीद', variant: 'default' as const, className: 'bg-success text-success-foreground' },
-  payment: { label: 'भुगतान', variant: 'destructive' as const, className: 'bg-destructive text-destructive-foreground' },
-  journal: { label: 'जर्नल', variant: 'secondary' as const, className: 'bg-info text-info-foreground' },
+  receipt: { label: 'रसीद', labelEn: 'Receipt', variant: 'default' as const, className: 'bg-success text-success-foreground' },
+  payment: { label: 'भुगतान', labelEn: 'Payment', variant: 'destructive' as const, className: 'bg-destructive text-destructive-foreground' },
+  journal: { label: 'जर्नल', labelEn: 'Journal', variant: 'secondary' as const, className: 'bg-info text-info-foreground' },
 };
 
 export const RecentVouchers: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const hi = language === 'hi';
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('hi-IN', {
@@ -86,7 +93,7 @@ export const RecentVouchers: React.FC = () => {
           {t('recentVouchers')}
         </CardTitle>
         <Button variant="ghost" size="sm" className="gap-1 text-primary">
-          सभी देखें
+          {hi ? 'सभी देखें' : 'View all'}
           <ArrowRight className="h-4 w-4" />
         </Button>
       </CardHeader>
@@ -99,10 +106,10 @@ export const RecentVouchers: React.FC = () => {
             >
               <div className="flex items-center gap-3">
                 <Badge className={cn('text-xs', voucherTypeStyles[voucher.type].className)}>
-                  {voucherTypeStyles[voucher.type].label}
+                  {hi ? voucherTypeStyles[voucher.type].label : voucherTypeStyles[voucher.type].labelEn}
                 </Badge>
                 <div>
-                  <p className="font-medium text-sm">{voucher.particulars}</p>
+                  <p className="font-medium text-sm">{hi ? voucher.particulars : voucher.particularsEn}</p>
                   <p className="text-xs text-muted-foreground">
                     {voucher.voucherNo} • {formatDate(voucher.date)}
                   </p>

@@ -53,7 +53,7 @@ const SITES = [
 ];
 for (const [fn, what, restore] of SITES) {
   const b = body(fn);
-  ok(b.includes(`failedCloudWrite('${what}', error`) && restore.test(b), `${fn}: a failed cloud write restores the record`);
+  ok(new RegExp(`failedCloudWrite\\(tr\\('${what}', '[^']*'\\), error`).test(b) && restore.test(b), `${fn}: a failed cloud write restores the record`);
 }
 
 // 4. Cascades run only after the parent write succeeded (inside its .then, after the failure return)

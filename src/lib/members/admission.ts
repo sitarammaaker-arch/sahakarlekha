@@ -11,6 +11,7 @@
  *  • Rules r.22(b) — the register records the date of entry: the admission date, not the application date.
  * The app WARNS on these (other states' rules differ); it never blocks a decision.
  */
+import { tr } from '../uiLang.ts';
 
 /** Late-added member columns (migration 116). Never in the base upsert — saved in a separate step-2 update (RULE 1). */
 export const MEMBER_ADMISSION_FIELDS = [
@@ -100,12 +101,12 @@ export interface AdmissionDecision {
 /** Approve: a real admission date (not before the application, not in the future); a missing resolution only warns. */
 export function validateAdmission(d: AdmissionDecision, ctx: { receivedOn?: string; today: string }): { ok: boolean; error?: string; warnings: string[] } {
   const warnings: string[] = [];
-  if (!isIso(d.admissionDate)) return { ok: false, error: 'दाख़िला तिथि भरें। (Enter the admission date.)', warnings };
-  if (d.admissionDate > ctx.today) return { ok: false, error: 'दाख़िला तिथि आज के बाद की नहीं हो सकती। (Admission date cannot be in the future.)', warnings };
-  if (isIso(ctx.receivedOn) && d.admissionDate < ctx.receivedOn) return { ok: false, error: 'दाख़िला तिथि आवेदन की तिथि से पहले की नहीं हो सकती। (Admission cannot precede the application.)', warnings };
-  if (d.resolutionDate && !isIso(d.resolutionDate)) return { ok: false, error: 'प्रस्ताव तिथि सही नहीं है। (Invalid resolution date.)', warnings };
-  if (d.resolutionDate && d.resolutionDate > ctx.today) return { ok: false, error: 'प्रस्ताव तिथि आज के बाद की नहीं हो सकती। (Resolution date cannot be in the future.)', warnings };
-  if (!d.resolutionNo?.trim()) warnings.push('समिति प्रस्ताव संख्या नहीं भरी — रजिस्टर व ऑडिट के लिए भरना अच्छा रहेगा। (No committee resolution number.)');
+  if (!isIso(d.admissionDate)) return { ok: false, error: tr('दाख़िला तिथि भरें। (Enter the admission date.)', 'Enter the admission date.'), warnings };
+  if (d.admissionDate > ctx.today) return { ok: false, error: tr('दाख़िला तिथि आज के बाद की नहीं हो सकती। (Admission date cannot be in the future.)', 'Admission date cannot be in the future.'), warnings };
+  if (isIso(ctx.receivedOn) && d.admissionDate < ctx.receivedOn) return { ok: false, error: tr('दाख़िला तिथि आवेदन की तिथि से पहले की नहीं हो सकती। (Admission cannot precede the application.)', 'Admission date cannot be before the application date.'), warnings };
+  if (d.resolutionDate && !isIso(d.resolutionDate)) return { ok: false, error: tr('प्रस्ताव तिथि सही नहीं है। (Invalid resolution date.)', 'Invalid resolution date.'), warnings };
+  if (d.resolutionDate && d.resolutionDate > ctx.today) return { ok: false, error: tr('प्रस्ताव तिथि आज के बाद की नहीं हो सकती। (Resolution date cannot be in the future.)', 'Resolution date cannot be in the future.'), warnings };
+  if (!d.resolutionNo?.trim()) warnings.push(tr('समिति प्रस्ताव संख्या नहीं भरी — रजिस्टर व ऑडिट के लिए भरना अच्छा रहेगा। (No committee resolution number.)', 'No committee resolution number entered — better to fill it for the register and audit.'));
   return { ok: true, warnings };
 }
 
@@ -113,7 +114,7 @@ export function validateAdmission(d: AdmissionDecision, ctx: { receivedOn?: stri
 export function validateRejection(reason: string): { ok: boolean; error?: string } {
   return reason.trim().length >= 5
     ? { ok: true }
-    : { ok: false, error: 'अस्वीकृति का कारण लिखें (कम से कम 5 अक्षर) — नियम 17 के अनुसार आवेदक को कारण बताना ज़रूरी है।' };
+    : { ok: false, error: tr('अस्वीकृति का कारण लिखें (कम से कम 5 अक्षर) — नियम 17 के अनुसार आवेदक को कारण बताना ज़रूरी है।', 'Write the reason for rejection (at least 5 characters) — under r.17 the applicant must be told the reason.') };
 }
 
 /** s.114(1)(c), (2): last day to appeal against a refusal (60 days from the decision). */

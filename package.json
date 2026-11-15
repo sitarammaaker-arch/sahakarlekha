@@ -388,6 +388,7 @@
     "test:referral": "node scripts/test-referral.mjs",
     "test:uppercase-ids": "node scripts/test-uppercase-ids.mjs",
     "test:content-en": "node scripts/test-content-en.mjs",
+    "test:toast-english": "node scripts/test-toast-english.mjs",
     "test:notification-channels": "node scripts/test-notification-channels.mjs",
     "test:pigmy": "node scripts/test-pigmy.mjs",
     "test:report-comparative": "node scripts/test-report-comparative.mjs",

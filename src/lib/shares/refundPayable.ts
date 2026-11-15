@@ -14,6 +14,7 @@
  */
 import { toMinor, toRupees } from '@/lib/money';
 import type { VoucherLine } from '@/types';
+import { tr } from '@/lib/uiLang';
 
 export const SHARE_REFUND_APPROVE_REF = 'share.refund.approve';
 export const SHARE_REFUND_PAY_REF = 'share.refund.pay';
@@ -75,11 +76,12 @@ export function buildShareRefundPayment(
   ] };
 }
 
-/** Hindi-first message for a refused posting (RULE 7). The missing-head case has its own toast (headResolve). */
+/** Hindi-first message for a refused posting (RULE 7). The missing-head case has its own toast (headResolve).
+ *  Getters, so each read follows the reader's language at the moment the toast is built. */
 export const SHARE_REFUND_MESSAGE: Record<Exclude<ShareRefundError, 'no_payable_head'>, string> = {
-  amount: 'राशि 0 से ज़्यादा होनी चाहिए।',
-  exceeds_capital: 'स्वीकृत राशि सदस्य की मौजूदा शेयर पूँजी से ज़्यादा नहीं हो सकती।',
-  exceeds_outstanding: 'भुगतान स्वीकृत और बकाया राशि से ज़्यादा नहीं हो सकता।',
-  no_bank: 'भुगतान के लिए नकद/बैंक खाता नहीं मिला।',
-  resolution: 'समिति के प्रस्ताव की संख्या/संदर्भ लिखना ज़रूरी है।',
+  get amount() { return tr('राशि 0 से ज़्यादा होनी चाहिए।', 'Amount must be more than 0.'); },
+  get exceeds_capital() { return tr('स्वीकृत राशि सदस्य की मौजूदा शेयर पूँजी से ज़्यादा नहीं हो सकती।', "The approved amount cannot be more than the member's current share capital."); },
+  get exceeds_outstanding() { return tr('भुगतान स्वीकृत और बकाया राशि से ज़्यादा नहीं हो सकता।', 'The payment cannot be more than the approved, outstanding amount.'); },
+  get no_bank() { return tr('भुगतान के लिए नकद/बैंक खाता नहीं मिला।', 'No cash/bank account found for the payment.'); },
+  get resolution() { return tr('समिति के प्रस्ताव की संख्या/संदर्भ लिखना ज़रूरी है।', "The committee resolution number/reference is required."); },
 };

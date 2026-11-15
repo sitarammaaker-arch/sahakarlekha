@@ -17,8 +17,8 @@ const tf = dc.slice(dc.indexOf('const transferShareCapital = useCallback'), dc.i
 ok('one transfer id per transfer', /const transferId = crypto\.randomUUID\(\);/.test(tf));
 ok('both halves tagged share.transfer with the same id', (tf.match(/refType: 'share\.transfer', refId: transferId/g) || []).length === 2);
 
-const cv = dc.slice(dc.indexOf('const cancelVoucher = useCallback'), dc.indexOf('const cancelVoucher = useCallback') + 3200);
-ok('cancelVoucher refuses a tagged share-transfer half unless viaParent', /current\.refType === 'share\.transfer'[\s\S]{0,200}!opts\?\.viaParent[\s\S]{0,500}return false;/.test(cv));
+const cv = dc.slice(dc.indexOf('const cancelVoucher = useCallback'), dc.indexOf('const cancelVoucher = useCallback') + 6000);
+ok('cancelVoucher refuses a tagged share-transfer half unless viaParent', /current\.refType === 'share\.transfer'[\s\S]{0,200}!opts\?\.viaParent[\s\S]{0,900}return false;/.test(cv));
 ok('…and a legacy (untagged) half recognised by narration', /!current\.refType && \(current\.narration \|\| ''\)\.startsWith\('Shares transferred from '\)/.test(cv));
 ok('the refusal points to a reverse transfer in Share Register', /Share Register से उल्टा ट्रांसफर/.test(cv));
 ok('guard sits after the already-cancelled no-op', cv.indexOf('if (current.isDeleted) return true;') > 0 && cv.indexOf('if (current.isDeleted) return true;') < cv.indexOf("current.refType === 'share.transfer'"));

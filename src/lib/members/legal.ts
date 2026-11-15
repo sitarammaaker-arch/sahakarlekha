@@ -19,7 +19,8 @@
  *    within fifteen days.
  *  • r.27(a) — a person in default of any sum due to the society cannot stand for the committee.
  */
-// No imports: node tests load this file directly (same date rules as shareRules.addTwoYears / cessation.addMonths).
+// Only the import-free uiLang: node tests load this file directly (same date rules as shareRules.addTwoYears / cessation.addMonths).
+import { tr } from '../uiLang.ts';
 function addMonths(date: string, n: number): string {
   const y0 = +date.slice(0, 4), m0 = +date.slice(5, 7) - 1 + n, d = +date.slice(8, 10);
   const y = y0 + Math.floor(m0 / 12), m = ((m0 % 12) + 12) % 12 + 1;
@@ -48,7 +49,7 @@ export function minorWarning(p: { dateOfBirth?: string; age?: number }, onDate: 
   if (isIso(p.dateOfBirth) && isIso(onDate)) age = yearsOn(p.dateOfBirth, onDate);
   else if (typeof p.age === 'number' && p.age > 0) age = p.age;
   if (age === undefined || age >= MIN_MEMBER_AGE) return null;
-  return `आयु ${age} वर्ष — धारा 16(a): सदस्य "अनुबंध करने में सक्षम" होना चाहिए (भारतीय संविदा अधिनियम धारा 11: 18 वर्ष या अधिक)। नाबालिग को सदस्य न बनाएँ। (Under 18 — not competent to contract.)`;
+  return tr(`आयु ${age} वर्ष — धारा 16(a): सदस्य "अनुबंध करने में सक्षम" होना चाहिए (भारतीय संविदा अधिनियम धारा 11: 18 वर्ष या अधिक)। नाबालिग को सदस्य न बनाएँ। (Under 18 — not competent to contract.)`, `Age ${age} years — s.16(a): a member must be "competent to contract" (Indian Contract Act s.11: 18 years or more). Do not admit a minor as a member.`);
 }
 
 /**
@@ -66,7 +67,7 @@ export function agmBlackoutWarning(admissionDate: string, meetings: readonly { t
     .filter((d) => { const gap = (t(d) - t(admissionDate)) / DAY; return gap >= 0 && gap <= 14; })
     .sort()[0];
   if (!hit) return null;
-  return `वार्षिक आम सभा ${dmy(hit)} को है — नियम 16: आम सभा से 14 दिन पहले के भीतर किसी को सदस्य नहीं बनाया जा सकता। दाख़िला आम सभा के बाद करें। (No admission within 14 days before the AGM.)`;
+  return tr(`वार्षिक आम सभा ${dmy(hit)} को है — नियम 16: आम सभा से 14 दिन पहले के भीतर किसी को सदस्य नहीं बनाया जा सकता। दाख़िला आम सभा के बाद करें। (No admission within 14 days before the AGM.)`, `The annual general meeting is on ${dmy(hit)} — r.16: no one can be admitted as a member within 14 days before the general meeting. Admit after the meeting.`);
 }
 
 /**
@@ -87,7 +88,7 @@ export function shareHeldTwoYears(rows: readonly { date: string; credit: number;
 /** s.22 warning: the transfer exceeds the shares held two years or more. */
 export function transferTwoYearWarning(amount: number, heldTwoYears: number): string | null {
   if (!(amount > 0) || amount <= heldTwoYears + 0.005) return null;
-  return `2 साल से पुराने शेयर सिर्फ़ ₹${heldTwoYears.toLocaleString('en-IN')} के हैं, हस्तांतरण ₹${amount.toLocaleString('en-IN')} का — हरियाणा अधिनियम धारा 22: कम से कम 2 साल रखे शेयर ही हस्तांतरित हो सकते हैं।`;
+  return tr(`2 साल से पुराने शेयर सिर्फ़ ₹${heldTwoYears.toLocaleString('en-IN')} के हैं, हस्तांतरण ₹${amount.toLocaleString('en-IN')} का — हरियाणा अधिनियम धारा 22: कम से कम 2 साल रखे शेयर ही हस्तांतरित हो सकते हैं।`, `Shares older than 2 years total only ₹${heldTwoYears.toLocaleString('en-IN')}, but the transfer is ₹${amount.toLocaleString('en-IN')} — Haryana Act s.22: only shares held for at least 2 years can be transferred.`);
 }
 
 /** r.18(3): the share-capital heads that make the refund base — every share-capital head except Government (1101). */
@@ -108,7 +109,7 @@ export const S40_FIELDS = ['address', 'correspondenceAddress', 'photoPath'] as c
 
 export function s40ChangeReminder(changed: readonly string[]): string | null {
   if (!changed.some((f) => (S40_FIELDS as readonly string[]).includes(f))) return null;
-  return 'धारा 40: फ़ोटो / पता / पत्राचार पता बदला है — सदस्य को यह बदलाव 15 दिन के भीतर रजिस्ट्रार को बताना होता है। (Report the change to the Registrar within 15 days.)';
+  return tr('धारा 40: फ़ोटो / पता / पत्राचार पता बदला है — सदस्य को यह बदलाव 15 दिन के भीतर रजिस्ट्रार को बताना होता है। (Report the change to the Registrar within 15 days.)', 's.40: photo / address / correspondence address has changed — the member must report this change to the Registrar within 15 days.');
 }
 
 /** r.27(a): candidates who may not stand because they are not on the voters roll for the election date. */
@@ -121,7 +122,7 @@ export function candidateDisqualifications<T extends { id: string; name: string 
     if (!id || roll.voters.some((v) => v.id === id)) continue;
     const ex = roll.excluded.find((e) => e.member.id === id);
     if (!ex) continue;
-    const why = ex.reason === 'defaulter' ? 'नियम 27(a): समिति का बक़ायेदार' : ex.reason === 'nominal' ? 'सहयोगी/नाममात्र सदस्य — मत का अधिकार नहीं' : ex.reason === 'ceased' ? 'सदस्यता समाप्त' : 'मतदाता सूची में नहीं';
+    const why = ex.reason === 'defaulter' ? tr('नियम 27(a): समिति का बक़ायेदार', 'r.27(a): defaulter of the society') : ex.reason === 'nominal' ? tr('सहयोगी/नाममात्र सदस्य — मत का अधिकार नहीं', 'associate/nominal member — no right to vote') : ex.reason === 'ceased' ? tr('सदस्यता समाप्त', 'membership ceased') : tr('मतदाता सूची में नहीं', 'not on the voters roll');
     out.push({ id, name: ex.member.name, reason: why });
   }
   return out;
@@ -169,13 +170,13 @@ export function electionOutcome(candidates: readonly { id: string; votes: number
 export function electionResultIssues(votes: readonly number[], votesCast: number, totalVoters: number, seats = 1): string[] {
   const issues: string[] = [];
   const sum = votes.reduce((s, v) => s + (v || 0), 0);
-  if (totalVoters > 0 && votesCast > totalVoters) issues.push(`डाले गए मत (${votesCast}) कुल मतदाताओं (${totalVoters}) से ज़्यादा हैं।`);
-  if (votesCast > 0 && sum > votesCast) issues.push(`उम्मीदवारों के मतों का जोड़ (${sum}) डाले गए मतों (${votesCast}) से ज़्यादा है।`);
+  if (totalVoters > 0 && votesCast > totalVoters) issues.push(tr(`डाले गए मत (${votesCast}) कुल मतदाताओं (${totalVoters}) से ज़्यादा हैं।`, `Votes cast (${votesCast}) are more than the total voters (${totalVoters}).`));
+  if (votesCast > 0 && sum > votesCast) issues.push(tr(`उम्मीदवारों के मतों का जोड़ (${sum}) डाले गए मतों (${votesCast}) से ज़्यादा है।`, `The total of candidates' votes (${sum}) is more than the votes cast (${votesCast}).`));
   const out = electionOutcome(votes.map((v, i) => ({ id: String(i), votes: v || 0 })), seats);
   if (out.tiedIds.length) {
     issues.push(seats > 1
-      ? `${seats} सीटों की आख़िरी जगह पर ${out.tiedIds.length} उम्मीदवारों के मत बराबर हैं — ${out.openSeats} सीट(ें) अपने-आप तय नहीं होंगी; उपनियम / निर्वाचन नियमों के अनुसार तय करके टिप्पणी में लिखें।`
-      : 'सबसे ज़्यादा मत बराबर हैं — विजेता अपने-आप तय नहीं होगा; उपनियम / निर्वाचन नियमों के अनुसार तय करके टिप्पणी में लिखें।');
+      ? tr(`${seats} सीटों की आख़िरी जगह पर ${out.tiedIds.length} उम्मीदवारों के मत बराबर हैं — ${out.openSeats} सीट(ें) अपने-आप तय नहीं होंगी; उपनियम / निर्वाचन नियमों के अनुसार तय करके टिप्पणी में लिखें।`, `${out.tiedIds.length} candidates are tied for the last place of ${seats} seats — ${out.openSeats} seat(s) will not be decided automatically; decide as per the bye-laws / election rules and write it in the remarks.`)
+      : tr('सबसे ज़्यादा मत बराबर हैं — विजेता अपने-आप तय नहीं होगा; उपनियम / निर्वाचन नियमों के अनुसार तय करके टिप्पणी में लिखें।', 'The highest votes are tied — the winner will not be decided automatically; decide as per the bye-laws / election rules and write it in the remarks.'));
   }
   return issues;
 }
@@ -230,44 +231,44 @@ export function validateCessation(
   const warnings: string[] = [];
   const fail = (error: string) => ({ ok: false, error, warnings });
   if (to === 'disqualified') {
-    if (d.ground !== 'insolvency' && d.ground !== 'conviction') return fail('अयोग्यता का आधार चुनें — नियम 14(1)(a) दिवाला या 14(1)(b) सज़ा। (Choose the r.14 ground.)');
-    if ((d.evidenceRef || '').trim().length < 3) return fail('प्रमाण दर्ज करें — न्यायालय आदेश / निर्णय संख्या। (Record the proof: order / judgment no.)');
+    if (d.ground !== 'insolvency' && d.ground !== 'conviction') return fail(tr('अयोग्यता का आधार चुनें — नियम 14(1)(a) दिवाला या 14(1)(b) सज़ा। (Choose the r.14 ground.)', 'Choose the ground of disqualification — r.14(1)(a) insolvency or 14(1)(b) sentence.'));
+    if ((d.evidenceRef || '').trim().length < 3) return fail(tr('प्रमाण दर्ज करें — न्यायालय आदेश / निर्णय संख्या। (Record the proof: order / judgment no.)', 'Record the proof — court order / judgment number.'));
     if (d.evidenceDate && isIso(d.evidenceDate) && isIso(ctx.effectiveDate) && d.evidenceDate < ctx.effectiveDate) {
-      warnings.push('आदेश की तिथि अयोग्यता की तिथि से पहले है — जाँच लें कि "किस तिथि से" सही है।');
+      warnings.push(tr('आदेश की तिथि अयोग्यता की तिथि से पहले है — जाँच लें कि "किस तिथि से" सही है।', 'The order date is before the disqualification date — check that the "from date" is correct.'));
     }
     return { ok: true, warnings };
   }
   if (!ctx.haryana) return { ok: true, warnings };
   if (to === 'expelled') {
-    if (!(ctx.resolutionNo || '').trim()) return fail('नियम 19: आम सभा का निष्कासन प्रस्ताव संख्या भरें। (GM resolution no. required.)');
-    if (!isIso(d.gmDate)) return fail('नियम 19: आम सभा की तिथि भरें। (Enter the general-meeting date.)');
+    if (!(ctx.resolutionNo || '').trim()) return fail(tr('नियम 19: आम सभा का निष्कासन प्रस्ताव संख्या भरें। (GM resolution no. required.)', "r.19: enter the general meeting's expulsion resolution number."));
+    if (!isIso(d.gmDate)) return fail(tr('नियम 19: आम सभा की तिथि भरें। (Enter the general-meeting date.)', 'r.19: enter the general meeting date.'));
     const present = Math.floor(Number(d.presentEntitled) || 0), yes = Math.floor(Number(d.votesFor) || 0);
-    if (present < 1) return fail('नियम 19: उपस्थित व मत-योग्य सदस्यों की संख्या भरें। (Members present and entitled to vote.)');
-    if (yes < 0 || yes > present) return fail('पक्ष में मत उपस्थित मत-योग्य सदस्यों से ज़्यादा नहीं हो सकते।');
-    if (yes * 3 < present * 2) return fail(`नियम 19: ${present} उपस्थित में से कम से कम ${Math.ceil((present * 2) / 3)} मत पक्ष में चाहिए — ${yes} मिले। प्रस्ताव पारित नहीं, निष्कासन नहीं हो सकता।`);
-    if (isIso(ctx.effectiveDate) && ctx.effectiveDate < d.gmDate) return fail('निष्कासन की तिथि आम सभा की तिथि से पहले नहीं हो सकती।');
-    if (!(d.byelawProcessRef || '').trim()) warnings.push('पंजीकृत उपनियमों के अनुसार नोटिस / सुनवाई का संदर्भ दर्ज नहीं — उपनियम की प्रक्रिया पूरी होने का प्रमाण रखें।');
+    if (present < 1) return fail(tr('नियम 19: उपस्थित व मत-योग्य सदस्यों की संख्या भरें। (Members present and entitled to vote.)', 'r.19: enter the number of members present and entitled to vote.'));
+    if (yes < 0 || yes > present) return fail(tr('पक्ष में मत उपस्थित मत-योग्य सदस्यों से ज़्यादा नहीं हो सकते।', 'Votes in favour cannot be more than the members present and entitled to vote.'));
+    if (yes * 3 < present * 2) return fail(tr(`नियम 19: ${present} उपस्थित में से कम से कम ${Math.ceil((present * 2) / 3)} मत पक्ष में चाहिए — ${yes} मिले। प्रस्ताव पारित नहीं, निष्कासन नहीं हो सकता।`, `r.19: of ${present} present, at least ${Math.ceil((present * 2) / 3)} votes in favour are needed — ${yes} received. The resolution is not passed; the member cannot be expelled.`));
+    if (isIso(ctx.effectiveDate) && ctx.effectiveDate < d.gmDate) return fail(tr('निष्कासन की तिथि आम सभा की तिथि से पहले नहीं हो सकती।', 'The expulsion date cannot be before the general meeting date.'));
+    if (!(d.byelawProcessRef || '').trim()) warnings.push(tr('पंजीकृत उपनियमों के अनुसार नोटिस / सुनवाई का संदर्भ दर्ज नहीं — उपनियम की प्रक्रिया पूरी होने का प्रमाण रखें।', 'No notice / hearing reference recorded as per the registered bye-laws — keep proof that the bye-law procedure was completed.'));
     return { ok: true, warnings };
   }
   if (to === 'resigned') {
     if (!ctx.liability) {
-      warnings.push('समिति का दायित्व-प्रकार (सीमित/असीमित) Society Setup में प्रमाण सहित दर्ज नहीं — नियम 18 का सही कार्यप्रवाह उसी से तय होता है।');
+      warnings.push(tr('समिति का दायित्व-प्रकार (सीमित/असीमित) Society Setup में प्रमाण सहित दर्ज नहीं — नियम 18 का सही कार्यप्रवाह उसी से तय होता है।', "The society's liability type (limited/unlimited) is not recorded with proof in Society Setup — the correct r.18 workflow depends on it."));
       return { ok: true, warnings };
     }
     if (ctx.liability === 'unlimited') {
-      if (ctx.dues > 0.005) return fail(`नियम 18(1): असीमित दायित्व समिति में ऋणी सदस्य त्यागपत्र नहीं दे सकता — बकाया ₹${ctx.dues.toLocaleString('en-IN')} पहले चुकाएँ।`);
-      if (d.notSurety !== true) return fail('नियम 18(1): सदस्य किसी बकाया ऋण का ज़मानतदार नहीं — इसकी पुष्टि करें।');
-      if (!isIso(d.noticeDate)) return fail('नियम 18(1): उपनियम के अनुसार सचिव को दिए नोटिस की तिथि भरें।');
-      if (isIso(ctx.effectiveDate) && ctx.effectiveDate < d.noticeDate) return fail('त्यागपत्र की तिथि नोटिस की तिथि से पहले नहीं हो सकती।');
-      warnings.push('नियम 18(2): शेयर की राशि बिना ब्याज, उपनियम में तय अवधि के बाद लौटाई जाती है।');
+      if (ctx.dues > 0.005) return fail(tr(`नियम 18(1): असीमित दायित्व समिति में ऋणी सदस्य त्यागपत्र नहीं दे सकता — बकाया ₹${ctx.dues.toLocaleString('en-IN')} पहले चुकाएँ।`, `r.18(1): in an unlimited-liability society an indebted member cannot resign — pay the dues of ₹${ctx.dues.toLocaleString('en-IN')} first.`));
+      if (d.notSurety !== true) return fail(tr('नियम 18(1): सदस्य किसी बकाया ऋण का ज़मानतदार नहीं — इसकी पुष्टि करें।', 'r.18(1): confirm that the member is not a surety for any outstanding loan.'));
+      if (!isIso(d.noticeDate)) return fail(tr('नियम 18(1): उपनियम के अनुसार सचिव को दिए नोटिस की तिथि भरें।', 'r.18(1): enter the date of the notice given to the secretary as per the bye-laws.'));
+      if (isIso(ctx.effectiveDate) && ctx.effectiveDate < d.noticeDate) return fail(tr('त्यागपत्र की तिथि नोटिस की तिथि से पहले नहीं हो सकती।', 'The resignation date cannot be before the notice date.'));
+      warnings.push(tr('नियम 18(2): शेयर की राशि बिना ब्याज, उपनियम में तय अवधि के बाद लौटाई जाती है।', 'r.18(2): the share amount is refunded without interest, after the period fixed in the bye-laws.'));
       return { ok: true, warnings };
     }
     // limited
-    if (d.shareRoute !== 'transfer' && d.shareRoute !== 'fund_refund') return fail('नियम 18(3): शेयर का निपटारा चुनें — योग्य सदस्य को हस्तांतरण, या शेयर-हस्तांतरण कोष से वापसी।');
+    if (d.shareRoute !== 'transfer' && d.shareRoute !== 'fund_refund') return fail(tr('नियम 18(3): शेयर का निपटारा चुनें — योग्य सदस्य को हस्तांतरण, या शेयर-हस्तांतरण कोष से वापसी।', 'r.18(3): choose how the shares are settled — transfer to an eligible member, or refund from the share-transfer fund.'));
     if (d.shareRoute === 'fund_refund') {
-      if (d.transferFundExists !== true) return fail('नियम 18(3): सीमित दायित्व समिति में शेयर वापसी तभी, जब अर्जित लाभ से शेयर-हस्तांतरण कोष बना हो — पुष्टि करें, या हस्तांतरण चुनें।');
-      if (!(ctx.resolutionNo || '').trim()) return fail('नियम 18(3): प्रबंध समिति की अनुमति का प्रस्ताव संख्या भरें।');
-      warnings.push('नियम 18(3): वर्ष में कुल वापसी 31 मार्च की चुकता पूँजी (सरकारी अंश छोड़कर) के 5% से अधिक नहीं — वापसी दर्ज करते समय जाँच होगी।');
+      if (d.transferFundExists !== true) return fail(tr('नियम 18(3): सीमित दायित्व समिति में शेयर वापसी तभी, जब अर्जित लाभ से शेयर-हस्तांतरण कोष बना हो — पुष्टि करें, या हस्तांतरण चुनें।', 'r.18(3): in a limited-liability society shares are refunded only if a share-transfer fund has been built from earned profits — confirm, or choose transfer.'));
+      if (!(ctx.resolutionNo || '').trim()) return fail(tr('नियम 18(3): प्रबंध समिति की अनुमति का प्रस्ताव संख्या भरें।', "r.18(3): enter the managing committee's permission resolution number."));
+      warnings.push(tr('नियम 18(3): वर्ष में कुल वापसी 31 मार्च की चुकता पूँजी (सरकारी अंश छोड़कर) के 5% से अधिक नहीं — वापसी दर्ज करते समय जाँच होगी।', 'r.18(3): total refunds in a year cannot exceed 5% of the paid-up capital on 31 March (excluding the government share) — this is checked when the refund is recorded.'));
     }
     return { ok: true, warnings };
   }

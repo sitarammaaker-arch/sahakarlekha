@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   Inbox, RefreshCw, ArrowLeft, Mail, Building2, Clock, Star, Lock,
   CheckCircle2, Eye, AlertTriangle, MessageSquare, Bug, Lightbulb,
@@ -48,6 +49,7 @@ const TYPE_META: Record<string, { label: string; icon: React.ElementType; cls: s
   review:     { label: 'रिव्यू', icon: Star,          cls: 'bg-violet-100 text-violet-800' },
   helpful:    { label: 'फ़ीडबैक', icon: CheckCircle2,  cls: 'bg-green-100 text-green-800' },
 };
+const TYPE_LABEL_EN: Record<string, string> = { message: 'Message', bug: 'Problem', suggestion: 'Suggestion', review: 'Review', helpful: 'Feedback' };
 
 const STATUS_FILTERS = [
   { value: 'new', label: 'नए' },
@@ -55,6 +57,7 @@ const STATUS_FILTERS = [
   { value: 'resolved', label: 'हल' },
   { value: 'all', label: 'सभी' },
 ];
+const STATUS_FILTER_EN: Record<string, string> = { new: 'New', seen: 'Seen', resolved: 'Resolved', all: 'All' };
 
 function fmt(d: string) {
   try {
@@ -67,6 +70,8 @@ function fmt(d: string) {
 const SuperAdminFeedback: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const email = user?.email || '';
 
   const [rows, setRows] = useState<FeedbackRow[]>([]);
@@ -91,7 +96,7 @@ const SuperAdminFeedback: React.FC = () => {
     } catch (e) {
       sessionPw = null;
       setAuthed(false);
-      setGateErr('platform-admin पहुँच सत्यापित नहीं हुई — पक्का करें कि आप platform-admin खाते से लॉग-इन हैं (और migration 024 चल चुका है)।');
+      setGateErr('denied');
     } finally {
       setLoading(false);
     }
@@ -113,7 +118,7 @@ const SuperAdminFeedback: React.FC = () => {
     });
     if (error) {
       setRows(prev); // rollback — never leave the UI out of sync with the DB
-      toast({ title: 'अपडेट नहीं हुआ', description: 'स्थिति बदली नहीं जा सकी, फिर कोशिश करें।', variant: 'destructive' });
+      toast({ title: L('अपडेट नहीं हुआ', 'Not updated'), description: L('स्थिति बदली नहीं जा सकी, फिर कोशिश करें।', 'The status could not be changed, try again.'), variant: 'destructive' });
     }
   };
 
@@ -126,9 +131,9 @@ const SuperAdminFeedback: React.FC = () => {
     });
     if (error) {
       setRows(prev);
-      toast({ title: 'अपडेट नहीं हुआ', description: 'प्रकाशन-स्थिति बदली नहीं जा सकी।', variant: 'destructive' });
+      toast({ title: L('अपडेट नहीं हुआ', 'Not updated'), description: L('प्रकाशन-स्थिति बदली नहीं जा सकी।', 'The publish status could not be changed.'), variant: 'destructive' });
     } else if (val) {
-      toast({ title: 'होमपेज पर प्रकाशित ✓', description: 'यह रिव्यू अब वेबसाइट पर दिखेगा।' });
+      toast({ title: L('होमपेज पर प्रकाशित ✓', 'Published on the homepage ✓'), description: L('यह रिव्यू अब वेबसाइट पर दिखेगा।', 'This review will now show on the website.') });
     }
   };
 
@@ -137,7 +142,7 @@ const SuperAdminFeedback: React.FC = () => {
     return (
       <div className="max-w-md mx-auto px-4 py-10">
         <Link to="/super-admin" className="text-sm text-muted-foreground inline-flex items-center gap-1 mb-4 hover:text-primary">
-          <ArrowLeft className="h-4 w-4" /> डैशबोर्ड
+          <ArrowLeft className="h-4 w-4" /> {L('डैशबोर्ड', 'Dashboard')}
         </Link>
         <Card>
           <CardContent className="p-6">
@@ -146,19 +151,19 @@ const SuperAdminFeedback: React.FC = () => {
               <h1 className="text-xl font-bold text-foreground">Feedback Inbox</h1>
             </div>
             <p className="text-sm text-muted-foreground mb-5">
-              सुरक्षा के लिए अपना platform-admin पासवर्ड डालें। (यह सिर्फ़ इसी सत्र के लिए, मेमोरी में रहेगा।)
+              {L('सुरक्षा के लिए अपना platform-admin पासवर्ड डालें। (यह सिर्फ़ इसी सत्र के लिए, मेमोरी में रहेगा।)', 'For security, enter your platform-admin password. (It stays in memory for this session only.)')}
             </p>
             <form onSubmit={(e) => { e.preventDefault(); if (pw) load(pw); }} className="space-y-3">
               <div className="space-y-1.5">
-                <Label htmlFor="adminpw">पासवर्ड ({email || 'admin'})</Label>
+                <Label htmlFor="adminpw">{L('पासवर्ड', 'Password')} ({email || 'admin'})</Label>
                 <Input id="adminpw" type="password" value={pw} autoFocus
                   onChange={(e) => setPw(e.target.value)} placeholder="••••••••" />
               </div>
               {gateErr && (
-                <p className="text-sm text-red-600 flex items-start gap-1.5"><AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" /> {gateErr}</p>
+                <p className="text-sm text-red-600 flex items-start gap-1.5"><AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" /> {L('platform-admin पहुँच सत्यापित नहीं हुई — पक्का करें कि आप platform-admin खाते से लॉग-इन हैं (और migration 024 चल चुका है)।', 'Platform-admin access could not be verified — make sure you are logged in with the platform-admin account (and migration 024 has been run).')}</p>
               )}
               <Button type="submit" className="w-full" disabled={loading || !pw}>
-                {loading ? 'जाँच रहे हैं…' : 'खोलें'}
+                {loading ? L('जाँच रहे हैं…', 'Checking…') : L('खोलें', 'Open')}
               </Button>
             </form>
           </CardContent>
@@ -177,14 +182,14 @@ const SuperAdminFeedback: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Inbox className="h-6 w-6 text-primary" /> Feedback Inbox
-            {newCount > 0 && <Badge className="bg-primary text-primary-foreground">{newCount} नए</Badge>}
+            {newCount > 0 && <Badge className="bg-primary text-primary-foreground">{newCount} {L('नए', 'new')}</Badge>}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">संपर्क संदेश, सुझाव, समस्याएँ व रिव्यू — सब यहाँ।</p>
+          <p className="text-sm text-muted-foreground mt-1">{L('संपर्क संदेश, सुझाव, समस्याएँ व रिव्यू — सब यहाँ।', 'Contact messages, suggestions, problems and reviews — all here.')}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Link to="/super-admin"><Button variant="ghost" size="sm" className="gap-1"><ArrowLeft className="h-4 w-4" /> डैशबोर्ड</Button></Link>
+          <Link to="/super-admin"><Button variant="ghost" size="sm" className="gap-1"><ArrowLeft className="h-4 w-4" /> {L('डैशबोर्ड', 'Dashboard')}</Button></Link>
           <Button variant="outline" size="sm" className="gap-1" onClick={() => sessionPw && load(sessionPw)} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> रिफ्रेश
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> {L('रिफ्रेश', 'Refresh')}
           </Button>
         </div>
       </div>
@@ -200,15 +205,15 @@ const SuperAdminFeedback: React.FC = () => {
                 : 'bg-background text-muted-foreground border-border hover:border-primary/50'
             }`}
           >
-            {f.label}
+            {language === 'hi' ? f.label : STATUS_FILTER_EN[f.value]}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground py-10 text-center">लोड हो रहा है…</p>
+        <p className="text-sm text-muted-foreground py-10 text-center">{L('लोड हो रहा है…', 'Loading…')}</p>
       ) : visible.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-10 text-center">इस फ़िल्टर में कोई संदेश नहीं।</p>
+        <p className="text-sm text-muted-foreground py-10 text-center">{L('इस फ़िल्टर में कोई संदेश नहीं।', 'No messages in this filter.')}</p>
       ) : (
         <div className="space-y-3">
           {visible.map(r => {
@@ -220,9 +225,9 @@ const SuperAdminFeedback: React.FC = () => {
                   <div className="flex items-start justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${tm.cls}`}>
-                        <Icon className="h-3.5 w-3.5" /> {tm.label}
+                        <Icon className="h-3.5 w-3.5" /> {language === 'hi' ? tm.label : (TYPE_LABEL_EN[r.type] ?? TYPE_LABEL_EN.message)}
                       </span>
-                      <span className="font-semibold text-foreground">{r.name || 'अनाम'}</span>
+                      <span className="font-semibold text-foreground">{r.name || L('अनाम', 'Anonymous')}</span>
                       {typeof r.rating === 'number' && (
                         <span className="inline-flex items-center gap-0.5 text-amber-600 text-sm">
                           {r.rating} <Star className="h-3.5 w-3.5 fill-current" />
@@ -245,16 +250,16 @@ const SuperAdminFeedback: React.FC = () => {
                   <div className="flex gap-2 mt-3 pt-3 border-t">
                     {r.status !== 'seen' && (
                       <Button variant="outline" size="sm" className="gap-1 h-8" onClick={() => setStatus(r.id, 'seen')}>
-                        <Eye className="h-3.5 w-3.5" /> देखा
+                        <Eye className="h-3.5 w-3.5" /> {L('देखा', 'Seen')}
                       </Button>
                     )}
                     {r.status !== 'resolved' && (
                       <Button variant="outline" size="sm" className="gap-1 h-8" onClick={() => setStatus(r.id, 'resolved')}>
-                        <CheckCircle2 className="h-3.5 w-3.5" /> हल किया
+                        <CheckCircle2 className="h-3.5 w-3.5" /> {L('हल किया', 'Resolved')}
                       </Button>
                     )}
                     {r.status !== 'new' && (
-                      <Button variant="ghost" size="sm" className="h-8" onClick={() => setStatus(r.id, 'new')}>नया रखें</Button>
+                      <Button variant="ghost" size="sm" className="h-8" onClick={() => setStatus(r.id, 'new')}>{L('नया रखें', 'Keep as new')}</Button>
                     )}
                     {r.type === 'review' && (
                       <Button
@@ -263,7 +268,7 @@ const SuperAdminFeedback: React.FC = () => {
                         className={`gap-1 h-8 ${r.is_public ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
                         onClick={() => setPublic(r.id, !r.is_public)}
                       >
-                        <Star className="h-3.5 w-3.5" /> {r.is_public ? 'होमपेज पर है ✓' : 'होमपेज पर दिखाएँ'}
+                        <Star className="h-3.5 w-3.5" /> {r.is_public ? L('होमपेज पर है ✓', 'On the homepage ✓') : L('होमपेज पर दिखाएँ', 'Show on homepage')}
                       </Button>
                     )}
                   </div>

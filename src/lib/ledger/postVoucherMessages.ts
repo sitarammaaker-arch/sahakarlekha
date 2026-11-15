@@ -3,6 +3,7 @@
  * dependency-free so the payroll Edge Functions can bundle it (pay-core.entry.ts) without pulling in the
  * voucher/store code. postVoucherClient.ts re-exports these — the messages have ONE home.
  */
+import { uiLanguage } from '../uiLang.ts';
 
 /** The `post_voucher:<code>` a refusal carries, or null for other errors. */
 export function postVoucherErrorCode(message: string | undefined | null): string | null {
@@ -37,7 +38,36 @@ const MESSAGES: Record<string, string> = {
   not_pending: 'यह वाउचर स्वीकृति के लिए रुका हुआ नहीं है।',
 };
 
+const MESSAGES_EN: Record<string, string> = {
+  not_a_society_user: 'Your login is not linked to any society.',
+  no_role_claim: 'Your role could not be found — log out once and log in again.',
+  role_cannot_write: 'Your role is not allowed to create vouchers.',
+  fy_locked: 'The financial year is audit-locked — the voucher cannot be created.',
+  period_locked: 'This date falls in a locked period — the voucher cannot be created.',
+  no_open_fy_for_date: 'This date is not in the current (open) financial year.',
+  unbalanced: 'Debit (Dr) and Credit (Cr) are not equal.',
+  too_few_legs: 'A voucher needs at least two lines.',
+  negative_amount: 'The amount cannot be negative.',
+  legs_do_not_match_voucher: 'The total of the lines does not match the voucher amount.',
+  event_lines_differ: 'The voucher lines and the ledger entry do not match.',
+  bad_event: 'The ledger entry was not built correctly.',
+  pending_not_supported: 'A voucher waiting for approval cannot be created this way yet.',
+  voucher_id_taken: 'This voucher id already belongs to another voucher.',
+  role_cannot_delete: 'Your role is not allowed to cancel vouchers.',
+  group_account: 'A group account cannot take entries — choose a ledger account under it.',
+  voucher_not_found: 'This voucher was not found on the cloud — refresh the page.',
+  voucher_cancelled: 'This voucher is already cancelled — it cannot be changed.',
+  voucher_reversed: 'This voucher has been reversed — it cannot be changed or cancelled.',
+  voucher_is_reversal: 'This is a reversal voucher — it must match the original voucher and cannot be edited.',
+  engine_voucher: 'System (engine) voucher — it can be corrected only by a reversal.',
+  voucher_in_closed_fy: 'This voucher belongs to a closed financial year — it cannot be changed or cancelled.',
+  self_approval: 'You cannot approve a voucher you created — another officer must approve it.',
+  not_pending: 'This voucher is not waiting for approval.',
+};
+
 export function postVoucherMessage(code: string | null, raw?: string): string {
-  const hi = code && MESSAGES[code];
-  return hi ? `${hi} (${code})` : `Cloud ने वाउचर मना किया — ${raw ?? 'unknown error'}`;
+  const en = uiLanguage() === 'en';
+  const msg = code && (en ? MESSAGES_EN[code] : MESSAGES[code]);
+  if (msg) return `${msg} (${code})`;
+  return en ? `The cloud refused the voucher — ${raw ?? 'unknown error'}` : `Cloud ने वाउचर मना किया — ${raw ?? 'unknown error'}`;
 }

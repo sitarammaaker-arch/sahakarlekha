@@ -10,6 +10,7 @@
  * The alphabet mirrors public._partner_new_code(): no 0/O/1/I/L, so a code survives being read out on the phone.
  * Keep the two in step.
  */
+import { uiLanguage } from '../uiLang.ts';
 
 export const REF_STORAGE_KEY = 'sl_ref';
 export const REF_TTL_DAYS = 90;
@@ -112,7 +113,8 @@ export const REFERRAL_ERROR_TEXT_EN: Record<string, string> = {
   unchanged: 'This partner is already set.',
 };
 
-export function referralErrorText(code: string | undefined | null, lang: Lang = 'hi'): string {
+// The language defaults to the reader's current one (uiLang; Hindi unless switched), so a caller that omits it still follows the toggle.
+export function referralErrorText(code: string | undefined | null, lang: Lang = uiLanguage()): string {
   if (lang === 'en') return (code && REFERRAL_ERROR_TEXT_EN[code]) || 'The referral code could not be recorded.';
   return (code && REFERRAL_ERROR_TEXT[code]) || 'Referral code दर्ज नहीं हो सका।';
 }
@@ -297,7 +299,7 @@ export const PAYOUT_ERROR_TEXT_EN: Record<string, string> = {
   out_of_range: 'Rate 0–30%, rate without PAN 0–40%, threshold 0 or more.',
 };
 
-export function payoutErrorText(code: string | undefined | null, lang: Lang = 'hi'): string {
+export function payoutErrorText(code: string | undefined | null, lang: Lang = uiLanguage()): string {
   if (lang === 'en') return (code && PAYOUT_ERROR_TEXT_EN[code]) || 'The payment was not recorded — try again.';
   return (code && PAYOUT_ERROR_TEXT[code]) || 'भुगतान दर्ज नहीं हुआ — दोबारा कोशिश करें।';
 }

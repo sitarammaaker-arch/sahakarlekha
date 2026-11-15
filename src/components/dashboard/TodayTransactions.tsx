@@ -10,8 +10,10 @@ interface Transaction {
   time: string;
   type: 'credit' | 'debit';
   description: string;
+  descriptionEn: string;
   amount: number;
   account: string;
+  accountEn: string;
 }
 
 const todayTransactions: Transaction[] = [
@@ -20,37 +22,46 @@ const todayTransactions: Transaction[] = [
     time: '10:30',
     type: 'credit',
     description: 'सदस्य शेयर जमा',
+    descriptionEn: 'Member share deposit',
     amount: 5000,
     account: 'नकद',
+    accountEn: 'Cash',
   },
   {
     id: '2',
     time: '11:45',
     type: 'debit',
     description: 'बिजली बिल भुगतान',
+    descriptionEn: 'Electricity bill payment',
     amount: 2500,
     account: 'बैंक',
+    accountEn: 'Bank',
   },
   {
     id: '3',
     time: '14:20',
     type: 'credit',
     description: 'गेहूं कमीशन',
+    descriptionEn: 'Wheat commission',
     amount: 8500,
     account: 'बैंक',
+    accountEn: 'Bank',
   },
   {
     id: '4',
     time: '15:00',
     type: 'debit',
     description: 'स्टेशनरी खरीद',
+    descriptionEn: 'Stationery purchase',
     amount: 450,
     account: 'नकद',
+    accountEn: 'Cash',
   },
 ];
 
 export const TodayTransactions: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const hi = language === 'hi';
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('hi-IN', {
@@ -81,12 +92,12 @@ export const TodayTransactions: React.FC = () => {
         <div className="flex gap-4 mb-4 pb-4 border-b border-border">
           <div className="flex-1 text-center p-3 rounded-lg bg-success/10">
             <TrendingUp className="h-5 w-5 text-success mx-auto mb-1" />
-            <p className="text-xs text-muted-foreground">जमा (Credit)</p>
+            <p className="text-xs text-muted-foreground">{hi ? 'जमा (Credit)' : 'Credit'}</p>
             <p className="font-bold text-success">{formatCurrency(totalCredit)}</p>
           </div>
           <div className="flex-1 text-center p-3 rounded-lg bg-destructive/10">
             <TrendingDown className="h-5 w-5 text-destructive mx-auto mb-1" />
-            <p className="text-xs text-muted-foreground">नाम (Debit)</p>
+            <p className="text-xs text-muted-foreground">{hi ? 'नाम (Debit)' : 'Debit'}</p>
             <p className="font-bold text-destructive">{formatCurrency(totalDebit)}</p>
           </div>
         </div>
@@ -114,13 +125,13 @@ export const TodayTransactions: React.FC = () => {
                   )}
                 </div>
                 <div>
-                  <p className="text-sm font-medium">{transaction.description}</p>
+                  <p className="text-sm font-medium">{hi ? transaction.description : transaction.descriptionEn}</p>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">
                       {transaction.time}
                     </span>
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                      {transaction.account}
+                      {hi ? transaction.account : transaction.accountEn}
                     </Badge>
                   </div>
                 </div>

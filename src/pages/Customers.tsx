@@ -438,7 +438,7 @@ const Customers: React.FC = () => {
                   </div>
                   <div className="space-y-1">
                     <Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
-                    <Input value={form.nameHi || ''} onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))} placeholder="ग्राहक का नाम" />
+                    <Input value={form.nameHi || ''} onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))} placeholder={hi ? 'ग्राहक का नाम' : 'Customer name (in Hindi)'} />
                   </div>
                 </div>
                 {isBusiness && (

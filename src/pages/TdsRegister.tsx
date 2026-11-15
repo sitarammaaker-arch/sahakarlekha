@@ -243,12 +243,12 @@ const TdsRegister: React.FC = () => {
     persistLinks(challanId ? [...links.filter(l => l.entryId !== entryId), { entryId, challanId }] : links.filter(l => l.entryId !== entryId));
     if (challanId) {
       supabase.from('tds_challan_links').upsert(withSoc({ entryId, challanId }), { onConflict: 'society_id,entryId' }).then(({ error }) => {
-        if (error) { console.error('TDS link save error:', error.message); persistLinks(prev); toast({ title: hi ? 'चालान लिंक सेव नहीं हुआ' : 'Challan link not saved', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: tds_challan_links block चलाएँ।)`, variant: 'destructive', duration: 12000 }); }
+        if (error) { console.error('TDS link save error:', error.message); persistLinks(prev); toast({ title: hi ? 'चालान लिंक सेव नहीं हुआ' : 'Challan link not saved', description: hi ? `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: tds_challan_links block चलाएँ।)` : `Not saved to the cloud — ${error.message}. (First time: run the tds_challan_links block.)`, variant: 'destructive', duration: 12000 }); }
       });
     } else {
       // RULE 1 (TAX-02): an unlink that did not reach the cloud is rolled back and shown.
       supabase.from('tds_challan_links').delete().eq('society_id', societyId).eq('entryId', entryId).then(({ error }) => {
-        if (error) { reportError('tds-unlink', error.message, { entryId }); persistLinks(prev); toast({ title: hi ? 'चालान लिंक नहीं हटा' : 'Challan link not removed', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. बदलाव वापस लिया गया।`, variant: 'destructive', duration: 12000 }); }
+        if (error) { reportError('tds-unlink', error.message, { entryId }); persistLinks(prev); toast({ title: hi ? 'चालान लिंक नहीं हटा' : 'Challan link not removed', description: hi ? `क्लाउड में सेव नहीं हुआ — ${error.message}. बदलाव वापस लिया गया।` : `Not saved to the cloud — ${error.message}. The change was undone.`, variant: 'destructive', duration: 12000 }); }
       }, () => { persistLinks(prev); toast({ title: hi ? 'चालान लिंक नहीं हटा' : 'Challan link not removed', description: 'Network error', variant: 'destructive', duration: 12000 }); });
     }
   };
@@ -273,7 +273,7 @@ const TdsRegister: React.FC = () => {
       if (error) {
         console.error('TDS entry save error:', error.message);
         persistEntries(prev); // RULE-1 rollback
-        toast({ title: hi ? 'TDS एंट्री सेव नहीं हुई' : 'TDS entry not saved', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: tds_entries block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toast({ title: hi ? 'TDS एंट्री सेव नहीं हुई' : 'TDS entry not saved', description: hi ? `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: tds_entries block चलाएँ।)` : `Not saved to the cloud — ${error.message}. (First time: run the tds_entries block.)`, variant: 'destructive', duration: 12000 });
       } else {
         toast({ title: hi ? '✅ TDS एंट्री जोड़ी गई' : '✅ TDS entry added' });
       }
@@ -326,7 +326,7 @@ const TdsRegister: React.FC = () => {
         console.error('TDS challan save error:', error.message);
         persistChallans(prev); // RULE-1 rollback
         if (voucherId) cancelVoucher(voucherId, 'TDS challan not saved (cloud save failed)', user?.name || 'System');   // the voucher must not outlive its challan
-        toast({ title: hi ? 'चालान सेव नहीं हुआ' : 'Challan not saved', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: tds_challans block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toast({ title: hi ? 'चालान सेव नहीं हुआ' : 'Challan not saved', description: hi ? `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: tds_challans block चलाएँ।)` : `Not saved to the cloud — ${error.message}. (First time: run the tds_challans block.)`, variant: 'destructive', duration: 12000 });
       } else {
         toast({ title: hi ? '✅ चालान जोड़ा गया' : '✅ Challan added' });
       }
@@ -340,7 +340,7 @@ const TdsRegister: React.FC = () => {
   const failDelete = (what: string, msg: string, rollback: () => void) => {
     rollback();
     reportError('tds-delete', msg, { what });
-    toast({ title: hi ? `${what} नहीं हटा` : `${what} not deleted`, description: `क्लाउड में सेव नहीं हुआ — ${msg}. बदलाव वापस लिया गया; refresh पर भी वही दिखेगा।`, variant: 'destructive', duration: 12000 });
+    toast({ title: hi ? `${what} नहीं हटा` : `${what} not deleted`, description: hi ? `क्लाउड में सेव नहीं हुआ — ${msg}. बदलाव वापस लिया गया; refresh पर भी वही दिखेगा।` : `Not saved to the cloud — ${msg}. The change was undone; a refresh will show the same.`, variant: 'destructive', duration: 12000 });
   };
   const handleDeleteEntry = (id: string) => {
     if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
@@ -604,7 +604,7 @@ const TdsRegister: React.FC = () => {
                               <Badge
                                 variant="outline"
                                 className={`text-xs ${ref.act === '2025' && !ref.verified ? 'border-amber-500/60 text-amber-700 dark:text-amber-500' : ''}`}
-                                title={ref.act === '2025' ? `${describeSectionRef(ref)} · संग्रहीत: ${entry.section}` : ref.cite}
+                                title={ref.act === '2025' ? (hi ? `${describeSectionRef(ref)} · संग्रहीत: ${entry.section}` : `Section ${ref.label} (Act 2025) — ⚠️ not verified, confirm with your CA before filing · Stored as: ${entry.section}`) : ref.cite}
                               >
                                 {ref.label}{ref.act === '2025' && !ref.verified ? ' ⚠️' : ''}
                               </Badge>
@@ -676,7 +676,7 @@ const TdsRegister: React.FC = () => {
                     const ref = resolveSectionRef(sec.value, `${quarterMonths(fy, selectedQuarter as Quarter)[0]}-01`);
                     return (
                       <div key={sec.value} className={`p-3 rounded-lg border ${secTotal > 0 ? 'bg-primary/5 border-primary/20' : 'bg-muted/30'}`}>
-                        <p className="text-xs font-medium" title={ref.act === '2025' ? describeSectionRef(ref) : ref.cite}>
+                        <p className="text-xs font-medium" title={ref.act === '2025' ? (hi ? describeSectionRef(ref) : `Section ${ref.label} (Act 2025) — ⚠️ not verified, confirm with your CA before filing`) : ref.cite}>
                           {ref.act === '2025' ? `${ref.label}${!ref.verified ? ' ⚠️' : ''} (${hi ? 'पहले' : 'was'} ${sec.value})` : sec.value}
                         </p>
                         <p className="text-sm font-bold">{fmt(secTotal)}</p>

@@ -430,7 +430,7 @@ const Suppliers: React.FC = () => {
                   </div>
                   <div className="space-y-1">
                     <Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
-                    <Input value={form.nameHi || ''} onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))} placeholder="सप्लायर का नाम" />
+                    <Input value={form.nameHi || ''} onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))} placeholder={hi ? 'सप्लायर का नाम' : 'Supplier name (in Hindi)'} />
                   </div>
                 </div>
                 {isBusiness && (

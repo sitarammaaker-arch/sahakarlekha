@@ -158,7 +158,12 @@ const STATE_LABEL_HI: Record<string, string> = {
   locked: 'लॉक', posted: 'बही में पोस्ट', paid: 'भुगतान हुआ', cancelled: 'रद्द',
   rolled_back: 'उलटा गया',
 };
-const stateLabel = (s: string, hi: boolean): string => (hi ? (STATE_LABEL_HI[s] ?? s) : s);
+const STATE_LABEL_EN: Record<string, string> = {
+  draft: 'Draft', verified: 'Verified', approved: 'Approved',
+  locked: 'Locked', posted: 'Posted to ledger', paid: 'Paid', cancelled: 'Cancelled',
+  rolled_back: 'Rolled back',
+};
+const stateLabel = (s: string, hi: boolean): string => (hi ? (STATE_LABEL_HI[s] ?? s) : (STATE_LABEL_EN[s] ?? s));
 
 const Payroll: React.FC = () => {
   const { language } = useLanguage();

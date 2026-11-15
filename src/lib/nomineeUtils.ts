@@ -7,6 +7,7 @@
  * scripts/test-nominees.mjs.
  */
 import type { Nominee } from '@/types';
+import { tr } from './uiLang.ts';
 
 /** Sum of nominee benefit shares (%). */
 export function nomineeShareTotal(nominees: Pick<Nominee, 'sharePercent'>[] | undefined): number {
@@ -28,10 +29,10 @@ export function validateNominees(nominees: Nominee[] | undefined): NomineeValida
   const list = nominees || [];
   const total = nomineeShareTotal(list);
   for (const n of list) {
-    if (!n.name?.trim() || !n.relation?.trim()) return { ok: false, error: 'हर नामांकित का नाम और रिश्ता ज़रूरी है / Each nominee needs a name and relation', total };
-    if (!(n.sharePercent > 0)) return { ok: false, error: 'हर नामांकित का हिस्सा (%) 0 से ज़्यादा होना चाहिए / Each nominee needs a share % greater than 0', total };
+    if (!n.name?.trim() || !n.relation?.trim()) return { ok: false, error: tr('हर नामांकित का नाम और रिश्ता ज़रूरी है / Each nominee needs a name and relation', 'Each nominee needs a name and relation'), total };
+    if (!(n.sharePercent > 0)) return { ok: false, error: tr('हर नामांकित का हिस्सा (%) 0 से ज़्यादा होना चाहिए / Each nominee needs a share % greater than 0', 'Each nominee needs a share % greater than 0'), total };
   }
-  if (total > 100) return { ok: false, error: `नामांकितों का कुल हिस्सा ${total}% है — 100% से ज़्यादा नहीं हो सकता / Nominee shares total ${total}% — cannot exceed 100%`, total };
+  if (total > 100) return { ok: false, error: tr(`नामांकितों का कुल हिस्सा ${total}% है — 100% से ज़्यादा नहीं हो सकता / Nominee shares total ${total}% — cannot exceed 100%`, `Nominee shares total ${total}% — cannot exceed 100%`), total };
   return { ok: true, total };
 }
 

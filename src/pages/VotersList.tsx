@@ -22,7 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { fmtDate } from '@/lib/dateUtils';
 import { downloadExcel } from '@/lib/exportUtils';
 import { generateVotersListPDF, generateDefaulterListPDF } from '@/lib/pdf';
-import { voterRoll, defaulterList, reservationSummary, EXCLUSION_LABEL } from '@/lib/members/voters';
+import { voterRoll, defaulterList, reservationSummary, EXCLUSION_LABEL, EXCLUSION_LABEL_EN } from '@/lib/members/voters';
 import { useMemberDues } from '@/hooks/useMemberDues';
 import { ListPager, usePaged } from '@/components/ListPager';
 import { isHaryana } from '@/lib/members/admission';
@@ -52,7 +52,7 @@ const VotersList: React.FC = () => {
 
   const excelVoters = () => downloadExcel([
     { name: 'Voters', headers: ['S.No', 'Member No.', 'Name', 'Father/Husband', 'Address'], rows: roll.voters.map((m, i) => [i + 1, m.memberId, m.name, m.fatherName || '', m.address || '']) },
-    { name: 'Not on the list', headers: ['Member No.', 'Name', 'Reason', 'Overdue'], rows: roll.excluded.map(x => [x.member.memberId, x.member.name, EXCLUSION_LABEL[x.reason], x.overdue ?? '']) },
+    { name: 'Not on the list', headers: ['Member No.', 'Name', 'Reason', 'Overdue'], rows: roll.excluded.map(x => [x.member.memberId, x.member.name, EXCLUSION_LABEL_EN[x.reason], x.overdue ?? '']) },
   ], `voters-list-${asOn}`);
   const excelDefaulters = () => downloadExcel([
     { name: 'Defaulters', headers: ['S.No', 'Member No.', 'Name', 'Father/Husband', 'Overdue', 'Amount'], rows: defaulters.map((d, i) => [i + 1, d.member.memberId, d.member.name, d.member.fatherName || '', d.items.join(', '), d.amount]) },
@@ -122,7 +122,7 @@ const VotersList: React.FC = () => {
                       <TableHeader><TableRow><TableHead>{hi ? 'सदस्य नं.' : 'Member No.'}</TableHead><TableHead>{hi ? 'नाम' : 'Name'}</TableHead><TableHead>{hi ? 'कारण' : 'Reason'}</TableHead></TableRow></TableHeader>
                       <TableBody>
                         {roll.excluded.map(x => (
-                          <TableRow key={x.member.id}><TableCell className="font-mono">{x.member.memberId}</TableCell><TableCell>{x.member.name}</TableCell><TableCell className="text-xs">{EXCLUSION_LABEL[x.reason]}{x.overdue ? ` — ${fmt(x.overdue)}` : ''}</TableCell></TableRow>
+                          <TableRow key={x.member.id}><TableCell className="font-mono">{x.member.memberId}</TableCell><TableCell>{x.member.name}</TableCell><TableCell className="text-xs">{hi ? EXCLUSION_LABEL[x.reason] : EXCLUSION_LABEL_EN[x.reason]}{x.overdue ? ` — ${fmt(x.overdue)}` : ''}</TableCell></TableRow>
                         ))}
                       </TableBody>
                     </Table>

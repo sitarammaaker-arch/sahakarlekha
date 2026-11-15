@@ -5,6 +5,7 @@
  * → unit-tested by scripts/test-kyc.mjs. Values are PII: display masked, and the audit
  * log redacts the 'aadhaar' / 'pan' keys.
  */
+import { tr } from './uiLang.ts';
 
 const AADHAAR_RE = /^\d{12}$/;
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
@@ -17,9 +18,9 @@ export interface KycValidation {
 /** Validate optional Aadhaar (12 digits) and PAN (ABCDE1234F). Empty is allowed. */
 export function validateKyc(aadhaar?: string, pan?: string): KycValidation {
   const a = (aadhaar || '').replace(/\s/g, '');
-  if (a && !AADHAAR_RE.test(a)) return { ok: false, error: 'आधार 12 अंकों का होना चाहिए / Aadhaar must be 12 digits' };
+  if (a && !AADHAAR_RE.test(a)) return { ok: false, error: tr('आधार 12 अंकों का होना चाहिए / Aadhaar must be 12 digits', 'Aadhaar must be 12 digits') };
   const p = (pan || '').toUpperCase().trim();
-  if (p && !PAN_RE.test(p)) return { ok: false, error: 'PAN गलत है (उदा. ABCDE1234F) / Invalid PAN (e.g. ABCDE1234F)' };
+  if (p && !PAN_RE.test(p)) return { ok: false, error: tr('PAN गलत है (उदा. ABCDE1234F) / Invalid PAN (e.g. ABCDE1234F)', 'Invalid PAN (e.g. ABCDE1234F)') };
   return { ok: true };
 }
 

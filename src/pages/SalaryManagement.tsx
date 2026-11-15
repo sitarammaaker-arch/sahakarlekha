@@ -123,7 +123,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ empForm, setEmpForm, hi, on
         <Input
           value={empForm.nameHi}
           onChange={e => setEmpForm(f => ({ ...f, nameHi: e.target.value }))}
-          placeholder="पूरा नाम"
+          placeholder={hi ? 'पूरा नाम' : 'Full name (in Hindi)'}
         />
       </div>
       <div className="space-y-1 col-span-2 sm:col-span-1">
@@ -1037,7 +1037,7 @@ const SalaryManagement: React.FC = () => {
                                     <div className="font-medium text-sm">{fmt(s.totalEmployeeDeductions)}</div>
                                     <div className="text-[10px] text-muted-foreground">
                                       PF {fmt(s.pfEmployee)}{(s.esiEligible || s.esiEmployee > 0) ? ` · ESI ${fmt(s.esiEmployee)}` : ''}
-                                      {pfEsiOverridden && <span className="ml-1 text-amber-600 dark:text-amber-500">• बदला गया</span>}
+                                      {pfEsiOverridden && <span className="ml-1 text-amber-600 dark:text-amber-500">{hi ? '• बदला गया' : '• changed'}</span>}
                                     </div>
                                   </div>
                                   <Popover>

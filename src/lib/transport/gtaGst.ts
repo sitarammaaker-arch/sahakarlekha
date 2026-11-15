@@ -11,6 +11,7 @@
  *   fcm5  — forward charge at 5% without ITC (Sl.9(iii)(b), 2.5% CGST): society pays; needs the Annexure V option.
  *   fcm18 — forward charge at 18% with ITC (Sl.9(iii)(b), CGST 9% from 22.09.2025 — earlier 6% = 12%).
  */
+import { tr } from '../uiLang.ts';
 
 export type GtaGstMode = 'none' | 'rcm' | 'fcm5' | 'fcm18';
 
@@ -34,6 +35,15 @@ export const RCM_RECIPIENT_CATEGORIES_HI = [
   'GST में पंजीकृत व्यक्ति',
   'कंपनी / body corporate',
   'साझेदारी फ़र्म / AOP',
+  'casual taxable person',
+] as const;
+export const RCM_RECIPIENT_CATEGORIES_EN = [
+  'Factory (Factories Act, 1948)',
+  'Society (Societies Registration Act, 1860 or any other law)',
+  'Co-operative society',
+  'Person registered under GST',
+  'Company / body corporate',
+  'Partnership firm / AOP',
   'casual taxable person',
 ] as const;
 
@@ -69,15 +79,15 @@ export function gtaModeProblem(input: {
 }): string | null {
   const { mode } = input;
   if (mode === 'none') return null;
-  if (input.date < FCM_FROM) return 'यह GST विकल्प 18.07.2022 से पहले की तारीख़ पर लागू नहीं किया जा सकता।';
+  if (input.date < FCM_FROM) return tr('यह GST विकल्प 18.07.2022 से पहले की तारीख़ पर लागू नहीं किया जा सकता।', 'This GST option cannot be applied to a date before 18.07.2022.');
   if (mode === 'rcm') {
     return input.customerHasGstin || input.rcmRecipientConfirmed
       ? null
-      : 'Reverse charge तभी लगता है जब ग्राहक अधिसूचना 13/2017 की सूची में हो (कारख़ाना, सोसाइटी, सहकारी समिति, GST-पंजीकृत, कंपनी, फ़र्म …) — ग्राहक का GSTIN भरें या पुष्टि करें।';
+      : tr('Reverse charge तभी लगता है जब ग्राहक अधिसूचना 13/2017 की सूची में हो (कारख़ाना, सोसाइटी, सहकारी समिति, GST-पंजीकृत, कंपनी, फ़र्म …) — ग्राहक का GSTIN भरें या पुष्टि करें।', 'Reverse charge applies only when the customer is in the list of Notification 13/2017 (factory, society, co-operative society, GST-registered, company, firm …) — enter the customer\'s GSTIN or confirm.');
   }
-  if (!(input.societyGstin || '').trim()) return 'Forward charge के लिए समिति का GST पंजीकरण (GSTIN) ज़रूरी है — Society Setup में GSTIN भरें।';
-  if (!input.societyStateCode) return 'समिति का राज्य/GSTIN नहीं मिला — CGST/SGST या IGST तय नहीं हो सकता। Society Setup में भरें।';
-  if (!input.forwardOptionConfirmed) return 'Forward charge तभी, जब समिति ने इस वित्त वर्ष के लिए Annexure V से विकल्प चुना हो — पुष्टि का बॉक्स टिक करें।';
+  if (!(input.societyGstin || '').trim()) return tr('Forward charge के लिए समिति का GST पंजीकरण (GSTIN) ज़रूरी है — Society Setup में GSTIN भरें।', 'Forward charge needs the society\'s GST registration (GSTIN) — enter the GSTIN in Society Setup.');
+  if (!input.societyStateCode) return tr('समिति का राज्य/GSTIN नहीं मिला — CGST/SGST या IGST तय नहीं हो सकता। Society Setup में भरें।', 'The society\'s state/GSTIN was not found — CGST/SGST or IGST cannot be decided. Fill it in Society Setup.');
+  if (!input.forwardOptionConfirmed) return tr('Forward charge तभी, जब समिति ने इस वित्त वर्ष के लिए Annexure V से विकल्प चुना हो — पुष्टि का बॉक्स टिक करें।', 'Forward charge only if the society has opted for it through Annexure V for this financial year — tick the confirmation box.');
   return null;
 }
 

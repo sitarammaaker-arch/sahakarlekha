@@ -654,7 +654,7 @@ const LedgerHeads: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <Label>{hi ? 'नाम (हिंदी)' : 'Name (Hindi)'}</Label>
-                <Input value={form.nameHi} onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))} placeholder="जैसे नकद" />
+                <Input value={form.nameHi} onChange={e => setForm(f => ({ ...f, nameHi: e.target.value }))} placeholder={hi ? 'जैसे नकद' : 'e.g. नकद'} />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

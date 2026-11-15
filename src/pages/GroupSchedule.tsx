@@ -123,7 +123,7 @@ const GroupSchedule: React.FC = () => {
               <p className="font-semibold">{society.name}</p>
               <p className="text-xs text-muted-foreground">Reg. No: {society.registrationNo} | FY: {society.financialYear}</p>
               <h2 className="font-bold mt-1">LIST OF {schedule.titleEn.toUpperCase()} AS ON {fmtDate(asOn)}</h2>
-              {schedule.titleHi !== schedule.titleEn && <p className="text-sm">{schedule.titleHi} की सूची — {fmtDate(asOn)} तक</p>}
+              {hi && schedule.titleHi !== schedule.titleEn && <p className="text-sm">{schedule.titleHi} की सूची — {fmtDate(asOn)} तक</p>}
             </div>
 
             {tb && (

@@ -377,7 +377,7 @@ const MSP = new Set(['procurement_msp']);
   const { readFileSync } = await import('node:fs');
   const mk = readFileSync(pathResolve(SRC, 'contexts', 'MarketingDataContext.tsx'), 'utf8');
   ok(/const \{ basisUnit: _unit, \.\.\.recBase \} = rec;/.test(mk) && /persistRuleUnit\(rec, /.test(mk), 'deduction unit is a step-2 write');
-  ok(/rollback\(\);\s*\n\s*toastRef\.current\(\{ title: 'कटौती नियम सेव नहीं हुआ'/.test(mk), 'a per-unit rule whose unit did not save is rolled back (never read as %)');
+  ok(/rollback\(\);\s*\n\s*toastRef\.current\(\{ title: tr\('कटौती नियम सेव नहीं हुआ'/.test(mk), 'a per-unit rule whose unit did not save is rolled back (never read as %)');
   const dc = readFileSync(pathResolve(SRC, 'contexts', 'DataContext.tsx'), 'utf8');
   ok(/if \(lot\.bags != null\) extras\.bags = lot\.bags;/.test(dc), 'weighment / bags are step-2 lot columns');
 }

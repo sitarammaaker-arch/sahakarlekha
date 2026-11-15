@@ -10,16 +10,19 @@ import { useLocation, Link } from 'react-router-dom';
 import { BookOpen, ArrowRight } from 'lucide-react';
 import { termsForRoute } from '@/content/glossary';
 import GlossaryHint from '@/components/glossary/GlossaryHint';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const ModuleGlossaryBar: React.FC = () => {
   const { pathname } = useLocation();
+  const { language } = useLanguage();
+  const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const terms = React.useMemo(() => termsForRoute(pathname), [pathname]);
   if (terms.length === 0) return null;
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-primary/15 bg-primary/5 px-3 py-2">
       <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
-        <BookOpen className="h-3.5 w-3.5" /> इस पेज से जुड़े शब्द:
+        <BookOpen className="h-3.5 w-3.5" /> {L('इस पेज से जुड़े शब्द:', 'Terms on this page:')}
       </span>
       {terms.map((t) => (
         <GlossaryHint
@@ -33,7 +36,7 @@ const ModuleGlossaryBar: React.FC = () => {
         to="/glossary"
         className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
       >
-        पूरा शब्दकोश <ArrowRight className="h-3 w-3" />
+        {L('पूरा शब्दकोश', 'Full glossary')} <ArrowRight className="h-3 w-3" />
       </Link>
     </div>
   );

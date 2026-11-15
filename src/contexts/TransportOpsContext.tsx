@@ -11,6 +11,7 @@
  * cancels the voucher (viaParent) — the books never keep half a document. Every mutation is FY-lock
  * guarded (RULE 6); deletes cascade to the document's vouchers (RULE 3).
  */
+import { tr } from '@/lib/uiLang';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
 import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
@@ -77,7 +78,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
   const guardFYLocked = (): boolean => {
     if (refuseIfWriteBlocked(toastRef.current)) return true;
     if (society?.fyLocked) {
-      toastRef.current({ title: 'FY Locked', description: 'वित्तीय वर्ष audit-locked है — डेटा बदला नहीं जा सकता। (Cannot modify data while Financial Year is audit-locked.)', variant: 'destructive' });
+      toastRef.current({ title: 'FY Locked', description: tr('वित्तीय वर्ष audit-locked है — डेटा बदला नहीं जा सकता। (Cannot modify data while Financial Year is audit-locked.)', 'Financial Year is audit-locked — data cannot be changed. (Cannot modify data while Financial Year is audit-locked.)'), variant: 'destructive' });
       return true;
     }
     return false;
@@ -86,8 +87,8 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
   // The one place a cloud refusal becomes words. A missing table means migration 128 has not been run.
   const cloudFail = (title: string, table: string, message: string, after: string) => {
     const why = isMissingTableError(message, table)
-      ? 'Supabase में migration 128 (परिवहन तालिकाएँ) अभी नहीं चला है — admin से चलवाएँ, फिर दोबारा करें।'
-      : `क्लाउड में सेव नहीं हुआ — ${message}.`;
+      ? tr('Supabase में migration 128 (परिवहन तालिकाएँ) अभी नहीं चला है — admin से चलवाएँ, फिर दोबारा करें।', 'Migration 128 (transport tables) has not been run in Supabase yet — ask the admin to run it, then try again.')
+      : tr(`क्लाउड में सेव नहीं हुआ — ${message}.`, `Not saved to the cloud — ${message}.`);
     toastRef.current({ title, description: `${why} ${after}`, variant: 'destructive', duration: 12000 });
   };
 
@@ -102,7 +103,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
 
   // H / RULE 3: the vouchers these documents carry are cancelled through the document, not alone.
   const ownerGroupsRef = useRef<OwnerGroup[]>([]);
-  ownerGroupsRef.current = [{ label: 'ट्रिप (परिवहन)', docs: trips }, { label: 'वाहन खर्च', docs: vehicleExpenses }];
+  ownerGroupsRef.current = [{ label: tr('ट्रिप (परिवहन)', 'Trip (transport)'), docs: trips }, { label: tr('वाहन खर्च', 'Vehicle expense'), docs: vehicleExpenses }];
   useEffect(() => registerVoucherOwner('transport', id => findVoucherOwner(ownerGroupsRef.current, id)), [registerVoucherOwner]);
 
   useEffect(() => {
@@ -129,15 +130,15 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
   const addVehicle = useCallback((data: NewVehicle): TransportVehicle => {
     const sentinel = { ...data, id: '', createdAt: '' } as TransportVehicle;
     if (guardFYLocked()) return sentinel;
-    if (!data.regNo?.trim()) { toastRef.current({ title: 'नंबर डालें', description: 'वाहन का पंजीकरण नंबर ज़रूरी है।', variant: 'destructive' }); return sentinel; }
-    if (regNoTaken(data.regNo)) { toastRef.current({ title: 'वाहन पहले से है', description: `${data.regNo} पहले से दर्ज है।`, variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!data.regNo?.trim()) { toastRef.current({ title: tr('नंबर डालें', 'Enter the number'), description: tr('वाहन का पंजीकरण नंबर ज़रूरी है।', 'The vehicle registration number is required.'), variant: 'destructive' }); return sentinel; }
+    if (regNoTaken(data.regNo)) { toastRef.current({ title: tr('वाहन पहले से है', 'Vehicle already exists'), description: tr(`${data.regNo} पहले से दर्ज है।`, `${data.regNo} is already recorded.`), variant: 'destructive', duration: 8000 }); return sentinel; }
     const v: TransportVehicle = { ...data, regNo: data.regNo.trim().toUpperCase(), id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     setVehicles(prev => [...prev, v]);
     supabase.from('transport_vehicles').upsert(withSoc(v)).then(({ error }) => {
       if (error) {
         console.error('Vehicle save error:', error.message);
         setVehicles(prev => prev.filter(x => x.id !== v.id));
-        cloudFail('वाहन सेव नहीं हुआ', 'transport_vehicles', error.message, 'स्क्रीन से हटा दिया गया; दोबारा जोड़ें।');
+        cloudFail(tr('वाहन सेव नहीं हुआ', 'Vehicle not saved'), 'transport_vehicles', error.message, tr('स्क्रीन से हटा दिया गया; दोबारा जोड़ें।', 'Removed from the screen; please add it again.'));
       }
     });
     return v;
@@ -148,8 +149,8 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
     const old = vehicles.find(v => v.id === id);
     if (!old) return;
     if (data.regNo !== undefined) {
-      if (!data.regNo.trim()) { toastRef.current({ title: 'नंबर डालें', description: 'वाहन का पंजीकरण नंबर ज़रूरी है।', variant: 'destructive' }); return; }
-      if (regNoTaken(data.regNo, id)) { toastRef.current({ title: 'वाहन पहले से है', description: `${data.regNo} पहले से दर्ज है।`, variant: 'destructive', duration: 8000 }); return; }
+      if (!data.regNo.trim()) { toastRef.current({ title: tr('नंबर डालें', 'Enter the number'), description: tr('वाहन का पंजीकरण नंबर ज़रूरी है।', 'The vehicle registration number is required.'), variant: 'destructive' }); return; }
+      if (regNoTaken(data.regNo, id)) { toastRef.current({ title: tr('वाहन पहले से है', 'Vehicle already exists'), description: tr(`${data.regNo} पहले से दर्ज है।`, `${data.regNo} is already recorded.`), variant: 'destructive', duration: 8000 }); return; }
     }
     const updated: TransportVehicle = { ...old, ...data, ...(data.regNo !== undefined ? { regNo: data.regNo.trim().toUpperCase() } : {}) };
     setVehicles(prev => prev.map(v => v.id === id ? updated : v));
@@ -157,7 +158,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Vehicle update error:', error.message);
         setVehicles(prev => prev.map(v => v.id === id ? old : v));
-        cloudFail('बदलाव सेव नहीं हुआ', 'transport_vehicles', error.message, 'पुराना data वापस आ गया।');
+        cloudFail(tr('बदलाव सेव नहीं हुआ', 'Change not saved'), 'transport_vehicles', error.message, tr('पुराना data वापस आ गया।', 'The old data has come back.'));
       }
     });
   }, [vehicles, society, user]);
@@ -170,7 +171,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
     const liveTrips = trips.filter(t => !t.isDeleted && t.vehicleId === id).length;
     const liveExp = vehicleExpenses.filter(e => !e.isDeleted && e.vehicleId === id).length;
     if (liveTrips + liveExp > 0) {
-      toastRef.current({ title: 'वाहन डिलीट नहीं हो सकता', description: `इस वाहन की ${liveTrips} ट्रिप और ${liveExp} खर्च दर्ज हैं — पहले वे हटाएँ, या वाहन को "निष्क्रिय" कर दें।`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('वाहन डिलीट नहीं हो सकता', 'Vehicle cannot be deleted'), description: tr(`इस वाहन की ${liveTrips} ट्रिप और ${liveExp} खर्च दर्ज हैं — पहले वे हटाएँ, या वाहन को "निष्क्रिय" कर दें।`, `This vehicle has ${liveTrips} trips and ${liveExp} expenses recorded — remove them first, or mark the vehicle "Inactive".`), variant: 'destructive', duration: 10000 });
       return;
     }
     setVehicles(prev => prev.filter(v => v.id !== id));
@@ -178,7 +179,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Vehicle delete error:', error.message);
         setVehicles(prev => [...prev, old]);
-        cloudFail('डिलीट सेव नहीं हुआ', 'transport_vehicles', error.message, 'वाहन वापस आ गया।');
+        cloudFail(tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), 'transport_vehicles', error.message, tr('वाहन वापस आ गया।', 'The vehicle has been restored.'));
       }
     });
   }, [vehicles, trips, vehicleExpenses, society, user]);
@@ -188,15 +189,15 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '', tripNo: '', ...data, amount: 0, paidAmount: 0, status: 'unpaid', createdAt: '' } as TransportTrip;
     if (guardFYLocked()) return sentinel;
     const vehicle = vehicles.find(v => v.id === data.vehicleId && !v.isDeleted);
-    if (!vehicle) { toastRef.current({ title: 'वाहन चुनें', description: 'वाहन नहीं मिला।', variant: 'destructive', duration: 8000 }); return sentinel; }
-    if (vehicle.status === 'inactive') { toastRef.current({ title: 'वाहन निष्क्रिय है', description: `${vehicle.regNo} निष्क्रिय है — पहले Vehicles में सक्रिय करें।`, variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!vehicle) { toastRef.current({ title: tr('वाहन चुनें', 'Select a vehicle'), description: tr('वाहन नहीं मिला।', 'Vehicle not found.'), variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (vehicle.status === 'inactive') { toastRef.current({ title: tr('वाहन निष्क्रिय है', 'Vehicle is inactive'), description: tr(`${vehicle.regNo} निष्क्रिय है — पहले Vehicles में सक्रिय करें।`, `${vehicle.regNo} is inactive — activate it in Vehicles first.`), variant: 'destructive', duration: 8000 }); return sentinel; }
     const customer = customers.find(c => c.id === data.customerId);
-    if (!customer?.accountId) { toastRef.current({ title: 'ग्राहक चुनें', description: 'ग्राहक या उसका खाता नहीं मिला।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!customer?.accountId) { toastRef.current({ title: tr('ग्राहक चुनें', 'Select a customer'), description: tr('ग्राहक या उसका खाता नहीं मिला।', 'Customer or their account not found.'), variant: 'destructive', duration: 8000 }); return sentinel; }
     const err = validateTripCharges(data);
-    if (err) { toastRef.current({ title: 'राशि जाँचें', description: err, variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (err) { toastRef.current({ title: tr('राशि जाँचें', 'Check the amounts'), description: err, variant: 'destructive', duration: 8000 }); return sentinel; }
     const ids = resolveTransportAccounts(accounts);
     if (!ids.freight) {
-      toastRef.current({ title: 'भाड़ा आय खाता नहीं है', description: '"Freight Income" (4501) खाता chart में नहीं है — Ledger Hygiene में "डोमेन खाते बनाएँ" दबाएँ, फिर ट्रिप दर्ज करें।', variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('भाड़ा आय खाता नहीं है', 'No freight income account'), description: tr('"Freight Income" (4501) खाता chart में नहीं है — Ledger Hygiene में "डोमेन खाते बनाएँ" दबाएँ, फिर ट्रिप दर्ज करें।', 'The "Freight Income" (4501) account is not in the chart — press "Create domain accounts" in Ledger Hygiene, then record the trip.'), variant: 'destructive', duration: 12000 });
       return sentinel;
     }
     // GST (GTA). Forward charge adds the Cr GST legs — head-wise (Output CGST / SGST / IGST), or the combined
@@ -206,14 +207,14 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
     const supplierCode = societyStateCode(society, INDIAN_STATES.find(st => st.value === society.state)?.label);
     const custGstin = partyGstin(customer);
     const gstProblem = gtaModeProblem({ mode: gstMode, date: data.date, societyGstin: society.gstin, societyStateCode: supplierCode, customerHasGstin: !!custGstin, rcmRecipientConfirmed: data.rcmRecipientConfirmed, forwardOptionConfirmed: data.forwardOptionConfirmed });
-    if (gstProblem) { toastRef.current({ title: 'GST विकल्प जाँचें', description: gstProblem, variant: 'destructive', duration: 12000 }); return sentinel; }
+    if (gstProblem) { toastRef.current({ title: tr('GST विकल्प जाँचें', 'Check the GST option'), description: gstProblem, variant: 'destructive', duration: 12000 }); return sentinel; }
     const taxable = tripAmount(data);
     const recipientCode = resolveStateCode(custGstin, customer.placeOfSupply || customer.state);
     const tax = gtaTax(gstMode, data.date, taxable, !!supplierCode && !!recipientCode && recipientCode !== supplierCode);
     const forward = (gstMode === 'fcm5' || gstMode === 'fcm18') && !!tax && tax.total > 0;
     const gstCr = forward && tax ? gstLegs('output', { cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, total: tax.total }) : [];
     const gstAccountId = forward && gstCr.length > 0 && gstCr.every(g => accounts.some(a => a.id === g.accountId && !a.isGroup)) ? gstCr[0].accountId : null;
-    if (forward && !gstAccountId) { toastRef.current({ title: 'देय GST खाता नहीं है', description: '"GST Payable" (2201) खाता chart में नहीं है — पहले Ledger Heads में बनाएँ।', variant: 'destructive', duration: 12000 }); return sentinel; }
+    if (forward && !gstAccountId) { toastRef.current({ title: tr('देय GST खाता नहीं है', 'No GST payable account'), description: tr('"GST Payable" (2201) खाता chart में नहीं है — पहले Ledger Heads में बनाएँ।', 'The "GST Payable" (2201) account is not in the chart — create it in Ledger Heads first.'), variant: 'destructive', duration: 12000 }); return sentinel; }
     const baseLegs = tripLegs(customer.accountId, data, { freight: ids.freight, loading: ids.loading, detention: ids.detention });
     const legs = forward && tax
       ? [{ ...baseLegs[0], amount: round2(baseLegs[0].amount + tax.total) }, ...baseLegs.slice(1), ...gstCr.map(g => ({ accountId: g.accountId, type: 'Cr' as const, amount: g.amount }))]
@@ -240,7 +241,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
             console.error('Trip save error:', error.message);
             setTrips(prev => prev.filter(t => t.id !== id));
             cancelVoucher(trip.voucherId!, 'Trip rolled back (trip save failed)', actor(), { viaParent: true });
-            cloudFail('ट्रिप सेव नहीं हुई', 'transport_trips', error.message, 'उसका वाउचर रद्द कर दिया गया; दोबारा दर्ज करें।');
+            cloudFail(tr('ट्रिप सेव नहीं हुई', 'Trip not saved'), 'transport_trips', error.message, tr('उसका वाउचर रद्द कर दिया गया; दोबारा दर्ज करें।', 'Its voucher has been cancelled; please record it again.'));
             return;
           }
           opts?.onSaved?.(trip);
@@ -268,13 +269,13 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '', voucherNo: '', type: 'receipt', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     const trip = tripsRef.current.find(t => t.id === data.tripId && !t.isDeleted);
-    if (!trip) { toastRef.current({ title: 'ट्रिप नहीं मिली', description: 'Trip not found', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!trip) { toastRef.current({ title: tr('ट्रिप नहीं मिली', 'Trip not found'), description: 'Trip not found', variant: 'destructive', duration: 8000 }); return sentinel; }
     const customer = customers.find(c => c.id === trip.customerId);
-    if (!customer?.accountId) { toastRef.current({ title: 'ग्राहक नहीं मिला', description: 'Customer not found', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!customer?.accountId) { toastRef.current({ title: tr('ग्राहक नहीं मिला', 'Customer not found'), description: 'Customer not found', variant: 'destructive', duration: 8000 }); return sentinel; }
     const cashOrBank = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.defaultBankAccountId(accounts) || storage.ACCOUNT_IDS.BANK);
     const tdsAccountId = accounts.some(a => a.id === '3307' && !a.isGroup) ? '3307' : null;   // TDS Receivable
     const res = collectionLegs({ outstanding: trip.amount - trip.paidAmount, amount: data.amount, tds: data.tdsAmount, cashOrBankAccountId: cashOrBank, customerAccountId: customer.accountId, tdsAccountId });
-    if ('error' in res) { toastRef.current({ title: 'राशि जाँचें', description: res.error, variant: 'destructive', duration: 9000 }); return sentinel; }
+    if ('error' in res) { toastRef.current({ title: tr('राशि जाँचें', 'Check the amounts'), description: res.error, variant: 'destructive', duration: 9000 }); return sentinel; }
     const amount = round2(Number(data.amount));
     const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
     let vid = '';
@@ -299,7 +300,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
             console.error('Trip collection save error:', error.message);
             setTrips(prev => prev.map(t => t.id === trip.id ? apply(t, -1) : t));
             cancelVoucher(vid, 'Trip collection rolled back (trip update failed)', actor(), { viaParent: true });
-            cloudFail('वसूली सेव नहीं हुई', 'transport_trips', error.message, 'रसीद रद्द कर दी गई; दोबारा करें।');
+            cloudFail(tr('वसूली सेव नहीं हुई', 'Collection not saved'), 'transport_trips', error.message, tr('रसीद रद्द कर दी गई; दोबारा करें।', 'The receipt has been cancelled; please do it again.'));
           }
         });
       },
@@ -320,14 +321,14 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Trip delete error:', error.message);
         setTrips(prev => [...prev, old]);
-        cloudFail('डिलीट सेव नहीं हुआ', 'transport_trips', error.message, 'ट्रिप वापस आ गई।');
+        cloudFail(tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), 'transport_trips', error.message, tr('ट्रिप वापस आ गई।', 'The trip has been restored.'));
         return;
       }
       // RULE 3: cancel the trip voucher + every collection voucher (linked list ∪ refId, so none is missed).
       const { tripVoucherId, collectionIds } = tripCascadeVoucherIds(old, vouchers, TRIP_COLLECTION_REF);
       const okTrip = !tripVoucherId || cancelVoucher(tripVoucherId, 'Trip deleted', actor(), { viaParent: true });
       const okColl = collectionIds.map(vid => cancelVoucher(vid, 'Trip deleted (collection reversed)', actor(), { viaParent: true })).every(Boolean);
-      if (!okTrip || !okColl) toastRef.current({ title: 'वाउचर रद्द नहीं हुआ', description: 'ट्रिप हट गई, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', variant: 'destructive', duration: 15000 });
+      if (!okTrip || !okColl) toastRef.current({ title: tr('वाउचर रद्द नहीं हुआ', 'Voucher not cancelled'), description: tr('ट्रिप हट गई, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', 'The trip was removed, but its voucher could not be cancelled (lock / permission). Cancel it from the Voucher screen — it is now an orphan, so it will cancel.'), variant: 'destructive', duration: 15000 });
     });
   }, [trips, vouchers, society, user, cancelVoucher]);
 
@@ -336,12 +337,12 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '', expenseNo: '', ...data, createdAt: '' } as VehicleExpense;
     if (guardFYLocked()) return sentinel;
     const vehicle = vehicles.find(v => v.id === data.vehicleId && !v.isDeleted);
-    if (!vehicle) { toastRef.current({ title: 'वाहन चुनें', description: 'वाहन नहीं मिला।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!vehicle) { toastRef.current({ title: tr('वाहन चुनें', 'Select a vehicle'), description: tr('वाहन नहीं मिला।', 'Vehicle not found.'), variant: 'destructive', duration: 8000 }); return sentinel; }
     const head = accounts.find(a => a.id === data.accountId && !a.isGroup && a.type === 'expense');
-    if (!head) { toastRef.current({ title: 'खर्च खाता चुनें', description: 'खर्च का खाता (expense ledger) चुनें।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!head) { toastRef.current({ title: tr('खर्च खाता चुनें', 'Select an expense account'), description: tr('खर्च का खाता (expense ledger) चुनें।', 'Select the expense account (expense ledger).'), variant: 'destructive', duration: 8000 }); return sentinel; }
     const cashOrBank = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.defaultBankAccountId(accounts) || storage.ACCOUNT_IDS.BANK);
     const legs = expenseLegs(head.id, cashOrBank, data.amount);
-    if (legs.length === 0) { toastRef.current({ title: 'राशि दर्ज करें', description: 'खर्च राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (legs.length === 0) { toastRef.current({ title: tr('राशि दर्ज करें', 'Enter an amount'), description: tr('खर्च राशि 0 से अधिक होनी चाहिए।', 'Expense amount must be more than 0.'), variant: 'destructive', duration: 8000 }); return sentinel; }
     const amount = legs[0].amount;
     const id = crypto.randomUUID();
     const expenseNo = nextDocNo('VEX', vehicleExpenses.map(e => e.expenseNo));
@@ -361,7 +362,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
             console.error('Vehicle expense save error:', error.message);
             setExpenses(prev => prev.filter(e => e.id !== id));
             cancelVoucher(exp.voucherId!, 'Vehicle expense rolled back (save failed)', actor(), { viaParent: true });
-            cloudFail('खर्च सेव नहीं हुआ', 'transport_vehicle_expenses', error.message, 'उसका वाउचर रद्द कर दिया गया; दोबारा दर्ज करें।');
+            cloudFail(tr('खर्च सेव नहीं हुआ', 'Expense not saved'), 'transport_vehicle_expenses', error.message, tr('उसका वाउचर रद्द कर दिया गया; दोबारा दर्ज करें।', 'Its voucher has been cancelled; please record it again.'));
             return;
           }
           opts?.onSaved?.(exp);
@@ -391,11 +392,11 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Vehicle expense delete error:', error.message);
         setExpenses(prev => [...prev, old]);
-        cloudFail('डिलीट सेव नहीं हुआ', 'transport_vehicle_expenses', error.message, 'खर्च वापस आ गया।');
+        cloudFail(tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), 'transport_vehicle_expenses', error.message, tr('खर्च वापस आ गया।', 'The expense has been restored.'));
         return;
       }
       const ok = !old.voucherId || cancelVoucher(old.voucherId, 'Vehicle expense deleted', actor(), { viaParent: true });
-      if (!ok) toastRef.current({ title: 'वाउचर रद्द नहीं हुआ', description: 'खर्च हट गया, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', variant: 'destructive', duration: 15000 });
+      if (!ok) toastRef.current({ title: tr('वाउचर रद्द नहीं हुआ', 'Voucher not cancelled'), description: tr('खर्च हट गया, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', 'The expense was removed, but its voucher could not be cancelled (lock / permission). Cancel it from the Voucher screen — it is now an orphan, so it will cancel.'), variant: 'destructive', duration: 15000 });
     });
   }, [vehicleExpenses, society, user, cancelVoucher]);
 

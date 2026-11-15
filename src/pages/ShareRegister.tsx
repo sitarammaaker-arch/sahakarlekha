@@ -453,8 +453,9 @@ const ShareRegister: React.FC = () => {
 // M3: statutory share warnings (Haryana Act s.6 / s.22, Rules r.18(3)) — shown, never blocking.
 interface ShareRuleCtx { haryana: boolean; totalCapital: number; heldTwoYears: (memberId: string, date: string) => number; refundCheck: (date: string, amount: number) => string | null }
 function RuleWarning({ text }: { text: string | null }) {
+  const { language } = useLanguage();
   if (!text) return null;
-  return <p className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">⚠ {text} <span className="block opacity-80">फिर भी दर्ज कर सकते हैं — कारण narration / प्रस्ताव में लिखें।</span></p>;
+  return <p className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">⚠ {text} <span className="block opacity-80">{language === 'hi' ? 'फिर भी दर्ज कर सकते हैं — कारण narration / प्रस्ताव में लिखें।' : 'You can still record it — write the reason in the narration / resolution.'}</span></p>;
 }
 
 function ShareTxnButton({ member, hi, kind, onSubmit, rules }: { member: Member; hi: boolean; kind: 'purchase' | 'refund'; onSubmit: (memberId: string, amount: number, mode: 'cash' | 'bank', date: string) => void; rules: ShareRuleCtx }) {

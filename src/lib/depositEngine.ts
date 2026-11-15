@@ -9,6 +9,7 @@
  */
 import type { DepositType, DepositTxnType } from '@/types';
 import { fixedDepositAccountId, type HeadAccount } from '@/lib/accounting/headResolve';
+import { tr } from '@/lib/uiLang';
 
 /** Liability account (COA) that a product's balance sits in. The chart-blind id convention — the posting code
  *  uses resolveDepositLiabilityAccount, which also checks that the account really is that head. */
@@ -59,9 +60,9 @@ export interface DepositValidation {
 
 /** Amount must be positive; a withdrawal cannot exceed the current balance. */
 export function validateDepositTxn(txnType: DepositTxnType, amount: number, balance: number): DepositValidation {
-  if (!(amount > 0)) return { ok: false, error: 'राशि 0 से ज़्यादा होनी चाहिए / Amount must be greater than 0' };
+  if (!(amount > 0)) return { ok: false, error: tr('राशि 0 से ज़्यादा होनी चाहिए / Amount must be greater than 0', 'Amount must be greater than 0') };
   if (txnType === 'withdraw' && amount > balance) {
-    return { ok: false, error: `निकासी शेष (₹${balance}) से ज़्यादा नहीं हो सकती / Withdrawal cannot exceed the balance (₹${balance})` };
+    return { ok: false, error: tr(`निकासी शेष (₹${balance}) से ज़्यादा नहीं हो सकती / Withdrawal cannot exceed the balance (₹${balance})`, `Withdrawal cannot exceed the balance (₹${balance})`) };
   }
   return { ok: true };
 }

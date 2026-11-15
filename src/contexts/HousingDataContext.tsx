@@ -13,6 +13,7 @@
  * same posting (Dr 3303 Maintenance Receivable / Cr 4101 Maintenance Charges), same
  * idempotent bill-run, same cascade-on-delete — only the home of the state changed.
  */
+import { tr } from '@/lib/uiLang';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
 import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
@@ -123,7 +124,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const guardFYLocked = (): boolean => {
     if (refuseIfWriteBlocked(toastRef.current)) return true; // F1: online-only entry (shared rule)
     if (society?.fyLocked) {
-      toastRef.current({ title: 'FY Locked', description: 'Financial Year audit-locked है — डेटा बदला नहीं जा सकता।', variant: 'destructive' });
+      toastRef.current({ title: 'FY Locked', description: tr('Financial Year audit-locked है — डेटा बदला नहीं जा सकता।', 'Financial Year is audit-locked — data cannot be changed.'), variant: 'destructive' });
       return true;
     }
     return false;
@@ -138,7 +139,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const [transfers, setTransfersState] = useState<HousingTransfer[]>(() => storage.getHousingTransfers());
   // H / RULE 3: vouchers these documents carry are cancelled through the document, not alone.
   const ownerGroupsRef = useRef<OwnerGroup[]>([]);
-  ownerGroupsRef.current = [{ label: 'मेंटेनेंस बिल', docs: maintenanceBills }, { label: 'फंड निवेश', docs: fundInvestments }, { label: 'फ्लैट ट्रांसफर', docs: transfers }];
+  ownerGroupsRef.current = [{ label: tr('मेंटेनेंस बिल', 'Maintenance bill'), docs: maintenanceBills }, { label: tr('फंड निवेश', 'Fund investment'), docs: fundInvestments }, { label: tr('फ्लैट ट्रांसफर', 'Flat transfer'), docs: transfers }];
   useEffect(() => registerVoucherOwner('housing', id => findVoucherOwner(ownerGroupsRef.current, id)), [registerVoucherOwner]);
   const [insurances, setInsurancesState] = useState<HousingInsurance[]>(() => storage.getHousingInsurance());
   const [amcs, setAmcsState] = useState<HousingAmc[]>(() => storage.getHousingAmc());
@@ -204,7 +205,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Charge head save error:', error.message); reportError('housing-save', error.message);
         setChargeHeadsState(prev => { const r = prev.filter(h => h.id !== head.id); storage.setHousingChargeHeads(r); return r; });
-        toastRef.current({ title: 'शुल्क मद सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('शुल्क मद सेव नहीं हुई', 'Charge head not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Refresh will not leave anything wrong; add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return head;
@@ -220,7 +221,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Charge head update error:', error.message); reportError('housing-save', error.message);
         setChargeHeadsState(prev => { const u = prev.map(h => h.id === id ? old : h); storage.setHousingChargeHeads(u); return u; });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [chargeHeads]);
@@ -233,7 +234,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Charge head delete error:', error.message); reportError('housing-save', error.message);
         if (old) setChargeHeadsState(prev => { const u = [...prev, old]; storage.setHousingChargeHeads(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [chargeHeads]);
@@ -247,7 +248,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Housing flat save error:', error.message); reportError('housing-save', error.message);
         setHousingFlatsState(prev => { const r = prev.filter(f => f.id !== flat.id); storage.setHousingFlats(r); return r; });
-        toastRef.current({ title: 'फ्लैट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('फ्लैट सेव नहीं हुआ', 'Flat not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Refresh will not leave anything wrong; add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return flat;
@@ -263,7 +264,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Housing flat update error:', error.message); reportError('housing-save', error.message);
         setHousingFlatsState(prev => { const u = prev.map(f => f.id === id ? old : f); storage.setHousingFlats(u); return u; });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
         return;
       }
       opts?.onSaved?.();
@@ -278,7 +279,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     // point at the dependents, mirroring the main ledger's getEntityLinks blocking-delete.
     const liveBills = maintenanceBills.filter(b => !b.isDeleted && b.flatId === id).length;
     if (liveBills > 0) {
-      toastRef.current({ title: 'फ्लैट डिलीट नहीं हो सकता', description: `इस फ्लैट की ${liveBills} रखरखाव bill(s) हैं — पहले Maintenance Billing में वे delete करें, फिर flat हटाएँ।`, variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('फ्लैट डिलीट नहीं हो सकता', 'Flat cannot be deleted'), description: tr(`इस फ्लैट की ${liveBills} रखरखाव bill(s) हैं — पहले Maintenance Billing में वे delete करें, फिर flat हटाएँ।`, `This flat has ${liveBills} maintenance bill(s) — delete them in Maintenance Billing first, then delete the flat.`), variant: 'destructive', duration: 10000 });
       return;
     }
     const old = housingFlats.find(f => f.id === id);
@@ -287,7 +288,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Housing flat delete error:', error.message); reportError('housing-save', error.message);
         if (old) setHousingFlatsState(prev => { const u = [...prev, old]; storage.setHousingFlats(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [housingFlats, maintenanceBills]);
@@ -298,11 +299,11 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const generateMaintenanceBills = useCallback((data: { period: string; date?: string; flatIds?: string[] }): MaintenanceBill[] => {
     if (guardFYLocked()) return [];
     if (!/^\d{4}-\d{2}$/.test(data.period || '')) {
-      toastRef.current({ title: 'अवधि चुनें', description: 'महीना (YYYY-MM) चुनें। (Select a billing month)', variant: 'destructive', duration: 8000 });
+      toastRef.current({ title: tr('अवधि चुनें', 'Select the period'), description: tr('महीना (YYYY-MM) चुनें। (Select a billing month)', 'Select a billing month (YYYY-MM).'), variant: 'destructive', duration: 8000 });
       return [];
     }
     if (!accounts.some(a => a.id === '3303') || !accounts.some(a => a.id === '4101')) {
-      toastRef.current({ title: 'खाते नहीं मिले', description: 'रखरखाव खाते (3303 / 4101) इस समिति के चार्ट में नहीं हैं। Housing chart सेट करें।', variant: 'destructive', duration: 10000 });
+      toastRef.current({ title: tr('खाते नहीं मिले', 'Accounts not found'), description: tr('रखरखाव खाते (3303 / 4101) इस समिति के चार्ट में नहीं हैं। Housing chart सेट करें।', 'Maintenance accounts (3303 / 4101) are not in this society\'s chart. Set up the Housing chart.'), variant: 'destructive', duration: 10000 });
       return [];
     }
     const targets = housingFlats.filter(f => !f.isDeleted && (f.monthlyMaintenance || 0) > 0 && (!data.flatIds || data.flatIds.includes(f.id)));
@@ -376,7 +377,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       created.push({ id: billId, billNo: `${data.period}/${flat.flatNo}`, flatId: flat.id, flatNo: flat.flatNo, memberId: flat.memberId, period: data.period, date, amount, voucherId: v.id, receivableAccountId: rec, lines: billLines, paidAmount: 0, status: 'unpaid', isDeleted: false, createdAt: new Date().toISOString() });
     }
     if (created.length === 0) {
-      toastRef.current({ title: 'कोई नया बिल नहीं', description: 'इस अवधि के लिए सभी पात्र फ्लैट पहले से बिल हो चुके हैं या कोई पात्र फ्लैट नहीं।', variant: 'default', duration: 8000 });
+      toastRef.current({ title: tr('कोई नया बिल नहीं', 'No new bills'), description: tr('इस अवधि के लिए सभी पात्र फ्लैट पहले से बिल हो चुके हैं या कोई पात्र फ्लैट नहीं।', 'All eligible flats are already billed for this period, or there is no eligible flat.'), variant: 'default', duration: 8000 });
       return [];
     }
     // Backfill receivableAccountId onto billed flats so future runs reuse the same sub-ledger
@@ -398,11 +399,11 @@ export function HousingProvider({ children }: { children: ReactNode }) {
           console.error('Maintenance bill save error:', error.message); reportError('housing-save', error.message);
           setMaintenanceBillsState(prev => { const r = prev.filter(b => b.id !== bill.id); storage.setMaintenanceBills(r); return r; });
           if (bill.voucherId) cancelVoucher(bill.voucherId, 'Maintenance bill save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
-          toastRef.current({ title: 'बिल सेव नहीं हुआ', description: `${bill.billNo} — cloud save fail (${error.message}). इसका receivable voucher वापस ले लिया गया।`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('बिल सेव नहीं हुआ', 'Bill not saved'), description: tr(`${bill.billNo} — cloud save fail (${error.message}). इसका receivable voucher वापस ले लिया गया।`, `${bill.billNo} — cloud save failed (${error.message}). Its receivable voucher has been withdrawn.`), variant: 'destructive', duration: 12000 });
         }
       });
     });
-    toastRef.current({ title: 'रखरखाव बिल बने', description: `${created.length} बिल · अवधि ${data.period}`, duration: 6000 });
+    toastRef.current({ title: tr('रखरखाव बिल बने', 'Maintenance bills created'), description: tr(`${created.length} बिल · अवधि ${data.period}`, `${created.length} bills · period ${data.period}`), duration: 6000 });
     return created;
   }, [accounts, housingFlats, maintenanceBills, chargeHeads, members, society, addAccount, addVoucher, cancelVoucher, gstLegs, user]);
 
@@ -418,7 +419,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Maintenance bill delete error:', error.message); reportError('housing-save', error.message);
         setMaintenanceBillsState(prev => { const u = [...prev, bill]; storage.setMaintenanceBills(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
     return true;
@@ -431,10 +432,10 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '', voucherNo: '', type: 'receipt', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     const bill = maintenanceBills.find(b => b.id === data.billId && !b.isDeleted);
-    if (!bill) { toastRef.current({ title: 'बिल नहीं मिला', description: 'Bill not found', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!bill) { toastRef.current({ title: tr('बिल नहीं मिला', 'Bill not found'), description: 'Bill not found', variant: 'destructive', duration: 8000 }); return sentinel; }
     const outstanding = +(bill.amount - bill.paidAmount).toFixed(2);
-    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'भुगतान राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
-    if (data.amount > outstanding) { toastRef.current({ title: 'राशि बकाया से अधिक', description: `भुगतान ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकता।`, variant: 'destructive', duration: 9000 }); return sentinel; }
+    if (!(data.amount > 0)) { toastRef.current({ title: tr('राशि डालें', 'Enter an amount'), description: tr('भुगतान राशि 0 से अधिक होनी चाहिए।', 'Payment amount must be more than 0.'), variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (data.amount > outstanding) { toastRef.current({ title: tr('राशि बकाया से अधिक', 'Amount is more than the outstanding'), description: tr(`भुगतान ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकता।`, `Payment ₹${data.amount} cannot be more than the outstanding ₹${outstanding}.`), variant: 'destructive', duration: 9000 }); return sentinel; }
     // Credit the exact account the demand debited (owner-member sub-ledger, or the 3303 control).
     const creditAcc = bill.receivableAccountId || defaultDebtorsAccountId(accounts);
     const debitAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
@@ -463,10 +464,10 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         console.error('Maintenance collection bill-update error:', error.message); reportError('housing-save', error.message);
         setMaintenanceBillsState(prev => { const u = prev.map(b => b.id === bill.id ? bill : b); storage.setMaintenanceBills(u); return u; });
         cancelVoucher(voucher.id, 'Maintenance collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'वसूली सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('वसूली सेव नहीं हुई', 'Collection not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The receipt has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
       }
     });
-    toastRef.current({ title: 'वसूली दर्ज हुई', description: `${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'पूर्ण' : 'आंशिक'}`, duration: 6000 });
+    toastRef.current({ title: tr('वसूली दर्ज हुई', 'Collection recorded'), description: tr(`${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'पूर्ण' : 'आंशिक'}`, `${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'full' : 'partial'}`), duration: 6000 });
     return voucher;
   }, [maintenanceBills, accounts, addVoucher, cancelVoucher, user]);
 
@@ -480,15 +481,15 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '', voucherNo: '', type: 'journal', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     if (guardFYLocked()) return sentinel;
     const fund = accounts.find(a => a.id === data.fundAccountId);
-    if (!fund) { toastRef.current({ title: 'निधि खाता नहीं मिला', description: 'Fund account not found', variant: 'destructive', duration: 8000 }); return sentinel; }
-    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!fund) { toastRef.current({ title: tr('निधि खाता नहीं मिला', 'Fund account not found'), description: 'Fund account not found', variant: 'destructive', duration: 8000 }); return sentinel; }
+    if (!(data.amount > 0)) { toastRef.current({ title: tr('राशि डालें', 'Enter an amount'), description: tr('राशि 0 से अधिक होनी चाहिए।', 'Amount must be more than 0.'), variant: 'destructive', duration: 8000 }); return sentinel; }
     // Balance guard on a SPEND — the same rule (and message) as DataContext.recordFundUtilisation used by the Fund
     // Register: never take more out of a fund than it holds. This housing path had none, so a sinking/repair fund
     // could be spent below zero from the Fund Statement page (RULE 2: one fund rule, both pages).
     if (!data.toFund) {
       const corpus = buildFundStatement(fund, vouchers.filter(isCountedVoucher)).closing;
       if (data.amount > corpus + 0.005) {
-        toastRef.current({ title: 'निधि में पर्याप्त शेष नहीं', description: `${fund.nameHi || fund.name} में केवल ₹${corpus.toLocaleString('en-IN')} उपलब्ध है — इससे अधिक उपयोग नहीं हो सकता।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('निधि में पर्याप्त शेष नहीं', 'Not enough balance in the fund'), description: tr(`${fund.nameHi || fund.name} में केवल ₹${corpus.toLocaleString('en-IN')} उपलब्ध है — इससे अधिक उपयोग नहीं हो सकता।`, `Only ₹${corpus.toLocaleString('en-IN')} is available in ${fund.nameHi || fund.name} — you cannot use more than this.`), variant: 'destructive', duration: 12000 });
         return sentinel;
       }
     }
@@ -508,7 +509,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         { id: lid(), accountId: creditAcc, type: 'Cr', amount: data.amount },
       ],
     });
-    if (v.id) toastRef.current({ title: 'निधि प्रविष्टि दर्ज', description: `${fund.nameHi || fund.name} · ₹${data.amount}`, duration: 6000 });
+    if (v.id) toastRef.current({ title: tr('निधि प्रविष्टि दर्ज', 'Fund entry recorded'), description: `${fund.nameHi || fund.name} · ₹${data.amount}`, duration: 6000 });
     return v;
   }, [accounts, vouchers, addVoucher, user]);
 
@@ -521,7 +522,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const FUND_RESOLUTION_THRESHOLD = 50000;
   const recordFundUtilisation = useCallback((data: { fundAccountId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; purpose?: string; resolutionNo?: string; resolutionDate?: string }): Voucher => {
     if (data.amount > FUND_RESOLUTION_THRESHOLD && !data.resolutionNo?.trim()) {
-      toastRef.current({ title: 'प्रस्ताव संख्या आवश्यक', description: `₹${FUND_RESOLUTION_THRESHOLD} से ऊपर निधि उपयोग के लिए समिति/AGM प्रस्ताव संख्या दर्ज करना आवश्यक है।`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('प्रस्ताव संख्या आवश्यक', 'Resolution number required'), description: tr(`₹${FUND_RESOLUTION_THRESHOLD} से ऊपर निधि उपयोग के लिए समिति/AGM प्रस्ताव संख्या दर्ज करना आवश्यक है।`, `A committee/AGM resolution number must be entered to use the fund above ₹${FUND_RESOLUTION_THRESHOLD}.`), variant: 'destructive', duration: 12000 });
       return { id: '', voucherNo: '', type: 'payment', date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
     }
     const resNote = data.resolutionNo?.trim() ? `प्रस्ताव ${data.resolutionNo.trim()}${data.resolutionDate ? ` (${data.resolutionDate})` : ''}` : '';
@@ -535,8 +536,8 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   // voucher (derived from vouchers), so re-running the same date charges nothing.
   const runArrearsInterest = useCallback((data: { asOnDate: string; annualRatePct: number; flatIds?: string[] }): { count: number; total: number } => {
     if (guardFYLocked()) return { count: 0, total: 0 };
-    if (!(data.annualRatePct > 0)) { toastRef.current({ title: 'ब्याज दर डालें', description: 'वार्षिक ब्याज दर 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return { count: 0, total: 0 }; }
-    if (!accounts.some(a => a.id === '4402')) { toastRef.current({ title: 'खाता नहीं मिला', description: 'ब्याज खाता (4402 — चूककर्ताओं पर ब्याज) चार्ट में नहीं है।', variant: 'destructive', duration: 10000 }); return { count: 0, total: 0 }; }
+    if (!(data.annualRatePct > 0)) { toastRef.current({ title: tr('ब्याज दर डालें', 'Enter an interest rate'), description: tr('वार्षिक ब्याज दर 0 से अधिक होनी चाहिए।', 'Annual interest rate must be more than 0.'), variant: 'destructive', duration: 8000 }); return { count: 0, total: 0 }; }
+    if (!accounts.some(a => a.id === '4402')) { toastRef.current({ title: tr('खाता नहीं मिला', 'Account not found'), description: tr('ब्याज खाता (4402 — चूककर्ताओं पर ब्याज) चार्ट में नहीं है।', 'The interest account (4402 — Interest on defaulters) is not in the chart.'), variant: 'destructive', duration: 10000 }); return { count: 0, total: 0 }; }
     const openBills = maintenanceBills.filter(b => !b.isDeleted && (!data.flatIds || data.flatIds.includes(b.flatId)));
     const lid = () => crypto.randomUUID();
     let count = 0, total = 0;
@@ -557,8 +558,8 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       });
       if (v.id) { count++; total = round2(total + p.amount); }
     }
-    if (count > 0) toastRef.current({ title: 'ब्याज दर्ज हुआ', description: `${count} बिल · कुल ब्याज ₹${round2(total)}`, duration: 7000 });
-    else toastRef.current({ title: 'कोई ब्याज नहीं', description: 'इस तिथि तक कोई नया ब्याज देय नहीं (बकाया नहीं या पहले से लगाया जा चुका)।', variant: 'default', duration: 8000 });
+    if (count > 0) toastRef.current({ title: tr('ब्याज दर्ज हुआ', 'Interest recorded'), description: tr(`${count} बिल · कुल ब्याज ₹${round2(total)}`, `${count} bills · total interest ₹${round2(total)}`), duration: 7000 });
+    else toastRef.current({ title: tr('कोई ब्याज नहीं', 'No interest'), description: tr('इस तिथि तक कोई नया ब्याज देय नहीं (बकाया नहीं या पहले से लगाया जा चुका)।', 'No new interest is due up to this date (nothing outstanding, or already charged).'), variant: 'default', duration: 8000 });
     return { count, total: round2(total) };
   }, [accounts, maintenanceBills, vouchers, addVoucher, user]);
 
@@ -569,9 +570,9 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const blank = { ...data, id: '', status: 'active' as const, createdAt: '' } as HousingFundInvestment;
     if (guardFYLocked()) return blank;
     if (!accounts.some(a => a.id === data.fundAccountId) || !accounts.some(a => a.id === data.investmentAccountId)) {
-      toastRef.current({ title: 'खाता नहीं मिला', description: 'निधि या निवेश खाता चार्ट में नहीं है।', variant: 'destructive', duration: 9000 }); return blank;
+      toastRef.current({ title: tr('खाता नहीं मिला', 'Account not found'), description: tr('निधि या निवेश खाता चार्ट में नहीं है।', 'The fund or investment account is not in the chart.'), variant: 'destructive', duration: 9000 }); return blank;
     }
-    if (!(data.amount > 0)) { toastRef.current({ title: 'राशि डालें', description: 'निवेश राशि 0 से अधिक होनी चाहिए।', variant: 'destructive', duration: 8000 }); return blank; }
+    if (!(data.amount > 0)) { toastRef.current({ title: tr('राशि डालें', 'Enter an amount'), description: tr('निवेश राशि 0 से अधिक होनी चाहिए।', 'Investment amount must be more than 0.'), variant: 'destructive', duration: 8000 }); return blank; }
     const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
     const fund = accounts.find(a => a.id === data.fundAccountId)!;
     const lid = () => crypto.randomUUID();
@@ -595,10 +596,10 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         console.error('Fund investment save error:', error.message); reportError('housing-save', error.message);
         setFundInvestmentsState(prev => { const r = prev.filter(x => x.id !== inv.id); storage.setHousingFundInvestments(r); return r; });
         cancelVoucher(v.id, 'Fund investment save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'निवेश सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. इसका voucher वापस ले लिया गया।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('निवेश सेव नहीं हुआ', 'Investment not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. इसका voucher वापस ले लिया गया।`, `Not saved to the cloud — ${error.message}. Its voucher has been withdrawn.`), variant: 'destructive', duration: 12000 });
       }
     });
-    toastRef.current({ title: 'निधि निवेश दर्ज', description: `${fund.nameHi || fund.name} · ₹${data.amount}`, duration: 6000 });
+    toastRef.current({ title: tr('निधि निवेश दर्ज', 'Fund investment recorded'), description: `${fund.nameHi || fund.name} · ₹${data.amount}`, duration: 6000 });
     return inv;
   }, [accounts, addVoucher, cancelVoucher, user]);
 
@@ -635,10 +636,10 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         console.error('Fund investment redeem error:', error.message); reportError('housing-save', error.message);
         setFundInvestmentsState(prev => { const u = prev.map(i => i.id === inv.id ? inv : i); storage.setHousingFundInvestments(u); return u; });
         cancelVoucher(v.id, 'Redemption rolled back (row update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'भुनाना सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('भुनाना सेव नहीं हुआ', 'Redemption not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
-    toastRef.current({ title: 'निवेश भुनाया गया', description: `₹${gross} बैंक में वापस${interest > 0 ? ` · ब्याज ₹${interest} निधि में` : ''}`, duration: 6000 });
+    toastRef.current({ title: tr('निवेश भुनाया गया', 'Investment redeemed'), description: tr(`₹${gross} बैंक में वापस${interest > 0 ? ` · ब्याज ₹${interest} निधि में` : ''}`, `₹${gross} returned to bank${interest > 0 ? ` · interest ₹${interest} to the fund` : ''}`), duration: 6000 });
   }, [fundInvestments, accounts, addVoucher, cancelVoucher, user]);
 
   const deleteFundInvestment = useCallback((id: string) => {
@@ -648,7 +649,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     // H / RULE 3: redemption first, then the investment voucher; stop at the first refusal.
     if (inv.redemptionVoucherId && !cancelVoucher(inv.redemptionVoucherId, `Fund investment deleted (redemption reversed)`, user?.name || 'System', { viaParent: true })) return;
     if (inv.voucherId && !cancelVoucher(inv.voucherId, `Fund investment deleted`, user?.name || 'System', { viaParent: true })) {
-      toastRef.current({ title: 'निवेश आंशिक रूप से हटा', description: 'Redemption वाउचर रद्द हुआ, पर निवेश का वाउचर नहीं — निवेश चालू रखा गया है। Admin को बताएँ।', variant: 'destructive', duration: 15000 });
+      toastRef.current({ title: tr('निवेश आंशिक रूप से हटा', 'Investment only partly removed'), description: tr('Redemption वाउचर रद्द हुआ, पर निवेश का वाउचर नहीं — निवेश चालू रखा गया है। Admin को बताएँ।', 'The redemption voucher was cancelled, but not the investment voucher — the investment has been kept active. Please tell the Admin.'), variant: 'destructive', duration: 15000 });
       return;
     }
     setFundInvestmentsState(prev => { const u = prev.filter(i => i.id !== id); storage.setHousingFundInvestments(u); return u; });
@@ -656,7 +657,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Fund investment delete error:', error.message); reportError('housing-save', error.message);
         setFundInvestmentsState(prev => { const u = [...prev, inv]; storage.setHousingFundInvestments(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [fundInvestments, cancelVoucher, user]);
@@ -671,7 +672,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Complaint save error:', error.message); reportError('housing-save', error.message);
         setComplaintsState(prev => { const r = prev.filter(x => x.id !== c.id); storage.setHousingComplaints(r); return r; });
-        toastRef.current({ title: 'शिकायत सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('शिकायत सेव नहीं हुई', 'Complaint not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Refreshing will not cause any problem; please add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return c;
@@ -687,7 +688,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Complaint update error:', error.message); reportError('housing-save', error.message);
         setComplaintsState(prev => { const u = prev.map(c => c.id === id ? old : c); storage.setHousingComplaints(u); return u; });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [complaints]);
@@ -700,7 +701,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Complaint delete error:', error.message); reportError('housing-save', error.message);
         if (old) setComplaintsState(prev => { const u = [...prev, old]; storage.setHousingComplaints(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [complaints]);
@@ -714,7 +715,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Parking save error:', error.message); reportError('housing-save', error.message);
         setParkingState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingParking(r); return r; });
-        toastRef.current({ title: 'पार्किंग सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('पार्किंग सेव नहीं हुई', 'Parking not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Refreshing will not cause any problem; please add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return p;
@@ -730,7 +731,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Parking update error:', error.message); reportError('housing-save', error.message);
         setParkingState(prev => { const u = prev.map(p => p.id === id ? old : p); storage.setHousingParking(u); return u; });
-        toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [parkingSlots]);
@@ -743,7 +744,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Parking delete error:', error.message); reportError('housing-save', error.message);
         if (old) setParkingState(prev => { const u = [...prev, old]; storage.setHousingParking(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [parkingSlots]);
@@ -754,14 +755,14 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const blank = { id: '', flatId: data.flatId, toMemberId: data.toMemberId, date: data.date, createdAt: '' } as HousingTransfer;
     if (guardFYLocked()) return blank;
     const flat = housingFlats.find(f => f.id === data.flatId && !f.isDeleted);
-    if (!flat) { toastRef.current({ title: 'फ्लैट नहीं मिला', description: 'Flat not found', variant: 'destructive', duration: 8000 }); return blank; }
-    if (!data.toMemberId) { toastRef.current({ title: 'नया सदस्य चुनें', description: 'Select the new owner', variant: 'destructive', duration: 8000 }); return blank; }
+    if (!flat) { toastRef.current({ title: tr('फ्लैट नहीं मिला', 'Flat not found'), description: 'Flat not found', variant: 'destructive', duration: 8000 }); return blank; }
+    if (!data.toMemberId) { toastRef.current({ title: tr('नया सदस्य चुनें', 'Select the new member'), description: 'Select the new owner', variant: 'destructive', duration: 8000 }); return blank; }
     // No-dues gate (bye-law practice): a flat with outstanding maintenance/interest cannot be
     // transferred until cleared — reuses the member-statement helper on THIS flat's bills.
     const flatBills = maintenanceBills.filter(b => !b.isDeleted && b.flatId === flat.id);
     const flatOutstanding = round2(buildMemberStatement(flatBills, vouchers).outstanding);
     if (flatOutstanding > 0.005) {
-      toastRef.current({ title: 'बकाया शेष है', description: `इस फ्लैट पर ₹${flatOutstanding} बकाया है — पहले वसूली करें, फिर हस्तांतरण करें।`, variant: 'destructive', duration: 12000 });
+      toastRef.current({ title: tr('बकाया शेष है', 'Dues are outstanding'), description: tr(`इस फ्लैट पर ₹${flatOutstanding} बकाया है — पहले वसूली करें, फिर हस्तांतरण करें।`, `₹${flatOutstanding} is outstanding on this flat — collect it first, then transfer.`), variant: 'destructive', duration: 12000 });
       return blank;
     }
     const fee = round2(data.transferFee || 0);
@@ -798,10 +799,10 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         setTransfersState(prev => { const r = prev.filter(x => x.id !== t.id); storage.setHousingTransfers(r); return r; });
         updateHousingFlat(flat.id, { memberId: oldOwner, receivableAccountId: flat.receivableAccountId, associateMemberId: flat.associateMemberId, nomineeName: flat.nomineeName, nomineeRelation: flat.nomineeRelation, nomineePhone: flat.nomineePhone });
         if (voucherId) cancelVoucher(voucherId, 'Transfer save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: 'हस्तांतरण सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. मालिक व शुल्क वापस ले लिए गए।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('हस्तांतरण सेव नहीं हुआ', 'Transfer not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. मालिक व शुल्क वापस ले लिए गए।`, `Not saved to the cloud — ${error.message}. The owner and the charges have been reverted.`), variant: 'destructive', duration: 12000 });
       }
     });
-    toastRef.current({ title: 'फ्लैट हस्तांतरित', description: `${flat.flatNo}${fee + prem > 0 ? ` · ₹${round2(fee + prem)}` : ''}`, duration: 6000 });
+    toastRef.current({ title: tr('फ्लैट हस्तांतरित', 'Flat transferred'), description: `${flat.flatNo}${fee + prem > 0 ? ` · ₹${round2(fee + prem)}` : ''}`, duration: 6000 });
     return t;
   }, [housingFlats, maintenanceBills, vouchers, accounts, addVoucher, cancelVoucher, updateHousingFlat, user]);
 
@@ -816,7 +817,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Transfer delete error:', error.message); reportError('housing-save', error.message);
         setTransfersState(prev => { const u = [...prev, t]; storage.setHousingTransfers(u); return u; });
-        toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [transfers, cancelVoucher, user]);
@@ -830,7 +831,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Insurance save error:', error.message); reportError('housing-save', error.message);
         setInsurancesState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingInsurance(r); return r; });
-        toastRef.current({ title: 'बीमा सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('बीमा सेव नहीं हुआ', 'Insurance not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Refreshing will not cause any problem; please add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return p;
@@ -842,7 +843,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const updated = { ...old, ...data };
     setInsurancesState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingInsurance(u); return u; });
     supabase.from('housing_insurance').upsert(withSoc(updated)).then(({ error }) => {
-      if (error) { console.error('Insurance update error:', error.message); reportError('housing-save', error.message); setInsurancesState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingInsurance(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('Insurance update error:', error.message); reportError('housing-save', error.message); setInsurancesState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingInsurance(u); return u; }); toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 }); }
     });
   }, [insurances]);
   const deleteInsurance = useCallback((id: string) => {
@@ -850,7 +851,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const old = insurances.find(x => x.id === id);
     setInsurancesState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingInsurance(u); return u; });
     supabase.from('housing_insurance').delete().eq('id', id).then(({ error }) => {
-      if (error) { console.error('Insurance delete error:', error.message); reportError('housing-save', error.message); if (old) setInsurancesState(prev => { const u = [...prev, old]; storage.setHousingInsurance(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('Insurance delete error:', error.message); reportError('housing-save', error.message); if (old) setInsurancesState(prev => { const u = [...prev, old]; storage.setHousingInsurance(u); return u; }); toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 }); }
     });
   }, [insurances]);
 
@@ -863,7 +864,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('AMC save error:', error.message); reportError('housing-save', error.message);
         setAmcsState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingAmc(r); return r; });
-        toastRef.current({ title: 'AMC सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('AMC सेव नहीं हुआ', 'AMC not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Refreshing will not cause any problem; please add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return p;
@@ -875,7 +876,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const updated = { ...old, ...data };
     setAmcsState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingAmc(u); return u; });
     supabase.from('housing_amc').upsert(withSoc(updated)).then(({ error }) => {
-      if (error) { console.error('AMC update error:', error.message); reportError('housing-save', error.message); setAmcsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingAmc(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('AMC update error:', error.message); reportError('housing-save', error.message); setAmcsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingAmc(u); return u; }); toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 }); }
     });
   }, [amcs]);
   const deleteAmc = useCallback((id: string) => {
@@ -883,7 +884,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const old = amcs.find(x => x.id === id);
     setAmcsState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingAmc(u); return u; });
     supabase.from('housing_amc').delete().eq('id', id).then(({ error }) => {
-      if (error) { console.error('AMC delete error:', error.message); reportError('housing-save', error.message); if (old) setAmcsState(prev => { const u = [...prev, old]; storage.setHousingAmc(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('AMC delete error:', error.message); reportError('housing-save', error.message); if (old) setAmcsState(prev => { const u = [...prev, old]; storage.setHousingAmc(u); return u; }); toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 }); }
     });
   }, [amcs]);
 
@@ -896,7 +897,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Document save error:', error.message); reportError('housing-save', error.message);
         setDocumentsState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingDocuments(r); return r; });
-        toastRef.current({ title: 'दस्तावेज़ सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('दस्तावेज़ सेव नहीं हुआ', 'Document not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Refreshing will not cause any problem; please add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return p;
@@ -908,7 +909,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const updated = { ...old, ...data };
     setDocumentsState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingDocuments(u); return u; });
     supabase.from('housing_documents').upsert(withSoc(updated)).then(({ error }) => {
-      if (error) { console.error('Document update error:', error.message); reportError('housing-save', error.message); setDocumentsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingDocuments(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('Document update error:', error.message); reportError('housing-save', error.message); setDocumentsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingDocuments(u); return u; }); toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 }); }
     });
   }, [documents]);
   const deleteDocument = useCallback((id: string) => {
@@ -916,7 +917,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const old = documents.find(x => x.id === id);
     setDocumentsState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingDocuments(u); return u; });
     supabase.from('housing_documents').delete().eq('id', id).then(({ error }) => {
-      if (error) { console.error('Document delete error:', error.message); reportError('housing-save', error.message); if (old) setDocumentsState(prev => { const u = [...prev, old]; storage.setHousingDocuments(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('Document delete error:', error.message); reportError('housing-save', error.message); if (old) setDocumentsState(prev => { const u = [...prev, old]; storage.setHousingDocuments(u); return u; }); toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 }); }
     });
   }, [documents]);
 
@@ -929,7 +930,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Building save error:', error.message); reportError('housing-save', error.message);
         setBuildingsState(prev => { const r = prev.filter(x => x.id !== p.id); storage.setHousingBuildings(r); return r; });
-        toastRef.current({ title: 'भवन सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('भवन सेव नहीं हुआ', 'Building not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Refreshing will not cause any problem; please add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
     return p;
@@ -941,7 +942,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const updated = { ...old, ...data };
     setBuildingsState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingBuildings(u); return u; });
     supabase.from('housing_buildings').upsert(withSoc(updated)).then(({ error }) => {
-      if (error) { console.error('Building update error:', error.message); reportError('housing-save', error.message); setBuildingsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingBuildings(u); return u; }); toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('Building update error:', error.message); reportError('housing-save', error.message); setBuildingsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingBuildings(u); return u; }); toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 }); }
     });
   }, [buildings]);
   const deleteBuilding = useCallback((id: string) => {
@@ -949,7 +950,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const old = buildings.find(x => x.id === id);
     setBuildingsState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingBuildings(u); return u; });
     supabase.from('housing_buildings').delete().eq('id', id).then(({ error }) => {
-      if (error) { console.error('Building delete error:', error.message); reportError('housing-save', error.message); if (old) setBuildingsState(prev => { const u = [...prev, old]; storage.setHousingBuildings(u); return u; }); toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 }); }
+      if (error) { console.error('Building delete error:', error.message); reportError('housing-save', error.message); if (old) setBuildingsState(prev => { const u = [...prev, old]; storage.setHousingBuildings(u); return u; }); toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 }); }
     });
   }, [buildings]);
 

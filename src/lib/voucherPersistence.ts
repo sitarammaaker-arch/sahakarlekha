@@ -13,6 +13,7 @@
  *
  * Pure & deterministic → unit-tested by scripts/test-voucher-persistence.mjs.
  */
+import { tr } from './uiLang.ts';
 
 /** Overlays whose loss corrupts the ledger / audit trail — a failed patch must be loud. */
 export const CRITICAL_OVERLAY_KEYS = [
@@ -62,8 +63,11 @@ export interface ExtrasToast {
 export function extrasFailureToast(hasCritical: boolean, message: string): ExtrasToast {
   if (hasCritical) {
     return {
-      title: '❌ अनुमोदन/ऑडिट जानकारी क्लाउड में सेव नहीं हुई',
-      description: `वाउचर सेव हो गया, पर अनुमोदन-स्थिति / बदलाव-इतिहास क्लाउड तक नहीं पहुँचा: ${message}। नवीनतम supabase-tables.sql migration चलाएँ — वरना refresh करने पर यह जानकारी खो सकती है।`,
+      title: tr('❌ अनुमोदन/ऑडिट जानकारी क्लाउड में सेव नहीं हुई', '❌ Approval/audit data not saved to the cloud'),
+      description: tr(
+        `वाउचर सेव हो गया, पर अनुमोदन-स्थिति / बदलाव-इतिहास क्लाउड तक नहीं पहुँचा: ${message}। नवीनतम supabase-tables.sql migration चलाएँ — वरना refresh करने पर यह जानकारी खो सकती है।`,
+        `The voucher was saved, but its approval status / edit history did not reach the cloud: ${message}. Run the latest supabase-tables.sql migration, or this information may be lost on refresh.`,
+      ),
       variant: 'destructive',
       duration: 14000,
     };

@@ -13,6 +13,7 @@
  * admin provisioning action (useDomainAccountProvisioning), no longer by a load-time seeder. The collection hot-path posting (which absorbs the existing MilkCollection
  * page — C-B) lands in D2.
  */
+import { tr } from '@/lib/uiLang';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
 import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
@@ -121,7 +122,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (societyRef.current?.fyLocked) {
       toastRef.current({
         title: 'FY Locked',
-        description: 'Cannot modify data while the Financial Year is audit-locked. (वित्तीय वर्ष लॉक है)',
+        description: tr('Cannot modify data while the Financial Year is audit-locked. (वित्तीय वर्ष लॉक है)', 'Cannot modify data while the Financial Year is audit-locked. (FY is locked)'),
         variant: 'destructive',
       });
       return true;
@@ -138,7 +139,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   const [distributions, setDistributionsState] = useState<DairyDistribution[]>(() => storage.getDairyDistributions());
   // H / RULE 3: vouchers these documents carry are cancelled through the document, not alone.
   const ownerGroupsRef = useRef<OwnerGroup[]>([]);
-  ownerGroupsRef.current = [{ label: 'दूध भुगतान (Settlement)', docs: settlements }, { label: 'दूध डिस्पैच', docs: dispatches }, { label: 'इनपुट वितरण', docs: inputIssues }, { label: 'बोनस/लाभ वितरण', docs: distributions }];
+  ownerGroupsRef.current = [{ label: tr('दूध भुगतान (Settlement)', 'Milk payment (Settlement)'), docs: settlements }, { label: tr('दूध डिस्पैच', 'Milk dispatch'), docs: dispatches }, { label: tr('इनपुट वितरण', 'Input distribution'), docs: inputIssues }, { label: tr('बोनस/लाभ वितरण', 'Bonus/profit distribution'), docs: distributions }];
   useEffect(() => registerVoucherOwner('dairy', id => findVoucherOwner(ownerGroupsRef.current, id)), [registerVoucherOwner]);
 
   useEffect(() => {
@@ -222,7 +223,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Rate chart save error:', error.message); reportError('dairy-save', error.message);
         setRateChartsState(prev => { const r = prev.filter(c => c.id !== chart.id); storage.setDairyRateCharts(r); return r; });
-        toastRef.current({ title: 'रेट चार्ट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का dairy_rate_charts block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('रेट चार्ट सेव नहीं हुआ', 'Rate chart not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का dairy_rate_charts block चलाएँ।)`, `Not saved to the cloud — ${error.message}. Refreshing will not cause any problem. (First time: run the dairy_rate_charts block of supabase-tables.sql.)`), variant: 'destructive', duration: 12000 });
       }
     });
     return chart;
@@ -238,7 +239,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       if (next && before) supabase.from('dairy_rate_charts').upsert(withSoc(next)).then(({ error }) => {
         if (error) {
           setRateChartsState(p => { const r = p.map(c => c.id === id ? before : c); storage.setDairyRateCharts(r); return r; });
-          toastRef.current({ title: 'अपडेट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
         }
       });
       return u;
@@ -254,7 +255,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       if (before) supabase.from('dairy_rate_charts').upsert(withSoc({ ...before, isDeleted: true })).then(({ error }) => {
         if (error) {
           setRateChartsState(p => { const r = p.map(c => c.id === id ? before : c); storage.setDairyRateCharts(r); return r; });
-          toastRef.current({ title: 'डिलीट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}.`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
         }
       });
       return u;
@@ -269,7 +270,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Milk entry save error:', error.message); reportError('dairy-save', error.message);
         setMilkEntriesState(prev => { const r = prev.filter(e => e.id !== entry.id); storage.setMilkEntries(r); return r; });
-        toastRef.current({ title: 'एंट्री सेव नहीं हुई', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का milk_entries block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('एंट्री सेव नहीं हुई', 'Entry not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा। (पहली बार: supabase-tables.sql का milk_entries block चलाएँ।)`, `Not saved to the cloud — ${error.message}. Refreshing will not cause any problem. (First time: run the milk_entries block of supabase-tables.sql.)`), variant: 'destructive', duration: 12000 });
       }
     });
     return entry;
@@ -282,7 +283,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const entry = milkEntries.find(e => e.id === id);
     if (entry) {
       const locked = settlements.find(s => !s.isDeleted && s.status === 'approved' && s.memberId === entry.memberId && (s.from || '') <= entry.date && (s.to || '') >= entry.date);
-      if (locked) { toastRef.current({ title: 'सेटलमेंट में शामिल', description: `यह एंट्री ${locked.settlementNo || 'approved सेटलमेंट'} में गिनी जा चुकी है — पहले सेटलमेंट reverse करें।`, variant: 'destructive', duration: 10000 }); return; }
+      if (locked) { toastRef.current({ title: tr('सेटलमेंट में शामिल', 'Included in a settlement'), description: tr(`यह एंट्री ${locked.settlementNo || 'approved सेटलमेंट'} में गिनी जा चुकी है — पहले सेटलमेंट reverse करें।`, `This entry is already counted in ${locked.settlementNo || 'an approved settlement'} — reverse the settlement first.`), variant: 'destructive', duration: 10000 }); return; }
     }
     setMilkEntriesState(prev => {
       const before = prev.find(e => e.id === id);
@@ -291,7 +292,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       if (before) supabase.from('milk_entries').delete().eq('id', id).then(({ error }) => {
         if (error) {
           setMilkEntriesState(p => { const r = [...p, before]; storage.setMilkEntries(r); return r; });
-          toastRef.current({ title: 'डिलीट नहीं हुआ', description: `क्लाउड से हटाना नहीं हुआ — ${error.message}. एंट्री वापस ले आई गई।`, variant: 'destructive', duration: 12000 });
+          toastRef.current({ title: tr('डिलीट नहीं हुआ', 'Delete failed'), description: tr(`क्लाउड से हटाना नहीं हुआ — ${error.message}. एंट्री वापस ले आई गई।`, `Could not delete from the cloud — ${error.message}. The entry has been restored.`), variant: 'destructive', duration: 12000 });
         }
       });
       return u;
@@ -305,7 +306,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
         console.error('Settlement save error:', error.message); reportError('dairy-save', error.message);
         setSettlementsState(prev => { const u = revertTo ? prev.map(s => s.id === next.id ? revertTo : s) : prev.filter(s => s.id !== next.id); storage.setDairySettlements(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'सेटलमेंट सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा। (पहली बार: dairy_settlements block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('सेटलमेंट सेव नहीं हुआ', 'Settlement not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा। (पहली बार: dairy_settlements block चलाएँ।)`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back. (First time: run the dairy_settlements block.)`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [societyId]);
@@ -322,28 +323,28 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '' } as DairySettlement;
     if (guardFYLocked()) return sentinel;
     const member = members.find(m => m.id === args.memberId);
-    if (!member) { toastRef.current({ title: 'सदस्य नहीं मिला', variant: 'destructive' }); return sentinel; }
+    if (!member) { toastRef.current({ title: tr('सदस्य नहीं मिला', 'Member not found'), variant: 'destructive' }); return sentinel; }
     // A2 fix: block overlapping settlement windows for the same member — otherwise the
     // milk cost for the overlapping days would be accrued (Dr 5108 / Cr 2102) twice.
     const overlap = settlements.find(s => !s.isDeleted && s.memberId === args.memberId && (s.from || '') <= args.to && (s.to || '') >= args.from);
-    if (overlap) { toastRef.current({ title: 'अवधि ओवरलैप', description: `इस सदस्य का ${overlap.from}→${overlap.to} सेटलमेंट पहले से है — अवधि दोहराई नहीं जा सकती।`, variant: 'destructive', duration: 10000 }); return sentinel; }
+    if (overlap) { toastRef.current({ title: tr('अवधि ओवरलैप', 'Period overlap'), description: tr(`इस सदस्य का ${overlap.from}→${overlap.to} सेटलमेंट पहले से है — अवधि दोहराई नहीं जा सकती।`, `This member already has a settlement for ${overlap.from}→${overlap.to} — the period cannot be repeated.`), variant: 'destructive', duration: 10000 }); return sentinel; }
     const gross = computeGross(milkEntries, args.memberId, args.from, args.to);
-    if (gross <= 0) { toastRef.current({ title: 'कोई दूध नहीं', description: 'इस सदस्य का इस अवधि में कोई स्वीकृत संकलन नहीं।', variant: 'destructive' }); return sentinel; }
+    if (gross <= 0) { toastRef.current({ title: tr('कोई दूध नहीं', 'No milk'), description: tr('इस सदस्य का इस अवधि में कोई स्वीकृत संकलन नहीं।', 'This member has no accepted collection in this period.'), variant: 'destructive' }); return sentinel; }
     const s: DairySettlement = {
       id: crypto.randomUUID(), memberId: member.id, memberName: member.name,
       from: args.from, to: args.to, gross, deductionLines: [], netPayable: gross, amountPaid: 0,
       status: 'draft', createdAt: new Date().toISOString(),
     };
     commitSettlement(s, null);
-    toastRef.current({ title: 'सेटलमेंट बनाया (draft)', description: `${member.name} — सकल ₹${gross.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr('सेटलमेंट बनाया (draft)', 'Settlement created (draft)'), description: tr(`${member.name} — सकल ₹${gross.toLocaleString('en-IN')}`, `${member.name} — gross ₹${gross.toLocaleString('en-IN')}`) });
     return s;
   }, [members, milkEntries, settlements, commitSettlement]);
 
   const addDairyDeduction = useCallback((args: { settlementId: string; type: string; accountId: string; amount: number; remarks?: string }) => {
     if (guardFYLocked()) return;
     const cur = settlements.find(s => s.id === args.settlementId);
-    if (!cur || cur.status !== 'draft') { toastRef.current({ title: 'बदल नहीं सकते', description: 'Approved सेटलमेंट में कटौती नहीं जुड़ सकती।', variant: 'destructive' }); return; }
-    if (!(args.amount > 0) || !args.accountId) { toastRef.current({ title: 'अधूरी कटौती', variant: 'destructive' }); return; }
+    if (!cur || cur.status !== 'draft') { toastRef.current({ title: tr('बदल नहीं सकते', 'Cannot change'), description: tr('Approved सेटलमेंट में कटौती नहीं जुड़ सकती।', 'A deduction cannot be added to an approved settlement.'), variant: 'destructive' }); return; }
+    if (!(args.amount > 0) || !args.accountId) { toastRef.current({ title: tr('अधूरी कटौती', 'Incomplete deduction'), variant: 'destructive' }); return; }
     // A5 fix: any deduction crediting the Member Input Receivable account is an input recovery —
     // cap it at the member's CURRENT derived outstanding so a manual line or a double-click can
     // never recover more feed/medicine than was issued (which would silently over-charge milk).
@@ -351,12 +352,12 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     let amount = +args.amount.toFixed(2);
     if (inputAcct && args.accountId === inputAcct) {
       const remaining = memberInputOutstanding(inputIssues, settlements, cur.memberId, inputAcct).outstanding;
-      if (remaining <= 0.005) { toastRef.current({ title: 'कोई बकाया आदान नहीं', description: 'इस सदस्य का पूरा आदान पहले ही वसूल हो चुका है।', variant: 'destructive' }); return; }
+      if (remaining <= 0.005) { toastRef.current({ title: tr('कोई बकाया आदान नहीं', 'No input dues outstanding'), description: tr('इस सदस्य का पूरा आदान पहले ही वसूल हो चुका है।', 'This member\'s inputs have already been fully recovered.'), variant: 'destructive' }); return; }
       if (amount > remaining) amount = remaining;
     }
     const line: DairyDeductionLine = { id: crypto.randomUUID(), type: args.type, accountId: args.accountId, amount, remarks: args.remarks };
     const lines = [...cur.deductionLines, line];
-    if (sumDeductions(lines) > cur.gross + 0.005) { toastRef.current({ title: 'कटौती सकल से ज़्यादा', description: 'कुल कटौती दूध-मूल्य से अधिक नहीं हो सकती।', variant: 'destructive' }); return; }
+    if (sumDeductions(lines) > cur.gross + 0.005) { toastRef.current({ title: tr('कटौती सकल से ज़्यादा', 'Deduction is more than gross'), description: tr('कुल कटौती दूध-मूल्य से अधिक नहीं हो सकती।', 'Total deductions cannot be more than the milk value.'), variant: 'destructive' }); return; }
     const next: DairySettlement = { ...cur, deductionLines: lines, netPayable: netPayable(cur.gross, lines) };
     commitSettlement(next, cur);
   }, [settlements, inputIssues, accounts, commitSettlement]);
@@ -373,12 +374,12 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '' } as DairySettlement;
     if (guardFYLocked()) return sentinel;
     const cur = settlements.find(s => s.id === settlementId);
-    if (!cur || cur.status !== 'draft') { toastRef.current({ title: 'पहले से approved', variant: 'destructive' }); return sentinel; }
+    if (!cur || cur.status !== 'draft') { toastRef.current({ title: tr('पहले से approved', 'Already approved'), variant: 'destructive' }); return sentinel; }
     const milkCost = resolveMilkProcurementAccountId(accounts);
     const payable = resolveMilkPayableAccountId(accounts);
-    if (!milkCost || !payable) { toastRef.current({ title: 'दुग्ध खाते नहीं मिले', description: 'Milk procurement / payable ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
+    if (!milkCost || !payable) { toastRef.current({ title: tr('दुग्ध खाते नहीं मिले', 'Milk accounts not found'), description: tr('Milk procurement / payable ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', 'Milk procurement / payable ledger missing — run "Create domain accounts" on Ledger Hygiene; if it is still missing, add the account in Ledger Heads (admin).'), variant: 'destructive', duration: 12000 }); return sentinel; }
     const legs = settlementLegs(cur.gross, cur.deductionLines, milkCost, payable);
-    if (legs.length === 0) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'एंट्री के दोनों पक्ष बराबर नहीं (कटौती > सकल या खाता गुम)।', variant: 'destructive' }); return sentinel; }
+    if (legs.length === 0) { toastRef.current({ title: tr('पोस्ट नहीं हुआ', 'Not posted'), description: tr('एंट्री के दोनों पक्ष बराबर नहीं (कटौती > सकल या खाता गुम)।', 'The two sides of the entry are not equal (deduction > gross, or an account is missing).'), variant: 'destructive' }); return sentinel; }
     const net = netPayable(cur.gross, cur.deductionLines);
     const voucher = addVoucher({
       type: 'journal', date: cur.to,
@@ -392,7 +393,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const no = 'DS/' + String(settlements.filter(s => s.status === 'approved' && !s.isDeleted).length + 1).padStart(4, '0');
     const next: DairySettlement = { ...cur, status: 'approved', settlementNo: no, netPayable: net, voucherId: voucher.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
     commitSettlement(next, cur, () => cancelVoucher(voucher.id, 'Settlement approval rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: '✅ सेटलमेंट approved', description: `${no} — नेट देय ₹${net.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr('✅ सेटलमेंट approved', '✅ Settlement approved'), description: tr(`${no} — नेट देय ₹${net.toLocaleString('en-IN')}`, `${no} — net payable ₹${net.toLocaleString('en-IN')}`) });
     return next;
   }, [settlements, accounts, addVoucher, cancelVoucher, commitSettlement, user]);
 
@@ -400,12 +401,12 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '' } as Voucher;
     if (guardFYLocked()) return sentinel;
     const cur = settlements.find(s => s.id === args.settlementId);
-    if (!cur || cur.status !== 'approved') { toastRef.current({ title: 'पहले approve करें', variant: 'destructive' }); return sentinel; }
+    if (!cur || cur.status !== 'approved') { toastRef.current({ title: tr('पहले approve करें', 'Approve it first'), variant: 'destructive' }); return sentinel; }
     const out = outstanding(cur.netPayable, cur.amountPaid);
     const amount = +Math.min(args.amount, out).toFixed(2);
-    if (!(amount > 0)) { toastRef.current({ title: 'कुछ बकाया नहीं', description: 'पूरा भुगतान हो चुका है।', variant: 'destructive' }); return sentinel; }
+    if (!(amount > 0)) { toastRef.current({ title: tr('कुछ बकाया नहीं', 'Nothing outstanding'), description: tr('पूरा भुगतान हो चुका है।', 'Full payment has already been made.'), variant: 'destructive' }); return sentinel; }
     const payable = resolveMilkPayableAccountId(accounts);
-    if (!payable) { toastRef.current({ title: 'देय खाता नहीं मिला', variant: 'destructive' }); return sentinel; }
+    if (!payable) { toastRef.current({ title: tr('देय खाता नहीं मिला', 'Payable account not found'), variant: 'destructive' }); return sentinel; }
     const creditAcc = args.mode === 'bank' ? (args.bankAccountId || storage.defaultBankAccountId(accounts)) : '3301';
     const voucher = addVoucher({
       type: 'payment', date: args.date,
@@ -418,7 +419,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!voucher?.id) return sentinel;
     const next: DairySettlement = { ...cur, amountPaid: +(cur.amountPaid + amount).toFixed(2) };
     commitSettlement(next, cur, () => cancelVoucher(voucher.id, 'Payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: '✅ भुगतान दर्ज', description: `₹${amount.toLocaleString('en-IN')} — बकाया ₹${outstanding(cur.netPayable, next.amountPaid).toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr('✅ भुगतान दर्ज', '✅ Payment recorded'), description: tr(`₹${amount.toLocaleString('en-IN')} — बकाया ₹${outstanding(cur.netPayable, next.amountPaid).toLocaleString('en-IN')}`, `₹${amount.toLocaleString('en-IN')} — outstanding ₹${outstanding(cur.netPayable, next.amountPaid).toLocaleString('en-IN')}`) });
     return voucher;
   }, [settlements, accounts, addVoucher, cancelVoucher, commitSettlement, user]);
 
@@ -426,7 +427,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return;
     const cur = settlements.find(s => s.id === settlementId);
     if (!cur) return;
-    if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले भुगतान reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
+    if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: tr('भुगतान मौजूद', 'Payment exists'), description: tr('पहले भुगतान reverse करें, फिर हटाएँ।', 'Reverse the payment first, then delete.'), variant: 'destructive' }); return; }
     // H / RULE 3: abort if the voucher cannot be cancelled — the document must not outlive it.
     if (cur.status === 'approved' && cur.voucherId && !cancelVoucher(cur.voucherId, 'Settlement deleted', user?.name || 'System', { viaParent: true })) return;
     commitSettlement({ ...cur, isDeleted: true }, cur);
@@ -440,7 +441,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
         console.error('Dispatch save error:', error.message); reportError('dairy-save', error.message);
         setDispatchesState(prev => { const u = revertTo ? prev.map(d => d.id === next.id ? revertTo : d) : prev.filter(d => d.id !== next.id); storage.setDairyDispatches(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'डिस्पैच सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा। (पहली बार: dairy_dispatches block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('डिस्पैच सेव नहीं हुआ', 'Dispatch not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा। (पहली बार: dairy_dispatches block चलाएँ।)`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back. (First time: run the dairy_dispatches block.)`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [societyId]);
@@ -450,13 +451,13 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return sentinel;
     const qty = data.qty || 0, rate = data.rate || 0;
     const amount = +(qty * rate).toFixed(2);
-    if (qty <= 0 || amount <= 0) { toastRef.current({ title: 'अधूरी जानकारी', description: 'लीटर और दर ज़रूरी हैं।', variant: 'destructive' }); return sentinel; }
+    if (qty <= 0 || amount <= 0) { toastRef.current({ title: tr('अधूरी जानकारी', 'Incomplete details'), description: tr('लीटर और दर ज़रूरी हैं।', 'Litres and rate are required.'), variant: 'destructive' }); return sentinel; }
     const rcv = resolveUnionReceivableAccountId(accounts);
     const sales = resolveMilkBulkSalesAccountId(accounts);
-    if (!rcv || !sales) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Union receivable / bulk-sales ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
+    if (!rcv || !sales) { toastRef.current({ title: tr('खाते नहीं मिले', 'Accounts not found'), description: tr('Union receivable / bulk-sales ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', 'Union receivable / bulk-sales ledger missing — run "Create domain accounts" on Ledger Hygiene; if it is still missing, add the account in Ledger Heads (admin).'), variant: 'destructive', duration: 12000 }); return sentinel; }
     const binding = { 'milk.dispatch.receivable': rcv, 'milk.bulk.sales': sales };
     const specs = buildEngineVoucherLines(resolveDairyPostingLegs('RecogniseMilkDispatch', { amount, currency: 'INR' }, binding, accounts));
-    if (specs.length !== 2) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'एंट्री के खाते तय नहीं हो सके।', variant: 'destructive' }); return sentinel; }
+    if (specs.length !== 2) { toastRef.current({ title: tr('पोस्ट नहीं हुआ', 'Not posted'), description: tr('एंट्री के खाते तय नहीं हो सके।', 'The accounts for the entry could not be determined.'), variant: 'destructive' }); return sentinel; }
     const dr = specs.find(s => s.type === 'Dr'); const cr = specs.find(s => s.type === 'Cr');
     const voucher = addVoucher({
       type: 'journal', date: data.date,
@@ -469,7 +470,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!voucher?.id) return sentinel;
     const d: DairyDispatch = { ...data, id: crypto.randomUUID(), amount, voucherId: voucher.id, amountReceived: 0, createdAt: new Date().toISOString() };
     commitDispatch(d, null, () => cancelVoucher(voucher.id, 'Dispatch rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: '✅ डिस्पैच दर्ज', description: `${data.unionName} — बिक्री ₹${amount.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr('✅ डिस्पैच दर्ज', '✅ Dispatch recorded'), description: tr(`${data.unionName} — बिक्री ₹${amount.toLocaleString('en-IN')}`, `${data.unionName} — sale ₹${amount.toLocaleString('en-IN')}`) });
     return d;
   }, [accounts, addVoucher, cancelVoucher, commitDispatch, user]);
 
@@ -480,9 +481,9 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!cur) return sentinel;
     const due = +(cur.amount - cur.amountReceived).toFixed(2);
     const amount = +Math.min(args.amount, due).toFixed(2);
-    if (!(amount > 0)) { toastRef.current({ title: 'कुछ बकाया नहीं', variant: 'destructive' }); return sentinel; }
+    if (!(amount > 0)) { toastRef.current({ title: tr('कुछ बकाया नहीं', 'Nothing outstanding'), variant: 'destructive' }); return sentinel; }
     const rcv = resolveUnionReceivableAccountId(accounts);
-    if (!rcv) { toastRef.current({ title: 'देनदार खाता नहीं मिला', variant: 'destructive' }); return sentinel; }
+    if (!rcv) { toastRef.current({ title: tr('देनदार खाता नहीं मिला', 'Debtor account not found'), variant: 'destructive' }); return sentinel; }
     const debitAcc = args.mode === 'bank' ? (args.bankAccountId || storage.defaultBankAccountId(accounts)) : '3301';
     const voucher = addVoucher({
       type: 'receipt', date: args.date,
@@ -495,7 +496,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!voucher?.id) return sentinel;
     const next: DairyDispatch = { ...cur, amountReceived: +(cur.amountReceived + amount).toFixed(2) };
     commitDispatch(next, cur, () => cancelVoucher(voucher.id, 'Union payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: '✅ भुगतान प्राप्त', description: `₹${amount.toLocaleString('en-IN')} — बकाया ₹${(due - amount).toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr('✅ भुगतान प्राप्त', '✅ Payment received'), description: tr(`₹${amount.toLocaleString('en-IN')} — बकाया ₹${(due - amount).toLocaleString('en-IN')}`, `₹${amount.toLocaleString('en-IN')} — outstanding ₹${(due - amount).toLocaleString('en-IN')}`) });
     return voucher;
   }, [dispatches, accounts, addVoucher, cancelVoucher, commitDispatch, user]);
 
@@ -503,7 +504,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return;
     const cur = dispatches.find(d => d.id === dispatchId);
     if (!cur) return;
-    if (cur.amountReceived > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले प्राप्ति reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
+    if (cur.amountReceived > 0.005) { toastRef.current({ title: tr('भुगतान मौजूद', 'Payment exists'), description: tr('पहले प्राप्ति reverse करें, फिर हटाएँ।', 'Reverse the receipt first, then delete.'), variant: 'destructive' }); return; }
     if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Dispatch deleted', user?.name || 'System', { viaParent: true })) return;   // H / RULE 3
     commitDispatch({ ...cur, isDeleted: true }, cur);
   }, [dispatches, cancelVoucher, commitDispatch, user]);
@@ -516,7 +517,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
         console.error('Input issue save error:', error.message); reportError('dairy-save', error.message);
         setInputIssuesState(prev => { const u = revertTo ? prev.map(i => i.id === next.id ? revertTo : i) : prev.filter(i => i.id !== next.id); storage.setDairyInputIssues(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'आदान सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा। (पहली बार: dairy_input_issues block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('आदान सेव नहीं हुआ', 'Input issue not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा। (पहली बार: dairy_input_issues block चलाएँ।)`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back. (First time: run the dairy_input_issues block.)`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [societyId]);
@@ -525,9 +526,9 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '' } as DairyInputIssue;
     if (guardFYLocked()) return sentinel;
     const amount = +(data.amount || 0).toFixed(2);
-    if (amount <= 0 || !data.memberId || !data.incomeAccountId) { toastRef.current({ title: 'अधूरी जानकारी', description: 'सदस्य, राशि और आय-खाता ज़रूरी हैं।', variant: 'destructive' }); return sentinel; }
+    if (amount <= 0 || !data.memberId || !data.incomeAccountId) { toastRef.current({ title: tr('अधूरी जानकारी', 'Incomplete details'), description: tr('सदस्य, राशि और आय-खाता ज़रूरी हैं।', 'Member, amount and income account are required.'), variant: 'destructive' }); return sentinel; }
     const rcv = resolveMemberInputReceivableAccountId(accounts);
-    if (!rcv || !accounts.some(a => a.id === data.incomeAccountId)) { toastRef.current({ title: 'खाता नहीं मिला', description: 'Member input receivable / income ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
+    if (!rcv || !accounts.some(a => a.id === data.incomeAccountId)) { toastRef.current({ title: tr('खाता नहीं मिला', 'Account not found'), description: tr('Member input receivable / income ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', 'Member input receivable / income ledger missing — run "Create domain accounts" on Ledger Hygiene; if it is still missing, add the account in Ledger Heads (admin).'), variant: 'destructive', duration: 12000 }); return sentinel; }
     const voucher = addVoucher({
       type: 'journal', date: data.date,
       debitAccountId: rcv, creditAccountId: data.incomeAccountId, amount,
@@ -539,7 +540,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!voucher?.id) return sentinel;
     const issue: DairyInputIssue = { ...data, id: crypto.randomUUID(), amount, voucherId: voucher.id, createdAt: new Date().toISOString() };
     commitInputIssue(issue, null, () => cancelVoucher(voucher.id, 'Input issue rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: '✅ आदान दर्ज', description: `${data.memberName} — ₹${amount.toLocaleString('en-IN')} (उधार)` });
+    toastRef.current({ title: tr('✅ आदान दर्ज', '✅ Input issue recorded'), description: tr(`${data.memberName} — ₹${amount.toLocaleString('en-IN')} (उधार)`, `${data.memberName} — ₹${amount.toLocaleString('en-IN')} (on credit)`) });
     return issue;
   }, [accounts, addVoucher, cancelVoucher, commitInputIssue, user]);
 
@@ -552,7 +553,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const inputAcct = resolveMemberInputReceivableAccountId(accounts);
     if (inputAcct) {
       const bal = memberInputOutstanding(inputIssues, settlements, cur.memberId, inputAcct);
-      if (bal.recovered > bal.issued - cur.amount + 0.005) { toastRef.current({ title: 'वसूली मौजूद', description: 'इस आदान की वसूली सेटलमेंट में हो चुकी है — पहले वह सेटलमेंट/कटौती reverse करें।', variant: 'destructive', duration: 10000 }); return; }
+      if (bal.recovered > bal.issued - cur.amount + 0.005) { toastRef.current({ title: tr('वसूली मौजूद', 'Recovery exists'), description: tr('इस आदान की वसूली सेटलमेंट में हो चुकी है — पहले वह सेटलमेंट/कटौती reverse करें।', 'This input has already been recovered in a settlement — reverse that settlement/deduction first.'), variant: 'destructive', duration: 10000 }); return; }
     }
     if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Input issue deleted', user?.name || 'System', { viaParent: true })) return;   // H / RULE 3
     commitInputIssue({ ...cur, isDeleted: true }, cur);
@@ -571,7 +572,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
         console.error('Distribution save error:', error.message); reportError('dairy-save', error.message);
         setDistributionsState(prev => { const u = revertTo ? prev.map(d => d.id === next.id ? revertTo : d) : prev.filter(d => d.id !== next.id); storage.setDairyDistributions(u); return u; });
         onFail?.();
-        toastRef.current({ title: 'वितरण सेव नहीं हुआ', description: `क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा। (पहली बार: dairy_distributions block चलाएँ।)`, variant: 'destructive', duration: 12000 });
+        toastRef.current({ title: tr('वितरण सेव नहीं हुआ', 'Distribution not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा। (पहली बार: dairy_distributions block चलाएँ।)`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back. (First time: run the dairy_distributions block.)`), variant: 'destructive', duration: 12000 });
       }
     });
   }, [societyId]);
@@ -579,12 +580,12 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   const createDairyDistribution = useCallback((args: { kind: 'bonus'; from: string; to: string; basis: DairyBonusBasis; rate: number } | { kind: 'dividend'; rate: number; fyLabel?: string }): DairyDistribution => {
     const sentinel = { id: '' } as DairyDistribution;
     if (guardFYLocked()) return sentinel;
-    if (!(args.rate > 0)) { toastRef.current({ title: 'दर ज़रूरी', description: 'एक धनात्मक दर डालें।', variant: 'destructive' }); return sentinel; }
+    if (!(args.rate > 0)) { toastRef.current({ title: tr('दर ज़रूरी', 'Rate required'), description: tr('एक धनात्मक दर डालें।', 'Enter a positive rate.'), variant: 'destructive' }); return sentinel; }
     const lines = args.kind === 'bonus'
       ? computeBonusLines(milkEntries, args.from, args.to, args.basis, args.rate)
       // A3 fix: dividend only to ACTIVE members (computeDividendLines excludes inactive/exited).
       : computeDividendLines(members.map(m => ({ id: m.id, name: m.name, shareCapital: m.shareCapital, status: m.status })), args.rate);
-    if (lines.length === 0) { toastRef.current({ title: 'कोई राशि नहीं', description: args.kind === 'bonus' ? 'इस अवधि में कोई स्वीकृत दूध नहीं।' : 'किसी सदस्य की शेयर पूंजी नहीं।', variant: 'destructive' }); return sentinel; }
+    if (lines.length === 0) { toastRef.current({ title: tr('कोई राशि नहीं', 'No amount'), description: args.kind === 'bonus' ? tr('इस अवधि में कोई स्वीकृत दूध नहीं।', 'No accepted milk in this period.') : tr('किसी सदस्य की शेयर पूंजी नहीं।', 'No member has share capital.'), variant: 'destructive' }); return sentinel; }
     const total = distributionTotal(lines);
     const d: DairyDistribution = {
       id: crypto.randomUUID(), kind: args.kind, rate: args.rate,
@@ -593,7 +594,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       resolutionNo: '', lines, total, status: 'draft', amountPaid: 0, createdAt: new Date().toISOString(),
     };
     commitDistribution(d, null);
-    toastRef.current({ title: 'वितरण बनाया (draft)', description: `${lines.length} सदस्य · कुल ₹${total.toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr('वितरण बनाया (draft)', 'Distribution created (draft)'), description: tr(`${lines.length} सदस्य · कुल ₹${total.toLocaleString('en-IN')}`, `${lines.length} members · total ₹${total.toLocaleString('en-IN')}`) });
     return d;
   }, [milkEntries, members, commitDistribution]);
 
@@ -601,13 +602,13 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '' } as DairyDistribution;
     if (guardFYLocked()) return sentinel;
     const cur = distributions.find(d => d.id === args.distributionId);
-    if (!cur || cur.status !== 'draft') { toastRef.current({ title: 'पहले से approved', variant: 'destructive' }); return sentinel; }
-    if (!args.resolutionNo || !args.resolutionNo.trim()) { toastRef.current({ title: 'प्रस्ताव संख्या आवश्यक', description: 'बोनस/लाभांश वितरण के लिए सभा/बोर्ड प्रस्ताव संख्या ज़रूरी है।', variant: 'destructive', duration: 10000 }); return sentinel; }
+    if (!cur || cur.status !== 'draft') { toastRef.current({ title: tr('पहले से approved', 'Already approved'), variant: 'destructive' }); return sentinel; }
+    if (!args.resolutionNo || !args.resolutionNo.trim()) { toastRef.current({ title: tr('प्रस्ताव संख्या आवश्यक', 'Resolution number required'), description: tr('बोनस/लाभांश वितरण के लिए सभा/बोर्ड प्रस्ताव संख्या ज़रूरी है।', 'A general body/board resolution number is required for a bonus/dividend distribution.'), variant: 'destructive', duration: 10000 }); return sentinel; }
     const distAcc = cur.kind === 'bonus' ? resolveBonusDistributionAccountId(accounts) : resolveDividendDistributionAccountId(accounts);
     const payAcc = cur.kind === 'bonus' ? resolveBonusPayableAccountId(accounts) : resolveDividendPayableAccountId(accounts);
-    if (!distAcc || !payAcc) { toastRef.current({ title: 'खाते नहीं मिले', description: 'Distribution / payable ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
+    if (!distAcc || !payAcc) { toastRef.current({ title: tr('खाते नहीं मिले', 'Accounts not found'), description: tr('Distribution / payable ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', 'Distribution / payable ledger missing — run "Create domain accounts" on Ledger Hygiene; if it is still missing, add the account in Ledger Heads (admin).'), variant: 'destructive', duration: 12000 }); return sentinel; }
     const legs = distributionLegs(cur.total, distAcc, payAcc);
-    if (legs.length === 0) { toastRef.current({ title: 'पोस्ट नहीं हुआ', description: 'एंट्री के दोनों पक्ष बराबर नहीं।', variant: 'destructive' }); return sentinel; }
+    if (legs.length === 0) { toastRef.current({ title: tr('पोस्ट नहीं हुआ', 'Not posted'), description: tr('एंट्री के दोनों पक्ष बराबर नहीं।', 'The two sides of the entry are not equal.'), variant: 'destructive' }); return sentinel; }
     const kindHi = cur.kind === 'bonus' ? 'बोनस' : 'लाभांश';
     const voucher = addVoucher({
       type: 'journal', date: args.resolutionDate || new Date().toISOString().slice(0, 10),
@@ -620,7 +621,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!voucher?.id) return sentinel;
     const next: DairyDistribution = { ...cur, status: 'approved', resolutionNo: args.resolutionNo.trim(), resolutionDate: args.resolutionDate, voucherId: voucher.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
     commitDistribution(next, cur, () => cancelVoucher(voucher.id, 'Distribution approval rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: `✅ ${kindHi} approved`, description: `प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}` });
+    toastRef.current({ title: `✅ ${kindHi} approved`, description: tr(`प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}`, `Resolution ${args.resolutionNo} — total ₹${cur.total.toLocaleString('en-IN')}`) });
     return next;
   }, [distributions, accounts, addVoucher, cancelVoucher, commitDistribution, user]);
 
@@ -628,12 +629,12 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const sentinel = { id: '' } as Voucher;
     if (guardFYLocked()) return sentinel;
     const cur = distributions.find(d => d.id === args.distributionId);
-    if (!cur || cur.status !== 'approved') { toastRef.current({ title: 'पहले approve करें', variant: 'destructive' }); return sentinel; }
+    if (!cur || cur.status !== 'approved') { toastRef.current({ title: tr('पहले approve करें', 'Approve it first'), variant: 'destructive' }); return sentinel; }
     const outstandingAmt = +(cur.total - cur.amountPaid).toFixed(2);
     const amount = +Math.min(args.amount, outstandingAmt).toFixed(2);
-    if (!(amount > 0)) { toastRef.current({ title: 'कुछ बकाया नहीं', variant: 'destructive' }); return sentinel; }
+    if (!(amount > 0)) { toastRef.current({ title: tr('कुछ बकाया नहीं', 'Nothing outstanding'), variant: 'destructive' }); return sentinel; }
     const payAcc = cur.kind === 'bonus' ? resolveBonusPayableAccountId(accounts) : resolveDividendPayableAccountId(accounts);
-    if (!payAcc) { toastRef.current({ title: 'देय खाता नहीं मिला', description: 'Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', variant: 'destructive', duration: 12000 }); return sentinel; }
+    if (!payAcc) { toastRef.current({ title: tr('देय खाता नहीं मिला', 'Payable account not found'), description: tr('Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', 'Run "Create domain accounts" on Ledger Hygiene; if it is still missing, add the account in Ledger Heads (admin).'), variant: 'destructive', duration: 12000 }); return sentinel; }
     const creditAcc = args.mode === 'bank' ? (args.bankAccountId || storage.defaultBankAccountId(accounts)) : '3301';
     const kindHi = cur.kind === 'bonus' ? 'बोनस' : 'लाभांश';
     const voucher = addVoucher({
@@ -647,7 +648,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!voucher?.id) return sentinel;
     const next: DairyDistribution = { ...cur, amountPaid: +(cur.amountPaid + amount).toFixed(2) };
     commitDistribution(next, cur, () => cancelVoucher(voucher.id, 'Distribution payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: '✅ भुगतान दर्ज', description: `₹${amount.toLocaleString('en-IN')} — बकाया ₹${(outstandingAmt - amount).toLocaleString('en-IN')}` });
+    toastRef.current({ title: tr('✅ भुगतान दर्ज', '✅ Payment recorded'), description: tr(`₹${amount.toLocaleString('en-IN')} — बकाया ₹${(outstandingAmt - amount).toLocaleString('en-IN')}`, `₹${amount.toLocaleString('en-IN')} — outstanding ₹${(outstandingAmt - amount).toLocaleString('en-IN')}`) });
     return voucher;
   }, [distributions, accounts, addVoucher, cancelVoucher, commitDistribution, user]);
 
@@ -655,7 +656,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return;
     const cur = distributions.find(d => d.id === distributionId);
     if (!cur) return;
-    if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: 'भुगतान मौजूद', description: 'पहले भुगतान reverse करें, फिर हटाएँ।', variant: 'destructive' }); return; }
+    if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: tr('भुगतान मौजूद', 'Payment exists'), description: tr('पहले भुगतान reverse करें, फिर हटाएँ।', 'Reverse the payment first, then delete.'), variant: 'destructive' }); return; }
     if (cur.status === 'approved' && cur.voucherId && !cancelVoucher(cur.voucherId, 'Distribution deleted', user?.name || 'System', { viaParent: true })) return;   // H / RULE 3
     commitDistribution({ ...cur, isDeleted: true }, cur);
   }, [distributions, cancelVoucher, commitDistribution, user]);

@@ -8,6 +8,7 @@
  * came back on F5 (RULE 1). These helpers decide what the user is told and what a COA reset may
  * safely delete.
  */
+import { tr } from '../uiLang.ts';
 
 export interface DeleteResult {
   error: { code?: string; message: string } | null;
@@ -23,13 +24,23 @@ export function accountDeleteFailure(accountName: string, r: DeleteResult): stri
   const name = `"${accountName}"`;
   if (r.error) {
     if (r.error.code === '23503') {
-      return `${name} किसी accounting role या दूसरे record से जुड़ा है, इसलिए cloud ने मिटाने से मना कर दिया। `
-        + 'खाता वापस दिखा दिया गया है — कुछ lose नहीं हुआ। (Linked to an accounting role / another record.)';
+      return tr(
+        `${name} किसी accounting role या दूसरे record से जुड़ा है, इसलिए cloud ने मिटाने से मना कर दिया। `
+          + 'खाता वापस दिखा दिया गया है — कुछ lose नहीं हुआ। (Linked to an accounting role / another record.)',
+        `${name} is linked to an accounting role or another record, so the cloud refused to delete it. `
+          + 'The account has been shown again — nothing was lost.',
+      );
     }
-    return `${name} cloud पर नहीं मिटा — खाता वापस दिखा दिया गया है, refresh पर भी रहेगा। (${r.error.message})`;
+    return tr(
+      `${name} cloud पर नहीं मिटा — खाता वापस दिखा दिया गया है, refresh पर भी रहेगा। (${r.error.message})`,
+      `${name} was not deleted on the cloud — the account has been shown again and will stay after refresh. (${r.error.message})`,
+    );
   }
   if (r.deleted === 0) {
-    return `${name} cloud पर नहीं मिटा (अनुमति नहीं मिली या पहले ही बदल चुका) — खाता वापस दिखा दिया गया है। (Nothing was deleted.)`;
+    return tr(
+      `${name} cloud पर नहीं मिटा (अनुमति नहीं मिली या पहले ही बदल चुका) — खाता वापस दिखा दिया गया है। (Nothing was deleted.)`,
+      `${name} was not deleted on the cloud (no permission, or it had already changed) — the account has been shown again. (Nothing was deleted.)`,
+    );
   }
   return null;
 }
@@ -90,15 +101,15 @@ export interface LiveDataCounts {
  */
 export function coaResetLiveData(c: LiveDataCounts): string[] {
   const rows: [number, string][] = [
-    [c.vouchers, 'वाउचर (रद्द वाले भी)'],
-    [c.members, 'सदस्य'],
-    [c.loans, 'ऋण'],
-    [c.suppliers, 'आपूर्तिकर्ता'],
-    [c.customers, 'ग्राहक'],
-    [c.sales, 'बिक्री'],
-    [c.purchases, 'खरीद'],
-    [c.employees, 'कर्मचारी'],
-    [c.accountsWithOpening, 'खाते जिनमें opening balance है'],
+    [c.vouchers, tr('वाउचर (रद्द वाले भी)', 'vouchers (cancelled ones too)')],
+    [c.members, tr('सदस्य', 'members')],
+    [c.loans, tr('ऋण', 'loans')],
+    [c.suppliers, tr('आपूर्तिकर्ता', 'suppliers')],
+    [c.customers, tr('ग्राहक', 'customers')],
+    [c.sales, tr('बिक्री', 'sales')],
+    [c.purchases, tr('खरीद', 'purchases')],
+    [c.employees, tr('कर्मचारी', 'employees')],
+    [c.accountsWithOpening, tr('खाते जिनमें opening balance है', 'accounts with an opening balance')],
   ];
   return rows.filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}`);
 }
