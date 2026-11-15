@@ -34,6 +34,9 @@
         // navigator.webdriver = true. For those the library is never fetched, so nothing queued above is sent
         // and they do not show up as visitors. Nov 2026: about 80% of "users" were such bots from US data centres.
         if (navigator.webdriver) return;
+        // Only the real site reports to GA. localhost (CI e2e runs, dev servers) and Vercel preview URLs were
+        // about 8,300 of 13,000 views in Oct–Nov 2026 and looked like US visitors landing on /login.
+        if (!/^(www\.)?sahakarlekha\.com$/.test(location.hostname)) return;
         var done = false;
         var events = ['pointerdown', 'keydown', 'scroll', 'touchstart'];
         function load() {
