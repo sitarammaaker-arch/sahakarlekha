@@ -2,8 +2,8 @@ import type { BlogPostEn } from './meta';
 
 export const BLOG_EN_B4G1: Record<string, BlogPostEn> = {
   'how-to-register-a-cooperative-society': {
-    metaTitle: 'How to Form (Register) a Cooperative Society — Step by Step | SahakarLekha',
-    metaDescription: 'How to form a new cooperative society: where to apply (RCS), minimum members, documents and bye-laws needed, and the full process up to the registration certificate.',
+    metaTitle: 'How to Form a Cooperative Society — 5 Registration Steps, Documents and Members | SahakarLekha',
+    metaDescription: 'A cooperative society is registered with the RCS. How many members you need, which documents are required, how the bye-laws are made and when the certificate comes — in 5 steps.',
     title: 'How to register a cooperative society',
     shortTitle: 'Registering a society',
     excerpt: 'Application to the RCS with bye-laws and documents → examination → registration certificate = a separate legal identity.',

@@ -1,5 +1,7 @@
 # Office-bearers of a society: the roles of the chairman, secretary and treasurer
 
+> **Short answer:** The chairman presides over meetings and represents the society before the bank, the department and the federation. The secretary handles day-to-day administration, records and minutes. The treasurer keeps watch over cash, payments and bank transactions. All three are answerable to the members.
+
 Within the managing committee, certain special responsibilities are given to a few people — these are the **office-bearers**: the chairman, the secretary and the treasurer. Each has a different role, and together the three run the society smoothly and transparently. This article explains the **roles, responsibilities, accountability and mutual balance** of these three in simple language — so that both new office-bearers and members know who does what.
 
 > ⚠️ **Information checked up to 18 October 2026.** This article mostly describes good practice, which is roughly the same in every state. Where the law is cited, it has been matched with the Haryana Cooperative Societies Act 1984 (including the 2013 amendment) — see "Sources" below. In other states, check your own Act and your society's bye-laws.
@@ -66,6 +68,10 @@ The treasurer's main job is to make sure the society's money stays safe and ever
 | Treasurer | Oversight of funds, cash and bank |
 
 > ⚠️ Note: how office-bearers are chosen and their exact powers are decided by the **state Act and bye-laws**. So the roles given in this article are a general framework; in your society some details may differ as per the bye-laws. (See: [What bye-laws are](/blog/cooperative-society-byelaws).)
+
+## Who is senior, the chairman or the secretary?
+
+In a meeting the chairman ranks higher: the chairman presides and has the casting vote when votes are tied. But the chairman is not the secretary's "boss". The real day-to-day work is in the secretary's hands, and both are answerable to the managing committee and the members.
 
 ## Roles in a small vs a large society
 

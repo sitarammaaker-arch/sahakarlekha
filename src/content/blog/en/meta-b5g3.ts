@@ -30,8 +30,8 @@ export const BLOG_EN_B5G3: Record<string, BlogPostEn> = {
     excerpt: 'Treating the loan as an asset and interest as income; the fine points of KCC; and monitoring recovery % and NPA.',
   },
   'voucher-entry-guide': {
-    metaTitle: 'How to Do Voucher Entry — Receipt, Payment, Journal (with Examples) | SahakarLekha',
-    metaDescription: 'How to fill vouchers — Receipt, Payment, Journal and Contra; deciding Dr/Cr by "did money come in or go out" — a step-by-step guide for societies.',
+    metaTitle: 'What Is a Voucher and How to Fill One — 4 Types, with Examples | SahakarLekha',
+    metaDescription: 'A voucher is the written proof of a transaction. Receipt, payment, journal and contra — which one applies when, how to decide Dr/Cr, and how to fill it, with examples.',
     title: 'How to Do Voucher Entry: A Step-by-Step Guide',
     shortTitle: 'How to do voucher entry',
     excerpt: 'Four types of vouchers, deciding Dr/Cr by "did money come in or go out", and a simple way to make every report right.',
