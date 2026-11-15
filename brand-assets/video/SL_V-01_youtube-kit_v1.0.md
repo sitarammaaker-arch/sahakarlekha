@@ -20,7 +20,7 @@ Assets (regenerate: `cd brand-assets/templates && npm run gen:youtube` → expor
 
 ### Channel description (copy-paste)
 
-> सहकारी समितियों का अपना सॉफ्टवेयर — बिल्कुल मुफ़्त।
+> सहकारी समितियों का अपना सॉफ्टवेयर — 30 दिन मुफ़्त आज़माएँ।
 > PACS से housing तक, 8 प्रकार की समितियों के लिए accounting: voucher entry,
 > बैलेंस शीट, ट्रायल बैलेंस, TDS 26Q, GST — सब हिंदी में, एक click पर।
 > इस channel पर मिलेंगे आसान हिंदी tutorials — voucher entry से audit तैयारी तक।
@@ -32,10 +32,10 @@ Assets (regenerate: `cd brand-assets/templates && npm run gen:youtube` → expor
 | समय | Visual | बोलना है |
 |---|---|---|
 | 0–6s | Founder camera पर | "समिति का हिसाब आज भी register में लिखते हैं? और audit के दिन वही भागदौड़?" |
-| 6–14s | Camera | "नमस्ते! मैं सीताराम — मैंने बनाया है **सहकार लेखा**, सिर्फ़ सहकारी समितियों के लिए, बिल्कुल मुफ़्त।" |
+| 6–14s | Camera | "नमस्ते! मैं सीताराम — मैंने बनाया है **सहकार लेखा**, सिर्फ़ सहकारी समितियों के लिए।" |
 | 14–30s | Screen recording: voucher entry → report | "Entry कीजिए आसान हिंदी में... और बैलेंस शीट, ट्रायल बैलेंस, TDS 26Q — एक click पर तैयार। Audit-ready, हमेशा।" |
 | 30–38s | Course page + certificate | "साथ में मुफ़्त course भी — certificate के साथ। आपका staff खुद expert बन जाएगा।" |
-| 38–45s | End-card (नीचे spec) | "sahakarlekha.com पर आज ही शुरू करें — मुफ़्त है, और आपका data आपका ही रहता है। Channel subscribe करना मत भूलिए!" |
+| 38–45s | End-card (नीचे spec) | "sahakarlekha.com पर आज ही शुरू करें — 30 दिन मुफ़्त आज़माइए, और आपका data आपका ही रहता है। Channel subscribe करना मत भूलिए!" |
 
 Recording नियम (Brand Book §8): screen recording में demo society का data,
 असली नाम कभी नहीं · **subtitles हमेशा** (Hind SemiBold, white on `#122d54` band) ·

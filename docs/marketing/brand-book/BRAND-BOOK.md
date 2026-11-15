@@ -1,4 +1,4 @@
-# सहकार लेखा — Brand Book v1.0 (B-01)
+# सहकार लेखा — Brand Book v1.1 (B-01)
 
 **Status:** DRAFT — awaiting founder approval.
 **Applies to:** every asset, page, video, print piece and message that carries
@@ -12,11 +12,12 @@ strategy ([MARKETING-MASTER-PLAN.md](../MARKETING-MASTER-PLAN.md)).
 ## 1. The brand in one breath
 
 > **सहकार लेखा** — सहकारी समितियों का अपना सॉफ्टवेयर।
-> All 8 society types. Hindi-first. Free. Audit-ready.
+> All 8 society types. Hindi-first. Affordable. Audit-ready.
 
 We are the cooperative sector's **own** software — not a generic accounting
 tool wearing a co-op sticker, not a government scheme with a rollout queue.
-Built only for societies, in their language, at no cost, with books that are
+Built only for societies, in their language, at a price a small society can
+afford (30-day free trial, then from ₹2,999/year + GST), with books that are
 always ready for the auditor.
 
 ### Positioning pillars (every asset ladders to ≥ 1)
@@ -24,7 +25,7 @@ always ready for the auditor.
 1. **सिर्फ़ सहकारी समितियों के लिए** — share capital, dividend, MSP, RCS formats built-in.
 2. **Audit-ready, हमेशा** — one-click statutory reports, FY-lock, clean trails.
 3. **आपकी भाषा में** — Hindi-first UI, course, support.
-4. **मुफ़्त और पारदर्शी** — free, explained openly, export-anytime.
+4. **किफ़ायती और पारदर्शी** — 30-day free trial, then from ₹2,999/year + GST; prices published openly, export-anytime.
 5. **सीखना भी मुफ़्त** — the certificate course; we train the whole sector.
 
 ### Personality
@@ -76,6 +77,10 @@ Dates in Hindi copy: 31 मार्च 2026.
 or "India's #1" claims. "India's only cooperative-specific platform" is the
 approved superlative. Never attack the government PACS scheme.
 
+**Price rule:** never call the software "free" / मुफ़्त. Free are only the
+30-day trial and the certificate course — say which one. Quote prices exactly
+as on sahakarlekha.com/pricing (from ₹2,999/year + GST) and change both together.
+
 ---
 
 ## 4. Logo system
@@ -110,7 +115,7 @@ Single source: `brand-assets/tokens/tokens.json`. Never eyeball.
 | **Orange (saffron)** | `#f48525` | Energy: logo tile, ONE call-to-action per asset, highlight numbers. ❌ Never body text on white (fails AA). ❌ Never full-page backgrounds. |
 | **Navy dark** | `#122d54` | Depth: background blobs/shapes, dark panels, tagline text. |
 | **White** | `#ffffff` | Space. Layouts breathe — default page background is white. |
-| Success green | `#1f9350` | मुफ़्त/free badges, checkmarks, positive numbers, tricolor strip green. |
+| Success green | `#1f9350` | मुफ़्त trial / मुफ़्त course badges, checkmarks, positive numbers, tricolor strip green. |
 | Info teal | `#2999a3` | Chart series 2, info callouts. |
 | Warning amber | `#f59f0a` | Caution notes only — never decoration (clashes with brand orange). |
 | Destructive red | `#db2424` | Errors/negative numbers only. |
@@ -192,7 +197,7 @@ White background, `#d1d8e0` gridlines, ₹-formatted axes, label the takeaway
 ## 9. Official-feel documents (QR, badges, certificates)
 
 - **QR codes:** navy modules on white, tile logo center, one per asset,
-  bottom-right, always with a Hindi action label: "स्कैन करें — मुफ़्त शुरू करें".
+  bottom-right, always with a Hindi action label: "स्कैन करें — 30 दिन मुफ़्त आज़माएँ".
 - **Certificates** (course/partner/training): white base, navy double-rule
   border, stacked logo top-center, orange seal motif, tricolor strip bottom
   edge, serial number + verification URL bottom-left.
@@ -243,6 +248,8 @@ White background, `#d1d8e0` gridlines, ₹-formatted axes, label the takeaway
 
 ---
 
-*v1.0 draft · 2026-07-05 · Changes to this book require founder sign-off and
+*v1.1 · 2026-11-15 · "Free" positioning replaced by trial + published price
+(paid plans live since 2026-11-11); price rule added to §3. v1.0 draft was
+2026-07-05. Changes to this book require founder sign-off and
 a version bump. The tokens file and logo masters are the machine-readable
 half of this book — keep all three in sync.*
