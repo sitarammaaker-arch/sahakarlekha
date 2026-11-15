@@ -34,6 +34,8 @@ const TEMPLATE = resolve(DIST, 'index.html');
 const MANIFEST = resolve(ROOT, 'scripts', 'guide-manifest.json');
 const SOCIETY_TYPES = resolve(ROOT, 'src', 'content', 'societyTypes.tsx');
 const STATES_FILE = resolve(ROOT, 'src', 'content', 'states.ts');
+const SOFTWARE_MODULES_FILE = resolve(ROOT, 'src', 'content', 'softwareModules.ts'); // the app's menu per society type
+const SOFTWARE_FAQ_FILE = resolve(ROOT, 'src', 'content', 'softwareFaq.ts'); // questions built from it + reused /faq answers
 const BLOG_FILE = resolve(ROOT, 'src', 'content', 'blog', 'index.ts');
 const BLOG_DIR = resolve(ROOT, 'src', 'content', 'blog');
 const AUTHORS_FILE = resolve(ROOT, 'src', 'content', 'blog', 'authors.ts');
@@ -75,7 +77,7 @@ const COURSE = 'सहकारी समिति लेखांकन व ऑ
 // blog uses its own dates, glossary uses KI `last_updated`). NEVER the build date.
 const LASTMOD = {
   guide: '2026-06-20',
-  software: '2026-06-20',
+  software: '2026-11-15',
   state: '2026-06-20',
   help: '2026-06-27',
   cookbook: '2026-06-27',
@@ -321,6 +323,8 @@ async function loadData() {
     ['downloads', DOWNLOADS_FILE, null], // /downloads hub — same registry as the page
     ['hub', HUB_META_FILE, null], // L5: hub title/description + glossary description — same module as the pages
     ['society', SOCIETY_TYPES, 'SOCIETY_TYPES'],
+    ['softwareModules', SOFTWARE_MODULES_FILE, null], // softwareModuleGroups — the same module the live page uses
+    ['softwareFaq', SOFTWARE_FAQ_FILE, null], // softwareFaq + softwareFaqLd
     ['states', STATES_FILE, 'STATES'],
     ['rel', RELATED_FILE, null], // whole module (edge maps + helpers), GOS-11
     ['authors', AUTHORS_FILE, null], // /author/<slug> profile pages (E-E-A-T) — AUTHORS + DEFAULT_AUTHOR_SLUG
@@ -465,6 +469,35 @@ const softwareAppLd = (url, description) => ({
   offers: { '@type': 'AggregateOffer', priceCurrency: 'INR', lowPrice: '2999', highPrice: '14999', offerCount: 3 },
 });
 
+// Depth for /software/<type>: what the type gets (the app's own menu), how to start, and questions.
+// Same modules and wording as the live page (SoftwareLanding.tsx) — both read content/softwareModules + softwareFaq.
+const softwareGroups = (DATA, t) =>
+  (DATA.softwareModules && DATA.softwareModules.softwareModuleGroups ? DATA.softwareModules.softwareModuleGroups(t.slug) : []);
+function softwareModulesHtml(DATA, t) {
+  const groups = softwareGroups(DATA, t);
+  if (!groups.length) return '';
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
+  return (
+    `<h2>${esc(t.nameHi)} को app में क्या-क्या मिलता है</h2>` +
+    `<p>समिति का प्रकार चुनते ही ये ${total} module menu में आ जाते हैं। यह सूची app के menu से ही बनती है, इसलिए यहाँ वही लिखा है जो आपको अंदर मिलेगा।</p>` +
+    groups.map((g) =>
+      `<h3>${esc(g.hi)} (${g.items.length})</h3>` +
+      `<ul>${g.items.map((it) => `<li>${esc(it.hi)}${it.hi !== it.en ? ` (${esc(it.en)})` : ''}${it.plan ? ` — ${it.plan === 'plus' ? 'Plus' : 'Pro'} plan` : ''}</li>`).join('')}</ul>`).join('')
+  );
+}
+const SOFTWARE_START_HTML = (t) =>
+  `<h2>शुरू कैसे करें</h2><ol>` +
+  `<li><strong>रजिस्टर करें</strong> — समिति का नाम और प्रकार "${esc(t.nameHi)}" चुनें। 30 दिन का मुफ़्त trial उसी समय शुरू हो जाता है।</li>` +
+  `<li><strong>प्रारंभिक शेष डालें</strong> — पिछले साल की बैलेंस शीट से हर खाते का शुरुआती शेष एक बार दर्ज करें।</li>` +
+  `<li><strong>वाउचर डालना शुरू करें</strong> — रसीद, भुगतान, जर्नल — रोज़ के वाउचर डालते जाएँ। ट्रायल बैलेंस और बाकी रिपोर्ट अपने-आप बनती हैं।</li>` +
+  `</ol>`;
+const softwareFaqItems = (DATA, t) =>
+  (DATA.softwareFaq && DATA.softwareFaq.softwareFaq ? DATA.softwareFaq.softwareFaq(t.slug, t.nameHi, t.nameEn) : []);
+const softwareFaqHtml = (items) =>
+  items.length
+    ? `<h2>अक्सर पूछे जाने वाले सवाल</h2>` + items.map((it) => `<h3>${esc(it.qHi)}</h3><p>${esc(it.aHi)}</p>`).join('') + `<p><a href="/faq">सभी सवाल-जवाब देखें</a></p>`
+    : '';
+
 function softwarePages(DATA) {
   const types = DATA.society || [];
   const pages = [
@@ -507,6 +540,9 @@ function softwarePages(DATA) {
               (t.solvesHi && t.solvesHi.length ? `<h2>SahakarLekha कैसे मदद करता है</h2><ul>${t.solvesHi.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : '') +
               (t.seoEn ? `<p lang="en">${esc(t.seoEn)}</p>` : '') +
               SOFTWARE_PRICE_HTML +
+              softwareModulesHtml(DATA, t) +
+              SOFTWARE_START_HTML(t) +
+              softwareFaqHtml(softwareFaqItems(DATA, t)) +
               surfaceLinksHtml(DATA.rel && DATA.rel.SOCIETY_CONTENT && DATA.rel.SOCIETY_CONTENT[slug], DATA, `${t.nameHi} के लिए और सीखें`) +
               `<p><a href="/guide">मुफ़्त गाइड से सीखें</a> · <a href="/software">सभी समिति-प्रकार देखें</a></p>` +
               registerCta(),
@@ -521,7 +557,8 @@ function softwarePages(DATA) {
         jsonLd: [crumb([
           { name: 'Software', item: `${SITE}/software` },
           { name: title, item: url },
-        ]), softwareAppLd(url, description)],
+        ]), softwareAppLd(url, description),
+        ...(t && softwareFaqItems(DATA, t).length ? [DATA.softwareFaq.softwareFaqLd(softwareFaqItems(DATA, t), 'hi')] : [])],
       });
     }
   }

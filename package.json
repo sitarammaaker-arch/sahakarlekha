@@ -25,6 +25,7 @@
     "test:account-code": "node scripts/test-account-code.mjs",
     "test:calc": "node scripts/test-calculators.mjs",
     "test:nav": "node scripts/test-nav.mjs",
+    "test:software-pages": "node scripts/test-software-pages.mjs",
     "test:jurisdiction": "node scripts/test-jurisdiction.mjs",
     "test:jurisdiction-packs": "node scripts/test-jurisdiction-packs.mjs",
     "test:money": "node scripts/test-money.mjs",
