@@ -679,6 +679,9 @@ export interface Loan {
   isDeleted?: boolean;   // ECR-02 / RULE-5: soft-delete — retain the loan register row for audit, hide from the app.
   voucherId?: string;    // P0-3 (L3): id of the auto-generated disbursement voucher, so deleteLoan cancels exactly it instead of a fragile narration-substring match.
   sureties?: LoanSurety[];   // late-added jsonb column (migration 169) — saved in step 2, never in the base upsert (RULE 1).
+  /** Monthly PRINCIPAL instalment fixed for this loan (interest is charged on top). Unset / 0 = not fixed: the
+   *  recovery list then derives equal instalments over the loan's term. Late-added column (migration 170), step 2. */
+  monthlyInstallment?: number | null;
 }
 
 // ── Deposits (Core for Credit/PACS) — SB / FD / RD / Pigmy / Compulsory ────────

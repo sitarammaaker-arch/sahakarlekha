@@ -779,6 +779,7 @@ var loan = {
     num3("interestRate", "Interest Rate %", "\u092C\u094D\u092F\u093E\u091C \u0926\u0930 %"),
     c5("disbursementDate", "Disbursement Date", "\u0935\u093F\u0924\u0930\u0923 \u0924\u093F\u0925\u093F", { type: "date" }),
     c5("dueDate", "Due Date", "\u0926\u0947\u092F \u0924\u093F\u0925\u093F", { type: "date" }),
+    money5("monthlyInstallment", "Monthly Instalment", "\u092E\u093E\u0938\u093F\u0915 \u0915\u093F\u0938\u094D\u0924"),
     // Running total — reconcile against repayment vouchers, not this column.
     internal5("repaidAmount", "Repaid (cached)", "\u091A\u0941\u0915\u093E\u092F\u093E \u0917\u092F\u093E (\u0915\u0948\u0936\u094D\u0921)", { type: "currency" }),
     c5("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),

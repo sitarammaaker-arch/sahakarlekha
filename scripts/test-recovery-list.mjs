@@ -71,6 +71,21 @@ ok(R.loanPrincipalDue(l3, '2026-05') === 3333.33 && R.loanPrincipalDue(l3, '2026
 ok(R.loanInstalmentCount({ disbursementDate: '2026-04-10', dueDate: '2026-04-25' }) === 1, 'a loan due in the same month is one instalment');
 ok(R.loanInstalmentCount({ disbursementDate: '2026-04-10', dueDate: '' }) === 1, 'no due date → one instalment');
 
+// 2b. A monthly instalment FIXED on the loan (column 170) replaces the derived one; a loan without one is unchanged.
+ok(R.hasFixedInstalment({ monthlyInstallment: 1500 }) && !R.hasFixedInstalment({}) && !R.hasFixedInstalment({ monthlyInstallment: null }) && !R.hasFixedInstalment({ monthlyInstallment: 0 }), 'fixed = a positive amount; missing / null / 0 = not fixed');
+ok(R.loanInstalment(loan({ monthlyInstallment: 1500 })) === 1500 && R.derivedLoanInstalment(loan({ monthlyInstallment: 1500 })) === 1000, 'the fixed instalment wins over the derived 1,000');
+ok(R.loanInstalment(loan()) === 1000 && R.loanInstalment(loan({ monthlyInstallment: null })) === 1000 && R.loanInstalment(loan({ monthlyInstallment: 0 })) === 1000, 'no fixed instalment → derived, exactly as before');
+ok(R.loanInstalment(loan({ monthlyInstallment: 99999 })) === 12000, 'an instalment above the loan is capped at the loan');
+const fx = loan({ monthlyInstallment: 1500 });
+ok(R.loanPrincipalDue(fx, '2026-04') === 0 && R.loanPrincipalDue(fx, '2026-05') === 1500 && R.loanPrincipalDue(fx, '2026-07') === 4500, 'fixed 1,500 a month from the month after disbursement');
+ok(R.loanPrincipalDue(loan({ monthlyInstallment: 1500, repaidAmount: 3000 }), '2026-07') === 1500, 'principal repaid is taken off the fixed schedule too');
+ok(R.loanPrincipalDue(fx, '2026-12') === 12000, 'fixed 1,500 × 8 months reaches the whole loan — never more than the outstanding');
+ok(R.loanPrincipalDue(loan({ monthlyInstallment: 500, repaidAmount: 1000 }), '2026-07') === 500, 'a small fixed instalment: 3 × 500 due, 1,000 repaid → 500');
+ok(R.loanPrincipalDue(loan({ monthlyInstallment: 500, repaidAmount: 1000 }), '2027-04') === 11000, 'a small instalment does not stretch the term: from the due month the whole outstanding is due');
+ok(R.loanPrincipalDue(loan({ monthlyInstallment: 1500, status: 'cleared', repaidAmount: 12000 }), '2026-07') === 0, 'a cleared loan owes nothing, fixed instalment or not');
+const fixedRows = R.recoveryRows({ month: '2026-07', depositAccounts: [], depositTransactions: [], loans: [fx, loan({ id: 'L9', loanNo: 'LN/009', memberId: 'm9' })], interestDueOf: () => 0 });
+ok(fixedRows.find((r) => r.memberId === 'm1').loanPrincipal === 4500 && fixedRows.find((r) => r.memberId === 'm9').loanPrincipal === 3000, 'in one list: a fixed-instalment loan and a derived one, each by its own rule');
+
 // 3. Rows.
 const depositAccounts = [
   { id: 'a1', memberId: 'm1', depositType: 'CD', status: 'active', openDate: '2026-09-05', installmentAmount: 500 },
@@ -117,7 +132,7 @@ ok(t.totals[4] === tot.compulsoryDeposit && t.totals[5] === tot.loanPrincipal &&
 ok(tot.total === Math.round(rows.reduce((s, r) => s + r.total, 0) * 100) / 100, 'grand total = sum of member totals');
 ok(/November 2026/.test(t.subtitle) && /2026-11-30/.test(t.subtitle), 'subtitle names the month and the as-on date');
 ok(t.notes.some((n) => /demand only/i.test(n.en) && /केवल माँग/.test(n.hi)), 'says it is a demand only');
-ok(t.notes.some((n) => /equal monthly instalments/i.test(n.en)), 'says how the loan instalment is derived');
+ok(t.notes.some((n) => /monthly instalment entered on the loan/i.test(n.en) && /equal monthly instalments/i.test(n.en) && /ऋण पर दर्ज मासिक किस्त/.test(n.hi)), 'says the instalment is the one on the loan, and how it is derived where none is entered');
 ok(t.notes.some((n) => /not yet accrued is not included/i.test(n.en)), 'says un-accrued interest is not included');
 
 // 5. Items (the unit the recovery is posted in) — and the rows are built from them.
@@ -169,6 +184,26 @@ ok(/\{canEdit && <Button size="sm" className="gap-1" onClick=\{startRlPosting\}/
 const hook = src('src/hooks/useLoanRepayment.ts');
 ok(/if \(society\.fyLocked\)[^\n]*return false;/.test(hook) && /return true;\n  \};\n  return recordRepayment;/.test(hook), 'shared repayment: FY-lock guard, true only at the end');
 ok(/const recordRepayment = useLoanRepayment\(dueOf\);/.test(src('src/pages/LoanRegister.tsx')), 'Loan Register uses the same routine');
+
+// 8. Monthly instalment (column 170): RULE 1 wiring, migration, form.
+const dcx = src('src/contexts/DataContext.tsx').replace(/\r\n/g, '\n');
+const addL = dcx.slice(dcx.indexOf('const addLoan = useCallback('), dcx.indexOf('// M16: Create disbursement voucher'));
+const updL = dcx.slice(dcx.indexOf('const updateLoan = useCallback('), dcx.indexOf('const deleteLoan = useCallback('));
+const svI = dcx.slice(dcx.indexOf('const saveLoanInstalment ='), dcx.indexOf('const addLoan = useCallback('));
+ok(/monthlyInstallment: loanInstalmentToSave, \.\.\.loanBase \} = loanToSave;/.test(addL) && /upsert\(withSoc\(loanBase\)\)/.test(addL), 'addLoan: the instalment is not in the base upsert');
+ok(/if \(!error && loanInstalmentToSave\) saveLoanInstalment\(newLoan\.id, loanInstalmentToSave, null\);/.test(addL), 'addLoan: instalment saved in step 2, only when one was entered');
+ok(/monthlyInstallment: updatedInstalment, \.\.\.updatedBase \} = updated;/.test(updL) && /upsert\(withSoc\(updatedBase\)\)/.test(updL), 'updateLoan: the instalment is not in the base upsert');
+ok(/if \(!error && instalmentChanged && \(updatedInstalment \?\? null\) !== \(before\.monthlyInstallment \?\? null\)\) saveLoanInstalment\(/.test(updL), 'updateLoan: step 2 only when the instalment really changed (no write, no error, on a database without the column)');
+ok(/\.update\(\{ monthlyInstallment \}\)\.eq\('id', loanId\)\.eq\('society_id', societyIdRef\.current\)/.test(svI) && !/sureties/.test(svI.slice(0, svI.indexOf('const cleanInstalment'))), 'its own update — never in the same write as the sureties');
+ok(/monthlyInstallment: restore \} : l\)\)/.test(svI) && /migration 170/.test(svI) && /variant: 'destructive', duration: 15000/.test(svI), 'a failed step 2 restores the screen and names migration 170');
+ok(/if \(instalment === null \|\| instalment <= amount \+ 0\.005\) return false;/.test(svI) && /refuseBadInstalment\(cleanInstalment\(data\.monthlyInstallment\), data\.amount\)/.test(addL), 'an instalment above the loan amount is refused before the loan is created');
+const mig170 = src('supabase/migrations/170_loan_monthly_instalment.sql');
+ok(/alter table public\.loans add column if not exists "monthlyInstallment" numeric;/.test(mig170) && /^begin;/m.test(mig170) && /^commit;/m.test(mig170), 'migration 170 adds the column, idempotently, in a transaction');
+ok(/drop column if exists "monthlyInstallment";/.test(src('supabase/migrations/170_loan_monthly_instalment_down.sql')) && /alter table loans add column if not exists "monthlyInstallment" numeric;/.test(src('supabase-tables.sql')), 'down migration and supabase-tables.sql know the column');
+ok(/money\('monthlyInstallment', 'Monthly Instalment', 'मासिक किस्त'\)/.test(src('src/lib/export/entities/lending.ts')), 'export registry carries the column (a backup keeps it)');
+const lrx = src('src/pages/LoanRegister.tsx');
+ok((lrx.match(/monthlyInstallment: Number\(form\.monthlyInstallment\) > 0 \? Number\(form\.monthlyInstallment\) : null,/g) || []).length === 2 && (lrx.match(/if \(instalmentError\(\)\) return;/g) || []).length === 2, 'the loan form passes the instalment on add and edit, blank as "not fixed"');
+ok(/monthlyInstallment: Number\(l\.monthlyInstallment\) > 0 \? String\(l\.monthlyInstallment\) : '',/.test(lrx), 'the edit form loads it');
 
 console.log(`\nrecovery-list: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

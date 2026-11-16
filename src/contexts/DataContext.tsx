@@ -6253,11 +6253,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
+  // The monthly instalment is its own late-added column (170) and its own step-2 write: one un-migrated column must
+  // not take the sureties (169) down with it, so the two are never sent in the same update.
+  const saveLoanInstalment = (loanId: string, monthlyInstallment: number | null, restore: Loan['monthlyInstallment']) => {
+    supabase.from('loans').update({ monthlyInstallment }).eq('id', loanId).eq('society_id', societyIdRef.current).then(({ error }) => {
+      if (!error) return;
+      reportError('write-partial', error.message, { at: 'Loan monthly instalment', loanId });
+      loansRef.current = loansRef.current.map(l => l.id === loanId ? { ...l, monthlyInstallment: restore } : l);
+      setLoansState(prev => prev.map(l => l.id === loanId ? { ...l, monthlyInstallment: restore } : l));
+      toastRef.current({ title: tr('मासिक किस्त सेव नहीं हुई', 'Monthly instalment not saved'), description: tr(`ऋण सुरक्षित है, पर मासिक किस्त cloud पर नहीं गई — ${error.message}. अगर यह "column monthlyInstallment" कहता है तो Supabase में migration 170 चलानी बाकी है। किस्त दोबारा भरें।`, `The loan is safe, but the monthly instalment did not reach the cloud — ${error.message}. If it mentions "column monthlyInstallment", migration 170 has not been run in Supabase yet. Enter the instalment again.`), variant: 'destructive', duration: 15000 });
+    });
+  };
+  /** A fixed instalment is a positive amount no larger than the loan; anything else means "not fixed" (null). */
+  const cleanInstalment = (v: Loan['monthlyInstallment']): number | null => { const n = Number(v); return Number.isFinite(n) && n > 0 ? toRupees(toMinor(n)) : null; };
+  const refuseBadInstalment = (instalment: number | null, amount: number): boolean => {
+    if (instalment === null || instalment <= amount + 0.005) return false;
+    toastRef.current({ title: tr('मासिक किस्त ठीक करें', 'Fix the monthly instalment'), description: tr('मासिक किस्त ऋण राशि से ज़्यादा नहीं हो सकती। ऋण सेव नहीं हुआ।', 'The monthly instalment cannot be more than the loan amount. The loan was not saved.'), variant: 'destructive', duration: 10000 });
+    return true;
+  };
+
   const addLoan = useCallback((data: Omit<Loan, 'id' | 'loanNo' | 'createdAt'>): Loan => {
     if (guardFYLocked()) return { ...data, id: '' } as unknown as Loan;
     if (refuseNonLiveMember(data.memberId, tr('ऋण', 'Loan'))) return { ...data, id: '' } as unknown as Loan;
     if (refuseBadSureties(data.memberId, data.sureties)) return { ...data, id: '' } as unknown as Loan;
-    data = { ...data, sureties: normalizeSureties(data.sureties) };
+    if (refuseBadInstalment(cleanInstalment(data.monthlyInstallment), data.amount)) return { ...data, id: '' } as unknown as Loan;
+    data = { ...data, sureties: normalizeSureties(data.sureties), monthlyInstallment: cleanInstalment(data.monthlyInstallment) };
     const fy = society.financialYear;
     const maxNum = loansRef.current.filter(l => l.loanNo?.includes(fy)).reduce((max, l) => {
       const m = l.loanNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
@@ -6274,9 +6294,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         loansRef.current = loansRef.current.map(l => l.id === newLoan.id ? loanToSave : l);
         setLoansState(prev => prev.map(l => l.id === newLoan.id ? loanToSave : l));
       }
-      const { sureties: loanSuretiesToSave, ...loanBase } = loanToSave;   // step 1: base columns only
+      const { sureties: loanSuretiesToSave, monthlyInstallment: loanInstalmentToSave, ...loanBase } = loanToSave;   // step 1: base columns only
       supabase.from('loans').upsert(withSoc(loanBase)).then(({ error }) => {
         if (!error && loanSuretiesToSave && loanSuretiesToSave.length > 0) saveLoanSureties(newLoan.id, loanSuretiesToSave, []);   // step 2
+        if (!error && loanInstalmentToSave) saveLoanInstalment(newLoan.id, loanInstalmentToSave, null);   // step 2 (own write)
         if (error) {
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           loansRef.current = loansRef.current.filter(l => l.id !== newLoan.id);
@@ -6333,11 +6354,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const suretiesChanged = 'sureties' in data;
     if (suretiesChanged && refuseBadSureties(data.memberId ?? before.memberId, data.sureties)) return;
     if (suretiesChanged) data = { ...data, sureties: normalizeSureties(data.sureties) };
+    const instalmentChanged = 'monthlyInstallment' in data;
+    if (instalmentChanged) {
+      if (refuseBadInstalment(cleanInstalment(data.monthlyInstallment), data.amount ?? before.amount)) return;
+      data = { ...data, monthlyInstallment: cleanInstalment(data.monthlyInstallment) };
+    }
     const updated = { ...before, ...data };
     setLoansState(prev => prev.map(l => l.id === id ? updated : l));
-    const { sureties: updatedSureties, ...updatedBase } = updated;   // step 1: base columns only (sureties = column 169)
+    const { sureties: updatedSureties, monthlyInstallment: updatedInstalment, ...updatedBase } = updated;   // step 1: base columns only (169, 170 go in step 2)
     supabase.from('loans').upsert(withSoc(updatedBase)).then(({ error }) => {
       if (!error && suretiesChanged) saveLoanSureties(id, updatedSureties ?? [], before.sureties);   // step 2
+      if (!error && instalmentChanged && (updatedInstalment ?? null) !== (before.monthlyInstallment ?? null)) saveLoanInstalment(id, updatedInstalment ?? null, before.monthlyInstallment);   // step 2 (own write), only when it really changed
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setLoansState(prev => prev.map(l => l.id === id ? before : l));   // RULE 1: roll back to prior state

@@ -46,6 +46,7 @@ const EMPTY_FORM = {
   status: 'active' as LoanStatus,
   security: '',
   sureties: [] as LoanSurety[],
+  monthlyInstallment: '',
 };
 
 /** Select value for a surety who is not a member (typed name). */
@@ -104,6 +105,11 @@ const LoanForm: React.FC<LoanFormProps> = ({ form, setForm, hi, members, onSubmi
       <div className="space-y-1">
         <Label>{hi ? 'देय तिथि *' : 'Due Date *'}</Label>
         <Input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
+      </div>
+      <div className="space-y-1">
+        <Label>{hi ? 'मासिक किस्त — मूलधन (₹)' : 'Monthly instalment — principal (₹)'}</Label>
+        <Input type="number" min="0" step="0.01" value={form.monthlyInstallment} onChange={e => setForm(f => ({ ...f, monthlyInstallment: e.target.value }))} placeholder={hi ? 'खाली = बराबर किस्तें' : 'blank = equal instalments'} />
+        <p className="text-[11px] text-muted-foreground">{hi ? 'वसूली सूची इसी किस्त से बनती है; ब्याज अलग से जुड़ता है। खाली छोड़ने पर ऋण को देय तिथि तक बराबर किस्तों में बाँटा जाता है।' : 'The recovery list uses this instalment; interest is added separately. Left blank, the loan is spread in equal instalments up to its due date.'}</p>
       </div>
       <div className="space-y-1">
         <Label>{hi ? 'स्थिति' : 'Status'}</Label>
@@ -227,6 +233,13 @@ const LoanRegister: React.FC = () => {
     return true;
   };
 
+  // The data layer refuses this too; the form says it first.
+  const instalmentError = (): boolean => {
+    if (!(Number(form.monthlyInstallment) > Number(form.amount) + 0.005)) return false;
+    toast({ title: hi ? 'मासिक किस्त ऋण राशि से ज़्यादा नहीं हो सकती' : 'The monthly instalment cannot be more than the loan amount', variant: 'destructive' });
+    return true;
+  };
+
   // Surety register: loan-wise and surety-wise, from the loans on screen (live loans only).
   const [suretyOpen, setSuretyOpen] = useState(false);
   const [suretyView, setSuretyView] = useState<'loan' | 'surety'>('loan');
@@ -245,8 +258,10 @@ const LoanRegister: React.FC = () => {
       return;
     }
     if (suretyError(form.memberId, form.sureties)) return;
+    if (instalmentError()) return;
     const created = addLoan({
       sureties: normalizeSureties(form.sureties),
+      monthlyInstallment: Number(form.monthlyInstallment) > 0 ? Number(form.monthlyInstallment) : null,
       memberId: form.memberId,
       loanType: form.loanType,
       purpose: form.purpose,
@@ -272,8 +287,10 @@ const LoanRegister: React.FC = () => {
       return;
     }
     if (suretyError(form.memberId, form.sureties)) return;
+    if (instalmentError()) return;
     updateLoan(editLoan.id, {
       sureties: normalizeSureties(form.sureties),
+      monthlyInstallment: Number(form.monthlyInstallment) > 0 ? Number(form.monthlyInstallment) : null,
       memberId: form.memberId,
       loanType: form.loanType,
       purpose: form.purpose,
@@ -303,6 +320,7 @@ const LoanRegister: React.FC = () => {
       status: l.status,
       security: l.security,
       sureties: loanSureties(l),
+      monthlyInstallment: Number(l.monthlyInstallment) > 0 ? String(l.monthlyInstallment) : '',
     });
   };
 
