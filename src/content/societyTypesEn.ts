@@ -33,7 +33,7 @@ export const SOCIETY_TYPES_EN: Record<string, SocietyTypeEn> = {
     solves: [
       'Compulsory (thrift) deposit — a separate account for each member, one monthly collection for everyone, and arrears in view',
       'Deposit accounts — savings, FD, RD and pigmy; a voucher is posted for every deposit and withdrawal',
-      'Loan register and interest calculation on loans; reminders on WhatsApp for dues',
+      'Loan register and interest calculation; a monthly recovery list — deposit, loan instalment and interest on one sheet (PDF/Excel)',
       'Share register, nomination register, Trial Balance, Balance Sheet and audit certificate',
     ],
   },

@@ -1,0 +1,124 @@
+// Monthly recovery list (2026-11-16) — imports the REAL helpers via the '@/' loader.
+//
+// Guards:
+//   - compulsory deposit due = the same arrears the collection sheet shows, as of the month's last day;
+//   - loan principal due = equal monthly instalments fallen due − principal repaid, never above the outstanding;
+//     nothing in the disbursement month; the whole outstanding from the due month on;
+//   - cleared / deleted loans and closed deposit accounts never appear;
+//   - interest comes only from what the caller says is accrued and unpaid; a member who owes nothing is left out;
+//   - the table's totals equal the sum of its rows, and its notes say the list is a demand only.
+//
+// Run: node scripts/test-recovery-list.mjs   (npm run test:recovery-list)
+import { register } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve as pathResolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = pathResolve(HERE, '..', 'src');
+const abs = (rel) => pathToFileURL(pathResolve(HERE, rel)).href;
+
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+      import { existsSync } from 'node:fs';
+      import { fileURLToPath, pathToFileURL } from 'node:url';
+      import { resolve as PR } from 'node:path';
+      const SRC = ${JSON.stringify(SRC)};
+      const EXTS = ['.ts', '.tsx', '.js', '.mjs', '.cjs', '.json'];
+      export async function resolve(spec, ctx, next) {
+        if (spec.startsWith('@/')) {
+          const b = PR(SRC, spec.slice(2));
+          for (const q of [b + '.ts', b + '.tsx', b + '/index.ts', b]) if (existsSync(q)) return { url: pathToFileURL(q).href, shortCircuit: true };
+        }
+        if (spec.startsWith('.') && !EXTS.some((e) => spec.endsWith(e))) {
+          for (const q of [spec + '.ts', spec + '.tsx', spec + '/index.ts']) { const u = new URL(q, ctx.parentURL); if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }; }
+        }
+        return next(spec, ctx);
+      }
+    `),
+);
+
+const R = await import(abs('../src/lib/recoveryList.ts'));
+const CD = await import(abs('../src/lib/compulsoryDeposit.ts'));
+
+let pass = 0, fail = 0;
+const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  ✗', msg); } };
+
+// 1. Month helpers.
+ok(R.monthEnd('2026-11') === '2026-11-30' && R.monthEnd('2026-02') === '2026-02-28' && R.monthEnd('2028-02') === '2028-02-29' && R.monthEnd('2026-12') === '2026-12-31', 'monthEnd, including a leap February');
+ok(R.monthLabel('2026-11', false) === 'November 2026' && R.monthLabel('2026-11', true) === 'नवंबर 2026', 'monthLabel in both languages');
+
+// 2. Loan instalment: 12,000 disbursed 2026-04-10, due 2027-04-10 → 12 instalments of 1,000 from May.
+const loan = (o = {}) => ({ id: 'L1', loanNo: 'LN/001', memberId: 'm1', amount: 12000, repaidAmount: 0, disbursementDate: '2026-04-10', dueDate: '2027-04-10', status: 'active', ...o });
+ok(R.loanInstalmentCount(loan()) === 12 && R.loanInstalment(loan()) === 1000, '12 equal instalments of 1,000');
+ok(R.loanPrincipalDue(loan(), '2026-03') === 0, 'nothing before disbursement');
+ok(R.loanPrincipalDue(loan(), '2026-04') === 0, 'nothing in the month of disbursement');
+ok(R.loanPrincipalDue(loan(), '2026-05') === 1000, 'first instalment the month after');
+ok(R.loanPrincipalDue(loan(), '2026-07') === 3000, 'three missed instalments add up');
+ok(R.loanPrincipalDue(loan({ repaidAmount: 2000 }), '2026-07') === 1000, 'repaid principal is taken off');
+ok(R.loanPrincipalDue(loan({ repaidAmount: 5000 }), '2026-07') === 0, 'paid ahead → nothing due, never negative');
+ok(R.loanPrincipalDue(loan({ repaidAmount: 11500 }), '2027-01') === 0, 'paid ahead near the end → nothing due yet');
+ok(R.loanPrincipalDue(loan({ repaidAmount: 11500 }), '2027-04') === 500, 'from the due month the whole outstanding is due');
+ok(R.loanPrincipalDue(loan({ repaidAmount: 4000 }), '2027-09') === 8000, 'after the due date: all of the outstanding');
+ok(R.loanPrincipalDue(loan({ status: 'cleared', repaidAmount: 12000 }), '2026-07') === 0, 'a cleared loan owes nothing');
+ok(R.loanPrincipalDue(loan({ isDeleted: true }), '2026-07') === 0, 'a deleted loan owes nothing');
+ok(R.loanPrincipalDue(loan({ repaidAmount: 12000 }), '2026-07') === 0, 'fully repaid owes nothing even if the status was not updated');
+ok(R.loanPrincipalDue(loan({ status: 'overdue' }), '2026-07') === 3000, 'an overdue loan is still listed');
+// Uneven division: 10,000 over 3 months → 3,333.33 a month, and the last month takes the remainder.
+const l3 = loan({ amount: 10000, dueDate: '2026-07-10' });
+ok(R.loanInstalment(l3) === 3333.33, 'instalment rounded to paise');
+ok(R.loanPrincipalDue(l3, '2026-05') === 3333.33 && R.loanPrincipalDue(l3, '2026-06') === 6666.66 && R.loanPrincipalDue(l3, '2026-07') === 10000, 'the due month collects the rounding remainder');
+ok(R.loanInstalmentCount({ disbursementDate: '2026-04-10', dueDate: '2026-04-25' }) === 1, 'a loan due in the same month is one instalment');
+ok(R.loanInstalmentCount({ disbursementDate: '2026-04-10', dueDate: '' }) === 1, 'no due date → one instalment');
+
+// 3. Rows.
+const depositAccounts = [
+  { id: 'a1', memberId: 'm1', depositType: 'CD', status: 'active', openDate: '2026-09-05', installmentAmount: 500 },
+  { id: 'a2', memberId: 'm2', depositType: 'CD', status: 'active', openDate: '2026-11-01', installmentAmount: 300 },
+  { id: 'a3', memberId: 'm3', depositType: 'CD', status: 'closed', openDate: '2026-04-01', installmentAmount: 400 },
+  { id: 'a4', memberId: 'm4', depositType: 'SB', status: 'active', openDate: '2026-04-01', installmentAmount: 900 },
+];
+const depositTransactions = [
+  { depositAccountId: 'a1', date: '2026-09-05', txnType: 'open', amount: 500 },
+  { depositAccountId: 'a2', date: '2026-11-01', txnType: 'open', amount: 300 },
+];
+const loans = [
+  loan(),                                                              // m1: 7 instalments by Nov = 7,000
+  loan({ id: 'L2', loanNo: 'LN/002', memberId: 'm5', amount: 6000, disbursementDate: '2026-10-01', dueDate: '2027-04-01' }),   // m5: 1,000
+  loan({ id: 'L3', loanNo: 'LN/003', memberId: 'm6', status: 'cleared', repaidAmount: 12000 }),
+  loan({ id: 'L4', loanNo: 'LN/004', memberId: 'm1', amount: 2400, disbursementDate: '2026-10-15', dueDate: '2027-10-15' }),   // m1 second loan: 200
+];
+const interest = { L1: 150.5, L2: 0, L3: 99, L4: 10 };
+const rows = R.recoveryRows({ month: '2026-11', depositAccounts, depositTransactions, loans, interestDueOf: (id) => interest[id] ?? 0 });
+const by = Object.fromEntries(rows.map((r) => [r.memberId, r]));
+ok(Object.keys(by).sort().join() === 'm1,m5', 'only members who owe something: m2 is paid up, m3 closed, m4 savings only, m6 cleared');
+ok(by.m1.compulsoryDeposit === 1000, 'm1 compulsory deposit: Sep–Nov due 1,500, paid 500');
+ok(by.m1.compulsoryDeposit === CD.compulsoryArrears(depositAccounts[0], depositTransactions, '2026-11-30').arrears, 'same figure as the collection sheet');
+ok(by.m1.loanPrincipal === 7200 && by.m1.loanInterest === 160.5 && by.m1.loanNos.join() === 'LN/001,LN/004', 'm1: two loans added together');
+ok(by.m1.total === 8360.5, 'm1 total = deposit + principal + interest');
+ok(by.m5.compulsoryDeposit === 0 && by.m5.loanPrincipal === 1000 && by.m5.loanInterest === 0 && by.m5.total === 1000, 'm5: a loan only');
+ok(!rows.some((r) => r.memberId === 'm6'), 'interest on a cleared loan is not demanded');
+// A loan with only interest due (principal paid ahead) still appears.
+const intOnly = R.recoveryRows({ month: '2026-05', depositAccounts: [], depositTransactions: [], loans: [loan({ repaidAmount: 5000 })], interestDueOf: () => 75 });
+ok(intOnly.length === 1 && intOnly[0].loanPrincipal === 0 && intOnly[0].loanInterest === 75 && intOnly[0].total === 75, 'interest alone puts the member on the list');
+ok(R.recoveryRows({ month: '2026-11', depositAccounts: [], depositTransactions: [], loans: [], interestDueOf: () => 0 }).length === 0, 'nothing owed → empty list');
+// An earlier month shows that month's position, not today's.
+const sep = R.recoveryRows({ month: '2026-09', depositAccounts, depositTransactions, loans, interestDueOf: () => 0 });
+ok(sep.length === 1 && sep[0].memberId === 'm1' && sep[0].compulsoryDeposit === 0 && sep[0].loanPrincipal === 5000, 'September: deposit paid for the month, five loan instalments, later loans not yet disbursed');
+
+// 4. Table.
+const names = { m1: { memberNo: 'M010', name: 'Member Ten' }, m5: { memberNo: 'M002', name: 'Member Two' } };
+const t = R.recoveryListTable(rows, '2026-11', (id) => names[id]);
+ok(t.columns.length === 8 && t.rowsEn.length === 2, 'eight columns, one row per member');
+ok(t.rowsEn[0][1] === 'M002' && t.rowsEn[1][1] === 'M010' && t.rowsEn[0][0] === 1 && t.rowsEn[1][0] === 2, 'sorted by member number, serial numbers follow');
+const tot = R.recoveryTotals(rows);
+ok(tot.compulsoryDeposit === 1000 && tot.loanPrincipal === 8200 && tot.loanInterest === 160.5 && tot.total === 9360.5, 'totals');
+ok(t.totals[4] === tot.compulsoryDeposit && t.totals[5] === tot.loanPrincipal && t.totals[6] === tot.loanInterest && t.totals[7] === tot.total, 'the totals row is the sum of the rows');
+ok(tot.total === Math.round(rows.reduce((s, r) => s + r.total, 0) * 100) / 100, 'grand total = sum of member totals');
+ok(/November 2026/.test(t.subtitle) && /2026-11-30/.test(t.subtitle), 'subtitle names the month and the as-on date');
+ok(t.notes.some((n) => /demand only/i.test(n.en) && /केवल माँग/.test(n.hi)), 'says it is a demand only');
+ok(t.notes.some((n) => /equal monthly instalments/i.test(n.en)), 'says how the loan instalment is derived');
+ok(t.notes.some((n) => /not yet accrued is not included/i.test(n.en)), 'says un-accrued interest is not included');
+
+console.log(`\nrecovery-list: ${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);
