@@ -12,8 +12,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from '@/components/ui/dialog';
-import { Lock, Mail, Eye, EyeOff, Languages, AlertCircle, KeyRound, HelpCircle, ShieldCheck, PlayCircle, MessageCircle } from 'lucide-react';
+import { Lock, Mail, Languages, AlertCircle, KeyRound, HelpCircle, ShieldCheck, PlayCircle, MessageCircle } from 'lucide-react';
 import { WHATSAPP_NUMBER } from '@/lib/socials';
+import { PasswordToggle } from '@/components/PasswordToggle';
 import { LOGOUT_REASON_KEY, parseLogoutReason, type LogoutReason } from '@/lib/auth/loginFailure';
 import { NEXT_PARAM, safeNext, withNext } from '@/lib/auth/entryContext';
 import { needsAppData } from '@/lib/appDataPaths';
@@ -103,6 +104,7 @@ const Login: React.FC = () => {
           'This login is not active — ask your society Admin to activate it.'));
       } else {
         setError(language === 'hi' ? 'गलत ईमेल या पासवर्ड' : 'Invalid email or password');
+        document.getElementById('password')?.focus();
       }
     } catch {
       setError(L('लॉगिन नहीं हो पाया — इंटरनेट कनेक्शन देखकर दोबारा कोशिश करें।', 'Could not sign in — check your connection and try again.'));
@@ -322,7 +324,12 @@ const Login: React.FC = () => {
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="email"
+                    name="email"
                     type="email"
+                    autoComplete="username"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="your@email.com"
@@ -338,7 +345,7 @@ const Login: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => { setShowForgotPassword(true); setFpSubmitted(false); setFpEmail(''); }}
-                    className="text-xs text-primary hover:underline font-medium"
+                    className="-my-3 -mr-1 px-1 py-3 text-xs text-primary hover:underline font-medium"
                   >
                     {language === 'hi' ? 'पासवर्ड भूल गए?' : 'Forgot Password?'}
                   </button>
@@ -347,20 +354,16 @@ const Login: React.FC = () => {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="password"
+                    name="password"
+                    autoComplete="current-password"
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="pl-10 pr-10"
+                    className="pl-10 pr-12"
                     required
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+                  <PasswordToggle shown={showPassword} onToggle={() => setShowPassword(v => !v)} hi={language === 'hi'} />
                 </div>
               </div>
 
@@ -380,7 +383,7 @@ const Login: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowForgotId(true)}
-                className="text-sm text-muted-foreground hover:text-primary hover:underline flex items-center gap-1 mx-auto"
+                className="text-sm text-muted-foreground hover:text-primary hover:underline flex items-center gap-1 mx-auto px-2 py-2.5"
               >
                 <HelpCircle className="h-3.5 w-3.5" />
                 {language === 'hi' ? 'User ID / ईमेल भूल गए?' : 'Forgot User ID / Email?'}
@@ -402,7 +405,7 @@ const Login: React.FC = () => {
           <a
             href="/#demo"
             onClick={() => trackEvent('cta_click', { location: 'login', target: 'demo' })}
-            className="inline-flex items-center gap-1 hover:text-primary hover:underline"
+            className="inline-flex items-center gap-1 py-2.5 hover:text-primary hover:underline"
           >
             <PlayCircle className="h-4 w-4" />
             {language === 'hi' ? '1 मिनट का डेमो देखें' : 'Watch the 1-minute demo'}
@@ -413,7 +416,7 @@ const Login: React.FC = () => {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => trackEvent('whatsapp_click', { location: 'login', page: '/login' })}
-              className="inline-flex items-center gap-1 hover:text-primary hover:underline"
+              className="inline-flex items-center gap-1 py-2.5 hover:text-primary hover:underline"
             >
               <MessageCircle className="h-4 w-4" />
               {language === 'hi' ? 'WhatsApp पर सहायता लें' : 'Get help on WhatsApp'}
@@ -445,11 +448,16 @@ const Login: React.FC = () => {
           {!fpSubmitted ? (
             <form onSubmit={handleForgotPasswordSubmit} className="space-y-4 pt-2">
               <div className="space-y-2">
-                <Label>{language === 'hi' ? 'ईमेल पता' : 'Email Address'}</Label>
+                <Label htmlFor="fp-email">{language === 'hi' ? 'ईमेल पता' : 'Email Address'}</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
+                    id="fp-email"
+                    name="email"
                     type="email"
+                    autoComplete="username"
+                    inputMode="email"
+                    autoCapitalize="none"
                     placeholder="your@email.com"
                     className="pl-10"
                     value={fpEmail}
