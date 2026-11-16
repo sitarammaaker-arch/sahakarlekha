@@ -5,8 +5,21 @@ import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { generateSecret, otpauthUri } from '@/lib/totp';
 import { isMfaPending } from '@/lib/auth/mfaPending';
 import { setAccountChanged, emailFromAuthStorage, isAccountMismatch } from '@/lib/connectivity/writeBlock';
+import {
+  classifyAuthError, idleRemainingMs, LAST_ACTIVITY_KEY, LOGOUT_REASON_KEY,
+  type LoginFailureReason, type LogoutReason,
+} from '@/lib/auth/loginFailure';
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes of inactivity
+const ACTIVITY_WRITE_EVERY_MS = 15 * 1000;  // how often activity is shared with the other tabs
+
+const isLocalhost = (): boolean =>
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+/** Tell the login page why this tab was signed out (read once there). Never throws. */
+function noteLogoutReason(reason: LogoutReason): void {
+  try { window.sessionStorage.setItem(LOGOUT_REASON_KEY, reason); } catch { /* storage blocked — no message */ }
+}
 
 // ECR-06 S3: single SSOT for the assignable role union — re-exported from types so the
 // AuthContext and UserManagement unions can never drift apart again.
@@ -35,8 +48,11 @@ export type MfaResult = { ok: true } | { ok: false; reason: 'bad-code' | 'save-f
  *  session can read nothing, so the user must reset their password to sign in (W-1).
  *  `reason: 'mfa_status_unavailable'` = the password was correct but the account's 2FA
  *  state could not be established, so the login is refused rather than completed without
- *  the gate. An unreadable flag is not the same as "no 2FA" (fail closed). */
-export type LoginResult = { status: 'ok' | 'mfa' | 'failed'; reason?: 'password_reset_required' | 'mfa_status_unavailable' };
+ *  the gate. An unreadable flag is not the same as "no 2FA" (fail closed).
+ *  The LoginFailureReason values say WHY sign-in itself failed (lib/auth/loginFailure): `network` /
+ *  `service` / `rate_limited` are not a wrong password and must not be shown as one; `inactive` = the
+ *  password was correct but this login has no active society user. */
+export type LoginResult = { status: 'ok' | 'mfa' | 'failed'; reason?: 'password_reset_required' | 'mfa_status_unavailable' | LoginFailureReason };
 
 interface AuthContextType {
   user: User | null;
@@ -228,10 +244,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAuthSession(null);
   }, []);
 
-  const resetTimer = useCallback(() => {
+  // Idle sign-out (audit 2026-11-16, S-2). It used to call doLogout only, which cleared this tab's screen
+  // but left the Supabase session in the browser — one reload and the user was back in. It now ends the
+  // session in THIS browser (scope 'local': other devices are untouched).
+  //
+  // Every tab shares that one session, so a tab left open in the background must not sign out the tab the
+  // user is working in: activity is shared through localStorage and the timer re-arms for whatever is left.
+  const lastActivityWriteRef = useRef(0);
+  const armIdleTimer = useCallback((delayMs: number) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(doLogout, SESSION_TIMEOUT_MS);
+    timeoutRef.current = setTimeout(() => {
+      let last: number | null = null;
+      try { last = Number(window.localStorage.getItem(LAST_ACTIVITY_KEY)); } catch { /* storage blocked */ }
+      const left = idleRemainingMs(last || null, Date.now(), SESSION_TIMEOUT_MS);
+      if (left > 0) { armIdleTimer(left); return; }   // another tab was active more recently
+      noteLogoutReason('idle');
+      supabase.auth.signOut({ scope: 'local' }).catch(() => { /* cleared locally regardless */ }).finally(doLogout);
+    }, delayMs);
   }, [doLogout]);
+
+  const resetTimer = useCallback(() => {
+    const now = Date.now();
+    if (now - lastActivityWriteRef.current > ACTIVITY_WRITE_EVERY_MS) {
+      lastActivityWriteRef.current = now;
+      try { window.localStorage.setItem(LAST_ACTIVITY_KEY, String(now)); } catch { /* storage blocked */ }
+    }
+    armIdleTimer(SESSION_TIMEOUT_MS);
+  }, [armIdleTimer]);
 
   // Restore Supabase Auth session on mount
   useEffect(() => {
@@ -250,12 +289,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // so a fresh login re-derives them from society_users. Skipped on localhost, where the DEV-only
         // demo users log in without a JWT by design. A valid production user always has a JWT at this
         // point, so they are unaffected; only a stale/forged app-session is cleared.
-        const onLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (!onLocalhost && getAuthSession()) doLogout();
+        if (!isLocalhost() && getAuthSession()) doLogout();
         return;
       }
       try {
-        const { data } = await supabase
+        const { data, error: rowError } = await supabase
           .from('society_users')
           .select('id, name, email, role, society_id, is_active, mfa_enabled, branch_id')
           .eq('email', email.trim().toLowerCase())   // stored emails are lower-case (mig 097)
@@ -273,7 +311,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Not a society user — may be a platform super-admin. P0-3: derive this from the
         // VERIFIED JWT session (is_platform_admin RPC), never from the restored localStorage
         // flag. A stale/forged localStorage `societyId:'PLATFORM'` is corrected here.
-        const isSA = await checkSuperAdmin(email);
+        // Both reads are checked for an ERROR separately from "no": a failed request proves nothing, so
+        // it keeps the session as the catch below does; only two clean "no" answers end it.
+        const { data: saData, error: saError } = await supabase.rpc('is_platform_admin');
+        const isSA = !saError && saData === true;
         if (isSA) {
           const u: User = {
             id: session!.user.id,
@@ -287,6 +328,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
         } else {
           setIsSuperAdmin(false);
+          // Audit 2026-11-16 (S-7 / J-8): a valid login with NO active society user and no platform-admin
+          // row (the user was deactivated, or the society_users email no longer matches). The app used to
+          // keep showing the shell from the old localStorage session. End it and say why on /login.
+          if (!rowError && !saError && getAuthSession()) {
+            noteLogoutReason('inactive');
+            await supabase.auth.signOut({ scope: 'local' }).catch(() => { /* cleared locally regardless */ });
+            doLogout();
+          }
         }
       } catch {
         // Supabase unreachable — keep localStorage session
@@ -406,11 +455,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [completeLogin]);
 
   const login = async (email: string, password: string): Promise<LoginResult> => {
+    // Why sign-in failed, if it does. `credentials` unless a call below proves otherwise — a dropped
+    // connection or a Supabase outage is not a wrong password (lib/auth/loginFailure).
+    let failure: LoginFailureReason = 'credentials';
+    const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+
     // 1. Try Supabase Auth (signInWithPassword — JWT based)
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (authError) failure = classifyAuthError(authError, online);
       if (!authError && authData.user) {
-        const { data: userData } = await supabase
+        const { data: userData, error: rowError } = await supabase
           .from('society_users')
           .select('id, name, email, role, society_id, is_active, mfa_enabled, branch_id')
           .eq('email', email.trim().toLowerCase())   // stored emails are lower-case (mig 097)
@@ -455,9 +510,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
           return { status: 'ok' };
         }
+
+        // The password was right, but this login is neither an active society user nor a platform admin.
+        // Do not leave the session signInWithPassword just minted in the browser (audit S-8), and do not
+        // call it a wrong password (J-8). If the society_users read itself failed, that proves nothing
+        // about the account — report the connection instead.
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => { /* session is refused regardless */ });
+        const rowFailure = rowError ? classifyAuthError(rowError, online) : null;
+        failure = rowFailure === null ? 'inactive' : rowFailure === 'credentials' ? 'service' : rowFailure;
       }
     } catch {
-      // Supabase unreachable — fall through
+      // A thrown request (not a resolved error) is a connection problem, never a wrong password.
+      failure = 'network';
     }
 
     // 2. (RETIRED — audit P0-1/P0-3, slice S3) The JWT-less verify_platform_admin fallback was
@@ -480,7 +544,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     //    the reset-flow messaging but is no longer emitted here.
 
     // 4. Demo users — ONLY on localhost (disabled in production for security)
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    if (isLocalhost()) {
       await new Promise(resolve => setTimeout(resolve, 400));
       const found = demoUsers.find(u => u.email === email && u.password === password);
       if (found) {
@@ -495,7 +559,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }
 
-    return { status: 'failed' };
+    return { status: 'failed', reason: failure };
   };
 
   const logout = useCallback(async () => {
@@ -515,14 +579,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const sendPasswordReset = async (email: string): Promise<{ success: boolean; isEmailSent: boolean }> => {
     try {
       // First try Supabase Auth reset (works if user is in Supabase Auth)
-      const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
-      console.info('[Auth] Password reset response:', { data, error: error?.message });
+      // (No console logging here: the response and the address do not belong in a shared computer's console.)
       if (!error) {
         return { success: true, isEmailSent: true };
       }
-      console.error('[Auth] Password reset error:', error.message);
 
       // If Supabase Auth fails (user might be on legacy plain-text auth),
       // try to sign them up in Supabase Auth first, then reset.
@@ -549,7 +612,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             password: tempPassword,
             options: { data: { name: legacyUser.name } },
           });
-          console.info('[Auth] Legacy user sign-up attempt:', { email, signUpError: signUpError?.message });
 
           if (!signUpError) {
             // Now try reset again
@@ -559,15 +621,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!retryError) {
               return { success: true, isEmailSent: true };
             }
-            console.error('[Auth] Retry reset error:', retryError.message);
           }
 
           // Even if Supabase Auth signup failed, the user can still use Admin reset
           return { success: true, isEmailSent: false };
         }
       }
-    } catch (err) {
-      console.error('[Auth] Password reset exception:', err);
+    } catch {
+      // network / unexpected — reported to the caller as "not sent" below
     }
     return { success: false, isEmailSent: false };
   };

@@ -15,6 +15,7 @@ import { Link } from '@/components/LocalLink';
 import { AlertTriangle, Clock } from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { LEGACY_NOTICE_DAYS, RENEWAL_NOTICE_DAYS, daysUntil, graceDaysLeft } from '@/lib/plans';
 
 /** Where a plan is bought (the plan card with the Razorpay buttons). */
@@ -24,6 +25,14 @@ const SubscriptionBanner: React.FC = () => {
   const { loading, plan, status, periodEnd } = useSubscription();
   const { language } = useLanguage();
   const hi = language === 'hi';
+  // Only an admin or secretary can open the plan page (rbac `userMgmt`, the same rule as the route). Every
+  // other user used to get a link that bounced them to the dashboard with "not available for your society"
+  // (audit 2026-11-16, J-7) — they are told who can act instead.
+  const { can } = useAuth();
+  const canBuy = can('userMgmt');
+  const action = (label: string, tone: string) => canBuy
+    ? <Link to={PLAN_PAGE} className={`ml-auto font-medium underline ${tone}`}>{label}</Link>
+    : <span className={`ml-auto font-medium ${tone}`}>{hi ? 'Plan लेने के लिए अपने Admin से कहें' : 'Ask your Admin to get a plan'}</span>;
 
   if (loading) return null;
   if (plan === 'legacy' && !periodEnd) return null; // grandfathered with no end date → no banner
@@ -41,9 +50,7 @@ const SubscriptionBanner: React.FC = () => {
             ? `${endedHi} — नई एंट्री रुकी है। आपका डेटा सुरक्षित है; रिपोर्ट और export चालू हैं।`
             : `Your ${whatEn} has ended — new entries are paused. Your data is safe; reports and export still work.`}
         </span>
-        <Link to={PLAN_PAGE} className="ml-auto font-medium text-destructive underline">
-          {hi ? 'Plan लें' : 'Get a plan'}
-        </Link>
+        {action(hi ? 'Plan लें' : 'Get a plan', 'text-destructive')}
       </div>
     );
   }
@@ -58,9 +65,7 @@ const SubscriptionBanner: React.FC = () => {
             ? `${endedHi} — ${left} दिन बाद नई एंट्री रुक जाएगी। जारी रखने के लिए plan लें।`
             : `Your ${whatEn} has ended — new entries pause in ${left} day(s). Get a plan to continue.`}
         </span>
-        <Link to={PLAN_PAGE} className="ml-auto font-medium text-destructive underline">
-          {hi ? 'Plan लें' : 'Get a plan'}
-        </Link>
+        {action(hi ? 'Plan लें' : 'Get a plan', 'text-destructive')}
       </div>
     );
   }
@@ -75,9 +80,7 @@ const SubscriptionBanner: React.FC = () => {
             ? `Free trial: ${Math.max(left, 0)} दिन बाकी — जारी रखने के लिए plan चुनें।`
             : `Free trial: ${Math.max(left, 0)} day(s) left — choose a plan to continue.`}
         </span>
-        <Link to={PLAN_PAGE} className="ml-auto font-medium text-amber-700 underline dark:text-amber-300">
-          {hi ? 'Plan देखें' : 'View plans'}
-        </Link>
+        {action(hi ? 'Plan देखें' : 'View plans', 'text-amber-700 dark:text-amber-300')}
       </div>
     );
   }
@@ -96,9 +99,7 @@ const SubscriptionBanner: React.FC = () => {
               ? `आपका plan ${Math.max(left, 0)} दिन में पूरा हो रहा है — समय रहते renew करें।`
               : `Your plan ends in ${Math.max(left, 0)} day(s) — renew in time.`)}
         </span>
-        <Link to={PLAN_PAGE} className="ml-auto font-medium text-amber-700 underline dark:text-amber-300">
-          {plan === 'legacy' ? (hi ? 'Plan देखें' : 'View plans') : (hi ? 'Renew करें' : 'Renew')}
-        </Link>
+        {action(plan === 'legacy' ? (hi ? 'Plan देखें' : 'View plans') : (hi ? 'Renew करें' : 'Renew'), 'text-amber-700 dark:text-amber-300')}
       </div>
     );
   }
