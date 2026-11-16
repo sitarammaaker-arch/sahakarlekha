@@ -3949,3 +3949,6 @@ alter table society_settings add column if not exists "lateFeeRules" jsonb;
 
 -- 169 · loan sureties (guarantors) — a list on the loan: [{ memberId?, name, phone?, address? }]
 alter table loans add column if not exists sureties jsonb default '[]'::jsonb;
+
+-- 170 · loan monthly instalment — the principal instalment fixed for the loan (null = not fixed)
+alter table loans add column if not exists "monthlyInstallment" numeric;

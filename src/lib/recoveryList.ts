@@ -11,9 +11,10 @@
  *   loan principal      what should have been repaid by now − what was repaid, never more than the outstanding
  *   loan interest       interest already accrued on the loan and not yet received (lib/loans/interestAccrual.ts)
  *
- * The loan record has no instalment amount, so the principal instalment is DERIVED: the loan is taken to be
- * repayable in equal monthly instalments from the month after disbursement to the due date. This is a product
- * rule, not a statutory one — the list says so in a note. After the due date the whole outstanding is due.
+ * The principal instalment is the one the society fixed on the loan (Loan.monthlyInstallment, column 170). A loan
+ * without one — every loan made before that field existed — has it DERIVED: equal monthly instalments from the
+ * month after disbursement to the due date. That fallback is a product rule, not a statutory one — the list says
+ * so in a note. After the due date the whole outstanding is due either way.
  *
  * PURE — unit-tested by scripts/test-recovery-list.mjs.
  */
@@ -30,7 +31,7 @@ export function monthEnd(month: string): string {
   return `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
 }
 
-type LoanIn = Pick<Loan, 'id' | 'loanNo' | 'memberId' | 'amount' | 'repaidAmount' | 'disbursementDate' | 'dueDate' | 'status' | 'isDeleted'>;
+type LoanIn = Pick<Loan, 'id' | 'loanNo' | 'memberId' | 'amount' | 'repaidAmount' | 'disbursementDate' | 'dueDate' | 'status' | 'isDeleted' | 'monthlyInstallment'>;
 
 /** Number of monthly instalments the loan is repayable in: one a month from the month after disbursement to the due date. */
 export function loanInstalmentCount(loan: Pick<Loan, 'disbursementDate' | 'dueDate'>): number {
@@ -39,8 +40,18 @@ export function loanInstalmentCount(loan: Pick<Loan, 'disbursementDate' | 'dueDa
 }
 
 /** The derived equal monthly principal instalment. */
-export function loanInstalment(loan: Pick<Loan, 'amount' | 'disbursementDate' | 'dueDate'>): number {
+export function derivedLoanInstalment(loan: Pick<Loan, 'amount' | 'disbursementDate' | 'dueDate'>): number {
   return r2(loan.amount / loanInstalmentCount(loan));
+}
+
+/** Whether the society fixed a monthly instalment on this loan (a positive amount). */
+export function hasFixedInstalment(loan: Pick<Loan, 'monthlyInstallment'>): boolean {
+  return Number(loan.monthlyInstallment) > 0;
+}
+
+/** The monthly principal instalment: the one fixed on the loan when there is one, otherwise the derived one. */
+export function loanInstalment(loan: Pick<Loan, 'amount' | 'disbursementDate' | 'dueDate' | 'monthlyInstallment'>): number {
+  return hasFixedInstalment(loan) ? r2(Math.min(Number(loan.monthlyInstallment), loan.amount)) : derivedLoanInstalment(loan);
 }
 
 /**
@@ -204,7 +215,7 @@ export function recoveryListTable(rows: readonly RecoveryRow[], month: string, m
     totals: ['', '', 'Total', '', t.compulsoryDeposit, t.loanPrincipal, t.loanInterest, t.total],
     notes: [
       { en: 'Compulsory deposit: monthly contributions fallen due up to this month, less contributions paid.', hi: 'अनिवार्य जमा: इस माह तक देय हुए मासिक अंशदान, घटाकर जमा हुए अंशदान।' },
-      { en: 'Loan instalment: the loan is taken as repayable in equal monthly instalments from the month after disbursement to its due date; shown here is what has fallen due less principal repaid. After the due date the whole outstanding is shown.', hi: 'ऋण किस्त: ऋण को वितरण के अगले माह से देय तिथि तक बराबर मासिक किस्तों में चुकाने योग्य माना गया है; यहाँ अब तक देय हुई किस्तें, घटाकर चुकाया मूलधन, दिखाया है। देय तिथि के बाद पूरा बकाया दिखता है।' },
+      { en: 'Loan instalment: the monthly instalment entered on the loan, falling due from the month after disbursement. Where a loan has none entered, it is taken as repayable in equal monthly instalments up to its due date. Shown here is what has fallen due less principal repaid; after the due date the whole outstanding is shown.', hi: 'ऋण किस्त: ऋण पर दर्ज मासिक किस्त, जो वितरण के अगले माह से देय होती है। जिस ऋण पर किस्त दर्ज नहीं है उसे देय तिथि तक बराबर मासिक किस्तों में चुकाने योग्य माना गया है। यहाँ अब तक देय हुई किस्तें, घटाकर चुकाया मूलधन, दिखाया है; देय तिथि के बाद पूरा बकाया दिखता है।' },
       { en: 'Loan interest: interest already accrued in the books and not yet received. Interest not yet accrued is not included.', hi: 'ऋण ब्याज: बही में दर्ज हो चुका और अब तक न मिला ब्याज। जो ब्याज अभी दर्ज नहीं हुआ वह इसमें शामिल नहीं है।' },
       { en: 'This list is a demand only. No entry is made in the books until the money is received.', hi: 'यह सूची केवल माँग है। रकम मिलने तक बही में कोई एंट्री नहीं होती।' },
     ],

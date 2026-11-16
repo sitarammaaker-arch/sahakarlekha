@@ -113,13 +113,13 @@ ok(!linksOf('m5').some((l) => /Surety/.test(l.labelEn)), 'a surety only on delet
 // 5. RULE 1 wiring in the data layer.
 const dc = read('src/contexts/DataContext.tsx');
 const add = dc.slice(dc.indexOf('const addLoan = useCallback('), dc.indexOf('// M16: Create disbursement voucher'));
-ok(/const \{ sureties: loanSuretiesToSave, \.\.\.loanBase \} = loanToSave;/.test(add) && /upsert\(withSoc\(loanBase\)\)/.test(add) && !/upsert\(withSoc\(loanToSave\)\)/.test(add), 'addLoan: sureties are not in the base upsert');
+ok(/const \{ sureties: loanSuretiesToSave, monthlyInstallment: loanInstalmentToSave, \.\.\.loanBase \} = loanToSave;/.test(add) && /upsert\(withSoc\(loanBase\)\)/.test(add) && !/upsert\(withSoc\(loanToSave\)\)/.test(add), 'addLoan: sureties are not in the base upsert');
 ok(/if \(!error && loanSuretiesToSave && loanSuretiesToSave\.length > 0\) saveLoanSureties\(newLoan\.id, loanSuretiesToSave, \[\]\);/.test(add), 'addLoan: sureties saved in step 2, only after the row exists');
 ok(/if \(refuseBadSureties\(data\.memberId, data\.sureties\)\) return/.test(add) && add.indexOf('refuseBadSureties(') < add.indexOf('crypto.randomUUID()'), 'addLoan: a bad surety list is refused before anything is created');
 const upd = dc.slice(dc.indexOf('const updateLoan = useCallback('), dc.indexOf('const deleteLoan = useCallback('));
-ok(/const \{ sureties: updatedSureties, \.\.\.updatedBase \} = updated;/.test(upd) && /upsert\(withSoc\(updatedBase\)\)/.test(upd) && !/upsert\(withSoc\(updated\)\)/.test(upd), 'updateLoan: sureties are not in the base upsert');
+ok(/const \{ sureties: updatedSureties, monthlyInstallment: updatedInstalment, \.\.\.updatedBase \} = updated;/.test(upd) && /upsert\(withSoc\(updatedBase\)\)/.test(upd) && !/upsert\(withSoc\(updated\)\)/.test(upd), 'updateLoan: sureties are not in the base upsert');
 ok(/if \(!error && suretiesChanged\) saveLoanSureties\(id, updatedSureties \?\? \[\], before\.sureties\);/.test(upd), 'updateLoan: step 2 only when the sureties were part of the change (a repayment does not rewrite them)');
-const sv = dc.slice(dc.indexOf('const saveLoanSureties ='), dc.indexOf('const addLoan = useCallback('));
+const sv = dc.slice(dc.indexOf('const saveLoanSureties ='), dc.indexOf('const saveLoanInstalment ='));
 ok(/\.update\(\{ sureties \}\)\.eq\('id', loanId\)\.eq\('society_id', societyIdRef\.current\)/.test(sv), 'step 2 updates this society\'s loan only');
 ok(/setLoansState\(prev => prev\.map\(l => l\.id === loanId \? \{ \.\.\.l, sureties: restore \} : l\)\)/.test(sv) && /variant: 'destructive', duration: 15000/.test(sv) && /migration 169/.test(sv), 'a failed step 2 restores the screen and says so loudly, naming the migration');
 ok(/if \(guardFYLocked\(\)\) return;/.test(upd) && /if \(guardFYLocked\(\)\) return \{ \.\.\.data, id: '' \}/.test(add), 'FY-lock guard still first on both');

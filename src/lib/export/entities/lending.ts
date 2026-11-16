@@ -60,6 +60,7 @@ const loan: EntityDescriptor = {
     num('interestRate', 'Interest Rate %', 'ब्याज दर %'),
     c('disbursementDate', 'Disbursement Date', 'वितरण तिथि', { type: 'date' }),
     c('dueDate', 'Due Date', 'देय तिथि', { type: 'date' }),
+    money('monthlyInstallment', 'Monthly Instalment', 'मासिक किस्त'),
     // Running total — reconcile against repayment vouchers, not this column.
     internal('repaidAmount', 'Repaid (cached)', 'चुकाया गया (कैश्ड)', { type: 'currency' }),
     c('status', 'Status', 'स्थिति', { type: 'enum' }),
