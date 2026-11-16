@@ -672,8 +672,10 @@ export interface Loan {
   voucherId?: string;    // P0-3 (L3): id of the auto-generated disbursement voucher, so deleteLoan cancels exactly it instead of a fragile narration-substring match.
 }
 
-// ── Deposits (Core for Credit/PACS) — SB / FD / RD / Pigmy ─────────────────────
-export type DepositType = 'SB' | 'FD' | 'RD' | 'PIGMY';
+// ── Deposits (Core for Credit/PACS) — SB / FD / RD / Pigmy / Compulsory ────────
+// CD = compulsory (thrift) deposit: a fixed monthly contribution every member makes under the bye-laws, kept in
+// its own liability head and paid back only when the account is closed (lib/compulsoryDeposit.ts).
+export type DepositType = 'SB' | 'FD' | 'RD' | 'PIGMY' | 'CD';
 export type DepositTxnType = 'open' | 'deposit' | 'withdraw' | 'interest' | 'closure';
 export type DepositStatus = 'active' | 'closed' | 'matured';
 

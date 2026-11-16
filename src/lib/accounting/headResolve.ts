@@ -22,6 +22,7 @@ export const PT_ACCOUNT_ID = '2207';
 export const TDS_PAYABLE_ACCOUNT_ID = '2202';
 export const PENALTY_ACCOUNT_ID = '5605';
 export const SHARE_REFUND_PAYABLE_ACCOUNT_ID = '2111';
+export const COMPULSORY_DEPOSIT_ACCOUNT_ID = '2112';
 
 const text = (a: HeadAccount) => `${a.name} ${a.nameHi ?? ''}`.toLowerCase();
 
@@ -39,6 +40,9 @@ const TDS_EXCLUDE = /receivable|प्राप्य|\btcs\b/;
 const PENALTY_NAME = /penalt|\bfine\b|late fee|दंड|जुर्माना/;
 /** Share Refund Payable / शेयर वापसी देय — a liability, not the share capital itself. */
 const SHARE_REFUND_NAME = /share refund|refund of share|शेयर वापसी|शेयर पूँजी वापसी|शेयर पूंजी वापसी/;
+/** Compulsory / thrift deposit from members / अनिवार्य जमा — a deposit head, not a thrift FUND or reserve. */
+const CD_NAME = /compulsory deposit|compulsory \(thrift\) deposit|thrift deposit|अनिवार्य जमा|अनिवार्य \(थ्रिफ्ट\) जमा|थ्रिफ्ट जमा/;
+const CD_EXCLUDE = /fund|reserve|निधि|कोष/;
 const NO_EXCLUDE = /(?!)/;
 
 type Leaf = 'liability' | 'expense';
@@ -55,6 +59,11 @@ function resolve(accounts: ReadonlyArray<HeadAccount>, id: string, include: RegE
 /** Liability head for fixed deposits taken from members, or null when the chart has none. */
 export function fixedDepositAccountId(accounts: ReadonlyArray<HeadAccount>): string | null {
   return resolve(accounts, FD_ACCOUNT_ID, FD_NAME, FD_EXCLUDE);
+}
+
+/** Liability head for the compulsory (thrift) deposit raised from every member, or null when the chart has none. */
+export function compulsoryDepositAccountId(accounts: ReadonlyArray<HeadAccount>): string | null {
+  return resolve(accounts, COMPULSORY_DEPOSIT_ACCOUNT_ID, CD_NAME, CD_EXCLUDE);
 }
 
 /** Liability head for professional tax withheld from salaries, or null when the chart has none. */
@@ -91,6 +100,12 @@ export const MISSING_HEAD_TOAST = {
     "इस सोसाइटी के चार्ट में 'Fixed Deposits from Members' (देयता) खाता नहीं है। Ledger Heads में यह खाता जोड़ें, फिर FD दोबारा चलाएँ। कोई वाउचर नहीं बना।",
     "This society's chart has no 'Fixed Deposits from Members' (liability) account. Add it in Ledger Heads, then run the FD again. No voucher was made.",
   ),
+  cd: headToast(
+    'अनिवार्य जमा का देयता खाता नहीं मिला',
+    'Compulsory deposit liability account not found',
+    "इस सोसाइटी के चार्ट में 'Compulsory (Thrift) Deposits from Members' (देयता) खाता नहीं है। Ledger Heads में यह खाता जोड़ें, फिर दोबारा चलाएँ। कोई वाउचर नहीं बना।",
+    "This society's chart has no 'Compulsory (Thrift) Deposits from Members' (liability) account. Add it in Ledger Heads, then run it again. No voucher was made.",
+  ),
   pt: headToast(
     'वेतन सेव नहीं हुआ',
     'Salary not saved',
@@ -123,5 +138,5 @@ export const MISSING_HEAD_TOAST = {
   ),
 } as const;
 
-/** The refusal toast for a deposit product: FD names the FD head, the rest name the member-deposit head. */
-export const missingDepositHeadToast = (type: string) => (type === 'FD' ? MISSING_HEAD_TOAST.fd : MISSING_HEAD_TOAST.deposit);
+/** The refusal toast for a deposit product: FD and the compulsory deposit name their own head, the rest name the member-deposit head. */
+export const missingDepositHeadToast = (type: string) => (type === 'FD' ? MISSING_HEAD_TOAST.fd : type === 'CD' ? MISSING_HEAD_TOAST.cd : MISSING_HEAD_TOAST.deposit);

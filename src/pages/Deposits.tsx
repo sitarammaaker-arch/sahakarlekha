@@ -4,6 +4,10 @@
  * Slice 1: open a member deposit account and post deposits / withdrawals. Each cash
  * movement posts a voucher (Dr/Cr the 2107/2108 liability) and updates the balance +
  * sub-ledger. Interest, FD maturity, RD schedules and Pigmy daily collection are later slices.
+ *
+ * Compulsory (thrift) deposit — type CD: one account per member with a monthly contribution, its own liability
+ * head, a monthly collection sheet for all members at once, arrears, and no withdrawal until the account is closed.
+ * Offered only where the chart has the compulsory-deposit head (a Thrift & Credit chart ships it).
  */
 import React, { useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -17,12 +21,14 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search, Percent, Lock, ListChecks, Download, FileSpreadsheet } from 'lucide-react';
+import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search, Percent, Lock, ListChecks, Download, FileSpreadsheet, CalendarCheck } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
 import { sbInterest } from '@/lib/depositInterest';
 import { asDayCount } from '@/lib/interestDayCount';
 import { buildRdSchedule, missedCount } from '@/lib/rdSchedule';
 import { pigmyAgents, pigmyAccountsForAgent, collectionTotal } from '@/lib/pigmy';
+import { compulsoryAccounts, collectionSheet, compulsoryArrears, monthOf } from '@/lib/compulsoryDeposit';
+import { resolveDepositLiabilityAccount, allowsWithdrawal } from '@/lib/depositEngine';
 import { useToast } from '@/hooks/use-toast';
 import type { DepositType, DepositAccount } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
@@ -39,6 +45,7 @@ const TYPE_LABELS: Record<DepositType, { hi: string; en: string }> = {
   FD: { hi: 'सावधि (FD)', en: 'Fixed (FD)' },
   RD: { hi: 'आवर्ती (RD)', en: 'Recurring (RD)' },
   PIGMY: { hi: 'पिग्मी', en: 'Pigmy' },
+  CD: { hi: 'अनिवार्य जमा (CD)', en: 'Compulsory (CD)' },
 };
 
 const today = () => new Date().toISOString().split('T')[0];
@@ -46,7 +53,7 @@ const today = () => new Date().toISOString().split('T')[0];
 const Deposits: React.FC = () => {
   const { language } = useLanguage();
   const { can } = useAuth();
-  const { members, depositAccounts, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions, vouchers, society } = useData();
+  const { members, accounts, depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions, vouchers, society } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
   // ECR-06 17-role: RBAC permission gate, not a hardcoded legacy list. `update` (not `create`)
@@ -66,6 +73,12 @@ const Deposits: React.FC = () => {
   );
   const totalDeposits = depositAccounts.reduce((s, d) => s + d.balance, 0);
   const activeCount = depositAccounts.filter(d => d.status === 'active').length;
+  // The compulsory deposit is offered only where the chart has its liability head — elsewhere it could not post.
+  const hasCdHead = useMemo(() => !!resolveDepositLiabilityAccount('CD', accounts), [accounts]);
+  const typeOptions = (Object.keys(TYPE_LABELS) as DepositType[]).filter(k => k !== 'CD' || hasCdHead);
+  const cdAccounts = compulsoryAccounts(depositAccounts);
+  const cdTotal = cdAccounts.reduce((s, d) => s + d.balance, 0);
+  const cdArrearsOf = (d: DepositAccount) => compulsoryArrears(d, depositTransactions, today());
 
   // ── Open account dialog ────────────────────────────────────────────────────
   const [openNew, setOpenNew] = useState(false);
@@ -108,6 +121,32 @@ const Deposits: React.FC = () => {
     }
     if (posted > 0) toast({ title: hi ? `${posted} संग्रह दर्ज` : `${posted} collections posted`, description: fmt(collectSum) });
     setCollectOpen(false);
+  };
+
+  // ── Compulsory deposit — monthly collection for every member at once ───────
+  const [cdOpen, setCdOpen] = useState(false);
+  const [cdDate, setCdDate] = useState(today());
+  const [cdMode, setCdMode] = useState<'cash' | 'bank'>('cash');
+  const [cdAmts, setCdAmts] = useState<Record<string, string>>({});
+  const cdRows = collectionSheet(depositAccounts, depositTransactions, cdDate);
+  const cdSum = collectionTotal(cdRows.map(r => cdAmts[r.account.id]));
+  // Pre-fill what each member still owes for the month of `date`; a member who has paid gets a blank.
+  const fillCd = (date: string) => {
+    const pre: Record<string, string> = {};
+    collectionSheet(depositAccounts, depositTransactions, date).forEach(r => { if (r.suggested > 0) pre[r.account.id] = String(r.suggested); });
+    setCdAmts(pre);
+  };
+  const openCd = () => { const d = today(); setCdDate(d); setCdMode('cash'); fillCd(d); setCdOpen(true); };
+  const changeCdDate = (d: string) => { setCdDate(d); if (monthOf(d) !== monthOf(cdDate)) fillCd(d); };
+  const postCd = () => {
+    let posted = 0, total = 0;
+    for (const r of cdRows) {
+      const amt = Number(cdAmts[r.account.id]) || 0;
+      if (amt > 0 && postDepositTransaction(r.account.id, 'deposit', amt, cdMode, cdDate)) { posted++; total += amt; }
+    }
+    // Say only what really posted — a blocked voucher (locked period) must not read as a success.
+    if (posted > 0) toast({ title: hi ? `${posted} सदस्यों की अनिवार्य जमा दर्ज` : `Compulsory deposit posted for ${posted} member(s)`, description: fmt(total) });
+    if (posted > 0) setCdOpen(false);
   };
 
   // ── Deposit / Withdraw dialog ──────────────────────────────────────────────
@@ -200,6 +239,9 @@ const Deposits: React.FC = () => {
               {agents.length > 0 && (
                 <Button variant="outline" className="gap-2" onClick={openCollect}><PiggyBank className="h-4 w-4" />{hi ? 'दैनिक संग्रह' : 'Daily Collection'}</Button>
               )}
+              {cdAccounts.length > 0 && (
+                <Button variant="outline" className="gap-2" onClick={openCd}><CalendarCheck className="h-4 w-4" />{hi ? 'मासिक अनिवार्य जमा' : 'Monthly Compulsory Deposit'}</Button>
+              )}
               <Button className="gap-2" onClick={() => setOpenNew(true)}><Plus className="h-4 w-4" />{hi ? 'नया खाता' : 'New Account'}</Button>
             </>
           )}
@@ -211,6 +253,9 @@ const Deposits: React.FC = () => {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">{hi ? 'कुल जमा' : 'Total Deposits'}</p><p className="text-xl font-bold">{fmt(totalDeposits)}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">{hi ? 'सक्रिय खाते' : 'Active Accounts'}</p><p className="text-xl font-bold">{activeCount}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">{hi ? 'कुल खाते' : 'Total Accounts'}</p><p className="text-xl font-bold">{depositAccounts.length}</p></CardContent></Card>
+        {cdAccounts.length > 0 && (
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">{hi ? `अनिवार्य जमा (${cdAccounts.length} सदस्य)` : `Compulsory deposit (${cdAccounts.length} members)`}</p><p className="text-xl font-bold">{fmt(cdTotal)}</p></CardContent></Card>
+        )}
       </div>
 
       {/* Search */}
@@ -252,7 +297,12 @@ const Deposits: React.FC = () => {
                   <TableRow key={d.id}>
                     <TableCell className="font-mono text-sm">{d.accountNo}</TableCell>
                     <TableCell className="font-medium">{memberName(d.memberId)}</TableCell>
-                    <TableCell><Badge variant="outline">{hi ? TYPE_LABELS[d.depositType].hi : TYPE_LABELS[d.depositType].en}</Badge></TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{hi ? TYPE_LABELS[d.depositType].hi : TYPE_LABELS[d.depositType].en}</Badge>
+                      {d.depositType === 'CD' && d.status === 'active' && cdArrearsOf(d).arrears > 0 && (
+                        <Badge variant="outline" className="ml-1 bg-red-100 text-red-800 border-red-300">{hi ? 'बकाया' : 'Arrears'} {fmt(cdArrearsOf(d).arrears)}</Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm">{fmtDate(d.openDate)}</TableCell>
                     <TableCell className="text-right font-semibold">{fmt(d.balance)}</TableCell>
                     <TableCell><Badge variant={d.status === 'active' ? 'default' : 'secondary'} className={d.status === 'active' ? 'bg-success' : ''}>{d.status}</Badge></TableCell>
@@ -261,9 +311,11 @@ const Deposits: React.FC = () => {
                         {canEdit && d.status === 'active' && (
                           <>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50" title={hi ? 'जमा' : 'Deposit'} onClick={() => openTxn(d, 'deposit')}><ArrowDownCircle className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600 hover:bg-amber-50" title={hi ? 'निकासी' : 'Withdraw'} onClick={() => openTxn(d, 'withdraw')}><ArrowUpCircle className="h-4 w-4" /></Button>
+                            {allowsWithdrawal(d.depositType) && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600 hover:bg-amber-50" title={hi ? 'निकासी' : 'Withdraw'} onClick={() => openTxn(d, 'withdraw')}><ArrowUpCircle className="h-4 w-4" /></Button>
+                            )}
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:bg-indigo-50" title={hi ? 'ब्याज जमा करें' : 'Credit interest'} onClick={() => openInterest(d)}><Percent className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-600 hover:bg-slate-100" title={isTerm(d) ? (hi ? 'परिपक्व करें' : 'Mature') : (hi ? 'खाता बंद करें' : 'Close account')} onClick={() => openClose(d)}><Lock className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-600 hover:bg-slate-100" title={isTerm(d) ? (hi ? 'परिपक्व करें' : 'Mature') : d.depositType === 'CD' ? (hi ? 'खाता बंद करें — पूरी जमा वापस' : 'Close account — pay the whole deposit back') : (hi ? 'खाता बंद करें' : 'Close account')} onClick={() => openClose(d)}><Lock className="h-4 w-4" /></Button>
                           </>
                         )}
                         {d.depositType === 'RD' && (
@@ -299,7 +351,7 @@ const Deposits: React.FC = () => {
                 <Label className="text-xs">{hi ? 'प्रकार' : 'Type'}</Label>
                 <Select value={form.depositType} onValueChange={v => setForm(f => ({ ...f, depositType: v as DepositType }))}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>{(Object.keys(TYPE_LABELS) as DepositType[]).map(k => <SelectItem key={k} value={k}>{hi ? TYPE_LABELS[k].hi : TYPE_LABELS[k].en}</SelectItem>)}</SelectContent>
+                  <SelectContent>{typeOptions.map(k => <SelectItem key={k} value={k}>{hi ? TYPE_LABELS[k].hi : TYPE_LABELS[k].en}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
@@ -320,9 +372,9 @@ const Deposits: React.FC = () => {
                   <Input type="date" className="mt-1" value={form.maturityDate} onChange={e => setForm(f => ({ ...f, maturityDate: e.target.value }))} />
                 </div>
               )}
-              {form.depositType === 'RD' && (
+              {(form.depositType === 'RD' || form.depositType === 'CD') && (
                 <div>
-                  <Label className="text-xs">{hi ? 'मासिक किस्त' : 'Monthly installment'}</Label>
+                  <Label className="text-xs">{form.depositType === 'CD' ? (hi ? 'मासिक अंशदान' : 'Monthly contribution') : (hi ? 'मासिक किस्त' : 'Monthly installment')}</Label>
                   <Input type="number" className="mt-1" value={form.installmentAmount} onChange={e => setForm(f => ({ ...f, installmentAmount: e.target.value }))} placeholder="0" />
                 </div>
               )}
@@ -333,6 +385,9 @@ const Deposits: React.FC = () => {
                 </div>
               )}
             </div>
+            {form.depositType === 'CD' && (
+              <p className="text-[11px] text-muted-foreground">{hi ? 'हर सदस्य का एक ही अनिवार्य जमा खाता होता है। बीच में निकासी नहीं होती — खाता बंद करने पर पूरी राशि लौटती है। मासिक अंशदान उपविधि के अनुसार भरें।' : 'A member has one compulsory deposit account. There are no withdrawals — the whole balance is paid back when the account is closed. Enter the monthly contribution your bye-laws set.'}</p>
+            )}
             {Number(form.openingAmount) > 0 && (
               <div>
                 <Label className="text-xs">{hi ? 'भुगतान विधि' : 'Payment mode'}</Label>
@@ -492,6 +547,60 @@ const Deposits: React.FC = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCollectOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
             <Button disabled={!(collectSum > 0)} onClick={postCollection}>{hi ? 'संग्रह दर्ज करें' : 'Post Collection'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Compulsory deposit — monthly collection dialog */}
+      <Dialog open={cdOpen} onOpenChange={setCdOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader><DialogTitle>{hi ? 'मासिक अनिवार्य जमा संग्रह' : 'Monthly Compulsory Deposit Collection'}</DialogTitle></DialogHeader>
+          {/* min-w-0: a grid child otherwise grows to the table's width and the dialog scrolls sideways on a phone. */}
+          <div className="space-y-3 min-w-0">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">{hi ? 'तिथि' : 'Date'}</Label>
+                <Input type="date" className="mt-1" value={cdDate} onChange={e => changeCdDate(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">{hi ? 'विधि' : 'Mode'}</Label>
+                <Select value={cdMode} onValueChange={v => setCdMode(v as 'cash' | 'bank')}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="cash">{hi ? 'नकद' : 'Cash'}</SelectItem><SelectItem value="bank">{hi ? 'बैंक' : 'Bank'}</SelectItem></SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="max-h-[45vh] overflow-auto border rounded-md">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead className="px-2">{hi ? 'सदस्य' : 'Member'}</TableHead>
+                  <TableHead className="px-2 text-right">{hi ? 'इस माह जमा' : 'Paid this month'}</TableHead>
+                  <TableHead className="px-2 text-right">{hi ? 'कुल बकाया' : 'Total arrears'}</TableHead>
+                  <TableHead className="px-2 text-right">{hi ? 'अब जमा' : 'Collect now'}</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {cdRows.map(r => (
+                    <TableRow key={r.account.id}>
+                      <TableCell className="px-2 text-sm">
+                        <div className="font-medium">{memberName(r.account.memberId)}</div>
+                        <div className="text-[11px] text-muted-foreground"><span className="font-mono">{r.account.accountNo}</span> · {hi ? 'मासिक' : 'monthly'} {r.monthly > 0 ? fmt(r.monthly) : '—'}</div>
+                      </TableCell>
+                      <TableCell className="px-2 text-right text-sm">{r.paidThisMonth > 0 ? fmt(r.paidThisMonth) : '—'}</TableCell>
+                      <TableCell className={`px-2 text-right text-sm ${r.arrears > 0 ? 'text-destructive font-medium' : ''}`}>{r.arrears > 0 ? fmt(r.arrears) : '—'}</TableCell>
+                      <TableCell className="px-2 text-right">
+                        <Input type="number" className="h-8 w-20 ml-auto" value={cdAmts[r.account.id] ?? ''} onChange={e => setCdAmts(m => ({ ...m, [r.account.id]: e.target.value }))} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <p className="text-[11px] text-muted-foreground">{hi ? 'जिस सदस्य ने इस माह का अंशदान दे दिया है उसका खाना खाली रहता है। हर सदस्य का अलग वाउचर बनता है: Dr नकद/बैंक, Cr अनिवार्य जमा।' : 'A member who has already paid this month is left blank. One voucher is made per member: Dr Cash/Bank, Cr compulsory deposit.'}</p>
+            <p className="text-sm text-right">{hi ? 'कुल' : 'Total'}: <strong>{fmt(cdSum)}</strong></p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCdOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
+            <Button disabled={!(cdSum > 0)} onClick={postCd}>{hi ? 'संग्रह दर्ज करें' : 'Post Collection'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

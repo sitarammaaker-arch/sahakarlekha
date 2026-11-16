@@ -92,7 +92,8 @@ import { sumActiveAssetCost, reconcileAssetRegister, type AssetReconciliation } 
 import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { splitVoucherExtras, extrasFailureToast } from '@/lib/voucherPersistence';
 import { shareOpPosting, validateShareOp, applyShareOp, withShareCapital, type ShareOpType } from '@/lib/shareOps';
-import { resolveDepositLiabilityAccount, depositPosting, applyDepositTxn, validateDepositTxn } from '@/lib/depositEngine';
+import { resolveDepositLiabilityAccount, depositPosting, depositVoucherType, applyDepositTxn, validateDepositTxn } from '@/lib/depositEngine';
+import { hasActiveCompulsoryDeposit } from '@/lib/compulsoryDeposit';
 import { professionalTaxAccountId, shareRefundPayableAccountId, MISSING_HEAD_TOAST, missingDepositHeadToast } from '@/lib/accounting/headResolve';
 import { buildShareRefundApproval, buildShareRefundPayment, shareRefundOutstanding, SHARE_REFUND_APPROVE_REF, SHARE_REFUND_PAY_REF, SHARE_REFUND_MESSAGE } from '@/lib/shares/refundPayable';
 import type { FarmerInput } from '@/lib/procurement/agentFlow';
@@ -4064,7 +4065,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const posting = depositPosting(txnType, { liability, cashBank });
     const member = membersRef.current.find(m => m.id === acct.memberId);
     const voucher = addVoucher({
-      type: txnType === 'withdraw' ? 'payment' : 'receipt', date,
+      // A closure pays the balance out, exactly like a withdrawal — it is a payment voucher, not a receipt.
+      type: depositVoucherType(txnType), date,
       debitAccountId: posting.debitAccountId, creditAccountId: posting.creditAccountId, amount,
       narration: `${acct.depositType} ${txnType} — ${acct.accountNo}${member ? ' · ' + member.name : ''}`,
       createdBy: userRef.current?.name ?? 'System', memberId: acct.memberId,
@@ -4095,6 +4097,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Refuse BEFORE creating anything when the chart has no liability head for this product — otherwise the account
     // would be created empty and every later deposit would fail, with a "जमा खाता खुला" toast on top of the error.
     if (!resolveDepositLiabilityAccount(data.depositType, accounts)) { toastRef.current({ ...missingDepositHeadToast(data.depositType), variant: 'destructive', duration: 12000 }); return null; }
+    // A member has ONE compulsory deposit: a second open account would split the same monthly contribution.
+    if (data.depositType === 'CD' && hasActiveCompulsoryDeposit(depositAccountsRef.current, data.memberId)) {
+      toastRef.current({ title: tr('अनिवार्य जमा खाता पहले से है', 'Compulsory deposit account already exists'), description: tr('इस सदस्य का अनिवार्य जमा खाता पहले से चालू है — उसी में जमा करें। नया खाता नहीं खुला।', 'This member already has an open compulsory deposit account — post to that one. No new account was opened.'), variant: 'destructive', duration: 10000 });
+      return null;
+    }
     const acct: DepositAccount = {
       ...rest, id: crypto.randomUUID(), accountNo: nextDepositAccountNo(data.depositType),
       balance: 0, status: 'active', createdAt: new Date().toISOString(),
@@ -4135,7 +4142,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!acct) return false;
     if (acct.status !== 'active') { toastRef.current({ title: tr('खाता सक्रिय नहीं', 'Account not active'), description: 'Only active deposit accounts can transact.', variant: 'destructive' }); return false; }
     const amt = toRupees(toMinor(amount));
-    const v = validateDepositTxn(txnType, amt, acct.balance);
+    const v = validateDepositTxn(txnType, amt, acct.balance, acct.depositType);
     if (!v.ok) { toastRef.current({ title: tr('अमान्य लेनदेन', 'Invalid transaction'), description: v.error, variant: 'destructive', duration: 9000 }); return false; }
     const before = acct;
     const newBal = postDepositLeg(acct, txnType, amt, mode, date);

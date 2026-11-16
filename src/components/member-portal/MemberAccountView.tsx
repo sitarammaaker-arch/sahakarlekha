@@ -17,7 +17,7 @@ import { PortalVerticals } from '@/components/member-portal/PortalVerticals';
 
 const money = (n: number) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const KYC_HI: Record<string, string> = { verified: 'सत्यापित', pending: 'लंबित', rejected: 'अस्वीकृत' };
-const DEPOSIT_TYPE_HI: Record<string, string> = { SB: 'बचत (SB)', FD: 'सावधि (FD)', RD: 'आवर्ती (RD)', PIGMY: 'पिग्मी' };
+const DEPOSIT_TYPE_HI: Record<string, string> = { SB: 'बचत (SB)', FD: 'सावधि (FD)', RD: 'आवर्ती (RD)', PIGMY: 'पिग्मी', CD: 'अनिवार्य जमा' };
 
 interface Props {
   member: PortalSnapshot['member'];
