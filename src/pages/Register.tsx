@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Link } from '@/components/LocalLink';
 import { supabase } from '@/lib/supabase';
 import { trackEvent } from '@/lib/analytics';
@@ -16,12 +16,42 @@ import type { SocietyType } from '@/types';
 import { loadReferral, isReferralCodeShape, normalizeReferralCode, referralErrorText, REF_STORAGE_KEY } from '@/lib/referral/referralCode';
 
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
-import { presetsForState, presetChoice, resolveTypeChoice, typeChoiceOf, type SocietyVariant } from '@/lib/societyPresets';
+import { presetsForState, presetChoice, resolveTypeChoice, typeChoiceOf, isSocietyVariant, type SocietyVariant } from '@/lib/societyPresets';
+import { useAuth } from '@/contexts/AuthContext';
+import { needsAppData } from '@/lib/appDataPaths';
+import { NEXT_PARAM, safeNext, withNext, resolveEntryType, resolveEntryState } from '@/lib/auth/entryContext';
+import { PLAN_CATALOG, TRIAL_DAYS, priceLabel } from '@/lib/plans';
 const STATES = INDIAN_STATES;
+
+/**
+ * Step-1 answers kept for this browser tab only (sessionStorage), so a refresh, the Back button or a look
+ * at the pricing page does not wipe a half-filled form (audit 2026-11-16, J-12). Society details only —
+ * the admin's email and password are NEVER stored. Cleared the moment the society is registered.
+ */
+const DRAFT_KEY = 'sl.register.draft';
+type RegisterDraft = Partial<Record<'societyName' | 'societyNameHi' | 'registrationNo' | 'district' | 'state' | 'phone' | 'gstin' | 'address' | 'societyType' | 'societyVariant' | 'financialYear', string>>;
+function loadDraft(): RegisterDraft {
+  try {
+    const raw = JSON.parse(window.sessionStorage.getItem(DRAFT_KEY) || '{}');
+    if (!raw || typeof raw !== 'object') return {};
+    const out: RegisterDraft = {};
+    for (const [k, v] of Object.entries(raw)) if (typeof v === 'string' && v.length <= 300) (out as Record<string, string>)[k] = v;
+    return out;
+  } catch { return {}; }
+}
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const { language, setLanguage } = useLanguage();
+  // What the visitor carried here in the link (all validated — lib/auth/entryContext):
+  //   ?next=  the app screen they wanted (Help / Cookbook buttons, or the login page passing it on)
+  //   ?type= / ?state=  the society type / state page they were reading
+  const [searchParams] = useSearchParams();
+  const next = safeNext(searchParams.get(NEXT_PARAM), needsAppData);
+  const [draft] = useState(loadDraft);
+  const entryType = resolveEntryType(searchParams.get('type'), SOCIETY_TYPES.map(t => t.value));
+  const entryState = resolveEntryState(searchParams.get('state'), INDIAN_STATES);
   // RULE 7: Hindi first; English when the visitor switches language.
   const L = (hiText: string, enText: string) => (language === 'hi' ? hiText : enText);
   const [step, setStep] = useState<1 | 2>(1);
@@ -31,14 +61,14 @@ const Register: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   // Society fields
-  const [societyName, setSocietyName] = useState('');
-  const [societyNameHi, setSocietyNameHi] = useState('');
-  const [registrationNo, setRegistrationNo] = useState('');
-  const [district, setDistrict] = useState('');
-  const [state, setState] = useState('');
-  const [phone, setPhone] = useState('');
-  const [gstin, setGstin] = useState('');
-  const [address, setAddress] = useState('');
+  const [societyName, setSocietyName] = useState(draft.societyName ?? '');
+  const [societyNameHi, setSocietyNameHi] = useState(draft.societyNameHi ?? '');
+  const [registrationNo, setRegistrationNo] = useState(draft.registrationNo ?? '');
+  const [district, setDistrict] = useState(draft.district ?? '');
+  const [state, setState] = useState(entryState || resolveEntryState(draft.state, INDIAN_STATES));
+  const [phone, setPhone] = useState(draft.phone ?? '');
+  const [gstin, setGstin] = useState(draft.gstin ?? '');
+  const [address, setAddress] = useState(draft.address ?? '');
   // Auto-detect current FY based on today's date (Apr-Mar cycle)
   const currentFY = (() => {
     const now = new Date();
@@ -58,9 +88,12 @@ const Register: React.FC = () => {
     return options;
   })();
   // No pre-selection: the type picks the chart of accounts and the modules, so the user must choose it (usability audit P1-10).
-  const [societyType, setSocietyType] = useState<SocietyType | ''>('');
+  // A type named in the link (?type=, from a /software/<type> page) is pre-selected; the visitor can still change it.
+  const draftType = resolveEntryType(draft.societyType, SOCIETY_TYPES.map(t => t.value));
+  const [societyType, setSocietyType] = useState<SocietyType | ''>((entryType || draftType) as SocietyType | '');
   // A state preset (e.g. Haryana CM-PACS): saved as its legal type + this name; see lib/societyPresets.
-  const [societyVariant, setSocietyVariant] = useState<SocietyVariant | null>(null);
+  const [societyVariant, setSocietyVariant] = useState<SocietyVariant | null>(
+    !entryType && isSocietyVariant(draft.societyVariant) ? draft.societyVariant : null);
   const chooseType = (choice: string) => {
     const r = resolveTypeChoice(choice);
     setSocietyType(r.societyType);
@@ -81,6 +114,14 @@ const Register: React.FC = () => {
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Keep the step-1 answers for this tab (see DRAFT_KEY). Never the admin's email or password.
+  useEffect(() => {
+    try {
+      const d: RegisterDraft = { societyName, societyNameHi, registrationNo, district, state, phone, gstin, address, societyType, societyVariant: societyVariant ?? '', financialYear };
+      window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    } catch { /* storage blocked — the form still works */ }
+  }, [societyName, societyNameHi, registrationNo, district, state, phone, gstin, address, societyType, societyVariant, financialYear]);
 
   // Partner program (migration 164): a code remembered from a ?ref= link pre-fills this field.
   const [linkReferral] = useState(() => {
@@ -184,8 +225,12 @@ const Register: React.FC = () => {
         return;
       }
 
+      // The society exists now — the half-filled form is no longer needed.
+      try { window.sessionStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+
       // The society exists now. Link the partner who referred it — a failure here never undoes the registration,
       // but it is shown on the success screen (not hidden) so the society can tell us and an admin can attach it.
+      let referralFailed = false;
       if (refCode) {
         try {
           const source = linkReferral && linkReferral.code === refCode ? 'link' : 'code';
@@ -197,16 +242,32 @@ const Register: React.FC = () => {
             setReferralResult({ ok: true, text: L(`Referral code ${refCode} दर्ज हो गया।`, `Referral code ${refCode} recorded.`) });
             try { window.localStorage.removeItem(REF_STORAGE_KEY); } catch { /* ignore */ }
           } else {
+            referralFailed = true;
             setReferralResult({ ok: false, text: `${referralErrorText(ref.error_code)} ${L('समिति का पंजीकरण पूरा है — code जुड़वाने के लिए हमें WhatsApp या संपर्क पेज पर बताएँ।', 'Your society is registered — contact us to have the code attached.')}` });
           }
         } catch {
+          referralFailed = true;
           setReferralResult({ ok: false, text: L('Referral code दर्ज नहीं हो सका (इंटरनेट)। समिति का पंजीकरण पूरा है — code जुड़वाने के लिए हमसे संपर्क करें।', 'Could not record the referral code (network). Your society is registered — contact us to have it attached.') });
         }
       }
 
-      setSuccess(true);
       // GOS-20: the #1 conversion event of the whole funnel (no PII in params).
       trackEvent('sign_up', { method: 'email' });
+
+      // Audit 2026-11-16 (J-4): the new admin used to be sent to the login page to type the same email
+      // and password again. Sign them in with what they just entered and open the app (the screen they
+      // came for, or the dashboard). If that sign-in does not go through — or a referral code could not
+      // be attached, which the success card must show — fall back to the card and its login button.
+      if (!referralFailed) {
+        try {
+          const signedIn = await login(adminEmail, adminPassword);
+          if (signedIn.status === 'ok') {
+            navigate(next ?? '/dashboard', { replace: true });
+            return;
+          }
+        } catch { /* fall through to the success card */ }
+      }
+      setSuccess(true);
     } catch {
       setError(L('पंजीकरण नहीं हुआ — इंटरनेट कनेक्शन जाँचकर दोबारा कोशिश करें।', 'Registration failed. Please check your connection and try again.'));
     } finally {
@@ -236,7 +297,7 @@ const Register: React.FC = () => {
                 {referralResult.text}
               </p>
             )}
-            <Button className="w-full" size="lg" onClick={() => navigate('/login')}>
+            <Button className="w-full" size="lg" onClick={() => navigate(withNext('/login', next, needsAppData))}>
               {L('लॉगिन पर जाएँ →', 'Go to Login →')}
             </Button>
           </CardContent>
@@ -295,10 +356,29 @@ const Register: React.FC = () => {
         </div>
         {/* Mobile logo */}
         <div className="lg:hidden mb-6 text-center">
-          <div className="h-14 w-14 rounded-xl bg-primary text-primary-foreground flex items-center justify-center mx-auto mb-3">
-            <Building2 className="h-7 w-7" />
-          </div>
+          <Link to="/" className="block" aria-label={L('सहकार लेखा — मुख्य पेज', 'SahakarLekha — home page')}>
+            <div className="h-14 w-14 rounded-xl bg-primary text-primary-foreground flex items-center justify-center mx-auto mb-3">
+              <Building2 className="h-7 w-7" />
+            </div>
+          </Link>
           <h1 className="text-xl font-bold">{L('नई समिति पंजीकरण', 'New Society Registration')}</h1>
+        </div>
+
+        {/* What registering means, before the first field (audit 2026-11-16, J-5). Every figure comes from
+            lib/plans — the same constants the pricing page uses. */}
+        <div className="w-full max-w-md mb-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+          <p className="font-medium text-foreground">
+            {L(`${TRIAL_DAYS} दिन का मुफ़्त trial — रजिस्टर करते समय कोई भुगतान नहीं।`,
+              `${TRIAL_DAYS}-day free trial — nothing to pay when you register.`)}
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            {L(`Trial में 1 user। आगे जारी रखना हो तो plan ${priceLabel(PLAN_CATALOG.starter.price)}/साल + GST से। `,
+              `The trial has 1 user. To continue afterwards, plans start at ${priceLabel(PLAN_CATALOG.starter.price)}/year + GST. `)}
+            <Link to="/pricing" target="_blank" rel="noopener" className="text-primary font-medium hover:underline"
+              onClick={() => trackEvent('cta_click', { location: 'register', target: 'pricing' })}>
+              {L('सभी plan देखें', 'See all plans')}
+            </Link>
+          </p>
         </div>
 
         <Card className="w-full max-w-md shadow-lg">
@@ -484,6 +564,7 @@ const Register: React.FC = () => {
                       placeholder={L('कम से कम 6 अक्षर', 'Minimum 6 characters')}
                       className="pr-10"
                       required
+                      aria-describedby="register-password-hint"
                     />
                     <button
                       type="button"
@@ -494,6 +575,11 @@ const Register: React.FC = () => {
                     </button>
                   </div>
                 </div>
+
+                <p id="register-password-hint" className="-mt-2 text-xs text-muted-foreground">
+                  {L('कम से कम 6 अक्षर। इसी ईमेल और पासवर्ड से आप लॉगिन करेंगे — ईमेल ध्यान से लिखें।',
+                    'At least 6 characters. You will log in with this email and password — type the email carefully.')}
+                </p>
 
                 <div className="space-y-2">
                   <Label>{L('पासवर्ड दोबारा', 'Confirm Password')} <span className="text-destructive">*</span></Label>
@@ -555,9 +641,18 @@ const Register: React.FC = () => {
               </form>
             )}
 
+            {/* Consent by action, with the documents one tap away (they open in a new tab so the form stays). */}
+            <p className="mt-4 text-center text-xs text-muted-foreground">
+              {L('रजिस्टर करके आप हमारी ', 'By registering you agree to our ')}
+              <Link to="/terms" target="_blank" rel="noopener" className="underline hover:text-primary">{L('शर्तों', 'Terms')}</Link>
+              {L(' और ', ' and ')}
+              <Link to="/privacy" target="_blank" rel="noopener" className="underline hover:text-primary">{L('गोपनीयता नीति', 'Privacy Policy')}</Link>
+              {L(' से सहमत होते हैं।', '.')}
+            </p>
+
             <div className="mt-5 text-center text-sm text-muted-foreground">
               {L('पहले से पंजीकृत हैं?', 'Already registered?')}{' '}
-              <Link to="/login" className="text-primary font-medium hover:underline">
+              <Link to={withNext('/login', next, needsAppData)} className="text-primary font-medium hover:underline">
                 {L('यहाँ लॉगिन करें', 'Login here')}
               </Link>
             </div>

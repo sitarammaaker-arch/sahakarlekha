@@ -13,6 +13,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePageTracking } from "@/lib/analytics";
 import { reloadOnceForStaleChunk } from "@/lib/chunkReload";
 import { needsAppData } from "@/lib/appDataPaths";
+import { safeNext, NEXT_PARAM } from "@/lib/auth/entryContext";
 import { captureReferral } from "@/lib/referral/referralCode";
 
 // Auto-recover from stale-chunk errors after a new deploy. When the app has stayed
@@ -248,9 +249,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 // Public Route wrapper (redirects to dashboard if authenticated)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
-  
+  const { search } = useLocation();
+
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    // ?next= (validated: an in-app path of this site only — lib/auth/entryContext) is where the user was
+    // going before login or registration; without one, the dashboard.
+    const next = safeNext(new URLSearchParams(search).get(NEXT_PARAM), needsAppData);
+    return <Navigate to={next ?? '/dashboard'} replace />;
   }
   
   return <>{children}</>;

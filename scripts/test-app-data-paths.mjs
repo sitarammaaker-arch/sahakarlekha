@@ -19,7 +19,7 @@ ok('App.tsx statically imports no data context, app layout, guard or export bind
 ok('App.tsx loads the shell with a dynamic import', /import\(["']\.\/AppDataShell["']\)/.test(app));
 ok('the shell still nests every provider', ['DataProvider', 'LabourProvider', 'HousingProvider', 'DairyProvider', 'MarketingProvider', 'TransportOpsProvider', 'ConsumerProvider', 'ExportContextBinder'].every((p) => shell.includes(`<${p}`)));
 ok('the protected shell keeps the login check, the loading screen, the layout and the capability guard',
-  shell.includes('<Navigate to="/login" replace />') && shell.includes('isLoading') && shell.includes('<MainLayout><CapabilityGuard>') && shell.includes('useNoIndex()'));
+  shell.includes("<Navigate to={withNext('/login', next, needsAppData)} replace />") && shell.includes('isLoading') && shell.includes('<MainLayout><CapabilityGuard>') && shell.includes('useNoIndex()'));
 ok('the gate keeps the providers mounted once an app path was opened', /everWanted/.test(app) && /wanted \|\| everWanted/.test(app));
 
 // 1b. the two entry-side modules that need the session do not import lib/storage (chart templates)
