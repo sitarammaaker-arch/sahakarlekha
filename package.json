@@ -143,6 +143,7 @@
     "test:transport-type": "node scripts/test-transport-type.mjs",
     "test:compulsory-deposit": "node scripts/test-compulsory-deposit.mjs",
     "test:recovery-list": "node scripts/test-recovery-list.mjs",
+    "test:surety-register": "node scripts/test-surety-register.mjs",
     "test:credit-type": "node scripts/test-credit-type.mjs",
     "test:activity-pl": "node scripts/test-activity-pl.mjs",
     "test:gta-gst": "node scripts/test-gta-gst.mjs",

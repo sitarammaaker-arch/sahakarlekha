@@ -654,6 +654,14 @@ export interface VehicleExpense {
 export type LoanType = 'short-term' | 'medium-term' | 'long-term';
 export type LoanStatus = 'active' | 'cleared' | 'overdue';
 
+/** A person standing surety (guarantor) for a loan: another member (memberId), or someone outside the society (name). */
+export interface LoanSurety {
+  memberId?: string;   // members.id when the surety is a member
+  name: string;        // the outside surety's name; for a member it may be empty (resolved from the member)
+  phone?: string;
+  address?: string;
+}
+
 export interface Loan {
   id: string;
   loanNo: string;
@@ -670,6 +678,7 @@ export interface Loan {
   createdAt: string;
   isDeleted?: boolean;   // ECR-02 / RULE-5: soft-delete — retain the loan register row for audit, hide from the app.
   voucherId?: string;    // P0-3 (L3): id of the auto-generated disbursement voucher, so deleteLoan cancels exactly it instead of a fragile narration-substring match.
+  sureties?: LoanSurety[];   // late-added jsonb column (migration 169) — saved in step 2, never in the base upsert (RULE 1).
 }
 
 // ── Deposits (Core for Credit/PACS) — SB / FD / RD / Pigmy / Compulsory ────────

@@ -6,6 +6,7 @@
  * RULE 5: orphan references (parent already deleted) and soft-deleted vouchers never block — the
  * caller passes LIVE vouchers, and stock movements only count while their purchase/sale still exists.
  */
+import { liveLoansGuaranteedBy } from '@/lib/loans/sureties';
 import type { Asset, Customer, EntityLink, Loan, Purchase, SalaryRecord, Sale, StockMovement, Supplier, Voucher } from '@/types';
 
 export type EntityLinkType = 'member' | 'customer' | 'supplier' | 'stockItem' | 'employee' | 'account' | 'loan' | 'asset';
@@ -70,6 +71,16 @@ export function computeEntityLinks(
       labelHi: `${lCount} ऋण`, labelEn: `${lCount} Loan(s)`,
       instructionHi: 'ऋण रजिस्टर पेज पर जाएँ → पहले ये ऋण हटाएँ',
       instructionEn: 'Go to Loan Register → delete these loans first',
+      blocking: true,
+    });
+    // A member standing surety for a LIVE loan (not deleted, not cleared) — deleting them would leave the loan's
+    // surety pointing at nobody. A cleared or deleted loan never blocks (RULE 5).
+    const sCount = liveLoansGuaranteedBy(loans, id);
+    if (sCount > 0) links.push({
+      module: 'Loans', count: sCount,
+      labelHi: `${sCount} ऋण में ज़मानतदार`, labelEn: `Surety for ${sCount} loan(s)`,
+      instructionHi: 'यह सदस्य चालू ऋण का ज़मानतदार है — ऋण रजिस्टर में उस ऋण का ज़मानतदार बदलें, या स्थिति "इस्तीफ़ा / निष्कासित / मृत" करें।',
+      instructionEn: 'This member is a surety on a live loan — change that loan\'s surety in the Loan Register, or change the member\'s status instead.',
       blocking: true,
     });
     const dCount = depositAccounts.filter(d => d.memberId === id).length;
