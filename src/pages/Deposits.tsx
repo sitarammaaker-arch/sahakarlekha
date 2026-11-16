@@ -371,7 +371,7 @@ const Deposits: React.FC = () => {
                         {canEdit && d.status === 'active' && (
                           <>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50" title={hi ? 'जमा' : 'Deposit'} onClick={() => openTxn(d, 'deposit')}><ArrowDownCircle className="h-4 w-4" /></Button>
-                            {allowsWithdrawal(d.depositType) && (
+                            {allowsWithdrawal(d.depositType, society.compulsoryDepositWithdrawal === true) && (
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600 hover:bg-amber-50" title={hi ? 'निकासी' : 'Withdraw'} onClick={() => openTxn(d, 'withdraw')}><ArrowUpCircle className="h-4 w-4" /></Button>
                             )}
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:bg-indigo-50" title={hi ? 'ब्याज जमा करें' : 'Credit interest'} onClick={() => openInterest(d)}><Percent className="h-4 w-4" /></Button>
@@ -446,7 +446,9 @@ const Deposits: React.FC = () => {
               )}
             </div>
             {form.depositType === 'CD' && (
-              <p className="text-[11px] text-muted-foreground">{hi ? 'हर सदस्य का एक ही अनिवार्य जमा खाता होता है। बीच में निकासी नहीं होती — खाता बंद करने पर पूरी राशि लौटती है। मासिक अंशदान उपविधि के अनुसार भरें।' : 'A member has one compulsory deposit account. There are no withdrawals — the whole balance is paid back when the account is closed. Enter the monthly contribution your bye-laws set.'}</p>
+              <p className="text-[11px] text-muted-foreground">{society.compulsoryDepositWithdrawal === true
+                ? (hi ? 'हर सदस्य का एक ही अनिवार्य जमा खाता होता है। इस समिति में बीच में निकासी चालू है (समिति सेटअप)। मासिक अंशदान उपविधि के अनुसार भरें।' : 'A member has one compulsory deposit account. Withdrawals are on for this society (Society Setup). Enter the monthly contribution your bye-laws set.')
+                : (hi ? 'हर सदस्य का एक ही अनिवार्य जमा खाता होता है। बीच में निकासी नहीं होती — खाता बंद करने पर पूरी राशि लौटती है। मासिक अंशदान उपविधि के अनुसार भरें।' : 'A member has one compulsory deposit account. There are no withdrawals — the whole balance is paid back when the account is closed. Enter the monthly contribution your bye-laws set.')}</p>
             )}
             {Number(form.openingAmount) > 0 && (
               <div>

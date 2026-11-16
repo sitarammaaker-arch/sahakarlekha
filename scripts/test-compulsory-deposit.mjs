@@ -82,6 +82,37 @@ ok(dep.debitAccountId === '3301' && dep.creditAccountId === '2112', 'deposit →
 const cls = E.depositPosting('closure', acc);
 ok(cls.debitAccountId === '2112' && cls.creditAccountId === '3301', 'closure → Dr compulsory deposit / Cr cash (the refund)');
 
+// Per-society switch (migration 171): a society may allow withdrawals from the compulsory deposit; default is off.
+ok(E.allowsWithdrawal('CD', false) === false && E.allowsWithdrawal('CD', undefined) === false, 'switch off / unset → no withdrawal (today\'s behaviour)');
+ok(E.allowsWithdrawal('CD', true) === true, 'switch on → withdrawal allowed');
+for (const t of ['SB', 'FD', 'RD', 'PIGMY']) ok(E.allowsWithdrawal(t, false) === true && E.allowsWithdrawal(t, true) === true, `${t}: the switch changes nothing`);
+ok(E.validateDepositTxn('withdraw', 100, 5000, 'CD', false).ok === false, 'withdraw from CD refused with the switch off');
+ok(E.validateDepositTxn('withdraw', 100, 5000, 'CD', true).ok === true, 'withdraw from CD allowed with the switch on');
+ok(E.validateDepositTxn('withdraw', 5001, 5000, 'CD', true).ok === false, 'even when allowed, never more than the balance');
+ok(E.validateDepositTxn('withdraw', 0, 5000, 'CD', true).ok === false, 'even when allowed, never a zero amount');
+ok(/Society Setup|समिति सेटअप/.test(E.validateDepositTxn('withdraw', 100, 5000, 'CD', false).error), 'the refusal says where the switch is');
+// A withdrawal is not an unpaid contribution: arrears count contributions paid in, so taking money out adds no arrears.
+const wAcct = { id: 'w1', openDate: '2026-04-10', installmentAmount: 500 };
+const wTx = [{ depositAccountId: 'w1', date: '2026-04-10', txnType: 'open', amount: 500 }, { depositAccountId: 'w1', date: '2026-05-05', txnType: 'deposit', amount: 500 }];
+const wBefore = CD.compulsoryArrears(wAcct, wTx, '2026-05-31').arrears;
+const wAfter = CD.compulsoryArrears(wAcct, [...wTx, { depositAccountId: 'w1', date: '2026-05-20', txnType: 'withdraw', amount: 400 }], '2026-05-31').arrears;
+ok(wBefore === 0 && wAfter === 0, 'a withdrawal does not turn into arrears');
+
+// Wiring of the switch.
+{
+  const { readFileSync } = await import('node:fs');
+  const rd = (f) => readFileSync(pathResolve(HERE, '..', f), 'utf8').replace(/\r\n/g, '\n');
+  ok(/validateDepositTxn\(txnType, amt, acct\.balance, acct\.depositType, societyRef\.current\?\.compulsoryDepositWithdrawal === true\)/.test(rd('src/contexts/DataContext.tsx')), 'the data layer enforces the society\'s switch, not the page');
+  ok(/allowsWithdrawal\(d\.depositType, society\.compulsoryDepositWithdrawal === true\)/.test(rd('src/pages/Deposits.tsx')), 'the withdraw button follows the same switch');
+  const ss = rd('src/pages/SocietySetup.tsx');
+  ok(/const hasCompulsoryDeposit = !!resolveDepositLiabilityAccount\('CD', accounts\);/.test(ss) && /\{hasCompulsoryDeposit && \(/.test(ss), 'the switch is shown only where the chart has the compulsory-deposit head');
+  ok(/if \(dropped\.includes\('compulsoryDepositWithdrawal'\)\) \{[\s\S]{0,900}?updateSociety\(\{ compulsoryDepositWithdrawal: false \}, \{ onSaved: say, onFailed: say \}\);[\s\S]{0,40}?return;/.test(ss) && /migration 171/.test(ss), 'no column yet → the switch is put back and migration 171 is named; no "turned on" toast');
+  const mig = rd('supabase/migrations/171_compulsory_deposit_withdrawal.sql');
+  ok(/alter table public\.society_settings add column if not exists "compulsoryDepositWithdrawal" boolean default false;/.test(mig) && /^begin;/m.test(mig) && /^commit;/m.test(mig), 'migration 171 adds the column, default false, idempotently');
+  ok(/drop column if exists "compulsoryDepositWithdrawal";/.test(rd('supabase/migrations/171_compulsory_deposit_withdrawal_down.sql')) && /alter table society_settings add column if not exists "compulsoryDepositWithdrawal" boolean default false;/.test(rd('supabase-tables.sql')), 'down migration and supabase-tables.sql know the column');
+  ok(/compulsoryDepositWithdrawal\?: boolean;/.test(rd('src/types/index.ts')), 'SocietySettings has the optional field');
+}
+
 // The closure payout is a PAYMENT voucher (staging 2026-11-16: it was numbered as a receipt, RV/…).
 ok(E.depositVoucherType('closure') === 'payment' && E.depositVoucherType('withdraw') === 'payment', 'money going out is a payment voucher');
 ok(E.depositVoucherType('open') === 'receipt' && E.depositVoucherType('deposit') === 'receipt', 'money coming in is a receipt voucher');

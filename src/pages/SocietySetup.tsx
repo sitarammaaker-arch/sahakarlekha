@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { asDayCount, DAY_COUNT_OPTIONS, type DayCountBasis } from '@/lib/interestDayCount';
+import { resolveDepositLiabilityAccount } from '@/lib/depositEngine';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -68,6 +69,25 @@ const SocietySetup: React.FC = () => {
   const saveDayCount = (v: DayCountBasis) => {
     updateSociety({ interestDayCount: v });
     toast({ title: language === 'hi' ? 'ब्याज का वर्ष-आधार सहेजा' : 'Interest year basis saved' });
+  };
+  // Compulsory (thrift) deposit: may a member withdraw while the account is open? A bye-law matter, so the society
+  // decides. Shown only where the chart has the compulsory-deposit head. The toast waits for the cloud: if the
+  // database has no such column yet (migration 171), the switch is put back and the user is told.
+  const hasCompulsoryDeposit = !!resolveDepositLiabilityAccount('CD', accounts);
+  const saveCdWithdrawal = (allow: boolean) => {
+    const hiL = language === 'hi';
+    updateSociety({ compulsoryDepositWithdrawal: allow }, {
+      onSaved: (dropped) => {
+        if (dropped.includes('compulsoryDepositWithdrawal')) {
+          // Do not leave the screen showing a switch the database never took. Only one message shows at a time and
+          // the settings save shows its own, so ours goes out after that second save has answered.
+          const say = () => toast({ title: hiL ? 'यह सेटिंग सेव नहीं हुई' : 'This setting was not saved', description: hiL ? 'डेटाबेस में इसका खाना अभी नहीं है — Supabase में migration 171 चलानी बाकी है। निकासी पहले की तरह बंद है।' : 'The database has no column for it yet — migration 171 has not been run in Supabase. Withdrawals stay off, as before.', variant: 'destructive', duration: 15000 });
+          updateSociety({ compulsoryDepositWithdrawal: false }, { onSaved: say, onFailed: say });
+          return;
+        }
+        toast({ title: allow ? (hiL ? 'अनिवार्य जमा से निकासी चालू की गई' : 'Withdrawals from compulsory deposit turned on') : (hiL ? 'अनिवार्य जमा से निकासी बंद की गई' : 'Withdrawals from compulsory deposit turned off') });
+      },
+    });
   };
   // ECR-20: godown storage-loss norm %
   const [storageLossNormInput, setStorageLossNormInput] = useState(String(society.storageLossNormPct ?? ''));
@@ -1091,6 +1111,26 @@ const SocietySetup: React.FC = () => {
                   </select>
                 </div>
               </div>
+
+              {/* Compulsory (thrift) deposit — withdrawal while the account is open */}
+              {hasCompulsoryDeposit && (
+                <div className="mt-6 p-4 rounded-lg border-2 border-primary/30 bg-primary/5">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="min-w-[220px] max-w-xl">
+                      <div className="font-semibold text-primary">{language === 'hi' ? 'अनिवार्य जमा से निकासी' : 'Withdrawal from compulsory deposit'}</div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {language === 'hi'
+                          ? 'सदस्य अपना अनिवार्य (थ्रिफ्ट) जमा खाता चालू रहते निकासी कर सके या नहीं — अपनी उपविधि के अनुसार चुनें। "बंद" रहने पर रकम केवल खाता बंद करने पर लौटती है। बदलाव आगे की निकासी पर लागू होता है; पहले दर्ज एंट्री नहीं बदलतीं।'
+                          : 'Whether a member may withdraw from a compulsory (thrift) deposit while the account is open — choose per your bye-laws. When off, the money is paid back only on closing the account. Applies to withdrawals from now on; entries already posted do not change.'}
+                      </p>
+                    </div>
+                    <select value={society.compulsoryDepositWithdrawal === true ? 'on' : 'off'} onChange={e => saveCdWithdrawal(e.target.value === 'on')} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+                      <option value="off">{language === 'hi' ? 'बंद — केवल खाता बंद करने पर' : 'Off — only on closing the account'}</option>
+                      <option value="on">{language === 'hi' ? 'चालू — निकासी की जा सकती है' : 'On — withdrawals allowed'}</option>
+                    </select>
+                  </div>
+                </div>
+              )}
 
               {/* ECR-20: godown storage-loss norm */}
               <div className="mt-6 p-4 rounded-lg border-2 border-primary/30 bg-primary/5">
