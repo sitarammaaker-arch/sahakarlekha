@@ -75,6 +75,8 @@ const SOCIETY_TYPE_LABEL: Record<string, string> = {
   consumer: 'Consumer',
   labour: 'Labour',
   transport: 'Transport',
+  credit: 'Credit',
+  thrift_credit: 'Thrift & Credit',
   other: 'Other',
 };
 

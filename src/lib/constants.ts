@@ -12,6 +12,10 @@ export const SOCIETY_TYPES: { value: SocietyType; label: string; labelHi: string
   { value: 'multistate',           label: 'Multi-State Cooperative Society', labelHi: 'बहु-राज्य सहकारी समिति' },
   { value: 'multipurpose',         label: 'Multipurpose Cooperative Society', labelHi: 'बहुउद्देश्यीय सहकारी समिति' },
   { value: 'transport',            label: 'Transport Cooperative Society', labelHi: 'परिवहन सहकारी समिति' },
+  // Non-agricultural credit, as TWO types (founder decision 2026-11-16: one combined name confused customers —
+  // a society looks for its own name in the list). Same screens for both; see societyTypeCapabilities.
+  { value: 'credit',               label: 'Credit Cooperative Society', labelHi: 'साख सहकारी समिति (Credit)' },
+  { value: 'thrift_credit',        label: 'Thrift & Credit Cooperative Society', labelHi: 'बचत एवं साख सहकारी समिति (Thrift & Credit)' },
   { value: 'other',                label: 'Other', labelHi: 'अन्य' },
 ];
 

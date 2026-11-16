@@ -22,6 +22,36 @@ export const SOCIETY_TYPES_EN: Record<string, SocietyTypeEn> = {
       'Member share register, Trial Balance, Balance Sheet and audit certificate',
     ],
   },
+  'thrift-credit': {
+    intro: 'Members’ compulsory deposits, their savings, the loans given to them and the interest on those — the whole accounts of an employees’ society or a thrift & credit society in one place.',
+    pains: [
+      'Separate accounts for each member’s compulsory deposit and savings',
+      'Member-wise loans, instalments, interest and dues',
+      'Correct accounting of interest on deposits and interest on loans',
+      'The share, nomination and audit registers',
+    ],
+    solves: [
+      'A separate head for compulsory (thrift) deposits in the chart of accounts; entries are made by voucher',
+      'Deposit accounts — savings, FD, RD and pigmy; a voucher is posted for every deposit and withdrawal',
+      'Loan register and interest calculation on loans; reminders on WhatsApp for dues',
+      'Share register, nomination register, Trial Balance, Balance Sheet and audit certificate',
+    ],
+  },
+  credit: {
+    intro: 'Member deposits, loans to members and the interest on both — the whole accounts of a credit society or an urban credit society in one place.',
+    pains: [
+      'A separate account for each member’s deposit, kept like a passbook',
+      'Member-wise loans, instalments, interest and dues',
+      'Correct accounting of interest on deposits and interest on loans',
+      'The share, nomination and audit registers',
+    ],
+    solves: [
+      'Deposit accounts — savings, FD, RD and pigmy; a voucher is posted for every deposit and withdrawal',
+      'Loan register — member-wise loans and dues, with reminders on WhatsApp',
+      'Interest calculation on loans and an entry for interest on deposits',
+      'Share register, nomination register, Trial Balance, Balance Sheet and audit certificate',
+    ],
+  },
   dairy: {
     intro: "Milk collection, member-wise payment, credit sales of cattle feed and commission — a dairy society's whole accounts in plain language, in one place.",
     pains: [

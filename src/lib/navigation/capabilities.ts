@@ -14,6 +14,7 @@ export type Role = 'admin' | 'accountant' | 'viewer' | 'auditor';
 export type Capability =
   | 'inventory_sales'
   | 'lending'
+  | 'agri_credit'             // farm credit on top of lending: KCC crop loans and the NABARD report. A thrift & credit society lends but has neither.
   | 'dairy_collection'
   | 'procurement_msp'
   | 'warehousing'

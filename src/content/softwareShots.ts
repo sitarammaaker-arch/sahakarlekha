@@ -34,6 +34,8 @@ const S = {
 
 export const SOFTWARE_SHOTS: Record<string, SoftwareShot[]> = {
   pacs: [S.loan, S.deposits, S.tb],
+  credit: [S.loan, S.deposits, S.bs],
+  'thrift-credit': [S.deposits, S.loan, S.tb],
   dairy: [S.milk, S.milkPay, S.milkOut],
   marketing: [S.lots, S.agency, S.trading],
   consumer: [S.stock, S.sales, S.bs],

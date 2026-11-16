@@ -42,6 +42,8 @@ export const TYPE_INFERRED_ACTIVITIES: Record<SocietyType, Activity[]> = {
   multipurpose: ['credit_short_term', 'deposits_savings', 'milk_procurement', 'consumer_retail', 'fair_price_shop_pds', 'foodgrain_procurement', 'transport'],
   // labour_works only for its pf_esi (drivers/conductors); 'labour' is outside the transport entitlement and drops out.
   transport: ['transport', 'labour_works'],
+  credit: ['credit_short_term', 'deposits_savings', 'deposits_term'],
+  thrift_credit: ['credit_short_term', 'deposits_savings', 'deposits_term'],
   other: ['credit_short_term', 'deposits_savings', 'consumer_retail'],
 };
 

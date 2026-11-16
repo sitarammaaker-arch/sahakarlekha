@@ -56,7 +56,11 @@ export function resolveEntitlements(
   const active = activeRows(rows, nowMs ?? Date.now());
   const template: Capability[] = SOCIETY_TYPE_CAPABILITIES[societyType] ?? [];
   const jurisdiction = jurisdictionCapabilities(societyType, state);
-  const grants = active.filter((r) => r.source !== ADMIN_SOURCE && r.mode === 'grant').map((r) => r.capability);
+  // A granted 'lending' row keeps what it always meant. Before 'agri_credit' existed, lending alone opened the KCC
+  // and NABARD screens; a society that was GRANTED lending (plan / plugin / system row) must not lose them, so the
+  // grant implies agri_credit. A type TEMPLATE is explicit instead (credit: lending without agri_credit).
+  const grants = active.filter((r) => r.source !== ADMIN_SOURCE && r.mode === 'grant')
+    .flatMap((r): Capability[] => (r.capability === 'lending' ? ['lending', 'agri_credit'] : [r.capability]));
   const revokes = new Set<Capability>(
     active.filter((r) => r.source !== ADMIN_SOURCE && r.mode === 'revoke').map((r) => r.capability),
   );
