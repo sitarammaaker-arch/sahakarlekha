@@ -3952,3 +3952,6 @@ alter table loans add column if not exists sureties jsonb default '[]'::jsonb;
 
 -- 170 · loan monthly instalment — the principal instalment fixed for the loan (null = not fixed)
 alter table loans add column if not exists "monthlyInstallment" numeric;
+
+-- 171 · per-society switch: may a member withdraw from a compulsory (thrift) deposit while the account is open
+alter table society_settings add column if not exists "compulsoryDepositWithdrawal" boolean default false;

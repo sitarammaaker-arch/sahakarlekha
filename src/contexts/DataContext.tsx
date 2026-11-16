@@ -4143,7 +4143,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!acct) return false;
     if (acct.status !== 'active') { toastRef.current({ title: tr('खाता सक्रिय नहीं', 'Account not active'), description: 'Only active deposit accounts can transact.', variant: 'destructive' }); return false; }
     const amt = toRupees(toMinor(amount));
-    const v = validateDepositTxn(txnType, amt, acct.balance, acct.depositType);
+    const v = validateDepositTxn(txnType, amt, acct.balance, acct.depositType, societyRef.current?.compulsoryDepositWithdrawal === true);
     if (!v.ok) { toastRef.current({ title: tr('अमान्य लेनदेन', 'Invalid transaction'), description: v.error, variant: 'destructive', duration: 9000 }); return false; }
     const before = acct;
     const newBal = postDepositLeg(acct, txnType, amt, mode, date);

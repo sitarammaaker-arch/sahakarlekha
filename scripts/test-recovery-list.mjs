@@ -172,7 +172,8 @@ ok(R.recoveryEntryProblems(items, { 'cd:a1': { deposit: 999999 } }, (id) => outs
 
 // 7. Wiring: the screen posts through the two existing routines — never its own vouchers.
 const { readFileSync } = await import('node:fs');
-const src = (f) => readFileSync(pathResolve(HERE, '..', f), 'utf8');
+// Normalise line endings: a Windows checkout has CRLF, and the patterns below span lines.
+const src = (f) => readFileSync(pathResolve(HERE, '..', f), 'utf8').replace(/\r\n/g, '\n');
 const dep = src('src/pages/Deposits.tsx');
 const post = dep.slice(dep.indexOf('const postRecovery = () => {'), dep.indexOf('// ── Deposit / Withdraw dialog'));
 ok(/postDepositTransaction\(a\.depositAccountId, 'deposit', a\.amount, rlMode, rlDate\)/.test(post), 'compulsory deposit goes through postDepositTransaction');

@@ -1161,6 +1161,10 @@ export interface SocietySettings {
   approvalRequired?: boolean;  // opt-in maker-checker: when true, PENDING vouchers are held out of the ledger/reports until approved (REJECTED are always excluded). Default (undefined/false) = no gating — behaviour unchanged.
   approvalThresholdAmount?: number;  // ECR-11: manual vouchers with amount ≥ this need approval (matrix). Undefined/0 = no threshold rule.
   approvalVoucherTypes?: VoucherType[];  // ECR-11: voucher types that ALWAYS need approval regardless of amount (e.g. journal/contra). Undefined/[] = no type rule.
+  /** Whether a member may withdraw from a compulsory (thrift) deposit while the account is open. Off (unset /
+   *  false) = no withdrawal, the balance is paid back only when the account is closed. The society decides per its
+   *  bye-laws; nothing statutory is assumed. Late-added column (migration 171). */
+  compulsoryDepositWithdrawal?: boolean;
   interestDayCount?: '365' | 'actual' | '360';  // NABARD RFP §16.1.2: year basis for interest (loans, KCC, SB). Undefined = '365' (unchanged behaviour).
   /** Migration 136 (Marketing D1): post each MSP lot through 5116 Govt Procurement Purchase (Dr 5116 / Cr 2105 + Dr agency / Cr 5116). */
   procurementVia5116?: boolean;

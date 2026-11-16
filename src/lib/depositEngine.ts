@@ -68,16 +68,20 @@ export interface DepositValidation {
   error?: string;
 }
 
-/** Whether money can be taken out of this product while the account stays open. A compulsory deposit cannot:
- *  it is paid back in full when the account is closed (the member leaves), never in part. */
-export function allowsWithdrawal(type: DepositType): boolean {
-  return type !== 'CD';
+/**
+ * Whether money can be taken out of this product while the account stays open. A compulsory deposit cannot, unless
+ * the society has switched withdrawals on (SocietySettings.compulsoryDepositWithdrawal — a bye-law matter). With the
+ * switch off the balance is paid back in full when the account is closed, never in part.
+ */
+export function allowsWithdrawal(type: DepositType, compulsoryWithdrawalAllowed = false): boolean {
+  return type !== 'CD' || compulsoryWithdrawalAllowed === true;
 }
 
-/** Amount must be positive; a withdrawal cannot exceed the current balance; a compulsory deposit has no withdrawals. */
-export function validateDepositTxn(txnType: DepositTxnType, amount: number, balance: number, depositType?: DepositType): DepositValidation {
-  if (txnType === 'withdraw' && depositType && !allowsWithdrawal(depositType)) {
-    return { ok: false, error: tr('अनिवार्य जमा से बीच में निकासी नहीं होती — सदस्यता समाप्त होने पर खाता बंद करके पूरी राशि लौटाएँ।', 'A compulsory deposit has no withdrawals — close the account when membership ends to pay the whole balance back.') };
+/** Amount must be positive; a withdrawal cannot exceed the current balance; a compulsory deposit has no withdrawals
+ *  unless the society allows them. */
+export function validateDepositTxn(txnType: DepositTxnType, amount: number, balance: number, depositType?: DepositType, compulsoryWithdrawalAllowed = false): DepositValidation {
+  if (txnType === 'withdraw' && depositType && !allowsWithdrawal(depositType, compulsoryWithdrawalAllowed)) {
+    return { ok: false, error: tr('इस समिति में अनिवार्य जमा से बीच में निकासी बंद है — खाता बंद करके पूरी राशि लौटाएँ, या व्यवस्थापक समिति सेटअप में निकासी चालू करे।', 'Withdrawals from a compulsory deposit are off for this society — close the account to pay the whole balance back, or have an admin turn withdrawals on in Society Setup.') };
   }
   if (!(amount > 0)) return { ok: false, error: tr('राशि 0 से ज़्यादा होनी चाहिए / Amount must be greater than 0', 'Amount must be greater than 0') };
   if (txnType === 'withdraw' && amount > balance) {
