@@ -8,6 +8,10 @@
  * Compulsory (thrift) deposit — type CD: one account per member with a monthly contribution, its own liability
  * head, a monthly collection sheet for all members at once, arrears, and no withdrawal until the account is closed.
  * Offered only where the chart has the compulsory-deposit head (a Thrift & Credit chart ships it).
+ *
+ * Monthly recovery list (same societies): compulsory deposit + loan instalment + loan interest each member owes for
+ * a month, as one sheet for the employer who deducts it from salary. A demand only — it posts nothing
+ * (lib/recoveryList.ts).
  */
 import React, { useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -21,7 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search, Percent, Lock, ListChecks, Download, FileSpreadsheet, CalendarCheck } from 'lucide-react';
+import { PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, History, Search, Percent, Lock, ListChecks, Download, FileSpreadsheet, CalendarCheck, ClipboardList } from 'lucide-react';
 import { fmtDate } from '@/lib/dateUtils';
 import { sbInterest } from '@/lib/depositInterest';
 import { asDayCount } from '@/lib/interestDayCount';
@@ -29,6 +33,9 @@ import { buildRdSchedule, missedCount } from '@/lib/rdSchedule';
 import { pigmyAgents, pigmyAccountsForAgent, collectionTotal } from '@/lib/pigmy';
 import { compulsoryAccounts, collectionSheet, compulsoryArrears, monthOf } from '@/lib/compulsoryDeposit';
 import { resolveDepositLiabilityAccount, allowsWithdrawal } from '@/lib/depositEngine';
+import { recoveryRows, recoveryListTable, recoveryTotals, monthLabel } from '@/lib/recoveryList';
+import { loanInterestDue } from '@/lib/loans/interestAccrual';
+import { useLoanAccruals } from '@/hooks/useLoanAccruals';
 import { useToast } from '@/hooks/use-toast';
 import type { DepositType, DepositAccount } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
@@ -53,7 +60,7 @@ const today = () => new Date().toISOString().split('T')[0];
 const Deposits: React.FC = () => {
   const { language } = useLanguage();
   const { can } = useAuth();
-  const { members, accounts, depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions, vouchers, society } = useData();
+  const { members, accounts, loans, depositAccounts, depositTransactions, addDepositAccount, postDepositTransaction, postDepositInterest, closeDepositAccount, getDepositTransactions, vouchers, society } = useData();
   const { toast } = useToast();
   const hi = language === 'hi';
   // ECR-06 17-role: RBAC permission gate, not a hardcoded legacy list. `update` (not `create`)
@@ -149,6 +156,17 @@ const Deposits: React.FC = () => {
     if (posted > 0) setCdOpen(false);
   };
 
+  // ── Monthly recovery list (a demand sheet — posts nothing) ─────────────────
+  const { accruals } = useLoanAccruals();
+  const [rlOpen, setRlOpen] = useState(false);
+  const [rlMonth, setRlMonth] = useState(monthOf(today()));
+  const rlRows = useMemo(() => (rlOpen && /^\d{4}-\d{2}$/.test(rlMonth)
+    ? recoveryRows({ month: rlMonth, depositAccounts, depositTransactions, loans, interestDueOf: id => loanInterestDue(id, accruals, vouchers).receivable })
+    : []), [rlOpen, rlMonth, depositAccounts, depositTransactions, loans, accruals, vouchers]);
+  const rlTable = recoveryListTable(rlRows, /^\d{4}-\d{2}$/.test(rlMonth) ? rlMonth : monthOf(today()),
+    id => { const m = members.find(x => x.id === id); return { memberNo: m?.memberId ?? '', name: m?.name ?? id }; });
+  const rlTotals = recoveryTotals(rlRows);
+
   // ── Deposit / Withdraw dialog ──────────────────────────────────────────────
   const [txnAcct, setTxnAcct] = useState<DepositAccount | null>(null);
   const [txnKind, setTxnKind] = useState<'deposit' | 'withdraw'>('deposit');
@@ -228,6 +246,10 @@ const Deposits: React.FC = () => {
             Deliberately OUTSIDE `canEdit`: a viewer may export what a viewer may see.
           */}
           <EntityExportButton entityKey="deposit_account" />
+          {/* Read-only sheet, so like the exports it sits outside `canEdit`. Shown where the compulsory deposit exists. */}
+          {hasCdHead && (
+            <Button variant="outline" size="sm" className="gap-1" onClick={() => { setRlMonth(monthOf(today())); setRlOpen(true); }}><ClipboardList className="h-4 w-4" />{hi ? 'मासिक वसूली सूची' : 'Monthly Recovery List'}</Button>
+          )}
           {depositAccounts.length > 0 && (
             <>
               <Button variant="outline" size="sm" className="gap-1" onClick={() => ledgerPdf(society, allLedgers(), 'DPL', 'Deposit_Ledger')}><Download className="h-4 w-4" />{hi ? 'खाता-बही PDF' : 'Ledger PDF'}</Button>
@@ -602,6 +624,55 @@ const Deposits: React.FC = () => {
             <Button variant="outline" onClick={() => setCdOpen(false)}>{hi ? 'रद्द' : 'Cancel'}</Button>
             <Button disabled={!(cdSum > 0)} onClick={postCd}>{hi ? 'संग्रह दर्ज करें' : 'Post Collection'}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Monthly recovery list dialog */}
+      <Dialog open={rlOpen} onOpenChange={setRlOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader><DialogTitle>{hi ? 'मासिक वसूली सूची' : 'Monthly Recovery List'} — {monthLabel(/^\d{4}-\d{2}$/.test(rlMonth) ? rlMonth : monthOf(today()), hi)}</DialogTitle></DialogHeader>
+          <div className="space-y-3 min-w-0">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <Label className="text-xs">{hi ? 'माह' : 'Month'}</Label>
+                <Input type="month" className="mt-1 w-44" value={rlMonth} onChange={e => setRlMonth(e.target.value)} />
+              </div>
+              {rlRows.length > 0 && (
+                <div className="ml-auto flex gap-2">
+                  <Button variant="outline" size="sm" className="gap-1" onClick={() => ledgerPdf(society, [rlTable], 'RCL', `Recovery_List_${rlMonth}`)}><Download className="h-4 w-4" />PDF</Button>
+                  <Button variant="outline" size="sm" className="gap-1" onClick={() => ledgerExcel([rlTable], `Recovery_List_${rlMonth}`, 'Recovery List')}><FileSpreadsheet className="h-4 w-4" />Excel</Button>
+                </div>
+              )}
+            </div>
+            <div className="max-h-[50vh] overflow-auto border rounded-md">
+              {rlRows.length === 0 ? (
+                <p className="p-6 text-center text-sm text-muted-foreground">{hi ? 'इस माह किसी सदस्य पर कुछ देय नहीं है।' : 'No member owes anything for this month.'}</p>
+              ) : (
+                <Table>
+                  <TableHeader><TableRow>
+                    {rlTable.columns.map((c, i) => <TableHead key={i} className={`px-2 ${c.num ? 'text-right' : ''}`}>{hi ? c.hi : c.en}</TableHead>)}
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {rlTable.rowsEn.map((r, i) => (
+                      <TableRow key={i}>
+                        {r.map((v, j) => <TableCell key={j} className={`px-2 text-sm ${rlTable.columns[j].num ? 'text-right' : ''} ${j === r.length - 1 ? 'font-semibold' : ''}`}>{typeof v === 'number' && rlTable.columns[j].num ? (v > 0 ? fmt(v) : '—') : v}</TableCell>)}
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-muted/50 font-semibold">
+                      <TableCell className="px-2" colSpan={4}>{hi ? 'कुल' : 'Total'}</TableCell>
+                      <TableCell className="px-2 text-right">{fmt(rlTotals.compulsoryDeposit)}</TableCell>
+                      <TableCell className="px-2 text-right">{fmt(rlTotals.loanPrincipal)}</TableCell>
+                      <TableCell className="px-2 text-right">{fmt(rlTotals.loanInterest)}</TableCell>
+                      <TableCell className="px-2 text-right">{fmt(rlTotals.total)}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+            <ul className="text-[11px] text-muted-foreground list-disc pl-4 space-y-0.5">
+              {rlTable.notes.map((n, i) => <li key={i}>{hi ? n.hi : n.en}</li>)}
+            </ul>
+          </div>
         </DialogContent>
       </Dialog>
 
