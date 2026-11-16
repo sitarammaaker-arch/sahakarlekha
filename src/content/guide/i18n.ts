@@ -48,7 +48,8 @@ export const GUIDE_UI: Record<string, { hi: string; en: string }> = {
   'hub.cert.verify': { hi: 'प्रमाणपत्र सत्यापित करें', en: 'Verify a certificate' },
   'hub.cta.title': { hi: 'तैयार हैं? अपनी समिति शुरू करें', en: 'Ready? Start your society' },
   'hub.cta.desc': { hi: 'पढ़ते जाइए, साथ-साथ अपनी समिति में अभ्यास कीजिए — यह गाइड मुफ़्त है; सहकार लेखा ₹2,999/साल + GST से।', en: 'Read on and practise in your own society — this guide is free; SahakarLekha starts at ₹2,999/year + GST.' },
-  'hub.cta.start': { hi: 'अभी शुरू करें', en: 'Get started' },
+  // Same wording as lib/cta TRIAL_CTA (kept a literal: this file has no imports; test-public-cta ties them).
+  'hub.cta.start': { hi: '30 दिन मुफ़्त आज़माएँ', en: 'Start 30-day free trial' },
   // chapter
   'ch.home': { hi: 'गाइड', en: 'Guide' },
   'ch.badge.appendix': { hi: 'परिशिष्ट', en: 'Appendix' },

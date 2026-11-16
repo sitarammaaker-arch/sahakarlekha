@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import { Link } from '@/components/LocalLink';
+import { TRIAL_CTA } from '@/lib/cta';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { PAGE_META_EN } from '@/content/pageMetaEn';
@@ -129,7 +130,7 @@ const FAQ: React.FC = () => {
           <div className="flex flex-wrap justify-center gap-3">
             <Link to="/register">
               <Button size="lg" variant="secondary" className="gap-2">
-                {L('रजिस्टर करें', 'Get Started')} <ArrowRight className="h-4 w-4" />
+                {L(TRIAL_CTA.hi, TRIAL_CTA.en)} <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <Link to="/contact">

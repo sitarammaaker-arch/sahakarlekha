@@ -8,6 +8,7 @@
 import React from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 import { Link } from '@/components/LocalLink';
+import { SIGNED_OUT_NOTE } from '@/lib/cta';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -127,6 +128,7 @@ const HelpArticle: React.FC = () => {
         <Link to={ctaTo} onClick={() => trackEvent('help_cta_click', { task: task.slug, authed: isAuthenticated })} className="mt-6 block">
           <Button size="lg" className="w-full gap-2">{task.deepLink.label} <ArrowRight className="h-4 w-4" /></Button>
         </Link>
+        {!isAuthenticated && <p className="mt-2 text-xs text-muted-foreground text-center">{language === 'hi' ? SIGNED_OUT_NOTE.hi : SIGNED_OUT_NOTE.en}</p>}
 
         {/* Prerequisites */}
         {task.prerequisites && task.prerequisites.length > 0 && (

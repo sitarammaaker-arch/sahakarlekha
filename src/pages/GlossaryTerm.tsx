@@ -7,6 +7,8 @@
 import React from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 import { Link } from '@/components/LocalLink';
+import { TRIAL_CTA, SIGNED_OUT_NOTE } from '@/lib/cta';
+import { useAuth } from '@/contexts/AuthContext';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -70,6 +72,7 @@ const Field: React.FC<{ icon: React.ReactNode; title: string; children: React.Re
 
 const GlossaryTerm: React.FC = () => {
   const { language } = useLanguage();
+  const { isAuthenticated } = useAuth();
   const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   const { slug = '' } = useParams();
   const term = findTerm(slug);
@@ -212,11 +215,15 @@ const GlossaryTerm: React.FC = () => {
           <Field icon={<MonitorPlay className="h-4 w-4 text-emerald-600" />} title={L('इसे SahakarLekha में करें', 'Do this in SahakarLekha')}>
             <div className="flex flex-wrap gap-2">
               {term.modules.map((m) => (
-                <Link key={m} to={m}>
+                // These are app screens. A signed-out visitor used to be dropped on the login page and then on
+                // the dashboard (audit 2026-11-16, J-18); like Help and Cookbook, they now go to Register with
+                // ?next=, which opens this very screen once the society exists.
+                <Link key={m} to={isAuthenticated ? m : `/register?next=${encodeURIComponent(m)}`}>
                   <Button variant="outline" size="sm" className="gap-1">{routeLabel(m, language)}<ArrowRight className="h-3.5 w-3.5" /></Button>
                 </Link>
               ))}
             </div>
+            {!isAuthenticated && <p className="mt-2 text-xs text-muted-foreground">{L(SIGNED_OUT_NOTE.hi, SIGNED_OUT_NOTE.en)}</p>}
           </Field>
         )}
 
@@ -290,7 +297,7 @@ const GlossaryTerm: React.FC = () => {
             <p className="font-bold text-lg text-foreground">{L('अपनी समिति का खाता डिजिटल कीजिए — ₹2,999/year + GST से', 'Take your society\'s accounts digital — from ₹2,999/year + GST')}</p>
             <p className="text-sm text-muted-foreground mt-1">{L('सहकारी समितियों के लिए ही बना, हिन्दी-केंद्रित प्लेटफ़ॉर्म।', 'A Hindi-first platform built only for cooperative societies.')}</p>
             <div className="flex flex-wrap gap-3 justify-center mt-4">
-              <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'glossary_footer', target: 'register', term: slug })}><Button className="gap-2">{L('रजिस्टर करें', 'Register')} <ArrowRight className="h-4 w-4" /></Button></Link>
+              <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'glossary_footer', target: 'register', term: slug })}><Button className="gap-2">{L(TRIAL_CTA.hi, TRIAL_CTA.en)} <ArrowRight className="h-4 w-4" /></Button></Link>
               <Link to="/glossary" onClick={() => trackEvent('cta_click', { location: 'glossary_footer', target: 'glossary', term: slug })}><Button variant="outline">{L('पूरा शब्दकोश', 'Full glossary')}</Button></Link>
             </div>
           </CardContent>

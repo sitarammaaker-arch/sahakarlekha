@@ -5,6 +5,8 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Link } from '@/components/LocalLink';
+import { TRIAL_CTA } from '@/lib/cta';
+import { trackEvent } from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 import { ArrowRight, Menu } from 'lucide-react';
@@ -129,7 +131,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
       </a>
       {/* Navbar */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b shadow-sm overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
           <Link to="/" className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-lg">स</div>
             <div className="min-w-0">
@@ -180,14 +182,21 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
               <>
                 {/* Below sm the Login button moves into the drawer — on a 375px phone the four header
                     controls overflowed and the clipped menu button sat half off-screen. */}
-                <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex">
-                  <Link to="/login">{L('लॉगिन', 'Login')}</Link>
+                {/* 2026-11-16 (audit J-9): logging in is the most frequent action of the people who already use
+                    the product, and on a phone it was two taps away inside the drawer. From 360px up there is
+                    room for a compact text button (the Register arrow is dropped below sm to make it); only the
+                    narrowest phones (< 360px) still find Login in the drawer. */}
+                <Button asChild variant="ghost" size="sm" className="hidden min-[360px]:inline-flex sm:hidden px-1.5 text-primary">
+                  <Link to="/login" onClick={() => trackEvent('cta_click', { location: 'header', target: 'login' })}>{L('लॉगिन', 'Login')}</Link>
                 </Button>
-                <Button asChild size="sm" className="gap-1">
-                  <Link to="/register">
-                    <span className="hidden lg:inline">{L('शुरू करें', 'Get Started')}</span>
+                <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex">
+                  <Link to="/login" onClick={() => trackEvent('cta_click', { location: 'header', target: 'login' })}>{L('लॉगिन', 'Login')}</Link>
+                </Button>
+                <Button asChild size="sm" className="gap-1 px-2.5 sm:px-3">
+                  <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'header', target: 'register' })}>
+                    <span className="hidden lg:inline">{L(TRIAL_CTA.hi, TRIAL_CTA.en)}</span>
                     <span className="lg:hidden">{L('रजिस्टर', 'Register')}</span>
-                    <ArrowRight className="h-4 w-4" />
+                    <ArrowRight className="hidden h-4 w-4 sm:block" />
                   </Link>
                 </Button>
               </>

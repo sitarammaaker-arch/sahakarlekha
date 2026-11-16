@@ -32,6 +32,7 @@
  */
 import React from 'react';
 import { Link } from '@/components/LocalLink';
+import { TRIAL_CTA } from '@/lib/cta';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { PAGE_META_EN } from '@/content/pageMetaEn';
@@ -91,7 +92,6 @@ interface Plan {
   cta: { label: Bi; to: string };
 }
 
-const TRIAL_CTA: Bi = { hi: '30 दिन मुफ़्त आज़माएँ', en: 'Start Free Trial' };
 
 const PLANS: Plan[] = [
   {
