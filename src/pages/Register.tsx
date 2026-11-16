@@ -116,6 +116,19 @@ const Register: React.FC = () => {
   const [adminPassword, setAdminPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Funnel (audit 2026-11-16, section 12): page view → start → step 2 → success, and WHY a try failed.
+  // Only the last step used to be counted. `entry` says what brought the visitor (a type page, a state
+  // page, a Help / Cookbook / Glossary button with ?next=, or nothing). Reasons are fixed codes; nothing
+  // typed into the form — names, numbers, the email — is ever sent.
+  const entry = entryType ? 'software' : entryState ? 'state' : next ? 'next' : 'direct';
+  const startedRef = React.useRef(false);
+  const markStarted = () => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    trackEvent('sign_up_start', { entry });
+  };
+  const fail = (reason: string, atStep: 1 | 2) => trackEvent('sign_up_failure', { reason, step: atStep });
+
   const stepMounted = React.useRef(false);
   useEffect(() => {
     if (!stepMounted.current) { stepMounted.current = true; return; }   // not on first paint
@@ -147,9 +160,11 @@ const Register: React.FC = () => {
     if (missing) {
       setError(L('कृपया सभी ज़रूरी (*) जानकारी भरें', 'Please fill all required fields'));
       document.getElementById(missing[0])?.focus();
+      fail('required', 1);
       return;
     }
     setError('');
+    trackEvent('sign_up_step', { step: 2, society_type: societyType, entry });
     setStep(2);
   };
 
@@ -158,6 +173,7 @@ const Register: React.FC = () => {
     if (!adminName || !adminEmail || !adminPassword) {
       setError(L('कृपया सभी ज़रूरी (*) जानकारी भरें', 'Please fill all required fields'));
       document.getElementById(!adminName ? 'reg-admin-name' : !adminEmail ? 'reg-email' : 'reg-password')?.focus();
+      fail('required', 2);
       return;
     }
     // The form is `noValidate` (so the messages are ours, in the page's language, with the cursor placed
@@ -166,21 +182,25 @@ const Register: React.FC = () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail.trim())) {
       setError(L('ईमेल सही नहीं लग रहा — जैसे name@example.com। इसी ईमेल से आप लॉगिन करेंगे।', 'That email does not look right — it should be like name@example.com. You will log in with it.'));
       document.getElementById('reg-email')?.focus();
+      fail('email_format', 2);
       return;
     }
     if (adminPassword !== confirmPassword) {
       setError(L('दोनों पासवर्ड एक जैसे नहीं हैं', 'Passwords do not match'));
       document.getElementById('reg-confirm-password')?.focus();
+      fail('password_mismatch', 2);
       return;
     }
     if (adminPassword.length < 6) {
       setError(L('पासवर्ड कम से कम 6 अक्षर का होना चाहिए', 'Password must be at least 6 characters'));
       document.getElementById('reg-password')?.focus();
+      fail('password_short', 2);
       return;
     }
     const refCode = normalizeReferralCode(referralCode);
     if (refCode && !isReferralCodeShape(refCode)) {
       setError(L('Referral code ग़लत लिखा है — यह SL-ABC234 जैसा होता है। न हो तो खाना ख़ाली छोड़ दें।', 'Referral code looks wrong — it looks like SL-ABC234. Leave it empty if you have none.'));
+      fail('referral_shape', 2);
       return;
     }
 
@@ -236,6 +256,8 @@ const Register: React.FC = () => {
       const result = (data ?? {}) as { ok?: boolean; error_code?: string; error_message?: string };
       if (rpcError || !result.ok) {
         const code = result.error_code;
+        // A known code, or 'server' — never the server's message text.
+        fail(code === 'duplicate_registration' || code === 'duplicate_email' || code === 'society_exists' ? code : 'server', 2);
         if (code === 'duplicate_registration') {
           setError(L('यह पंजीकरण संख्या पहले से दर्ज है — कृपया दूसरी पंजीकरण संख्या डालें।', 'Registration number already exists. Please use a different registration number.'));
         } else if (code === 'duplicate_email') {
@@ -276,7 +298,7 @@ const Register: React.FC = () => {
       }
 
       // GOS-20: the #1 conversion event of the whole funnel (no PII in params).
-      trackEvent('sign_up', { method: 'email' });
+      trackEvent('sign_up', { method: 'email', society_type: societyType, has_referral: !!refCode, entry });
 
       // Audit 2026-11-16 (J-4): the new admin used to be sent to the login page to type the same email
       // and password again. Sign them in with what they just entered and open the app (the screen they
@@ -293,6 +315,7 @@ const Register: React.FC = () => {
       }
       setSuccess(true);
     } catch {
+      fail('network', 2);
       setError(L('पंजीकरण नहीं हुआ — इंटरनेट कनेक्शन जाँचकर दोबारा कोशिश करें।', 'Registration failed. Please check your connection and try again.'));
     } finally {
       setLoading(false);
@@ -425,7 +448,7 @@ const Register: React.FC = () => {
             )}
 
             {step === 1 ? (
-              <form onSubmit={handleStep1} className="space-y-4" noValidate>
+              <form onSubmit={handleStep1} onInput={markStarted} className="space-y-4" noValidate>
                 <p className="text-xs text-muted-foreground"><span className="text-destructive" aria-hidden="true">*</span> {L('वाले खाने भरना ज़रूरी है।', 'marks a required field.')}</p>
                 <div className="space-y-2">
                   <Label htmlFor="reg-society-name">{L('समिति का नाम (English में)', 'Society Name (English)')} <span className="text-destructive">*</span></Label>
@@ -557,7 +580,7 @@ const Register: React.FC = () => {
                 </Button>
               </form>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              <form onSubmit={handleSubmit} onInput={markStarted} className="space-y-4" noValidate>
                 <p className="text-xs text-muted-foreground"><span className="text-destructive" aria-hidden="true">*</span> {L('वाले खाने भरना ज़रूरी है।', 'marks a required field.')}</p>
                 <div className="space-y-2">
                   <Label htmlFor="reg-admin-name">{L('एडमिन का पूरा नाम', 'Admin Full Name')} <span className="text-destructive">*</span></Label>

@@ -100,7 +100,7 @@ const SECTIONS = [
       <p className="text-muted-foreground leading-relaxed">
         लॉगिन सत्र (session) आपके browser के local storage में रखा जाता है और logout करने या समय-सीमा पूरी होने पर समाप्त होता है।
         साइट व ऐप को बेहतर बनाने के लिए हम Google Analytics (GA4) का उपयोग करते हैं, जो browser में एक छद्म-नाम (pseudonymous) पहचान-कुकी रखता है। GA4 को ये जानकारी भेजी जाती है:
-        देखे गए पेज (URL व पेज-शीर्षक सहित), public साइट पर किए गए खोज-शब्द, बटन-क्लिक जैसे इवेंट, तथा device/प्रदर्शन व तकनीकी-त्रुटि की जानकारी।
+        देखे गए पेज (URL व पेज-शीर्षक सहित — ऐप के अंदर के पते से रिकॉर्ड की पहचान (id) और link के token हटाकर), public साइट पर किए गए खोज-शब्द, बटन-क्लिक तथा लॉगिन/पंजीकरण के चरण जैसे इवेंट (सफल या असफल और असफलता का प्रकार — आपका ईमेल, पासवर्ड या फ़ॉर्म में लिखी कोई चीज़ नहीं), तथा device/प्रदर्शन व तकनीकी-त्रुटि की जानकारी।
         हम आपके वाउचर, खाते या रिपोर्ट जैसे लेखा-रिकॉर्ड जान-बूझकर Analytics को नहीं भेजते। हम साइट पर विज्ञापन नहीं दिखाते और आपका डेटा नहीं बेचते।
       </p>
     ),
@@ -108,7 +108,7 @@ const SECTIONS = [
       <p className="text-muted-foreground leading-relaxed">
         Your login session is kept in your browser's local storage and ends when you log out or it expires.
         To improve the site and app we use Google Analytics (GA4), which sets a pseudonymous identifier cookie in your browser. GA4 receives:
-        pages viewed (including URL and page title), search terms typed on the public site, events such as button clicks, and device/performance and technical-error information.
+        pages viewed (including URL and page title — with record ids and link tokens removed from in-app addresses), search terms typed on the public site, events such as button clicks and login / registration steps (whether a step succeeded or failed and the kind of failure — never your email, your password or anything typed into a form), and device/performance and technical-error information.
         We do not intentionally send accounting records such as your vouchers, accounts or reports to Analytics. We do not show ads and never sell your data.
       </p>
     ),

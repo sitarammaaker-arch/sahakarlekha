@@ -6,6 +6,8 @@
  */
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { needsAppData } from './appDataPaths';
+import { analyticsPath, analyticsQuery } from './analyticsPath';
 
 export const GA_MEASUREMENT_ID = 'G-PB8FG0M5ET';
 
@@ -19,6 +21,7 @@ declare global {
 /**
  * Fire a GA4 custom event. Fire-and-forget; no-op if gtag hasn't loaded.
  * Only pass non-PII params (counts, verdicts, page paths, types) — never names/emails.
+ * scripts/test-funnel-analytics.mjs scans every call site for forbidden parameter names.
  */
 export function trackEvent(name: string, params?: Record<string, unknown>) {
   if (typeof window.gtag === 'function') {
@@ -36,17 +39,18 @@ export function usePageTracking() {
     // /login and the screens inside the app never set a title of their own, so they all reported the home
     // page's title and GA's "page title" report lumped 84% of views into one row. Name them by their path.
     const untitled = document.title === SHELL_TITLE && location.pathname !== '/' && location.pathname !== '/en';
-    // The assistant's question lives in the URL (/ask?q=…) and can name a member. GA must not get it through
-    // the page address either, so on that page the address is reported without its query. `set` makes every
-    // later event on this page (they attach the address by themselves) use the cleaned one too.
-    const isAsk = /^\/(en\/)?ask\/?$/.test(location.pathname);
-    const search = isAsk ? '' : location.search;
-    const pageLocation = window.location.origin + location.pathname + search;
+    // GA never gets the address as the browser has it (lib/analyticsPath): record ids in the path become
+    // `:id`, and the query keeps only the few keys that name a view — so no token (/verify-email?token=…),
+    // member / society id, name, or the assistant's question (/ask?q=…) reaches it. `set` makes every later
+    // event on this page (they attach the address by themselves) use the cleaned one too.
+    const path = analyticsPath(location.pathname, needsAppData);
+    const search = analyticsQuery(location.pathname, location.search, needsAppData);
+    const pageLocation = window.location.origin + path + search;
     window.gtag('set', { page_location: pageLocation });
     window.gtag('event', 'page_view', {
-      page_path: location.pathname + search,
+      page_path: path + search,
       page_location: pageLocation,
-      page_title: untitled ? `SahakarLekha — ${location.pathname}` : document.title,
+      page_title: untitled ? `SahakarLekha — ${path}` : document.title,
     });
   }, [location.pathname, location.search]);
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Link } from '@/components/LocalLink';
 import { useAuth } from '@/contexts/AuthContext';
@@ -53,6 +53,16 @@ const Login: React.FC = () => {
   // sent them nowhere and said "request noted" (audit 2026-11-16, J-2).
   const [showForgotId, setShowForgotId] = useState(false);
 
+  // Funnel (audit 2026-11-16, section 12): page view → form start → submit → success. Until now only the
+  // success was counted, so a low login rate could not be told apart from people never trying. No event
+  // here carries the email, the password, a code, or anything else typed.
+  const startedRef = useRef(false);
+  const markStarted = () => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    trackEvent('login_form_start');
+  };
+
   // Why this tab was sent here (idle sign-out, or a login that is no longer active) — said once.
   const [logoutReason, setLogoutReason] = useState<LogoutReason | null>(null);
   useEffect(() => {
@@ -60,6 +70,7 @@ const Login: React.FC = () => {
       const reason = parseLogoutReason(window.sessionStorage.getItem(LOGOUT_REASON_KEY));
       window.sessionStorage.removeItem(LOGOUT_REASON_KEY);
       setLogoutReason(reason);
+      if (reason) trackEvent('session_ended', { reason });
     } catch { /* storage blocked — no message */ }
   }, []);
 
@@ -68,12 +79,17 @@ const Login: React.FC = () => {
     setError('');
     setLogoutReason(null);
     setIsLoading(true);
+    trackEvent('login_submit');
     try {
       const result = await login(email, password);
+      // WHY it failed, as a fixed code (never the server's text): credentials / network / service /
+      // rate_limited / inactive / mfa_status_unavailable / password_reset_required.
+      if (result.status === 'failed') trackEvent('login_failure', { reason: result.reason ?? 'credentials' });
       if (result.status === 'ok') {
         trackEvent('login', { method: 'email' });
         navigate(afterLogin);
       } else if (result.status === 'mfa') {
+        trackEvent('mfa_challenge_view');
         setMfaStep(true);
         setMfaCode('');
       } else if (result.reason === 'mfa_status_unavailable') {
@@ -107,6 +123,7 @@ const Login: React.FC = () => {
         document.getElementById('password')?.focus();
       }
     } catch {
+      trackEvent('login_failure', { reason: 'exception' });
       setError(L('लॉगिन नहीं हो पाया — इंटरनेट कनेक्शन देखकर दोबारा कोशिश करें।', 'Could not sign in — check your connection and try again.'));
     } finally {
       setIsLoading(false);
@@ -123,6 +140,7 @@ const Login: React.FC = () => {
         trackEvent('login', { method: useRecovery ? 'email+recovery' : 'email+mfa' });
         navigate(afterLogin);
       } else {
+        trackEvent('mfa_failure', { method: useRecovery ? 'recovery' : 'totp' });
         setError(language === 'hi' ? 'गलत कोड — फिर कोशिश करें' : 'Invalid code — try again');
       }
     } catch {
@@ -150,7 +168,9 @@ const Login: React.FC = () => {
     e.preventDefault();
     if (!fpEmail.trim()) return;
     setFpLoading(true);
+    trackEvent('password_reset_start');
     const result = await sendPasswordReset(fpEmail.trim());
+    if (!result.success) trackEvent('password_reset_send_failed');
     setFpEmailSent(result.isEmailSent);
     setFpFailed(!result.success);
     setFpSubmitted(true);
@@ -298,7 +318,7 @@ const Login: React.FC = () => {
               </div>
             </form>
             ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} onInput={markStarted} className="space-y-4">
               {logoutReason && !error && (
                 <Alert role="status">
                   <ShieldCheck className="h-4 w-4" />

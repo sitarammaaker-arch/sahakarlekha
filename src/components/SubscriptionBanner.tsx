@@ -16,6 +16,7 @@ import { AlertTriangle, Clock } from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { trackEvent } from '@/lib/analytics';
 import { LEGACY_NOTICE_DAYS, RENEWAL_NOTICE_DAYS, daysUntil, graceDaysLeft } from '@/lib/plans';
 
 /** Where a plan is bought (the plan card with the Razorpay buttons). */
@@ -30,8 +31,30 @@ const SubscriptionBanner: React.FC = () => {
   // (audit 2026-11-16, J-7) — they are told who can act instead.
   const { can } = useAuth();
   const canBuy = can('userMgmt');
+  // Which notice (if any) is on screen — the same conditions as the returns below, worked out up here so
+  // the analytics effect can sit above them (hooks cannot follow an early return).
+  const daysLeft = daysUntil(periodEnd);
+  const notice: 'expired' | 'grace' | 'trialing' | 'renewal' | null =
+    loading || (plan === 'legacy' && !periodEnd) ? null
+      : status === 'expired' ? 'expired'
+      : status === 'grace' ? 'grace'
+      : status === 'trialing' && daysLeft != null ? 'trialing'
+      : status === 'active' && daysLeft != null && daysLeft <= (plan === 'legacy' ? LEGACY_NOTICE_DAYS : RENEWAL_NOTICE_DAYS) ? 'renewal'
+      : null;
+  // Counted once per browser session per notice (it is on every screen). No society, plan price or date.
+  const roleGroup = canBuy ? 'manager' : 'staff';
+  React.useEffect(() => {
+    if (!notice) return;
+    try {
+      const key = `sl.ga.planNotice.${notice}`;
+      if (window.sessionStorage.getItem(key) === '1') return;
+      window.sessionStorage.setItem(key, '1');
+    } catch { /* storage blocked — count it anyway */ }
+    trackEvent('plan_notice_view', { state: notice, role_group: roleGroup });
+  }, [notice, roleGroup]);
+
   const action = (label: string, tone: string) => canBuy
-    ? <Link to={PLAN_PAGE} className={`ml-auto font-medium underline ${tone}`}>{label}</Link>
+    ? <Link to={PLAN_PAGE} onClick={() => trackEvent('plan_cta_click', { state: notice ?? 'none', role_group: roleGroup })} className={`ml-auto font-medium underline ${tone}`}>{label}</Link>
     : <span className={`ml-auto font-medium ${tone}`}>{hi ? 'Plan लेने के लिए अपने Admin से कहें' : 'Ask your Admin to get a plan'}</span>;
 
   if (loading) return null;
