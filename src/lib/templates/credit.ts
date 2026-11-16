@@ -10,8 +10,8 @@
  * The one addition is the compulsory deposit: what makes a "thrift" society is that its bye-laws raise a
  * compulsory deposit from every member (the U.P. Co-operative Societies Rules, 1968 define a "Co-operative
  * Credit and Thrift Society" by exactly that). It is a liability to members, kept apart from voluntary
- * savings so the two can be reported separately. Nothing posts to it automatically — it is used from the
- * voucher screen.
+ * savings so the two can be reported separately. The Deposits screen posts to it for depositType 'CD'
+ * (lib/compulsoryDeposit.ts): one account per member, a monthly collection sheet, arrears, no withdrawals.
  */
 import type { LedgerAccount } from '@/types';
 

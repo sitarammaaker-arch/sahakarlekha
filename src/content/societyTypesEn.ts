@@ -31,7 +31,7 @@ export const SOCIETY_TYPES_EN: Record<string, SocietyTypeEn> = {
       'The share, nomination and audit registers',
     ],
     solves: [
-      'A separate head for compulsory (thrift) deposits in the chart of accounts; entries are made by voucher',
+      'Compulsory (thrift) deposit — a separate account for each member, one monthly collection for everyone, and arrears in view',
       'Deposit accounts — savings, FD, RD and pigmy; a voucher is posted for every deposit and withdrawal',
       'Loan register and interest calculation on loans; reminders on WhatsApp for dues',
       'Share register, nomination register, Trial Balance, Balance Sheet and audit certificate',

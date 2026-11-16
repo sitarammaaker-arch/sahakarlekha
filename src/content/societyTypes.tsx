@@ -80,9 +80,9 @@ export const SOCIETY_TYPES: SocietyType[] = [
   },
   {
     // Thrift & Credit Cooperative Society — employees' / salary earners' societies. Same screens as Credit; its
-    // chart also has the compulsory (thrift) deposit head (templates/credit.ts), which is posted from the voucher
-    // screen — say exactly that, not that a compulsory-deposit module exists.
-    // Not claimed, because not built: recovery lists for deduction from salary, a surety register, RD schedules.
+    // chart also has the compulsory (thrift) deposit head (templates/credit.ts), and the Deposits screen has the
+    // compulsory deposit (type CD): one account per member, a monthly collection sheet, arrears, no withdrawals.
+    // Not claimed, because not built: recovery lists for deduction from salary, a surety register.
     slug: 'thrift-credit',
     Icon: PiggyBank,
     nameHi: 'बचत एवं साख सहकारी समिति (Thrift & Credit)',
@@ -99,7 +99,7 @@ export const SOCIETY_TYPES: SocietyType[] = [
       'शेयर, नामांकन और ऑडिट के रजिस्टर',
     ],
     solvesHi: [
-      'खाता-सूची में अनिवार्य (थ्रिफ्ट) जमा का अलग खाता; एंट्री वाउचर से',
+      'अनिवार्य (थ्रिफ्ट) जमा — हर सदस्य का अलग खाता, सबका मासिक संग्रह एक साथ, और बकाया सामने',
       'जमा खाते — बचत, FD, RD और पिग्मी; हर जमा-निकासी का वाउचर अपने-आप',
       'ऋण रजिस्टर और ऋण पर ब्याज की गणना; बकाया पर WhatsApp से याद दिलाना',
       'शेयर रजिस्टर, नामांकन रजिस्टर, ट्रायल बैलेंस, बैलेंस शीट व ऑडिट प्रमाणपत्र',
