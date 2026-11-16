@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Rocket, ChevronRight, X, CheckCircle2, Circle } from 'lucide-react';
 import { localizePath } from '@/lib/enRoutes';
+import { trackEvent } from '@/lib/analytics';
 
 const DISMISS_KEY = 'sl.onboarding.dismissed';
 
@@ -32,6 +33,19 @@ const OnboardingChecklist: React.FC = () => {
 
   const hasMembers = members.length > 0;
   const hasVouchers = vouchers.some(v => !v.isDeleted);
+
+  // Activation funnel (audit 2026-11-16): sign_up → dashboard_first_view → member_added / voucher_created.
+  // "First view" = this card is on screen, i.e. the society has no member and no voucher yet. Once per
+  // browser session, so a new admin who reloads the empty dashboard five times counts once.
+  const isNew = !dismissed && !hasMembers && !hasVouchers;
+  React.useEffect(() => {
+    if (!isNew) return;
+    try {
+      if (window.sessionStorage.getItem('sl.ga.firstDashboard') === '1') return;
+      window.sessionStorage.setItem('sl.ga.firstDashboard', '1');
+    } catch { /* storage blocked — count it anyway */ }
+    trackEvent('dashboard_first_view');
+  }, [isNew]);
 
   // Established society (or dismissed) → nothing to show.
   if (dismissed || hasMembers || hasVouchers) return null;

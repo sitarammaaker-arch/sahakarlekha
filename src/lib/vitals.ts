@@ -8,6 +8,8 @@ import { onLCP, onCLS, onINP, onTTFB, type Metric } from 'web-vitals';
 import { isBenignBrowserNoise } from './errorNoise';
 import { trackEvent } from '@/lib/analytics';
 import { reportError } from '@/lib/errorReporting';
+import { analyticsPath } from '@/lib/analyticsPath';
+import { needsAppData } from '@/lib/appDataPaths';
 
 export function reportWebVitals() {
   const send = (m: Metric) =>
@@ -16,7 +18,7 @@ export function reportWebVitals() {
       // CLS is a unitless score (~0–1) — scale so GA4's integer metrics keep precision.
       value: Math.round(m.name === 'CLS' ? m.value * 1000 : m.value),
       rating: m.rating,
-      page_path: window.location.pathname,
+      page_path: analyticsPath(window.location.pathname, needsAppData),   // no record id (lib/analyticsPath)
     });
   onLCP(send);
   onCLS(send);
@@ -35,7 +37,7 @@ export function installErrorTracking() {
       // (chunk-*.js) — or the route when e.filename is the page URL (/vouchers) — was
       // overriding the session's traffic source and polluting acquisition reports.
       error_source: (e.filename || '').split('/').pop(),
-      page_path: window.location.pathname,
+      page_path: analyticsPath(window.location.pathname, needsAppData),   // no record id (lib/analyticsPath)
     });
     // Durable, full-detail sink (message + stack) — the operator-visible error log.
     reportError('window.error', e.error ?? e.message, { filename: e.filename, lineno: e.lineno, colno: e.colno });
@@ -45,7 +47,7 @@ export function installErrorTracking() {
     trackEvent('app_error', {
       message: String((typeof reason === 'object' && reason?.message) || reason || '').slice(0, 150),
       type: 'unhandledrejection',
-      page_path: window.location.pathname,
+      page_path: analyticsPath(window.location.pathname, needsAppData),   // no record id (lib/analyticsPath)
     });
     reportError('unhandledrejection', e.reason);
   });

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/lib/supabase';
+import { trackEvent } from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -83,6 +84,7 @@ const ResetPassword: React.FC = () => {
       }
 
       setSuccess(true);
+      trackEvent('password_reset_success');
       // Auto-redirect to login after 3 seconds
       setTimeout(() => navigate('/login'), 3000);
     } catch {
