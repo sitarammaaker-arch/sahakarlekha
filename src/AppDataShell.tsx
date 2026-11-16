@@ -23,6 +23,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { CapabilityGuard } from '@/components/CapabilityGuard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useNoIndex } from '@/lib/useDocumentMeta';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { needsAppData } from '@/lib/appDataPaths';
 import { withNext } from '@/lib/auth/entryContext';
 import { LOGOUT_REASON_KEY } from '@/lib/auth/loginFailure';
@@ -52,6 +53,7 @@ export default AppDataProviders;
 export const ProtectedShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
   const { isLoading } = useData();
+  const { language } = useLanguage();
   const { pathname, search } = useLocation();
   // App-only screens must never be indexed (robots.txt + X-Robots-Tag are the
   // other two layers; this covers any route a crawler still reaches with JS).
@@ -74,7 +76,7 @@ export const ProtectedShell: React.FC<{ children: React.ReactNode }> = ({ childr
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">डेटा लोड हो रहा है...</p>
+          <p className="text-sm text-muted-foreground" role="status">{language === 'hi' ? 'डेटा लोड हो रहा है...' : 'Loading your data...'}</p>
         </div>
       </div>
     );

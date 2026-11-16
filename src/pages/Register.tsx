@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, AlertCircle, CheckCircle, Eye, EyeOff, Languages, Gift } from 'lucide-react';
+import { Building2, AlertCircle, CheckCircle, Languages, Gift } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { fullChartForType } from '@/lib/storage';
 import type { SocietyType } from '@/types';
@@ -18,6 +18,7 @@ import { loadReferral, isReferralCodeShape, normalizeReferralCode, referralError
 import { SOCIETY_TYPES, INDIAN_STATES } from '@/lib/constants';
 import { presetsForState, presetChoice, resolveTypeChoice, typeChoiceOf, isSocietyVariant, type SocietyVariant } from '@/lib/societyPresets';
 import { useAuth } from '@/contexts/AuthContext';
+import { PasswordToggle } from '@/components/PasswordToggle';
 import { needsAppData } from '@/lib/appDataPaths';
 import { NEXT_PARAM, safeNext, withNext, resolveEntryType, resolveEntryState } from '@/lib/auth/entryContext';
 import { PLAN_CATALOG, TRIAL_DAYS, priceLabel } from '@/lib/plans';
@@ -115,6 +116,12 @@ const Register: React.FC = () => {
   const [adminPassword, setAdminPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  const stepMounted = React.useRef(false);
+  useEffect(() => {
+    if (!stepMounted.current) { stepMounted.current = true; return; }   // not on first paint
+    document.getElementById('reg-step-title')?.focus();
+  }, [step]);
+
   // Keep the step-1 answers for this tab (see DRAFT_KEY). Never the admin's email or password.
   useEffect(() => {
     try {
@@ -132,8 +139,14 @@ const Register: React.FC = () => {
 
   const handleStep1 = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!societyName || !registrationNo || !district || !state || !societyType) {
+    // The first required field left empty gets the cursor (the alert alone did not say which one).
+    const missing = ([
+      ['reg-society-name', societyName], ['reg-registration-no', registrationNo], ['reg-district', district],
+      ['reg-state', state], ['reg-society-type', societyType],
+    ] as const).find(([, value]) => !value);
+    if (missing) {
       setError(L('कृपया सभी ज़रूरी (*) जानकारी भरें', 'Please fill all required fields'));
+      document.getElementById(missing[0])?.focus();
       return;
     }
     setError('');
@@ -144,14 +157,25 @@ const Register: React.FC = () => {
     e.preventDefault();
     if (!adminName || !adminEmail || !adminPassword) {
       setError(L('कृपया सभी ज़रूरी (*) जानकारी भरें', 'Please fill all required fields'));
+      document.getElementById(!adminName ? 'reg-admin-name' : !adminEmail ? 'reg-email' : 'reg-password')?.focus();
+      return;
+    }
+    // The form is `noValidate` (so the messages are ours, in the page's language, with the cursor placed
+    // in the field) — which also switches off the browser's own email check. This email becomes the login
+    // and is not verified by a link, so a malformed one must be caught here.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail.trim())) {
+      setError(L('ईमेल सही नहीं लग रहा — जैसे name@example.com। इसी ईमेल से आप लॉगिन करेंगे।', 'That email does not look right — it should be like name@example.com. You will log in with it.'));
+      document.getElementById('reg-email')?.focus();
       return;
     }
     if (adminPassword !== confirmPassword) {
       setError(L('दोनों पासवर्ड एक जैसे नहीं हैं', 'Passwords do not match'));
+      document.getElementById('reg-confirm-password')?.focus();
       return;
     }
     if (adminPassword.length < 6) {
       setError(L('पासवर्ड कम से कम 6 अक्षर का होना चाहिए', 'Password must be at least 6 characters'));
+      document.getElementById('reg-password')?.focus();
       return;
     }
     const refCode = normalizeReferralCode(referralCode);
@@ -383,7 +407,7 @@ const Register: React.FC = () => {
 
         <Card className="w-full max-w-md shadow-lg">
           <CardHeader>
-            <CardTitle className="text-xl">
+            <CardTitle id="reg-step-title" tabIndex={-1} className="text-xl focus:outline-none">
               {step === 1 ? L('🏢 समिति की जानकारी', '🏢 Society Information') : L('👤 एडमिन खाता', '👤 Admin Account')}
             </CardTitle>
             <CardDescription>
@@ -401,11 +425,12 @@ const Register: React.FC = () => {
             )}
 
             {step === 1 ? (
-              <form onSubmit={handleStep1} className="space-y-4">
+              <form onSubmit={handleStep1} className="space-y-4" noValidate>
+                <p className="text-xs text-muted-foreground"><span className="text-destructive" aria-hidden="true">*</span> {L('वाले खाने भरना ज़रूरी है।', 'marks a required field.')}</p>
                 <div className="space-y-2">
-                  <Label>{L('समिति का नाम (English में)', 'Society Name (English)')} <span className="text-destructive">*</span></Label>
+                  <Label htmlFor="reg-society-name">{L('समिति का नाम (English में)', 'Society Name (English)')} <span className="text-destructive">*</span></Label>
                   <Input
-                    value={societyName}
+                    id="reg-society-name" name="organization" autoComplete="organization" aria-required="true" value={societyName}
                     onChange={e => setSocietyName(e.target.value)}
                     placeholder="Gram Seva Cooperative Marketing Society"
                     required
@@ -413,18 +438,18 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>{L('समिति का नाम (हिंदी में)', 'Society Name (Hindi)')}</Label>
+                  <Label htmlFor="reg-society-name-hi">{L('समिति का नाम (हिंदी में)', 'Society Name (Hindi)')}</Label>
                   <Input
-                    value={societyNameHi}
+                    id="reg-society-name-hi" name="society-name-hi" autoComplete="off" lang="hi" value={societyNameHi}
                     onChange={e => setSocietyNameHi(e.target.value)}
                     placeholder="ग्राम सेवा सहकारी विपणन समिति"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label>{L('पंजीकरण संख्या', 'Registration Number')} <span className="text-destructive">*</span></Label>
+                  <Label htmlFor="reg-registration-no">{L('पंजीकरण संख्या', 'Registration Number')} <span className="text-destructive">*</span></Label>
                   <Input
-                    value={registrationNo}
+                    id="reg-registration-no" name="registration-no" autoComplete="off" aria-required="true" value={registrationNo}
                     onChange={e => setRegistrationNo(e.target.value)}
                     placeholder="COOP/2024/12345"
                     required
@@ -433,18 +458,18 @@ const Register: React.FC = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label>{L('ज़िला', 'District')} <span className="text-destructive">*</span></Label>
+                    <Label htmlFor="reg-district">{L('ज़िला', 'District')} <span className="text-destructive">*</span></Label>
                     <Input
-                      value={district}
+                      id="reg-district" name="district" autoComplete="address-level2" aria-required="true" value={district}
                       onChange={e => setDistrict(e.target.value)}
                       placeholder={L('ज़िले का नाम', 'District name')}
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>{L('राज्य', 'State')} <span className="text-destructive">*</span></Label>
+                    <Label htmlFor="reg-state">{L('राज्य', 'State')} <span className="text-destructive">*</span></Label>
                     <Select value={state} onValueChange={chooseState}>
-                      <SelectTrigger>
+                      <SelectTrigger id="reg-state" aria-required="true">
                         <SelectValue placeholder={L('राज्य चुनें', 'Select state')} />
                       </SelectTrigger>
                       <SelectContent>
@@ -457,18 +482,18 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>{L('फ़ोन', 'Phone')}</Label>
+                  <Label htmlFor="reg-phone">{L('फ़ोन', 'Phone')}</Label>
                   <Input
-                    value={phone}
+                    id="reg-phone" name="tel" type="tel" inputMode="tel" autoComplete="tel" value={phone}
                     onChange={e => setPhone(e.target.value)}
                     placeholder="0755-1234567"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label>{L('GSTIN (वैकल्पिक)', 'GSTIN (Optional)')}</Label>
+                  <Label htmlFor="reg-gstin">{L('GSTIN (वैकल्पिक)', 'GSTIN (Optional)')}</Label>
                   <Input
-                    value={gstin}
+                    id="reg-gstin" name="gstin" autoComplete="off" autoCapitalize="characters" spellCheck={false} value={gstin}
                     onChange={e => setGstin(e.target.value.toUpperCase())}
                     placeholder="22AAAAA0000A1Z5"
                     maxLength={15}
@@ -477,18 +502,18 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>{L('पता', 'Address')}</Label>
+                  <Label htmlFor="reg-address">{L('पता', 'Address')}</Label>
                   <Input
-                    value={address}
+                    id="reg-address" name="address" autoComplete="street-address" value={address}
                     onChange={e => setAddress(e.target.value)}
                     placeholder={L('पूरा पता', 'Full address')}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label>{L('समिति का प्रकार', 'Society Type')} <span className="text-destructive">*</span></Label>
+                  <Label htmlFor="reg-society-type">{L('समिति का प्रकार', 'Society Type')} <span className="text-destructive">*</span></Label>
                   <Select value={typeChoiceOf(societyType, societyVariant)} onValueChange={chooseType}>
-                    <SelectTrigger>
+                    <SelectTrigger id="reg-society-type" aria-required="true">
                       <SelectValue placeholder={L('समिति का प्रकार चुनें', 'Select society type')} />
                     </SelectTrigger>
                     <SelectContent>
@@ -512,9 +537,9 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>{L('वित्तीय वर्ष', 'Financial Year')}</Label>
+                  <Label htmlFor="reg-financial-year">{L('वित्तीय वर्ष', 'Financial Year')}</Label>
                   <Select value={financialYear} onValueChange={setFinancialYear}>
-                    <SelectTrigger>
+                    <SelectTrigger id="reg-financial-year">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -532,11 +557,12 @@ const Register: React.FC = () => {
                 </Button>
               </form>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+                <p className="text-xs text-muted-foreground"><span className="text-destructive" aria-hidden="true">*</span> {L('वाले खाने भरना ज़रूरी है।', 'marks a required field.')}</p>
                 <div className="space-y-2">
-                  <Label>{L('एडमिन का पूरा नाम', 'Admin Full Name')} <span className="text-destructive">*</span></Label>
+                  <Label htmlFor="reg-admin-name">{L('एडमिन का पूरा नाम', 'Admin Full Name')} <span className="text-destructive">*</span></Label>
                   <Input
-                    value={adminName}
+                    id="reg-admin-name" name="name" autoComplete="name" aria-required="true" value={adminName}
                     onChange={e => setAdminName(e.target.value)}
                     placeholder={L('आपका पूरा नाम', 'Your full name')}
                     required
@@ -544,10 +570,10 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>{L('ईमेल', 'Email')} <span className="text-destructive">*</span></Label>
+                  <Label htmlFor="reg-email">{L('ईमेल', 'Email')} <span className="text-destructive">*</span></Label>
                   <Input
                     type="email"
-                    value={adminEmail}
+                    id="reg-email" name="email" autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false} aria-required="true" value={adminEmail}
                     onChange={e => setAdminEmail(e.target.value)}
                     placeholder="admin@yoursociety.com"
                     required
@@ -555,24 +581,18 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>{L('पासवर्ड', 'Password')} <span className="text-destructive">*</span></Label>
+                  <Label htmlFor="reg-password">{L('पासवर्ड', 'Password')} <span className="text-destructive">*</span></Label>
                   <div className="relative">
                     <Input
                       type={showPassword ? 'text' : 'password'}
-                      value={adminPassword}
+                      id="reg-password" name="new-password" autoComplete="new-password" aria-required="true" value={adminPassword}
                       onChange={e => setAdminPassword(e.target.value)}
                       placeholder={L('कम से कम 6 अक्षर', 'Minimum 6 characters')}
-                      className="pr-10"
+                      className="pr-12"
                       required
                       aria-describedby="register-password-hint"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                    <PasswordToggle shown={showPassword} onToggle={() => setShowPassword(v => !v)} hi={language === 'hi'} />
                   </div>
                 </div>
 
@@ -582,10 +602,10 @@ const Register: React.FC = () => {
                 </p>
 
                 <div className="space-y-2">
-                  <Label>{L('पासवर्ड दोबारा', 'Confirm Password')} <span className="text-destructive">*</span></Label>
+                  <Label htmlFor="reg-confirm-password">{L('पासवर्ड दोबारा', 'Confirm Password')} <span className="text-destructive">*</span></Label>
                   <Input
                     type="password"
-                    value={confirmPassword}
+                    id="reg-confirm-password" name="confirm-password" autoComplete="new-password" aria-required="true" value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
                     placeholder={L('पासवर्ड दोबारा लिखें', 'Repeat password')}
                     required

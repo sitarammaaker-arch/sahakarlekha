@@ -210,7 +210,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-72">
+              <SheetContent side="right" className="w-72" closeLabel={L('मेन्यू बंद करें', 'Close menu')}>
                 <SheetHeader>
                   <SheetTitle className="text-left">{L('सहकार लेखा', 'SahakarLekha')}</SheetTitle>
                 </SheetHeader>

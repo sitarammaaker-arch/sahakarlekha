@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Lock, Eye, EyeOff, CheckCircle2, AlertCircle, Languages } from 'lucide-react';
+import { PasswordToggle } from '@/components/PasswordToggle';
+import { Lock, CheckCircle2, AlertCircle, Languages } from 'lucide-react';
 
 const ResetPassword: React.FC = () => {
   const navigate = useNavigate();
@@ -177,21 +178,17 @@ const ResetPassword: React.FC = () => {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="password"
+                    name="new-password"
+                    autoComplete="new-password"
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="pl-10 pr-10"
+                    className="pl-10 pr-12"
                     required
                     minLength={6}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+                  <PasswordToggle shown={showPassword} onToggle={() => setShowPassword(v => !v)} hi={hi} />
                 </div>
               </div>
 
@@ -201,6 +198,8 @@ const ResetPassword: React.FC = () => {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="confirm"
+                    name="confirm-password"
+                    autoComplete="new-password"
                     type={showPassword ? 'text' : 'password'}
                     value={confirm}
                     onChange={e => setConfirm(e.target.value)}

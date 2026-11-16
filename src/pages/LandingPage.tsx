@@ -240,16 +240,18 @@ const LandingPage: React.FC = () => {
               )}
             </p>
             <div className="mt-7 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
-              <Link to="/register">
-                <Button size="lg" className="gap-2 text-base px-8 w-full sm:w-auto">
+              {/* `asChild`: the link IS the button. A <button> inside an <a> is two nested controls — two tab
+                  stops and an ambiguous role for a screen reader (audit 2026-11-16, M-10). */}
+              <Button asChild size="lg" className="gap-2 text-base px-8 w-full sm:w-auto">
+                <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'landing_hero', target: 'register' })}>
                   {L(TRIAL_CTA.hi, TRIAL_CTA.en)} <ArrowRight className="h-5 w-5" />
-                </Button>
-              </Link>
-              <a href="#demo">
-                <Button size="lg" variant="outline" className="gap-2 text-base px-6 w-full sm:w-auto">
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="gap-2 text-base px-6 w-full sm:w-auto">
+                <a href="#demo" onClick={() => trackEvent('cta_click', { location: 'landing_hero', target: 'demo' })}>
                   <Play className="h-4 w-4" /> {L('देखें कैसे काम करता है', 'See how it works')}
-                </Button>
-              </a>
+                </a>
+              </Button>
             </div>
             <p className="mt-3 text-xs text-muted-foreground text-center lg:text-left">
               {L(
@@ -366,9 +368,11 @@ const LandingPage: React.FC = () => {
           {/* The page is long (13,000 px on a phone) and the only buttons to register were in the hero and at
               the very end. This one sits where a visitor has just watched the product (audit 2026-11-16, C-7). */}
           <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
-            <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'landing_demo', target: 'register' })}>
-              <Button className="gap-2 w-full sm:w-auto">{L(TRIAL_CTA.hi, TRIAL_CTA.en)} <ArrowRight className="h-4 w-4" /></Button>
-            </Link>
+            <Button asChild className="gap-2 w-full sm:w-auto">
+              <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'landing_demo', target: 'register' })}>
+                {L(TRIAL_CTA.hi, TRIAL_CTA.en)} <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
             <Button variant="outline" className="gap-2" onClick={handleSampleReport}>
               <Download className="h-4 w-4" /> {L('नमूना रिपोर्ट PDF डाउनलोड करें', 'Download sample report PDF')}
             </Button>
@@ -664,11 +668,11 @@ const LandingPage: React.FC = () => {
             )}
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/register">
-              <Button size="lg" variant="secondary" className="gap-2 text-base px-8">
+            <Button asChild size="lg" variant="secondary" className="gap-2 text-base px-8">
+              <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'landing_final', target: 'register' })}>
                 {L(TRIAL_CTA.hi, TRIAL_CTA.en)} <ArrowRight className="h-5 w-5" />
-              </Button>
-            </Link>
+              </Link>
+            </Button>
             {WHATSAPP ? (
               <a href={`https://wa.me/${WHATSAPP}`} target="_blank" rel="noopener noreferrer">
                 <Button size="lg" variant="outline" className="gap-2 text-base px-8 bg-transparent text-white border-white/40 hover:bg-white/10">
