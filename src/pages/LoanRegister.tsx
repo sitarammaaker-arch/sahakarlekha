@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Download, Search, Edit, Trash2, Landmark, AlertTriangle, CheckCircle, Clock, BookOpen, FileSpreadsheet } from 'lucide-react';
+import { Plus, Download, Search, Edit, Trash2, Landmark, AlertTriangle, CheckCircle, Clock, BookOpen, FileSpreadsheet, UserCheck, X } from 'lucide-react';
 import { LedgerDialog } from '@/components/registers/LedgerDialog';
 import { loanLedger, memberLoanLedgerInput } from '@/lib/registers/subsidiaryLedgers';
 import { loanLedgerTable } from '@/lib/registers/ledgerTables';
@@ -26,7 +26,8 @@ import { useLoanAccruals } from '@/hooks/useLoanAccruals';
 import { useLoanRepayment } from '@/hooks/useLoanRepayment';
 import { effectiveLoanStatus } from '@/lib/loans/interestAccrual';
 import { fmtDate, todayStr } from '@/lib/dateUtils';
-import type { Loan, LoanType, LoanStatus } from '@/types';
+import type { Loan, LoanType, LoanStatus, LoanSurety } from '@/types';
+import { loanSureties, normalizeSureties, suretyProblem, suretyRegisterTable, suretyExposureTable, suretySummary } from '@/lib/loans/sureties';
 import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
 import { loanReminderMessage } from '@/lib/whatsappReminders';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
@@ -44,7 +45,11 @@ const EMPTY_FORM = {
   repaidAmount: '',
   status: 'active' as LoanStatus,
   security: '',
+  sureties: [] as LoanSurety[],
 };
+
+/** Select value for a surety who is not a member (typed name). */
+const OUTSIDE = '__outside__';
 
 interface LoanFormProps {
   form: typeof EMPTY_FORM;
@@ -119,6 +124,29 @@ const LoanForm: React.FC<LoanFormProps> = ({ form, setForm, hi, members, onSubmi
         <Label>{hi ? 'सुरक्षा / जमानत' : 'Security / Collateral'}</Label>
         <Textarea rows={2} value={form.security} onChange={e => setForm(f => ({ ...f, security: e.target.value }))} placeholder={hi ? 'भूमि, संपत्ति आदि' : 'Land, property, etc.'} />
       </div>
+      {/* Sureties (guarantors): a member, or a named person outside the society. Kept on the loan (column 169). */}
+      <div className="space-y-2 col-span-2">
+        <Label>{hi ? 'ज़मानतदार' : 'Sureties (guarantors)'}</Label>
+        {form.sureties.map((sv, i) => {
+          const setRow = (patch: Partial<LoanSurety>) => setForm(f => ({ ...f, sureties: f.sureties.map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
+          const outside = !sv.memberId;
+          return (
+            <div key={i} className="flex flex-wrap items-center gap-2">
+              <Select value={sv.memberId || OUTSIDE} onValueChange={v => setRow(v === OUTSIDE ? { memberId: undefined } : { memberId: v, name: '' })}>
+                <SelectTrigger className="w-full sm:w-64"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={OUTSIDE}>{hi ? '— सदस्य नहीं (नाम लिखें) —' : '— Not a member (type the name) —'}</SelectItem>
+                  {members.filter(m => m.id !== form.memberId).map(m => <SelectItem key={m.id} value={m.id}>{m.memberId} — {m.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {outside && <Input className="flex-1 min-w-[10rem]" value={sv.name} onChange={e => setRow({ name: e.target.value })} placeholder={hi ? 'ज़मानतदार का नाम' : 'Surety name'} />}
+              <Button type="button" variant="ghost" size="icon" title={hi ? 'हटाएँ' : 'Remove'} onClick={() => setForm(f => ({ ...f, sureties: f.sureties.filter((_, j) => j !== i) }))}><X className="h-4 w-4" /></Button>
+            </div>
+          );
+        })}
+        <Button type="button" variant="outline" size="sm" className="gap-1" onClick={() => setForm(f => ({ ...f, sureties: [...f.sureties, { name: '' }] }))}><Plus className="h-4 w-4" />{hi ? 'ज़मानतदार जोड़ें' : 'Add a surety'}</Button>
+        <p className="text-[11px] text-muted-foreground">{hi ? 'कितने ज़मानतदार चाहिए, यह आपकी उपविधि और ऋण नियम तय करते हैं — app कोई संख्या लागू नहीं करता।' : 'How many sureties a loan needs is set by your bye-laws and loan rules — the app does not enforce a number.'}</p>
+      </div>
     </div>
     <div className="flex justify-end gap-2 pt-2">
       <Button type="button" variant="outline" onClick={onCancel}>{hi ? 'रद्द' : 'Cancel'}</Button>
@@ -185,6 +213,27 @@ const LoanRegister: React.FC = () => {
   })();
   const sec32Breach = sec32Limit.base > 0 && totalOutstanding > sec32Limit.limit;
 
+  // The form says why a surety list cannot be saved (the data layer refuses it too).
+  const suretyError = (borrowerId: string, list: LoanSurety[]): boolean => {
+    const p = suretyProblem(borrowerId, list);
+    if (!p) return false;
+    toast({
+      title: hi ? 'ज़मानतदार ठीक करें' : 'Fix the sureties',
+      description: p === 'self' ? (hi ? 'ऋणी अपना ही ज़मानतदार नहीं हो सकता।' : 'The borrower cannot be their own surety.')
+        : p === 'duplicate' ? (hi ? 'एक ही सदस्य दो बार ज़मानतदार नहीं हो सकता।' : 'The same member cannot be a surety twice.')
+        : (hi ? 'जो ज़मानतदार सदस्य नहीं है उसका नाम भरें।' : 'Enter the name of a surety who is not a member.'),
+      variant: 'destructive',
+    });
+    return true;
+  };
+
+  // Surety register: loan-wise and surety-wise, from the loans on screen (live loans only).
+  const [suretyOpen, setSuretyOpen] = useState(false);
+  const [suretyView, setSuretyView] = useState<'loan' | 'surety'>('loan');
+  const memberOf = (id: string) => { const m = members.find(x => x.id === id); return m ? { memberNo: m.memberId, name: m.name } : undefined; };
+  const suretyTable = suretyView === 'loan' ? suretyRegisterTable(loans, memberOf) : suretyExposureTable(loans, memberOf);
+  const suretyCounts = suretySummary(loans);
+
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.memberId || !form.amount || !form.dueDate) {
@@ -195,7 +244,9 @@ const LoanRegister: React.FC = () => {
       toast({ title: hi ? 'चुकाई गई राशि ऋण राशि से ज़्यादा नहीं हो सकती' : 'Repaid amount cannot exceed the loan amount', variant: 'destructive' });
       return;
     }
+    if (suretyError(form.memberId, form.sureties)) return;
     const created = addLoan({
+      sureties: normalizeSureties(form.sureties),
       memberId: form.memberId,
       loanType: form.loanType,
       purpose: form.purpose,
@@ -220,7 +271,9 @@ const LoanRegister: React.FC = () => {
       toast({ title: hi ? 'चुकाई गई राशि ऋण राशि से ज़्यादा नहीं हो सकती' : 'Repaid amount cannot exceed the loan amount', variant: 'destructive' });
       return;
     }
+    if (suretyError(form.memberId, form.sureties)) return;
     updateLoan(editLoan.id, {
+      sureties: normalizeSureties(form.sureties),
       memberId: form.memberId,
       loanType: form.loanType,
       purpose: form.purpose,
@@ -249,6 +302,7 @@ const LoanRegister: React.FC = () => {
       repaidAmount: String(l.repaidAmount),
       status: l.status,
       security: l.security,
+      sureties: loanSureties(l),
     });
   };
 
@@ -297,6 +351,7 @@ const LoanRegister: React.FC = () => {
             <>
               <Button variant="outline" size="sm" className="gap-2" onClick={() => ledgerPdf(society, allLedgers(), 'LNL', 'Loan_Ledger')}><BookOpen className="h-4 w-4" />{hi ? 'खाता-बही PDF' : 'Ledger PDF'}</Button>
               <Button variant="outline" size="sm" className="gap-2" onClick={() => ledgerExcel(allLedgers(), 'Loan_Ledger', 'Loan Ledger')}><FileSpreadsheet className="h-4 w-4" />{hi ? 'खाता-बही Excel' : 'Ledger Excel'}</Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => { setSuretyView('loan'); setSuretyOpen(true); }}><UserCheck className="h-4 w-4" />{hi ? 'ज़मानतदार रजिस्टर' : 'Surety Register'}</Button>
             </>
           )}
           <Button size="sm" className="gap-2" onClick={() => { setForm(EMPTY_FORM); setIsAddOpen(true); }}>
@@ -451,6 +506,47 @@ const LoanRegister: React.FC = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Surety register */}
+      <Dialog open={suretyOpen} onOpenChange={setSuretyOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader><DialogTitle>{hi ? suretyTable.titleHi : suretyTable.title}</DialogTitle></DialogHeader>
+          <div className="space-y-3 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant={suretyView === 'loan' ? 'default' : 'outline'} onClick={() => setSuretyView('loan')}>{hi ? 'ऋण-वार' : 'Loan-wise'}</Button>
+              <Button size="sm" variant={suretyView === 'surety' ? 'default' : 'outline'} onClick={() => setSuretyView('surety')}>{hi ? 'ज़मानतदार-वार' : 'Surety-wise'}</Button>
+              {suretyTable.rowsEn.length > 0 && (
+                <div className="ml-auto flex gap-2">
+                  <Button variant="outline" size="sm" className="gap-1" onClick={() => ledgerPdf(society, [suretyTable], 'SUR', suretyView === 'loan' ? 'Surety_Register' : 'Surety_Register_Suretywise')}><Download className="h-4 w-4" />PDF</Button>
+                  <Button variant="outline" size="sm" className="gap-1" onClick={() => ledgerExcel([suretyTable], suretyView === 'loan' ? 'Surety_Register' : 'Surety_Register_Suretywise', 'Surety Register')}><FileSpreadsheet className="h-4 w-4" />Excel</Button>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">{!hi ? suretyTable.subtitle : suretyView === 'loan' ? `${suretyCounts.liveLoans} चालू ऋण · ${suretyCounts.withoutSurety} बिना ज़मानतदार` : `चालू ऋणों पर ${suretyCounts.sureties} ज़मानतदार`}</p>
+            <div className="max-h-[50vh] overflow-auto border rounded-md">
+              {suretyTable.rowsEn.length === 0 ? (
+                <p className="p-6 text-center text-sm text-muted-foreground">{suretyView === 'loan' ? (hi ? 'कोई चालू ऋण नहीं है।' : 'There are no live loans.') : (hi ? 'किसी चालू ऋण पर ज़मानतदार दर्ज नहीं है। ऋण को संपादित करके ज़मानतदार जोड़ें।' : 'No surety is recorded on any live loan. Edit a loan to add its sureties.')}</p>
+              ) : (
+                <Table>
+                  <TableHeader><TableRow>
+                    {suretyTable.columns.map((c, i) => <TableHead key={i} className={`px-2 ${c.num ? 'text-right' : ''}`}>{hi ? c.hi : c.en}</TableHead>)}
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {suretyTable.rowsEn.map((r, i) => (
+                      <TableRow key={i}>
+                        {r.map((v, j) => <TableCell key={j} className={`px-2 text-sm ${suretyTable.columns[j].num ? 'text-right' : ''}`}>{typeof v === 'number' && suretyTable.columns[j].num && suretyTable.columns[j].en !== 'Loans' ? fmt(v) : (v === '— no surety recorded —' ? <span className="text-destructive">{hi ? '— ज़मानतदार दर्ज नहीं —' : v}</span> : v === 'Non-member' ? (hi ? 'सदस्य नहीं' : v) : v)}</TableCell>)}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+            <ul className="text-[11px] text-muted-foreground list-disc pl-4 space-y-0.5">
+              {suretyTable.notes.map((n, i) => <li key={i}>{hi ? n.hi : n.en}</li>)}
+            </ul>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Dialog */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>

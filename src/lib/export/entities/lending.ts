@@ -64,6 +64,8 @@ const loan: EntityDescriptor = {
     internal('repaidAmount', 'Repaid (cached)', 'चुकाया गया (कैश्ड)', { type: 'currency' }),
     c('status', 'Status', 'स्थिति', { type: 'enum' }),
     c('security', 'Security', 'प्रतिभूति'),
+    // Sureties (guarantors) — names and phone numbers of people, so it is contact data.
+    internal('sureties', 'Sureties', 'ज़मानतदार', { type: 'json', piiClass: 'contact' }),
     c('isDeleted', 'Deleted', 'हटाया गया', { type: 'boolean', defaultVisible: false }),
     internal('createdAt', 'Created At', 'निर्माण समय', { type: 'date' }),
   ],

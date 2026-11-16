@@ -94,6 +94,7 @@ import { splitVoucherExtras, extrasFailureToast } from '@/lib/voucherPersistence
 import { shareOpPosting, validateShareOp, applyShareOp, withShareCapital, type ShareOpType } from '@/lib/shareOps';
 import { resolveDepositLiabilityAccount, depositPosting, depositVoucherType, applyDepositTxn, validateDepositTxn } from '@/lib/depositEngine';
 import { hasActiveCompulsoryDeposit } from '@/lib/compulsoryDeposit';
+import { normalizeSureties, suretyProblem } from '@/lib/loans/sureties';
 import { professionalTaxAccountId, shareRefundPayableAccountId, MISSING_HEAD_TOAST, missingDepositHeadToast } from '@/lib/accounting/headResolve';
 import { buildShareRefundApproval, buildShareRefundPayment, shareRefundOutstanding, SHARE_REFUND_APPROVE_REF, SHARE_REFUND_PAY_REF, SHARE_REFUND_MESSAGE } from '@/lib/shares/refundPayable';
 import type { FarmerInput } from '@/lib/procurement/agentFlow';
@@ -6229,9 +6230,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return reconcileShareCapital(member.shareCapital || 0, ledgerBalance);
   }, [members, getMemberLedger]);
 
+  // Sureties are a late-added column (169): never part of the base upsert (a database without the column would
+  // refuse the whole loan), saved in a second step. If that step fails the loan row is safe; the sureties are taken
+  // back off the screen so it never shows something a refresh would lose (RULE 1).
+  const refuseBadSureties = (memberId: string, sureties: Loan['sureties']): boolean => {
+    const p = suretyProblem(memberId, sureties);
+    if (!p) return false;
+    const msg = p === 'self'
+      ? tr('ऋणी अपना ही ज़मानतदार नहीं हो सकता।', 'The borrower cannot be their own surety.')
+      : p === 'duplicate' ? tr('एक ही सदस्य दो बार ज़मानतदार नहीं हो सकता।', 'The same member cannot be a surety twice.')
+      : tr('जो ज़मानतदार सदस्य नहीं है उसका नाम भरें।', 'Enter the name of a surety who is not a member.');
+    toastRef.current({ title: tr('ज़मानतदार ठीक करें', 'Fix the sureties'), description: tr(`${msg} ऋण सेव नहीं हुआ।`, `${msg} The loan was not saved.`), variant: 'destructive', duration: 10000 });
+    return true;
+  };
+  const saveLoanSureties = (loanId: string, sureties: NonNullable<Loan['sureties']>, restore: Loan['sureties']) => {
+    supabase.from('loans').update({ sureties }).eq('id', loanId).eq('society_id', societyIdRef.current).then(({ error }) => {
+      if (!error) return;
+      reportError('write-partial', error.message, { at: 'Loan sureties', loanId });
+      loansRef.current = loansRef.current.map(l => l.id === loanId ? { ...l, sureties: restore } : l);
+      setLoansState(prev => prev.map(l => l.id === loanId ? { ...l, sureties: restore } : l));
+      toastRef.current({ title: tr('ज़मानतदार सेव नहीं हुए', 'Sureties not saved'), description: tr(`ऋण सुरक्षित है, पर ज़मानतदार cloud पर नहीं गए — ${error.message}. अगर यह "column sureties" कहता है तो Supabase में migration 169 चलानी बाकी है। ज़मानतदार दोबारा भरें।`, `The loan is safe, but the sureties did not reach the cloud — ${error.message}. If it mentions "column sureties", migration 169 has not been run in Supabase yet. Enter the sureties again.`), variant: 'destructive', duration: 15000 });
+    });
+  };
+
   const addLoan = useCallback((data: Omit<Loan, 'id' | 'loanNo' | 'createdAt'>): Loan => {
     if (guardFYLocked()) return { ...data, id: '' } as unknown as Loan;
     if (refuseNonLiveMember(data.memberId, tr('ऋण', 'Loan'))) return { ...data, id: '' } as unknown as Loan;
+    if (refuseBadSureties(data.memberId, data.sureties)) return { ...data, id: '' } as unknown as Loan;
+    data = { ...data, sureties: normalizeSureties(data.sureties) };
     const fy = society.financialYear;
     const maxNum = loansRef.current.filter(l => l.loanNo?.includes(fy)).reduce((max, l) => {
       const m = l.loanNo?.match(/\/(\d+)$/); return m ? Math.max(max, parseInt(m[1], 10)) : max;
@@ -6248,7 +6274,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         loansRef.current = loansRef.current.map(l => l.id === newLoan.id ? loanToSave : l);
         setLoansState(prev => prev.map(l => l.id === newLoan.id ? loanToSave : l));
       }
-      supabase.from('loans').upsert(withSoc(loanToSave)).then(({ error }) => {
+      const { sureties: loanSuretiesToSave, ...loanBase } = loanToSave;   // step 1: base columns only
+      supabase.from('loans').upsert(withSoc(loanBase)).then(({ error }) => {
+        if (!error && loanSuretiesToSave && loanSuretiesToSave.length > 0) saveLoanSureties(newLoan.id, loanSuretiesToSave, []);   // step 2
         if (error) {
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           loansRef.current = loansRef.current.filter(l => l.id !== newLoan.id);
@@ -6302,9 +6330,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return;
     const before = loansRef.current.find(l => l.id === id);
     if (!before) return;
+    const suretiesChanged = 'sureties' in data;
+    if (suretiesChanged && refuseBadSureties(data.memberId ?? before.memberId, data.sureties)) return;
+    if (suretiesChanged) data = { ...data, sureties: normalizeSureties(data.sureties) };
     const updated = { ...before, ...data };
     setLoansState(prev => prev.map(l => l.id === id ? updated : l));
-    supabase.from('loans').upsert(withSoc(updated)).then(({ error }) => {
+    const { sureties: updatedSureties, ...updatedBase } = updated;   // step 1: base columns only (sureties = column 169)
+    supabase.from('loans').upsert(withSoc(updatedBase)).then(({ error }) => {
+      if (!error && suretiesChanged) saveLoanSureties(id, updatedSureties ?? [], before.sureties);   // step 2
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setLoansState(prev => prev.map(l => l.id === id ? before : l));   // RULE 1: roll back to prior state

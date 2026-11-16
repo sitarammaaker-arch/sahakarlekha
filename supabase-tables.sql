@@ -3946,3 +3946,6 @@ alter table purchases add column if not exists "lateFeeRule" jsonb;
 alter table customers add column if not exists "lateFeeRule" jsonb;
 alter table suppliers add column if not exists "lateFeeRule" jsonb;
 alter table society_settings add column if not exists "lateFeeRules" jsonb;
+
+-- 169 · loan sureties (guarantors) — a list on the loan: [{ memberId?, name, phone?, address? }]
+alter table loans add column if not exists sureties jsonb default '[]'::jsonb;
