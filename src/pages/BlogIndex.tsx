@@ -7,6 +7,7 @@
  */
 import React from 'react';
 import { Link } from '@/components/LocalLink';
+import { TRIAL_CTA } from '@/lib/cta';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -215,7 +216,7 @@ const BlogIndex: React.FC = () => {
                 </p>
               </div>
               <div className="flex flex-wrap gap-3 justify-center flex-shrink-0">
-                <Button asChild className="gap-2"><Link to="/register">{L('शुरू करें', 'Get started')} <ArrowRight className="h-4 w-4" /></Link></Button>
+                <Button asChild className="gap-2"><Link to="/register">{L(TRIAL_CTA.hi, TRIAL_CTA.en)} <ArrowRight className="h-4 w-4" /></Link></Button>
                 <Button asChild variant="outline" className="gap-1.5">
                   <a href="https://x.com/sahakarlekha" target="_blank" rel="noopener noreferrer">{L('X पर फॉलो करें', 'Follow on X')} <ArrowUpRight className="h-3.5 w-3.5" /></a>
                 </Button>

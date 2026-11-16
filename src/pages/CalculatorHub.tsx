@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import { Link } from '@/components/LocalLink';
+import { TRIAL_CTA } from '@/lib/cta';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -111,10 +112,10 @@ const CalculatorHub: React.FC = () => {
           <CardContent className="p-6 text-center">
             <p className="font-bold text-lg text-foreground">{L('गणना से आगे — पूरा हिसाब अपने-आप', 'Beyond calculation — your full accounts, automatically')}</p>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl mx-auto">
-              {L('SahakarLekha में ब्याज, डेप्रिसिएशन, GST/TDS की गणना एंट्री के साथ अपने-आप होती है — बिल्कुल मुफ्त।', 'In SahakarLekha, interest, depreciation and GST/TDS are calculated automatically as you make entries — completely free.')}
+              {L('SahakarLekha में ब्याज, डेप्रिसिएशन, GST/TDS की गणना एंट्री के साथ अपने-आप होती है। ये कैलकुलेटर हमेशा मुफ़्त हैं; पूरा सॉफ्टवेयर पहले मुफ़्त आज़माकर देखें।', 'In SahakarLekha, interest, depreciation and GST/TDS are calculated automatically as you make entries. These calculators are always free; try the full software free first.')}
             </p>
             <div className="flex flex-wrap gap-3 justify-center mt-4">
-              <Link to="/register"><Button className="gap-2">{L('मुफ्त रजिस्टर करें', 'Register free')} <ArrowRight className="h-4 w-4" /></Button></Link>
+              <Link to="/register"><Button className="gap-2">{L(TRIAL_CTA.hi, TRIAL_CTA.en)} <ArrowRight className="h-4 w-4" /></Button></Link>
               <Link to="/cookbook"><Button variant="outline">{L('एंट्री कुकबुक देखें', 'See the entry cookbook')}</Button></Link>
             </div>
           </CardContent>

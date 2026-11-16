@@ -9,6 +9,7 @@ import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent } from '@/components/ui/card';
 import RatingWidget from '@/components/RatingWidget';
+import { PLAN_CATALOG } from '@/lib/plans';
 import { Star, Quote } from 'lucide-react';
 
 const SITE = 'https://sahakarlekha.com';
@@ -58,7 +59,8 @@ const Testimonials: React.FC = () => {
     image: `${SITE}/og-image.png`,
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
-    offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR' },
+    // The software is not free (it said price '0'): the real annual plan prices, as the software / state pages state them.
+    offers: { '@type': 'AggregateOffer', priceCurrency: 'INR', lowPrice: String(PLAN_CATALOG.starter.price), highPrice: String(PLAN_CATALOG.pro.price), offerCount: 3 },
     aggregateRating: {
       '@type': 'AggregateRating',
       ratingValue: avg.toFixed(1),

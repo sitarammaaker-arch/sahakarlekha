@@ -6,6 +6,7 @@
 import React from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 import { Link } from '@/components/LocalLink';
+import { TRIAL_CTA } from '@/lib/cta';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -597,7 +598,7 @@ const BlogPost: React.FC = () => {
                   {L('वाउचर से बैलेंस शीट तक, सब एक क्लिक पर। सहकारी समितियों के लिए ही बना, हिन्दी-केंद्रित प्लेटफ़ॉर्म।', 'From vouchers to the balance sheet, all in one click. A Hindi-first platform built just for cooperative societies.')}
                 </p>
                 <div className="flex flex-wrap gap-3 justify-center mt-4">
-                  <Button asChild className="gap-2"><Link to="/register" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'register', post: slug })}>{L('रजिस्टर करें', 'Register')} <ArrowRight className="h-4 w-4" /></Link></Button>
+                  <Button asChild className="gap-2"><Link to="/register" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'register', post: slug })}>{L(TRIAL_CTA.hi, TRIAL_CTA.en)} <ArrowRight className="h-4 w-4" /></Link></Button>
                   <Button asChild variant="outline"><Link to="/guide" onClick={() => trackEvent('cta_click', { location: 'blog_footer', target: 'guide', post: slug })}>{L('संपूर्ण गाइड पढ़ें', 'Read the complete guide')}</Link></Button>
                 </div>
               </CardContent>

@@ -1459,7 +1459,7 @@ function staticExtraPages(DATA) {
           `<h1>सहकारी समिति का <span>Accounting, Compliance और Control</span> — एक ही जगह।</h1>` +
           `<p class="sl-lead">PACS, dairy, marketing, consumer और अन्य cooperative societies के लिए बनाया गया — जहाँ vouchers से लेकर financial statements, GST/TDS और audit-ready reports तक एक connected system में रहते हैं।</p>` +
           `<p>Professional cooperative accounting <strong>₹2,999/year + GST से</strong>। Team व operations बढ़ें तो Plus या Pro के साथ आगे बढ़ें।</p>` +
-          `<div class="sl-ctas"><a class="sl-btn" href="/register">शुरू करें →</a><a class="sl-btn sl-btn-o" href="/pricing">मूल्य देखें</a></div>` +
+          `<div class="sl-ctas"><a class="sl-btn" href="/register">30 दिन मुफ़्त आज़माएँ →</a><a class="sl-btn sl-btn-o" href="/pricing">मूल्य देखें</a></div>` +
           `<p class="sl-ticks">✓ Unlimited Vouchers · ✓ Unlimited Members · ✓ Data Export Anytime · ✓ ₹2,999/year + GST से</p>` +
         `</div></section>`,
       html:
@@ -1771,7 +1771,7 @@ function homeBodyEn() {
         `<h1>Your cooperative society's <span>accounting, compliance and control</span> — all in one place.</h1>` +
         `<p class="sl-lead">Built for PACS, dairy, marketing, consumer and other cooperative societies — vouchers, financial statements, GST/TDS and audit-ready reports, all in one connected system.</p>` +
         `<p>Professional cooperative accounting <strong>from ₹2,999/year + GST</strong>. As your team and operations grow, move up to Plus or Pro.</p>` +
-        `<div class="sl-ctas"><a class="sl-btn" href="/register">Get Started →</a><a class="sl-btn sl-btn-o" href="/pricing">See pricing</a></div>` +
+        `<div class="sl-ctas"><a class="sl-btn" href="/register">Start 30-day free trial →</a><a class="sl-btn sl-btn-o" href="/pricing">See pricing</a></div>` +
         `<p class="sl-ticks">✓ Unlimited Vouchers · ✓ Unlimited Members · ✓ Data Export Anytime · ✓ From ₹2,999/year + GST</p>` +
       `</div></section>`,
     html:

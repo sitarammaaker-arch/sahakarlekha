@@ -8,6 +8,7 @@
  */
 import React from 'react';
 import { Link } from '@/components/LocalLink';
+import { TRIAL_CTA } from '@/lib/cta';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { PAGE_META_EN } from '@/content/pageMetaEn';
@@ -604,7 +605,7 @@ const UserGuide: React.FC = () => {
                     That's all — SahakarLekha makes your cooperative society paperless and audit-ready.</>)}
                   </p>
                   <div className="flex flex-wrap gap-3 justify-center">
-                    <Link to="/register"><Button className="gap-2">{L('अभी शुरू करें · Get Started', 'Get Started')} <ArrowRight className="h-4 w-4"/></Button></Link>
+                    <Link to="/register"><Button className="gap-2">{L(TRIAL_CTA.hi, TRIAL_CTA.en)} <ArrowRight className="h-4 w-4"/></Button></Link>
                     <Link to="/contact"><Button variant="outline">{L('Support संपर्क करें', 'Contact Support')}</Button></Link>
                     <Link to="/faq"><Button variant="ghost">{L('FAQ देखें', 'View FAQ')}</Button></Link>
                   </div>

@@ -16,6 +16,7 @@
  */
 import React from 'react';
 import { Link } from '@/components/LocalLink';
+import { TRIAL_CTA } from '@/lib/cta';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import PublicLayout from '@/components/PublicLayout';
@@ -241,7 +242,7 @@ const LandingPage: React.FC = () => {
             <div className="mt-7 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <Link to="/register">
                 <Button size="lg" className="gap-2 text-base px-8 w-full sm:w-auto">
-                  {L('शुरू करें', 'Get Started')} <ArrowRight className="h-5 w-5" />
+                  {L(TRIAL_CTA.hi, TRIAL_CTA.en)} <ArrowRight className="h-5 w-5" />
                 </Button>
               </Link>
               <a href="#demo">
@@ -362,7 +363,12 @@ const LandingPage: React.FC = () => {
               <div className="p-6"><MockDashboard /></div>
             )}
           </div>
-          <div className="mt-6">
+          {/* The page is long (13,000 px on a phone) and the only buttons to register were in the hero and at
+              the very end. This one sits where a visitor has just watched the product (audit 2026-11-16, C-7). */}
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+            <Link to="/register" onClick={() => trackEvent('cta_click', { location: 'landing_demo', target: 'register' })}>
+              <Button className="gap-2 w-full sm:w-auto">{L(TRIAL_CTA.hi, TRIAL_CTA.en)} <ArrowRight className="h-4 w-4" /></Button>
+            </Link>
             <Button variant="outline" className="gap-2" onClick={handleSampleReport}>
               <Download className="h-4 w-4" /> {L('नमूना रिपोर्ट PDF डाउनलोड करें', 'Download sample report PDF')}
             </Button>
@@ -660,7 +666,7 @@ const LandingPage: React.FC = () => {
           <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/register">
               <Button size="lg" variant="secondary" className="gap-2 text-base px-8">
-                {L('पंजीकरण', 'Register')} <ArrowRight className="h-5 w-5" />
+                {L(TRIAL_CTA.hi, TRIAL_CTA.en)} <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
             {WHATSAPP ? (
