@@ -86,13 +86,16 @@ ok(bad === 0, `300 random loan lifecycles: every rupee of interest reaches incom
 // ── 4. Wiring on the Loan Register ──
 const strip = (f) => readFileSync(pathResolve(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
 const lr = strip('src/pages/LoanRegister.tsx');
-const rep = lr.slice(lr.indexOf('const recordRepayment'), lr.indexOf('updateLoan(loan.id'));
+// The repayment routine moved to hooks/useLoanRepayment.ts (shared with the monthly recovery); it returns false on refusal.
+const hk = strip('src/hooks/useLoanRepayment.ts');
+const rep = hk.slice(hk.indexOf('const recordRepayment'), hk.indexOf('updateLoan(loan.id'));
+ok(/const recordRepayment = useLoanRepayment\(dueOf\);/.test(lr) && /const dueOf = \(loanId: string\): LoanInterestDue => loanInterestDue\(loanId, accruals, vouchers\);/.test(lr), 'Loan Register: shared routine, fed this society\'s accrued interest');
 ok(/repaymentInterestSplit\(interest, dueOf\(loan\.id\)\)/.test(rep), 'repayment uses the shared split for this loan');
 ok(/accountId: ACC_INTEREST_RECEIVABLE, type: 'Cr', amount: split\.toReceivable/.test(rep) && /accountId: incomeAccId, type: 'Cr', amount: split\.toIncome/.test(rep), 'receipt: Cr 3313 accrued + Cr income un-accrued only');
 ok(/refType: REF_LOAN_REPAYMENT, refId: loan\.id/.test(rep), 'receipt tagged with the loan (the derivation key)');
 ok(/debitAccountId: ACC_OVERDUE_INTEREST_RESERVE, creditAccountId: incomeAccId, amount: split\.releaseFromReserve/.test(rep) && /refType: REF_LOAN_INTEREST_RELEASE, refId: loan\.id/.test(rep), 'reserve release: own journal Dr 2211 / Cr income, tagged');
-ok(/if \(!released\) \{[\s\S]*?cancelVoucher\(receiptId,[\s\S]*?return;/.test(rep), 'release refused ⇒ receipt cancelled, loan unchanged (RULE 1)');
-ok(rep.indexOf('releaseFromReserve > 0') < rep.length && /if \(!posted\)[\s\S]*?return;/.test(rep), 'receipt refused ⇒ nothing else happens');
+ok(/if \(!released\) \{[\s\S]*?cancelVoucher\(receiptId,[\s\S]*?return false;/.test(rep), 'release refused ⇒ receipt cancelled, loan unchanged (RULE 1)');
+ok(rep.indexOf('releaseFromReserve > 0') < rep.length && /if \(!posted\)[\s\S]*?return false;/.test(rep), 'receipt refused ⇒ nothing else happens');
 ok(/due=\{dueOf\(l\.id\)\}/.test(lr) && /प्राप्य ब्याज भरें/.test(lr) && /setInterest\(String\(due\.receivable\)\)/.test(lr), 'repay dialog shows accrued interest + fill button');
 
 console.log(`loan repayment vs accrual (H2-2): ${pass} passed, ${fail} failed`);

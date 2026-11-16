@@ -62,10 +62,16 @@ ok(R.kccLoanAccountId(cms) === '3304', 'CMS (no KCC asset head): KCC → 3304 Lo
 ok(R.interestIncomeAccountId([{ id: '4400', name: 'Interest & Other Income', type: 'income', isGroup: true }, { id: '4999', name: 'X', nameHi: 'ऋण पर ब्याज', type: 'income' }]) === '4999', 'group heads skipped; Hindi name matched');
 
 // Wired: no old pattern left on the pages.
-for (const f of ['src/pages/LoanRegister.tsx', 'src/pages/KccLoan.tsx']) {
+// The member-loan repayment routine moved to hooks/useLoanRepayment.ts (shared with the monthly recovery).
+for (const f of ['src/hooks/useLoanRepayment.ts', 'src/pages/KccLoan.tsx']) {
   const s = readFileSync(pathResolve(ROOT, f), 'utf8');
   ok(!/a\.id === '4408' \|\|/.test(s) && !/a\.id === '3313' \|\|/.test(s) && !/a\.id === '3304' \|\|/.test(s), `${f}: no "id || name" first-match lookups left`);
   ok(/interestIncomeAccountId\(accounts\)/.test(s), `${f}: interest via the shared resolver`);
+}
+{
+  const s = readFileSync(pathResolve(ROOT, 'src/pages/LoanRegister.tsx'), 'utf8');
+  ok(!/a\.id === '4408' \|\|/.test(s) && !/a\.id === '3313' \|\|/.test(s) && !/a\.id === '3304' \|\|/.test(s), 'src/pages/LoanRegister.tsx: no "id || name" first-match lookups left');
+  ok(/const recordRepayment = useLoanRepayment\(dueOf\);/.test(s) && !/addVoucher\(/.test(s), 'Loan Register posts repayments only through the shared routine');
 }
 const kcc = readFileSync(pathResolve(ROOT, 'src/pages/KccLoan.tsx'), 'utf8');
 ok((kcc.match(/kccLoanAccountId\(accounts\)/g) || []).length === 2, 'KCC disbursement AND repayment use the asset resolver');
