@@ -3,7 +3,8 @@
  *
  * An employees' (salary earners') thrift & credit society sends its members' employer a list every month and the
  * employer deducts the amounts from salary. The list is a DEMAND: it posts nothing. Money is recorded when it comes
- * in — the compulsory deposit from the monthly collection sheet, the loan from the Loan Register.
+ * in — one member at a time (collection sheet, Loan Register), or all at once from this list's "record recovery"
+ * step, which posts through those same two routines (recoveryPostPlan below decides what; the screen posts it).
  *
  * Per member, as of the last day of the month:
  *   compulsory deposit  months fallen due × monthly contribution − contributions paid (lib/compulsoryDeposit.ts)
@@ -69,38 +70,100 @@ export interface RecoveryRow {
 
 export interface RecoveryInput {
   month: string;   // 'YYYY-MM'
-  depositAccounts: Pick<DepositAccount, 'id' | 'memberId' | 'depositType' | 'status' | 'openDate' | 'installmentAmount'>[];
+  depositAccounts: (Pick<DepositAccount, 'id' | 'memberId' | 'depositType' | 'status' | 'openDate' | 'installmentAmount'> & { accountNo?: string })[];
   depositTransactions: Pick<DepositTransaction, 'depositAccountId' | 'date' | 'txnType' | 'amount'>[];
   loans: LoanIn[];
   /** Accrued, not yet received interest of a loan (loanInterestDue(...).receivable). */
   interestDueOf: (loanId: string) => number;
 }
 
-/** One row per member who owes anything for the month; members who owe nothing are left out. */
-export function recoveryRows({ month, depositAccounts, depositTransactions, loans, interestDueOf }: RecoveryInput): RecoveryRow[] {
+/** One thing a member owes: a compulsory deposit account, or a loan. The unit the recovery is posted in. */
+export type RecoveryItem =
+  | { key: string; kind: 'cd'; memberId: string; depositAccountId: string; label: string; due: number }
+  | { key: string; kind: 'loan'; memberId: string; loanId: string; label: string; principalDue: number; interestDue: number };
+
+/** Every compulsory deposit account and loan with something due for the month. */
+export function recoveryItems({ month, depositAccounts, depositTransactions, loans, interestDueOf }: RecoveryInput): RecoveryItem[] {
   const asOf = monthEnd(month);
+  const items: RecoveryItem[] = [];
+  for (const a of compulsoryAccounts(depositAccounts)) {
+    const due = compulsoryArrears(a, depositTransactions, asOf).arrears;
+    if (due > 0) items.push({ key: `cd:${a.id}`, kind: 'cd', memberId: a.memberId, depositAccountId: a.id, label: a.accountNo ?? '', due });
+  }
+  for (const l of loans) {
+    if (l.isDeleted || l.status === 'cleared') continue;
+    const principalDue = loanPrincipalDue(l, month);
+    const interestDue = r2(Math.max(0, interestDueOf(l.id)));
+    if (principalDue <= 0 && interestDue <= 0) continue;
+    items.push({ key: `loan:${l.id}`, kind: 'loan', memberId: l.memberId, loanId: l.id, label: l.loanNo, principalDue, interestDue });
+  }
+  return items;
+}
+
+/** One row per member who owes anything for the month; members who owe nothing are left out. Built from the items. */
+export function recoveryRows(input: RecoveryInput): RecoveryRow[] {
   const rows = new Map<string, RecoveryRow>();
   const row = (memberId: string) => {
     let r = rows.get(memberId);
     if (!r) { r = { memberId, compulsoryDeposit: 0, loanPrincipal: 0, loanInterest: 0, total: 0, loanNos: [] }; rows.set(memberId, r); }
     return r;
   };
-  for (const a of compulsoryAccounts(depositAccounts)) {
-    const due = compulsoryArrears(a, depositTransactions, asOf).arrears;
-    if (due > 0) row(a.memberId).compulsoryDeposit = r2(row(a.memberId).compulsoryDeposit + due);
+  for (const it of recoveryItems(input)) {
+    const r = row(it.memberId);
+    if (it.kind === 'cd') r.compulsoryDeposit = r2(r.compulsoryDeposit + it.due);
+    else { r.loanPrincipal = r2(r.loanPrincipal + it.principalDue); r.loanInterest = r2(r.loanInterest + it.interestDue); r.loanNos.push(it.label); }
   }
-  for (const l of loans) {
-    if (l.isDeleted || l.status === 'cleared') continue;
-    const principal = loanPrincipalDue(l, month);
-    const interest = r2(Math.max(0, interestDueOf(l.id)));
-    if (principal <= 0 && interest <= 0) continue;
-    const r = row(l.memberId);
-    r.loanPrincipal = r2(r.loanPrincipal + principal);
-    r.loanInterest = r2(r.loanInterest + interest);
-    r.loanNos.push(l.loanNo);
+  return [...rows.values()].map((r) => ({ ...r, total: r2(r.compulsoryDeposit + r.loanPrincipal + r.loanInterest) })).filter((r) => r.total > 0);
+}
+
+/** What the user typed against an item when recording the money received. Blank / invalid counts as 0. */
+export interface RecoveryEntry { deposit?: number | string; principal?: number | string; interest?: number | string }
+
+export type RecoveryAction =
+  | { kind: 'cd'; key: string; depositAccountId: string; amount: number }
+  | { kind: 'loan'; key: string; loanId: string; total: number; interest: number };
+
+const amt = (v: number | string | undefined) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? r2(n) : 0; };
+
+/**
+ * Entries that cannot be posted as typed: loan principal above the loan's outstanding (the repayment routine refuses
+ * it). Checked BEFORE anything is posted, so a wrong figure stops the whole batch with its loan named instead of
+ * leaving half of it posted. Returns the labels of the offending loans.
+ */
+export function recoveryEntryProblems(items: readonly RecoveryItem[], entries: Readonly<Record<string, RecoveryEntry>>, outstandingOf: (loanId: string) => number): string[] {
+  const bad: string[] = [];
+  for (const it of items) {
+    if (it.kind !== 'loan') continue;
+    if (amt(entries[it.key]?.principal) > outstandingOf(it.loanId) + 0.005) bad.push(it.label);
   }
-  const out = [...rows.values()].map((r) => ({ ...r, total: r2(r.compulsoryDeposit + r.loanPrincipal + r.loanInterest) })).filter((r) => r.total > 0);
+  return bad;
+}
+
+/** The amounts the recording step starts with: exactly what is due. */
+export function defaultRecoveryEntries(items: readonly RecoveryItem[]): Record<string, RecoveryEntry> {
+  const out: Record<string, RecoveryEntry> = {};
+  for (const it of items) out[it.key] = it.kind === 'cd' ? { deposit: it.due } : { principal: it.principalDue, interest: it.interestDue };
   return out;
+}
+
+/**
+ * What to post for the amounts entered: one deposit per compulsory deposit account, one repayment per loan
+ * (total = principal + interest). Items with nothing entered are skipped — they post nothing. PURE: the screen
+ * runs these through postDepositTransaction and the shared loan repayment routine.
+ */
+export function recoveryPostPlan(items: readonly RecoveryItem[], entries: Readonly<Record<string, RecoveryEntry>>): { actions: RecoveryAction[]; total: number } {
+  const actions: RecoveryAction[] = [];
+  for (const it of items) {
+    const e = entries[it.key] ?? {};
+    if (it.kind === 'cd') {
+      const a = amt(e.deposit);
+      if (a > 0) actions.push({ kind: 'cd', key: it.key, depositAccountId: it.depositAccountId, amount: a });
+    } else {
+      const principal = amt(e.principal), interest = amt(e.interest);
+      if (principal + interest > 0) actions.push({ kind: 'loan', key: it.key, loanId: it.loanId, total: r2(principal + interest), interest });
+    }
+  }
+  return { actions, total: r2(actions.reduce((s, a) => s + (a.kind === 'cd' ? a.amount : a.total), 0)) };
 }
 
 export interface RecoveryTotals { compulsoryDeposit: number; loanPrincipal: number; loanInterest: number; total: number }

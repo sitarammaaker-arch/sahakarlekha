@@ -33,9 +33,12 @@ const lr = strip('src/pages/LoanRegister.tsx');
 const add = lr.slice(lr.indexOf('const handleAdd'), lr.indexOf('addLoan({'));
 const edt = lr.slice(lr.indexOf('const handleEdit'), lr.indexOf('updateLoan(editLoan.id'));
 for (const [name, blk] of [['add', add], ['edit', edt]]) ok(/\(Number\(form\.repaidAmount\) \|\| 0\) > Number\(form\.amount\) \+ 0\.005/.test(blk), `${name}: repaid > loan amount is refused`);
-const rep = lr.slice(lr.indexOf('const recordRepayment'), lr.indexOf('updateLoan(loan.id'));
+// The repayment routine moved to hooks/useLoanRepayment.ts (shared with the monthly recovery); it returns false on refusal.
+const hk = strip('src/hooks/useLoanRepayment.ts');
+const rep = hk.slice(hk.indexOf('const recordRepayment'), hk.indexOf('updateLoan(loan.id'));
+ok(/const recordRepayment = useLoanRepayment\(dueOf\);/.test(lr), 'Loan Register uses the shared repayment routine');
 ok(/if \(principal > loanOutstanding\(loan\) \+ 0\.005\)/.test(rep), 'repayment: principal can\'t exceed outstanding');
-ok(/posted = !!v\?\.id/.test(rep) && /if \(!posted\)[\s\S]*?return;/.test(rep), 'refused receipt voucher → loan left unchanged');
+ok(/posted = !!v\?\.id/.test(rep) && /if \(!posted\)[\s\S]*?return false;/.test(rep), 'refused receipt voucher → loan left unchanged');
 ok(!/catch \{ \/\* best-effort/.test(readFileSync(pathResolve(ROOT, 'src/pages/LoanRegister.tsx'), 'utf8')), 'no "best-effort, loan still updates" path');
 ok(/const overPrincipal = principal > outstanding \+ 0\.005/.test(lr) && /\|\| overPrincipal\} onClick/.test(lr), 'repay dialog blocks + explains over-principal');
 

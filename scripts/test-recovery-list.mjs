@@ -120,5 +120,55 @@ ok(t.notes.some((n) => /demand only/i.test(n.en) && /केवल माँग/.
 ok(t.notes.some((n) => /equal monthly instalments/i.test(n.en)), 'says how the loan instalment is derived');
 ok(t.notes.some((n) => /not yet accrued is not included/i.test(n.en)), 'says un-accrued interest is not included');
 
+// 5. Items (the unit the recovery is posted in) — and the rows are built from them.
+const input = { month: '2026-11', depositAccounts: depositAccounts.map((a) => ({ ...a, accountNo: 'CD/' + a.id })), depositTransactions, loans, interestDueOf: (id) => interest[id] ?? 0 };
+const items = R.recoveryItems(input);
+ok(items.map((i) => i.key).join() === 'cd:a1,loan:L1,loan:L2,loan:L4', 'one item per compulsory deposit account and per loan with something due');
+const cdItem = items[0], l1 = items[1];
+ok(cdItem.kind === 'cd' && cdItem.depositAccountId === 'a1' && cdItem.due === 1000 && cdItem.label === 'CD/a1', 'deposit item carries its account and what is due');
+ok(l1.kind === 'loan' && l1.loanId === 'L1' && l1.principalDue === 7000 && l1.interestDue === 150.5 && l1.label === 'LN/001', 'loan item carries principal and interest due separately');
+const sumItems = items.reduce((s, i) => s + (i.kind === 'cd' ? i.due : i.principalDue + i.interestDue), 0);
+ok(Math.round(sumItems * 100) / 100 === R.recoveryTotals(R.recoveryRows(input)).total, 'the items add up to the list total — one source for both');
+
+// 6. Posting plan: what was typed → what gets posted.
+const def = R.defaultRecoveryEntries(items);
+ok(def['cd:a1'].deposit === 1000 && def['loan:L1'].principal === 7000 && def['loan:L1'].interest === 150.5, 'the recording step starts with exactly what is due');
+const full = R.recoveryPostPlan(items, def);
+ok(full.actions.length === 4 && full.total === R.recoveryTotals(R.recoveryRows(input)).total, 'posting everything due = the list total');
+const a1 = full.actions.find((a) => a.key === 'cd:a1'), aL1 = full.actions.find((a) => a.key === 'loan:L1');
+ok(a1.kind === 'cd' && a1.depositAccountId === 'a1' && a1.amount === 1000, 'deposit action: account + amount');
+ok(aL1.kind === 'loan' && aL1.loanId === 'L1' && aL1.total === 7150.5 && aL1.interest === 150.5, 'loan action: total = principal + interest, interest stated');
+// Partial / nothing received.
+const part = R.recoveryPostPlan(items, { 'cd:a1': { deposit: '500' }, 'loan:L1': { principal: '1000', interest: '' }, 'loan:L2': { principal: 0, interest: 0 }, 'loan:L4': { principal: '', interest: '10' } });
+ok(part.actions.length === 3 && part.total === 1510, 'typed strings are read as amounts; an item with nothing entered posts nothing');
+ok(!part.actions.some((a) => a.key === 'loan:L2'), 'zero received → no entry');
+ok(part.actions.find((a) => a.key === 'loan:L4').total === 10 && part.actions.find((a) => a.key === 'loan:L4').interest === 10, 'interest alone is a valid recovery');
+const junk = R.recoveryPostPlan(items, { 'cd:a1': { deposit: '-50' }, 'loan:L1': { principal: 'abc', interest: undefined }, 'nope': { deposit: 999 } });
+ok(junk.actions.length === 0 && junk.total === 0, 'negative, non-numeric and unknown-item entries post nothing');
+ok(R.recoveryPostPlan(items, {}).actions.length === 0, 'nothing entered → nothing posted');
+ok(R.recoveryPostPlan(items, { 'cd:a1': { deposit: 100.456 } }).actions[0].amount === 100.46, 'amounts rounded to paise');
+
+// A principal above the loan's outstanding is caught before anything is posted, with the loan named.
+const outstanding = { L1: 12000, L2: 6000, L4: 2400 };
+ok(R.recoveryEntryProblems(items, def, (id) => outstanding[id]).length === 0, 'what is due never exceeds the outstanding');
+ok(R.recoveryEntryProblems(items, { ...def, 'loan:L1': { principal: 12000.01 } }, (id) => outstanding[id]).join() === 'LN/001', 'principal above the outstanding is named');
+ok(R.recoveryEntryProblems(items, { ...def, 'loan:L1': { principal: 12000, interest: 99999 } }, (id) => outstanding[id]).length === 0, 'extra interest is never a problem — only principal is capped');
+ok(R.recoveryEntryProblems(items, { 'cd:a1': { deposit: 999999 } }, (id) => outstanding[id]).length === 0, 'a deposit has no upper limit');
+
+// 7. Wiring: the screen posts through the two existing routines — never its own vouchers.
+const { readFileSync } = await import('node:fs');
+const src = (f) => readFileSync(pathResolve(HERE, '..', f), 'utf8');
+const dep = src('src/pages/Deposits.tsx');
+const post = dep.slice(dep.indexOf('const postRecovery = () => {'), dep.indexOf('// ── Deposit / Withdraw dialog'));
+ok(/postDepositTransaction\(a\.depositAccountId, 'deposit', a\.amount, rlMode, rlDate\)/.test(post), 'compulsory deposit goes through postDepositTransaction');
+ok(/recordRepayment\(loan, a\.total, a\.interest, rlMode, rlDate, \{ silent: true \}\)/.test(post), 'loan goes through the shared repayment routine');
+ok(/const recordRepayment = useLoanRepayment\(/.test(dep) && !/addVoucher/.test(dep), 'the Deposits screen makes no voucher of its own');
+ok(/if \(done > 0\) setRlPosting\(false\);/.test(post) && /failed > 0\) toast\(/.test(post) && /failedLabels\.join\(', '\)/.test(post), 'success is claimed only for what posted; what did not post is named');
+ok(post.indexOf('recoveryEntryProblems(') > 0 && post.indexOf('recoveryEntryProblems(') < post.indexOf('for (const a of rlPlan.actions)'), 'entries are checked before the first posting');
+ok(/\{canEdit && <Button size="sm" className="gap-1" onClick=\{startRlPosting\}/.test(dep), 'recording is offered only to a user who may edit');
+const hook = src('src/hooks/useLoanRepayment.ts');
+ok(/if \(society\.fyLocked\)[^\n]*return false;/.test(hook) && /return true;\n  \};\n  return recordRepayment;/.test(hook), 'shared repayment: FY-lock guard, true only at the end');
+ok(/const recordRepayment = useLoanRepayment\(dueOf\);/.test(src('src/pages/LoanRegister.tsx')), 'Loan Register uses the same routine');
+
 console.log(`\nrecovery-list: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

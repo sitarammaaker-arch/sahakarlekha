@@ -10,8 +10,9 @@
  * Offered only where the chart has the compulsory-deposit head (a Thrift & Credit chart ships it).
  *
  * Monthly recovery list (same societies): compulsory deposit + loan instalment + loan interest each member owes for
- * a month, as one sheet for the employer who deducts it from salary. A demand only — it posts nothing
- * (lib/recoveryList.ts).
+ * a month, as one sheet for the employer who deducts it from salary. The list itself is a demand and posts nothing
+ * (lib/recoveryList.ts). Its "record recovery" step books the money actually received for everyone at once, through
+ * the same two routines the single-member screens use: postDepositTransaction and the shared loan repayment.
  */
 import React, { useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -33,7 +34,8 @@ import { buildRdSchedule, missedCount } from '@/lib/rdSchedule';
 import { pigmyAgents, pigmyAccountsForAgent, collectionTotal } from '@/lib/pigmy';
 import { compulsoryAccounts, collectionSheet, compulsoryArrears, monthOf } from '@/lib/compulsoryDeposit';
 import { resolveDepositLiabilityAccount, allowsWithdrawal } from '@/lib/depositEngine';
-import { recoveryRows, recoveryListTable, recoveryTotals, monthLabel } from '@/lib/recoveryList';
+import { recoveryRows, recoveryItems, recoveryListTable, recoveryTotals, recoveryPostPlan, recoveryEntryProblems, defaultRecoveryEntries, monthLabel, type RecoveryEntry } from '@/lib/recoveryList';
+import { useLoanRepayment } from '@/hooks/useLoanRepayment';
 import { loanInterestDue } from '@/lib/loans/interestAccrual';
 import { useLoanAccruals } from '@/hooks/useLoanAccruals';
 import { useToast } from '@/hooks/use-toast';
@@ -166,6 +168,42 @@ const Deposits: React.FC = () => {
   const rlTable = recoveryListTable(rlRows, /^\d{4}-\d{2}$/.test(rlMonth) ? rlMonth : monthOf(today()),
     id => { const m = members.find(x => x.id === id); return { memberNo: m?.memberId ?? '', name: m?.name ?? id }; });
   const rlTotals = recoveryTotals(rlRows);
+  // Record the recovery: book what was actually received, for every member on the list, in one step.
+  const recordRepayment = useLoanRepayment(id => loanInterestDue(id, accruals, vouchers));
+  const rlItems = useMemo(() => (rlOpen && /^\d{4}-\d{2}$/.test(rlMonth)
+    ? recoveryItems({ month: rlMonth, depositAccounts, depositTransactions, loans, interestDueOf: id => loanInterestDue(id, accruals, vouchers).receivable })
+    : []), [rlOpen, rlMonth, depositAccounts, depositTransactions, loans, accruals, vouchers]);
+  const [rlPosting, setRlPosting] = useState(false);
+  const [rlEntries, setRlEntries] = useState<Record<string, RecoveryEntry>>({});
+  const [rlDate, setRlDate] = useState(today());
+  const [rlMode, setRlMode] = useState<'cash' | 'bank'>('bank');
+  const startRlPosting = () => { setRlEntries(defaultRecoveryEntries(rlItems)); setRlDate(today()); setRlMode('bank'); setRlPosting(true); };
+  const setRlEntry = (key: string, field: keyof RecoveryEntry, value: string) => setRlEntries(m => ({ ...m, [key]: { ...m[key], [field]: value } }));
+  const rlPlan = recoveryPostPlan(rlItems, rlEntries);
+  const postRecovery = () => {
+    // Stop before posting anything if a figure cannot go through — never leave half a batch posted over a typo.
+    const over = recoveryEntryProblems(rlItems, rlEntries, id => { const l = loans.find(x => x.id === id); return l ? l.amount - l.repaidAmount : 0; });
+    if (over.length > 0) {
+      toast({ title: hi ? 'मूलधन बकाया से ज़्यादा है' : 'Principal exceeds the outstanding', description: hi ? `ऋण ${over.join(', ')}: मूलधन की रकम बकाया से ज़्यादा भरी है। उसे घटाएँ, या अतिरिक्त रकम ब्याज में लिखें। कुछ भी दर्ज नहीं हुआ।` : `Loan ${over.join(', ')}: the principal entered is more than the outstanding. Reduce it, or enter the extra as interest. Nothing was posted.`, variant: 'destructive', duration: 12000 });
+      return;
+    }
+    let done = 0, amount = 0;
+    const failedLabels: string[] = [];
+    const labelOf = (key: string) => rlItems.find(i => i.key === key)?.label ?? key;
+    for (const a of rlPlan.actions) {
+      if (a.kind === 'cd') {
+        if (postDepositTransaction(a.depositAccountId, 'deposit', a.amount, rlMode, rlDate)) { done++; amount += a.amount; } else failedLabels.push(labelOf(a.key));
+      } else {
+        const loan = loans.find(l => l.id === a.loanId);
+        if (loan && recordRepayment(loan, a.total, a.interest, rlMode, rlDate, { silent: true })) { done++; amount += a.total; } else failedLabels.push(labelOf(a.key));
+      }
+    }
+    const failed = failedLabels.length;
+    // Say only what really posted, and name what did not (only one message shows at a time, so name them here).
+    if (done > 0) toast({ title: hi ? `✅ ${done} एंट्री दर्ज` : `✅ ${done} entr${done === 1 ? 'y' : 'ies'} posted`, description: fmt(Math.round(amount * 100) / 100) });
+    if (failed > 0) toast({ title: hi ? `${failed} एंट्री दर्ज नहीं हुई` : `${failed} entr${failed === 1 ? 'y was' : 'ies were'} NOT posted`, description: hi ? `${failedLabels.join(', ')} — इनकी एंट्री नहीं बनी (आम कारण: वित्तीय वर्ष या अवधि लॉक, या तिथि खुले वर्ष से बाहर)। ये रकमें सूची में अब भी देय दिखेंगी; कारण ठीक करके दोबारा दर्ज करें।` : `${failedLabels.join(', ')} — no entry was made for these (usual cause: the financial year or period is locked, or the date is outside the open year). They still show as due in the list; fix the cause and post again.`, variant: 'destructive', duration: 15000 });
+    if (done > 0) setRlPosting(false);
+  };
 
   // ── Deposit / Withdraw dialog ──────────────────────────────────────────────
   const [txnAcct, setTxnAcct] = useState<DepositAccount | null>(null);
@@ -248,7 +286,7 @@ const Deposits: React.FC = () => {
           <EntityExportButton entityKey="deposit_account" />
           {/* Read-only sheet, so like the exports it sits outside `canEdit`. Shown where the compulsory deposit exists. */}
           {hasCdHead && (
-            <Button variant="outline" size="sm" className="gap-1" onClick={() => { setRlMonth(monthOf(today())); setRlOpen(true); }}><ClipboardList className="h-4 w-4" />{hi ? 'मासिक वसूली सूची' : 'Monthly Recovery List'}</Button>
+            <Button variant="outline" size="sm" className="gap-1" onClick={() => { setRlMonth(monthOf(today())); setRlPosting(false); setRlOpen(true); }}><ClipboardList className="h-4 w-4" />{hi ? 'मासिक वसूली सूची' : 'Monthly Recovery List'}</Button>
           )}
           {depositAccounts.length > 0 && (
             <>
@@ -631,6 +669,59 @@ const Deposits: React.FC = () => {
       <Dialog open={rlOpen} onOpenChange={setRlOpen}>
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader><DialogTitle>{hi ? 'मासिक वसूली सूची' : 'Monthly Recovery List'} — {monthLabel(/^\d{4}-\d{2}$/.test(rlMonth) ? rlMonth : monthOf(today()), hi)}</DialogTitle></DialogHeader>
+          {rlPosting ? (
+          <div className="space-y-3 min-w-0">
+            <p className="text-sm text-muted-foreground">{hi ? 'जो रकम सच में मिली है वही भरें। जिस खाने में कुछ नहीं मिला उसे खाली या 0 कर दें — उसकी कोई एंट्री नहीं बनेगी।' : 'Enter what was actually received. Leave a box blank or 0 where nothing came in — no entry is made for it.'}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">{hi ? 'प्राप्ति की तिथि' : 'Date received'}</Label>
+                <Input type="date" className="mt-1" value={rlDate} onChange={e => setRlDate(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">{hi ? 'विधि' : 'Mode'}</Label>
+                <Select value={rlMode} onValueChange={v => setRlMode(v as 'cash' | 'bank')}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="bank">{hi ? 'बैंक' : 'Bank'}</SelectItem><SelectItem value="cash">{hi ? 'नकद' : 'Cash'}</SelectItem></SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="max-h-[45vh] overflow-auto border rounded-md">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead className="px-2">{hi ? 'सदस्य' : 'Member'}</TableHead>
+                  <TableHead className="px-2 text-right">{hi ? 'अनिवार्य जमा' : 'Compulsory deposit'}</TableHead>
+                  <TableHead className="px-2 text-right">{hi ? 'ऋण मूलधन' : 'Loan principal'}</TableHead>
+                  <TableHead className="px-2 text-right">{hi ? 'ऋण ब्याज' : 'Loan interest'}</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {rlItems.map(it => (
+                    <TableRow key={it.key}>
+                      <TableCell className="px-2 text-sm">
+                        <div className="font-medium">{memberName(it.memberId)}</div>
+                        <div className="text-[11px] text-muted-foreground font-mono">{it.label}</div>
+                      </TableCell>
+                      <TableCell className="px-2 text-right">
+                        {it.kind === 'cd' && <Input type="number" min="0" className="h-8 w-24 ml-auto" value={rlEntries[it.key]?.deposit ?? ''} onChange={e => setRlEntry(it.key, 'deposit', e.target.value)} />}
+                      </TableCell>
+                      <TableCell className="px-2 text-right">
+                        {it.kind === 'loan' && <Input type="number" min="0" className="h-8 w-24 ml-auto" value={rlEntries[it.key]?.principal ?? ''} onChange={e => setRlEntry(it.key, 'principal', e.target.value)} />}
+                      </TableCell>
+                      <TableCell className="px-2 text-right">
+                        {it.kind === 'loan' && <Input type="number" min="0" className="h-8 w-24 ml-auto" value={rlEntries[it.key]?.interest ?? ''} onChange={e => setRlEntry(it.key, 'interest', e.target.value)} />}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <p className="text-[11px] text-muted-foreground">{hi ? 'हर अनिवार्य जमा की एक रसीद (Dr नकद/बैंक, Cr अनिवार्य जमा) और हर ऋण की एक रसीद (Dr नकद/बैंक, Cr ऋण व ब्याज) बनती है — वही एंट्री जो "मासिक अनिवार्य जमा" और "ऋण रजिस्टर" से बनती है।' : 'One receipt per compulsory deposit (Dr Cash/Bank, Cr compulsory deposit) and one per loan (Dr Cash/Bank, Cr loan and interest) — the same entries the monthly collection and the Loan Register make.'}</p>
+            <p className="text-sm text-right">{rlPlan.actions.length} {hi ? 'एंट्री' : 'entries'} · {hi ? 'कुल' : 'Total'}: <strong>{fmt(rlPlan.total)}</strong></p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRlPosting(false)}>{hi ? 'वापस सूची पर' : 'Back to the list'}</Button>
+              <Button disabled={rlPlan.actions.length === 0 || !rlDate} onClick={postRecovery}>{hi ? 'वसूली दर्ज करें' : 'Post recovery'}</Button>
+            </DialogFooter>
+          </div>
+          ) : (
           <div className="space-y-3 min-w-0">
             <div className="flex flex-wrap items-end gap-3">
               <div>
@@ -641,6 +732,7 @@ const Deposits: React.FC = () => {
                 <div className="ml-auto flex gap-2">
                   <Button variant="outline" size="sm" className="gap-1" onClick={() => ledgerPdf(society, [rlTable], 'RCL', `Recovery_List_${rlMonth}`)}><Download className="h-4 w-4" />PDF</Button>
                   <Button variant="outline" size="sm" className="gap-1" onClick={() => ledgerExcel([rlTable], `Recovery_List_${rlMonth}`, 'Recovery List')}><FileSpreadsheet className="h-4 w-4" />Excel</Button>
+                  {canEdit && <Button size="sm" className="gap-1" onClick={startRlPosting}><ArrowDownCircle className="h-4 w-4" />{hi ? 'वसूली दर्ज करें' : 'Record recovery'}</Button>}
                 </div>
               )}
             </div>
@@ -673,6 +765,7 @@ const Deposits: React.FC = () => {
               {rlTable.notes.map((n, i) => <li key={i}>{hi ? n.hi : n.en}</li>)}
             </ul>
           </div>
+          )}
         </DialogContent>
       </Dialog>
 

@@ -83,7 +83,8 @@ export const SOCIETY_TYPES: SocietyType[] = [
     // chart also has the compulsory (thrift) deposit head (templates/credit.ts), and the Deposits screen has the
     // compulsory deposit (type CD): one account per member, a monthly collection sheet, arrears, no withdrawals.
     // The monthly recovery list (lib/recoveryList.ts) is a demand sheet on the Deposits screen — it posts nothing.
-    // Not claimed, because not built: a surety register, posting a whole recovery in one step.
+    // Its "record recovery" step books what was received for everyone at once (same routines as the single screens).
+    // Not claimed, because not built: a surety register.
     slug: 'thrift-credit',
     Icon: PiggyBank,
     nameHi: 'बचत एवं साख सहकारी समिति (Thrift & Credit)',
