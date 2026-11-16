@@ -23,6 +23,9 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { CapabilityGuard } from '@/components/CapabilityGuard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useNoIndex } from '@/lib/useDocumentMeta';
+import { needsAppData } from '@/lib/appDataPaths';
+import { withNext } from '@/lib/auth/entryContext';
+import { LOGOUT_REASON_KEY } from '@/lib/auth/loginFailure';
 
 /** The data providers, in the order App.tsx always nested them. */
 const AppDataProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -49,13 +52,21 @@ export default AppDataProviders;
 export const ProtectedShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
   const { isLoading } = useData();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   // App-only screens must never be indexed (robots.txt + X-Robots-Tag are the
   // other two layers; this covers any route a crawler still reaches with JS).
   useNoIndex();
+  // Was this screen opened while signed out (a bookmark, a link in an email)?
+  const arrivedSignedOut = React.useRef(!isAuthenticated).current;
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    // Remember where the user was going, so login can bring them back (audit 2026-11-16, J-3) — for a
+    // screen opened while signed out, and after the idle sign-out. NOT after pressing Logout: the next
+    // person to sign in on this computer should start at their own dashboard, not on this screen.
+    let idle = false;
+    try { idle = window.sessionStorage.getItem(LOGOUT_REASON_KEY) === 'idle'; } catch { /* storage blocked */ }
+    const next = arrivedSignedOut || idle ? pathname + search : null;
+    return <Navigate to={withNext('/login', next, needsAppData)} replace />;
   }
 
   if (isLoading) {

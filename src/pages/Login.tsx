@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link } from '@/components/LocalLink';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { trackEvent } from '@/lib/analytics';
@@ -14,9 +15,16 @@ import {
 import { Lock, Mail, Eye, EyeOff, Languages, AlertCircle, KeyRound, HelpCircle, ShieldCheck, PlayCircle, MessageCircle } from 'lucide-react';
 import { WHATSAPP_NUMBER } from '@/lib/socials';
 import { LOGOUT_REASON_KEY, parseLogoutReason, type LogoutReason } from '@/lib/auth/loginFailure';
+import { NEXT_PARAM, safeNext, withNext } from '@/lib/auth/entryContext';
+import { needsAppData } from '@/lib/appDataPaths';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
+  // Where the user was going before they were asked to sign in (validated: an in-app path of this site
+  // only). Kept through to Register too, so a new society ends up on the same screen.
+  const [searchParams] = useSearchParams();
+  const next = safeNext(searchParams.get(NEXT_PARAM), needsAppData);
+  const afterLogin = next ?? '/dashboard';
   const { login, verifyMfaCode, verifyRecoveryCode, cancelMfa, sendPasswordReset } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
@@ -63,7 +71,7 @@ const Login: React.FC = () => {
       const result = await login(email, password);
       if (result.status === 'ok') {
         trackEvent('login', { method: 'email' });
-        navigate('/dashboard');
+        navigate(afterLogin);
       } else if (result.status === 'mfa') {
         setMfaStep(true);
         setMfaCode('');
@@ -111,7 +119,7 @@ const Login: React.FC = () => {
       const ok = useRecovery ? await verifyRecoveryCode(mfaCode) : await verifyMfaCode(mfaCode);
       if (ok) {
         trackEvent('login', { method: useRecovery ? 'email+recovery' : 'email+mfa' });
-        navigate('/dashboard');
+        navigate(afterLogin);
       } else {
         setError(language === 'hi' ? 'गलत कोड — फिर कोशिश करें' : 'Invalid code — try again');
       }
@@ -207,12 +215,12 @@ const Login: React.FC = () => {
         </div>
 
         {/* Mobile Logo */}
-        <div className="lg:hidden mb-8 text-center">
+        <Link to="/" className="lg:hidden mb-8 block text-center" aria-label={L('सहकार लेखा — मुख्य पेज', 'SahakarLekha — home page')}>
           <div className="h-16 w-16 rounded-xl bg-accent text-accent-foreground flex items-center justify-center mx-auto mb-4 shadow-md">
             <span className="text-4xl font-bold leading-none">स</span>
           </div>
           <h1 className="text-2xl font-bold text-foreground">सहकार लेखा</h1>
-        </div>
+        </Link>
 
         <Card className="w-full max-w-md shadow-card">
           <CardHeader className="text-center">
@@ -384,9 +392,9 @@ const Login: React.FC = () => {
         {/* Register link */}
         <p className="mt-4 text-sm text-center">
           {language === 'hi' ? 'नई समिति?' : 'New society?'}{' '}
-          <a href="/register" className="text-primary font-medium hover:underline">
+          <Link to={withNext('/register', next, needsAppData)} className="text-primary font-medium hover:underline">
             {language === 'hi' ? 'यहाँ पंजीकरण करें' : 'Register here'}
-          </a>
+          </Link>
         </p>
 
         {/* Someone who landed here without an account: show them the product and a way to ask. */}

@@ -162,7 +162,7 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link to="/register"><Button className="gap-2">{L('शुरू करें', 'Get started')} <ArrowRight className="h-4 w-4" /></Button></Link>
+          <Link to={`/register?type=${encodeURIComponent(data.slug)}`}><Button className="gap-2">{L('शुरू करें', 'Get started')} <ArrowRight className="h-4 w-4" /></Button></Link>
           <Link to="/guide"><Button variant="outline" className="gap-2"><GraduationCap className="h-4 w-4" /> {L('मुफ़्त गाइड', 'Free guide')}</Button></Link>
         </div>
 
@@ -317,7 +317,7 @@ const TypePage: React.FC<{ data: NonNullable<ReturnType<typeof findSocietyType>>
         <div className="mt-8 rounded-xl bg-primary/5 border border-primary/20 p-6 text-center">
           <p className="font-semibold text-foreground">{L(`अपनी ${data.nameHi} का खाता आज ही डिजिटल करें — ₹2,999/year + GST से।`, `Take your ${data.nameEn} accounts digital today — from ₹2,999/year + GST.`)}</p>
           <div className="mt-4 flex flex-wrap justify-center gap-3">
-            <Link to="/register"><Button className="gap-2">{L('रजिस्टर करें', 'Register')} <ArrowRight className="h-4 w-4" /></Button></Link>
+            <Link to={`/register?type=${encodeURIComponent(data.slug)}`}><Button className="gap-2">{L('रजिस्टर करें', 'Register')} <ArrowRight className="h-4 w-4" /></Button></Link>
             <Link to="/contact"><Button variant="outline">{L('डेमो/संपर्क', 'Demo / Contact')}</Button></Link>
           </div>
         </div>
