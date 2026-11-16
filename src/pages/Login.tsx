@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Lock, Mail, Eye, EyeOff, Languages, AlertCircle, KeyRound, HelpCircle, ShieldCheck, PlayCircle, MessageCircle } from 'lucide-react';
 import { WHATSAPP_NUMBER } from '@/lib/socials';
+import { LOGOUT_REASON_KEY, parseLogoutReason, type LogoutReason } from '@/lib/auth/loginFailure';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -36,17 +37,27 @@ const Login: React.FC = () => {
   const [fpEmail, setFpEmail] = useState('');
   const [fpSubmitted, setFpSubmitted] = useState(false);
   const [fpEmailSent, setFpEmailSent] = useState(false);
+  const [fpFailed, setFpFailed] = useState(false);
   const [fpLoading, setFpLoading] = useState(false);
 
-  // Forgot ID modal
+  // Forgot ID modal — guidance only. It used to be a form that collected a name and a phone number,
+  // sent them nowhere and said "request noted" (audit 2026-11-16, J-2).
   const [showForgotId, setShowForgotId] = useState(false);
-  const [fiName, setFiName] = useState('');
-  const [fiPhone, setFiPhone] = useState('');
-  const [fiSubmitted, setFiSubmitted] = useState(false);
+
+  // Why this tab was sent here (idle sign-out, or a login that is no longer active) — said once.
+  const [logoutReason, setLogoutReason] = useState<LogoutReason | null>(null);
+  useEffect(() => {
+    try {
+      const reason = parseLogoutReason(window.sessionStorage.getItem(LOGOUT_REASON_KEY));
+      window.sessionStorage.removeItem(LOGOUT_REASON_KEY);
+      setLogoutReason(reason);
+    } catch { /* storage blocked — no message */ }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLogoutReason(null);
     setIsLoading(true);
     try {
       const result = await login(email, password);
@@ -68,11 +79,25 @@ const Login: React.FC = () => {
         setError(language === 'hi'
           ? 'साइन इन करने के लिए कृपया "पासवर्ड भूल गए?" से पासवर्ड रीसेट करें।'
           : 'Please reset your password (use "Forgot password?") to sign in.');
+      } else if (result.reason === 'network') {
+        // Not a wrong password — the request never reached the server (audit J-1).
+        setError(L('इंटरनेट से संपर्क नहीं हो पाया — आपका ईमेल / पासवर्ड जाँचा ही नहीं गया। कनेक्शन देखकर दोबारा कोशिश करें।',
+          'Could not reach the internet — your email / password were not even checked. Check the connection and try again.'));
+      } else if (result.reason === 'service') {
+        setError(L('सर्वर से अभी जवाब नहीं मिल रहा — यह आपके पासवर्ड की ग़लती नहीं है। कुछ मिनट बाद दोबारा कोशिश करें।',
+          'The server is not responding right now — this is not a problem with your password. Please try again in a few minutes.'));
+      } else if (result.reason === 'rate_limited') {
+        setError(L('बहुत बार कोशिश हुई है — सुरक्षा के लिए कुछ मिनट रुककर दोबारा कोशिश करें।',
+          'Too many attempts — for safety, please wait a few minutes and try again.'));
+      } else if (result.reason === 'inactive') {
+        // Shown only after a CORRECT password, so it tells a stranger nothing about who has an account.
+        setError(L('यह लॉगिन अभी चालू नहीं है — अपनी समिति के Admin से इसे चालू करने को कहें।',
+          'This login is not active — ask your society Admin to activate it.'));
       } else {
         setError(language === 'hi' ? 'गलत ईमेल या पासवर्ड' : 'Invalid email or password');
       }
     } catch {
-      setError(language === 'hi' ? 'कोई त्रुटि हुई' : 'An error occurred');
+      setError(L('लॉगिन नहीं हो पाया — इंटरनेट कनेक्शन देखकर दोबारा कोशिश करें।', 'Could not sign in — check your connection and try again.'));
     } finally {
       setIsLoading(false);
     }
@@ -117,15 +142,16 @@ const Login: React.FC = () => {
     setFpLoading(true);
     const result = await sendPasswordReset(fpEmail.trim());
     setFpEmailSent(result.isEmailSent);
+    setFpFailed(!result.success);
     setFpSubmitted(true);
     setFpLoading(false);
   };
 
-  const handleForgotIdSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fiName.trim()) return;
-    setFiSubmitted(true);
-  };
+  const whatsappHelpHref = WHATSAPP_NUMBER
+    ? `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(L(
+      'नमस्ते! मुझे सहकार लेखा में लॉगिन / शुरू करने में सहायता चाहिए।',
+      'Hello! I need help signing in to / getting started with Sahakar Lekha.'))}`
+    : '';
 
   return (
     <div className="min-h-screen flex">
@@ -263,6 +289,18 @@ const Login: React.FC = () => {
             </form>
             ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {logoutReason && !error && (
+                <Alert role="status">
+                  <ShieldCheck className="h-4 w-4" />
+                  <AlertDescription>
+                    {logoutReason === 'idle'
+                      ? L('काफ़ी देर से कोई काम नहीं हुआ था, इसलिए सुरक्षा के लिए आपको लॉगआउट कर दिया गया। दोबारा लॉगिन करें — आपका सेव किया हुआ डेटा सुरक्षित है।',
+                        'You were signed out for safety after a long period of no activity. Please log in again — your saved data is safe.')
+                      : L('यह लॉगिन अब चालू नहीं है, इसलिए आपको लॉगआउट कर दिया गया। अपनी समिति के Admin से संपर्क करें।',
+                        'This login is no longer active, so you were signed out. Please contact your society Admin.')}
+                  </AlertDescription>
+                </Alert>
+              )}
               {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
@@ -333,7 +371,7 @@ const Login: React.FC = () => {
             <div className="mt-4 text-center">
               <button
                 type="button"
-                onClick={() => { setShowForgotId(true); setFiSubmitted(false); setFiName(''); setFiPhone(''); }}
+                onClick={() => setShowForgotId(true)}
                 className="text-sm text-muted-foreground hover:text-primary hover:underline flex items-center gap-1 mx-auto"
               >
                 <HelpCircle className="h-3.5 w-3.5" />
@@ -361,11 +399,9 @@ const Login: React.FC = () => {
             <PlayCircle className="h-4 w-4" />
             {language === 'hi' ? '1 मिनट का डेमो देखें' : 'Watch the 1-minute demo'}
           </a>
-          {WHATSAPP_NUMBER && (
+          {whatsappHelpHref && (
             <a
-              href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(language === 'hi'
-                ? 'नमस्ते! मुझे सहकार लेखा में लॉगिन / शुरू करने में सहायता चाहिए।'
-                : 'Hello! I need help signing in to / getting started with Sahakar Lekha.')}`}
+              href={whatsappHelpHref}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => trackEvent('whatsapp_click', { location: 'login', page: '/login' })}
@@ -384,7 +420,7 @@ const Login: React.FC = () => {
       </div>
 
       {/* ── Forgot Password Modal ── */}
-      <Dialog open={showForgotPassword} onOpenChange={(open) => { setShowForgotPassword(open); setFpSubmitted(false); setFpEmailSent(false); }}>
+      <Dialog open={showForgotPassword} onOpenChange={(open) => { setShowForgotPassword(open); setFpSubmitted(false); setFpEmailSent(false); setFpFailed(false); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -425,38 +461,47 @@ const Login: React.FC = () => {
             </form>
           ) : (
             <div className="pt-2 space-y-4">
-              {fpEmailSent ? (
+              {fpFailed ? (
+                // The request did not go through (no network, too many requests, server error). Nothing was
+                // recorded anywhere, so this must not say "request received" (audit 2026-11-16, J-2b).
+                <div role="alert" className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800 space-y-2">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    {L('लिंक अभी नहीं भेजा जा सका', 'The link could not be sent right now')}
+                  </div>
+                  <p>
+                    {L('इंटरनेट कनेक्शन देखें और एक-दो मिनट बाद दोबारा कोशिश करें (लगातार कई बार माँगने पर भी लिंक कुछ देर रुक जाता है)।',
+                      'Check your connection and try again in a minute or two (asking several times in a row also pauses the link for a while).')}
+                  </p>
+                  <p className="font-medium">
+                    {L('जल्दी हो तो अपनी समिति के Admin से कहें — वे User Management में आपका पासवर्ड बदल सकते हैं।',
+                      'If it is urgent, ask your society Admin — they can change your password in User Management.')}
+                  </p>
+                </div>
+              ) : fpEmailSent ? (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800 space-y-2">
                   <div className="flex items-center gap-2 font-semibold">
                     <ShieldCheck className="h-4 w-4 text-green-600" />
-                    {language === 'hi' ? 'ईमेल भेज दिया गया!' : 'Email Sent!'}
+                    {L('ईमेल देखें', 'Check your email')}
                   </div>
                   <p>
-                    {language === 'hi'
-                      ? `"${fpEmail}" पर पासवर्ड reset लिंक भेजा गया है।`
-                      : `A password reset link has been sent to "${fpEmail}".`}
+                    {L(`अगर "${fpEmail}" सहकार लेखा में पंजीकृत है, तो उस पर पासवर्ड बदलने का लिंक भेज दिया गया है।`,
+                      `If "${fpEmail}" is registered with SahakarLekha, a link to change the password has been sent to it.`)}
                   </p>
                   <p className="font-medium">
-                    {language === 'hi'
-                      ? 'अपना ईमेल inbox (और spam folder) चेक करें।'
-                      : 'Please check your email inbox (and spam folder).'}
+                    {L('Inbox और spam folder दोनों देखें। कुछ मिनट में ईमेल न आए तो ईमेल की spelling जाँचें।',
+                      'Look in both the inbox and the spam folder. If nothing arrives in a few minutes, check the spelling of the email.')}
                   </p>
                 </div>
               ) : (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 space-y-2">
                   <div className="flex items-center gap-2 font-semibold">
                     <ShieldCheck className="h-4 w-4 text-blue-600" />
-                    {language === 'hi' ? 'अनुरोध प्राप्त हुआ' : 'Request Received'}
+                    {L('Admin से पासवर्ड बदलवाएँ', 'Ask your Admin to change the password')}
                   </div>
-                  <p>
-                    {language === 'hi'
-                      ? `"${fpEmail}" के लिए पासवर्ड reset अनुरोध दर्ज किया गया।`
-                      : `Password reset request noted for "${fpEmail}".`}
-                  </p>
                   <p className="font-medium">
-                    {language === 'hi'
-                      ? 'कृपया अपनी समिति के Admin से संपर्क करें। Admin, User Management में जाकर आपका पासवर्ड reset कर सकते हैं।'
-                      : 'Please contact your society Admin. The Admin can reset your password from the User Management page.'}
+                    {L('इस ईमेल पर लिंक नहीं भेजा जा सका। अपनी समिति के Admin से कहें — वे User Management में आपका पासवर्ड बदल सकते हैं।',
+                      'A link could not be emailed to this address. Ask your society Admin — they can change your password in User Management.')}
                   </p>
                 </div>
               )}
@@ -469,7 +514,7 @@ const Login: React.FC = () => {
       </Dialog>
 
       {/* ── Forgot User ID Modal ── */}
-      <Dialog open={showForgotId} onOpenChange={(open) => { setShowForgotId(open); setFiSubmitted(false); }}>
+      <Dialog open={showForgotId} onOpenChange={setShowForgotId}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -477,59 +522,42 @@ const Login: React.FC = () => {
               {language === 'hi' ? 'User ID / ईमेल भूल गए' : 'Forgot User ID / Email'}
             </DialogTitle>
             <DialogDescription>
-              {language === 'hi'
-                ? 'पहचान के लिए अपना नाम और फ़ोन नंबर दर्ज करें'
-                : 'Enter your name and phone to identify your account'}
+              {L('आपका User ID वही ईमेल है जिससे लॉगिन बना था। उसे ऐसे पता करें:',
+                'Your User ID is the email your login was created with. Here is how to find it:')}
             </DialogDescription>
           </DialogHeader>
 
-          {!fiSubmitted ? (
-            <form onSubmit={handleForgotIdSubmit} className="space-y-4 pt-2">
-              <div className="space-y-2">
-                <Label>{language === 'hi' ? 'पूरा नाम' : 'Full Name'}</Label>
-                <Input
-                  placeholder={language === 'hi' ? 'जैसे: राम कुमार शर्मा' : 'e.g. Ram Kumar Sharma'}
-                  value={fiName}
-                  onChange={e => setFiName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>{language === 'hi' ? 'मोबाइल नंबर (वैकल्पिक)' : 'Mobile Number (optional)'}</Label>
-                <Input
-                  placeholder="9876543210"
-                  value={fiPhone}
-                  onChange={e => setFiPhone(e.target.value)}
-                  type="tel"
-                />
-              </div>
-              <Button type="submit" className="w-full">
-                {language === 'hi' ? 'अनुरोध भेजें' : 'Submit Request'}
-              </Button>
-            </form>
-          ) : (
-            <div className="pt-2 space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 space-y-2">
-                <div className="flex items-center gap-2 font-semibold">
-                  <ShieldCheck className="h-4 w-4 text-blue-600" />
-                  {language === 'hi' ? 'अनुरोध प्राप्त हुआ' : 'Request Received'}
-                </div>
-                <p>
-                  {language === 'hi'
-                    ? `"${fiName}" के नाम से अनुरोध दर्ज किया गया।`
-                    : `Request noted for "${fiName}".`}
-                </p>
-                <p className="font-medium">
-                  {language === 'hi'
-                    ? 'कृपया अपनी समिति के Admin से संपर्क करें। Admin आपको आपका लॉगिन ईमेल / User ID बता सकते हैं।'
-                    : 'Please contact your society Admin. The Admin can find and share your login email / User ID.'}
-                </p>
-              </div>
-              <Button variant="outline" className="w-full" onClick={() => setShowForgotId(false)}>
-                {language === 'hi' ? 'बंद करें' : 'Close'}
-              </Button>
-            </div>
-          )}
+          <div className="pt-2 space-y-4">
+            <ol className="list-decimal pl-5 space-y-2 text-sm text-foreground">
+              <li>
+                {L('अपनी समिति के Admin से पूछें — सहकार लेखा में User Management खोलने पर हर यूज़र का लॉगिन ईमेल दिखता है।',
+                  'Ask your society Admin — User Management in SahakarLekha lists every user\'s login email.')}
+              </li>
+              <li>
+                {L('आपने ही समिति पंजीकृत की थी? तो यह वही ईमेल है जो पंजीकरण के समय लिखा था। अपने ईमेल inbox में "SahakarLekha" खोजकर देखें।',
+                  'Did you register the society yourself? Then it is the email you entered at registration. Search your inbox for "SahakarLekha".')}
+              </li>
+              <li>
+                {L('ईमेल याद है पर पासवर्ड नहीं? यह खिड़की बंद करके "पासवर्ड भूल गए?" दबाएँ।',
+                  'Remember the email but not the password? Close this and use "Forgot Password?".')}
+              </li>
+            </ol>
+            {whatsappHelpHref && (
+              <a
+                href={whatsappHelpHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => trackEvent('whatsapp_click', { location: 'login_forgot_id', page: '/login' })}
+                className="flex items-center justify-center gap-2 rounded-md border px-3 py-2.5 text-sm font-medium text-primary hover:bg-muted"
+              >
+                <MessageCircle className="h-4 w-4" />
+                {L('फिर भी न मिले तो WhatsApp पर सहायता लें', 'Still stuck? Get help on WhatsApp')}
+              </a>
+            )}
+            <Button variant="outline" className="w-full" onClick={() => setShowForgotId(false)}>
+              {L('बंद करें', 'Close')}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

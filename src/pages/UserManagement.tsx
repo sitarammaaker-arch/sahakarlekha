@@ -329,12 +329,34 @@ export default function UserManagement() {
     const u = users.find(x => x.id === id);
     if (!u) return;
     const newVal = !u.isActive;
+    const apply = (val: boolean) => {
+      const next = users.map(x => x.id === id ? { ...x, isActive: val } : x);
+      setUsers(next);
+      cacheUsers(next);
+    };
+    apply(newVal); // optimistic
+    // RULE 1 (audit 2026-11-16, S-3): this used to ignore the result and flip the switch regardless —
+    // supabase-js RESOLVES a refused update with `error` (it does not throw), so a failed "deactivate"
+    // showed the user as Inactive while their login kept working. `.select('id')` makes a refusal by RLS
+    // (0 rows changed, no error) visible too. On any failure the switch goes back and the admin is told.
+    let failed = false;
     try {
-      await supabase.from('society_users').update({ is_active: newVal }).eq('id', id);
-    } catch { /* offline — update locally anyway */ }
-    const updated = users.map(x => x.id === id ? { ...x, isActive: newVal } : x);
-    setUsers(updated);
-    cacheUsers(updated);
+      const { data, error } = await supabase.from('society_users').update({ is_active: newVal }).eq('id', id).select('id');
+      failed = !!error || !data || data.length === 0;
+    } catch {
+      failed = true;
+    }
+    if (failed) {
+      apply(!newVal);
+      toast({
+        title: hi ? 'बदलाव सेव नहीं हुआ' : 'Change was not saved',
+        description: newVal
+          ? (hi ? `${u.name} को चालू नहीं किया जा सका — इंटरनेट देखकर दोबारा कोशिश करें।` : `${u.name} could not be activated — check the connection and try again.`)
+          : (hi ? `${u.name} अभी भी चालू है और लॉगिन कर सकता है — बंद नहीं हो पाया। इंटरनेट देखकर दोबारा कोशिश करें।` : `${u.name} is STILL active and can log in — the deactivation did not go through. Check the connection and try again.`),
+        variant: 'destructive',
+        duration: 12000,
+      });
+    }
   };
 
   // ECR-12 — admin resets a locked-out user's 2FA (lost device).
