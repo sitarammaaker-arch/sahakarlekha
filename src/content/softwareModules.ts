@@ -19,6 +19,8 @@ import type { NavDomain } from '@/lib/navigation/capabilities';
 /** /software/<slug> → the app's society type. */
 export const SOFTWARE_SLUG_TYPE: Record<string, SocietyType> = {
   pacs: 'pacs',
+  credit: 'credit',
+  'thrift-credit': 'thrift_credit',
   dairy: 'dairy',
   marketing: 'marketing_processing',
   consumer: 'consumer',

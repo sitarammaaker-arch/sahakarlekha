@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import {
-  Wheat, Landmark, ShoppingCart, Milk, Home, Factory, Hammer, Building2,
+  Wheat, Landmark, ShoppingCart, Milk, Home, Factory, Hammer, Building2, PiggyBank,
 } from 'lucide-react';
 
 export interface SocietyType {
@@ -48,6 +48,61 @@ export const SOCIETY_TYPES: SocietyType[] = [
       'समर्पित KCC मॉड्यूल व ब्याज गणना',
       'NABARD-शैली रिपोर्ट + आरक्षित फंड विनियोजन (राज्य अधिनियम/उपनियम अनुसार %)',
       'सदस्य शेयर रजिस्टर, ट्रायल बैलन्स, बैलेंस शीट व ऑडिट प्रमाणपत्र',
+    ],
+  },
+  {
+    // Credit Cooperative Society — urban / citizens' credit societies. A separate type from Thrift & Credit
+    // (founder decision 2026-11-16: a customer looks for its own name). Every line below is a module this type
+    // really has (content/softwareModules lists them from the app's menu): deposits (SB/FD/RD/pigmy), loan
+    // register, loan interest, share & nomination registers, TDS, reports.
+    // Not claimed, because not built: RD instalment schedules, FD maturity processing.
+    slug: 'credit',
+    Icon: PiggyBank,
+    nameHi: 'साख सहकारी समिति (Credit)',
+    nameEn: 'Credit Cooperative Society',
+    metaTitle: 'क्रेडिट सहकारी समिति सॉफ्टवेयर | Credit Cooperative Society Software',
+    metaDescription: 'साख (क्रेडिट) सहकारी समिति और नागरिक साख समितियों के लिए लेखा सॉफ्टवेयर — सदस्य जमा (बचत, FD, RD, पिग्मी), सदस्य ऋण, ब्याज, शेयर रजिस्टर, TDS व ऑडिट रिपोर्ट। हिंदी+English।',
+    h1Hi: 'साख (क्रेडिट) सहकारी समिति के लिए लेखा सॉफ्टवेयर',
+    introHi: 'सदस्यों की जमा, सदस्यों को ऋण और उन पर ब्याज — साख समिति और नागरिक साख समिति का पूरा हिसाब एक ही जगह।',
+    seoEn: 'SahakarLekha is accounting software for credit cooperative societies, including urban (citizens) credit societies. Keep member deposits (savings, FD, RD, pigmy), member loans and interest, the share register, TDS and audit reports — in Hindi and English.',
+    painsHi: [
+      'हर सदस्य की जमा का अलग खाता और पासबुक जैसा हिसाब',
+      'सदस्य-वार ऋण, किस्त, ब्याज और बकाया',
+      'जमा पर ब्याज और ऋण पर ब्याज का सही लेखा',
+      'शेयर, नामांकन और ऑडिट के रजिस्टर',
+    ],
+    solvesHi: [
+      'जमा खाते — बचत, FD, RD और पिग्मी; हर जमा-निकासी का वाउचर अपने-आप',
+      'ऋण रजिस्टर — सदस्य-वार ऋण, बकाया और WhatsApp पर याद दिलाना',
+      'ऋण पर ब्याज की गणना और जमा पर ब्याज की एंट्री',
+      'शेयर रजिस्टर, नामांकन रजिस्टर, ट्रायल बैलेंस, बैलेंस शीट व ऑडिट प्रमाणपत्र',
+    ],
+  },
+  {
+    // Thrift & Credit Cooperative Society — employees' / salary earners' societies. Same screens as Credit; its
+    // chart also has the compulsory (thrift) deposit head (templates/credit.ts), which is posted from the voucher
+    // screen — say exactly that, not that a compulsory-deposit module exists.
+    // Not claimed, because not built: recovery lists for deduction from salary, a surety register, RD schedules.
+    slug: 'thrift-credit',
+    Icon: PiggyBank,
+    nameHi: 'बचत एवं साख सहकारी समिति (Thrift & Credit)',
+    nameEn: 'Thrift & Credit Cooperative Society',
+    metaTitle: 'थ्रिफ्ट एंड क्रेडिट समिति सॉफ्टवेयर | Thrift & Credit Society Software',
+    metaDescription: 'बचत एवं साख (थ्रिफ्ट एंड क्रेडिट) और वेतनभोगी सहकारी समितियों के लिए लेखा सॉफ्टवेयर — अनिवार्य जमा का अलग खाता, सदस्य जमा, सदस्य ऋण, ब्याज, शेयर रजिस्टर, TDS व ऑडिट रिपोर्ट। हिंदी+English।',
+    h1Hi: 'बचत एवं साख (थ्रिफ्ट एंड क्रेडिट) समिति के लिए लेखा सॉफ्टवेयर',
+    introHi: 'सदस्यों की अनिवार्य जमा, उनकी बचत, उन्हें दिया ऋण और उस पर ब्याज — वेतनभोगी और थ्रिफ्ट एंड क्रेडिट समिति का पूरा हिसाब एक ही जगह।',
+    seoEn: 'SahakarLekha is accounting software for thrift and credit cooperative societies, including employees (salary earners) societies. Keep a separate account for compulsory deposits, member deposits, member loans and interest, the share register, TDS and audit reports — in Hindi and English.',
+    painsHi: [
+      'हर सदस्य की अनिवार्य जमा और बचत का अलग-अलग हिसाब',
+      'सदस्य-वार ऋण, किस्त, ब्याज और बकाया',
+      'जमा पर ब्याज और ऋण पर ब्याज का सही लेखा',
+      'शेयर, नामांकन और ऑडिट के रजिस्टर',
+    ],
+    solvesHi: [
+      'खाता-सूची में अनिवार्य (थ्रिफ्ट) जमा का अलग खाता; एंट्री वाउचर से',
+      'जमा खाते — बचत, FD, RD और पिग्मी; हर जमा-निकासी का वाउचर अपने-आप',
+      'ऋण रजिस्टर और ऋण पर ब्याज की गणना; बकाया पर WhatsApp से याद दिलाना',
+      'शेयर रजिस्टर, नामांकन रजिस्टर, ट्रायल बैलेंस, बैलेंस शीट व ऑडिट प्रमाणपत्र',
     ],
   },
   {

@@ -14,8 +14,10 @@ import type { Activity } from './activities';
 import type { Capability } from './capabilities';
 
 export const ACTIVITY_CAPABILITY_MAP: Record<Activity, Capability[]> = {
-  credit_short_term: ['lending'],
-  credit_long_term: ['lending'],
+  // agri_credit rides with the credit activities; a society whose type is not entitled to it (credit & thrift)
+  // drops it at the entitlement intersection in resolveCapabilities.
+  credit_short_term: ['lending', 'agri_credit'],
+  credit_long_term: ['lending', 'agri_credit'],
   deposits_savings: ['deposit_ledger'],
   deposits_term: ['deposit_ledger'],
   milk_procurement: ['dairy_collection'],

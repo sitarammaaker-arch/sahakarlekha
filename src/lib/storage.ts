@@ -709,11 +709,15 @@ import { DAIRY_SOCIETY_ACCOUNTS } from './templates/dairy';
 import { HOUSING_SOCIETY_ACCOUNTS } from './templates/housing';
 import { SUGAR_SOCIETY_ACCOUNTS } from './templates/sugar';
 import { TRANSPORT_EXTRA_ACCOUNTS } from './templates/transport';
+import { THRIFT_CREDIT_EXTRA_ACCOUNTS } from './templates/credit';
 
 // Template map: societyType → accounts array
 // CMS chart + the transport heads. PURE-annotated so esbuild can still tree-shake the templates out of
 // bundles that import storage.ts for other things (the /ask Edge bundle) — a bare spread here pulled all of them in.
 const TRANSPORT_SOCIETY_ACCOUNTS: LedgerAccount[] = /* @__PURE__ */ CMS_SOCIETY_ACCOUNTS.concat(TRANSPORT_EXTRA_ACCOUNTS);
+// Thrift & Credit: CMS chart + the compulsory-deposit head (templates/credit.ts). PURE-annotated for the same
+// tree-shaking reason. A Credit society (no compulsory deposit) uses the CMS chart as it is.
+const THRIFT_CREDIT_SOCIETY_ACCOUNTS: LedgerAccount[] = /* @__PURE__ */ CMS_SOCIETY_ACCOUNTS.concat(THRIFT_CREDIT_EXTRA_ACCOUNTS);
 
 export const SOCIETY_TEMPLATES: Record<string, LedgerAccount[]> = {
   marketing_processing: CMS_SOCIETY_ACCOUNTS,
@@ -724,6 +728,8 @@ export const SOCIETY_TEMPLATES: Record<string, LedgerAccount[]> = {
   sugar:                SUGAR_SOCIETY_ACCOUNTS,
   labour:               CMS_SOCIETY_ACCOUNTS,
   transport:            TRANSPORT_SOCIETY_ACCOUNTS,
+  credit:               CMS_SOCIETY_ACCOUNTS,
+  thrift_credit:        THRIFT_CREDIT_SOCIETY_ACCOUNTS,
   other:                CMS_SOCIETY_ACCOUNTS,
 };
 

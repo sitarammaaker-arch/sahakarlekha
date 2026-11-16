@@ -193,6 +193,18 @@ export const SOCIETY_CONTENT: Record<string, SurfaceLinks> = {
     help: ['loan-entry'],
     cookbook: ['loan-disbursed', 'loan-interest-received'],
   },
+  credit: {
+    guide: [G('special-registers', 'विशेष रजिस्टर (ऋण रजिस्टर)')],
+    blog: [B('member-deposit-interest-accounting', 'सदस्य की जमा और ब्याज'), B('member-loan-installment-accounting-principal-interest-arrears', 'सदस्य के ऋण की किस्त का हिसाब'), B('loan-and-interest-accounting', 'ऋण व ब्याज लेखांकन')],
+    help: ['loan-entry'],
+    cookbook: ['loan-disbursed', 'loan-interest-received'],
+  },
+  'thrift-credit': {
+    guide: [G('special-registers', 'विशेष रजिस्टर (ऋण रजिस्टर)')],
+    blog: [B('member-deposit-interest-accounting', 'सदस्य की जमा और ब्याज'), B('member-loan-installment-accounting-principal-interest-arrears', 'सदस्य के ऋण की किस्त का हिसाब'), B('loan-and-interest-accounting', 'ऋण व ब्याज लेखांकन')],
+    help: ['loan-entry'],
+    cookbook: ['loan-disbursed', 'loan-interest-received'],
+  },
   dairy: {
     guide: [G('society-type-entries', 'समिति-प्रकार अनुसार एंट्रियाँ')],
     blog: [B('dairy-cooperative-accounting-basics', 'दुग्ध समिति लेखांकन की मूल बातें')],

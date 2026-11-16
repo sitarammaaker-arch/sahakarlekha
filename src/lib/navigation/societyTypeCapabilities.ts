@@ -9,17 +9,25 @@ import type { Capability } from './capabilities';
 
 export const SOCIETY_TYPE_CAPABILITIES: Record<SocietyType, Capability[]> = {
   marketing_processing: ['inventory_sales', 'procurement_msp', 'transport', 'gst', 'tds'], // trades goods + MSP procurement + transport
-  pacs: ['inventory_sales', 'lending', 'deposit_ledger', 'procurement_msp', 'subsidy_reconciliation', 'gst', 'tds'], // credit + deposits + input distribution + FPS/subsidy + procurement
+  pacs: ['inventory_sales', 'lending', 'agri_credit', 'deposit_ledger', 'procurement_msp', 'subsidy_reconciliation', 'gst', 'tds'], // credit + deposits + input distribution + FPS/subsidy + procurement
   consumer: ['inventory_sales', 'pos_billing', 'subsidy_reconciliation', 'gst', 'tds'],     // retail store + fast POS + FPS subsidy
   dairy: ['dairy_collection', 'inventory_sales', 'gst', 'tds'],               // milk + goods commerce
   housing: ['tds', 'housing'],                                                // service — core accounting + TDS + housing (flats/maintenance)
   sugar: ['inventory_sales', 'procurement_msp', 'gst', 'tds'],                // cane procurement + sugar sales
   labour: ['tds', 'labour', 'pf_esi'],                                        // service — core accounting + TDS + labour (work orders/wages) + EPF/ESI (revocable per society)
   producer: ['inventory_sales', 'procurement_msp', 'gst', 'tds'],             // FPO — input supply + output marketing (T-13 / SC-2)
-  multistate: ['inventory_sales', 'lending', 'deposit_ledger', 'procurement_msp', 'gst', 'tds'], // multi-state coop — broad, credit-capable (T-13 / SC-3)
-  multipurpose: ['inventory_sales', 'lending', 'deposit_ledger', 'dairy_collection', 'procurement_msp', 'pos_billing', 'subsidy_reconciliation', 'transport', 'gst', 'tds'], // does many activities at once (T-13 / SC-1); transport added 2026-10-19 (CM-PACS bye-laws list it)
+  multistate: ['inventory_sales', 'lending', 'agri_credit', 'deposit_ledger', 'procurement_msp', 'gst', 'tds'], // multi-state coop — broad, credit-capable (T-13 / SC-3)
+  multipurpose: ['inventory_sales', 'lending', 'agri_credit', 'deposit_ledger', 'dairy_collection', 'procurement_msp', 'pos_billing', 'subsidy_reconciliation', 'transport', 'gst', 'tds'], // does many activities at once (T-13 / SC-1); transport added 2026-10-19 (CM-PACS bye-laws list it)
   // Founder decision 2026-10-19: its own type (Haryana Act 1984 / Rules 1989 name no transport class, so no
   // statutory rule reads it). Service society — freight/hire income, own vehicles, drivers (EPF/ESI revocable).
   transport: ['transport', 'gst', 'tds', 'pf_esi'],
-  other: ['inventory_sales', 'lending', 'deposit_ledger', 'gst', 'tds'],      // catch-all — broad
+  // Non-agricultural credit, as two types (founder decision 2026-11-16 — a customer must find its own name):
+  //   credit        — Credit Cooperative Society (urban / citizens' credit societies)
+  //   thrift_credit — Thrift & Credit Cooperative Society (employees' / salary earners' societies; compulsory deposit)
+  // The National Cooperative Database counts both in one sector, "Credit & Thrift Society". Member deposits and
+  // member loans are the whole business: no goods, no KCC, no NABARD return, so no inventory_sales / agri_credit / gst.
+  // The two templates are the same on purpose; they differ in the chart (thrift_credit adds the compulsory-deposit head).
+  credit: ['lending', 'deposit_ledger', 'tds'],
+  thrift_credit: ['lending', 'deposit_ledger', 'tds'],
+  other: ['inventory_sales', 'lending', 'agri_credit', 'deposit_ledger', 'gst', 'tds'],      // catch-all — broad
 };
