@@ -783,6 +783,8 @@ var loan = {
     internal5("repaidAmount", "Repaid (cached)", "\u091A\u0941\u0915\u093E\u092F\u093E \u0917\u092F\u093E (\u0915\u0948\u0936\u094D\u0921)", { type: "currency" }),
     c5("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
     c5("security", "Security", "\u092A\u094D\u0930\u0924\u093F\u092D\u0942\u0924\u093F"),
+    // Sureties (guarantors) — names and phone numbers of people, so it is contact data.
+    internal5("sureties", "Sureties", "\u091C\u093C\u092E\u093E\u0928\u0924\u0926\u093E\u0930", { type: "json", piiClass: "contact" }),
     c5("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false }),
     internal5("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]
