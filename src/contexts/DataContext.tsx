@@ -1,4 +1,5 @@
 import { tr } from '@/lib/uiLang';
+import { systemOwnedVoucherKind, systemOwnedVoucherMessage } from '@/lib/systemOwnedVoucher';
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -410,6 +411,7 @@ interface DataContextType {
     grossProfit: number;
     physicalClosingStock: number;    // computed from stockItems, used when no ledger closing stock
     closingStockPosted: boolean;     // true if a closing stock journal exists for current FY
+    tracksStock: boolean;            // YE-01: the society keeps tracked stock items (physical 0 = all sold)
     procuredToStock: number;         // goods bought straight into a 3400 stock head (a Dr-side purchase)
     legacyPurchaseGrossUp: number;   // closing stock added back to 5101 when the LEGACY journal reduced it
     activities: { key: string; keyHi: string; salesId: string; purchaseId: string; sales: number; purchases: number; hasRoutedPurchase: boolean; grossMargin: number }[];
@@ -2442,6 +2444,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // (voucherId). Neither is edited, cancelled or reversed from the Vouchers page: the slip, the TDS Register,
   // 24Q and Statutory Reconciliation would keep showing what the ledger no longer has. The Salary page
   // (viaParent) is the only door. Returns true (and toasts) when BLOCKED.
+  // YE-03 / PAY-01 (audit 2026-11-17): year-close and payroll-run vouchers belong to a server process — never
+  // edited, cancelled or reversed from here, not even viaParent (no parent screen owns them). Migration 176 refuses
+  // the same on the server. Returns true (and toasts) when BLOCKED.
+  const guardSystemOwnedVoucher = (id: string, what: { hi: string; en: string }): boolean => {
+    const kind = systemOwnedVoucherKind(vouchersRef.current.find(v => v.id === id));
+    if (!kind) return false;
+    const hi = systemOwnedVoucherMessage(kind, what.hi, true);
+    const en = systemOwnedVoucherMessage(kind, what.en, false);
+    toastRef.current({ title: tr(hi.title, en.title), description: tr(hi.description, en.description), variant: 'destructive', duration: 12000 });
+    return true;
+  };
   const guardSalaryVoucher = (id: string, what: string): boolean => {
     const slip = salaryRecordsRef.current.find(r => r.voucherId === id || r.accrualVoucherId === id);
     if (!slip) return false;
@@ -2455,6 +2468,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
   const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines' | 'costCentreId'>>, opts?: { viaParent?: boolean }): boolean => {
     if (guardPermission('update', tr('वाउचर बदलने', 'change vouchers'))) return false;   // ECR-06: role gate
+    if (guardSystemOwnedVoucher(id, { hi: 'बदला', en: 'changed' })) return false;
     if (!opts?.viaParent && guardSalaryVoucher(id, tr('बदला', 'changed'))) return false;
     if (guardFYLocked()) return false;
     const current = vouchersRef.current.find(v => v.id === id);
@@ -2781,6 +2795,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // H12: Block cancelling auto-generated vouchers — parent record would dangle
     // Both the payment AND the accrual voucher of a salary slip (the accrual used to be cancellable here).
+    if (guardSystemOwnedVoucher(id, { hi: 'रद्द', en: 'cancelled' })) return false;
     if (!opts?.viaParent && guardSalaryVoucher(id, tr('रद्द', 'cancelled'))) return false;
     // Block cancelling an auto wage-accrual voucher while its muster entry is live —
     // otherwise the entry's `accrued` flag goes stale and payWages would Dr 2109 against
@@ -2961,6 +2976,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (current.reversedBy) { toastRef.current({ title: tr('पहले से reversed', 'Already reversed'), description: tr(`यह वाउचर पहले ही reverse हो चुका है।`, `This voucher has already been reversed.`), variant: 'destructive' }); return null; }
     if (current.reversalOf) { toastRef.current({ title: tr('यह स्वयं reversal है', 'This is itself a reversal'), description: tr('Reversal entry को दोबारा reverse नहीं किया जाता।', 'A reversal entry cannot be reversed again.'), variant: 'destructive' }); return null; }
     if (isEngineVoucher(current) && !opts?.engine) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return null; }
+    if (guardSystemOwnedVoucher(id, { hi: 'reverse', en: 'reversed' })) return null;
     if (guardSalaryVoucher(id, 'reverse')) return null;
     const revDate = new Date().toISOString().split('T')[0];
     if (guardPeriodLock(revDate)) return null; // reversal must post into an open period
@@ -4056,39 +4072,117 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return `${type}/${yy}/${String(n).padStart(4, '0')}`;
   };
 
-  // Post the cash voucher + sub-ledger transaction for a deposit movement. Returns the
-  // new balance, or null if the voucher was blocked (FY/period lock / unbalanced).
-  const postDepositLeg = (acct: DepositAccount, txnType: DepositTxnType, amount: number, mode: 'cash' | 'bank', date: string): number | null => {
+  // DEP-01 (audit 2026-11-17): a deposit movement is THREE writes — the voucher, the passbook line and the account's
+  // balance. If any one fails, all three must go: a cash voucher left standing after "Transaction not saved" makes the
+  // clerk pay the member a second time. One undo, run at most once, from whichever write failed first:
+  //   • the server refuses the voucher (addVoucher onFailed — it already removed the voucher),
+  //   • the passbook line does not save,
+  //   • the account's balance does not save (the caller calls undo()).
+  // It cancels the voucher (if it still stands), removes the passbook line (screen + cloud) and calls onUndone so
+  // the caller restores the account as it was.
+  const makeDepositUndo = (voucherNo: string, onUndone?: () => void) => {
+    let done = false;
+    let voucherId: string | undefined;
+    let txnId: string | undefined;
+    const undo = (why: 'voucher' | 'passbook' | 'balance', detail?: string) => {
+      if (done) return;
+      done = true;
+      if (voucherId && why !== 'voucher') cancelLinkedVouchers([voucherId], `Deposit not saved (${why})`, 'System');
+      if (txnId) {
+        const id = txnId;
+        setDepositTransactionsState(prev => prev.filter(t => t.id !== id));
+        supabase.from('deposit_transactions').delete().eq('id', id).then(({ error }) => {
+          if (error) reportError('deposit-txn-undo', error.message, { id });
+        }, () => {});
+      }
+      onUndone?.();
+      const tail = detail ? ` (${detail})` : '';
+      toastRef.current({
+        title: tr('लेनदेन सेव नहीं हुआ — कुछ भी दर्ज नहीं हुआ', 'Transaction not saved — nothing was recorded'),
+        description: tr(`वाउचर ${voucherNo || '—'} रद्द किया गया; पासबुक और शेष पहले जैसे हैं। सदस्य को भुगतान न करें / रकम न लें — कारण ठीक करके दोबारा दर्ज करें।${tail}`, `Voucher ${voucherNo || '—'} was cancelled; the passbook and balance are unchanged. Do not pay out or take the money — fix the cause and enter it again.${tail}`),
+        variant: 'destructive', duration: 15000,
+      });
+    };
+    return { undo, isDone: () => done, setIds: (v?: string, t?: string) => { voucherId = v; txnId = t; } };
+  };
+
+  // Post the cash voucher + sub-ledger transaction for a deposit movement. Returns the new balance and the undo
+  // for the whole movement, or null if the voucher was blocked (FY/period lock / unbalanced). onUndone restores the
+  // caller's account state when any part of the movement fails later.
+  const postDepositLeg = (acct: DepositAccount, txnType: DepositTxnType, amount: number, mode: 'cash' | 'bank', date: string, onUndone?: () => void): { balance: number; undo: (why: 'balance', detail?: string) => void } | null => {
     // FD sits in 2108 only where that id really is Fixed Deposits (PACS); elsewhere it is another head or absent.
     const liability = resolveDepositLiabilityAccount(acct.depositType, accounts);
     if (!liability) { toastRef.current({ ...missingDepositHeadToast(acct.depositType), variant: 'destructive', duration: 12000 }); return null; }
     const cashBank = mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
     const posting = depositPosting(txnType, { liability, cashBank });
     const member = membersRef.current.find(m => m.id === acct.memberId);
+    let pending: ReturnType<typeof makeDepositUndo> | null = null;
+    let refusedEarly = false;
     const voucher = addVoucher({
       // A closure pays the balance out, exactly like a withdrawal — it is a payment voucher, not a receipt.
       type: depositVoucherType(txnType), date,
       debitAccountId: posting.debitAccountId, creditAccountId: posting.creditAccountId, amount,
       narration: `${acct.depositType} ${txnType} — ${acct.accountNo}${member ? ' · ' + member.name : ''}`,
       createdBy: userRef.current?.name ?? 'System', memberId: acct.memberId,
-    });
-    if (!voucher?.id) return null;
+    }, { onFailed: () => { if (pending) pending.undo('voucher'); else refusedEarly = true; } });
+    if (!voucher?.id || refusedEarly) return null;
+    const leg = makeDepositUndo(voucher.voucherNo, onUndone);
+    pending = leg;
     const balanceAfter = applyDepositTxn(acct.balance, txnType, amount);
     const txn: DepositTransaction = {
       id: crypto.randomUUID(), depositAccountId: acct.id, date, txnType, amount, mode,
       voucherId: voucher.id, balanceAfter, createdAt: new Date().toISOString(),
     };
+    leg.setIds(voucher.id, txn.id);
     setDepositTransactionsState(prev => [...prev, txn]);
-    // G4 / RULE 1: the passbook line used to fail silently (console only) — the voucher stood but
-    // the member's passbook lost the entry on refresh. Roll the line back and say so loudly.
+    // G4 / RULE 1 + DEP-01: a passbook line that does not save undoes the whole movement (voucher + balance too).
     supabase.from('deposit_transactions').upsert(withSoc(txn)).then(({ error }) => {
       if (error) {
-        setDepositTransactionsState(prev => prev.filter(t => t.id !== txn.id));
         reportError('deposit-txn-save', error.message, { depositAccountId: acct.id, voucherId: voucher.id });
-        toastRef.current({ title: tr('पासबुक entry सेव नहीं हुई', 'Passbook entry not saved'), description: tr(`वाउचर ${voucher.voucherNo} बन गया, पर पासबुक की पंक्ति cloud पर नहीं गई — ${error.message}. Admin को बताएँ।`, `Voucher ${voucher.voucherNo} was created, but the passbook line did not reach the cloud — ${error.message}. Tell your admin.`), variant: 'destructive', duration: 15000 });
+        leg.undo('passbook', error.message);
+      } else if (leg.isDone()) {
+        // undone while this save was in flight — the line must not outlive its voucher
+        supabase.from('deposit_transactions').delete().eq('id', txn.id).then(() => {}, () => {});
       }
     });
-    return balanceAfter;
+    return { balance: balanceAfter, undo: leg.undo };
+  };
+
+  // Start a deposit movement and save the account's new state. If the balance save fails, the whole movement is
+  // undone (voucher cancelled, passbook line removed). If the voucher or passbook line fails, the account goes back
+  // to `before` — and when the new balance has already reached the cloud (or reaches it after the undo), `before`
+  // is written back too, so the cloud never keeps a balance with no voucher behind it. Returns the new account, or
+  // null when the movement could not start (voucher blocked).
+  const commitDepositMovement = (
+    before: DepositAccount,
+    makeUpdated: (balance: number) => DepositAccount,
+    startLeg: (onUndone: () => void) => { balance: number; undo: (why: 'balance', detail?: string) => void } | null,
+    label: string,
+  ): DepositAccount | null => {
+    const id = before.id;
+    let balanceSaved = false;
+    let undone = false;
+    const writeBackBefore = () => supabase.from('deposit_accounts').upsert(withSoc(before)).then(({ error }) => { if (error) reportCascade(`${label} undo`, error); }, () => {});
+    const leg = startLeg(() => {
+      undone = true;
+      depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === id ? before : d);
+      setDepositAccountsState(prev => prev.map(d => d.id === id ? before : d));   // RULE 1: roll back
+      if (balanceSaved) writeBackBefore();
+    });
+    if (leg === null) return null;
+    const updated = makeUpdated(leg.balance);
+    depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === id ? updated : d);
+    setDepositAccountsState(prev => prev.map(d => d.id === id ? updated : d));
+    supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
+      if (error) {
+        reportCascade(label, error);
+        leg.undo('balance', error.message);
+      } else {
+        balanceSaved = true;
+        if (undone) writeBackBefore();
+      }
+    });
+    return updated;
   };
 
   const addDepositAccount = useCallback((data: Omit<DepositAccount, 'id' | 'accountNo' | 'balance' | 'status' | 'createdAt'> & { openingAmount?: number; mode?: 'cash' | 'bank' }): DepositAccount | null => {
@@ -4109,23 +4203,35 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     depositAccountsRef.current = [...depositAccountsRef.current, acct];
     setDepositAccountsState(prev => [...prev, acct]);
-    const persist = (a: DepositAccount) => supabase.from('deposit_accounts').upsert(withSoc(a)).then(({ error }) => {
+    let openUndone = false;
+    const writeZero = () => {
+      if (!depositAccountsRef.current.some(d => d.id === acct.id)) return;   // the account itself was rolled back
+      const zero = { ...acct, balance: 0 };
+      depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === acct.id ? zero : d);
+      setDepositAccountsState(prev => prev.map(d => d.id === acct.id ? zero : d));
+      supabase.from('deposit_accounts').upsert(withSoc(zero)).then(({ error }) => { if (error) reportCascade('Deposit open undo', error); }, () => {});
+    };
+    const persist = (a: DepositAccount, undoLeg?: (why: 'balance', detail?: string) => void) => supabase.from('deposit_accounts').upsert(withSoc(a)).then(({ error }) => {
+      if (!error && undoLeg && openUndone) writeZero();   // the opening deposit failed while this save was in flight
       if (error) {
         reportCascade('Deposit account sync', error);
         depositAccountsRef.current = depositAccountsRef.current.filter(d => d.id !== a.id);
         setDepositAccountsState(prev => prev.filter(d => d.id !== a.id));   // RULE 1: roll back
         toastRef.current({ title: tr('जमा खाता सेव नहीं हुआ', 'Deposit account not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
+        undoLeg?.('balance', error.message);   // DEP-01: the opening deposit's voucher + passbook line go too
       }
     });
     // Opening deposit (if any) posts a voucher + first transaction, then re-persist with the balance.
     const opening = toRupees(toMinor(Math.max(0, openingAmount)));
     if (opening > 0) {
-      const newBal = postDepositLeg(acct, 'open', opening, mode, acct.openDate);
-      if (newBal !== null) {
+      // If the opening deposit fails later, the account stays open with a zero balance (only if it still exists).
+      const leg = postDepositLeg(acct, 'open', opening, mode, acct.openDate, () => { openUndone = true; writeZero(); });
+      if (leg !== null) {
+        const newBal = leg.balance;
         const withBal = { ...acct, balance: newBal };
         depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === acct.id ? withBal : d);
         setDepositAccountsState(prev => prev.map(d => d.id === acct.id ? withBal : d));
-        persist(withBal);
+        persist(withBal, leg.undo);
         emitAudit({ entityType: 'deposit', entityId: acct.id, action: 'create', after: { accountNo: acct.accountNo, type: acct.depositType, opening } });
         toastRef.current({ title: tr('✅ जमा खाता खुला', '✅ Deposit account opened'), description: `${acct.accountNo} · ₹${opening.toLocaleString('en-IN')}` });
         return withBal;
@@ -4146,19 +4252,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const v = validateDepositTxn(txnType, amt, acct.balance, acct.depositType, societyRef.current?.compulsoryDepositWithdrawal === true);
     if (!v.ok) { toastRef.current({ title: tr('अमान्य लेनदेन', 'Invalid transaction'), description: v.error, variant: 'destructive', duration: 9000 }); return false; }
     const before = acct;
-    const newBal = postDepositLeg(acct, txnType, amt, mode, date);
-    if (newBal === null) return false; // voucher blocked
-    const updated = { ...acct, balance: newBal };
-    depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? updated : d);
-    setDepositAccountsState(prev => prev.map(d => d.id === accountId ? updated : d));
-    supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
-      if (error) {
-        reportCascade('Deposit txn balance sync', error);
-        depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
-        setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
-        toastRef.current({ title: tr('लेनदेन सेव नहीं हुआ', 'Transaction not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
-      }
-    });
+    const updated = commitDepositMovement(before, bal => ({ ...acct, balance: bal }),
+      onUndone => postDepositLeg(acct, txnType, amt, mode, date, onUndone), 'Deposit txn balance sync');
+    if (!updated) return false; // voucher blocked
+    const newBal = updated.balance;
     emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { balance: before.balance }, after: { balance: newBal, txn: txnType, amount: amt } });
     toastRef.current({ title: txnType === 'deposit' ? tr('✅ जमा', '✅ Deposit') : tr('✅ निकासी', '✅ Withdrawal'), description: tr(`${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · शेष ₹${newBal.toLocaleString('en-IN')}`, `${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · balance ₹${newBal.toLocaleString('en-IN')}`) });
     return true;
@@ -4177,37 +4274,39 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const liability = resolveDepositLiabilityAccount(acct.depositType, accounts);
     if (!liability) { toastRef.current({ ...missingDepositHeadToast(acct.depositType), variant: 'destructive', duration: 12000 }); return false; }
     const member = membersRef.current.find(m => m.id === acct.memberId);
-    const voucher = addVoucher({
-      type: 'journal', date, debitAccountId: '5604', creditAccountId: liability, amount: amt,
-      narration: `Interest on ${acct.depositType} deposit ${acct.accountNo}${member ? ' · ' + member.name : ''}`,
-      createdBy: userRef.current?.name ?? 'System', memberId: acct.memberId,
-    });
-    if (!voucher?.id) return false;
     const before = acct;
-    const newBal = applyDepositTxn(acct.balance, 'interest', amt);
-    const updated = { ...acct, balance: newBal };
-    depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? updated : d);
-    setDepositAccountsState(prev => prev.map(d => d.id === accountId ? updated : d));
-    supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
-      if (error) {
-        reportCascade('Deposit interest balance sync', error);
-        depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
-        setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
-        toastRef.current({ title: tr('ब्याज सेव नहीं हुआ', 'Interest not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
-      }
-    });
-    const txn: DepositTransaction = {
-      id: crypto.randomUUID(), depositAccountId: accountId, date, txnType: 'interest', amount: amt, mode: 'cash',
-      voucherId: voucher.id, balanceAfter: newBal, createdAt: new Date().toISOString(),
+    // Same three writes as postDepositLeg (voucher, passbook line, balance) — one undo for all (DEP-01).
+    const startInterestLeg = (onUndone: () => void) => {
+      let pending: ReturnType<typeof makeDepositUndo> | null = null;
+      let refusedEarly = false;
+      const voucher = addVoucher({
+        type: 'journal', date, debitAccountId: '5604', creditAccountId: liability, amount: amt,
+        narration: `Interest on ${acct.depositType} deposit ${acct.accountNo}${member ? ' · ' + member.name : ''}`,
+        createdBy: userRef.current?.name ?? 'System', memberId: acct.memberId,
+      }, { onFailed: () => { if (pending) pending.undo('voucher'); else refusedEarly = true; } });
+      if (!voucher?.id || refusedEarly) return null;
+      const leg = makeDepositUndo(voucher.voucherNo, onUndone);
+      pending = leg;
+      const balanceAfter = applyDepositTxn(acct.balance, 'interest', amt);
+      const txn: DepositTransaction = {
+        id: crypto.randomUUID(), depositAccountId: accountId, date, txnType: 'interest', amount: amt, mode: 'cash',
+        voucherId: voucher.id, balanceAfter, createdAt: new Date().toISOString(),
+      };
+      leg.setIds(voucher.id, txn.id);
+      setDepositTransactionsState(prev => [...prev, txn]);
+      supabase.from('deposit_transactions').upsert(withSoc(txn)).then(({ error }) => {
+        if (error) {
+          reportError('deposit-txn-save', error.message, { depositAccountId: accountId, voucherId: voucher.id });
+          leg.undo('passbook', error.message);
+        } else if (leg.isDone()) {
+          supabase.from('deposit_transactions').delete().eq('id', txn.id).then(() => {}, () => {});
+        }
+      });
+      return { balance: balanceAfter, undo: leg.undo };
     };
-    setDepositTransactionsState(prev => [...prev, txn]);
-    supabase.from('deposit_transactions').upsert(withSoc(txn)).then(({ error }) => {
-      if (error) {   // G4 / RULE 1 (see postDepositLeg)
-        setDepositTransactionsState(prev => prev.filter(t => t.id !== txn.id));
-        reportError('deposit-txn-save', error.message, { depositAccountId: accountId, voucherId: voucher.id });
-        toastRef.current({ title: tr('ब्याज की पासबुक entry सेव नहीं हुई', 'Interest passbook entry not saved'), description: tr(`वाउचर ${voucher.voucherNo} बन गया, पर पासबुक की पंक्ति cloud पर नहीं गई — ${error.message}. Admin को बताएँ।`, `Voucher ${voucher.voucherNo} was created, but the passbook line did not reach the cloud — ${error.message}. Tell your admin.`), variant: 'destructive', duration: 15000 });
-      }
-    });
+    const updated = commitDepositMovement(before, bal => ({ ...acct, balance: bal }), startInterestLeg, 'Deposit interest balance sync');
+    if (!updated) return false;
+    const newBal = updated.balance;
     emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { balance: before.balance }, after: { balance: newBal, interest: amt } });
     toastRef.current({ title: tr('✅ ब्याज जमा', '✅ Interest credited'), description: tr(`${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · शेष ₹${newBal.toLocaleString('en-IN')}`, `${acct.accountNo} · ₹${amt.toLocaleString('en-IN')} · balance ₹${newBal.toLocaleString('en-IN')}`) });
     return true;
@@ -4221,24 +4320,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!acct) return false;
     if (acct.status !== 'active') { toastRef.current({ title: tr('खाता पहले से बंद', 'Account already closed'), description: 'Account is not active.', variant: 'destructive' }); return false; }
     const before = acct;
-    let newBal = acct.balance;
-    if (acct.balance > 0) {
-      const b = postDepositLeg(acct, 'closure', acct.balance, mode, date);
-      if (b === null) return false; // payout voucher blocked (FY/period lock)
-      newBal = b;
-    }
     const newStatus: DepositAccount['status'] = (acct.depositType === 'FD' || acct.depositType === 'RD') ? 'matured' : 'closed';
-    const updated = { ...acct, balance: newBal, status: newStatus };
-    depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? updated : d);
-    setDepositAccountsState(prev => prev.map(d => d.id === accountId ? updated : d));
-    supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
-      if (error) {
-        reportCascade('Deposit close sync', error);
-        depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === accountId ? before : d);
-        setDepositAccountsState(prev => prev.map(d => d.id === accountId ? before : d));   // RULE 1: roll back
-        toastRef.current({ title: tr('बंद करना सेव नहीं हुआ', 'Closing not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
-      }
-    });
+    // A balance is paid out through the same three-write movement (DEP-01); a zero-balance account only changes status.
+    const startCloseLeg = (onUndone: () => void) => acct.balance > 0
+      ? postDepositLeg(acct, 'closure', acct.balance, mode, date, onUndone)
+      : {
+          balance: acct.balance,
+          undo: (_why: 'balance', detail?: string) => {
+            onUndone();
+            toastRef.current({ title: tr('बंद करना सेव नहीं हुआ', 'Closing not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${detail ?? ''}.`, `Not saved to the cloud — ${detail ?? ''}.`), variant: 'destructive', duration: 12000 });
+          },
+        };
+    const updated = commitDepositMovement(before, bal => ({ ...acct, balance: bal, status: newStatus }), startCloseLeg, 'Deposit close sync');
+    if (!updated) return false; // payout voucher blocked (FY/period lock)
+    const newBal = updated.balance;
     emitAudit({ entityType: 'deposit', entityId: accountId, action: 'update', before: { status: before.status, balance: before.balance }, after: { status: newStatus, balance: newBal } });
     toastRef.current({ title: newStatus === 'matured' ? tr('✅ जमा परिपक्व', '✅ Deposit matured') : tr('✅ जमा खाता बंद', '✅ Deposit account closed'), description: tr(`${acct.accountNo}${acct.balance > 0 ? ` · भुगतान ₹${acct.balance.toLocaleString('en-IN')}` : ''}`, `${acct.accountNo}${acct.balance > 0 ? ` · payment ₹${acct.balance.toLocaleString('en-IN')}` : ''}`) });
     return true;

@@ -36,7 +36,7 @@ export interface BalanceSheetLeaves {
 
 export function balanceSheetLeaves(
   trialBalance: readonly AccountBalance[],
-  opts: { closingStockPosted: boolean; physicalClosingStock: number; netProfit: number },
+  opts: { closingStockPosted: boolean; physicalClosingStock: number; netProfit: number; tracksStock?: boolean },
   /** The chart — so a stock ledger in a sub-group under 3400 counts (stockLedgerPredicate). Omit ⇒ direct children only. */
   accounts?: ReadonlyArray<{ id: string; parentId?: string }>,
 ): BalanceSheetLeaves {
@@ -44,7 +44,7 @@ export function balanceSheetLeaves(
   // RULE 2: THE closing-stock rule shared with the Trading A/c (lib/tradingAccount.closingStock).
   const stockLeaves = trialBalance.filter(b => isStockLedgerAccount(b.account));
   const cs = closingStock(stockLeaves.map(b => ({ name: b.account.name, nameHi: b.account.nameHi, netBalance: b.netBalance, openingDebit: b.openingDebit, openingCredit: b.openingCredit })),
-    opts.physicalClosingStock, opts.closingStockPosted);
+    opts.physicalClosingStock, opts.closingStockPosted, opts.tracksStock);
   const unpostedStock = cs.replacesLedger ? cs.total : 0;
   const isStock = (b: AccountBalance) => cs.replacesLedger && isStockLedgerAccount(b.account);
   // A Dr balance on the P&L account (a brought-forward deficit) or on an appropriation contra (dividend / rebate /
@@ -75,7 +75,7 @@ export function balanceSheetLeaves(
  *  trial-balance Dr = Cr over all dates with a ₹1 tolerance, so the two could disagree — RULE 2). */
 export function balanceSheetTallied(
   trialBalance: readonly AccountBalance[],
-  opts: { closingStockPosted: boolean; physicalClosingStock: number; netProfit: number },
+  opts: { closingStockPosted: boolean; physicalClosingStock: number; netProfit: number; tracksStock?: boolean },
 ): boolean {
   const { totalAssets, totalLiabilities } = balanceSheetLeaves(trialBalance, opts);
   return Math.abs(totalAssets - totalLiabilities) < 0.01;

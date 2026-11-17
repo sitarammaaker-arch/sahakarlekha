@@ -123,7 +123,7 @@ export function CasStatements({ hi }: { hi: boolean }) {
     const tb = tbOf(fyEnd);
     const appPL = getProfitLoss(fyEnd);
     const tr = getTradingAccount(fyEnd);
-    const leaves = balanceSheetLeaves(tb, { closingStockPosted: tr.closingStockPosted, physicalClosingStock: tr.physicalClosingStock, netProfit: appPL.netProfit });
+    const leaves = balanceSheetLeaves(tb, { closingStockPosted: tr.closingStockPosted, physicalClosingStock: tr.physicalClosingStock, netProfit: appPL.netProfit, tracksStock: tr.tracksStock });
     // Overdue part of each loan's open accrued interest — the same loanInterestDue as the repay dialogs.
     const overdue = [...loans.map((l) => l.id), ...kccLoans.map((k) => k.id)]
       .reduce((t, id) => { const d = loanInterestDue(id, accruals, vouchers); return t + Math.min(d.reserve, d.receivable); }, 0);
@@ -133,7 +133,7 @@ export function CasStatements({ hi }: { hi: boolean }) {
     // leaves rule + builder as Annexure IV. The overdue-interest split does not move any XVII figure.
     const bsAt = (date: string) => {
       const t = getTrialBalance(date), p = getProfitLoss(date), r = getTradingAccount(date);
-      const lv = balanceSheetLeaves(t, { closingStockPosted: r.closingStockPosted, physicalClosingStock: r.physicalClosingStock, netProfit: p.netProfit });
+      const lv = balanceSheetLeaves(t, { closingStockPosted: r.closingStockPosted, physicalClosingStock: r.physicalClosingStock, netProfit: p.netProfit, tracksStock: r.tracksStock });
       return buildCasBalanceSheet({ assetLeaves: lv.assetLeaves, capLiabLeaves: lv.capLiabLeaves, unpostedStock: lv.unpostedStock, netProfit: p.netProfit, overdueInterestReceivable: 0 });
     };
     const misAsOf = today < fyEnd ? today : fyEnd;

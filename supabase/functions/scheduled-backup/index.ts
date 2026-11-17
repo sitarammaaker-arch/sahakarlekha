@@ -12,7 +12,9 @@
  *
  * Two ways to invoke:
  *   • Manual test:  POST { "societyId": "<id>" }   → backs up one society.
- *   • Weekly cron:  no body                        → backs up every society.
+ *   • All:          no body / {}                   → backs up every society.
+ *   • Hourly cron:  { "due": true, "limit": 4 }    → backs up up to 4 societies whose last
+ *                   successful backup is > 6 days old (see _shared/backup-due.mjs, migration 174).
  *
  * NO PARTIAL BACKUPS: buildArchive throws if any table can't be read in full, and that
  * society is reported failed rather than getting a half-archive that looks complete.
@@ -22,6 +24,7 @@ import { AwsClient } from 'npm:aws4fetch@1.0.20';
 import { buildArchive, archiveFileName, planArchive, REGISTRY, BACKUP_FORMAT_VERSION, evaluate321, resolveJurisdiction } from '../_shared/backup-core.mjs';
 import { planRetention } from '../_shared/retention-plan.mjs';
 import { resolvePlacements } from '../_shared/placement-config.mjs';
+import { pickDueSocieties, attemptsFromAuditRows } from '../_shared/backup-due.mjs';
 
 const PAGE = 1000;
 // Per-table row ceiling. A table above this makes buildArchive refuse (no partial backups),
@@ -405,15 +408,32 @@ Deno.serve(async (req) => {
 
   // Which societies? A body { societyId } backs up one (manual test); no body → all (cron).
   let societyIds: string[] = [];
+  let body: any = null;
   try {
-    const body = await req.json();
+    body = await req.json();
     if (body?.societyId) societyIds = [String(body.societyId)];
   } catch { /* no body — cron path */ }
 
+  let dueInfo: any = null;
   if (societyIds.length === 0) {
     const { data, error } = await supabase.from('society_settings').select('society_id');
     if (error) return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500, headers: { 'content-type': 'application/json' } });
     societyIds = [...new Set((data ?? []).map((r: any) => r.society_id).filter(Boolean))];
+
+    // BKP-00/BKP-07: { due: true } — the hourly cron. Back up only the few societies that are due
+    // (oldest first), so one dead invocation costs an hour for a handful of societies, not a week
+    // for all of them. Without `due` (old weekly cron, manual call) every society is backed up.
+    if (body?.due) {
+      const since = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
+      const { data: rows, error: aErr } = await supabase
+        .from('audit_log').select('society_id, created_at, after')
+        .eq('entity_type', 'backup').eq('actor_name', 'scheduled-backup')
+        .gte('created_at', since).limit(10000);
+      if (aErr) return new Response(JSON.stringify({ ok: false, error: `audit read failed: ${aErr.message}` }), { status: 500, headers: { 'content-type': 'application/json' } });
+      const limit = Math.min(20, Math.max(1, Number(body?.limit) || 4));
+      dueInfo = pickDueSocieties(societyIds, attemptsFromAuditRows(rows ?? []), { limit });
+      societyIds = dueInfo.due;
+    }
   }
 
   const results: any[] = [];
@@ -431,7 +451,7 @@ Deno.serve(async (req) => {
   }
 
   const allOk = results.every((r) => r.ok);
-  return new Response(JSON.stringify({ ok: allOk, count: results.length, results }, null, 2), {
+  return new Response(JSON.stringify({ ok: allOk, count: results.length, due: dueInfo ? { remaining: dueInfo.dueTotal - results.length, fresh: dueInfo.fresh, backingOff: dueInfo.backingOff } : undefined, results }, null, 2), {
     status: allOk ? 200 : 207,
     headers: { 'content-type': 'application/json' },
   });

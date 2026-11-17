@@ -20,8 +20,12 @@ for (const f of readdirSync(ctxDir).filter(n => n.endsWith('.tsx'))) {
 }
 
 const dc = readFileSync(resolve(ctxDir, 'DataContext.tsx'), 'utf8');
-const dep = [...dc.matchAll(/supabase\.from\('deposit_transactions'\)\.upsert[\s\S]{0,1200}?\n    \}\);/g)].map(m => m[0]);
-ok('both deposit passbook writes roll back + report + toast', dep.length === 2 && dep.every(b => /setDepositTransactionsState\(prev => prev\.filter/.test(b) && /reportError\('deposit-txn-save'/.test(b) && /variant: 'destructive'/.test(b)));
+// DEP-01 (2026-11-17): a failed passbook write now undoes the WHOLE movement through makeDepositUndo, which removes
+// the line (screen + cloud), cancels the voucher, restores the balance and shows the destructive toast.
+const dep = [...dc.matchAll(/supabase\.from\('deposit_transactions'\)\.upsert\(withSoc\(txn\)\)[\s\S]{0,400}?leg\.undo\('passbook', error\.message\)/g)].map(m => m[0]);
+const undoFn = dc.slice(dc.indexOf('const makeDepositUndo = '), dc.indexOf('const postDepositLeg = '));
+ok('both deposit passbook writes roll back + report + toast', dep.length === 2 && dep.every(b => /reportError\('deposit-txn-save'/.test(b))
+  && /setDepositTransactionsState\(prev => prev\.filter/.test(undoFn) && /variant: 'destructive'/.test(undoFn));
 const ctrl = dc.slice(dc.indexOf("supabase.from('accounts').upsert(withSoc(control))"), dc.indexOf("supabase.from('accounts').upsert(withSoc(control))") + 1000);
 ok('inter-branch control account write rolls back + reports + toasts', /setAccountsState\(prev => prev\.filter/.test(ctrl) && /reportError\('control-account-save'/.test(ctrl) && /destructive/.test(ctrl));
 const audit = readFileSync(resolve(root, 'src/lib/auditLog.ts'), 'utf8');

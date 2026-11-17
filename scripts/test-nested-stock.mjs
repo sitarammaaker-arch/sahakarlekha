@@ -74,7 +74,7 @@ ok(JSON.stringify(B.balanceSheetLeaves(flatTb, opts, chart)) === JSON.stringify(
 ok(T.withTradingParents(flatTb, chart).every((b, i) => b === flatTb[i]), 'no nesting ⇒ the trial balance rows are the same objects');
 
 // ── Wiring ───────────────────────────────────────────────────────────────────────────────────────────────────
-ok(/balanceSheetLeaves\(trialBalance, \{ closingStockPosted, physicalClosingStock, netProfit \}, accounts\)/.test(src('pages/BalanceSheet.tsx')), 'Balance Sheet page passes the chart');
+ok(/balanceSheetLeaves\(trialBalance, \{ closingStockPosted, physicalClosingStock, netProfit, tracksStock \}, accounts\)/.test(src('pages/BalanceSheet.tsx')), 'Balance Sheet page passes the chart');
 ok(/balanceSheetLeaves\(trialBalance, \{[^}]*\}, accounts\)/.test(src('pages/AuditSchedules.tsx')), 'Audit Schedules pass the chart');
 ok(/stockLedgerPredicate\(input\.accounts\)/.test(src('lib/reports/balanceSheetLayout.ts')), 'the Balance Sheet layout (prior-year stock) uses the same rule');
 ok(/withTradingParents\(getTrialBalance\(effDate\), accounts\)/.test(src('contexts/DataContext.tsx')), 'the Trading A/c getter wraps the trial balance');

@@ -88,6 +88,20 @@ Deno.serve(async (req: Request) => {
     if (run.society_id !== societyId) return json(403, { error: 'run belongs to another society' }, CORS);
     if (!canTransition(run.state, 'posted')) return json(409, { error: `cannot post a run in state '${run.state}' (must be 'locked')` }, CORS);
 
+    // PAY-02 (migration 175 is the other half): one salary path per month. If the Salary page has already
+    // booked this month (a slip whose accrual voucher is live), posting the run would expense it twice.
+    const month = String(run.period_month).slice(0, 7);
+    const slips = await sql`select s."slipNo" as slip_no from public.salary_records s
+                              join public.vouchers v on v.id = s."accrualVoucherId" and not coalesce(v."isDeleted", false)
+                             where s.society_id = ${societyText} and s.month = ${month} limit 5`;
+    if (slips.length) {
+      const nos = slips.map((s: { slip_no: string }) => s.slip_no).join(', ');
+      return json(409, {
+        error: `इस महीने (${month}) का वेतन Salary पेज की पर्चियों (${nos}) से पहले ही बही में है — Payroll run post करने पर वह दो बार खर्च होगा। / Salary for ${month} is already booked by salary slips ${nos}.`,
+        code: 'PAY-POST-SALARY-SLIPS', slips: nos,
+      }, CORS);
+    }
+
     // 1. the run's money, and the society's heads
     const { lines, netMinor } = await runTotals(sql, body.runId, String(run.period_month));
     const { heads, missing: missingCore } = await loadHeads(sql, societyText, [PAYROLL_ROLES.salaryExpense, PAYROLL_ROLES.salaryPayable]);

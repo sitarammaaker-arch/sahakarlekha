@@ -108,6 +108,27 @@ ok(near(RANIA.reduce((t, b) => t + b.netBalance, 0), 0), 'fixture: the Trial Bal
   ok(T.isStockLedgerAccount({ id: '3400', isGroup: false }) && !T.isStockLedgerAccount({ id: '3400', isGroup: true }) && !T.isStockLedgerAccount({ id: '3301', parentId: '3300' }), 'stock ledger = the 3400 group leaves');
 }
 
+// ── 2b. YE-01 (audit 2026-11-17): "everything sold" is not "no tracked stock" ──
+{
+  // Year 2: opening stock 400 (4 units) in the ledger; the last 4 units are sold. Ledger still shows 400.
+  const leaves = leavesOf([row(acc('3403', 'Stock', 'asset', '3400'), 400, 400)]);
+  const old = T.closingStock(leaves, 0, false);
+  ok(old.total === 400, 'without the tracked flag the old rule keeps the stale 400 (documents the bug)');
+  const fixed = T.closingStock(leaves, 0, false, true);
+  ok(fixed.total === 0 && fixed.replacesLedger, 'tracked stock, all sold: closing stock = 0 and the stale ledger value is replaced');
+  const withProc = T.closingStock(leavesOf([row(acc('3403', 'Stock', 'asset', '3400'), 900, 400)]), 0, false, true);
+  ok(withProc.total === 500 && withProc.items.length === 1, 'all items sold, goods put straight into the ledger this year still count (500)');
+  ok(T.closingStock(leaves, 0, true, true).total === 400, 'after the closing journal is posted the ledger is the closing stock');
+  ok(T.tracksPhysicalStock([{ id: 'i1', isActive: true, openingStock: 4 }], []) === true, 'an item with opening stock is tracked');
+  ok(T.tracksPhysicalStock([{ id: 'i1', isActive: true, openingStock: 0 }], [{ itemId: 'i1' }]) === true, 'an item with a movement is tracked');
+  ok(T.tracksPhysicalStock([{ id: 'i1', isActive: true, openingStock: 0 }], []) === false, 'an item never used is not tracked (the ledger stays the closing stock)');
+  ok(T.tracksPhysicalStock([{ id: 'i1', isActive: false, openingStock: 9 }], []) === false, 'an inactive item is not tracked');
+  const tb = [row(acc('3403', 'Stock', 'asset', '3400'), 400, 400), row(acc('1102', 'Cap', 'equity', '1100'), -400)];
+  const bsOld = balanceSheetLeaves(tb, { closingStockPosted: false, physicalClosingStock: 0, netProfit: 0 });
+  const bsNew = balanceSheetLeaves(tb, { closingStockPosted: false, physicalClosingStock: 0, netProfit: -400, tracksStock: true });
+  ok(near(bsOld.totalAssets, 400) && near(bsNew.totalAssets, 0) && near(bsNew.totalAssets, bsNew.totalLiabilities), 'Balance Sheet: all-sold stock leaves the assets, books still balance');
+}
+
 // ── 3. Random books: the Balance Sheet balances for EVERY mix of items + ledger stock ──
 {
   let seed = 11; const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
@@ -143,12 +164,12 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const dc = read('src/contexts/DataContext.tsx');
 // K2: the Trading A/c compute lives in lib/reports/tradingAndProfitLoss; DataContext delegates to it.
 const tp = read('src/lib/reports/tradingAndProfitLoss.ts');
-ok(/const closing = closingStock\(stockLeaves, physicalClosingStock, closingStockPosted\);/.test(tp) && /const closingStockItems = closing\.items;/.test(tp) && /return computeTradingAccount\(/.test(dc), 'Trading A/c closing stock = closingStock()');
+ok(/const closing = closingStock\(stockLeaves, physicalClosingStock, closingStockPosted, tracksStock\);/.test(tp) && /const closingStockItems = closing\.items;/.test(tp) && /return computeTradingAccount\(/.test(dc), 'Trading A/c closing stock = closingStock()');
 ok(!/ledgerClosingItems\.length > 0\s*\?\s*ledgerClosingItems/.test(dc), 'the old ledger-else-physical rule is gone');
 const bsl = read('src/lib/balanceSheetLeaves.ts');
 ok(/closingStock\(stockLeaves\.map/.test(bsl) && /const unpostedStock = cs\.replacesLedger \? cs\.total : 0;/.test(bsl), 'Balance Sheet closing stock = the same closingStock()');
 // 2026-10-09: the tally moved into the shared balanceSheetTallied (lib/balanceSheetLeaves), which wraps balanceSheetLeaves.
-ok(/(balanceSheetLeaves|balanceSheetTallied)\(tb, \{ closingStockPosted, physicalClosingStock, netProfit \}\)/.test(read('src/pages/Dashboard.tsx'))
+ok(/(balanceSheetLeaves|balanceSheetTallied)\(tb, \{ closingStockPosted, physicalClosingStock, netProfit, tracksStock \}\)/.test(read('src/pages/Dashboard.tsx'))
   && /export function balanceSheetTallied[\s\S]*?balanceSheetLeaves\(trialBalance, opts\)/.test(bsl), 'Dashboard tally uses the Balance Sheet rule (no raw-ledger tally)');
 // 2026-10-11: the closing-stock row moved into the shared Balance Sheet layout (screen + PDF + export print it).
 ok(/Math\.abs\(input\.unpostedStock\) > 0\.005/.test(read('src/lib/reports/balanceSheetLayout.ts')) && /buildBalanceSheetLayout\(/.test(read('src/pages/BalanceSheet.tsx')), 'Balance Sheet shows a non-zero closing stock of either sign (never silently hidden)');

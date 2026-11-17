@@ -101,14 +101,32 @@ export function stockLedgerPredicate(accounts?: ReadonlyArray<{ id: string; pare
 }
 const STOCK_HEAD = '3400';
 
-export function closingStock(leaves: readonly StockLedgerLeaf[], physicalClosingStock: number, closingStockPosted: boolean): ClosingStock {
+/**
+ * Does the society keep TRACKED stock (items with an opening stock or at least one movement)? YE-01 (audit
+ * 2026-11-17): "no tracked stock" and "every unit sold" both gave physical = 0, and both fell to the ledger rule —
+ * so when the last units were sold the closing stock became the stale stock-ledger balance (goods that no longer
+ * exist), and the year close froze it into 3403. Items that were created but never used do not count as tracked.
+ */
+export function tracksPhysicalStock(
+  stockItems: ReadonlyArray<{ id: string; isActive?: boolean; openingStock?: number }>,
+  movements: ReadonlyArray<{ itemId: string }>,
+): boolean {
+  const moved = new Set(movements.map(m => m.itemId));
+  return stockItems.some(s => s.isActive !== false && ((Number(s.openingStock) || 0) > 0 || moved.has(s.id)));
+}
+
+/**
+ * @param tracksStock — tracksPhysicalStock(...). When true, a physical stock of 0 means "everything sold" (closing
+ *   stock = 0 + the ledger's in-year movement), not "no tracked stock". Omitted ⇒ the old rule (physical > 0).
+ */
+export function closingStock(leaves: readonly StockLedgerLeaf[], physicalClosingStock: number, closingStockPosted: boolean, tracksStock?: boolean): ClosingStock {
   const physical = r2(Number(physicalClosingStock) || 0);
-  if (closingStockPosted || physical <= 0.005) {
+  if (closingStockPosted || (physical <= 0.005 && !tracksStock)) {
     const items = leaves.filter((l) => Math.abs(l.netBalance) > 0.005)
       .map((l) => ({ name: l.name, nameHi: l.nameHi ?? l.name, amount: r2(l.netBalance) }));
     return { items, total: r2(items.reduce((t, i) => t + i.amount, 0)), replacesLedger: false };
   }
-  const items = [{ name: 'Closing Stock (Physical)', nameHi: 'समापन माल (भौतिक)', amount: physical }];
+  const items = physical > 0.005 ? [{ name: 'Closing Stock (Physical)', nameHi: 'समापन माल (भौतिक)', amount: physical }] : [];
   for (const l of leaves) {
     const inYear = r2(l.netBalance - ((Number(l.openingDebit) || 0) - (Number(l.openingCredit) || 0)));
     if (Math.abs(inYear) > 0.005) items.push({ name: `${l.name} (put into stock this year)`, nameHi: `${l.nameHi ?? l.name} (इस वर्ष स्टॉक में)`, amount: inYear });

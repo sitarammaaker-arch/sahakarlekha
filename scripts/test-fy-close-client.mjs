@@ -11,6 +11,7 @@ ok('2026-27 ends 2027-03-31', fyEndOf('2026-27') === '2027-03-31');
 ok('bad label → undefined', fyEndOf('x') === undefined);
 ok('closing stock rupees → paise', closingStockMinorFor({ totalClosingStock: 1234.56 }) === 123456);
 ok('no stock / non-trading → null (server posts no stock journal)', closingStockMinorFor({ totalClosingStock: 0 }) === null && closingStockMinorFor(undefined) === null);
+ok('YE-01: tracked stock, everything sold → 0 is SENT (server moves the ledger to 0)', closingStockMinorFor({ totalClosingStock: 0, tracksStock: true }) === 0 && closingStockMinorFor({ totalClosingStock: -5, tracksStock: true }) === 0);
 ok('server reason extracted', closeFyMessage('close_fy:authority_required — बोर्ड प्रस्ताव का हवाला देना ज़रूरी है।') === 'बोर्ड प्रस्ताव का हवाला देना ज़रूरी है।');
 ok('post_voucher failure named', /no_open_fy_for_date/.test(closeFyMessage('post_voucher:no_open_fy_for_date')));
 const dc = readFileSync(resolve(root, 'src/contexts/DataContext.tsx'), 'utf8');
