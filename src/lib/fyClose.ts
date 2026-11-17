@@ -15,9 +15,12 @@ export function fyEndOf(label: string): string | undefined {
  * (getTradingAccount → totalClosingStock). null when the society has no trading / no stock at all —
  * the server then posts no stock journal.
  */
-export function closingStockMinorFor(trading: { totalClosingStock?: number } | null | undefined): number | null {
+export function closingStockMinorFor(trading: { totalClosingStock?: number; tracksStock?: boolean } | null | undefined): number | null {
   const total = Number(trading?.totalClosingStock);
-  if (!Number.isFinite(total) || total <= 0) return null;
+  if (!Number.isFinite(total)) return null;
+  // YE-01: a society that keeps tracked stock and has sold everything has a closing stock of 0 — that must be SENT,
+  // so the server moves the stock ledger down to 0. null here left the stale ledger value in 3403 for ever.
+  if (total <= 0) return trading?.tracksStock ? 0 : null;
   return Math.round(total * 100);
 }
 

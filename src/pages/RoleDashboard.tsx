@@ -44,8 +44,8 @@ const RoleDashboard: React.FC = () => {
     // The card is labelled "Balance Sheet": the SAME tally as the Dashboard / Balance Sheet page (at FY end,
     // 1 paisa) — it was a trial-balance Dr = Cr over all dates with a ₹1 tolerance (RULE 2).
     const fyEnd = fyEndDate(society.financialYear);
-    const { physicalClosingStock, closingStockPosted } = getTradingAccount(fyEnd);
-    const tbBalanced = balanceSheetTallied(getTrialBalance(fyEnd), { closingStockPosted, physicalClosingStock, netProfit });
+    const { physicalClosingStock, closingStockPosted, tracksStock } = getTradingAccount(fyEnd);
+    const tbBalanced = balanceSheetTallied(getTrialBalance(fyEnd), { closingStockPosted, physicalClosingStock, netProfit, tracksStock });
     const activeMembers = members.filter(m => (!m.approvalStatus || m.approvalStatus === 'approved') && m.status === 'active').length;
     // Same scope + formula as the Loan Register / Dashboard (RULE 2): non-cleared loans, shared loanOutstanding.
     const loanOutstanding = loans.filter(l => l.status !== 'cleared').reduce((s, l) => s + loanOutstandingOf(l), 0);

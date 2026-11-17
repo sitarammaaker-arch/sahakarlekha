@@ -52,7 +52,7 @@ const BalanceSheet: React.FC = () => {
   // excluded the matching receipt, throwing the sheet out by that amount.
   const trialBalance = getTrialBalance(asOnDate);
   const { netProfit } = getProfitLoss(asOnDate);
-  const { physicalClosingStock, closingStockPosted } = getTradingAccount(asOnDate);
+  const { physicalClosingStock, closingStockPosted, tracksStock } = getTradingAccount(asOnDate);
 
   // Audit C-10: the Balance Sheet reads the ACTUAL journalled Statutory Reserve
   // Fund (1201) balance via the equity group below — it never re-computes a
@@ -84,7 +84,7 @@ const BalanceSheet: React.FC = () => {
   // Auto-reclassify by balance SIGN + the closing-stock rule — the ONE shared rule
   // (src/lib/balanceSheetLeaves.ts), also used by the NABARD CAS Balance Sheet (RULE 2).
   const { assetLeaves, capLiabLeaves: allCapLiabLeaf, unpostedStock, totalAssets: leafAssets, totalLiabilities: leafLiabilities } =
-    balanceSheetLeaves(trialBalance, { closingStockPosted, physicalClosingStock, netProfit }, accounts);
+    balanceSheetLeaves(trialBalance, { closingStockPosted, physicalClosingStock, netProfit, tracksStock }, accounts);
 
   // ── Balance health diagnostic ──────────────────────────────────────────────
   // When the sheet doesn't tie, the root cause is almost always a ledger that

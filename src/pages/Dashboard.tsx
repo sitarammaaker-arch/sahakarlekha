@@ -78,7 +78,7 @@ const Dashboard: React.FC = () => {
     // FY would make the Balance Sheet tally falsely fail.
     const fyEnd = fyEndDate(fy);
     const tb = getTrialBalance(fyEnd);
-    const { physicalClosingStock, closingStockPosted } = getTradingAccount(fyEnd);
+    const { physicalClosingStock, closingStockPosted, tracksStock } = getTradingAccount(fyEnd);
 
     // 1. Reserve Fund posted
     const reservePosted = activeVouchers.some(v =>
@@ -91,7 +91,7 @@ const Dashboard: React.FC = () => {
     // RULE 2: the SAME sides + closing-stock rule as the Balance Sheet page (balanceSheetLeaves) —
     // a raw-ledger tally here disagreed with the page whenever stock was valued from inventory.
     // Audit (High): 1-paisa tolerance — shared with the role dashboard (balanceSheetTallied).
-    const bsTallied = balanceSheetTallied(tb, { closingStockPosted, physicalClosingStock, netProfit });
+    const bsTallied = balanceSheetTallied(tb, { closingStockPosted, physicalClosingStock, netProfit, tracksStock });
 
     // 3. Closing stock — auto-valued from inventory at report time (no journal needed)
     const stockOk = true;

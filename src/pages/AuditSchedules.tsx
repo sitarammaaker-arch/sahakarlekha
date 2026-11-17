@@ -221,7 +221,7 @@ const AuditSchedules: React.FC = () => {
       totalShareCapital,
     };
 
-    const leaves = balanceSheetLeaves(trialBalance, { closingStockPosted: tr.closingStockPosted, physicalClosingStock: tr.physicalClosingStock, netProfit }, accounts);
+    const leaves = balanceSheetLeaves(trialBalance, { closingStockPosted: tr.closingStockPosted, physicalClosingStock: tr.physicalClosingStock, netProfit, tracksStock: tr.tracksStock }, accounts);
     const hasTrading = Math.abs(tr.totalSales) > 0.005 || Math.abs(tr.totalPurchases) > 0.005 || Math.abs(tr.totalClosingStock) > 0.005;
     return tieSchedules(resolveAllSchedules(format, ctx), {
       accounts, leaves, trialBalance, netProfit, previousYearBalances: pyBalances,

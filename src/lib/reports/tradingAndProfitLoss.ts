@@ -10,7 +10,7 @@
 import type { AccountBalance, StockItem, StockMovement, Voucher } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { toMinor, toRupees, addMinor, subMinor, sumMinor } from '@/lib/money';
-import { inventoryProcurementCost, closingStock, isStockLedgerAccount } from '@/lib/tradingAccount';
+import { inventoryProcurementCost, closingStock, isStockLedgerAccount, tracksPhysicalStock } from '@/lib/tradingAccount';
 import { computeStockValue } from '@/lib/stockUtils';
 
 export interface StatementItem { name: string; nameHi: string; amount: number }
@@ -63,6 +63,8 @@ export function computeTradingAccount({ tb, fy, effDate, vouchers, stockItems, m
   const physicalClosingStock = openingsInScope ? toRupees(sumMinor(
     stockItems.filter(s => s.isActive).map(s => toMinor(Number(computeStockValue(s, movementsToUse)) || 0)),
   )) : 0;
+  // YE-01: with tracked items, physical 0 means "all sold" — not "no stock records" (lib/tradingAccount.closingStock).
+  const tracksStock = openingsInScope && tracksPhysicalStock(stockItems.filter(s => s.isActive), movementsToUse);
 
   // Check if the closing-stock journal has been posted for this FY.
   // Audit C-8: the NEW journal credits the dedicated 5150 (Purchases stay gross);
@@ -91,7 +93,7 @@ export function computeTradingAccount({ tb, fy, effDate, vouchers, stockItems, m
   // ledger counts both, in both reports.
   const stockLeaves = tb.filter(b => isStockLedgerAccount(b.account))
     .map(b => ({ name: b.account.name, nameHi: b.account.nameHi, netBalance: b.netBalance, openingDebit: b.openingDebit, openingCredit: b.openingCredit }));
-  const closing = closingStock(stockLeaves, physicalClosingStock, closingStockPosted);
+  const closing = closingStock(stockLeaves, physicalClosingStock, closingStockPosted, tracksStock);
   const closingStockItems = closing.items;
   void ledgerClosingItems;
 
@@ -206,7 +208,7 @@ export function computeTradingAccount({ tb, fy, effDate, vouchers, stockItems, m
 
   return { salesItems, closingStockItems, openingStockItems, purchaseItems, directExpItems,
     totalSales, totalClosingStock, totalOpeningStock, totalPurchases, totalDirectExp, grossProfit,
-    physicalClosingStock, closingStockPosted, activities, unallocated,
+    physicalClosingStock, closingStockPosted, tracksStock, activities, unallocated,
     procuredToStock: inventoryProcurement > 0.005 ? inventoryProcurement : 0,
     legacyPurchaseGrossUp: toRupees(subMinor(toMinor(Number(purchase5101Gross) || 0), toMinor(Number(purchase5101Net) || 0))) };
 }
