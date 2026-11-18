@@ -418,7 +418,11 @@ const RestoreCenter: React.FC = () => {
 
   // ── THE COMMIT GATES. The button is dead unless EVERY one of these holds. ──────
   const confirmPhrase = society?.name ?? '';
-  const rehearsalPassed = rehearsal?.status === 'passed';
+  // BKP-01 (audit 2026-11-17): the rehearsal compares the backup with TODAY's books. "Different" is exactly why a
+  // restore is needed (damaged books), so it must not block the restore. What must hold is that the backup itself
+  // rebuilds balanced books; the difference is shown as information.
+  const rehearsalPassed = rehearsal?.status === 'passed' || (rehearsal?.status === 'failed' && rehearsal.restored.balanced);
+  const rehearsalDiffers = rehearsal?.status === 'failed' && rehearsal.restored.balanced;
   const dryRunOkForMode = !!diff && diff.ok && diff.mode === mode;
   const backupReady = mode === 'fresh' ? true : !!preRestoreBackup;   // Fresh has nothing to undo
   const confirmOk = confirmText.trim() === confirmPhrase && confirmPhrase.length > 0;
@@ -726,6 +730,13 @@ const RestoreCenter: React.FC = () => {
                   </div>
                 )}
 
+                {rehearsalDiffers && (
+                  <p className="text-sm text-amber-900" data-testid="rehearsal-differs-info">
+                    {hi
+                      ? 'यह बैकअप आज की किताबों से अलग है — restore करने पर किताबें ठीक इस बैकअप जैसी हो जाएँगी। बैकअप अपने-आप में संतुलित है, इसलिए restore किया जा सकता है।'
+                      : 'This backup differs from today\'s books — restoring it makes the books exactly as in this backup. The backup itself is balanced, so it can be restored.'}
+                  </p>
+                )}
                 {rehearsal.status === 'failed' && (
                   <div className="text-sm text-red-800 space-y-1">
                     {rehearsal.verdict.accounts.length > 0 && (
@@ -805,7 +816,7 @@ const RestoreCenter: React.FC = () => {
             {!canCommit && !commitOutcome && (
               <ul className="text-xs text-gray-500 list-disc pl-5">
                 {!dryRunOkForMode && <li>{hi ? 'पहले इसी mode पर dry run चलाएँ और वह साफ़ हो' : 'run a clean dry run for this mode first'}</li>}
-                {!rehearsalPassed && <li>{hi ? 'rehearsal पास होना चाहिए' : 'the rehearsal must pass'}</li>}
+                {!rehearsalPassed && <li>{hi ? 'rehearsal चलाएँ — बैकअप अपने-आप में संतुलित होना चाहिए' : 'run the rehearsal — the backup itself must be balanced'}</li>}
                 {!backupReady && <li>{hi ? 'सुरक्षा बैकअप बनाएँ' : 'create the safety backup'}</li>}
                 {!confirmOk && <li>{hi ? 'संस्था का नाम सही टाइप करें' : 'type the society name exactly'}</li>}
                 {!!society?.fyLocked && <li>{hi ? 'वित्तीय वर्ष लॉक है' : 'the financial year is locked'}</li>}

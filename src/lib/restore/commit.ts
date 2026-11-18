@@ -97,6 +97,12 @@ export interface RestoreCommitInput {
 
   applyWrites: ApplyWrites;
   recordAttempt: RecordAttempt;
+  /**
+   * Server restore (migration 178): `applyWrites` only RECORDS the plan; `flush` uploads it and applies it in ONE
+   * database transaction. Called once, after every write has been planned. THROWS with the server's reason — and
+   * then nothing was written at all (the transaction rolled back), which is reported as `server-refused`.
+   */
+  flush?: () => Promise<void>;
 
   onProgress?: (done: number, total: number, entityKey: string) => void;
 }
@@ -119,6 +125,8 @@ export type RestoreOutcome =
   // pre-restore backup. This is the state the whole design works to make rare and legible.
   | { status: 'partial'; entityKey: string; entitiesWritten: number; rowsWritten: number; message: string; preRestoreBackup?: PreRestoreBackup }
   | { status: 'audit-failed'; message: string; summary: RestoreCommitSummary }
+  // Server restore: the server refused the plan and rolled the whole transaction back — NOTHING was written.
+  | { status: 'server-refused'; message: string }
   | { status: 'failed'; message: string };
 
 const VOUCHER_ENTRY_KEY = 'voucher_entry';
@@ -193,6 +201,15 @@ async function runSaga(input: RestoreCommitInput): Promise<RestoreOutcome> {
       }
     }
 
+    // ── 5b. Server restore: apply the recorded plan in one transaction ───────
+    if (input.flush) {
+      try {
+        await input.flush();
+      } catch (e) {
+        return { status: 'server-refused', message: e instanceof Error ? e.message : String(e) };
+      }
+    }
+
     return {
       status: 'committed',
       summary: {
@@ -220,7 +237,7 @@ async function runSaga(input: RestoreCommitInput): Promise<RestoreOutcome> {
 export function buildRestoreRunRecord(input: RestoreCommitInput, outcome: RestoreOutcome): RestoreRunRecord {
   const reachedWrites = outcome.status === 'committed' || outcome.status === 'partial' || outcome.status === 'audit-failed';
   const replay: ReplayResult =
-    outcome.status === 'replay-failed' ? 'failed' : reachedWrites ? 'passed' : 'not-run';
+    outcome.status === 'replay-failed' ? 'failed' : (reachedWrites || outcome.status === 'server-refused') ? 'passed' : 'not-run';
 
   const summary = outcome.status === 'committed' || outcome.status === 'audit-failed' ? outcome.summary : null;
 
@@ -288,5 +305,9 @@ export function summarizeOutcome(outcome: RestoreOutcome, hi = true): string {
       return hi ? 'Restore हो गया, पर उसका ऑडिट-रिकॉर्ड नहीं लिखा जा सका।' : 'The restore ran, but its audit record could not be written.';
     case 'failed':
       return hi ? `Restore विफल: ${outcome.message}` : `Restore failed: ${outcome.message}`;
+    case 'server-refused':
+      return hi
+        ? `सर्वर ने restore रोक दिया — कुछ भी नहीं बदला (पूरा लेन-देन वापस)। कारण: ${outcome.message}`
+        : `The server refused the restore — nothing was changed (the whole transaction rolled back). Reason: ${outcome.message}`;
   }
 }
