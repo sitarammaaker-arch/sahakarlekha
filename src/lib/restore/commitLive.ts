@@ -24,6 +24,8 @@ import type { RestoreMode } from './diff';
 import { commitRestore, type RestoreOutcome } from './commit';
 import { makeRestoreWriter, type WriteClient } from './rowWriter';
 import { recordRestoreAttempt, type PreRestoreBackup } from './trail';
+import { makeRecordingClient, rekeyRevivedVouchers, stageAndCommit, restoreErrorMessage, type RestoreRpc } from './serverWriter';
+import { isMissingTableError } from '../export/missingTable';
 
 export interface CommitRestoreLiveInput {
   mode: RestoreMode;
@@ -42,8 +44,15 @@ export interface CommitRestoreLiveInput {
   auditContext: AuditContext;
   onProgress?: (done: number, total: number, entityKey: string) => void;
 
-  /** Injected in tests / the browser probe. Production uses the real Supabase client. */
+  /**
+   * Injected in tests / the browser probe: a DIRECT writer (the old browser path, kept only for tests).
+   * Production leaves it unset and restores through the server (migration 178) in one transaction.
+   */
   client?: WriteClient;
+  /** Injected in tests: the RPC surface for the server restore. Production uses the Supabase client. */
+  rpc?: RestoreRpc;
+  /** Injected in tests: id generator for re-keyed revived vouchers and the upload run. */
+  newId?: () => string;
   /** Injected in tests. Production records into audit_log. */
   recordAttempt?: (record: Parameters<typeof recordRestoreAttempt>[0]) => Promise<void>;
 }
@@ -54,21 +63,59 @@ export interface CommitRestoreLiveInput {
  * The archived vouchers drive the replay assertion; they are cast from the archive rows.
  */
 export async function commitRestoreLive(input: CommitRestoreLiveInput): Promise<RestoreOutcome> {
-  const client = input.client ?? (supabase as unknown as WriteClient);
   const record = input.recordAttempt ?? ((r) => recordRestoreAttempt(r, input.auditContext));
 
+  // Test path: a direct writer was injected — run the saga against it, exactly as before.
+  if (input.client) {
+    return commitRestore({
+      entities: REGISTRY, mode: input.mode, fyLocked: input.fyLocked,
+      archiveRows: input.archiveRows, currentRows: input.currentRows,
+      vouchers: (input.archiveRows['voucher'] ?? []) as unknown as Voucher[],
+      archivedEntries: input.archivedEntries, societyId: input.societyId,
+      sourceManifestHash: input.sourceManifestHash, preRestoreBackup: input.preRestoreBackup,
+      applyWrites: makeRestoreWriter(input.client, input.societyId, input.currentRows, input.archiveRows),
+      recordAttempt: record, onProgress: input.onProgress,
+    });
+  }
+
+  // Production: plan in the browser against a RECORDING client, apply on the server in one transaction.
+  const rpc = input.rpc ?? (supabase as unknown as RestoreRpc);
+  const newId = input.newId ?? (() => crypto.randomUUID());
+
+  // Vouchers cancelled after the backup come back under a new id (the journal treats a cancel as final). Replace
+  // only: Merge keeps every row the society already has (the cancelled one included), Fresh starts empty.
+  const rekeyed = input.mode !== 'replace'
+    ? { archiveRows: input.archiveRows, archivedEntries: [...input.archivedEntries], revived: {} as Record<string, string> }
+    : rekeyRevivedVouchers(input.archiveRows, input.archivedEntries, input.currentRows['voucher'] ?? [], newId);
+
+  // member_identity (migration 106) may not exist yet — the recorder answers like the database would, so the
+  // PII routing keeps its legacy fallback instead of planning a write the server would refuse.
+  const missingTables = new Set<string>();
+  if (!input.rpc) {
+    const probe = await supabase.from('member_identity').select('member_id').limit(0);
+    if (probe.error && isMissingTableError(probe.error.message, 'member_identity')) missingTables.add('member_identity');
+  }
+
+  const { client, ops } = makeRecordingClient({ missingTables });
   return commitRestore({
     entities: REGISTRY,
     mode: input.mode,
     fyLocked: input.fyLocked,
-    archiveRows: input.archiveRows,
+    archiveRows: rekeyed.archiveRows,
     currentRows: input.currentRows,
-    vouchers: (input.archiveRows['voucher'] ?? []) as unknown as Voucher[],
-    archivedEntries: input.archivedEntries,
+    vouchers: (rekeyed.archiveRows['voucher'] ?? []) as unknown as Voucher[],
+    archivedEntries: rekeyed.archivedEntries,
     societyId: input.societyId,
     sourceManifestHash: input.sourceManifestHash,
     preRestoreBackup: input.preRestoreBackup,
-    applyWrites: makeRestoreWriter(client, input.societyId, input.currentRows, input.archiveRows),
+    applyWrites: makeRestoreWriter(client, input.societyId, input.currentRows, rekeyed.archiveRows),
+    flush: async () => {
+      try {
+        await stageAndCommit(rpc, ops, { mode: input.mode, manifestHash: input.sourceManifestHash, revived: rekeyed.revived, runId: newId() });
+      } catch (e) {
+        throw new Error(restoreErrorMessage(e instanceof Error ? e.message : String(e)));
+      }
+    },
     recordAttempt: record,
     onProgress: input.onProgress,
   });
