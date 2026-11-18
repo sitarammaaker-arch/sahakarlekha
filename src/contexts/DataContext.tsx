@@ -394,7 +394,12 @@ interface DataContextType {
     expenseItems: { name: string; nameHi: string; amount: number }[];
     totalIncome: number;
     totalExpenses: number;
+    /** ACC-03: THIS financial year's result only. */
     netProfit: number;
+    /** Result earlier, not-yet-closed years left on income/expense accounts (0 once closed). */
+    priorUnclosed: number;
+    /** netProfit + priorUnclosed — what a Balance Sheet carries so it ties. */
+    balanceSheetResult: number;
   };
   getReceiptsPayments: (asOnDate?: string) => ReceiptsPaymentsData;
   // ECR-27: spend a statutory fund (Dr fund / Cr cash|bank). Balance-guarded, FY-locked,
@@ -2592,7 +2597,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const oldLegs = voucherPostingLines(current);
       const newLegs = voucherPostingLines(updatedVoucher);
-      if (JSON.stringify(oldLegs) !== JSON.stringify(newLegs)) {
+      // ACC-02: a date-only edit must reach the journal too — the journal dates each voucher from its posting
+      // event, so without a reversed + reposted pair every as-of statement between the two dates was wrong.
+      if (JSON.stringify(oldLegs) !== JSON.stringify(newLegs) || current.date !== updatedVoucher.date) {
         const at = new Date().toISOString();
         const base = {
           tenantId: societyIdRef.current, jurisdiction: jurisdictionRef.current,
@@ -6852,6 +6859,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // RULE 2/3: movements are reconciled against live purchase/sale records first.
     return computeTradingAccount({
       tb, fy, effDate, vouchers: activeVouchers, stockItems, openingsInScope,
+      fyStart: fyStartOf(effDate),   // ACC-01: the same year window as the trial balance's opening columns
       movements: reconcileMovements(stockMovementsRef.current, salesRef.current, purchasesRef.current),
     });
   }, [getTrialBalance, accounts, stockItems, stockMovements, sales, purchases, activeVouchers, society.financialYear, openingsInScope]);

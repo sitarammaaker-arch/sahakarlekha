@@ -51,7 +51,9 @@ const BalanceSheet: React.FC = () => {
   // FY) into net profit while the asset/cash side — correctly date-filtered —
   // excluded the matching receipt, throwing the sheet out by that amount.
   const trialBalance = getTrialBalance(asOnDate);
-  const { netProfit } = getProfitLoss(asOnDate);
+  // ACC-03: netProfit is THIS year's; priorUnclosed is what earlier, not-yet-closed years left on the income /
+  // expense accounts. The sheet carries both (balanceSheetResult) — the P&L line shows them apart.
+  const { netProfit, priorUnclosed, balanceSheetResult } = getProfitLoss(asOnDate);
   const { physicalClosingStock, closingStockPosted, tracksStock } = getTradingAccount(asOnDate);
 
   // Audit C-10: the Balance Sheet reads the ACTUAL journalled Statutory Reserve
@@ -84,7 +86,7 @@ const BalanceSheet: React.FC = () => {
   // Auto-reclassify by balance SIGN + the closing-stock rule — the ONE shared rule
   // (src/lib/balanceSheetLeaves.ts), also used by the NABARD CAS Balance Sheet (RULE 2).
   const { assetLeaves, capLiabLeaves: allCapLiabLeaf, unpostedStock, totalAssets: leafAssets, totalLiabilities: leafLiabilities } =
-    balanceSheetLeaves(trialBalance, { closingStockPosted, physicalClosingStock, netProfit, tracksStock }, accounts);
+    balanceSheetLeaves(trialBalance, { closingStockPosted, physicalClosingStock, netProfit: balanceSheetResult, tracksStock }, accounts);
 
   // ── Balance health diagnostic ──────────────────────────────────────────────
   // When the sheet doesn't tie, the root cause is almost always a ledger that
@@ -104,7 +106,7 @@ const BalanceSheet: React.FC = () => {
   const pyNetProfit = hasPY ? pyResult(pyBalances, accounts) : 0;
   // Tally-style: an opening Dr ≠ Cr is printed as its own "ओपनिंग बैलेंस का अंतर" line (2026-10-11), never hidden.
   const layout = buildBalanceSheetLayout({
-    accounts, assetLeaves, capLiabLeaves: allCapLiabLeaf, unpostedStock, netProfit,
+    accounts, assetLeaves, capLiabLeaves: allCapLiabLeaf, unpostedStock, netProfit, priorUnclosed,
     py: hasPY ? pyBalances : undefined, pyNetProfit: hasPY ? pyNetProfit : undefined,
     openingDifference: openingGap,
   });
@@ -138,6 +140,7 @@ const BalanceSheet: React.FC = () => {
       netProfit, society, language, 0, accounts, stockItems, showLedgers, unpostedStock,
       hasPY ? { balances: pyBalances, label: pyYear, netProfit: pyNetProfit } : undefined,
       openingGap,
+      priorUnclosed,
     );
   };
 

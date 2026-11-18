@@ -34,12 +34,12 @@ const SurplusAppropriation: React.FC = () => {
   const fy = society.financialYear;
 
   const s = useMemo(() => {
-    const { netProfit } = getProfitLoss();
+    const { netProfit, balanceSheetResult } = getProfitLoss();
     const toFunds = appropriatedToFunds(vouchers, appropriationFunds(accounts).map(a => a.id), fy);
     const dividend = postedAppropriation(vouchers, ACC_NET_SURPLUS, ACC_DIVIDEND, fy)?.amount ?? 0;
     const fyEnd = fyEndDate(fy);
     const { physicalClosingStock, closingStockPosted, tracksStock } = getTradingAccount(fyEnd);
-    const bsOk = balanceSheetTallied(getTrialBalance(fyEnd), { closingStockPosted, physicalClosingStock, netProfit, tracksStock });
+    const bsOk = balanceSheetTallied(getTrialBalance(fyEnd), { closingStockPosted, physicalClosingStock, netProfit: balanceSheetResult, tracksStock });
     const shareOk = getShareCapitalReconciliation().reconciled;
     return { netProfit, toFunds, dividend, remaining: Math.round((netProfit - toFunds - dividend) * 100) / 100, bsOk, shareOk };
   }, [getProfitLoss, vouchers, accounts, fy, getTradingAccount, getTrialBalance, getShareCapitalReconciliation]);

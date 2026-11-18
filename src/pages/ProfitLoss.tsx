@@ -15,7 +15,7 @@ import { reclassifyIncomeExpenditure } from '@/lib/reports/negativeLines';
 import { groupWithSubtotals, type GroupableLine } from '@/lib/reports/groupSubtotals';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
-import { deltaProfitLoss, isEmptyPL } from '@/lib/reportComparative';
+import { isEmptyPL } from '@/lib/reportComparative';
 import { PrintButton, PrintHeader } from '@/components/ReportPrint';
 
 // Appropriation account IDs (must match ReserveFund.tsx)
@@ -53,15 +53,13 @@ const ProfitLoss: React.FC = () => {
   const printExpenseTotal = ieSides.expense.reduce((s, i) => s + i.amount, 0);
   const grandTotal = isSurplus ? printIncomeTotal : printExpenseTotal;
 
-  // ECR-19: prior-year I&E is now COMPUTED as a period-delta — the flows DURING the
-  // prior FY = cumulative(prior FY end) − cumulative(prior FY start). Falls back to
-  // the saved snapshot when the dataset has no prior-period figures (rolled-over
-  // society whose prior vouchers were cleared into openings).
+  // ECR-19: prior-year I&E is COMPUTED from data. ACC-03: getProfitLoss(date) is now the
+  // year of `date` only, so the prior year is simply the statement at the prior FY end
+  // (the old cumulative(end) − cumulative(start) delta would subtract the year before
+  // from it). Falls back to the saved snapshot when the dataset has no prior-period figures.
   const fyFirstYear = society.financialYear.split('-')[0];
   const hasFY = /^\d{4}$/.test(fyFirstYear);
-  const computedPY = hasFY
-    ? deltaProfitLoss(getProfitLoss(`${fyFirstYear}-03-31`), getProfitLoss(`${Number(fyFirstYear) - 1}-03-31`))
-    : null;
+  const computedPY = hasFY ? getProfitLoss(`${fyFirstYear}-03-31`) : null;
   const usingComputedPY = !isEmptyPL(computedPY);
   const pyIE = usingComputedPY ? computedPY : society.previousYearIE;
   const hasPY = !!pyIE && (usingComputedPY || !!society.previousFinancialYear);

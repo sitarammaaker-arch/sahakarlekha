@@ -65,7 +65,7 @@ const Dashboard: React.FC = () => {
   const cashBalance = getAccountBalance(ACCOUNT_IDS.CASH);
   const bankIds = getBankAccountIds(accounts);
   const bankBalance = bankIds.reduce((sum, bid) => sum + getAccountBalance(bid), 0);
-  const { netProfit, incomeItems, expenseItems, totalIncome, totalExpenses } = getProfitLoss();
+  const { netProfit, balanceSheetResult, incomeItems, expenseItems, totalIncome, totalExpenses } = getProfitLoss();
   const approvedMembers = members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved');
   const activeMembers = approvedMembers.filter(m => m.status === 'active').length;
 
@@ -91,7 +91,7 @@ const Dashboard: React.FC = () => {
     // RULE 2: the SAME sides + closing-stock rule as the Balance Sheet page (balanceSheetLeaves) —
     // a raw-ledger tally here disagreed with the page whenever stock was valued from inventory.
     // Audit (High): 1-paisa tolerance — shared with the role dashboard (balanceSheetTallied).
-    const bsTallied = balanceSheetTallied(tb, { closingStockPosted, physicalClosingStock, netProfit, tracksStock });
+    const bsTallied = balanceSheetTallied(tb, { closingStockPosted, physicalClosingStock, netProfit: balanceSheetResult, tracksStock });
 
     // 3. Closing stock — auto-valued from inventory at report time (no journal needed)
     const stockOk = true;

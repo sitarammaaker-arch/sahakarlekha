@@ -11,6 +11,7 @@ import { toMinor } from '@/lib/money';
 import type { LedgerEvent } from './event';
 import { projectTrialBalance } from './projections';
 import { voucherPostingLines } from './voucherEvent';
+import { resolveCurrentVouchers } from './aggregateState';
 
 /** PURE — per-account net opening balances (minor units, Dr − Cr) from the accounts' openingBalance/
  *  openingBalanceType. getTrialBalance adds these to the voucher postings, so parity must too. */
@@ -60,6 +61,8 @@ export interface LedgerParity {
   matches: boolean;
   diffs: ParityDiff[];
   accountsChecked: number;
+  /** ACC-02: live vouchers whose journal posting carries another date (a date-only edit never journalled). */
+  dateDiffs?: ParityDateDiff[];
 }
 
 /**
@@ -84,5 +87,39 @@ export function ledgerParity(
     const ac = actual[a] ?? 0;
     if (e !== ac) diffs.push({ accountId: a, expected: e, actual: ac });
   }
-  return { matches: diffs.length === 0, diffs, accountsChecked: accountIds.size };
+  // ACC-02: all-time balances agree even when a voucher was re-dated and the journal kept the old date — yet every
+  // as-of statement between the two dates then differs. Compare each live voucher's date with its journal date too;
+  // a mismatch fails the gate, so a cut-over tenant falls back to the voucher rows instead of a wrong statement.
+  const dateDiffs = journalDateDiffs(events, vouchers);
+  return { matches: diffs.length === 0 && dateDiffs.length === 0, diffs, accountsChecked: accountIds.size, dateDiffs };
+}
+
+export interface ParityDateDiff { voucherId: string; voucherDate: string; journalDate: string }
+
+/** PURE — live, approved vouchers whose CURRENT journal posting carries a different date (ACC-02). A posting
+ *  whose payload has no date is not compared (nothing to disagree with; every production posting carries one). */
+export function journalDateDiffs(events: readonly LedgerEvent[], vouchers: readonly Voucher[]): ParityDateDiff[] {
+  // The current posting, by the SAME rule as resolveCurrentVouchers: the last reposted event, else the posted one.
+  const current = new Map<string, { posted?: LedgerEvent; reposted?: LedgerEvent }>();
+  for (const e of Array.isArray(events) ? events : []) {
+    if (e.aggregateType !== 'voucher') continue;
+    const c = current.get(e.aggregateId) ?? {};
+    if (e.eventType === 'voucher.reposted') c.reposted = e;
+    else if (e.eventType === 'voucher.posted' && !c.posted) c.posted = e;
+    current.set(e.aggregateId, c);
+  }
+  const dated = new Set<string>();
+  for (const [id, c] of current) {
+    const d = ((c.reposted ?? c.posted)?.payload as { date?: unknown } | undefined)?.date;
+    if (typeof d === 'string' && d) dated.add(id);
+  }
+  const journalDate = new Map(resolveCurrentVouchers(events).filter((c) => dated.has(c.id)).map((c) => [c.id, c.date]));
+  const out: ParityDateDiff[] = [];
+  for (const v of Array.isArray(vouchers) ? vouchers : []) {
+    if (v.isDeleted || v.approvalStatus === 'pending') continue;
+    const j = journalDate.get(v.id);
+    const d = String(v.date || '').slice(0, 10);
+    if (j !== undefined && j.slice(0, 10) !== d) out.push({ voucherId: v.id, voucherDate: d, journalDate: j.slice(0, 10) });
+  }
+  return out;
 }
