@@ -15,6 +15,30 @@ import { computeStockValue } from '@/lib/stockUtils';
 
 export interface StatementItem { name: string; nameHi: string; amount: number }
 
+// ── ACC-03: a statement for the year shows the YEAR's income and expenditure ─────────────────────
+// The trial balance's opening columns are the balance brought forward at the start of the as-of
+// date's financial year (earlier years fold into them); netBalance is opening + this year. Income
+// and expense accounts are swept to zero only when the old year is CLOSED — until then their
+// netBalance carried every earlier year into "this year's" Trading A/c, I&E and surplus (audit
+// 2026-11-17: income 500 last year + 100 this year printed as 600 for this year). The statements
+// read the year's movement; what earlier, unclosed years left on those accounts is reported
+// separately (priorUnclosedResult) so the Balance Sheet still ties.
+const isNominal = (b: AccountBalance) => b.account.type === 'income' || b.account.type === 'expense';
+const openingNetMinor = (b: AccountBalance) => subMinor(toMinor(Number(b.openingDebit) || 0), toMinor(Number(b.openingCredit) || 0));
+
+/** The trial balance with every income / expense row reduced to this year's movement (opening columns zeroed). */
+export function nominalYearTB<B extends AccountBalance>(tb: readonly B[]): B[] {
+  return tb.map(b => {
+    if (!isNominal(b) || openingNetMinor(b) === 0) return b;
+    return { ...b, netBalance: toRupees(subMinor(toMinor(Number(b.netBalance) || 0), openingNetMinor(b))), openingDebit: 0, openingCredit: 0 };
+  });
+}
+
+/** Result (Cr positive) that earlier, not-yet-closed years left on the income / expense accounts — 0 once they are closed. */
+export function priorUnclosedResult(tb: readonly AccountBalance[]): number {
+  return toRupees(subMinor(0, sumMinor(tb.filter(isNominal).map(openingNetMinor))));
+}
+
 export interface TradingAccountInput {
   /** Trial balance as on effDate. */
   tb: AccountBalance[];
@@ -29,9 +53,14 @@ export interface TradingAccountInput {
   movements: StockMovement[];
   /** ECR-17: physical stock is society-level → Head Office scope only. */
   openingsInScope: boolean;
+  /** First day of the as-of date's financial year (YYYY-MM-DD). ACC-01: goods procured into the stock ledger are
+   *  counted from here — earlier years' are already inside the opening stock. Omitted ⇒ every voucher (old rule). */
+  fyStart?: string;
 }
 
-export function computeTradingAccount({ tb, fy, effDate, vouchers, stockItems, movements, openingsInScope }: TradingAccountInput) {
+export function computeTradingAccount({ tb: rawTb, fy, effDate, vouchers, stockItems, movements, openingsInScope, fyStart }: TradingAccountInput) {
+  // ACC-03: sales, purchases and direct expenses are this year's movement, not since inception.
+  const tb = nominalYearTB(rawTb);
 
   // Cr side: Sales / Trading Income (parentId '4100'). Signed (-nb) so a net SALES
   // RETURN (abnormal debit) reduces sales and stays consistent with the ledger
@@ -133,8 +162,11 @@ export function computeTradingAccount({ tb, fy, effDate, vouchers, stockItems, m
   const inventoryAcctIds = new Set(
     tb.filter(b => isStockLedgerAccount(b.account)).map(b => b.account.id)
   );
+  // ACC-01: only THIS year's vouchers. Goods put into stock in an earlier year are already in the opening stock
+  // (the ledger's brought-forward balance, Dr side above); counting them again here made a phantom gross loss
+  // and an untied Balance Sheet from year 2 (audit 2026-11-17: opening 300 + procured 300, closing 300 → GP −300).
   const inventoryProcurement = inventoryProcurementCost(
-    closingScopedVouchers.map(v => ({ lines: getVoucherLines(v) })),
+    closingScopedVouchers.filter(v => !fyStart || v.date >= fyStart).map(v => ({ lines: getVoucherLines(v) })),
     inventoryAcctIds,
   );
   // Signed: goods leaving the stock ledger this year (a correction / an issue) reduce it.
@@ -227,7 +259,10 @@ export interface ProfitLossInput {
 /** A P&L line. accountId / parentId let a report roll lines up into Head / Sub-head subtotals (presentation only). */
 export interface PlLine { name: string; nameHi: string; amount: number; accountId?: string; parentId?: string }
 
-export function computeProfitLoss({ tb, hasTrading, tradingGrossProfit }: ProfitLossInput) {
+export function computeProfitLoss({ tb: rawTb, hasTrading, tradingGrossProfit }: ProfitLossInput) {
+  // ACC-03: the year's income and expenditure; earlier unclosed years are reported apart (priorUnclosed).
+  const tb = nominalYearTB(rawTb);
+  const priorUnclosed = priorUnclosedResult(rawTb);
   // ── Audit C-9: NCDC two-statement structure (Trading A/c → P&L/I&E) ──────
   // Per NCDC Annexure II + III, trading heads (Sales, Purchases, direct expenses,
   // opening/closing stock) are absorbed into the TRADING ACCOUNT, and only the
@@ -270,5 +305,9 @@ export function computeProfitLoss({ tb, hasTrading, tradingGrossProfit }: Profit
   const totalExpensesMinor = sumMinor(expenseItems.map(i => toMinor(Number(i.amount) || 0)));
   const totalIncome = toRupees(totalIncomeMinor);
   const totalExpenses = toRupees(totalExpensesMinor);
-  return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit: toRupees(subMinor(totalIncomeMinor, totalExpensesMinor)) };
+  const netProfit = toRupees(subMinor(totalIncomeMinor, totalExpensesMinor));
+  // netProfit = THIS year's result (appropriation, dividend, the I&E). priorUnclosed = what earlier years not yet
+  // closed left on the income/expense accounts. A Balance Sheet carries BOTH (balanceSheetResult) or it will not tie.
+  return { incomeItems, expenseItems, totalIncome, totalExpenses, netProfit, priorUnclosed,
+    balanceSheetResult: toRupees(addMinor(toMinor(netProfit), toMinor(priorUnclosed))) };
 }

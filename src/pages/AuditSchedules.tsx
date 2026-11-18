@@ -200,7 +200,7 @@ const AuditSchedules: React.FC = () => {
   const fyEnd = `20${(fy || '').split('-')[1]}-03-31`;
   const tied = useMemo(() => {
     const trialBalance = getTrialBalance(fyEnd);
-    const { totalIncome, totalExpenses, netProfit } = getProfitLoss(fyEnd);
+    const { totalIncome, totalExpenses, netProfit, balanceSheetResult } = getProfitLoss(fyEnd);
     const tr = getTradingAccount(fyEnd);
     const { grossProfit } = tr;
     const approvedMembers = members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved');
@@ -221,7 +221,7 @@ const AuditSchedules: React.FC = () => {
       totalShareCapital,
     };
 
-    const leaves = balanceSheetLeaves(trialBalance, { closingStockPosted: tr.closingStockPosted, physicalClosingStock: tr.physicalClosingStock, netProfit, tracksStock: tr.tracksStock }, accounts);
+    const leaves = balanceSheetLeaves(trialBalance, { closingStockPosted: tr.closingStockPosted, physicalClosingStock: tr.physicalClosingStock, netProfit: balanceSheetResult, tracksStock: tr.tracksStock }, accounts);   // ACC-03: + earlier unclosed years
     const hasTrading = Math.abs(tr.totalSales) > 0.005 || Math.abs(tr.totalPurchases) > 0.005 || Math.abs(tr.totalClosingStock) > 0.005;
     return tieSchedules(resolveAllSchedules(format, ctx), {
       accounts, leaves, trialBalance, netProfit, previousYearBalances: pyBalances,

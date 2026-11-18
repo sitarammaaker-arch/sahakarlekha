@@ -169,7 +169,7 @@ ok(!/ledgerClosingItems\.length > 0\s*\?\s*ledgerClosingItems/.test(dc), 'the ol
 const bsl = read('src/lib/balanceSheetLeaves.ts');
 ok(/closingStock\(stockLeaves\.map/.test(bsl) && /const unpostedStock = cs\.replacesLedger \? cs\.total : 0;/.test(bsl), 'Balance Sheet closing stock = the same closingStock()');
 // 2026-10-09: the tally moved into the shared balanceSheetTallied (lib/balanceSheetLeaves), which wraps balanceSheetLeaves.
-ok(/(balanceSheetLeaves|balanceSheetTallied)\(tb, \{ closingStockPosted, physicalClosingStock, netProfit, tracksStock \}\)/.test(read('src/pages/Dashboard.tsx'))
+ok(/(balanceSheetLeaves|balanceSheetTallied)\(tb, \{ closingStockPosted, physicalClosingStock, netProfit: balanceSheetResult, tracksStock \}\)/.test(read('src/pages/Dashboard.tsx'))
   && /export function balanceSheetTallied[\s\S]*?balanceSheetLeaves\(trialBalance, opts\)/.test(bsl), 'Dashboard tally uses the Balance Sheet rule (no raw-ledger tally)');
 // 2026-10-11: the closing-stock row moved into the shared Balance Sheet layout (screen + PDF + export print it).
 ok(/Math\.abs\(input\.unpostedStock\) > 0\.005/.test(read('src/lib/reports/balanceSheetLayout.ts')) && /buildBalanceSheetLayout\(/.test(read('src/pages/BalanceSheet.tsx')), 'Balance Sheet shows a non-zero closing stock of either sign (never silently hidden)');

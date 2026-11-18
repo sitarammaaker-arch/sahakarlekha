@@ -47,7 +47,11 @@ export interface BsLayoutInput {
   assetLeaves: readonly AccountBalance[];
   capLiabLeaves: readonly AccountBalance[];
   unpostedStock: number;
+  /** THIS year's result (getProfitLoss().netProfit). */
   netProfit: number;
+  /** ACC-03: result earlier years left on income/expense accounts because they are not closed yet
+   *  (getProfitLoss().priorUnclosed). Shown as its own line; without it the sheet would not tie. */
+  priorUnclosed?: number;
   /** Prior-year balances by account id, Dr positive / Cr negative (as getTrialBalance's netBalance). */
   py?: Record<string, number>;
   /** Prior year's result (Cr positive) — so the prior-year P&L line, and the comparative totals, tie. */
@@ -200,7 +204,8 @@ export function buildBalanceSheetLayout(input: BsLayoutInput): BsLayout {
   const surplusLeaves = [...input.capLiabLeaves, ...input.assetLeaves].filter((b) => isSurplus(b.account));
   const bf = r2(surplusLeaves.reduce((t, b) => t - b.netBalance, 0));
   const pyBf = r2(surplusLeaves.reduce((t, b) => t - (py[b.account.id] ?? 0), 0));
-  const profitAndLoss = r2(bf + input.netProfit);
+  const priorUnclosed = r2(input.priorUnclosed ?? 0);
+  const profitAndLoss = r2(bf + priorUnclosed + input.netProfit);
   const pyPL = r2(pyBf + (input.pyNetProfit ?? 0));
 
   const liab = buildSide(input, input.capLiabLeaves.filter((b) => !isSurplus(b.account)), ['1000', '2000'], true);
@@ -217,6 +222,9 @@ export function buildBalanceSheetLayout(input: BsLayoutInput): BsLayout {
         labelHi: loss ? 'घटाएँ: लाभ-हानि खाता (घाटा)' : 'लाभ-हानि खाता (शेष)',
         amount: profitAndLoss, py: pyPL, depth: 0, accountId: surplusLeaves[0]?.account.id },
       { key: 'pl-bf', kind: 'detail', label: 'Balance brought forward', labelHi: 'पिछला शेष', amount: bf, py: pyBf, depth: 1 },
+      ...(Math.abs(priorUnclosed) >= 0.005 ? [{ key: 'pl-prior', kind: 'detail' as const,
+        label: 'Add/(less): result of earlier year(s) not yet closed', labelHi: 'जोड़ें/(घटाएँ): पिछले वर्ष(वर्षों) का परिणाम — वर्ष अभी बंद नहीं',
+        amount: priorUnclosed, py: 0, depth: 1 }] : []),
       { key: 'pl-cy', kind: 'detail', label: input.netProfit >= 0 ? 'Add: Net profit for the year' : 'Less: Net loss for the year', labelHi: input.netProfit >= 0 ? 'जोड़ें: इस वर्ष का शुद्ध लाभ' : 'घटाएँ: इस वर्ष का शुद्ध घाटा', amount: r2(input.netProfit), py: r2(input.pyNetProfit ?? 0), depth: 1 },
     ];
     if (homeSec) homeSec.rows.push(...plRows);

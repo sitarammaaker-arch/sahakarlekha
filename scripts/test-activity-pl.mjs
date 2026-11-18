@@ -114,9 +114,17 @@ ok(slice(down127, ...EV) === ev095 && slice(down127, ...SP) === sp104, '127 down
 ok(/create or replace function public\.voucher_edit_capabilities\(\)/.test(up127) && /drop function if exists public\.voucher_edit_capabilities\(\)/.test(down127),
   '127 adds the capability probe; its down drops it (the app re-locks the picker)');
 ok(/values \('127', 'voucher_activity_tag_edit'\)/.test(up127) && /delete from public\.app_migrations where version = '127'/.test(down127), '127 ledger insert / down delete');
-// No later migration redefines the two functions (else 127 would not be the live body).
+// No later migration redefines the two functions (else 127 would not be the live body) — EXCEPT 180 (ACC-02), which
+// is 127's edit_voucher with only the journal condition widened to date changes; its body must keep 127's activity tag.
 const later = readdirSync(new URL('../supabase/migrations/', import.meta.url)).filter(f => /^\d{3}_/.test(f) && f > '127_voucher_activity_tag_edit_down.sql' && f.endsWith('.sql'));
-ok(later.every(f => !/function public\.(edit_voucher|save_pending_voucher)\(/i.test(mig(f))), `no migration after 127 redefines edit_voucher / save_pending_voucher (${later.join(', ') || 'none'})`);
+const ALLOWED_LATER = new Set(['180_edit_voucher_date_journal.sql', '180_edit_voucher_date_journal_down.sql']);
+ok(later.every(f => ALLOWED_LATER.has(f) || !/function public\.(edit_voucher|save_pending_voucher)\(/i.test(mig(f))), `no migration after 127 redefines edit_voucher / save_pending_voucher (${later.filter(f => !ALLOWED_LATER.has(f)).join(', ') || 'none'})`);
+{
+  const up180 = mig('180_edit_voucher_date_journal.sql'), down180 = mig('180_edit_voucher_date_journal_down.sql');
+  const norm = (s) => s.replace(/\r\n/g, '\n').replace(/  -- Journal:[^\n]*\n(  -- [^\n]*\n)*/, '').replace(/  elsif v_posting\.payload -> 'lines' is distinct from v_legs(\n\s+or \(v_posting\.payload ->> 'date'\) is distinct from v_new\."date")? then/, 'ELSIF');
+  ok(norm(slice(up180, ...EV)) === norm(slice(up127, ...EV)) && !/save_pending_voucher\(/i.test(up180), '180 edit_voucher = 127 (activity tag kept) + the date condition only; save_pending_voucher untouched');
+  ok(slice(down180, ...EV) === slice(up127, ...EV), '180 down restores 127\'s edit_voucher byte-for-byte');
+}
 
 // Client: the tag goes to the server only when changed, and only once 127 is live.
 const vouchersSrc = read('../src/pages/Vouchers.tsx');

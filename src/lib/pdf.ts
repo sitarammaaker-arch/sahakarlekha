@@ -913,6 +913,8 @@ export function generateBalanceSheetPDF(
   priorYear?: { balances: Record<string, number>; label: string; netProfit: number },
   /** Σ opening Dr − Σ opening Cr — printed as "Difference in opening balances" (Tally), like the screen. */
   openingDifference: number = 0,
+  /** ACC-03: result of earlier years not yet closed (getProfitLoss().priorUnclosed) — its own line, like the screen. */
+  priorUnclosed: number = 0,
 ) {
   const doc = new jsPDF('landscape');
   const bsFinal = reportStatus(society).final;
@@ -927,7 +929,7 @@ export function generateBalanceSheetPDF(
   const hasPY = !!(pyYear && Object.keys(pyBalances).length > 0);
   const layout = buildBalanceSheetLayout({
     accounts: allAccounts ?? [], assetLeaves: assetBalances, capLiabLeaves: liabilityBalances,
-    unpostedStock: unpostedClosingStock, netProfit, py: hasPY ? pyBalances : undefined,
+    unpostedStock: unpostedClosingStock, netProfit, priorUnclosed, py: hasPY ? pyBalances : undefined,
     pyNetProfit: hasPY ? (priorYear?.netProfit ?? pyResult(pyBalances, allAccounts ?? [])) : undefined,
     openingDifference,
   });

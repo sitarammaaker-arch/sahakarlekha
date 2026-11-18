@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, CheckCircle2, Download } from 'lucide-react';
 import { navigationService, declaredActivities } from '@/lib/navigation';
 import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
+import { nominalYearTB } from '@/lib/reports/tradingAndProfitLoss';
 import { buildCasBalanceSheet, buildCasProfitLoss, buildCasTrading, buildCasTrialBalance, casBalanceSheetTies, type CasSection, type CasTbRow } from '@/lib/cas/pacsCas';
 import { generateCasPdf } from '@/lib/cas/casPdf';
 import { loanInterestDue, kccAccruables } from '@/lib/loans/interestAccrual';
@@ -123,18 +124,19 @@ export function CasStatements({ hi }: { hi: boolean }) {
     const tb = tbOf(fyEnd);
     const appPL = getProfitLoss(fyEnd);
     const tr = getTradingAccount(fyEnd);
-    const leaves = balanceSheetLeaves(tb, { closingStockPosted: tr.closingStockPosted, physicalClosingStock: tr.physicalClosingStock, netProfit: appPL.netProfit, tracksStock: tr.tracksStock });
+    const leaves = balanceSheetLeaves(tb, { closingStockPosted: tr.closingStockPosted, physicalClosingStock: tr.physicalClosingStock, netProfit: appPL.balanceSheetResult, tracksStock: tr.tracksStock });
     // Overdue part of each loan's open accrued interest — the same loanInterestDue as the repay dialogs.
     const overdue = [...loans.map((l) => l.id), ...kccLoans.map((k) => k.id)]
       .reduce((t, id) => { const d = loanInterestDue(id, accruals, vouchers); return t + Math.min(d.reserve, d.receivable); }, 0);
-    const bs = buildCasBalanceSheet({ assetLeaves: leaves.assetLeaves, capLiabLeaves: leaves.capLiabLeaves, unpostedStock: leaves.unpostedStock, netProfit: appPL.netProfit, overdueInterestReceivable: overdue });
-    const pl = buildCasProfitLoss(tb, { hasTrading, grossProfit: tr.grossProfit });
+    const bs = buildCasBalanceSheet({ assetLeaves: leaves.assetLeaves, capLiabLeaves: leaves.capLiabLeaves, unpostedStock: leaves.unpostedStock, netProfit: appPL.balanceSheetResult, overdueInterestReceivable: overdue });
+    // ACC-03: the CAS P&L is the year's, like the app's I&E (the Balance Sheet above carries earlier unclosed years).
+    const pl = buildCasProfitLoss(nominalYearTB(tb), { hasTrading, grossProfit: tr.grossProfit });
     // MIS (CAS-2b): month-end CAS Balance Sheets for the Annexure XVII averages — built by the SAME
     // leaves rule + builder as Annexure IV. The overdue-interest split does not move any XVII figure.
     const bsAt = (date: string) => {
       const t = getTrialBalance(date), p = getProfitLoss(date), r = getTradingAccount(date);
-      const lv = balanceSheetLeaves(t, { closingStockPosted: r.closingStockPosted, physicalClosingStock: r.physicalClosingStock, netProfit: p.netProfit, tracksStock: r.tracksStock });
-      return buildCasBalanceSheet({ assetLeaves: lv.assetLeaves, capLiabLeaves: lv.capLiabLeaves, unpostedStock: lv.unpostedStock, netProfit: p.netProfit, overdueInterestReceivable: 0 });
+      const lv = balanceSheetLeaves(t, { closingStockPosted: r.closingStockPosted, physicalClosingStock: r.physicalClosingStock, netProfit: p.balanceSheetResult, tracksStock: r.tracksStock });
+      return buildCasBalanceSheet({ assetLeaves: lv.assetLeaves, capLiabLeaves: lv.capLiabLeaves, unpostedStock: lv.unpostedStock, netProfit: p.balanceSheetResult, overdueInterestReceivable: 0 });
     };
     const misAsOf = today < fyEnd ? today : fyEnd;
     const monthBs = months.filter((m) => m.to <= misAsOf).map((m) => ({ to: m.to, bs: bsAt(m.to) }));
@@ -148,7 +150,7 @@ export function CasStatements({ hi }: { hi: boolean }) {
     ];
     const depBooks = depositAccounts.map((d) => ({ memberId: d.memberId, rows: depositLedger(getDepositTransactions(d.id)).rows }));
     const fyBefore = months.length ? dayBefore(months[0].from) : null;
-    const plAt = (date: string) => plFlows(buildCasProfitLoss(tbOf(date), { hasTrading, grossProfit: getTradingAccount(date).grossProfit }));
+    const plAt = (date: string) => plFlows(buildCasProfitLoss(nominalYearTB(tbOf(date)), { hasTrading, grossProfit: getTradingAccount(date).grossProfit }));
     const avgAssets = (xs: { bs: { totalAssets: number } }[]) => (xs.length ? Math.round((xs.reduce((t, x) => t + x.bs.totalAssets, 0) / xs.length) * 100) / 100 : null);
     const pointAt = (date: string, after: string | null, sheet: typeof bs, flows: ReturnType<typeof plFlows>, monthsIn: typeof monthBs): XviPoint => {
       const lf = loanBooks.reduce((t, b) => { const f = loanFlowsBetween(b.rows, after, date); return { issued: t.issued + f.issued, recovered: t.recovered + f.recovered }; }, { issued: 0, recovered: 0 });
@@ -176,7 +178,7 @@ export function CasStatements({ hi }: { hi: boolean }) {
       ratios: misRatios(bs, appPL.netProfit),
       xvi,
     };
-    const trading = hasTrading ? buildCasTrading(tb, { openingStock: tr.totalOpeningStock, closingStock: tr.totalClosingStock, procuredToStock: tr.procuredToStock, purchaseGrossUp: tr.legacyPurchaseGrossUp }) : null;
+    const trading = hasTrading ? buildCasTrading(nominalYearTB(tb), { openingStock: tr.totalOpeningStock, closingStock: tr.totalClosingStock, procuredToStock: tr.procuredToStock, purchaseGrossUp: tr.legacyPurchaseGrossUp }) : null;
     const m = months.find((x) => x.key === tbMonth);
     const tbCas = m ? buildCasTrialBalance(tbOf(m.to), tbOf(dayBefore(m.from)), { hasTrading }) : null;
     return { bs, pl, trading, appNet: appPL.netProfit, appGross: tr.grossProfit, leaves, tbCas, tbLabel: m?.label ?? '', mis };
