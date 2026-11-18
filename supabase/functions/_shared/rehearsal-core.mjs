@@ -4372,8 +4372,6 @@ var REPLAY_FIELDS = Object.freeze([
   "accountId",
   "dr",
   "cr",
-  "narration",
-  "societyId",
   "workOrderId",
   "costCentreId"
 ]);
