@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Link } from '@/components/LocalLink';
 import { MemberPicker } from '@/components/MemberPicker';
 import { BankAccountSelect } from '@/components/BankAccountSelect';
@@ -66,6 +66,10 @@ const Vouchers: React.FC = () => {
   const canDelete = can('delete');  // cancel — admin/societyAdmin/secretary only (restore is disabled)
   const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, getTrialBalance, matchesActiveBranch, canEditVoucherActivity } = useData();
   const [submitForApproval, setSubmitForApproval] = useState(false);
+  // UX-01: the maker-checker tick exists only where the society turned approval on. Elsewhere a ticked
+  // box kept vouchers out of every report with an ordinary "saved" toast and nobody able to approve.
+  const approvalOn = !!society.approvalRequired;
+  const navigate = useNavigate();
   // CM-PACS activity-wise accounts: optional business-activity tag, stored in Voucher.costCentreId. Sticky
   // across entries (like the voucher type) so a run of shop vouchers needs one pick; shown next to Save.
   const [activity, setActivity] = useState<Activity | ''>('');
@@ -140,6 +144,19 @@ const Vouchers: React.FC = () => {
   // so a cash↔bank contra never posts to a group; the simplified form lets the operator pick
   // WHICH bank among several. (Fixes: contra posted to a group + no bank choice in Easy mode.)
   const applyTemplate = (tmpl: typeof VOUCHER_TEMPLATES[0]) => {
+    // UX-02: member share capital goes through the Share Register, which moves the member's shares AND
+    // posts the voucher. A bare voucher credited 1102 with no member's shares moving (dividend later blocked).
+    if (tmpl.route) {
+      toast({
+        title: language === 'hi' ? 'शेयर रजिस्टर से दर्ज करें' : 'Record it in the Share Register',
+        description: language === 'hi'
+          ? 'सदस्य की पंक्ति में "शेयर जोड़ें" दबाएँ — इससे सदस्य के शेयर और वाउचर दोनों एक साथ बनते हैं।'
+          : 'Press "Add Shares" on the member\'s row — it records the member\'s shares and the voucher together.',
+        duration: 10000,
+      });
+      navigate(tmpl.route);
+      return;
+    }
     const realBank = bankIds[0] || ACCOUNT_IDS.BANK;
     setSelectedTemplate(tmpl);
     setVoucherType(tmpl.type);
@@ -176,8 +193,20 @@ const Vouchers: React.FC = () => {
         window.clearTimeout(safety);
         setSaving(false);
         setSavedVoucherNo(sv.voucherNo);
-        toast({ title: language === 'hi' ? title.hi : title.en, description: sv.voucherNo });
+        // UX-01: a pending voucher is NOT in the books yet — the toast must not read like a normal save.
+        if (sv.approvalStatus === 'pending') {
+          toast({
+            title: language === 'hi' ? 'अनुमोदन हेतु भेजा गया' : 'Sent for approval',
+            description: language === 'hi'
+              ? `${sv.voucherNo} — मंज़ूरी मिलने तक यह किसी रिपोर्ट या बही में नहीं गिना जाएगा।`
+              : `${sv.voucherNo} — it is not counted in any report or ledger until it is approved.`,
+            duration: 10000,
+          });
+        } else {
+          toast({ title: language === 'hi' ? title.hi : title.en, description: sv.voucherNo });
+        }
         trackEvent('voucher_created', { type: sv.type, mode });
+        setSubmitForApproval(false);   // UX-01: never sticky — each voucher is sent for approval on purpose
         handleClear();
       },
       onFailed: () => { window.clearTimeout(safety); setSaving(false); },
@@ -517,7 +546,7 @@ const Vouchers: React.FC = () => {
       memberId: linkedMemberId || undefined,
       createdBy: user?.name || 'System',
       voucherNo: customNo || undefined,
-      approvalStatus: submitForApproval ? 'pending' : undefined,
+      approvalStatus: approvalOn && submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
       ...activityField,
     }, saveOpts('expert', { hi: 'वाउचर सहेजा गया', en: 'Voucher saved' }));
@@ -549,7 +578,7 @@ const Vouchers: React.FC = () => {
         narration,
         createdBy: user?.name || 'System',
         voucherNo: customNo || undefined,
-        approvalStatus: submitForApproval ? 'pending' : undefined,
+        approvalStatus: approvalOn && submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
         ...activityField,
       }, saveOpts('contra', { hi: 'कोंट्रा वाउचर सहेजा गया', en: 'Contra Voucher saved' }));
@@ -582,7 +611,7 @@ const Vouchers: React.FC = () => {
       memberId: linkedMemberId || undefined,
       createdBy: user?.name || 'System',
       voucherNo: customNo || undefined,
-      approvalStatus: submitForApproval ? 'pending' : undefined,
+      approvalStatus: approvalOn && submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
       ...activityField,
     }, saveOpts('simple', { hi: 'वाउचर सहेजा गया', en: 'Voucher saved' }));
@@ -942,6 +971,7 @@ const Vouchers: React.FC = () => {
                         </div>
                       )}
                       <ActivityTagSelect id="activityTag1" value={activity} onChange={setActivity} />
+                      {approvalOn && (
                       <div className="flex items-center gap-2 pb-2">
                         <input
                           type="checkbox"
@@ -954,13 +984,14 @@ const Vouchers: React.FC = () => {
                           {language === 'hi' ? 'अनुमोदन हेतु भेजें (Maker-Checker)' : 'Submit for Approval (Maker-Checker)'}
                         </label>
                       </div>
+                      )}
                       {cashWarningText && (
                         <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-2">⚠️ {cashWarningText}</p>
                       )}
                       <div className="flex gap-3 pt-2 border-t">
                         <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2" disabled={saving}>
                           <Save className="h-5 w-5" />
-                          {saving ? (language === 'hi' ? 'सेव हो रहा है…' : 'Saving…') : submitForApproval ? (language === 'hi' ? 'अनुमोदन हेतु भेजें' : 'Submit for Approval') : t('save')}
+                          {saving ? (language === 'hi' ? 'सेव हो रहा है…' : 'Saving…') : approvalOn && submitForApproval ? (language === 'hi' ? 'अनुमोदन हेतु भेजें' : 'Submit for Approval') : t('save')}
                         </Button>
                         <Button type="button" variant="outline" size="lg" className="gap-2" onClick={() => { setSelectedTemplate(null); handleClear(); }}>
                           <X className="h-5 w-5" />
@@ -1236,6 +1267,7 @@ const Vouchers: React.FC = () => {
                     )}
 
                     <ActivityTagSelect id="activityTag2" value={activity} onChange={setActivity} />
+                    {approvalOn && (
                     <div className="flex items-center gap-2 pb-2">
                       <input
                         type="checkbox"
@@ -1248,13 +1280,14 @@ const Vouchers: React.FC = () => {
                         {language === 'hi' ? 'अनुमोदन हेतु भेजें (Maker-Checker)' : 'Submit for Approval (Maker-Checker)'}
                       </label>
                     </div>
+                    )}
                     {cashWarningText && (
                       <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-2">⚠️ {cashWarningText}</p>
                     )}
                     <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
                       <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2" disabled={saving || (voucherType !== 'contra' && !linesBalanced)}>
                         <Save className="h-5 w-5" />
-                        {saving ? (language === 'hi' ? 'सेव हो रहा है…' : 'Saving…') : submitForApproval ? (language === 'hi' ? 'अनुमोदन हेतु भेजें' : 'Submit for Approval') : t('save')}
+                        {saving ? (language === 'hi' ? 'सेव हो रहा है…' : 'Saving…') : approvalOn && submitForApproval ? (language === 'hi' ? 'अनुमोदन हेतु भेजें' : 'Submit for Approval') : t('save')}
                       </Button>
                       <Button type="button" variant="outline" size="lg" className="gap-2" onClick={handleClear}>
                         <X className="h-5 w-5" />
@@ -1377,6 +1410,9 @@ const Vouchers: React.FC = () => {
                             {cancelled && <Badge variant="destructive" className="ml-1 text-xs py-0">{language === 'hi' ? 'रद्द' : 'Cancelled'}</Badge>}
                             {v.reversedBy && <Badge className="ml-1 text-xs py-0 bg-amber-100 text-amber-800 border-amber-300">{language === 'hi' ? 'उलटा गया' : 'Reversed'}</Badge>}
                             {v.reversalOf && <Badge className="ml-1 text-xs py-0 bg-blue-100 text-blue-800 border-blue-300">{language === 'hi' ? 'रिवर्सल' : 'Reversal'}</Badge>}
+                            {/* UX-01: a pending voucher is counted nowhere until approved — say so on the row. */}
+                            {!cancelled && v.approvalStatus === 'pending' && <Badge data-testid="voucher-pending-badge" className="ml-1 text-xs py-0 bg-orange-100 text-orange-800 border-orange-300" title={language === 'hi' ? 'मंज़ूरी तक किताबों में नहीं गिना जाता' : 'Not counted in the books until approved'}>{language === 'hi' ? 'लंबित' : 'Pending'}</Badge>}
+                            {!cancelled && v.approvalStatus === 'rejected' && <Badge variant="destructive" className="ml-1 text-xs py-0">{language === 'hi' ? 'अस्वीकृत' : 'Rejected'}</Badge>}
                           </TableCell>
                           <TableCell className={cn('font-medium', cancelled && 'line-through')}>
                             {fmtDate(v.date)}
