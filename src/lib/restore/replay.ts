@@ -44,11 +44,18 @@ import { buildVoucherEntries } from '../voucherUtils';
 import type { Row } from './naturalKeys';
 
 /**
- * The posting rule's output. `narration`, `workOrderId` and `costCentreId` are optional and
- * are compared as absent-equals-null, exactly as `diff.ts` does.
+ * The posting rule's MONEY output: which voucher, which account, how much on which side (and the cost
+ * dimensions). `workOrderId` and `costCentreId` are optional and compared as absent-equals-null, as `diff.ts` does.
+ *
+ * NOT compared (the first real restore, CMS Rania 2026-11-18, refused all 37 vouchers on these):
+ *   • `societyId` — voucher_entries has no such column (the tenant column is `society_id`), so an archive never
+ *     carries it and every real backup "disagreed" on every entry. The server stamps the caller's society on
+ *     every restored row (migration 178), which is where the tenant boundary is enforced.
+ *   • `narration` — descriptive text, not money. The payroll posting writes a per-leg narration into
+ *     voucher_entries ("Net salary payable") that the voucher's own lines do not carry.
  */
 export const REPLAY_FIELDS: readonly string[] = Object.freeze([
-  'id', 'voucherId', 'accountId', 'dr', 'cr', 'narration', 'societyId', 'workOrderId', 'costCentreId',
+  'id', 'voucherId', 'accountId', 'dr', 'cr', 'workOrderId', 'costCentreId',
 ]);
 
 export interface EntryDisagreement {

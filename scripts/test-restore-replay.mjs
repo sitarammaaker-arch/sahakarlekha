@@ -189,8 +189,20 @@ ok(summarizeReplay(changed, true).includes('रोक दिया'), 'and says 
 // ── 6. THE FIELD LIST ────────────────────────────────────────────────────────
 
 ok(Object.isFrozen(REPLAY_FIELDS), 'the compared field list cannot be mutated at runtime');
-for (const f of ['id', 'voucherId', 'accountId', 'dr', 'cr', 'societyId']) {
+for (const f of ['id', 'voucherId', 'accountId', 'dr', 'cr']) {
   ok(REPLAY_FIELDS.includes(f), `${f} is compared`);
+}
+// 2026-11-18 (first real restore, CMS Rania): voucher_entries has no societyId column, and payroll legs carry a
+// narration the voucher lines do not — comparing either refused every real backup. Money fields only.
+ok(!REPLAY_FIELDS.includes('societyId') && !REPLAY_FIELDS.includes('narration'), 'societyId and narration are NOT compared (not money; not in a real archive)');
+{
+  const v = { id: 'PV', isDeleted: false, lines: [{ id: 'a', accountId: '5201', type: 'Dr', amount: 10 }, { id: 'b', accountId: '2103', type: 'Cr', amount: 10 }] };
+  const realArchive = [   // how a real backup carries the rows: society_id (no societyId), a payroll leg narration
+    { id: 'PV-a', voucherId: 'PV', accountId: '5201', dr: 10, cr: 0, narration: 'Salary & wages', society_id: 'S1' },
+    { id: 'PV-b', voucherId: 'PV', accountId: '2103', dr: 0, cr: 10, narration: 'Net salary payable', society_id: 'S1' },
+  ];
+  ok(compareReplay(replayEntries([v], 'S1'), realArchive).ok, 'a real archive row (society_id, leg narration) reproduces');
+  ok(!compareReplay(replayEntries([v], 'S1'), [{ ...realArchive[0], dr: 11 }, realArchive[1]]).ok, 'a money difference still refuses');
 }
 // Deliberately absent, and the module says why.
 ok(!REPLAY_FIELDS.includes('society_id'), 'society_id is NOT compared — it is a storage duplicate');
