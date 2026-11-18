@@ -696,7 +696,7 @@ const RestoreCenter: React.FC = () => {
 
       {/* ── T-35 (client-side): rehearsal — does this backup reproduce today's books? ── */}
       {report?.ok && (
-        <Card className={rehearsal ? healthColor(rehearsal.status === 'passed' ? 'green' : rehearsal.status === 'failed' ? 'red' : 'amber') : ''}>
+        <Card className={rehearsal ? healthColor(rehearsal.status === 'passed' ? 'green' : rehearsalDiffers ? 'amber' : rehearsal.status === 'failed' ? 'red' : 'amber') : ''}>
           <CardHeader className="py-3">
             <CardTitle className="text-base flex items-center gap-2">
               <HeartPulse className="h-4 w-4" />
@@ -716,7 +716,7 @@ const RestoreCenter: React.FC = () => {
 
             {rehearsal && (
               <div className="space-y-2">
-                <p className={`font-semibold ${rehearsal.status === 'passed' ? 'text-green-800' : rehearsal.status === 'failed' ? 'text-red-800' : 'text-amber-900'}`}>
+                <p className={`font-semibold ${rehearsal.status === 'passed' ? 'text-green-800' : rehearsalDiffers ? 'text-amber-900' : rehearsal.status === 'failed' ? 'text-red-800' : 'text-amber-900'}`}>
                   {summarizeRun(rehearsal, hi)}
                 </p>
 
@@ -736,12 +736,12 @@ const RestoreCenter: React.FC = () => {
                 {rehearsalDiffers && (
                   <p className="text-sm text-amber-900" data-testid="rehearsal-differs-info">
                     {hi
-                      ? 'यह बैकअप आज की किताबों से अलग है — restore करने पर किताबें ठीक इस बैकअप जैसी हो जाएँगी। बैकअप अपने-आप में संतुलित है, इसलिए restore किया जा सकता है।'
-                      : 'This backup differs from today\'s books — restoring it makes the books exactly as in this backup. The backup itself is balanced, so it can be restored.'}
+                      ? 'Restore करने पर किताबें ठीक इस बैकअप जैसी हो जाएँगी, इसलिए restore किया जा सकता है।'
+                      : 'Restoring it makes the books exactly as in this backup, so it can be restored.'}
                   </p>
                 )}
                 {rehearsal.status === 'failed' && (
-                  <div className="text-sm text-red-800 space-y-1">
+                  <div className={`text-sm space-y-1 ${rehearsalDiffers ? 'text-amber-900' : 'text-red-800'}`}>
                     {rehearsal.verdict.accounts.length > 0 && (
                       <p>{hi ? 'मेल न खाने वाले खाते' : 'Accounts that differ'}: {rehearsal.verdict.accounts.slice(0, 8).join(', ')}{rehearsal.verdict.accounts.length > 8 ? ` +${rehearsal.verdict.accounts.length - 8}` : ''}</p>
                     )}

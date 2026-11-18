@@ -127,7 +127,14 @@ function baseInput(over = {}) {
   ok(out.status === 'failed', 'a backup missing a voucher the live books have FAILS the rehearsal');
   ok(out.verdict.accounts.includes('5101'), 'and names the account only the live books have');
   ok(out.health.status !== 'green', 'a failed rehearsal is never green');
-  ok(summarizeRun(out, false).includes('stale or incomplete'), 'the summary explains the likely cause');
+  // The backup itself balances — it is a point in time, not broken. The headline says "differs"
+  // (restorable), never "failed … stale or incomplete" (trial restore on a practice society, 2026-11-18).
+  ok(out.restored.balanced === true, 'the stale backup itself balances');
+  ok(summarizeRun(out, false).includes('differs from today') && summarizeRun(out, false).includes('itself is balanced'), 'a balanced stale backup reads as "differs", not "failed"');
+  ok(!/failed|stale or incomplete/.test(summarizeRun(out, false)), 'and does not alarm with "failed" / "stale or incomplete"');
+  ok(summarizeRun(out, true).includes('आज की किताबों से अलग'), 'and in Hindi (RULE 7)');
+  const broken = { ...out, restored: { ...out.restored, balanced: false } };
+  ok(summarizeRun(broken, false).includes('stale or incomplete'), 'an UNBALANCED backup still reads as failed — the likely cause is explained');
 }
 
 // A stock difference is caught too.
