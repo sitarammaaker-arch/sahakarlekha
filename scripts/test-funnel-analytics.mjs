@@ -62,7 +62,7 @@ ok('ResetPassword emits password_reset_success after the password is saved', has
 for (const e of ['sign_up_start', 'sign_up_step', 'sign_up_failure', 'sign_up']) ok(`Register emits ${e}`, has(reg, e));
 const reasons = [...reg.matchAll(/fail\('([a-z_]+)', [12]\)/g)].map((m) => m[1]);
 ok(`sign_up_failure reasons are fixed codes (${[...new Set(reasons)].join(', ')})`, ['required', 'email_format', 'password_mismatch', 'password_short', 'referral_shape', 'network'].every((r) => reasons.includes(r)));
-ok('a server refusal is reported as a known code or "server" — never the message text', /fail\(code === 'duplicate_registration' \|\| code === 'duplicate_email' \|\| code === 'society_exists' \? code : 'server', 2\);/.test(reg));
+ok('a server refusal is reported as a known code or "server" — never the message text', /fail\(code === 'duplicate_registration' \|\| code === 'duplicate_email' \|\| code === 'society_exists' \|\| code === 'rate_limited' \? code : 'server', 2\);/.test(reg));
 ok('sign_up says the society type, whether a referral code was used and how the visitor arrived', /trackEvent\('sign_up', \{ method: 'email', society_type: societyType, has_referral: !!refCode, entry \}\)/.test(reg));
 ok('sign_up is still sent only after the society exists', reg.indexOf("trackEvent('sign_up',") > reg.indexOf("rpc('register_society'"));
 ok('the first dashboard view of an empty society is counted once per session', /trackEvent\('dashboard_first_view'\)/.test(read('src/components/dashboard/OnboardingChecklist.tsx')) && /sl\.ga\.firstDashboard/.test(read('src/components/dashboard/OnboardingChecklist.tsx')));

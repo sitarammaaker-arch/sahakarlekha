@@ -257,8 +257,11 @@ const Register: React.FC = () => {
       if (rpcError || !result.ok) {
         const code = result.error_code;
         // A known code, or 'server' — never the server's message text.
-        fail(code === 'duplicate_registration' || code === 'duplicate_email' || code === 'society_exists' ? code : 'server', 2);
-        if (code === 'duplicate_registration') {
+        fail(code === 'duplicate_registration' || code === 'duplicate_email' || code === 'society_exists' || code === 'rate_limited' ? code : 'server', 2);
+        if (code === 'rate_limited') {
+          // MAIL-01 (migration 181): signup is limited per network, per email and per hour.
+          setError(L('अभी बहुत सारे पंजीकरण प्रयास हुए हैं — कृपया एक घंटे बाद फिर कोशिश करें, या WhatsApp पर हमसे बात करें।', 'Too many registration attempts right now — please try again in an hour, or message us on WhatsApp.'));
+        } else if (code === 'duplicate_registration') {
           setError(L('यह पंजीकरण संख्या पहले से दर्ज है — कृपया दूसरी पंजीकरण संख्या डालें।', 'Registration number already exists. Please use a different registration number.'));
         } else if (code === 'duplicate_email') {
           setError(L('यह ईमेल पहले से पंजीकृत है — कृपया दूसरा ईमेल डालें।', 'This email is already registered. Please use a different email.'));
