@@ -190,6 +190,13 @@ function resolveLineItem(
       break;
   }
 
+  // RPT-05 (audit 2026-11-17): a one-account line prints THAT account's own name. The labels above were fixed per
+  // account id, but charts reuse ids — in the PACS chart 3303 is "Short-term Loans (KCC)" and 3316 "Overdue / NPA
+  // Loans", which printed as "Sundry Debtors" and "Stock in Transit" while the tie check still passed.
+  if (src.kind === 'account' && src.accountIds.length === 1) {
+    const acc = ctx.accounts.find(a => a.id === src.accountIds[0]);
+    if (acc?.name) return { ...item, label: acc.name, labelHi: acc.nameHi || acc.name, currentYear, previousYear };
+  }
   return { ...item, currentYear, previousYear };
 }
 

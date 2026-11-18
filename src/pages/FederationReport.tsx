@@ -20,6 +20,7 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 import { loanOutstanding, kccOutstanding } from '@/lib/memberSnapshot';
 import { isCountedVoucher } from '@/lib/countedVoucher';
+import { isDepositLiabilityName } from '@/lib/depositLiabilityName';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -102,8 +103,8 @@ const FederationReport: React.FC = () => {
   // ── Section 4: Deposits ─────────────────────────────────────────────────────
   const depositTotal = useMemo(() => {
     return accounts
-      .filter(a => !a.isGroup && a.type === 'liability' &&
-        /deposit|fd|rd/i.test(a.name))
+      // RPT-06: whole-word deposit names only; a loan / borrowing (e.g. "Loan from DCCB/NABARD") is never a deposit.
+      .filter(a => !a.isGroup && a.type === 'liability' && isDepositLiabilityName(a.name))
       .reduce((s, a) => {
         const b = getBalance(a.id);
         return s + (b > 0 ? b : 0);

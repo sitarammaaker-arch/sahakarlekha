@@ -2455,6 +2455,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     toastRef.current({ title: tr(hi.title, en.title), description: tr(hi.description, en.description), variant: 'destructive', duration: 12000 });
     return true;
   };
+  // RPT-02 (audit 2026-11-17): a sale's / purchase's own vouchers (the main voucher and its GST / TDS journals) are
+  // changed only through Sale / Purchase Management. Cancel was already blocked; REVERSE and edit were not, so the
+  // ledger could reverse a sale's tax while the sale row — and GSTR-1 / 3B built from it — kept showing it.
+  // Returns true (and toasts) when BLOCKED.
+  const guardStockDocumentVoucher = (id: string, what: { hi: string; en: string }): boolean => {
+    const live = (x: { isDeleted?: boolean }) => !x.isDeleted;
+    const sale = salesRef.current.find(x => live(x as { isDeleted?: boolean }) && (x.voucherId === id || (x.gstVoucherIds ?? []).includes(id)));
+    const purchase = sale ? undefined : purchasesRef.current.find(x => live(x as { isDeleted?: boolean }) && (x.voucherId === id || (x.taxVoucherIds ?? []).includes(id)));
+    if (!sale && !purchase) return false;
+    const docHi = sale ? `बिक्री ${sale.saleNo}` : `खरीद ${purchase!.purchaseNo}`;
+    const docEn = sale ? `sale ${sale.saleNo}` : `purchase ${purchase!.purchaseNo}`;
+    const screenHi = sale ? 'Sale Management' : 'Purchase Management';
+    toastRef.current({
+      title: tr(`वाउचर ${what.hi} नहीं होगा`, `Voucher cannot be ${what.en}`),
+      description: tr(`यह ${docHi} का वाउचर है। उसे ${screenHi} से बदलें या हटाएँ — तभी stock, GST रिपोर्ट और बही साथ ठीक रहेंगे।`, `This is a voucher of ${docEn}. Change or delete it from ${screenHi} — only then do stock, the GST reports and the ledger stay together.`),
+      variant: 'destructive', duration: 12000,
+    });
+    return true;
+  };
   const guardSalaryVoucher = (id: string, what: string): boolean => {
     const slip = salaryRecordsRef.current.find(r => r.voucherId === id || r.accrualVoucherId === id);
     if (!slip) return false;
@@ -2469,6 +2488,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines' | 'costCentreId'>>, opts?: { viaParent?: boolean }): boolean => {
     if (guardPermission('update', tr('वाउचर बदलने', 'change vouchers'))) return false;   // ECR-06: role gate
     if (guardSystemOwnedVoucher(id, { hi: 'बदला', en: 'changed' })) return false;
+    if (!opts?.viaParent && guardStockDocumentVoucher(id, { hi: 'बदला', en: 'changed' })) return false;
     if (!opts?.viaParent && guardSalaryVoucher(id, tr('बदला', 'changed'))) return false;
     if (guardFYLocked()) return false;
     const current = vouchersRef.current.find(v => v.id === id);
@@ -2977,6 +2997,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (current.reversalOf) { toastRef.current({ title: tr('यह स्वयं reversal है', 'This is itself a reversal'), description: tr('Reversal entry को दोबारा reverse नहीं किया जाता।', 'A reversal entry cannot be reversed again.'), variant: 'destructive' }); return null; }
     if (isEngineVoucher(current) && !opts?.engine) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return null; }
     if (guardSystemOwnedVoucher(id, { hi: 'reverse', en: 'reversed' })) return null;
+    if (!opts?.engine && guardStockDocumentVoucher(id, { hi: 'reverse', en: 'reversed' })) return null;
     if (guardSalaryVoucher(id, 'reverse')) return null;
     const revDate = new Date().toISOString().split('T')[0];
     if (guardPeriodLock(revDate)) return null; // reversal must post into an open period

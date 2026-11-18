@@ -94,7 +94,8 @@ ok(near(x.find((i) => i.isTotal).currentYear, 4524), 'X: net profit 4,524');
   const { hideZeroLines } = await imp('src/lib/auditScheduleTie.ts');
   const shown = hideZeroLines(schedules);
   const I = shown.find((s) => s.id === 'sch-I').items;
-  ok(I.length === 2 && I[0].label === 'Individual Member Share Capital' && I[1].isTotal, `I: only the share line + total (${I.map((i) => i.label).join(' | ')})`);
+  // RPT-05 (2026-11-17): a one-account line prints the society's own account name (here the chart's 1102).
+  ok(I.length === 2 && I[0].source.accountIds?.[0] === '1102' && I[0].label === A('1102').name && I[1].isTotal, `I: only the share line + total (${I.map((i) => i.label).join(' | ')})`);
   const III = shown.find((s) => s.id === 'sch-III').items;
   ok(III.length === 1 && III[0].isTotal && III[0].currentYear === 0, 'an empty schedule keeps just its total (Nil)');
   ok(shown.every((s) => s.items.filter((i) => !i.isTotal).every((i) => Math.abs(i.currentYear) >= 0.005 || Math.abs(i.previousYear) >= 0.005)), 'no nil line anywhere');

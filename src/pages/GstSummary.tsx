@@ -21,6 +21,8 @@ import { partyGstin, societyStateCode, placeOfSupply } from '@/lib/gstStates';
 import { INDIAN_STATES } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
 import { computeRCM, type RcmPurchase } from '@/lib/rcm';
+import { gstLedgerIds, gstLedgerTie } from '@/lib/gstLedgerTie';
+import { getVoucherLines } from '@/lib/voucherUtils';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -36,7 +38,7 @@ function fyBounds(fy: string): { from: string; to: string } {
 }
 
 export default function GstSummary() {
-  const { sales, purchases, customers, society, stockItems, matchesActiveBranch } = useData();
+  const { sales, purchases, customers, society, stockItems, matchesActiveBranch, vouchers, accounts } = useData();
   const { salesReturns, purchaseReturns } = useConsumerData();
   const { toast } = useToast();
   const { language } = useLanguage();
@@ -667,6 +669,19 @@ export default function GstSummary() {
     });
   };
 
+  // RPT-01: GST in the ledger that this report (built from sale / purchase / return rows) does not count.
+  const ledgerTie = useMemo(() => {
+    const counted = new Set<string>();
+    const docIds = new Set<string>();
+    for (const x of sales) { if ((x as { isDeleted?: boolean }).isDeleted) continue; docIds.add(x.id); if (x.voucherId) counted.add(x.voucherId); for (const g of x.gstVoucherIds ?? []) counted.add(g); }
+    for (const x of purchases) { if ((x as { isDeleted?: boolean }).isDeleted) continue; docIds.add(x.id); if (x.voucherId) counted.add(x.voucherId); for (const g of x.taxVoucherIds ?? []) counted.add(g); }
+    for (const x of [...salesReturns, ...purchaseReturns]) { if (x.isDeleted) continue; docIds.add(x.id); if (x.voucherId) counted.add(x.voucherId); }
+    for (const v of vouchers) if (v.refId && docIds.has(v.refId)) counted.add(v.id);
+    const tieVouchers = vouchers.map(v => ({ id: v.id, voucherNo: v.voucherNo, date: v.date, narration: v.narration, isDeleted: v.isDeleted, approvalStatus: (v as { approvalStatus?: string }).approvalStatus, lines: getVoucherLines(v) }));
+    return gstLedgerTie(tieVouchers, gstLedgerIds(accounts), counted, fromDate, toDate);
+  }, [sales, purchases, salesReturns, purchaseReturns, vouchers, accounts, fromDate, toDate]);
+  const ledgerGap = ledgerTie.outputNotInReport > 0.005 || ledgerTie.inputNotInReport > 0.005;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -772,6 +787,42 @@ export default function GstSummary() {
           </CardContent>
         </Card>
       </div>
+
+      {ledgerGap && (
+        <Card className="border-amber-300 bg-amber-50" data-testid="gst-ledger-gap">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2 text-amber-900">
+              <AlertTriangle className="h-4 w-4" />
+              {hi ? 'बही में GST है जो इस रिपोर्ट में नहीं गिना गया — रिटर्न भरने से पहले जोड़ें' : 'The ledger has GST this report does not count — add it before filing'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-amber-900">
+            <p>
+              {hi
+                ? 'यह रिपोर्ट बिक्री / खरीद / वापसी की प्रविष्टियों से बनती है। नीचे के वाउचर (जैसे मेंटेनेंस बिल, भाड़ा, हाथ से बनी journal) बही में GST दर्ज करते हैं पर किसी बिक्री / खरीद से जुड़े नहीं हैं, इसलिए GSTR-1 / GSTR-3B में नहीं आए। इन्हें रिटर्न में हाथ से जोड़ें या बिक्री / खरीद के रूप में दर्ज करें।'
+                : 'This report is built from sale / purchase / return entries. The vouchers below (e.g. maintenance bills, freight, manual journals) record GST in the ledger but are not linked to any sale or purchase, so they are not in GSTR-1 / GSTR-3B. Add them to the return by hand, or record them as a sale / purchase.'}
+            </p>
+            {ledgerTie.outputRows.length > 0 && (
+              <div>
+                <p className="font-semibold">{hi ? 'आउटपुट GST जो रिपोर्ट में नहीं' : 'Output GST not in the report'}: {fmt(ledgerTie.outputNotInReport)} ({ledgerTie.outputRows.length})</p>
+                <ul className="list-disc pl-5">
+                  {ledgerTie.outputRows.slice(0, 10).map(r => <li key={`o-${r.voucherId}`}>{fmtDate(r.date)} · {r.voucherNo} · {fmt(r.amount)}{r.narration ? ` · ${r.narration.slice(0, 60)}` : ''}</li>)}
+                  {ledgerTie.outputRows.length > 10 && <li>{hi ? `…और ${ledgerTie.outputRows.length - 10}` : `…and ${ledgerTie.outputRows.length - 10} more`}</li>}
+                </ul>
+              </div>
+            )}
+            {ledgerTie.inputRows.length > 0 && (
+              <div>
+                <p className="font-semibold">{hi ? 'इनपुट क्रेडिट (ITC) जो रिपोर्ट में नहीं' : 'Input credit (ITC) not in the report'}: {fmt(ledgerTie.inputNotInReport)} ({ledgerTie.inputRows.length})</p>
+                <ul className="list-disc pl-5">
+                  {ledgerTie.inputRows.slice(0, 10).map(r => <li key={`i-${r.voucherId}`}>{fmtDate(r.date)} · {r.voucherNo} · {fmt(r.amount)}{r.narration ? ` · ${r.narration.slice(0, 60)}` : ''}</li>)}
+                  {ledgerTie.inputRows.length > 10 && <li>{hi ? `…और ${ledgerTie.inputRows.length - 10}` : `…and ${ledgerTie.inputRows.length - 10} more`}</li>}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main tabs — 4 tabs */}
       <Tabs defaultValue="overview">
