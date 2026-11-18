@@ -16,12 +16,15 @@ export interface VoucherTemplate {
   debitAccountId: string;
   creditAccountId: string;
   category: 'receipt' | 'payment' | 'contra';
+  /** UX-02: when set, the tile opens this screen instead of a plain voucher form — the money must move
+   *  through a register that also moves the member's record (a bare voucher would leave them apart). */
+  route?: string;
 }
 
 // 15 common cooperative society transactions
 export const VOUCHER_TEMPLATES: VoucherTemplate[] = [
   // ── Receipt (Paisa Aaya) ──────────────────────────────────────────────────
-  { id: 'share_cap',   label: 'Member Share Capital',  labelHi: 'सदस्य शेयर पूंजी',    icon: '👤', type: 'receipt', debitAccountId: '3301', creditAccountId: '1102', category: 'receipt' },
+  { id: 'share_cap',   label: 'Member Share Capital',  labelHi: 'सदस्य शेयर पूंजी',    icon: '👤', type: 'receipt', debitAccountId: '3301', creditAccountId: '1102', category: 'receipt', route: '/share-register' },
   { id: 'adm_fee',     label: 'Admission Fee',         labelHi: 'प्रवेश शुल्क',         icon: '🎟️', type: 'receipt', debitAccountId: '3301', creditAccountId: '4407', category: 'receipt' },
   { id: 'fert_sale',   label: 'Fertilizer/Seed Sale',  labelHi: 'उर्वरक/बीज बिक्री',   icon: '🌾', type: 'receipt', debitAccountId: '3301', creditAccountId: '4101', category: 'receipt' },
   { id: 'commission',  label: 'Commission Received',   labelHi: 'कमीशन/दामी आई',        icon: '💰', type: 'receipt', debitAccountId: '3301', creditAccountId: '4201', category: 'receipt' },

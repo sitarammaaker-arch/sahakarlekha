@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from '@/components/LocalLink';
 import { asDayCount, DAY_COUNT_OPTIONS, type DayCountBasis } from '@/lib/interestDayCount';
 import { resolveDepositLiabilityAccount } from '@/lib/depositEngine';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -440,54 +441,6 @@ const SocietySetup: React.FC = () => {
     if (!window.confirm(language === 'hi' ? `"${name}" खाता हटाएं?` : `Delete account "${name}"?`)) return;
     // deleteAccount bails with its own toast on a guard — only announce a delete that started.
     if (deleteAccount(id)) toast({ title: language === 'hi' ? 'खाता हटाया गया' : 'Account deleted' });
-  };
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleBackup = () => {
-    const KEYS = [
-      'sahayata_vouchers', 'sahayata_members', 'sahayata_accounts', 'sahayata_society',
-      'sahayata_counters', 'sahayata_loans', 'sahayata_assets', 'sahayata_loan_counter',
-      'sahayata_asset_counter', 'sahayata_audit_objections', 'sahayata_objection_counter',
-    ];
-    const backup: Record<string, unknown> = { _version: 1, _exportedAt: new Date().toISOString() };
-    KEYS.forEach(k => {
-      const val = localStorage.getItem(k);
-      if (val) backup[k] = JSON.parse(val);
-    });
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sahayata_backup_${society.financialYear}_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: language === 'hi' ? 'बैकअप तैयार' : 'Backup ready', description: language === 'hi' ? 'डेटा फ़ाइल डाउनलोड हो रही है' : 'Data file downloaded' });
-  };
-
-  const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        const data = JSON.parse(ev.target?.result as string);
-        const KEYS = [
-          'sahayata_vouchers', 'sahayata_members', 'sahayata_accounts', 'sahayata_society',
-          'sahayata_counters', 'sahayata_loans', 'sahayata_assets', 'sahayata_loan_counter',
-          'sahayata_asset_counter', 'sahayata_audit_objections', 'sahayata_objection_counter',
-        ];
-        KEYS.forEach(k => {
-          if (data[k] !== undefined) localStorage.setItem(k, JSON.stringify(data[k]));
-        });
-        toast({ title: language === 'hi' ? 'डेटा पुनर्स्थापित' : 'Data restored', description: language === 'hi' ? 'पृष्ठ रीफ्रेश हो रहा है…' : 'Refreshing page…' });
-        setTimeout(() => window.location.reload(), 1200);
-      } catch {
-        toast({ title: language === 'hi' ? 'त्रुटि' : 'Error', description: language === 'hi' ? 'अमान्य बैकअप फ़ाइल' : 'Invalid backup file', variant: 'destructive' });
-      }
-    };
-    reader.readAsText(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // Leaf accounts only (no group headers) for balance entry
@@ -1429,84 +1382,27 @@ const SocietySetup: React.FC = () => {
             </CardContent>
           </Card>
         </TabsContent>
-        {/* Backup & Restore */}
+        {/* UX-06: the real backup lives on its own pages. This tab used to download eleven browser
+            (localStorage) keys — no sales, purchases, stock or deposits — and called it "बैकअप तैयार",
+            and its "restore" wrote those keys back over the browser's copy. Both are gone. */}
         <TabsContent value="backup" className="mt-6">
-          <div className="space-y-6">
-            {/* Export */}
-            <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Download className="h-5 w-5 text-primary" />
-                  {language === 'hi' ? 'डेटा बैकअप' : 'Data Backup'}
-                </CardTitle>
-                <CardDescription>
-                  {language === 'hi'
-                    ? 'सभी डेटा (वाउचर, सदस्य, खाते, ऋण, संपत्ति) एक JSON फ़ाइल में डाउनलोड करें'
-                    : 'Download all data (vouchers, members, accounts, loans, assets) as a JSON file'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center p-4 rounded-lg bg-muted/50">
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{language === 'hi' ? 'पूर्ण डेटा बैकअप' : 'Full Data Backup'}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {language === 'hi'
-                        ? `फ़ाइल नाम: sahayata_backup_${society.financialYear}_<date>.json`
-                        : `Filename: sahayata_backup_${society.financialYear}_<date>.json`}
-                    </p>
-                  </div>
-                  <Button onClick={handleBackup} className="gap-2 shrink-0">
-                    <Download className="h-4 w-4" />
-                    {language === 'hi' ? 'बैकअप डाउनलोड करें' : 'Download Backup'}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Restore */}
-            <Card className="shadow-card border-destructive/30">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-destructive">
-                  <Upload className="h-5 w-5" />
-                  {language === 'hi' ? 'डेटा पुनर्स्थापना' : 'Data Restore'}
-                </CardTitle>
-                <CardDescription>
-                  {language === 'hi'
-                    ? 'पहले से डाउनलोड की गई बैकअप फ़ाइल से डेटा पुनर्स्थापित करें'
-                    : 'Restore data from a previously downloaded backup file'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-start gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
-                  <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-                  <p className="text-sm text-destructive">
-                    {language === 'hi'
-                      ? 'चेतावनी: पुनर्स्थापना से वर्तमान सभी डेटा बदल जाएगा। पहले बैकअप लें।'
-                      : 'Warning: Restoring will replace ALL current data. Take a backup first.'}
-                  </p>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center p-4 rounded-lg bg-muted/50">
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{language === 'hi' ? 'बैकअप फ़ाइल चुनें (.json)' : 'Select backup file (.json)'}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {language === 'hi' ? 'केवल sahayata बैकअप फ़ाइलें स्वीकार की जाती हैं' : 'Only Sahayata backup files are accepted'}
-                    </p>
-                  </div>
-                  <Button variant="destructive" className="gap-2 shrink-0" onClick={() => fileInputRef.current?.click()}>
-                    <Upload className="h-4 w-4" />
-                    {language === 'hi' ? 'फ़ाइल से पुनर्स्थापित करें' : 'Restore from File'}
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".json"
-                    className="hidden"
-                    onChange={handleRestore}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <Card className="shadow-card" data-testid="setup-backup-links">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Download className="h-5 w-5 text-primary" />
+                {language === 'hi' ? 'बैकअप और restore' : 'Backup and restore'}
+              </CardTitle>
+              <CardDescription>
+                {language === 'hi'
+                  ? 'पूरा बैकअप (.slbak) सर्वर के डेटा से बनता है — हर वाउचर, सदस्य, बिक्री, खरीद, स्टॉक और जमा सहित। सर्वर हर घंटे भी अपने-आप बैकअप लेता है।'
+                  : 'A full backup (.slbak) is built from the server data — every voucher, member, sale, purchase, stock and deposit. The server also takes one automatically every hour.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col sm:flex-row gap-3">
+              <Button asChild className="gap-2"><Link to="/backup-restore"><Download className="h-4 w-4" />{language === 'hi' ? 'बैकअप बनाएँ / डाउनलोड करें' : 'Create / download a backup'}</Link></Button>
+              <Button asChild variant="outline" className="gap-2"><Link to="/restore-center"><Upload className="h-4 w-4" />{language === 'hi' ? 'बैकअप से restore (Restore Center)' : 'Restore from a backup (Restore Center)'}</Link></Button>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

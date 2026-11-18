@@ -21,6 +21,7 @@
     "test:year-end-guards": "node scripts/test-year-end-guards.mjs",
     "test:statutory-report-guards": "node scripts/test-statutory-report-guards.mjs",
     "test:restore-server": "node scripts/test-restore-server.mjs",
+    "test:ux-p0-quick": "node scripts/test-ux-p0-quick.mjs",
     "test:backup-placement-config": "node scripts/test-backup-placement-config.mjs",
     "test:jwt-role-helpers": "node scripts/test-jwt-role-helpers.mjs",
     "test:mfa-pending": "node scripts/test-mfa-pending.mjs",

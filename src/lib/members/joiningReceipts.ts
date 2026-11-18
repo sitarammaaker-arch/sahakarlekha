@@ -85,6 +85,39 @@ export function planJoiningReceipts(
   return { ...base, mode: 'post', receipts };
 }
 
+/**
+ * UX-03 — the live line under the add-member form's admission date. Built from the SAME plan the
+ * save posts, so the form can never promise a receipt the save will not make (RULE 2). An empty
+ * date says "choose it" — the form used to default to today, which silently booked a cash receipt
+ * for every old member copied from the register.
+ */
+export function joiningPreviewLine(
+  member: JoiningMember,
+  opts: { financialYear: string; today: string; bankAccountId?: string | null },
+  hi = true,
+): { tone: 'warn' | 'info' | 'muted'; text: string } {
+  const rs = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+  if (!(member.joinDate || '').slice(0, 10)) {
+    return { tone: 'warn', text: hi
+      ? 'दाख़िला तिथि चुनें — इसी से तय होगा कि इस वर्ष की रसीद बनेगी (नया सदस्य) या नहीं (पुराना सदस्य)।'
+      : 'Choose the admission date — it decides whether a receipt is made this year (new member) or not (old member).' };
+  }
+  const plan = planJoiningReceipts(member, opts);
+  if (plan.mode === 'historical') {
+    return { tone: 'info', text: hi
+      ? `पुराना सदस्य (इस वित्तीय वर्ष से पहले) — कोई रसीद नहीं बनेगी; ${rs(plan.historicalShare + plan.historicalAdmission)} opening balance में रखें।`
+      : `Old member (before this financial year) — no receipt will be made; carry ${rs(plan.historicalShare + plan.historicalAdmission)} in the opening balances.` };
+  }
+  if (plan.mode === 'post') {
+    const amt = plan.receipts.reduce((t, r) => t + r.amount, 0);
+    const where = plan.debitAccountId === CASH_ACCOUNT ? (hi ? 'नकद' : 'cash') : (hi ? 'बैंक' : 'bank');
+    return { tone: 'warn', text: hi
+      ? `इस वर्ष की रसीद बनेगी: ${rs(amt)} (${where}), तिथि ${plan.date}। पुराना सदस्य हो तो असली दाख़िला तिथि भरें।`
+      : `A receipt will be made this year: ${rs(amt)} (${where}), dated ${plan.date}. For an old member, enter the real admission date.` };
+  }
+  return { tone: 'muted', text: hi ? 'शेयर / प्रवेश शुल्क नहीं — कोई रसीद नहीं बनेगी।' : 'No share or admission fee — no receipt will be made.' };
+}
+
 /** Totals for a batch (the importer's end-of-run summary) — same rule as each single add. */
 export function summariseJoiningPlans(plans: readonly JoiningReceiptPlan[]) {
   const historical = plans.filter((p) => p.mode === 'historical');

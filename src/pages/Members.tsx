@@ -57,6 +57,8 @@ import { nomineeCountWarning, certificateNoTakenBy } from '@/lib/members/shareRu
 import { validateStatusChange, liabilityUntil, isExit, deathSettlement } from '@/lib/members/cessation';
 
 import { ageOn } from '@/lib/members/voters';
+import { joiningPreviewLine } from '@/lib/members/joiningReceipts';
+import { defaultBankAccountId } from '@/lib/storage';
 import { downloadExcel } from '@/lib/exportUtils';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
@@ -79,7 +81,8 @@ const CASTE_OPTIONS: { value: CasteCategory; label: string; labelHi: string }[] 
 const EMPTY_FORM = {
   memberId: '', name: '', fatherName: '', address: '', phone: '',
   shareCapital: '', admissionFee: '', memberType: 'member' as MemberType,
-  joinDate: todayStr(), status: 'active' as MemberStatus,
+  // UX-03: no default — "today" silently booked a cash receipt for every old member copied from the register.
+  joinDate: '', status: 'active' as MemberStatus,
   age: '', occupation: '', caste: '' as CasteCategory | '',
   postOffice: '', tehsil: '', district: '', state: '', pinCode: '',
   paymentMode: 'cash' as 'cash' | 'cheque' | 'online',
@@ -109,9 +112,11 @@ interface MemberFormProps {
   onPhoto: (file: File | null) => void;
   existingPhotoUrl?: string | null;
   onPhotoError: (message: string) => void;
+  /** UX-03 (add only): what the save will post, shown live under the admission date. */
+  joining?: { financialYear: string; today: string; bankAccountId: string | null };
 }
 
-const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onSubmit, submitLabel, onCancel, isEdit, photoFile, onPhoto, existingPhotoUrl, onPhotoError }) => {
+const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onSubmit, submitLabel, onCancel, isEdit, photoFile, onPhoto, existingPhotoUrl, onPhotoError, joining }) => {
   const hi = language === 'hi';
   const f = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
   // ECR-16: multiple-nominee editor helpers (functional updates → no stale-closure lost writes)
@@ -137,9 +142,21 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
         <Input value={form.memberId} onChange={e => f('memberId', e.target.value)} placeholder="M001" />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs">{hi ? 'दाख़िला तिथि (सदस्य बनने की तिथि)' : 'Admission date'}</Label>
-        <Input type="date" value={form.joinDate} onChange={e => f('joinDate', e.target.value)} />
+        <Label className="text-xs">{hi ? 'दाख़िला तिथि (सदस्य बनने की तिथि)' : 'Admission date'}{!isEdit && ' *'}</Label>
+        <Input type="date" value={form.joinDate} onChange={e => f('joinDate', e.target.value)} required={!isEdit} data-testid="member-join-date" />
       </div>
+      {!isEdit && joining && (() => {
+        const line = joiningPreviewLine({
+          name: form.name, joinDate: form.joinDate, shareCapital: Number(form.shareCapital) || 0,
+          admissionFee: Number(form.admissionFee) || 0, paymentMode: form.paymentMode,
+        }, joining, hi);
+        return (
+          <p data-testid="member-receipt-preview"
+            className={`sm:col-span-2 text-xs rounded px-2 py-1 ${line.tone === 'warn' ? 'bg-amber-50 text-amber-900' : line.tone === 'info' ? 'bg-blue-50 text-blue-900' : 'text-muted-foreground'}`}>
+            {line.text}
+          </p>
+        );
+      })()}
     </div>
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="space-y-1">
@@ -414,7 +431,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ form, setForm, language, t, onS
 const Members: React.FC = () => {
   const { t, language } = useLanguage();
   const { can, user } = useAuth();
-  const { members: allMembers, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks, matchesActiveBranch, loans, kccLoans, approveShareRefund, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl } = useData();
+  const { members: allMembers, accounts, addMember, updateMember, changeMemberStatus, deleteMember, approveMember, rejectMember, getMemberLedger, society, getEntityLinks, matchesActiveBranch, loans, kccLoans, approveShareRefund, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl } = useData();
   // ECR-17 Phase 4: scope the member list to the active branch ('all' → every member).
   const members = allMembers.filter(m => matchesActiveBranch(m.branchId));
   const { housingFlats } = useHousingData();
@@ -590,6 +607,11 @@ const Members: React.FC = () => {
     e.preventDefault();
     if (!form.name) {
       toast({ title: hi ? 'कृपया आवश्यक फ़ील्ड भरें' : 'Please fill required fields', variant: 'destructive' });
+      return;
+    }
+    // UX-03: the admission date decides whether a cash receipt is booked — never assume "today".
+    if (!form.joinDate) {
+      toast({ title: hi ? 'दाख़िला तिथि चुनें' : 'Choose the admission date', description: hi ? 'पुराने सदस्य की असली दाख़िला तिथि भरें — इस वर्ष की तिथि पर नकद रसीद बनती है।' : 'Enter the real admission date of an old member — a date in this year books a cash receipt.', variant: 'destructive' });
       return;
     }
     if (phoneError(form.phone)) { toast({ title: phoneError(form.phone)!, variant: 'destructive' }); return; }
@@ -1093,7 +1115,8 @@ const Members: React.FC = () => {
                 <DialogDescription>{hi ? 'जिस सदस्य को समिति स्वीकृत कर चुकी है। नए व्यक्ति के लिए "नया आवेदन" चुनें।' : 'A member the committee has already admitted. For a new person, choose "New application".'}</DialogDescription>
               </DialogHeader>
               <MemberForm form={form} setForm={setForm} language={language} t={t} onSubmit={handleAdd} submitLabel={t('save')} onCancel={() => { setIsAddOpen(false); setForm(EMPTY_FORM); setFormPhoto(null); }}
-                photoFile={formPhoto} onPhoto={setFormPhoto} onPhotoError={photoError} />
+                photoFile={formPhoto} onPhoto={setFormPhoto} onPhotoError={photoError}
+                joining={{ financialYear: society.financialYear || '', today, bankAccountId: defaultBankAccountId(accounts) || null }} />
             </DialogContent>
           </Dialog>
         </div>
