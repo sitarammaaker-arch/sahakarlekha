@@ -412,7 +412,10 @@ const RestoreCenter: React.FC = () => {
     }
   }
 
-  const canDryRun = stage === 'verified' && !!compat?.safe && loadProblems.length === 0;
+  // A verified archive stays verified after a dry run: 'dry-run' only means a diff is on screen. Gating on
+  // stage === 'verified' alone locked the Rehearse button (and a re-run of the dry run) as soon as the first dry
+  // run finished — the first trial restore on the practice society could not proceed (2026-11-18).
+  const canDryRun = (stage === 'verified' || stage === 'dry-run') && !!compat?.safe && loadProblems.length === 0;
   const changed = diff?.entities.filter(e => e.insert || e.update || e.conflicts.length || e.orphan) ?? [];
   const healthColor = (s: string) => (s === 'green' ? 'border-green-300 text-green-800' : s === 'red' ? 'border-red-300 text-red-800' : 'border-amber-300 text-amber-900');
 
