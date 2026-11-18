@@ -76,6 +76,30 @@ const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  �
   ok(/drop function if exists public\.restore_commit/.test(d) && /drop table if exists public\.restore_staging/.test(d), 'down removes everything');
 }
 
+// ── 2b. Migration 179: production's vouchers."createdAt" is a timestamp. 178 built the derived-rows loop as a
+// UNION whose second branch types "createdAt" as text, so every real commit failed with
+// "UNION types timestamp without time zone and text cannot be matched" (trial restore, 2026-11-18; nothing written).
+// 179 = 178's restore_commit with _rv carrying "createdAt" as text — and no other change.
+{
+  const fnOf = (sql) => {
+    const s = sql.replace(/\r\n/g, '\n');
+    const a = s.indexOf('create or replace function public.restore_commit(');
+    const end = 'grant execute on function public.restore_commit(uuid, int, text, text, jsonb) to authenticated;';
+    return s.slice(a, s.indexOf(end) + end.length);
+  };
+  const f178 = fnOf(read('supabase/migrations/178_restore_commit_server.sql'));
+  const f179 = fnOf(read('supabase/migrations/179_restore_commit_createdat_text.sql'));
+  const d179 = fnOf(read('supabase/migrations/179_restore_commit_createdat_text_down.sql'));
+  const rv = f179.slice(f179.indexOf('create temp table _rv'), f179.indexOf('from public.vouchers v where'));
+  ok(/v\."createdAt"::text as "createdAt"/.test(rv), '179: _rv carries "createdAt" as text, matching the UNION\'s null::text branch');
+  const loop = f179.slice(f179.indexOf('for r in'), f179.indexOf('loop\n', f179.indexOf('for r in')));
+  ok(/union all/.test(loop) && /null::date, null::text, null::text, null::text, false, '\[\]'::jsonb/.test(loop), '179: the loop\'s second UNION branch is unchanged (text "createdAt")');
+  ok(f179 === f178.replace('v."createdBy", v."createdAt",\n', 'v."createdBy", v."createdAt"::text as "createdAt",\n'), '179 changes exactly one line of 178\'s restore_commit');
+  ok(d179 === f178, '179 down puts back 178\'s restore_commit verbatim');
+  const m179 = read('supabase/migrations/179_restore_commit_createdat_text.sql');
+  ok(/^begin;/m.test(m179) && /^commit;/m.test(m179) && /values \('179', 'restore_commit_createdat_text'\)/.test(m179), '179 runs in one transaction and registers itself');
+}
+
 // ── 3. The recording client turns the writer's calls into server operations ──
 {
   const vEntity = REGISTRY.find((e) => e.key === 'voucher');
