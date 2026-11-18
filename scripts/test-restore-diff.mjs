@@ -249,5 +249,14 @@ for (const file of ['diff.ts', 'naturalKeys.ts']) {
   }
 }
 
+// ── Nested JSON key order is not a difference (2026-11-18: 276 of CMS Rania's vouchers showed as "updated") ──
+{
+  const archive = { id: 'V', lines: [{ accountId: '5201', amount: 100, id: 'a', type: 'Dr' }], editHistory: [{ at: 't', by: 'x' }] };
+  const current = { id: 'V', lines: [{ id: 'a', type: 'Dr', amount: 100, accountId: '5201' }], editHistory: [{ by: 'x', at: 't' }] };
+  ok(diffRow(archive, current).length === 0, 'the same nested JSON with its keys in another order does not differ');
+  ok(diffRow(archive, { ...current, lines: [{ id: 'a', type: 'Dr', amount: 101, accountId: '5201' }] }).map(f => f.field).join() === 'lines', 'a real nested change still differs');
+  ok(diffRow({ x: [1, 2] }, { x: [2, 1] }).length === 1, 'array order still matters');
+}
+
 console.log(`\nRestore diff: ${pass} passed, ${fail} failed`);
 process.exitCode = fail > 0 ? 1 : 0;

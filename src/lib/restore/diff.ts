@@ -37,6 +37,7 @@
  */
 import type { EntityDescriptor } from '../export/registry.types';
 import { indexByNaturalKey, describeKey, type Row } from './naturalKeys';
+import { canonicalize } from '../backup/integrity';
 
 /** Fresh: the society is empty. Merge: keep what is there. Replace: the archive wins. */
 export type RestoreMode = 'fresh' | 'merge' | 'replace';
@@ -83,9 +84,16 @@ export interface RestoreDiff {
 /** How many conflicting fields to itemize per row before saying "and N more". */
 const MAX_FIELDS_PER_CONFLICT = 12;
 
-/** PURE — JSON encoding used for value comparison. Absent and null are the same fact. */
+/**
+ * PURE — JSON encoding used for value comparison. Absent and null are the same fact.
+ *
+ * CANONICAL (keys sorted at every depth), the same encoding the archive is written with (backup/integrity
+ * canonicalize). The database hands nested JSON (vouchers.lines, sale items, editHistory) back with its keys in
+ * storage order, while the archive holds them sorted — so a plain JSON.stringify called identical values different.
+ * A backup taken two minutes before showed 276 of CMS Rania's 2,070 vouchers as "updated" (2026-11-18).
+ */
 function encode(value: unknown): string {
-  return value === undefined ? 'null' : JSON.stringify(value) ?? 'null';
+  return value === undefined ? 'null' : canonicalize(value) ?? 'null';
 }
 
 /**
