@@ -183,6 +183,7 @@ const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  âœ
   const page = read('src/pages/RestoreCenter.tsx');
   ok(/const rehearsalPassed = rehearsal\?\.status === 'passed' \|\| \(rehearsal\?\.status === 'failed' && rehearsal\.restored\.balanced\);/.test(page), 'the gate is "the backup rebuilds balanced books", not "the backup equals today"');
   ok(/data-testid="rehearsal-differs-info"/.test(page), 'the difference from today is shown as information');
+  ok((page.match(/rehearsalDiffers \? 'amber'|rehearsalDiffers \? 'text-amber-900'/g) || []).length >= 2, 'a balanced backup that differs is amber (information), not red (failure)');
   ok(!/from '@\/lib\/supabase'/.test(page), 'the page still never imports the database client');
   ok(/const canDryRun = \(stage === 'verified' \|\| stage === 'dry-run'\)/.test(page) && /onClick=\{handleRehearse\} disabled=\{busy \|\| !canDryRun\}/.test(page),
     'Rehearse (and a re-run of the dry run) stay available after the first dry run');

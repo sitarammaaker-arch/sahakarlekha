@@ -89,8 +89,17 @@ export interface AuditLogRow {
   created_at?: string | null;
   actor_name?: string | null;
   actor_role?: string | null;
+  entity_type?: string | null;
+  source?: string | null;
   after?: unknown;
 }
+
+/**
+ * The server's own row for a committed restore (migration 178's restore_commit). It carries
+ * counts but no `outcome` — the function only writes it inside the transaction that committed,
+ * so the row's existence IS the outcome.
+ */
+const SERVER_SOURCE = 'restore_commit';
 
 const asRecord = (v: unknown): Record<string, unknown> =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -117,20 +126,42 @@ export function toRestoreHistoryEntry(row: AuditLogRow): RestoreHistoryEntry {
   const after = asRecord(row.after);
   const backup = asRecord(after.preRestoreBackup);
   const replay = after.replay;
+  const fromServer = row.source === SERVER_SOURCE && typeof after.outcome !== 'string';
   return {
     id: String(row.id ?? ''),
     at: String(row.created_at ?? ''),
     actorName: row.actor_name ?? null,
     actorRole: row.actor_role ?? null,
-    sourceManifestHash: typeof after.sourceManifestHash === 'string' ? after.sourceManifestHash : '',
+    sourceManifestHash: typeof after.sourceManifestHash === 'string' ? after.sourceManifestHash
+      : typeof after.manifestHash === 'string' ? after.manifestHash : '',
     mode: typeof after.mode === 'string' ? after.mode : 'unknown',
-    outcome: typeof after.outcome === 'string' ? after.outcome : 'unknown',
+    outcome: typeof after.outcome === 'string' ? after.outcome : fromServer ? 'server-committed' : 'unknown',
     replay: replay === 'passed' || replay === 'failed' ? replay : 'not-run',
     disagreeingVouchers: typeof after.disagreeingVouchers === 'number' ? after.disagreeingVouchers : 0,
     rowsWritten: typeof after.rowsWritten === 'number' ? after.rowsWritten : 0,
     preRestoreBackupFile: typeof backup.filename === 'string' ? backup.filename : null,
     message: typeof after.message === 'string' ? after.message : null,
   };
+}
+
+/**
+ * PURE — one line per restore attempt. A committed server restore leaves TWO rows: the server's
+ * (inside the transaction) and the app's record a moment later. Showing both reads as two
+ * restores. The server row is dropped when the app's row for the same restore is present (same
+ * mode and rows written, the app row within 10 minutes after it); a server row with no app row
+ * stays — it is then the only proof the books were rewritten, and it is not marked clean.
+ * Input and output are newest first.
+ */
+export function foldServerRows(entries: RestoreHistoryEntry[]): RestoreHistoryEntry[] {
+  const appRows = entries.filter((e) => e.outcome !== 'server-committed');
+  return entries.filter((e) => {
+    if (e.outcome !== 'server-committed') return true;
+    const t = Date.parse(e.at);
+    return !appRows.some((a) => {
+      const dt = Date.parse(a.at) - t;
+      return a.mode === e.mode && a.rowsWritten === e.rowsWritten && dt >= 0 && dt <= 10 * 60 * 1000;
+    });
+  });
 }
 
 /** PURE — one line for the history list. Hindi first (RULE 7). */
@@ -144,6 +175,8 @@ export function describeRestoreEntry(entry: RestoreHistoryEntry, hi = true): str
     'fy-locked': ['FY लॉक', 'FY locked'],
     'audit-failed': ['ट्रेल नहीं लिखा', 'trail not written'],
     failed: ['विफल', 'failed'],
+    'server-refused': ['सर्वर ने रोका — कुछ नहीं बदला', 'refused by the server — nothing changed'],
+    'server-committed': ['सर्वर पर लिखा गया (ऐप का रिकॉर्ड नहीं मिला)', 'written on the server (no app record)'],
   };
   const [hiV, enV] = verdicts[entry.outcome] ?? [entry.outcome, entry.outcome];
   return `${entry.mode.toUpperCase()} · ${hi ? hiV : enV}`;
@@ -183,12 +216,15 @@ export async function listRestoreHistory(
 ): Promise<{ entries: RestoreHistoryEntry[]; error: string | null }> {
   const { data, error } = await supabase
     .from('audit_log')
-    .select('id, created_at, actor_name, actor_role, after')
+    .select('id, created_at, actor_name, actor_role, entity_type, source, after')
     .eq('society_id', societyId)      // the only tenant isolation on this table
     .eq('action', 'restore')
+    // Backup restores only. A single voucher brought back from the bin also logs action
+    // 'restore' (entity_type 'voucher'); it is not a restore attempt and read as "UNKNOWN".
+    .eq('entity_type', 'restore')
     .order('created_at', { ascending: false })
     .limit(limit);
 
   if (error) return { entries: [], error: error.message };
-  return { entries: (data ?? []).map(toRestoreHistoryEntry), error: null };
+  return { entries: foldServerRows((data ?? []).map(toRestoreHistoryEntry)), error: null };
 }

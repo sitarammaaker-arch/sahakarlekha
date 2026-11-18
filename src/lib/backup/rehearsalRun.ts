@@ -139,6 +139,13 @@ export function summarizeRun(outcome: RehearsalRunOutcome, hi = true): string {
         : 'Rehearsal passed — restoring this backup would reproduce the current books exactly.';
     case 'failed': {
       const n = outcome.verdict.accounts.length + outcome.verdict.items.length;
+      // A balanced backup that differs from today is not broken — it is a point in time (entries
+      // made after it). Restoring it is allowed; the headline must say "differs", not "failed".
+      if (outcome.restored.balanced) {
+        return hi
+          ? `यह बैकअप आज की किताबों से अलग है — ${n} खाते/मद बदलेंगे (बैकअप के बाद की प्रविष्टियाँ)। बैकअप अपने-आप में संतुलित है।`
+          : `This backup differs from today's books — ${n} account(s)/item(s) would change (entries made after the backup). The backup itself is balanced.`;
+      }
       return hi
         ? `rehearsal विफल — ${n} खाते/मद मेल नहीं खाए। यह बैकअप वर्तमान किताबें पूरी तरह नहीं लौटाता (शायद पुराना या अधूरा)।`
         : `Rehearsal failed — ${n} account(s)/item(s) did not match. This backup would not fully reproduce the current books (likely stale or incomplete).`;

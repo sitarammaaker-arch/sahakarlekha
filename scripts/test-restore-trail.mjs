@@ -141,6 +141,31 @@ ok(describeRestoreEntry(rf, true).includes('मेल नहीं खाया'
 ok(describeRestoreEntry({ ...e, outcome: 'brand-new-status' }, false).includes('brand-new-status'),
   'an unknown outcome degrades to its raw name, never a crash');
 
+// ── 4b. The server's own row (migration 178's restore_commit) and old voucher-restore rows ──
+// Trial restore on a practice society, 2026-11-18: "Past restore attempts" showed the server row
+// as "REPLACE · unknown" next to the app's "committed" row for the SAME restore, and an old
+// single-voucher restore (entity_type 'voucher') as "UNKNOWN · unknown".
+{
+  const { foldServerRows } = trailMod;
+  const serverRow = {
+    id: 's1', created_at: '2026-11-18T16:16:53.605Z', actor_name: 'x', actor_role: 'admin', entity_type: 'restore', source: 'restore_commit',
+    after: { mode: 'replace', entries: 96, journal: { posted: 0, reposted: 0, cancelled: 1 }, rowsWritten: 3332, manifestHash: 'MH', vouchersCancelled: 1 },
+  };
+  const appRow = { ...committedRow, id: 'a1', created_at: '2026-11-18T16:16:54.971Z', source: 'app', entity_type: 'restore', after: { ...committedRow.after, rowsWritten: 3332 } };
+  const refusedRow = { ...committedRow, id: 'r1', created_at: '2026-11-18T15:32:25Z', after: { ...committedRow.after, outcome: 'server-refused', rowsWritten: 0 } };
+  const s = toRestoreHistoryEntry(serverRow);
+  ok(s.outcome === 'server-committed' && s.mode === 'replace' && s.rowsWritten === 3332 && s.sourceManifestHash === 'MH', 'the server row is read as a server commit, not "unknown"');
+  ok(!wasClean('server-committed'), 'a server row on its own is not marked clean (the app record is missing — a human looks)');
+  const folded = foldServerRows([appRow, serverRow, refusedRow].map(toRestoreHistoryEntry));
+  ok(folded.length === 2 && folded[0].id === 'a1' && folded[1].id === 'r1', 'one restore = one line: the server row folds into the app row that follows it');
+  const lone = foldServerRows([refusedRow, serverRow].map(toRestoreHistoryEntry));
+  ok(lone.some((x) => x.id === 's1'), 'a server row with no app record stays — it is the only proof the books were rewritten');
+  const later = foldServerRows([{ ...toRestoreHistoryEntry(appRow), at: '2026-11-18T17:00:00Z' }, s]);
+  ok(later.length === 2, 'an app row far later is a different restore — the server row is not folded into it');
+  ok(describeRestoreEntry(s, false).includes('written on the server') && describeRestoreEntry(s, true).includes('सर्वर पर लिखा गया'), 'the lone server row reads plainly (RULE 7)');
+  ok(describeRestoreEntry(toRestoreHistoryEntry(refusedRow), false).includes('refused by the server') && describeRestoreEntry(toRestoreHistoryEntry(refusedRow), true).includes('सर्वर ने रोका'), 'a server refusal reads plainly, not as a raw status');
+}
+
 // ── 5. NO SPECULATIVE TABLE, and the reason is written down ──────────────────
 
 const src = readFileSync(pathResolve(SRC, 'lib', 'restore', 'trail.ts'), 'utf8');
@@ -148,6 +173,8 @@ ok(!/from\(['"]restore_runs['"]\)/.test(src), 'the trail does NOT read from a re
 ok(/from\(['"]audit_log['"]\)/.test(src), 'it reads from audit_log — the existing WORM custody trail');
 ok(src.includes("eq('society_id'"), 'the society_id filter — the only tenant isolation on audit_log — is present');
 ok(src.includes("eq('action', 'restore')"), 'and it reads only restore events');
+ok(src.includes("eq('entity_type', 'restore')"), 'backup restores only — a single voucher brought back from the bin is not a restore attempt');
+ok(/foldServerRows\(\(data \?\? \[\]\)\.map\(toRestoreHistoryEntry\)\)/.test(src), 'the list folds the server row into its app row');
 ok(src.includes('NEVER WRITE A TEST ROW'), 'the WORM hazard is documented for the next reader');
 ok(src.includes('DELIBERATE DEVIATION'), 'and the missing table is a documented decision, not an omission');
 
