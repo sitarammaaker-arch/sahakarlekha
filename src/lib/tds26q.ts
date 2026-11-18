@@ -60,6 +60,25 @@ export function entriesFor26Q(entries: TdsEntry[], challans: TdsChallan[]): { en
   return { entries: nonSalary, challans: challans.filter((c) => !salaryOnly(c)) };
 }
 
+/** The entries and challans of one quarter's 26Q (PURE). Challans: dated in the quarter, or linked to one of its entries. */
+export function quarterFor26Q(entries: TdsEntry[], challans: TdsChallan[], quarter: string, financialYear: string): { qEntries: TdsEntry[]; qChallans: TdsChallan[]; unlinked: TdsEntry[] } {
+  const byId = new Map(challans.map((c) => [c.id, c]));
+  const qEntries = entries.filter((e) => e.quarter === quarter && e.financialYear === financialYear)
+    .map((e) => (e.challanId && !byId.has(e.challanId) ? { ...e, challanId: undefined } : e));
+  const linked = new Set(qEntries.map((e) => e.challanId).filter(Boolean) as string[]);
+  const qChallans = challans.filter((c) => (c.quarter === quarter && c.financialYear === financialYear) || linked.has(c.id));
+  return { qEntries, qChallans, unlinked: qEntries.filter((e) => !e.challanId) };
+}
+
+/** Quarter-level refusals for the 26Q export (PURE): every deductee must sit under a real, deposited challan. */
+export function validate26QQuarter(entries: TdsEntry[], challans: TdsChallan[], quarter: string, financialYear: string): string[] {
+  const { unlinked } = quarterFor26Q(entries, challans, quarter, financialYear);
+  if (unlinked.length === 0) return [];
+  const total = unlinked.reduce((s, e) => s + (e.tdsAmount || 0), 0);
+  const names = unlinked.slice(0, 3).map((e) => e.deducteeName).join(', ') + (unlinked.length > 3 ? '…' : '');
+  return [`${unlinked.length} TDS ${unlinked.length === 1 ? 'entry has' : 'entries have'} no deposited challan (TDS ${fmtAmt(total)}): ${names} — deposit the TDS and link the challan before filing 26Q.`];
+}
+
 export interface Generate26QOptions {
   entries: TdsEntry[];
   challans: TdsChallan[];
@@ -74,9 +93,10 @@ export function generate26QText(opts: Generate26QOptions): string {
   const pan = society.entityPan || 'XXXXXXXXXX';
   const lines: string[] = [];
 
-  // Quarterly entries only
-  const qEntries = entries.filter(e => e.quarter === quarter && e.financialYear === financialYear);
-  const qChallans = challans.filter(c => c.quarter === quarter && c.financialYear === financialYear);
+  // RPT-03 (audit 2026-11-17): the quarter's challans are those dated in it PLUS any challan a quarter entry is
+  // linked to — TDS deducted in March is routinely deposited in April. Before, such a deductee was counted in the
+  // file header but dropped from the detail (header 3, detail 2). An entry whose challan is not found is unlinked.
+  const { qEntries, qChallans } = quarterFor26Q(entries, challans, quarter, financialYear);
 
   // Line 1: File Header
   lines.push([
@@ -84,7 +104,7 @@ export function generate26QText(opts: Generate26QOptions): string {
     tan,                                        // TAN
     'SahakarLekha v1.0',                       // Utility name
     '001',                                      // Batch count
-    String(qEntries.length),                    // Total deductee records
+    String(qEntries.filter(e => e.challanId).length), // Total deductee records (= the DD lines written)
     financialYear.replace('-', ''),             // FY (202425)
     quarter.replace('Q', ''),                   // Quarter (1/2/3/4)
   ].join('|'));
@@ -138,34 +158,9 @@ export function generate26QText(opts: Generate26QOptions): string {
     });
   });
 
-  // Unlinked entries (no challan yet)
-  const unlinked = qEntries.filter(e => !e.challanId);
-  if (unlinked.length > 0) {
-    lines.push([
-      'CH',
-      '0000000',   // No BSR (pending deposit)
-      '00000000',  // No date
-      '0',         // No serial
-      fmtAmt(unlinked.reduce((s, e) => s + e.tdsAmount, 0)),
-      fmtAmt(unlinked.reduce((s, e) => s + e.tdsAmount, 0)),
-      String(unlinked.length),
-    ].join('|'));
-
-    unlinked.forEach(entry => {
-      lines.push([
-        'DD',
-        entry.deducteePan,
-        entry.deducteeName.substring(0, 75),
-        SECTION_CODES[entry.section] || entry.section,
-        fmtDate(entry.date),
-        fmtAmt(entry.grossAmount),
-        fmtAmt(entry.tdsRate),
-        fmtAmt(entry.tdsAmount),
-        NATURE_CODES[entry.section] || entry.natureOfPayment,
-        '',
-      ].join('|'));
-    });
-  }
+  // RPT-03: an entry with no deposited challan is NEVER written under an invented challan (BSR 0000000) — the FVU
+  // rejects it or, worse, the return goes in with wrong data. validate26QQuarter() refuses the export while any such
+  // entry remains; this builder simply never writes one.
 
   return lines.join('\n');
 }

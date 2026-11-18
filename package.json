@@ -19,6 +19,7 @@
     "test:backup-salary-guards": "node scripts/test-backup-salary-guards.mjs",
     "test:deposit-undo": "node scripts/test-deposit-undo.mjs",
     "test:year-end-guards": "node scripts/test-year-end-guards.mjs",
+    "test:statutory-report-guards": "node scripts/test-statutory-report-guards.mjs",
     "test:backup-placement-config": "node scripts/test-backup-placement-config.mjs",
     "test:jwt-role-helpers": "node scripts/test-jwt-role-helpers.mjs",
     "test:mfa-pending": "node scripts/test-mfa-pending.mjs",

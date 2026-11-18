@@ -22,13 +22,15 @@ import { useToast } from '@/hooks/use-toast';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { salaryTdsWhen, quarterMonths, type Quarter } from '@/lib/form24Q';
-import { generate26QText, download26Q, validate26QData, entriesFor26Q, getQuarterFromDate, getQuarterDueDate } from '@/lib/tds26q';
+import { generate26QText, download26Q, validate26QData, validate26QQuarter, quarterFor26Q, entriesFor26Q, getQuarterFromDate, getQuarterDueDate } from '@/lib/tds26q';
 import { applyPercent, toMinor, toRupees } from '@/lib/money';
 import type { TdsEntry, TdsChallan, TdsChallanLink, TdsSection, TdsDeducteeType, TdsQuarter } from '@/types';
 import { resolveSectionRef, describeSectionRef, isAct2025 } from '@/lib/rules/tdsSections';
 import { reportError } from '@/lib/errorReporting';
 import { buildChallanPosting, CHALLAN_REF_TYPE, CHALLAN_POSTING_MESSAGE } from '@/lib/tax/challanPosting';
 import { tdsPayableAccountId, penaltyAccountId, MISSING_HEAD_TOAST } from '@/lib/accounting/headResolve';
+import { tdsLedgerTie, quarterRange } from '@/lib/tdsLedgerTie';
+import { getVoucherLines } from '@/lib/voucherUtils';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const fmt = (n: number) =>
@@ -225,6 +227,17 @@ const TdsRegister: React.FC = () => {
   const quarterEntries = allEntries.filter(e => e.quarter === selectedQuarter && e.financialYear === fy);
   const quarterChallans = activeChallans.filter(c => c.quarter === selectedQuarter && c.financialYear === fy);
 
+  // RPT-04: register ↔ TDS Payable ledger, both ways, for the selected quarter.
+  const ledgerTie = useMemo(() => {
+    const counted = new Set<string>();
+    for (const p of allPurchases) { if ((p as { isDeleted?: boolean }).isDeleted) continue; if (p.voucherId) counted.add(p.voucherId); for (const t of p.taxVoucherIds ?? []) counted.add(t); }
+    for (const r of allSalaryRecords) if (r.accrualVoucherId) counted.add(r.accrualVoucherId);
+    const { from, to } = quarterRange(fy, selectedQuarter);
+    const manual = activeManualEntries.filter(e => e.quarter === selectedQuarter && e.financialYear === fy);
+    const tieVouchers = vouchers.map(v => ({ id: v.id, voucherNo: v.voucherNo, date: v.date, narration: v.narration, isDeleted: v.isDeleted, approvalStatus: (v as { approvalStatus?: string }).approvalStatus, lines: getVoucherLines(v) }));
+    return tdsLedgerTie(tieVouchers, tdsPayableAccountId(accounts), counted, manual, from, to);
+  }, [allPurchases, allSalaryRecords, activeManualEntries, vouchers, accounts, fy, selectedQuarter]);
+
   // Stats
   const totalDeducted = quarterEntries.reduce((s, e) => s + e.tdsAmount, 0);
   const totalDeposited = quarterChallans.filter(c => c.status === 'paid').reduce((s, c) => s + c.amount, 0);
@@ -381,7 +394,8 @@ const TdsRegister: React.FC = () => {
   // 26Q Export
   const handleExport26Q = () => {
     // Salary TDS (section 192) is listed here but filed in 24Q — never in the 26Q file (entriesFor26Q).
-    const q26 = entriesFor26Q(quarterEntries, quarterChallans);
+    // RPT-03: ALL live challans go in, so a challan deposited in the next quarter still carries this quarter's deductees.
+    const q26 = entriesFor26Q(quarterEntries, activeChallans);
     if (q26.entries.length === 0) {
       toast({
         title: hi ? '26Q में कोई एंट्री नहीं' : 'Nothing for 26Q',
@@ -389,7 +403,18 @@ const TdsRegister: React.FC = () => {
       });
       return;
     }
-    const errors = validate26QData(q26.entries, q26.challans, society);
+    const usedChallans = quarterFor26Q(q26.entries, q26.challans, selectedQuarter, fy).qChallans;
+    const unlinkedErr = validate26QQuarter(q26.entries, q26.challans, selectedQuarter, fy);
+    if (unlinkedErr.length > 0) {
+      const n = quarterFor26Q(q26.entries, q26.challans, selectedQuarter, fy).unlinked.length;
+      toast({
+        title: hi ? '26Q नहीं बनी — बिना चालान की TDS' : '26Q not created — TDS without a challan',
+        description: hi ? `${n} TDS प्रविष्टियाँ किसी जमा चालान से जुड़ी नहीं हैं। पहले TDS जमा करें और चालान जोड़ें, फिर 26Q बनाएँ।` : unlinkedErr[0],
+        variant: 'destructive', duration: 12000,
+      });
+      return;
+    }
+    const errors = validate26QData(q26.entries, usedChallans, society);
     if (errors.length > 0) {
       toast({
         title: hi ? '26Q निर्यात त्रुटि' : '26Q Export Validation Errors',
@@ -522,6 +547,29 @@ const TdsRegister: React.FC = () => {
                 ? 'TAN और PAN Society Setup में भरें — 26Q निर्यात के लिए आवश्यक है'
                 : 'Please set TAN and PAN in Society Setup — required for 26Q export'}
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {(ledgerTie.ledgerRows.length > 0 || ledgerTie.registerRows.length > 0) && (
+        <Card className="border-amber-300 bg-amber-50" data-testid="tds-ledger-gap">
+          <CardContent className="pt-4 pb-4 space-y-2 text-sm text-amber-900">
+            <p className="font-semibold flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+              {hi ? 'TDS रजिस्टर और बही (TDS Payable) मेल नहीं खाते — 26Q / 24Q भरने से पहले ठीक करें' : 'TDS Register and the ledger (TDS Payable) do not agree — fix before filing 26Q / 24Q'}
+            </p>
+            {ledgerTie.ledgerRows.length > 0 && (
+              <div>
+                <p>{hi ? `बही में TDS है पर रजिस्टर में कोई पंक्ति नहीं (${ledgerTie.ledgerRows.length}): ₹${ledgerTie.ledgerNotInRegister.toLocaleString('en-IN')} — इनके लिए TDS एंट्री जोड़ें।` : `TDS in the ledger with no register row (${ledgerTie.ledgerRows.length}): ₹${ledgerTie.ledgerNotInRegister.toLocaleString('en-IN')} — add a TDS entry for each.`}</p>
+                <ul className="list-disc pl-5">{ledgerTie.ledgerRows.slice(0, 8).map(r => <li key={r.id}>{fmtDate(r.date)} · {r.label} · ₹{r.amount.toLocaleString('en-IN')}</li>)}</ul>
+              </div>
+            )}
+            {ledgerTie.registerRows.length > 0 && (
+              <div>
+                <p>{hi ? `हाथ से जोड़ी TDS पंक्तियाँ जिनका बही में कोई वाउचर नहीं (${ledgerTie.registerRows.length}): ₹${ledgerTie.registerNotInLedger.toLocaleString('en-IN')} — भुगतान के वाउचर में TDS Payable को Cr करें।` : `TDS rows typed in by hand with no voucher in the ledger (${ledgerTie.registerRows.length}): ₹${ledgerTie.registerNotInLedger.toLocaleString('en-IN')} — credit TDS Payable in the payment voucher.`}</p>
+                <ul className="list-disc pl-5">{ledgerTie.registerRows.slice(0, 8).map(r => <li key={r.id}>{fmtDate(r.date)} · {r.label} · ₹{r.amount.toLocaleString('en-IN')}</li>)}</ul>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

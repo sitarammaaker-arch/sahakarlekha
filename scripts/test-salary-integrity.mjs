@@ -26,7 +26,8 @@ const code = (sql) => sql.replace(/--[^\n]*/g, '');
   ok(entriesFor26Q([E('sal-9', '192')], []).entries.length === 0, 'a quarter with only salary TDS has nothing for 26Q');
   const tr = read('src/pages/TdsRegister.tsx');
   const h = tr.slice(tr.indexOf('const handleExport26Q = () => {'), tr.indexOf('download26Q(text'));
-  ok(/const q26 = entriesFor26Q\(quarterEntries, quarterChallans\);/.test(h) && /validate26QData\(q26\.entries, q26\.challans, society\)/.test(h) && /entries: q26\.entries,\s+challans: q26\.challans,/.test(h), '26Q export validates and writes only the 26Q set');
+  // RPT-03 (2026-11-17): all live challans go in (a challan deposited next quarter still carries this quarter's deductees).
+  ok(/const q26 = entriesFor26Q\(quarterEntries, activeChallans\);/.test(h) && /validate26QData\(q26\.entries, usedChallans, society\)/.test(h) && /entries: q26\.entries,\s+challans: q26\.challans,/.test(h), '26Q export validates and writes only the 26Q set');
   ok(!/validate26QData\(quarterEntries/.test(tr) && !/entries: quarterEntries,/.test(tr), 'the unfiltered quarter is never passed to 26Q');
   // A salary entry is shown as "वेतन", never as "Manual" with a Delete button (it is not a tds_entries row).
   ok(/: entry\.id\.startsWith\('sal-'\)\s*\n[\s\S]{0,700}\{hi \? 'वेतन' : 'Salary'\}<\/Badge>/.test(tr), 'salary entries are labelled वेतन, with no delete button');
