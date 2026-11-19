@@ -14,6 +14,9 @@
  * page — C-B) lands in D2.
  */
 import { tr } from '@/lib/uiLang';
+import { voucherRefusedToast, inFlightToast } from '@/lib/voucherRefused';
+import { useLatest } from '@/hooks/useLatest';
+import { useInFlight } from '@/hooks/useInFlight';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
 import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
@@ -116,6 +119,9 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   societyRef.current = society;
   const toastRef = useRef(toast);
   toastRef.current = toast;
+  // X-1: a voucher refused late → the domain record is not made either (rows are written only in onSaved).
+  const voucherRefused = (title: string) => voucherRefusedToast(toastRef.current, title);
+  const inFlight = useInFlight(() => inFlightToast(toastRef.current));
 
   const guardFYLocked = useCallback((): boolean => {
     if (refuseIfWriteBlocked(toastRef.current)) return true; // F1: online-only entry (shared rule)
@@ -137,6 +143,10 @@ export function DairyProvider({ children }: { children: ReactNode }) {
   const [dispatches, setDispatchesState] = useState<DairyDispatch[]>(() => storage.getDairyDispatches());
   const [inputIssues, setInputIssuesState] = useState<DairyInputIssue[]>(() => storage.getDairyInputIssues());
   const [distributions, setDistributionsState] = useState<DairyDistribution[]>(() => storage.getDairyDistributions());
+  // X-1: updates applied in a voucher's onSaved start from the CURRENT rows.
+  const settlementsLatest = useLatest(settlements);
+  const dispatchesLatest = useLatest(dispatches);
+  const distributionsLatest = useLatest(distributions);
   // H / RULE 3: vouchers these documents carry are cancelled through the document, not alone.
   const ownerGroupsRef = useRef<OwnerGroup[]>([]);
   ownerGroupsRef.current = [{ label: tr('दूध भुगतान (Settlement)', 'Milk payment (Settlement)'), docs: settlements }, { label: tr('दूध डिस्पैच', 'Milk dispatch'), docs: dispatches }, { label: tr('इनपुट वितरण', 'Input distribution'), docs: inputIssues }, { label: tr('बोनस/लाभ वितरण', 'Bonus/profit distribution'), docs: distributions }];
@@ -381,6 +391,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const legs = settlementLegs(cur.gross, cur.deductionLines, milkCost, payable);
     if (legs.length === 0) { toastRef.current({ title: tr('पोस्ट नहीं हुआ', 'Not posted'), description: tr('एंट्री के दोनों पक्ष बराबर नहीं (कटौती > सकल या खाता गुम)।', 'The two sides of the entry are not equal (deduction > gross, or an account is missing).'), variant: 'destructive' }); return sentinel; }
     const net = netPayable(cur.gross, cur.deductionLines);
+    if (!inFlight.begin(`dairy-settlement:${cur.id}`)) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'journal', date: cur.to,
       debitAccountId: milkCost, creditAccountId: payable, amount: cur.gross,
@@ -388,13 +399,21 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       narration: `दूध सेटलमेंट ${cur.memberName} — ${cur.from} से ${cur.to} (सकल ₹${cur.gross}, नेट ₹${net})`,
       refType: 'dairy.settlement', refId: cur.id,
       createdBy: user?.name || 'admin',
-    } as Parameters<typeof addVoucher>[0]);
-    if (!voucher?.id) return sentinel;
-    const no = 'DS/' + String(settlements.filter(s => s.status === 'approved' && !s.isDeleted).length + 1).padStart(4, '0');
-    const next: DairySettlement = { ...cur, status: 'approved', settlementNo: no, netPayable: net, voucherId: voucher.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
-    commitSettlement(next, cur, () => cancelVoucher(voucher.id, 'Settlement approval rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: tr('✅ सेटलमेंट approved', '✅ Settlement approved'), description: tr(`${no} — नेट देय ₹${net.toLocaleString('en-IN')}`, `${no} — net payable ₹${net.toLocaleString('en-IN')}`) });
-    return next;
+    } as Parameters<typeof addVoucher>[0], {
+      // X-1: approved (and numbered) only once the server has the voucher; a late refusal leaves the draft as it was.
+      onSaved: (sv) => {
+        inFlight.end(`dairy-settlement:${cur.id}`);
+        const latest = settlementsLatest.current;
+        const now = latest.find(s => s.id === cur.id) ?? cur;
+        const no = 'DS/' + String(latest.filter(s => s.status === 'approved' && !s.isDeleted).length + 1).padStart(4, '0');
+        const next: DairySettlement = { ...now, status: 'approved', settlementNo: no, netPayable: net, voucherId: sv.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
+        commitSettlement(next, now, () => cancelVoucher(sv.id, 'Settlement approval rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
+        toastRef.current({ title: tr('✅ सेटलमेंट approved', '✅ Settlement approved'), description: tr(`${no} — नेट देय ₹${net.toLocaleString('en-IN')}`, `${no} — net payable ₹${net.toLocaleString('en-IN')}`) });
+      },
+      onFailed: () => { inFlight.end(`dairy-settlement:${cur.id}`); voucherRefused(tr('सेटलमेंट approve नहीं हुआ', 'Settlement not approved')); },
+    });
+    if (!voucher?.id) { inFlight.end(`dairy-settlement:${cur.id}`); return sentinel; }
+    return { ...cur, status: 'approved', netPayable: net, voucherId: voucher.id };
   }, [settlements, accounts, addVoucher, cancelVoucher, commitSettlement, user]);
 
   const recordDairySettlementPayment = useCallback((args: { settlementId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string }): Voucher => {
@@ -408,6 +427,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const payable = resolveMilkPayableAccountId(accounts);
     if (!payable) { toastRef.current({ title: tr('देय खाता नहीं मिला', 'Payable account not found'), variant: 'destructive' }); return sentinel; }
     const creditAcc = args.mode === 'bank' ? (args.bankAccountId || storage.defaultBankAccountId(accounts)) : '3301';
+    if (!inFlight.begin(`dairy-settlement:${cur.id}`)) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'payment', date: args.date,
       debitAccountId: payable, creditAccountId: creditAcc, amount,
@@ -415,11 +435,18 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       narration: `दूध भुगतान ${cur.memberName} — ${cur.settlementNo || ''}${args.reference ? ` (${args.reference})` : ''}`,
       refType: 'dairy.settlement.payment', refId: cur.id,
       createdBy: user?.name || 'admin',
-    } as Parameters<typeof addVoucher>[0]);
-    if (!voucher?.id) return sentinel;
-    const next: DairySettlement = { ...cur, amountPaid: +(cur.amountPaid + amount).toFixed(2) };
-    commitSettlement(next, cur, () => cancelVoucher(voucher.id, 'Payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: tr('✅ भुगतान दर्ज', '✅ Payment recorded'), description: tr(`₹${amount.toLocaleString('en-IN')} — बकाया ₹${outstanding(cur.netPayable, next.amountPaid).toLocaleString('en-IN')}`, `₹${amount.toLocaleString('en-IN')} — outstanding ₹${outstanding(cur.netPayable, next.amountPaid).toLocaleString('en-IN')}`) });
+    } as Parameters<typeof addVoucher>[0], {
+      // X-1: the paid amount moves only once the server has the payment — from the CURRENT row.
+      onSaved: (sv) => {
+        inFlight.end(`dairy-settlement:${cur.id}`);
+        const now = settlementsLatest.current.find(s => s.id === cur.id) ?? cur;
+        const next: DairySettlement = { ...now, amountPaid: +(now.amountPaid + amount).toFixed(2) };
+        commitSettlement(next, now, () => cancelVoucher(sv.id, 'Payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
+        toastRef.current({ title: tr('✅ भुगतान दर्ज', '✅ Payment recorded'), description: tr(`₹${amount.toLocaleString('en-IN')} — बकाया ₹${outstanding(now.netPayable, next.amountPaid).toLocaleString('en-IN')}`, `₹${amount.toLocaleString('en-IN')} — outstanding ₹${outstanding(now.netPayable, next.amountPaid).toLocaleString('en-IN')}`) });
+      },
+      onFailed: () => { inFlight.end(`dairy-settlement:${cur.id}`); voucherRefused(tr('भुगतान दर्ज नहीं हुआ', 'Payment not recorded')); },
+    });
+    if (!voucher?.id) { inFlight.end(`dairy-settlement:${cur.id}`); return sentinel; }
     return voucher;
   }, [settlements, accounts, addVoucher, cancelVoucher, commitSettlement, user]);
 
@@ -459,6 +486,8 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const specs = buildEngineVoucherLines(resolveDairyPostingLegs('RecogniseMilkDispatch', { amount, currency: 'INR' }, binding, accounts));
     if (specs.length !== 2) { toastRef.current({ title: tr('पोस्ट नहीं हुआ', 'Not posted'), description: tr('एंट्री के खाते तय नहीं हो सके।', 'The accounts for the entry could not be determined.'), variant: 'destructive' }); return sentinel; }
     const dr = specs.find(s => s.type === 'Dr'); const cr = specs.find(s => s.type === 'Cr');
+    const d: DairyDispatch = { ...data, id: crypto.randomUUID(), amount, voucherId: '', amountReceived: 0, createdAt: new Date().toISOString() };
+    if (!inFlight.begin('dairy-dispatch:new')) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'journal', date: data.date,
       debitAccountId: dr!.accountId, creditAccountId: cr!.accountId, amount,
@@ -466,12 +495,17 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       narration: `दूध डिस्पैच ${data.unionName} — ${qty} लीटर @ ₹${rate}`,
       refType: 'dairy.dispatch',
       createdBy: user?.name || 'admin',
-    } as Parameters<typeof addVoucher>[0]);
-    if (!voucher?.id) return sentinel;
-    const d: DairyDispatch = { ...data, id: crypto.randomUUID(), amount, voucherId: voucher.id, amountReceived: 0, createdAt: new Date().toISOString() };
-    commitDispatch(d, null, () => cancelVoucher(voucher.id, 'Dispatch rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: tr('✅ डिस्पैच दर्ज', '✅ Dispatch recorded'), description: tr(`${data.unionName} — बिक्री ₹${amount.toLocaleString('en-IN')}`, `${data.unionName} — sale ₹${amount.toLocaleString('en-IN')}`) });
-    return d;
+    } as Parameters<typeof addVoucher>[0], {
+      // X-1: the dispatch row is written only once the server has the voucher.
+      onSaved: (sv) => {
+        inFlight.end('dairy-dispatch:new');
+        commitDispatch({ ...d, voucherId: sv.id }, null, () => cancelVoucher(sv.id, 'Dispatch rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
+        toastRef.current({ title: tr('✅ डिस्पैच दर्ज', '✅ Dispatch recorded'), description: tr(`${data.unionName} — बिक्री ₹${amount.toLocaleString('en-IN')}`, `${data.unionName} — sale ₹${amount.toLocaleString('en-IN')}`) });
+      },
+      onFailed: () => { inFlight.end('dairy-dispatch:new'); voucherRefused(tr('डिस्पैच दर्ज नहीं हुआ', 'Dispatch not recorded')); },
+    });
+    if (!voucher?.id) { inFlight.end('dairy-dispatch:new'); return sentinel; }
+    return { ...d, voucherId: voucher.id };
   }, [accounts, addVoucher, cancelVoucher, commitDispatch, user]);
 
   const receiveUnionPayment = useCallback((args: { dispatchId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }): Voucher => {
@@ -485,6 +519,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const rcv = resolveUnionReceivableAccountId(accounts);
     if (!rcv) { toastRef.current({ title: tr('देनदार खाता नहीं मिला', 'Debtor account not found'), variant: 'destructive' }); return sentinel; }
     const debitAcc = args.mode === 'bank' ? (args.bankAccountId || storage.defaultBankAccountId(accounts)) : '3301';
+    if (!inFlight.begin(`dairy-dispatch:${cur.id}`)) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'receipt', date: args.date,
       debitAccountId: debitAcc, creditAccountId: rcv, amount,
@@ -492,11 +527,18 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       narration: `यूनियन भुगतान प्राप्त — ${cur.unionName} (${cur.date})`,
       refType: 'dairy.dispatch.receipt', refId: cur.id,
       createdBy: user?.name || 'admin',
-    } as Parameters<typeof addVoucher>[0]);
-    if (!voucher?.id) return sentinel;
-    const next: DairyDispatch = { ...cur, amountReceived: +(cur.amountReceived + amount).toFixed(2) };
-    commitDispatch(next, cur, () => cancelVoucher(voucher.id, 'Union payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: tr('✅ भुगतान प्राप्त', '✅ Payment received'), description: tr(`₹${amount.toLocaleString('en-IN')} — बकाया ₹${(due - amount).toLocaleString('en-IN')}`, `₹${amount.toLocaleString('en-IN')} — outstanding ₹${(due - amount).toLocaleString('en-IN')}`) });
+    } as Parameters<typeof addVoucher>[0], {
+      // X-1: the received amount moves only once the server has the receipt — from the CURRENT row.
+      onSaved: (sv) => {
+        inFlight.end(`dairy-dispatch:${cur.id}`);
+        const now = dispatchesLatest.current.find(d => d.id === cur.id) ?? cur;
+        const next: DairyDispatch = { ...now, amountReceived: +(now.amountReceived + amount).toFixed(2) };
+        commitDispatch(next, now, () => cancelVoucher(sv.id, 'Union payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
+        toastRef.current({ title: tr('✅ भुगतान प्राप्त', '✅ Payment received'), description: tr(`₹${amount.toLocaleString('en-IN')} — बकाया ₹${(now.amount - next.amountReceived).toLocaleString('en-IN')}`, `₹${amount.toLocaleString('en-IN')} — outstanding ₹${(now.amount - next.amountReceived).toLocaleString('en-IN')}`) });
+      },
+      onFailed: () => { inFlight.end(`dairy-dispatch:${cur.id}`); voucherRefused(tr('यूनियन भुगतान दर्ज नहीं हुआ', 'Union payment not recorded')); },
+    });
+    if (!voucher?.id) { inFlight.end(`dairy-dispatch:${cur.id}`); return sentinel; }
     return voucher;
   }, [dispatches, accounts, addVoucher, cancelVoucher, commitDispatch, user]);
 
@@ -529,6 +571,8 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (amount <= 0 || !data.memberId || !data.incomeAccountId) { toastRef.current({ title: tr('अधूरी जानकारी', 'Incomplete details'), description: tr('सदस्य, राशि और आय-खाता ज़रूरी हैं।', 'Member, amount and income account are required.'), variant: 'destructive' }); return sentinel; }
     const rcv = resolveMemberInputReceivableAccountId(accounts);
     if (!rcv || !accounts.some(a => a.id === data.incomeAccountId)) { toastRef.current({ title: tr('खाता नहीं मिला', 'Account not found'), description: tr('Member input receivable / income ledger missing — Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', 'Member input receivable / income ledger missing — run "Create domain accounts" on Ledger Hygiene; if it is still missing, add the account in Ledger Heads (admin).'), variant: 'destructive', duration: 12000 }); return sentinel; }
+    const issue: DairyInputIssue = { ...data, id: crypto.randomUUID(), amount, voucherId: '', createdAt: new Date().toISOString() };
+    if (!inFlight.begin('dairy-input:new')) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'journal', date: data.date,
       debitAccountId: rcv, creditAccountId: data.incomeAccountId, amount,
@@ -536,12 +580,17 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       narration: `आदान (उधार) — ${data.memberName} — ${data.inputType}${data.itemName ? ` ${data.itemName}` : ''}`,
       refType: 'dairy.input.issue',
       createdBy: user?.name || 'admin',
-    } as Parameters<typeof addVoucher>[0]);
-    if (!voucher?.id) return sentinel;
-    const issue: DairyInputIssue = { ...data, id: crypto.randomUUID(), amount, voucherId: voucher.id, createdAt: new Date().toISOString() };
-    commitInputIssue(issue, null, () => cancelVoucher(voucher.id, 'Input issue rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: tr('✅ आदान दर्ज', '✅ Input issue recorded'), description: tr(`${data.memberName} — ₹${amount.toLocaleString('en-IN')} (उधार)`, `${data.memberName} — ₹${amount.toLocaleString('en-IN')} (on credit)`) });
-    return issue;
+    } as Parameters<typeof addVoucher>[0], {
+      // X-1: the issue row is written only once the server has the voucher.
+      onSaved: (sv) => {
+        inFlight.end('dairy-input:new');
+        commitInputIssue({ ...issue, voucherId: sv.id }, null, () => cancelVoucher(sv.id, 'Input issue rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
+        toastRef.current({ title: tr('✅ आदान दर्ज', '✅ Input issue recorded'), description: tr(`${data.memberName} — ₹${amount.toLocaleString('en-IN')} (उधार)`, `${data.memberName} — ₹${amount.toLocaleString('en-IN')} (on credit)`) });
+      },
+      onFailed: () => { inFlight.end('dairy-input:new'); voucherRefused(tr('आदान दर्ज नहीं हुआ', 'Input issue not recorded')); },
+    });
+    if (!voucher?.id) { inFlight.end('dairy-input:new'); return sentinel; }
+    return { ...issue, voucherId: voucher.id };
   }, [accounts, addVoucher, cancelVoucher, commitInputIssue, user]);
 
   const deleteDairyInputIssue = useCallback((id: string) => {
@@ -610,6 +659,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const legs = distributionLegs(cur.total, distAcc, payAcc);
     if (legs.length === 0) { toastRef.current({ title: tr('पोस्ट नहीं हुआ', 'Not posted'), description: tr('एंट्री के दोनों पक्ष बराबर नहीं।', 'The two sides of the entry are not equal.'), variant: 'destructive' }); return sentinel; }
     const kindHi = cur.kind === 'bonus' ? 'बोनस' : 'लाभांश';
+    if (!inFlight.begin(`dairy-distribution:${cur.id}`)) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'journal', date: args.resolutionDate || new Date().toISOString().slice(0, 10),
       debitAccountId: distAcc, creditAccountId: payAcc, amount: cur.total,
@@ -617,12 +667,19 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       narration: `${kindHi} वितरण — प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total} (${cur.lines.length} सदस्य)`,
       refType: 'dairy.distribution', refId: cur.id,
       createdBy: user?.name || 'admin',
-    } as Parameters<typeof addVoucher>[0]);
-    if (!voucher?.id) return sentinel;
-    const next: DairyDistribution = { ...cur, status: 'approved', resolutionNo: args.resolutionNo.trim(), resolutionDate: args.resolutionDate, voucherId: voucher.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
-    commitDistribution(next, cur, () => cancelVoucher(voucher.id, 'Distribution approval rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: `✅ ${kindHi} approved`, description: tr(`प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}`, `Resolution ${args.resolutionNo} — total ₹${cur.total.toLocaleString('en-IN')}`) });
-    return next;
+    } as Parameters<typeof addVoucher>[0], {
+      // X-1: approved only once the server has the voucher; a late refusal leaves the draft as it was.
+      onSaved: (sv) => {
+        inFlight.end(`dairy-distribution:${cur.id}`);
+        const now = distributionsLatest.current.find(d => d.id === cur.id) ?? cur;
+        const next: DairyDistribution = { ...now, status: 'approved', resolutionNo: args.resolutionNo.trim(), resolutionDate: args.resolutionDate, voucherId: sv.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
+        commitDistribution(next, now, () => cancelVoucher(sv.id, 'Distribution approval rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
+        toastRef.current({ title: `✅ ${kindHi} approved`, description: tr(`प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}`, `Resolution ${args.resolutionNo} — total ₹${cur.total.toLocaleString('en-IN')}`) });
+      },
+      onFailed: () => { inFlight.end(`dairy-distribution:${cur.id}`); voucherRefused(tr(`${kindHi} approve नहीं हुआ`, 'Distribution not approved')); },
+    });
+    if (!voucher?.id) { inFlight.end(`dairy-distribution:${cur.id}`); return sentinel; }
+    return { ...cur, status: 'approved', resolutionNo: args.resolutionNo.trim(), resolutionDate: args.resolutionDate, voucherId: voucher.id };
   }, [distributions, accounts, addVoucher, cancelVoucher, commitDistribution, user]);
 
   const recordDistributionPayment = useCallback((args: { distributionId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }): Voucher => {
@@ -637,6 +694,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!payAcc) { toastRef.current({ title: tr('देय खाता नहीं मिला', 'Payable account not found'), description: tr('Ledger Hygiene पर "डोमेन खाते बनाएँ" चलाएँ; फिर भी न मिले तो Ledger Heads पर खाता जोड़ें (admin).', 'Run "Create domain accounts" on Ledger Hygiene; if it is still missing, add the account in Ledger Heads (admin).'), variant: 'destructive', duration: 12000 }); return sentinel; }
     const creditAcc = args.mode === 'bank' ? (args.bankAccountId || storage.defaultBankAccountId(accounts)) : '3301';
     const kindHi = cur.kind === 'bonus' ? 'बोनस' : 'लाभांश';
+    if (!inFlight.begin(`dairy-distribution:${cur.id}`)) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'payment', date: args.date,
       debitAccountId: payAcc, creditAccountId: creditAcc, amount,
@@ -644,11 +702,18 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       narration: `${kindHi} भुगतान — प्रस्ताव ${cur.resolutionNo}`,
       refType: 'dairy.distribution.payment', refId: cur.id,
       createdBy: user?.name || 'admin',
-    } as Parameters<typeof addVoucher>[0]);
-    if (!voucher?.id) return sentinel;
-    const next: DairyDistribution = { ...cur, amountPaid: +(cur.amountPaid + amount).toFixed(2) };
-    commitDistribution(next, cur, () => cancelVoucher(voucher.id, 'Distribution payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: tr('✅ भुगतान दर्ज', '✅ Payment recorded'), description: tr(`₹${amount.toLocaleString('en-IN')} — बकाया ₹${(outstandingAmt - amount).toLocaleString('en-IN')}`, `₹${amount.toLocaleString('en-IN')} — outstanding ₹${(outstandingAmt - amount).toLocaleString('en-IN')}`) });
+    } as Parameters<typeof addVoucher>[0], {
+      // X-1: the paid amount moves only once the server has the payment — from the CURRENT row.
+      onSaved: (sv) => {
+        inFlight.end(`dairy-distribution:${cur.id}`);
+        const now = distributionsLatest.current.find(d => d.id === cur.id) ?? cur;
+        const next: DairyDistribution = { ...now, amountPaid: +(now.amountPaid + amount).toFixed(2) };
+        commitDistribution(next, now, () => cancelVoucher(sv.id, 'Distribution payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
+        toastRef.current({ title: tr('✅ भुगतान दर्ज', '✅ Payment recorded'), description: tr(`₹${amount.toLocaleString('en-IN')} — बकाया ₹${(now.total - next.amountPaid).toLocaleString('en-IN')}`, `₹${amount.toLocaleString('en-IN')} — outstanding ₹${(now.total - next.amountPaid).toLocaleString('en-IN')}`) });
+      },
+      onFailed: () => { inFlight.end(`dairy-distribution:${cur.id}`); voucherRefused(tr('भुगतान दर्ज नहीं हुआ', 'Payment not recorded')); },
+    });
+    if (!voucher?.id) { inFlight.end(`dairy-distribution:${cur.id}`); return sentinel; }
     return voucher;
   }, [distributions, accounts, addVoucher, cancelVoucher, commitDistribution, user]);
 
