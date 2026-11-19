@@ -14,6 +14,9 @@
  * C2 exposes the 'member' tier in the UI; 'wholesale'/'promo' are schema-ready for later slices.
  */
 import { tr } from '@/lib/uiLang';
+import { voucherRefusedToast, inFlightToast } from '@/lib/voucherRefused';
+import { useLatest } from '@/hooks/useLatest';
+import { useInFlight } from '@/hooks/useInFlight';
 import { resolveDiscountReceivedAccountId } from '@/lib/invoiceAdjustments';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
@@ -130,6 +133,9 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   societyRef.current = society;
   const toastRef = useRef(toast);
   toastRef.current = toast;
+  // X-1: a voucher refused late → the domain record is not made either (rows are written only in onSaved).
+  const voucherRefused = (title: string) => voucherRefusedToast(toastRef.current, title);
+  const inFlight = useInFlight(() => inFlightToast(toastRef.current));
 
   const guardFYLocked = useCallback((): boolean => {
     if (refuseIfWriteBlocked(toastRef.current)) return true; // F1: online-only entry (shared rule)
@@ -223,6 +229,9 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       createdBy: user?.name ?? 'Counter',
       refType: RECOVERY_REF,
       refId: data.memberId,
+    }, {
+      // X-1: the recovery IS its voucher (no row of its own); say so plainly when the server refuses it.
+      onFailed: () => voucherRefused(tr('उधार वसूली दर्ज नहीं हुई', 'Credit recovery not recorded')),
     });
   }, [memberReceivableAccountId, accounts, addVoucher, user]);
 
@@ -237,6 +246,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
 
   // ── C4: patronage rebate runs (draft → approve → pay), mirrors Dairy distribution ──
   const [patronageRuns, setPatronageRunsState] = useState<PatronageRun[]>(() => storage.getConsumerPatronageRuns());
+  const patronageRunsLatest = useLatest(patronageRuns);   // X-1: onSaved updates start from the CURRENT run
 
   const commitPatronageRun = useCallback((next: PatronageRun, revertTo: PatronageRun | null, onFail?: () => void) => {
     setPatronageRunsState(prev => { const u = prev.some(r => r.id === next.id) ? prev.map(r => r.id === next.id ? next : r) : [...prev, next]; storage.setConsumerPatronageRuns(u); return u; });
@@ -286,6 +296,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (!distAcc || !payAcc) { toastRef.current({ title: tr('खाते नहीं मिले', 'Accounts not found'), description: tr('Distribution / payable ledger missing — Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', 'Distribution / payable ledger missing — run "Create domain accounts" on the Ledger Hygiene page (admin).'), variant: 'destructive', duration: 12000 }); return null; }
     const legs = patronageLegs(cur.total, distAcc, payAcc);
     if (legs.length === 0) { toastRef.current({ title: tr('पोस्ट नहीं हुआ', 'Not posted'), variant: 'destructive' }); return null; }
+    if (!inFlight.begin(`patronage-run:${cur.id}`)) return null;   // X-1: one save at a time for this run
     const voucher = addVoucher({
       type: 'journal', date: args.resolutionDate || new Date().toISOString().slice(0, 10),
       debitAccountId: distAcc, creditAccountId: payAcc, amount: cur.total,
@@ -293,12 +304,19 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       narration: `${label} वितरण — प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total} (${cur.lines.length} सदस्य)`,
       refType: isDiv ? 'consumer.dividend' : 'consumer.patronage', refId: cur.id,
       createdBy: user?.name || 'admin',
-    } as Parameters<typeof addVoucher>[0]);
-    if (!voucher?.id) return null;
-    const next: PatronageRun = { ...cur, status: 'approved', resolutionNo: args.resolutionNo.trim(), resolutionDate: args.resolutionDate, voucherId: voucher.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
-    commitPatronageRun(next, cur, () => cancelVoucher(voucher.id, `${label} approval rolled back (cloud save failed)`, user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: `✅ ${label} approved`, description: tr(`प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}`, `Resolution ${args.resolutionNo} — total ₹${cur.total.toLocaleString('en-IN')}`) });
-    return next;
+    } as Parameters<typeof addVoucher>[0], {
+      // X-1: approved only once the server has the voucher; a late refusal leaves the draft as it was.
+      onSaved: (sv) => {
+        inFlight.end(`patronage-run:${cur.id}`);
+        const now = patronageRunsLatest.current.find(r => r.id === cur.id) ?? cur;
+        const next: PatronageRun = { ...now, status: 'approved', resolutionNo: args.resolutionNo.trim(), resolutionDate: args.resolutionDate, voucherId: sv.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
+        commitPatronageRun(next, now, () => cancelVoucher(sv.id, `${label} approval rolled back (cloud save failed)`, user?.name || 'System', { viaParent: true }));
+        toastRef.current({ title: `✅ ${label} approved`, description: tr(`प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}`, `Resolution ${args.resolutionNo} — total ₹${cur.total.toLocaleString('en-IN')}`) });
+      },
+      onFailed: () => { inFlight.end(`patronage-run:${cur.id}`); voucherRefused(tr(`${label} approve नहीं हुआ`, 'Run not approved')); },
+    });
+    if (!voucher?.id) { inFlight.end(`patronage-run:${cur.id}`); return null; }
+    return { ...cur, status: 'approved', resolutionNo: args.resolutionNo.trim(), resolutionDate: args.resolutionDate, voucherId: voucher.id };
   }, [patronageRuns, accounts, addVoucher, cancelVoucher, guardFYLocked, commitPatronageRun, user]);
 
   const recordPatronagePayment = useCallback((args: { runId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }): Voucher | null => {
@@ -312,6 +330,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const payAcc = isDiv ? resolveDividendPayableAccountId(accounts) : resolveRebatePayableAccountId(accounts);
     if (!payAcc) { toastRef.current({ title: tr('देय खाता नहीं मिला', 'Payable account not found'), description: tr('Ledger Hygiene पेज पर "डोमेन खाते बनाएँ" चलाएँ (admin).', 'Run "Create domain accounts" on the Ledger Hygiene page (admin).'), variant: 'destructive', duration: 12000 }); return null; }
     const creditAcc = args.mode === 'bank' ? (args.bankAccountId || defaultBankAccountId(accounts)) : CASH_ACCOUNT;
+    if (!inFlight.begin(`patronage-run:${cur.id}`)) return null;   // X-1: one save at a time for this run
     const voucher = addVoucher({
       type: 'payment', date: args.date,
       debitAccountId: payAcc, creditAccountId: creditAcc, amount,
@@ -319,11 +338,18 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
       narration: `${isDiv ? 'लाभांश' : 'संरक्षण रिबेट'} भुगतान — प्रस्ताव ${cur.resolutionNo}`,
       refType: isDiv ? 'consumer.dividend.payment' : 'consumer.patronage.payment', refId: cur.id,
       createdBy: user?.name || 'admin',
-    } as Parameters<typeof addVoucher>[0]);
-    if (!voucher?.id) return null;
-    const next: PatronageRun = { ...cur, amountPaid: +(cur.amountPaid + amount).toFixed(2) };
-    commitPatronageRun(next, cur, () => cancelVoucher(voucher.id, 'Patronage payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
-    toastRef.current({ title: tr('✅ भुगतान दर्ज', '✅ Payment recorded'), description: `₹${amount.toLocaleString('en-IN')}` });
+    } as Parameters<typeof addVoucher>[0], {
+      // X-1: the paid amount moves only once the server has the payment — from the CURRENT row.
+      onSaved: (sv) => {
+        inFlight.end(`patronage-run:${cur.id}`);
+        const now = patronageRunsLatest.current.find(r => r.id === cur.id) ?? cur;
+        const next: PatronageRun = { ...now, amountPaid: +(now.amountPaid + amount).toFixed(2) };
+        commitPatronageRun(next, now, () => cancelVoucher(sv.id, 'Patronage payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
+        toastRef.current({ title: tr('✅ भुगतान दर्ज', '✅ Payment recorded'), description: `₹${amount.toLocaleString('en-IN')}` });
+      },
+      onFailed: () => { inFlight.end(`patronage-run:${cur.id}`); voucherRefused(tr('भुगतान दर्ज नहीं हुआ', 'Payment not recorded')); },
+    });
+    if (!voucher?.id) { inFlight.end(`patronage-run:${cur.id}`); return null; }
     return voucher;
   }, [patronageRuns, accounts, addVoucher, cancelVoucher, guardFYLocked, commitPatronageRun, user]);
 
@@ -554,30 +580,39 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     gstLegs('output', { cgst: cgstAmount, sgst: sgstAmount, igst: igstAmount, total: taxAmount }, { legacy: usesCombinedGst('output', sale.voucherId ? vouchers.find(v => v.id === sale.voucherId) : null) })
       .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Dr', amount: g.amount }));
     lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: grandTotal });
+    const ret: SalesReturn = {
+      id: lid(), returnNo, date: data.date, originalSaleId: sale.id, saleNo: sale.saleNo,
+      customerName: sale.customerName, memberId: sale.memberId, customerId: sale.customerId,
+      items, netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal,
+      refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: '',
+      createdBy: user?.name ?? 'admin', createdAt: new Date().toISOString(),
+    };
+    const key = 'sales-return:new';   // X-1: the number and the sold-qty cap read the list — one new return at a time
+    if (!inFlight.begin(key)) return null;
     const voucher = addVoucher({
       type: 'credit_note', date: data.date,
       debitAccountId: salesReturnAccId, creditAccountId: creditAccId, amount: grandTotal, lines,
       narration: `बिक्री वापसी — ${sale.saleNo}`, refType: 'sale.return', refId: sale.id,
       createdBy: user?.name ?? 'admin',
-    } as Parameters<typeof addVoucher>[0]);
-    if (!voucher?.id) return null;
-    // Goods back in stock (positive adjustment; canonical stock formula adds it).
-    items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: returnNo, narration: `Sales return ${sale.saleNo}` }));
-    const ret: SalesReturn = {
-      id: lid(), returnNo, date: data.date, originalSaleId: sale.id, saleNo: sale.saleNo,
-      customerName: sale.customerName, memberId: sale.memberId, customerId: sale.customerId,
-      items, netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal,
-      refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: voucher.id,
-      createdBy: user?.name ?? 'admin', createdAt: new Date().toISOString(),
-    };
-    commitSalesReturn(ret, null, () => {
-      cancelVoucher(voucher.id, 'Sales return rolled back (cloud save failed)', user?.name || 'System', { viaParent: true });
-      // RULE 1/2: also reverse the stock added back at creation (compensating negative adjustment),
-      // else a failed cloud save leaves phantom inventory with no return record — mirrors deleteSalesReturn.
-      items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: `${returnNo}/REV`, narration: `Sales return rolled back ${sale.saleNo}` }));
+    } as Parameters<typeof addVoucher>[0], {
+      // X-1: the stock and the return row move only once the server has the credit note — a late refusal
+      // leaves no phantom inventory and no return pointing at a voucher that does not exist.
+      onSaved: (sv) => {
+        inFlight.end(key);
+        // Goods back in stock (positive adjustment; canonical stock formula adds it).
+        items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: returnNo, narration: `Sales return ${sale.saleNo}` }));
+        commitSalesReturn({ ...ret, voucherId: sv.id }, null, () => {
+          cancelVoucher(sv.id, 'Sales return rolled back (cloud save failed)', user?.name || 'System', { viaParent: true });
+          // RULE 1/2: also reverse the stock added back at creation (compensating negative adjustment),
+          // else a failed cloud save leaves phantom inventory with no return record — mirrors deleteSalesReturn.
+          items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: `${returnNo}/REV`, narration: `Sales return rolled back ${sale.saleNo}` }));
+        });
+        toastRef.current({ title: tr(`✅ वापसी दर्ज — ${returnNo}`, `✅ Return recorded — ${returnNo}`), description: tr(`स्टॉक वापस + ₹${grandTotal.toLocaleString('en-IN')}`, `Stock back + ₹${grandTotal.toLocaleString('en-IN')}`) });
+      },
+      onFailed: () => { inFlight.end(key); voucherRefused(tr('बिक्री वापसी दर्ज नहीं हुई', 'Sales return not recorded')); },
     });
-    toastRef.current({ title: tr(`✅ वापसी दर्ज — ${returnNo}`, `✅ Return recorded — ${returnNo}`), description: tr(`स्टॉक वापस + ₹${grandTotal.toLocaleString('en-IN')}`, `Stock back + ₹${grandTotal.toLocaleString('en-IN')}`) });
-    return ret;
+    if (!voucher?.id) { inFlight.end(key); return null; }
+    return { ...ret, voucherId: voucher.id };
   }, [sales, salesReturns, accounts, vouchers, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, gstLegs, user]);
 
   // Edit a posted sales return (fix a wrong quantity/refund). Reverses the old return's
@@ -612,12 +647,11 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const grandTotal = round2(netAmount + taxAmount);
     if (!(grandTotal > 0)) { toastRef.current({ title: tr('वापसी राशि शून्य', 'Return amount is zero'), variant: 'destructive' }); return null; }
 
-    // 1) Reverse the OLD return: cancel its voucher + compensating −qty stock (mirrors delete).
-    // H4: abort if the old voucher could not be cancelled (lock/permission) — else two live postings.
-    if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Sales return edited', user?.name || 'System', { viaParent: true })) return null;
-    cur.items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: `${cur.returnNo}/EDIT`, narration: `Sales return edited — reverse old ${cur.saleNo}` }));
-
-    // 2) Post the NEW voucher (same return no. kept on the record).
+    // X-1: the NEW credit note is posted FIRST; only once the server has it is the old one reversed (voucher + stock)
+    // and the new stock and row written. A late refusal now leaves the old return fully intact — before, the old
+    // voucher was already cancelled, so the ledger was left with no credit note at all.
+    const key = `sales-return:${cur.id}`;
+    if (!inFlight.begin(key)) return null;
     const creditAccId = salesReturnCreditAccountId({
       refundMode: data.refundMode, bankAccountId: data.bankAccountId, bankAccountIds: getBankAccountIds(accounts),
       saleVoucher: sale.voucherId ? vouchers.find(v => v.id === sale.voucherId) : null,
@@ -629,25 +663,37 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     gstLegs('output', { cgst: cgstAmount, sgst: sgstAmount, igst: igstAmount, total: taxAmount }, { legacy: usesCombinedGst('output', sale.voucherId ? vouchers.find(v => v.id === sale.voucherId) : null) })
       .forEach(g => lines.push({ id: lid(), accountId: g.accountId, type: 'Dr', amount: g.amount }));
     lines.push({ id: lid(), accountId: creditAccId, type: 'Cr', amount: grandTotal });
+    const updated: SalesReturn = {
+      ...cur, date: data.date, originalSaleId: sale.id, saleNo: sale.saleNo,
+      customerName: sale.customerName, memberId: sale.memberId, customerId: sale.customerId,
+      items, netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal,
+      refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: '',
+    };
     const voucher = addVoucher({
       type: 'credit_note', date: data.date,
       debitAccountId: salesReturnAccId, creditAccountId: creditAccId, amount: grandTotal, lines,
       narration: `बिक्री वापसी (संशोधित) — ${sale.saleNo}`, refType: 'sale.return', refId: sale.id,
       createdBy: user?.name ?? 'admin',
-    } as Parameters<typeof addVoucher>[0]);
-    if (!voucher?.id) return null;
-    // 3) New goods-back-in-stock movements under the original return no.
-    items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: cur.returnNo, narration: `Sales return (edited) ${sale.saleNo}` }));
-
-    const updated: SalesReturn = {
-      ...cur, date: data.date, originalSaleId: sale.id, saleNo: sale.saleNo,
-      customerName: sale.customerName, memberId: sale.memberId, customerId: sale.customerId,
-      items, netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal,
-      refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: voucher.id,
-    };
-    commitSalesReturn(updated, cur);
-    toastRef.current({ title: tr(`✅ वापसी संशोधित — ${cur.returnNo}`, `✅ Return revised — ${cur.returnNo}`), description: tr(`नई राशि ₹${grandTotal.toLocaleString('en-IN')}`, `New amount ₹${grandTotal.toLocaleString('en-IN')}`) });
-    return updated;
+    } as Parameters<typeof addVoucher>[0], {
+      onSaved: (sv) => {
+        inFlight.end(key);
+        // 1. Reverse the OLD return: cancel its voucher + compensating −qty stock (mirrors delete).
+        // H4: if the old voucher cannot be cancelled (lock/permission), withdraw the NEW one — never two live postings.
+        if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Sales return edited', user?.name || 'System', { viaParent: true })) {
+          cancelVoucher(sv.id, 'Sales return edit withdrawn (old credit note could not be cancelled)', user?.name || 'System', { viaParent: true });
+          toastRef.current({ title: tr('वापसी संशोधित नहीं हुई', 'Return not revised'), description: tr('पुराना credit note रद्द नहीं हो सका, इसलिए नया भी वापस ले लिया गया — वापसी पहले जैसी है।', 'The old credit note could not be cancelled, so the new one was withdrawn too — the return is as it was.'), variant: 'destructive', duration: 12000 });
+          return;
+        }
+        cur.items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: `${cur.returnNo}/EDIT`, narration: `Sales return edited — reverse old ${cur.saleNo}` }));
+        // 2. New goods-back-in-stock movements under the original return no.
+        items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: cur.returnNo, narration: `Sales return (edited) ${sale.saleNo}` }));
+        commitSalesReturn({ ...updated, voucherId: sv.id }, cur);
+        toastRef.current({ title: tr(`✅ वापसी संशोधित — ${cur.returnNo}`, `✅ Return revised — ${cur.returnNo}`), description: tr(`नई राशि ₹${grandTotal.toLocaleString('en-IN')}`, `New amount ₹${grandTotal.toLocaleString('en-IN')}`) });
+      },
+      onFailed: () => { inFlight.end(key); voucherRefused(tr('वापसी संशोधित नहीं हुई — पुरानी वापसी जस की तस है', 'Return not revised — the old return is unchanged')); },
+    });
+    if (!voucher?.id) { inFlight.end(key); return null; }
+    return { ...updated, voucherId: voucher.id };
   }, [sales, salesReturns, accounts, vouchers, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, addAccount, commitSalesReturn, gstLegs, user]);
 
   const deleteSalesReturn = useCallback((id: string) => {
@@ -742,30 +788,38 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (rcmAccId) lines.push({ id: lid(), accountId: rcmAccId, type: 'Dr', amount: taxAmount });
     if (cashDiscShare > 0) lines.push({ id: lid(), accountId: resolveDiscountReceivedAccountId(accounts), type: 'Dr', amount: cashDiscShare });
     const primaryCrAcc = purchaseAccBuckets.size > 0 ? [...purchaseAccBuckets.keys()][0] : '5101';
+    const ret: PurchaseReturn = {
+      id: lid(), returnNo, date: data.date, originalPurchaseId: purchase.id, purchaseNo: purchase.purchaseNo,
+      supplierName: purchase.supplierName, supplierId: purchase.supplierId,
+      items, netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal,
+      refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: '',
+      createdBy: user?.name ?? 'admin', createdAt: new Date().toISOString(),
+    };
+    const key = 'purchase-return:new';   // X-1: the number and the bought-qty cap read the list — one new return at a time
+    if (!inFlight.begin(key)) return null;
     const voucher = addVoucher({
       type: 'debit_note', date: data.date,
       debitAccountId: debitAccId, creditAccountId: primaryCrAcc, amount: grandTotal, lines,
       narration: `खरीद वापसी — ${purchase.purchaseNo}`, refType: 'purchase.return', refId: purchase.id,
       createdBy: user?.name ?? 'admin',
-    } as Parameters<typeof addVoucher>[0]);
-    if (!voucher?.id) return null;
-    // Goods leave stock (negative adjustment; canonical stock formula subtracts it).
-    items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: returnNo, narration: `Purchase return ${purchase.purchaseNo}` }));
-    const ret: PurchaseReturn = {
-      id: lid(), returnNo, date: data.date, originalPurchaseId: purchase.id, purchaseNo: purchase.purchaseNo,
-      supplierName: purchase.supplierName, supplierId: purchase.supplierId,
-      items, netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal,
-      refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: voucher.id,
-      createdBy: user?.name ?? 'admin', createdAt: new Date().toISOString(),
-    };
-    commitPurchaseReturn(ret, null, () => {
-      cancelVoucher(voucher.id, 'Purchase return rolled back (cloud save failed)', user?.name || 'System', { viaParent: true });
-      // RULE 1/2: also restore the stock removed at creation (compensating positive adjustment),
-      // else a failed cloud save leaves inventory understated with no return record — mirrors deletePurchaseReturn.
-      items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: `${returnNo}/REV`, narration: `Purchase return rolled back ${purchase.purchaseNo}` }));
+    } as Parameters<typeof addVoucher>[0], {
+      // X-1: the stock and the return row move only once the server has the debit note.
+      onSaved: (sv) => {
+        inFlight.end(key);
+        // Goods leave stock (negative adjustment; canonical stock formula subtracts it).
+        items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: returnNo, narration: `Purchase return ${purchase.purchaseNo}` }));
+        commitPurchaseReturn({ ...ret, voucherId: sv.id }, null, () => {
+          cancelVoucher(sv.id, 'Purchase return rolled back (cloud save failed)', user?.name || 'System', { viaParent: true });
+          // RULE 1/2: also restore the stock removed at creation (compensating positive adjustment),
+          // else a failed cloud save leaves inventory understated with no return record — mirrors deletePurchaseReturn.
+          items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: `${returnNo}/REV`, narration: `Purchase return rolled back ${purchase.purchaseNo}` }));
+        });
+        toastRef.current({ title: tr(`✅ खरीद वापसी दर्ज — ${returnNo}`, `✅ Purchase return recorded — ${returnNo}`), description: tr(`स्टॉक कम + ₹${grandTotal.toLocaleString('en-IN')}`, `Stock reduced + ₹${grandTotal.toLocaleString('en-IN')}`) });
+      },
+      onFailed: () => { inFlight.end(key); voucherRefused(tr('खरीद वापसी दर्ज नहीं हुई', 'Purchase return not recorded')); },
     });
-    toastRef.current({ title: tr(`✅ खरीद वापसी दर्ज — ${returnNo}`, `✅ Purchase return recorded — ${returnNo}`), description: tr(`स्टॉक कम + ₹${grandTotal.toLocaleString('en-IN')}`, `Stock reduced + ₹${grandTotal.toLocaleString('en-IN')}`) });
-    return ret;
+    if (!voucher?.id) { inFlight.end(key); return null; }
+    return { ...ret, voucherId: voucher.id };
   }, [purchases, purchaseReturns, suppliers, stockItems, accounts, vouchers, society.financialYear, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitPurchaseReturn, gstLegs, user]);
 
   // Edit a posted purchase return. Reverses the old return's voucher + stock, then re-posts
@@ -800,11 +854,10 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     const grandTotal = round2(netAmount + (rcmAccId ? 0 : taxAmount) - cashDiscShare);
     if (!(grandTotal > 0)) { toastRef.current({ title: tr('वापसी राशि शून्य', 'Return amount is zero'), variant: 'destructive' }); return null; }
 
-    // 1) Reverse the OLD return: cancel its voucher + restore the stock it removed (+qty).
-    if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Purchase return edited', user?.name || 'System', { viaParent: true })) return null;
-    cur.items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: `${cur.returnNo}/EDIT`, narration: `Purchase return edited — restore old ${cur.purchaseNo}` }));
-
-    // 2) Post the NEW voucher (same return no. kept on the record).
+    // X-1: the NEW debit note is posted FIRST; only once the server has it is the old one reversed (voucher + stock)
+    // and the new stock and row written — a late refusal leaves the old return fully intact.
+    const key = `purchase-return:${cur.id}`;
+    if (!inFlight.begin(key)) return null;
     const supplierAccId = purchase.supplierId ? (suppliers.find(s => s.id === purchase.supplierId)?.accountId || storage.defaultCreditorsAccountId(accounts)) : storage.defaultCreditorsAccountId(accounts);
     const debitAccId = data.refundMode === 'cash' ? '3301'
       : data.refundMode === 'bank' ? (data.bankAccountId || defaultBankAccountId(accounts))
@@ -826,25 +879,37 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
     if (rcmAccId) lines.push({ id: lid(), accountId: rcmAccId, type: 'Dr', amount: taxAmount });
     if (cashDiscShare > 0) lines.push({ id: lid(), accountId: resolveDiscountReceivedAccountId(accounts), type: 'Dr', amount: cashDiscShare });
     const primaryCrAcc = purchaseAccBuckets.size > 0 ? [...purchaseAccBuckets.keys()][0] : '5101';
+    const updated: PurchaseReturn = {
+      ...cur, date: data.date, originalPurchaseId: purchase.id, purchaseNo: purchase.purchaseNo,
+      supplierName: purchase.supplierName, supplierId: purchase.supplierId,
+      items, netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal,
+      refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: '',
+    };
     const voucher = addVoucher({
       type: 'debit_note', date: data.date,
       debitAccountId: debitAccId, creditAccountId: primaryCrAcc, amount: grandTotal, lines,
       narration: `खरीद वापसी (संशोधित) — ${purchase.purchaseNo}`, refType: 'purchase.return', refId: purchase.id,
       createdBy: user?.name ?? 'admin',
-    } as Parameters<typeof addVoucher>[0]);
-    if (!voucher?.id) return null;
-    // 3) New goods-leave-stock movements under the original return no.
-    items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: cur.returnNo, narration: `Purchase return (edited) ${purchase.purchaseNo}` }));
-
-    const updated: PurchaseReturn = {
-      ...cur, date: data.date, originalPurchaseId: purchase.id, purchaseNo: purchase.purchaseNo,
-      supplierName: purchase.supplierName, supplierId: purchase.supplierId,
-      items, netAmount, cgstAmount, sgstAmount, igstAmount, taxAmount, grandTotal,
-      refundMode: data.refundMode, bankAccountId: data.bankAccountId, voucherId: voucher.id,
-    };
-    commitPurchaseReturn(updated, cur);
-    toastRef.current({ title: tr(`✅ खरीद वापसी संशोधित — ${cur.returnNo}`, `✅ Purchase return revised — ${cur.returnNo}`), description: tr(`नई राशि ₹${grandTotal.toLocaleString('en-IN')}`, `New amount ₹${grandTotal.toLocaleString('en-IN')}`) });
-    return updated;
+    } as Parameters<typeof addVoucher>[0], {
+      onSaved: (sv) => {
+        inFlight.end(key);
+        // 1. Reverse the OLD return: cancel its voucher + restore the stock it removed (+qty).
+        // If the old voucher cannot be cancelled, withdraw the NEW one — never two live postings.
+        if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Purchase return edited', user?.name || 'System', { viaParent: true })) {
+          cancelVoucher(sv.id, 'Purchase return edit withdrawn (old debit note could not be cancelled)', user?.name || 'System', { viaParent: true });
+          toastRef.current({ title: tr('खरीद वापसी संशोधित नहीं हुई', 'Purchase return not revised'), description: tr('पुराना debit note रद्द नहीं हो सका, इसलिए नया भी वापस ले लिया गया — वापसी पहले जैसी है।', 'The old debit note could not be cancelled, so the new one was withdrawn too — the return is as it was.'), variant: 'destructive', duration: 12000 });
+          return;
+        }
+        cur.items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: `${cur.returnNo}/EDIT`, narration: `Purchase return edited — restore old ${cur.purchaseNo}` }));
+        // 2. New goods-leave-stock movements under the original return no.
+        items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: cur.returnNo, narration: `Purchase return (edited) ${purchase.purchaseNo}` }));
+        commitPurchaseReturn({ ...updated, voucherId: sv.id }, cur);
+        toastRef.current({ title: tr(`✅ खरीद वापसी संशोधित — ${cur.returnNo}`, `✅ Purchase return revised — ${cur.returnNo}`), description: tr(`नई राशि ₹${grandTotal.toLocaleString('en-IN')}`, `New amount ₹${grandTotal.toLocaleString('en-IN')}`) });
+      },
+      onFailed: () => { inFlight.end(key); voucherRefused(tr('खरीद वापसी संशोधित नहीं हुई — पुरानी वापसी जस की तस है', 'Purchase return not revised — the old return is unchanged')); },
+    });
+    if (!voucher?.id) { inFlight.end(key); return null; }
+    return { ...updated, voucherId: voucher.id };
   }, [purchases, purchaseReturns, suppliers, stockItems, accounts, vouchers, guardFYLocked, addVoucher, cancelVoucher, addStockMovement, commitPurchaseReturn, gstLegs, user]);
 
   const deletePurchaseReturn = useCallback((id: string) => {

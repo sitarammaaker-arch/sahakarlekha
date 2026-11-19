@@ -11,6 +11,9 @@
  * upsert, with RULE-1 rollback on cloud failure and a RULE-6 FY-lock guard on every mutation.
  */
 import { tr } from '@/lib/uiLang';
+import { voucherRefusedToast, inFlightToast } from '@/lib/voucherRefused';
+import { useLatest } from '@/hooks/useLatest';
+import { useInFlight } from '@/hooks/useInFlight';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
 import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
@@ -105,6 +108,9 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const toastRef = useRef(toast);
   useEffect(() => { toastRef.current = toast; }, [toast]);
+  // X-1: a voucher refused late → the domain record is not made either (rows are written only in onSaved).
+  const voucherRefused = (title: string) => voucherRefusedToast(toastRef.current, title);
+  const inFlight = useInFlight(() => inFlightToast(toastRef.current));
 
   const societyId = user?.societyId || 'SOC001';
   // T-01: stamp BOTH tenancy keys (society_id + jurisdiction) — the value comes from the SSOT
@@ -125,6 +131,10 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   const [departmentBills, setDepartmentBillsState] = useState<DepartmentBill[]>(() => storage.getDepartmentBills());
   const [workerAdvances, setWorkerAdvancesState] = useState<WorkerAdvance[]>(() => storage.getWorkerAdvances());
   const [pfEsiRuns, setPfEsiRunsState] = useState<PfEsiRun[]>(() => storage.getPfEsiRuns());
+  // X-1: updates applied in a voucher's onSaved start from the CURRENT rows.
+  const departmentBillsLatest = useLatest(departmentBills);
+  const workerAdvancesLatest = useLatest(workerAdvances);
+  const pfEsiRunsLatest = useLatest(pfEsiRuns);
   // H / RULE 3: vouchers these documents carry are cancelled through the document, not alone.
   const ownerGroupsRef = useRef<OwnerGroup[]>([]);
   ownerGroupsRef.current = [{ label: tr('विभाग बिल', 'Department bill'), docs: departmentBills }, { label: tr('श्रमिक अग्रिम', 'Worker advance'), docs: workerAdvances }, { label: 'PF/ESI', docs: pfEsiRuns }];
@@ -300,6 +310,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const maxNum = departmentBills.reduce((max, b) => { const m = b.billNo?.match(/DB\/(\d+)/); return m ? Math.max(max, parseInt(m[1], 10)) : max; }, 0);
     const billNo = `DB/${String(maxNum + 1).padStart(4, '0')}`;
     const lid = () => crypto.randomUUID();
+    if (!inFlight.begin('dept-bill:new')) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'journal', date: data.date,
       debitAccountId: dept.accountId, creditAccountId: '4203', amount: data.amount,
@@ -310,20 +321,27 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         { id: lid(), accountId: dept.accountId, type: 'Dr', amount: data.amount },
         { id: lid(), accountId: '4203', type: 'Cr', amount: data.amount },
       ],
-    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>);
-    if (!voucher.id) return sentinel;
-    const bill: DepartmentBill = { id, billNo, departmentId: data.departmentId, workOrderId: data.workOrderId, billType: data.billType, date: data.date, amount: data.amount, paidAmount: 0, status: 'unpaid', voucherId: voucher.id, narration: data.narration, createdAt: new Date().toISOString() };
-    setDepartmentBillsState(prev => { const u = [...prev, bill]; storage.setDepartmentBills(u); return u; });
-    supabase.from('department_bills').upsert(withSoc(bill)).then(({ error }) => {
-      if (error) {
-        console.error('Department bill save error:', error.message);
-        setDepartmentBillsState(prev => { const r = prev.filter(b => b.id !== bill.id); storage.setDepartmentBills(r); return r; });
-        cancelVoucher(voucher.id, 'Department bill rolled back (save failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: tr('बिल सेव नहीं हुआ', 'Bill not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. बिल वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The bill has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
-      }
+    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>, {
+      // X-1: the bill row is written only once the server has the voucher; a late refusal leaves nothing behind.
+      onSaved: (sv) => {
+        inFlight.end('dept-bill:new');
+        const bill: DepartmentBill = { id, billNo, departmentId: data.departmentId, workOrderId: data.workOrderId, billType: data.billType, date: data.date, amount: data.amount, paidAmount: 0, status: 'unpaid', voucherId: sv.id, narration: data.narration, createdAt: new Date().toISOString() };
+        setDepartmentBillsState(prev => { const u = [...prev, bill]; storage.setDepartmentBills(u); return u; });
+        supabase.from('department_bills').upsert(withSoc(bill)).then(({ error }) => {
+          if (error) {
+            console.error('Department bill save error:', error.message);
+            setDepartmentBillsState(prev => { const r = prev.filter(b => b.id !== bill.id); storage.setDepartmentBills(r); return r; });
+            cancelVoucher(sv.id, 'Department bill rolled back (save failed)', user?.name || 'System', { viaParent: true });
+            toastRef.current({ title: tr('बिल सेव नहीं हुआ', 'Bill not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. बिल वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The bill has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
+            return;
+          }
+          toastRef.current({ title: tr('विभाग बिल दर्ज हुआ', 'Department bill recorded'), description: `${billNo} · ${dept.name} · ₹${data.amount}`, duration: 6000 });
+        });
+      },
+      onFailed: () => { inFlight.end('dept-bill:new'); voucherRefused(tr('विभाग बिल दर्ज नहीं हुआ', 'Department bill not recorded')); },
     });
-    toastRef.current({ title: tr('विभाग बिल दर्ज हुआ', 'Department bill recorded'), description: `${billNo} · ${dept.name} · ₹${data.amount}`, duration: 6000 });
-    return bill;
+    if (!voucher?.id) { inFlight.end('dept-bill:new'); return sentinel; }
+    return { id, billNo, departmentId: data.departmentId, workOrderId: data.workOrderId, billType: data.billType, date: data.date, amount: data.amount, paidAmount: 0, status: 'unpaid', voucherId: voucher.id, narration: data.narration, createdAt: new Date().toISOString() };
   }, [departments, departmentBills, society, user, addVoucher, cancelVoucher]);
 
   const recordDepartmentCollection = useCallback((data: { billId: string; amount: number; tdsAmount?: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string; reference?: string; remarks?: string }): Voucher => {
@@ -346,6 +364,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
     const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
     const tdsNarr = tds > 0 ? ` · TDS ₹${tds}` : '';
+    if (!inFlight.begin(`dept-bill:${bill.id}`)) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'receipt', date: data.date,
       // Header keeps the cash/bank receipt; lines carry the full split (incl. TDS receivable).
@@ -358,21 +377,29 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         ...(tds > 0 ? [{ id: lid(), accountId: '3307', type: 'Dr' as const, amount: tds }] : []),   // TDS Receivable
         { id: lid(), accountId: dept.accountId, type: 'Cr' as const, amount: data.amount },
       ],
-    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>);
-    if (!voucher.id) return sentinel;
-    const newPaid = +(bill.paidAmount + data.amount).toFixed(2);
-    const status: DepartmentBill['status'] = newPaid >= bill.amount - 0.005 ? 'paid' : newPaid > 0 ? 'partial' : 'unpaid';
-    const next: DepartmentBill = { ...bill, paidAmount: newPaid, status };
-    setDepartmentBillsState(prev => { const u = prev.map(b => b.id === bill.id ? next : b); storage.setDepartmentBills(u); return u; });
-    supabase.from('department_bills').upsert(withSoc(next)).then(({ error }) => {
-      if (error) {
-        console.error('Department collection bill-update error:', error.message);
-        setDepartmentBillsState(prev => { const u = prev.map(b => b.id === bill.id ? bill : b); storage.setDepartmentBills(u); return u; });
-        cancelVoucher(voucher.id, 'Department collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: tr('वसूली सेव नहीं हुई', 'Collection not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The receipt has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
-      }
+    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>, {
+      // X-1: the bill moves only once the server has the receipt — from the CURRENT row, not the captured one.
+      onSaved: (sv) => {
+        inFlight.end(`dept-bill:${bill.id}`);
+        const cur = departmentBillsLatest.current.find(b => b.id === bill.id) ?? bill;
+        const newPaid = +(cur.paidAmount + data.amount).toFixed(2);
+        const status: DepartmentBill['status'] = newPaid >= cur.amount - 0.005 ? 'paid' : newPaid > 0 ? 'partial' : 'unpaid';
+        const next: DepartmentBill = { ...cur, paidAmount: newPaid, status };
+        setDepartmentBillsState(prev => { const u = prev.map(b => b.id === bill.id ? next : b); storage.setDepartmentBills(u); return u; });
+        supabase.from('department_bills').upsert(withSoc(next)).then(({ error }) => {
+          if (error) {
+            console.error('Department collection bill-update error:', error.message);
+            setDepartmentBillsState(prev => { const u = prev.map(b => b.id === bill.id ? cur : b); storage.setDepartmentBills(u); return u; });
+            cancelVoucher(sv.id, 'Department collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true });
+            toastRef.current({ title: tr('वसूली सेव नहीं हुई', 'Collection not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The receipt has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
+            return;
+          }
+          toastRef.current({ title: tr('वसूली दर्ज हुई', 'Collection recorded'), description: tr(`${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'पूर्ण' : 'आंशिक'}`, `${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'full' : 'partial'}`), duration: 6000 });
+        });
+      },
+      onFailed: () => { inFlight.end(`dept-bill:${bill.id}`); voucherRefused(tr('वसूली दर्ज नहीं हुई', 'Collection not recorded')); },
     });
-    toastRef.current({ title: tr('वसूली दर्ज हुई', 'Collection recorded'), description: tr(`${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'पूर्ण' : 'आंशिक'}`, `${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'full' : 'partial'}`), duration: 6000 });
+    if (!voucher?.id) { inFlight.end(`dept-bill:${bill.id}`); return sentinel; }
     return voucher;
   }, [departmentBills, departments, accounts, society, user, addVoucher, cancelVoucher]);
 
@@ -409,6 +436,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const advanceNo = `ADV/${String(maxNum + 1).padStart(3, '0')}`;
     const creditAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.defaultBankAccountId(accounts) || storage.ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
+    if (!inFlight.begin('worker-advance:new')) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'payment', date: data.date,
       debitAccountId: '3304', creditAccountId: creditAcc, amount: data.amount,
@@ -419,20 +447,27 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         { id: lid(), accountId: '3304', type: 'Dr', amount: data.amount },
         { id: lid(), accountId: creditAcc, type: 'Cr', amount: data.amount },
       ],
-    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>);
-    if (!voucher.id) return sentinel;
-    const adv: WorkerAdvance = { id, advanceNo, workerId: data.workerId, date: data.date, amount: data.amount, recovered: 0, status: 'open', mode: data.mode, voucherId: voucher.id, narration: data.narration, createdAt: new Date().toISOString() };
-    setWorkerAdvancesState(prev => { const u = [...prev, adv]; storage.setWorkerAdvances(u); return u; });
-    supabase.from('worker_advances').upsert(withSoc(adv)).then(({ error }) => {
-      if (error) {
-        console.error('Worker advance save error:', error.message);
-        setWorkerAdvancesState(prev => { const r = prev.filter(a => a.id !== adv.id); storage.setWorkerAdvances(r); return r; });
-        cancelVoucher(voucher.id, 'Worker advance rolled back (save failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: tr('अग्रिम सेव नहीं हुआ', 'Advance not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. It has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
-      }
+    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>, {
+      // X-1: the advance row is written only once the server has the payment voucher.
+      onSaved: (sv) => {
+        inFlight.end('worker-advance:new');
+        const adv: WorkerAdvance = { id, advanceNo, workerId: data.workerId, date: data.date, amount: data.amount, recovered: 0, status: 'open', mode: data.mode, voucherId: sv.id, narration: data.narration, createdAt: new Date().toISOString() };
+        setWorkerAdvancesState(prev => { const u = [...prev, adv]; storage.setWorkerAdvances(u); return u; });
+        supabase.from('worker_advances').upsert(withSoc(adv)).then(({ error }) => {
+          if (error) {
+            console.error('Worker advance save error:', error.message);
+            setWorkerAdvancesState(prev => { const r = prev.filter(a => a.id !== adv.id); storage.setWorkerAdvances(r); return r; });
+            cancelVoucher(sv.id, 'Worker advance rolled back (save failed)', user?.name || 'System', { viaParent: true });
+            toastRef.current({ title: tr('अग्रिम सेव नहीं हुआ', 'Advance not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. It has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
+            return;
+          }
+          toastRef.current({ title: tr('श्रमिक अग्रिम दर्ज हुआ', 'Worker advance recorded'), description: `${advanceNo} · ${worker.name} · ₹${data.amount}`, duration: 6000 });
+        });
+      },
+      onFailed: () => { inFlight.end('worker-advance:new'); voucherRefused(tr('श्रमिक अग्रिम दर्ज नहीं हुआ', 'Worker advance not recorded')); },
     });
-    toastRef.current({ title: tr('श्रमिक अग्रिम दर्ज हुआ', 'Worker advance recorded'), description: `${advanceNo} · ${worker.name} · ₹${data.amount}`, duration: 6000 });
-    return adv;
+    if (!voucher?.id) { inFlight.end('worker-advance:new'); return sentinel; }
+    return { id, advanceNo, workerId: data.workerId, date: data.date, amount: data.amount, recovered: 0, status: 'open', mode: data.mode, voucherId: voucher.id, narration: data.narration, createdAt: new Date().toISOString() };
   }, [workers, workerAdvances, accounts, society, user, addVoucher, cancelVoucher]);
 
   const recordAdvanceRecovery = useCallback((data: { advanceId: string; amount: number; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }): Voucher => {
@@ -446,6 +481,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     if (data.amount > outstanding + 0.005) { toastRef.current({ title: tr('राशि बकाया से अधिक', 'Amount is more than the outstanding'), description: tr(`वसूली ₹${data.amount} बकाया ₹${outstanding} से अधिक नहीं हो सकती।`, `Recovery ₹${data.amount} cannot be more than the outstanding ₹${outstanding}.`), variant: 'destructive', duration: 9000 }); return sentinel; }
     const debitAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.defaultBankAccountId(accounts) || storage.ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
+    if (!inFlight.begin(`worker-advance:${adv.id}`)) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'receipt', date: data.date,
       debitAccountId: debitAcc, creditAccountId: '3304', amount: data.amount,
@@ -456,20 +492,28 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         { id: lid(), accountId: debitAcc, type: 'Dr', amount: data.amount },
         { id: lid(), accountId: '3304', type: 'Cr', amount: data.amount },
       ],
-    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>);
-    if (!voucher.id) return sentinel;
-    const newRec = +(adv.recovered + data.amount).toFixed(2);
-    const next: WorkerAdvance = { ...adv, recovered: newRec, status: newRec >= adv.amount - 0.005 ? 'cleared' : 'open' };
-    setWorkerAdvancesState(prev => { const u = prev.map(a => a.id === adv.id ? next : a); storage.setWorkerAdvances(u); return u; });
-    supabase.from('worker_advances').upsert(withSoc(next)).then(({ error }) => {
-      if (error) {
-        console.error('Advance recovery update error:', error.message);
-        setWorkerAdvancesState(prev => { const u = prev.map(a => a.id === adv.id ? adv : a); storage.setWorkerAdvances(u); return u; });
-        cancelVoucher(voucher.id, 'Advance recovery rolled back (update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: tr('वसूली सेव नहीं हुई', 'Recovery not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The receipt has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
-      }
+    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>, {
+      // X-1: the advance moves only once the server has the receipt — from the CURRENT row.
+      onSaved: (sv) => {
+        inFlight.end(`worker-advance:${adv.id}`);
+        const cur = workerAdvancesLatest.current.find(a => a.id === adv.id) ?? adv;
+        const newRec = +(cur.recovered + data.amount).toFixed(2);
+        const next: WorkerAdvance = { ...cur, recovered: newRec, status: newRec >= cur.amount - 0.005 ? 'cleared' : 'open' };
+        setWorkerAdvancesState(prev => { const u = prev.map(a => a.id === adv.id ? next : a); storage.setWorkerAdvances(u); return u; });
+        supabase.from('worker_advances').upsert(withSoc(next)).then(({ error }) => {
+          if (error) {
+            console.error('Advance recovery update error:', error.message);
+            setWorkerAdvancesState(prev => { const u = prev.map(a => a.id === adv.id ? cur : a); storage.setWorkerAdvances(u); return u; });
+            cancelVoucher(sv.id, 'Advance recovery rolled back (update failed)', user?.name || 'System', { viaParent: true });
+            toastRef.current({ title: tr('वसूली सेव नहीं हुई', 'Recovery not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The receipt has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
+            return;
+          }
+          toastRef.current({ title: tr('अग्रिम वसूली दर्ज हुई', 'Advance recovery recorded'), description: tr(`${adv.advanceNo} · ₹${data.amount} · ${next.status === 'cleared' ? 'पूर्ण' : 'आंशिक'}`, `${adv.advanceNo} · ₹${data.amount} · ${next.status === 'cleared' ? 'full' : 'partial'}`), duration: 6000 });
+        });
+      },
+      onFailed: () => { inFlight.end(`worker-advance:${adv.id}`); voucherRefused(tr('अग्रिम वसूली दर्ज नहीं हुई', 'Advance recovery not recorded')); },
     });
-    toastRef.current({ title: tr('अग्रिम वसूली दर्ज हुई', 'Advance recovery recorded'), description: tr(`${adv.advanceNo} · ₹${data.amount} · ${next.status === 'cleared' ? 'पूर्ण' : 'आंशिक'}`, `${adv.advanceNo} · ₹${data.amount} · ${next.status === 'cleared' ? 'full' : 'partial'}`), duration: 6000 });
+    if (!voucher?.id) { inFlight.end(`worker-advance:${adv.id}`); return sentinel; }
     return voucher;
   }, [workerAdvances, workers, accounts, society, user, addVoucher, cancelVoucher]);
 
@@ -546,6 +590,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       ...(epfTotal > 0 ? [{ id: lid(), accountId: '2203', type: 'Cr' as const, amount: epfTotal }] : []),
       ...(esiTotal > 0 ? [{ id: lid(), accountId: '2204', type: 'Cr' as const, amount: esiTotal }] : []),
     ];
+    if (!inFlight.begin(`pf-esi:${period}`)) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'journal', date,
       debitAccountId: '5203', creditAccountId: '2203', amount: +(epfTotal + esiTotal).toFixed(2),
@@ -553,20 +598,27 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       refType: 'pf_esi.liability', refId: id,
       createdBy: user?.name || 'System',
       lines,
-    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>);
-    if (!voucher.id) return sentinel;
-    const run: PfEsiRun = { id, period, grossWages: c.grossWages, epfEmployee: c.epfEmployee, epfEmployer: c.epfEmployer, epfAdminEdli: c.epfAdminEdli, esiEmployee: c.esiEmployee, esiEmployer: c.esiEmployer, status: 'posted', voucherId: voucher.id, createdAt: new Date().toISOString() };
-    setPfEsiRunsState(prev => { const u = [...prev, run]; storage.setPfEsiRuns(u); return u; });
-    supabase.from('pf_esi_runs').upsert(withSoc(run)).then(({ error }) => {
-      if (error) {
-        console.error('PF/ESI run save error:', error.message);
-        setPfEsiRunsState(prev => { const r = prev.filter(x => x.id !== run.id); storage.setPfEsiRuns(r); return r; });
-        cancelVoucher(voucher.id, 'PF/ESI run rolled back (save failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: tr('EPF/ESI सेव नहीं हुआ', 'EPF/ESI not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. It has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
-      }
+    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>, {
+      // X-1: the run row is written only once the server has the voucher (a refused run must not block a re-post).
+      onSaved: (sv) => {
+        inFlight.end(`pf-esi:${period}`);
+        const run: PfEsiRun = { id, period, grossWages: c.grossWages, epfEmployee: c.epfEmployee, epfEmployer: c.epfEmployer, epfAdminEdli: c.epfAdminEdli, esiEmployee: c.esiEmployee, esiEmployer: c.esiEmployer, status: 'posted', voucherId: sv.id, createdAt: new Date().toISOString() };
+        setPfEsiRunsState(prev => { const u = [...prev, run]; storage.setPfEsiRuns(u); return u; });
+        supabase.from('pf_esi_runs').upsert(withSoc(run)).then(({ error }) => {
+          if (error) {
+            console.error('PF/ESI run save error:', error.message);
+            setPfEsiRunsState(prev => { const r = prev.filter(x => x.id !== run.id); storage.setPfEsiRuns(r); return r; });
+            cancelVoucher(sv.id, 'PF/ESI run rolled back (save failed)', user?.name || 'System', { viaParent: true });
+            toastRef.current({ title: tr('EPF/ESI सेव नहीं हुआ', 'EPF/ESI not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. It has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
+            return;
+          }
+          toastRef.current({ title: tr('EPF/ESI देयता दर्ज हुई', 'EPF/ESI liability recorded'), description: `${period} · EPF ₹${epfTotal} · ESI ₹${esiTotal}`, duration: 6000 });
+        });
+      },
+      onFailed: () => { inFlight.end(`pf-esi:${period}`); voucherRefused(tr('EPF/ESI देयता दर्ज नहीं हुई', 'EPF/ESI liability not recorded')); },
     });
-    toastRef.current({ title: tr('EPF/ESI देयता दर्ज हुई', 'EPF/ESI liability recorded'), description: `${period} · EPF ₹${epfTotal} · ESI ₹${esiTotal}`, duration: 6000 });
-    return run;
+    if (!voucher?.id) { inFlight.end(`pf-esi:${period}`); return sentinel; }
+    return { id, period, grossWages: c.grossWages, epfEmployee: c.epfEmployee, epfEmployer: c.epfEmployer, epfAdminEdli: c.epfAdminEdli, esiEmployee: c.esiEmployee, esiEmployer: c.esiEmployer, status: 'posted', voucherId: voucher.id, createdAt: new Date().toISOString() };
   }, [pfEsiRuns, computePfEsi, society, user, addVoucher, cancelVoucher]);
 
   const depositPfEsi = useCallback((data: { runId: string; mode: 'cash' | 'bank'; bankAccountId?: string; date: string }): Voucher => {
@@ -580,6 +632,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const total = +(epfTotal + esiTotal).toFixed(2);
     const creditAcc = data.mode === 'cash' ? storage.ACCOUNT_IDS.CASH : (data.bankAccountId || storage.defaultBankAccountId(accounts) || storage.ACCOUNT_IDS.BANK);
     const lid = () => crypto.randomUUID();
+    if (!inFlight.begin(`pf-esi-deposit:${run.id}`)) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'payment', date: data.date,
       debitAccountId: '2203', creditAccountId: creditAcc, amount: total,
@@ -591,19 +644,27 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         ...(esiTotal > 0 ? [{ id: lid(), accountId: '2204', type: 'Dr' as const, amount: esiTotal }] : []),
         { id: lid(), accountId: creditAcc, type: 'Cr' as const, amount: total },
       ],
-    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>);
-    if (!voucher.id) return sentinel;
-    const next: PfEsiRun = { ...run, status: 'deposited', depositVoucherId: voucher.id };
-    setPfEsiRunsState(prev => { const u = prev.map(r => r.id === run.id ? next : r); storage.setPfEsiRuns(u); return u; });
-    supabase.from('pf_esi_runs').upsert(withSoc(next)).then(({ error }) => {
-      if (error) {
-        console.error('PF/ESI deposit update error:', error.message);
-        setPfEsiRunsState(prev => { const u = prev.map(r => r.id === run.id ? run : r); storage.setPfEsiRuns(u); return u; });
-        cancelVoucher(voucher.id, 'PF/ESI deposit rolled back (update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: tr('जमा सेव नहीं हुई', 'Deposit not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया।`, `Not saved to the cloud — ${error.message}. It has been withdrawn.`), variant: 'destructive', duration: 12000 });
-      }
+    } as Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'>, {
+      // X-1: the run is marked deposited only once the server has the payment (a refused deposit must allow a retry).
+      onSaved: (sv) => {
+        inFlight.end(`pf-esi-deposit:${run.id}`);
+        const cur = pfEsiRunsLatest.current.find(r => r.id === run.id) ?? run;
+        const next: PfEsiRun = { ...cur, status: 'deposited', depositVoucherId: sv.id };
+        setPfEsiRunsState(prev => { const u = prev.map(r => r.id === run.id ? next : r); storage.setPfEsiRuns(u); return u; });
+        supabase.from('pf_esi_runs').upsert(withSoc(next)).then(({ error }) => {
+          if (error) {
+            console.error('PF/ESI deposit update error:', error.message);
+            setPfEsiRunsState(prev => { const u = prev.map(r => r.id === run.id ? cur : r); storage.setPfEsiRuns(u); return u; });
+            cancelVoucher(sv.id, 'PF/ESI deposit rolled back (update failed)', user?.name || 'System', { viaParent: true });
+            toastRef.current({ title: tr('जमा सेव नहीं हुई', 'Deposit not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया।`, `Not saved to the cloud — ${error.message}. It has been withdrawn.`), variant: 'destructive', duration: 12000 });
+            return;
+          }
+          toastRef.current({ title: tr('EPF/ESI जमा दर्ज हुई', 'EPF/ESI deposit recorded'), description: `${run.period} · ₹${total}`, duration: 6000 });
+        });
+      },
+      onFailed: () => { inFlight.end(`pf-esi-deposit:${run.id}`); voucherRefused(tr('EPF/ESI जमा दर्ज नहीं हुई', 'EPF/ESI deposit not recorded')); },
     });
-    toastRef.current({ title: tr('EPF/ESI जमा दर्ज हुई', 'EPF/ESI deposit recorded'), description: `${run.period} · ₹${total}`, duration: 6000 });
+    if (!voucher?.id) { inFlight.end(`pf-esi-deposit:${run.id}`); return sentinel; }
     return voucher;
   }, [pfEsiRuns, accounts, society, user, addVoucher, cancelVoucher]);
 

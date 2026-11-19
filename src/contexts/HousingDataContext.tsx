@@ -14,6 +14,9 @@
  * idempotent bill-run, same cascade-on-delete — only the home of the state changed.
  */
 import { tr } from '@/lib/uiLang';
+import { voucherRefusedToast, inFlightToast } from '@/lib/voucherRefused';
+import { useLatest } from '@/hooks/useLatest';
+import { useInFlight } from '@/hooks/useInFlight';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
 import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
@@ -115,6 +118,9 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const toastRef = useRef(toast);
   useEffect(() => { toastRef.current = toast; }, [toast]);
+  // X-1: a voucher refused late → the domain record is not made either (rows are written only in onSaved).
+  const voucherRefused = (title: string) => voucherRefusedToast(toastRef.current, title);
+  const inFlight = useInFlight(() => inFlightToast(toastRef.current));
 
   const societyId = user?.societyId || 'SOC001';
   // T-01: stamp BOTH tenancy keys (society_id + jurisdiction) — the value comes from the SSOT
@@ -134,6 +140,9 @@ export function HousingProvider({ children }: { children: ReactNode }) {
   const [maintenanceBills, setMaintenanceBillsState] = useState<MaintenanceBill[]>(() => storage.getMaintenanceBills());
   const [chargeHeads, setChargeHeadsState] = useState<HousingChargeHead[]>(() => storage.getHousingChargeHeads());
   const [fundInvestments, setFundInvestmentsState] = useState<HousingFundInvestment[]>(() => storage.getHousingFundInvestments());
+  // X-1: updates applied in a voucher's onSaved start from the CURRENT rows.
+  const maintenanceBillsLatest = useLatest(maintenanceBills);
+  const fundInvestmentsLatest = useLatest(fundInvestments);
   const [complaints, setComplaintsState] = useState<HousingComplaint[]>(() => storage.getHousingComplaints());
   const [parkingSlots, setParkingState] = useState<HousingParking[]>(() => storage.getHousingParking());
   const [transfers, setTransfersState] = useState<HousingTransfer[]>(() => storage.getHousingTransfers());
@@ -311,6 +320,28 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const date = data.date || new Date().toISOString().split('T')[0];
     const created: MaintenanceBill[] = [];
     const lid = () => crypto.randomUUID();
+    // X-1: each bill is written in ITS voucher's onSaved; the run holds one in-flight key until every voucher answered
+    // (a second run meanwhile would see these flats as unbilled and bill them twice).
+    const runKey = `housing-bills:${data.period}`;
+    if (!inFlight.begin(runKey)) return [];
+    let pending = 0, refused = 0;
+    const settle = () => {
+      pending -= 1;
+      if (pending > 0) return;
+      inFlight.end(runKey);
+      if (refused > 0) voucherRefused(tr(`${refused} रखरखाव बिल नहीं बने`, `${refused} maintenance bill(s) not created`));
+    };
+    const saveBill = (bill: MaintenanceBill) => {
+      setMaintenanceBillsState(prev => { const u = [...prev, bill]; storage.setMaintenanceBills(u); return u; });
+      supabase.from('maintenance_bills').upsert(withSoc(bill)).then(({ error }) => {
+        if (error) {
+          console.error('Maintenance bill save error:', error.message); reportError('housing-save', error.message);
+          setMaintenanceBillsState(prev => { const r = prev.filter(b => b.id !== bill.id); storage.setMaintenanceBills(r); return r; });
+          if (bill.voucherId) cancelVoucher(bill.voucherId, 'Maintenance bill save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
+          toastRef.current({ title: tr('बिल सेव नहीं हुआ', 'Bill not saved'), description: tr(`${bill.billNo} — cloud save fail (${error.message}). इसका receivable voucher वापस ले लिया गया।`, `${bill.billNo} — cloud save failed (${error.message}). Its receivable voucher has been withdrawn.`), variant: 'destructive', duration: 12000 });
+        }
+      });
+    };
 
     // Resolve (find-or-create, deduped per owner member within AND across runs) the member's
     // receivable sub-ledger — a leaf under 3303 (mirrors the Departments sub-ledger pattern; 3303
@@ -364,6 +395,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       // Balanced multi-leg demand: Dr <member receivable> total / Cr each head's own account
       // (income → I&E, fund → 1202/1204 corpus directly, pass-through → liability).
       const legs = demandLegs(rec, billLines);
+      const draft: MaintenanceBill = { id: billId, billNo: `${data.period}/${flat.flatNo}`, flatId: flat.id, flatNo: flat.flatNo, memberId: flat.memberId, period: data.period, date, amount, voucherId: '', receivableAccountId: rec, lines: billLines, paidAmount: 0, status: 'unpaid', isDeleted: false, createdAt: new Date().toISOString() };
       const v = addVoucher({
         type: 'journal', date,
         debitAccountId: rec, creditAccountId: billLines[0].accountId, amount,
@@ -372,10 +404,15 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         memberId: flat.memberId,
         createdBy: user?.name || 'System',
         lines: legs.map(l => ({ id: lid(), accountId: l.accountId, type: l.type, amount: l.amount })),
+      }, {
+        onSaved: (sv) => { saveBill({ ...draft, voucherId: sv.id }); settle(); },
+        onFailed: () => { refused += 1; settle(); },
       });
       if (!v.id) continue;
-      created.push({ id: billId, billNo: `${data.period}/${flat.flatNo}`, flatId: flat.id, flatNo: flat.flatNo, memberId: flat.memberId, period: data.period, date, amount, voucherId: v.id, receivableAccountId: rec, lines: billLines, paidAmount: 0, status: 'unpaid', isDeleted: false, createdAt: new Date().toISOString() });
+      pending += 1;
+      created.push({ ...draft, voucherId: v.id });
     }
+    if (pending === 0) inFlight.end(runKey);
     if (created.length === 0) {
       toastRef.current({ title: tr('कोई नया बिल नहीं', 'No new bills'), description: tr('इस अवधि के लिए सभी पात्र फ्लैट पहले से बिल हो चुके हैं या कोई पात्र फ्लैट नहीं।', 'All eligible flats are already billed for this period, or there is no eligible flat.'), variant: 'default', duration: 8000 });
       return [];
@@ -392,18 +429,8 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         if (flat) supabase.from('housing_flats').upsert(withSoc({ ...flat, receivableAccountId: rec })).then(({ error }) => { if (error) { console.warn('Flat receivable backfill (non-fatal):', error.message); reportError('write-partial', error.message, { at: 'Flat receivable backfill (non-fatal):' }); } });
       });
     }
-    setMaintenanceBillsState(prev => { const u = [...prev, ...created]; storage.setMaintenanceBills(u); return u; });
-    created.forEach(bill => {
-      supabase.from('maintenance_bills').upsert(withSoc(bill)).then(({ error }) => {
-        if (error) {
-          console.error('Maintenance bill save error:', error.message); reportError('housing-save', error.message);
-          setMaintenanceBillsState(prev => { const r = prev.filter(b => b.id !== bill.id); storage.setMaintenanceBills(r); return r; });
-          if (bill.voucherId) cancelVoucher(bill.voucherId, 'Maintenance bill save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
-          toastRef.current({ title: tr('बिल सेव नहीं हुआ', 'Bill not saved'), description: tr(`${bill.billNo} — cloud save fail (${error.message}). इसका receivable voucher वापस ले लिया गया।`, `${bill.billNo} — cloud save failed (${error.message}). Its receivable voucher has been withdrawn.`), variant: 'destructive', duration: 12000 });
-        }
-      });
-    });
-    toastRef.current({ title: tr('रखरखाव बिल बने', 'Maintenance bills created'), description: tr(`${created.length} बिल · अवधि ${data.period}`, `${created.length} bills · period ${data.period}`), duration: 6000 });
+    // X-1: the bills themselves are saved one by one in their vouchers' onSaved (saveBill); a refused one is not made.
+    toastRef.current({ title: tr('रखरखाव बिल बन रहे हैं', 'Maintenance bills being created'), description: tr(`${created.length} बिल · अवधि ${data.period} — सर्वर के स्वीकार करते ही सूची में दिखेंगे।`, `${created.length} bills · period ${data.period} — they appear in the list as the server accepts each one.`), duration: 6000 });
     return created;
   }, [accounts, housingFlats, maintenanceBills, chargeHeads, members, society, addAccount, addVoucher, cancelVoucher, gstLegs, user]);
 
@@ -442,6 +469,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const lid = () => crypto.randomUUID();
     const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
     const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
+    if (!inFlight.begin(`maintenance-bill:${bill.id}`)) return sentinel;   // X-1: one save at a time for this record
     const voucher = addVoucher({
       type: 'receipt', date: data.date,
       debitAccountId: debitAcc, creditAccountId: creditAcc, amount: data.amount,
@@ -453,21 +481,29 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         { id: lid(), accountId: debitAcc, type: 'Dr', amount: data.amount },
         { id: lid(), accountId: creditAcc, type: 'Cr', amount: data.amount },
       ],
+    }, {
+      // X-1: the bill moves only once the server has the receipt — from the CURRENT row.
+      onSaved: (sv) => {
+        inFlight.end(`maintenance-bill:${bill.id}`);
+        const cur = maintenanceBillsLatest.current.find(b => b.id === bill.id) ?? bill;
+        const newPaid = +(cur.paidAmount + data.amount).toFixed(2);
+        const status: MaintenanceBill['status'] = newPaid >= cur.amount - 0.005 ? 'paid' : newPaid > 0 ? 'partial' : 'unpaid';
+        const next: MaintenanceBill = { ...cur, paidAmount: newPaid, status };
+        setMaintenanceBillsState(prev => { const u = prev.map(b => b.id === bill.id ? next : b); storage.setMaintenanceBills(u); return u; });
+        supabase.from('maintenance_bills').upsert(withSoc(next)).then(({ error }) => {
+          if (error) {
+            console.error('Maintenance collection bill-update error:', error.message); reportError('housing-save', error.message);
+            setMaintenanceBillsState(prev => { const u = prev.map(b => b.id === bill.id ? cur : b); storage.setMaintenanceBills(u); return u; });
+            cancelVoucher(sv.id, 'Maintenance collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true });
+            toastRef.current({ title: tr('वसूली सेव नहीं हुई', 'Collection not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The receipt has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
+            return;
+          }
+          toastRef.current({ title: tr('वसूली दर्ज हुई', 'Collection recorded'), description: tr(`${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'पूर्ण' : 'आंशिक'}`, `${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'full' : 'partial'}`), duration: 6000 });
+        });
+      },
+      onFailed: () => { inFlight.end(`maintenance-bill:${bill.id}`); voucherRefused(tr('वसूली दर्ज नहीं हुई', 'Collection not recorded')); },
     });
-    if (!voucher.id) return sentinel;
-    const newPaid = +(bill.paidAmount + data.amount).toFixed(2);
-    const status: MaintenanceBill['status'] = newPaid >= bill.amount - 0.005 ? 'paid' : newPaid > 0 ? 'partial' : 'unpaid';
-    const next: MaintenanceBill = { ...bill, paidAmount: newPaid, status };
-    setMaintenanceBillsState(prev => { const u = prev.map(b => b.id === bill.id ? next : b); storage.setMaintenanceBills(u); return u; });
-    supabase.from('maintenance_bills').upsert(withSoc(next)).then(({ error }) => {
-      if (error) {
-        console.error('Maintenance collection bill-update error:', error.message); reportError('housing-save', error.message);
-        setMaintenanceBillsState(prev => { const u = prev.map(b => b.id === bill.id ? bill : b); storage.setMaintenanceBills(u); return u; });
-        cancelVoucher(voucher.id, 'Maintenance collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: tr('वसूली सेव नहीं हुई', 'Collection not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The receipt has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
-      }
-    });
-    toastRef.current({ title: tr('वसूली दर्ज हुई', 'Collection recorded'), description: tr(`${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'पूर्ण' : 'आंशिक'}`, `${bill.billNo} · ₹${data.amount} · ${status === 'paid' ? 'full' : 'partial'}`), duration: 6000 });
+    if (!voucher?.id) { inFlight.end(`maintenance-bill:${bill.id}`); return sentinel; }
     return voucher;
   }, [maintenanceBills, accounts, addVoucher, cancelVoucher, user]);
 
@@ -508,8 +544,11 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         { id: lid(), accountId: debitAcc, type: 'Dr', amount: data.amount },
         { id: lid(), accountId: creditAcc, type: 'Cr', amount: data.amount },
       ],
+    }, {
+      // X-1: "recorded" only once the server has it.
+      onSaved: () => toastRef.current({ title: tr('निधि प्रविष्टि दर्ज', 'Fund entry recorded'), description: `${fund.nameHi || fund.name} · ₹${data.amount}`, duration: 6000 }),
+      onFailed: () => voucherRefused(tr('निधि प्रविष्टि दर्ज नहीं हुई', 'Fund entry not recorded')),
     });
-    if (v.id) toastRef.current({ title: tr('निधि प्रविष्टि दर्ज', 'Fund entry recorded'), description: `${fund.nameHi || fund.name} · ₹${data.amount}`, duration: 6000 });
     return v;
   }, [accounts, vouchers, addVoucher, user]);
 
@@ -555,6 +594,9 @@ export function HousingProvider({ children }: { children: ReactNode }) {
           { id: lid(), accountId: rec, type: 'Dr', amount: p.amount },
           { id: lid(), accountId: '4402', type: 'Cr', amount: p.amount },
         ],
+      }, {
+        // X-1: interest has no row of its own — a refused voucher just means that bill's interest was not charged.
+        onFailed: () => voucherRefused(tr(`${bill.billNo} का ब्याज दर्ज नहीं हुआ`, `Interest for ${bill.billNo} not recorded`)),
       });
       if (v.id) { count++; total = round2(total + p.amount); }
     }
@@ -577,6 +619,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const fund = accounts.find(a => a.id === data.fundAccountId)!;
     const lid = () => crypto.randomUUID();
     const id = crypto.randomUUID();
+    const planned: HousingFundInvestment = { id, fundAccountId: data.fundAccountId, investmentAccountId: data.investmentAccountId, instrument: data.instrument, institution: data.institution, amount: data.amount, date: data.date, maturityDate: data.maturityDate, interestRate: data.interestRate, voucherId: '', status: 'active', isDeleted: false, createdAt: new Date().toISOString() };
     const v = addVoucher({
       type: 'journal', date: data.date,
       debitAccountId: data.investmentAccountId, creditAccountId: bankAcc, amount: data.amount,
@@ -587,20 +630,26 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         { id: lid(), accountId: data.investmentAccountId, type: 'Dr', amount: data.amount },
         { id: lid(), accountId: bankAcc, type: 'Cr', amount: data.amount },
       ],
+    }, {
+      // X-1: the investment row is written only once the server has the voucher.
+      onSaved: (sv) => {
+        const inv: HousingFundInvestment = { ...planned, voucherId: sv.id };
+        setFundInvestmentsState(prev => { const u = [...prev, inv]; storage.setHousingFundInvestments(u); return u; });
+        supabase.from('housing_fund_investments').upsert(withSoc(inv)).then(({ error }) => {
+          if (error) {
+            console.error('Fund investment save error:', error.message); reportError('housing-save', error.message);
+            setFundInvestmentsState(prev => { const r = prev.filter(x => x.id !== inv.id); storage.setHousingFundInvestments(r); return r; });
+            cancelVoucher(sv.id, 'Fund investment save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
+            toastRef.current({ title: tr('निवेश सेव नहीं हुआ', 'Investment not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. इसका voucher वापस ले लिया गया।`, `Not saved to the cloud — ${error.message}. Its voucher has been withdrawn.`), variant: 'destructive', duration: 12000 });
+            return;
+          }
+          toastRef.current({ title: tr('निधि निवेश दर्ज', 'Fund investment recorded'), description: `${fund.nameHi || fund.name} · ₹${data.amount}`, duration: 6000 });
+        });
+      },
+      onFailed: () => voucherRefused(tr('निधि निवेश दर्ज नहीं हुआ', 'Fund investment not recorded')),
     });
     if (!v.id) return blank;
-    const inv: HousingFundInvestment = { id, fundAccountId: data.fundAccountId, investmentAccountId: data.investmentAccountId, instrument: data.instrument, institution: data.institution, amount: data.amount, date: data.date, maturityDate: data.maturityDate, interestRate: data.interestRate, voucherId: v.id, status: 'active', isDeleted: false, createdAt: new Date().toISOString() };
-    setFundInvestmentsState(prev => { const u = [...prev, inv]; storage.setHousingFundInvestments(u); return u; });
-    supabase.from('housing_fund_investments').upsert(withSoc(inv)).then(({ error }) => {
-      if (error) {
-        console.error('Fund investment save error:', error.message); reportError('housing-save', error.message);
-        setFundInvestmentsState(prev => { const r = prev.filter(x => x.id !== inv.id); storage.setHousingFundInvestments(r); return r; });
-        cancelVoucher(v.id, 'Fund investment save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: tr('निवेश सेव नहीं हुआ', 'Investment not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. इसका voucher वापस ले लिया गया।`, `Not saved to the cloud — ${error.message}. Its voucher has been withdrawn.`), variant: 'destructive', duration: 12000 });
-      }
-    });
-    toastRef.current({ title: tr('निधि निवेश दर्ज', 'Fund investment recorded'), description: `${fund.nameHi || fund.name} · ₹${data.amount}`, duration: 6000 });
-    return inv;
+    return { ...planned, voucherId: v.id };
   }, [accounts, addVoucher, cancelVoucher, user]);
 
   const redeemFundInvestment = useCallback((data: { id: string; date: string; mode: 'cash' | 'bank'; bankAccountId?: string; maturityAmount?: number }) => {
@@ -620,6 +669,8 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       { id: lid(), accountId: inv.investmentAccountId, type: 'Cr' as const, amount: inv.amount },
     ];
     if (interest > 0) lines.push({ id: lid(), accountId: inv.fundAccountId, type: 'Cr' as const, amount: interest });
+    const key = `fund-investment:${inv.id}`;
+    if (!inFlight.begin(key)) return;   // X-1: one redemption at a time
     const v = addVoucher({
       type: 'journal', date: data.date,
       debitAccountId: bankAcc, creditAccountId: inv.investmentAccountId, amount: gross,
@@ -627,19 +678,27 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       refType: 'fund.redemption', refId: inv.id,
       createdBy: user?.name || 'System',
       lines,
+    }, {
+      // X-1: marked redeemed only once the server has the voucher (a refused redemption must allow a retry).
+      onSaved: (sv) => {
+        inFlight.end(key);
+        const cur = fundInvestmentsLatest.current.find(i => i.id === inv.id) ?? inv;
+        const next: HousingFundInvestment = { ...cur, status: 'redeemed', redemptionVoucherId: sv.id };
+        setFundInvestmentsState(prev => { const u = prev.map(i => i.id === inv.id ? next : i); storage.setHousingFundInvestments(u); return u; });
+        supabase.from('housing_fund_investments').upsert(withSoc(next)).then(({ error }) => {
+          if (error) {
+            console.error('Fund investment redeem error:', error.message); reportError('housing-save', error.message);
+            setFundInvestmentsState(prev => { const u = prev.map(i => i.id === inv.id ? cur : i); storage.setHousingFundInvestments(u); return u; });
+            cancelVoucher(sv.id, 'Redemption rolled back (row update failed)', user?.name || 'System', { viaParent: true });
+            toastRef.current({ title: tr('भुनाना सेव नहीं हुआ', 'Redemption not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
+            return;
+          }
+          toastRef.current({ title: tr('निवेश भुनाया गया', 'Investment redeemed'), description: tr(`₹${gross} बैंक में वापस${interest > 0 ? ` · ब्याज ₹${interest} निधि में` : ''}`, `₹${gross} returned to bank${interest > 0 ? ` · interest ₹${interest} to the fund` : ''}`), duration: 6000 });
+        });
+      },
+      onFailed: () => { inFlight.end(key); voucherRefused(tr('निवेश नहीं भुनाया गया', 'Investment not redeemed')); },
     });
-    if (!v.id) return;
-    const next: HousingFundInvestment = { ...inv, status: 'redeemed', redemptionVoucherId: v.id };
-    setFundInvestmentsState(prev => { const u = prev.map(i => i.id === inv.id ? next : i); storage.setHousingFundInvestments(u); return u; });
-    supabase.from('housing_fund_investments').upsert(withSoc(next)).then(({ error }) => {
-      if (error) {
-        console.error('Fund investment redeem error:', error.message); reportError('housing-save', error.message);
-        setFundInvestmentsState(prev => { const u = prev.map(i => i.id === inv.id ? inv : i); storage.setHousingFundInvestments(u); return u; });
-        cancelVoucher(v.id, 'Redemption rolled back (row update failed)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: tr('भुनाना सेव नहीं हुआ', 'Redemption not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
-      }
-    });
-    toastRef.current({ title: tr('निवेश भुनाया गया', 'Investment redeemed'), description: tr(`₹${gross} बैंक में वापस${interest > 0 ? ` · ब्याज ₹${interest} निधि में` : ''}`, `₹${gross} returned to bank${interest > 0 ? ` · interest ₹${interest} to the fund` : ''}`), duration: 6000 });
+    if (!v.id) { inFlight.end(key); return; }
   }, [fundInvestments, accounts, addVoucher, cancelVoucher, user]);
 
   const deleteFundInvestment = useCallback((id: string) => {
@@ -769,7 +828,28 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const prem = round2(data.premium || 0);
     const id = crypto.randomUUID();
     const lid = () => crypto.randomUUID();
-    let voucherId: string | undefined;
+    const oldOwner = flat.memberId;
+    const plan = (voucherId?: string): HousingTransfer => ({ id, flatId: flat.id, flatNo: flat.flatNo, fromMemberId: oldOwner, toMemberId: data.toMemberId, date: data.date, transferType: data.transferType || 'sale', transferFee: fee || undefined, premium: prem || undefined, voucherId, resolutionNo: data.resolutionNo?.trim() || undefined, resolutionDate: data.resolutionDate || undefined, remarks: data.remarks, isDeleted: false, createdAt: new Date().toISOString() });
+    // The owner change + the transfer row. X-1: with a fee voucher this runs only in its onSaved — a refused fee
+    // leaves the flat with its old owner and no transfer row.
+    const complete = (voucherId?: string) => {
+      // Owner changes; the share cert follows the flat (a flat property). The nominee was the OLD
+      // owner's — reset it so the new owner records their own (R3).
+      updateHousingFlat(flat.id, { memberId: data.toMemberId, receivableAccountId: undefined, associateMemberId: undefined, nomineeName: undefined, nomineeRelation: undefined, nomineePhone: undefined });
+      const t = plan(voucherId);
+      setTransfersState(prev => { const u = [...prev, t]; storage.setHousingTransfers(u); return u; });
+      supabase.from('housing_transfers').upsert(withSoc(t)).then(({ error }) => {
+        if (error) {
+          console.error('Transfer save error:', error.message); reportError('housing-save', error.message);
+          setTransfersState(prev => { const r = prev.filter(x => x.id !== t.id); storage.setHousingTransfers(r); return r; });
+          updateHousingFlat(flat.id, { memberId: oldOwner, receivableAccountId: flat.receivableAccountId, associateMemberId: flat.associateMemberId, nomineeName: flat.nomineeName, nomineeRelation: flat.nomineeRelation, nomineePhone: flat.nomineePhone });
+          if (voucherId) cancelVoucher(voucherId, 'Transfer save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
+          toastRef.current({ title: tr('हस्तांतरण सेव नहीं हुआ', 'Transfer not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. मालिक व शुल्क वापस ले लिए गए।`, `Not saved to the cloud — ${error.message}. The owner and the charges have been reverted.`), variant: 'destructive', duration: 12000 });
+          return;
+        }
+        toastRef.current({ title: tr('फ्लैट हस्तांतरित', 'Flat transferred'), description: `${flat.flatNo}${fee + prem > 0 ? ` · ₹${round2(fee + prem)}` : ''}`, duration: 6000 });
+      });
+    };
     if (fee + prem > 0) {
       const bankAcc = data.mode === 'cash' ? ACCOUNT_IDS.CASH : (data.bankAccountId || defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK);
       const feeAcc = accounts.some(a => a.id === '4201') ? '4201' : '4400';
@@ -777,33 +857,23 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       const lines: { id: string; accountId: string; type: 'Dr' | 'Cr'; amount: number }[] = [{ id: lid(), accountId: bankAcc, type: 'Dr', amount: round2(fee + prem) }];
       if (fee > 0) lines.push({ id: lid(), accountId: feeAcc, type: 'Cr', amount: fee });
       if (prem > 0) lines.push({ id: lid(), accountId: premAcc, type: 'Cr', amount: prem });
+      const key = `flat-transfer:${flat.id}`;
+      if (!inFlight.begin(key)) return blank;   // X-1: one transfer of this flat at a time
       const v = addVoucher({
         type: 'receipt', date: data.date,
         debitAccountId: bankAcc, creditAccountId: feeAcc, amount: round2(fee + prem),
         narration: `हस्तांतरण शुल्क — ${flat.flatNo}${prem > 0 ? ` (शुल्क ₹${fee} + प्रीमियम ₹${prem})` : ''}`,
         refType: 'housing.transfer', refId: id, memberId: data.toMemberId, createdBy: user?.name || 'System',
         lines,
+      }, {
+        onSaved: (sv) => { inFlight.end(key); complete(sv.id); },
+        onFailed: () => { inFlight.end(key); voucherRefused(tr('फ्लैट हस्तांतरित नहीं हुआ', 'Flat not transferred')); },
       });
-      if (!v.id) return blank;
-      voucherId = v.id;
+      if (!v.id) { inFlight.end(key); return blank; }
+      return plan(v.id);
     }
-    const oldOwner = flat.memberId;
-    // Owner changes; the share cert follows the flat (a flat property). The nominee was the OLD
-    // owner's — reset it so the new owner records their own (R3).
-    updateHousingFlat(flat.id, { memberId: data.toMemberId, receivableAccountId: undefined, associateMemberId: undefined, nomineeName: undefined, nomineeRelation: undefined, nomineePhone: undefined });
-    const t: HousingTransfer = { id, flatId: flat.id, flatNo: flat.flatNo, fromMemberId: oldOwner, toMemberId: data.toMemberId, date: data.date, transferType: data.transferType || 'sale', transferFee: fee || undefined, premium: prem || undefined, voucherId, resolutionNo: data.resolutionNo?.trim() || undefined, resolutionDate: data.resolutionDate || undefined, remarks: data.remarks, isDeleted: false, createdAt: new Date().toISOString() };
-    setTransfersState(prev => { const u = [...prev, t]; storage.setHousingTransfers(u); return u; });
-    supabase.from('housing_transfers').upsert(withSoc(t)).then(({ error }) => {
-      if (error) {
-        console.error('Transfer save error:', error.message); reportError('housing-save', error.message);
-        setTransfersState(prev => { const r = prev.filter(x => x.id !== t.id); storage.setHousingTransfers(r); return r; });
-        updateHousingFlat(flat.id, { memberId: oldOwner, receivableAccountId: flat.receivableAccountId, associateMemberId: flat.associateMemberId, nomineeName: flat.nomineeName, nomineeRelation: flat.nomineeRelation, nomineePhone: flat.nomineePhone });
-        if (voucherId) cancelVoucher(voucherId, 'Transfer save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
-        toastRef.current({ title: tr('हस्तांतरण सेव नहीं हुआ', 'Transfer not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. मालिक व शुल्क वापस ले लिए गए।`, `Not saved to the cloud — ${error.message}. The owner and the charges have been reverted.`), variant: 'destructive', duration: 12000 });
-      }
-    });
-    toastRef.current({ title: tr('फ्लैट हस्तांतरित', 'Flat transferred'), description: `${flat.flatNo}${fee + prem > 0 ? ` · ₹${round2(fee + prem)}` : ''}`, duration: 6000 });
-    return t;
+    complete(undefined);
+    return plan(undefined);
   }, [housingFlats, maintenanceBills, vouchers, accounts, addVoucher, cancelVoucher, updateHousingFlat, user]);
 
   const deleteFlatTransfer = useCallback((id: string) => {

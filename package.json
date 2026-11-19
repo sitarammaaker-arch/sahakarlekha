@@ -21,6 +21,7 @@
     "test:year-end-guards": "node scripts/test-year-end-guards.mjs",
     "test:statutory-report-guards": "node scripts/test-statutory-report-guards.mjs",
     "test:restore-server": "node scripts/test-restore-server.mjs",
+    "test:x1-onsaved-rule": "node scripts/test-x1-onsaved-rule.mjs",
     "test:bkp02-cross-society": "node scripts/test-bkp02-cross-society.mjs",
     "test:mail01-signup": "node scripts/test-mail01-signup.mjs",
     "test:acc-year-window": "node scripts/test-acc-year-window.mjs",
