@@ -94,6 +94,8 @@ export interface RestoreCommitInput {
 
   /** The source archive's manifest hash — ties the trail record to the exact bytes restored. */
   sourceManifestHash: string;
+  /** BKP-02: the archive's society id when it is not this society (rows already rebased). Recorded in the trail. */
+  sourceSocietyId?: string;
 
   applyWrites: ApplyWrites;
   recordAttempt: RecordAttempt;
@@ -252,6 +254,7 @@ export function buildRestoreRunRecord(input: RestoreCommitInput, outcome: Restor
     entriesReplayed: summary?.entriesReplayed ?? 0,
     preRestoreBackup: input.preRestoreBackup ?? null,
     message: 'message' in outcome ? outcome.message : null,
+    ...(input.sourceSocietyId ? { sourceSocietyId: input.sourceSocietyId } : {}),
   };
 }
 

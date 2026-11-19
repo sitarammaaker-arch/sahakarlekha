@@ -38,6 +38,8 @@ export interface CommitRestoreLiveInput {
   archivedEntries: readonly Row[];
   societyId: string;
   sourceManifestHash: string;
+  /** BKP-02: the archive's society id for a cross-society restore (rows already rebased onto societyId). */
+  sourceSocietyId?: string;
   /** The freshly-created safety backup. The saga refuses Merge/Replace without it. */
   preRestoreBackup?: PreRestoreBackup;
   /** Actor + society, for the trail row. */
@@ -72,7 +74,7 @@ export async function commitRestoreLive(input: CommitRestoreLiveInput): Promise<
       archiveRows: input.archiveRows, currentRows: input.currentRows,
       vouchers: (input.archiveRows['voucher'] ?? []) as unknown as Voucher[],
       archivedEntries: input.archivedEntries, societyId: input.societyId,
-      sourceManifestHash: input.sourceManifestHash, preRestoreBackup: input.preRestoreBackup,
+      sourceManifestHash: input.sourceManifestHash, preRestoreBackup: input.preRestoreBackup, sourceSocietyId: input.sourceSocietyId,
       applyWrites: makeRestoreWriter(input.client, input.societyId, input.currentRows, input.archiveRows),
       recordAttempt: record, onProgress: input.onProgress,
     });
@@ -108,6 +110,7 @@ export async function commitRestoreLive(input: CommitRestoreLiveInput): Promise<
     societyId: input.societyId,
     sourceManifestHash: input.sourceManifestHash,
     preRestoreBackup: input.preRestoreBackup,
+    sourceSocietyId: input.sourceSocietyId,
     applyWrites: makeRestoreWriter(client, input.societyId, input.currentRows, rekeyed.archiveRows),
     flush: async () => {
       try {

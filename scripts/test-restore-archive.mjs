@@ -291,7 +291,8 @@ ok(/backupReady/.test(canCommitExpr), 'canCommit requires a mandatory pre-restor
 ok(/confirmOk/.test(canCommitExpr), 'canCommit requires a typed confirmation');
 ok(/dryRunOkForMode/.test(canCommitExpr), 'canCommit requires a clean dry run for the mode');
 ok(/fyLocked/.test(canCommitExpr), 'canCommit respects the FY lock (RULE 6)');
-ok(/compat\?\.safe/.test(canCommitExpr), 'canCommit requires a same-society (safe) archive');
+// BKP-02: compatOk = a same-society (safe) archive, or the guarded cross-society restore (empty books + typed name).
+ok(/compatOk/.test(canCommitExpr) && /const compatOk = !!compat\?\.safe \|\| cross\.allowed;/.test(page), 'canCommit requires a same-society (safe) archive, or the guarded cross-society restore');
 // And the definitions behind those flags are the real checks.
 ok(/rehearsal\?\.status === 'passed'/.test(page), 'rehearsalPassed is the real rehearsal-passed check');
 ok(/preRestoreBackup/.test(page), 'backupReady is backed by an actual pre-restore backup');
