@@ -41,6 +41,8 @@ const MESSAGES: Record<string, string> = {
   needs_approval: 'समिति के नियम के अनुसार यह वाउचर स्वीकृति के बाद ही post होगा — page refresh करके फिर से save करें, यह स्वीकृति के लिए रुकेगा।',
   not_an_approver: 'आपकी भूमिका वाउचर approve / reject नहीं कर सकती — यह काम admin, सचिव, प्रबंधक, अध्यक्ष या बोर्ड सदस्य करते हैं।',
   no_email_claim: 'आपके login की email पता नहीं चली — एक बार logout करके फिर login करें।',
+  // 184 / SEC-09
+  subscription_expired: 'आपका trial / plan समाप्त हो गया है, इसलिए नई एंट्री रुकी है। डेटा सुरक्षित है — रिपोर्ट और export चालू हैं। User Management से plan लेते ही एंट्री फिर शुरू हो जाएगी।',
 };
 
 const MESSAGES_EN: Record<string, string> = {
@@ -73,6 +75,8 @@ const MESSAGES_EN: Record<string, string> = {
   needs_approval: "Under the society's rules this voucher posts only after approval — refresh the page and save it again; it will wait for approval.",
   not_an_approver: 'Your role cannot approve or reject vouchers — an admin, secretary, manager, chairman or board member does this.',
   no_email_claim: 'Your login email could not be found — log out once and log in again.',
+  // 184 / SEC-09
+  subscription_expired: 'Your trial / plan has ended, so new entries are paused. Your data is safe — reports and export still work. Entries resume as soon as you buy a plan in User Management.',
 };
 
 export function postVoucherMessage(code: string | null, raw?: string): string {
