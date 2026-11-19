@@ -22,12 +22,12 @@ ok('already-cancelled voucher ⇒ true, before any other check', /if \(!current\
 ok('return vouchers refused unless viaParent', /\(current\.refType === 'sale\.return' \|\| current\.refType === 'purchase\.return'\) && !opts\?\.viaParent[\s\S]{0,600}return false;/.test(cv));
 
 const cc = read('src/contexts/ConsumerDataContext.tsx');
-const viaParent = (cc.match(/cancelVoucher\([^;]*'(Sales|Purchase) return[^']*'[^;]*\{ viaParent: true(?:, rollback: true)? \}\)/g) || []).length;
-ok('all 6 return cancel sites pass viaParent', viaParent === 6);
-ok('return delete aborts if its voucher stays live', /if \(cur\.voucherId && !cancelVoucher\(cur\.voucherId, 'Sales return deleted'[^)]*\{ viaParent: true \}\)\) return;/.test(cc) && /if \(cur\.voucherId && !cancelVoucher\(cur\.voucherId, 'Purchase return deleted'[^)]*\{ viaParent: true \}\)\) return;/.test(cc));
+const viaParent = (cc.match(/cancelVoucher\([^;]*'(Sales|Purchase) return[^']*'[^;]*\{ viaParent: true[^}]*\}\)/g) || []).length;
+ok('all 8 return cancel sites pass viaParent (X-3: the edit\'s old-note cancel and its withdraw-new are separate calls)', viaParent === 8);
+ok('return delete aborts if its voucher stays live', /cancelVoucher\(cur\.voucherId, 'Sales return deleted'[^)]*\{ viaParent: true, onCancelled: reverseReturn \}\)/.test(cc) && /cancelVoucher\(cur\.voucherId, 'Purchase return deleted'[^)]*\{ viaParent: true, onCancelled: reverseReturn \}\)/.test(cc));
 // X-1: the edit now posts the NEW note first; in its onSaved, if the old note cannot be cancelled, the NEW one is
 // withdrawn and the edit stops — still never two live postings.
-ok('return edit aborts if the old voucher stays live', /!cancelVoucher\(cur\.voucherId, 'Sales return edited'[^)]*\{ viaParent: true \}\)\) \{\s*cancelVoucher\(sv\.id, 'Sales return edit withdrawn[\s\S]{0,1200}?return;/.test(cc) && /!cancelVoucher\(cur\.voucherId, 'Purchase return edited'[^)]*\{ viaParent: true \}\)\) \{\s*cancelVoucher\(sv\.id, 'Purchase return edit withdrawn[\s\S]{0,1200}?return;/.test(cc));
+ok('return edit aborts if the old voucher stays live', /!cancelVoucher\(cur\.voucherId, 'Sales return edited'[^)]*\{ viaParent: true, onCancelled: applyEdit, onFailed: withdrawNew \}\)\) withdrawNew\(\);/.test(cc) && /!cancelVoucher\(cur\.voucherId, 'Purchase return edited'[^)]*\{ viaParent: true, onCancelled: applyEdit, onFailed: withdrawNew \}\)\) withdrawNew\(\);/.test(cc) && cc.includes("cancelVoucher(sv.id, 'Sales return edit withdrawn") && cc.includes("cancelVoucher(sv.id, 'Purchase return edit withdrawn"));
 
 ok('live-return check reads return vouchers (refType + refId)', /v\.refType === `\$\{kind\}\.return` && v\.refId === docId/.test(dc));
 for (const k of ['Sale', 'Purchase']) {

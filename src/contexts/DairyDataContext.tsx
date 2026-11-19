@@ -18,7 +18,7 @@ import { voucherRefusedToast, inFlightToast } from '@/lib/voucherRefused';
 import { useLatest } from '@/hooks/useLatest';
 import { useInFlight } from '@/hooks/useInFlight';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
+import { findVoucherOwner, figureAfterCancel, type OwnerGroup } from '@/lib/voucherOwnership';
 import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
 import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { useAuth } from '@/contexts/AuthContext';
@@ -103,7 +103,7 @@ interface DairyDataContextValue {
 const DairyDataContext = createContext<DairyDataContextValue | null>(null);
 
 export function DairyProvider({ children }: { children: ReactNode }) {
-  const { society, accounts, members, addVoucher, cancelVoucher, registerVoucherOwner } = useData();
+  const { society, accounts, members, addVoucher, cancelVoucher, registerVoucherOwner, registerVoucherCancelFollower } = useData();
   const { user } = useAuth();
   // J6b: load this module's tables only when its capability is on for the society (same rule as the
   // sidebar / CapabilityGuard) — societies that don't use dairy no longer fetch them on every login.
@@ -456,8 +456,10 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     if (!cur) return;
     if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: tr('भुगतान मौजूद', 'Payment exists'), description: tr('पहले भुगतान reverse करें, फिर हटाएँ।', 'Reverse the payment first, then delete.'), variant: 'destructive' }); return; }
     // H / RULE 3: abort if the voucher cannot be cancelled — the document must not outlive it.
-    if (cur.status === 'approved' && cur.voucherId && !cancelVoucher(cur.voucherId, 'Settlement deleted', user?.name || 'System', { viaParent: true })) return;
-    commitSettlement({ ...cur, isDeleted: true }, cur);
+    // X-3: marked deleted only once the cloud has CONFIRMED the cancel (not when it was merely started).
+    const markDeleted = () => commitSettlement({ ...cur, isDeleted: true }, cur);
+    if (cur.status === 'approved' && cur.voucherId) cancelVoucher(cur.voucherId, 'Settlement deleted', user?.name || 'System', { viaParent: true, onCancelled: markDeleted });
+    else markDeleted();
   }, [settlements, cancelVoucher, commitSettlement, user]);
 
   // ── Milk dispatch to the Union (D4 — revenue side) ──
@@ -547,8 +549,10 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const cur = dispatches.find(d => d.id === dispatchId);
     if (!cur) return;
     if (cur.amountReceived > 0.005) { toastRef.current({ title: tr('भुगतान मौजूद', 'Payment exists'), description: tr('पहले प्राप्ति reverse करें, फिर हटाएँ।', 'Reverse the receipt first, then delete.'), variant: 'destructive' }); return; }
-    if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Dispatch deleted', user?.name || 'System', { viaParent: true })) return;   // H / RULE 3
-    commitDispatch({ ...cur, isDeleted: true }, cur);
+    // X-3: marked deleted only once the cloud has CONFIRMED the cancel (not when it was merely started).
+    const markDeleted = () => commitDispatch({ ...cur, isDeleted: true }, cur);
+    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Dispatch deleted', user?.name || 'System', { viaParent: true, onCancelled: markDeleted });   // H / RULE 3
+    else markDeleted();
   }, [dispatches, cancelVoucher, commitDispatch, user]);
 
   // ── Member input issue: feed / medicine / AI on credit (D4b) ──
@@ -604,8 +608,10 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       const bal = memberInputOutstanding(inputIssues, settlements, cur.memberId, inputAcct);
       if (bal.recovered > bal.issued - cur.amount + 0.005) { toastRef.current({ title: tr('वसूली मौजूद', 'Recovery exists'), description: tr('इस आदान की वसूली सेटलमेंट में हो चुकी है — पहले वह सेटलमेंट/कटौती reverse करें।', 'This input has already been recovered in a settlement — reverse that settlement/deduction first.'), variant: 'destructive', duration: 10000 }); return; }
     }
-    if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Input issue deleted', user?.name || 'System', { viaParent: true })) return;   // H / RULE 3
-    commitInputIssue({ ...cur, isDeleted: true }, cur);
+    // X-3: marked deleted only once the cloud has CONFIRMED the cancel (not when it was merely started).
+    const markDeleted = () => commitInputIssue({ ...cur, isDeleted: true }, cur);
+    if (cur.voucherId) cancelVoucher(cur.voucherId, 'Input issue deleted', user?.name || 'System', { viaParent: true, onCancelled: markDeleted });   // H / RULE 3
+    else markDeleted();
   }, [inputIssues, settlements, accounts, cancelVoucher, commitInputIssue, user]);
 
   const getMemberInputBalance = useCallback(
@@ -722,8 +728,10 @@ export function DairyProvider({ children }: { children: ReactNode }) {
     const cur = distributions.find(d => d.id === distributionId);
     if (!cur) return;
     if (cur.status === 'approved' && cur.amountPaid > 0.005) { toastRef.current({ title: tr('भुगतान मौजूद', 'Payment exists'), description: tr('पहले भुगतान reverse करें, फिर हटाएँ।', 'Reverse the payment first, then delete.'), variant: 'destructive' }); return; }
-    if (cur.status === 'approved' && cur.voucherId && !cancelVoucher(cur.voucherId, 'Distribution deleted', user?.name || 'System', { viaParent: true })) return;   // H / RULE 3
-    commitDistribution({ ...cur, isDeleted: true }, cur);
+    // X-3: marked deleted only once the cloud has CONFIRMED the cancel (not when it was merely started).
+    const markDeleted = () => commitDistribution({ ...cur, isDeleted: true }, cur);
+    if (cur.status === 'approved' && cur.voucherId) cancelVoucher(cur.voucherId, 'Distribution deleted', user?.name || 'System', { viaParent: true, onCancelled: markDeleted });   // H / RULE 3
+    else markDeleted();
   }, [distributions, cancelVoucher, commitDistribution, user]);
 
   const resolveMilkRate = useCallback(
@@ -731,6 +739,39 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       priceMilk(rateCharts, { fat: args.fat, snf: args.snf, qty: args.qty, date: args.date || new Date().toISOString().slice(0, 10), season: args.season }),
     [rateCharts],
   );
+
+  // X-5 (audit 2026-11-17): a payment / collection voucher cancelled from the Vouchers page takes its amount back off
+  // its document here (DataContext calls this only after the cloud CONFIRMED the cancel, and only for a direct cancel).
+  const followFailedD = (what: string, msg: string) => {
+    reportError('voucher-cancel-follow', msg, { at: what });
+    toastRef.current({ title: tr('⚠ document ठीक नहीं हुआ', '⚠ Document not updated'), description: tr(`वाउचर रद्द हुआ, पर ${what} की राशि क्लाउड पर नहीं घटी — ${msg}. Refresh करके देखें।`, `The voucher was cancelled, but ${what}'s figure did not go down on the cloud — ${msg}. Refresh and check.`), variant: 'destructive', duration: 15000 });
+  };
+  const followedToastD = (what: string, due: number) => toastRef.current({ title: tr('document भी ठीक किया गया', 'Document updated too'), description: tr(`भुगतान रद्द हुआ — ${what} पर ₹${due.toLocaleString('en-IN')} फिर से बकाया है।`, `The payment was cancelled — ₹${due.toLocaleString('en-IN')} is due again on ${what}.`), duration: 10000 });
+  useEffect(() => registerVoucherCancelFollower('dairy', {
+    refTypes: ['dairy.settlement.payment', 'dairy.dispatch.receipt', 'dairy.distribution.payment'], label: tr('दूध भुगतान / डिस्पैच / वितरण (Dairy)', 'Dairy settlement / dispatch / distribution'),
+    follow: (v) => {
+      if (v.refType === 'dairy.settlement.payment') {
+        const cur = settlementsLatest.current.find(x => x.id === v.refId);
+        if (!cur) return;
+        const next: DairySettlement = { ...cur, amountPaid: figureAfterCancel(cur.amountPaid, v.amount) };
+        commitSettlement(next, cur);
+        followedToastD(tr('दूध भुगतान (settlement)', 'the milk settlement'), +(cur.netPayable - next.amountPaid).toFixed(2));
+      } else if (v.refType === 'dairy.dispatch.receipt') {
+        const cur = dispatchesLatest.current.find(x => x.id === v.refId);
+        if (!cur) return;
+        const next: DairyDispatch = { ...cur, amountReceived: figureAfterCancel(cur.amountReceived, v.amount) };
+        commitDispatch(next, cur);
+        followedToastD(tr('डिस्पैच', 'the dispatch'), +(cur.amount - next.amountReceived).toFixed(2));
+      } else {
+        const cur = distributionsLatest.current.find(x => x.id === v.refId);
+        if (!cur) return;
+        const next: DairyDistribution = { ...cur, amountPaid: figureAfterCancel(cur.amountPaid, v.amount) };
+        commitDistribution(next, cur);
+        followedToastD(tr('वितरण', 'the distribution'), +(cur.total - next.amountPaid).toFixed(2));
+      }
+    },
+  }), [registerVoucherCancelFollower, commitSettlement, commitDispatch, commitDistribution]);
+  void followFailedD;   // the commit helpers above report their own cloud failures
 
   return (
     <DairyDataContext.Provider value={{

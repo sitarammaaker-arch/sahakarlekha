@@ -45,3 +45,23 @@ export function findVoucherOwner(groups: readonly OwnerGroup[], voucherId: strin
 }
 
 export type VoucherOwnerCheck = (voucherId: string) => string | null;
+
+/**
+ * X-5 (audit 2026-11-17) — a PAYMENT / RECEIPT / RECOVERY voucher against a document (maintenance collection, department
+ * bill collection, advance recovery, dairy / patronage payments, muster wage payment) moved a stored figure on that
+ * document (paidAmount, recovered, amountReceived…). Cancelling the voucher from the Vouchers page left that figure as
+ * paid. A follower is told about every CONFIRMED direct cancel of a voucher whose refType it lists and takes the
+ * voucher's amount back off its document. Editing / reversing such a voucher is refused instead (the document could not
+ * follow an arbitrary edit) — the way to undo it is to cancel it.
+ */
+export interface VoucherCancelFollower {
+  refTypes: readonly string[];
+  label: string;
+  follow: (voucher: { id: string; refType?: string; refId?: string; amount: number; lines?: readonly { amount: number; musterEntryId?: string }[] }) => void;
+}
+
+/** A document's stored figure after one of its payment vouchers (amount `minus`) is cancelled: never below zero. */
+export function figureAfterCancel(current: number, minus: number): number {
+  const next = Math.round(((current || 0) - (minus || 0)) * 100) / 100;
+  return next > 0.005 ? next : 0;
+}

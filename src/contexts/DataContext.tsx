@@ -33,7 +33,7 @@ import { resolveFarmerPaymentCredit } from '@/lib/procurement/farmerPaymentMode'
 import { toMinor, toRupees, addMinor, subMinor, sumMinor, type Minor } from '@/lib/money';
 import { salaryAccrualLines, salaryAccrualChanged } from '@/lib/payroll/accrualLines';
 import { CORE_PARTS, setLoadFailures, refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
-import { findVoucherOwner, type VoucherOwnerCheck } from '@/lib/voucherOwnership';
+import { findVoucherOwner, figureAfterCancel, type VoucherOwnerCheck, type VoucherCancelFollower } from '@/lib/voucherOwnership';
 import { buildMemberShareLedger } from '@/lib/memberSnapshot';
 import { reportError } from '@/lib/errorReporting';
 import { syncPrimaryNominee } from '@/lib/nomineeUtils';
@@ -214,6 +214,8 @@ interface DataContextType {
   cancelVoucher: (id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean; rollback?: boolean; onCancelled?: () => void; onFailed?: (message: string) => void }) => boolean;
   /** H: a domain context registers who owns its vouchers; returns the unregister fn. */
   registerVoucherOwner: (key: string, check: VoucherOwnerCheck) => () => void;
+  /** X-5: told about every CONFIRMED direct cancel of a voucher whose refType it lists (takes the amount back off its document). */
+  registerVoucherCancelFollower: (key: string, follower: VoucherCancelFollower) => () => void;
   /** RM-17: the ledger(s) a document's GST goes to — head-wise, or the combined 2201 / 3310 (lib/accounting/gstLedgers). */
   gstLegs: (side: GstSide, parts: { cgst?: number; sgst?: number; igst?: number; total: number }, opts?: { legacy?: boolean }) => GstLeg[];
   /** S2: which skippable tables (src/lib/emptyTables.ts) hold no rows for this society — one shared call. */
@@ -1142,6 +1144,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loans, setLoansState] = useState<Loan[]>([]);
   const [depositAccounts, setDepositAccountsState] = useState<DepositAccount[]>([]);
   const [depositTransactions, setDepositTransactionsState] = useState<DepositTransaction[]>([]);
+  const depositTransactionsRef = useRef<DepositTransaction[]>([]);   // X-5: the deposits owner check reads the latest
+  depositTransactionsRef.current = depositTransactions;
   const [complianceFilings, setComplianceFilingsState] = useState<ComplianceFiling[]>([]);
   const [societyCapabilities, setSocietyCapabilitiesState] = useState<SocietyCapabilityRow[]>([]);
   const societyCapabilitiesRef = useRef(societyCapabilities);
@@ -2545,6 +2549,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const asset = assetsRef.current.find(a => a.assetNo && v.narration.includes(a.assetNo));
       if (asset) owner = tr(`संपत्ति ${asset.assetNo} का ह्रास (Asset Register)`, `Depreciation of asset ${asset.assetNo} (Asset Register)`);
     }
+    const follower = owner ? null : followedBy(v.refType);
+    if (follower && !v.isDeleted) {
+      // X-5: the document follows a CANCEL of this payment, not an edit / reverse.
+      toastRef.current({ title: tr(`वाउचर ${what.hi} नहीं होगा`, `Voucher cannot be ${what.en}`), description: tr(`यह "${follower}" का भुगतान / वसूली वाउचर है। गलती हो तो इसे रद्द (cancel) करें — document की राशि अपने-आप ठीक होगी — फिर सही entry करें।`, `This is a payment / collection voucher of "${follower}". For a mistake, cancel it (the document's figure follows), then make the right entry.`), variant: 'destructive', duration: 12000 });
+      return true;
+    }
     if (!owner) return false;
     toastRef.current({
       title: tr(`वाउचर ${what.hi} नहीं होगा`, `Voucher cannot be ${what.en}`),
@@ -2800,6 +2810,54 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     voucherOwnersRef.current.set(key, check);
     return () => { if (voucherOwnersRef.current.get(key) === check) voucherOwnersRef.current.delete(key); };
   }, []);
+  // X-5: followers keep a document's stored paid / received figure in step with its live payment vouchers.
+  const cancelFollowersRef = useRef(new Map<string, VoucherCancelFollower>());
+  const registerVoucherCancelFollower = useCallback((key: string, follower: VoucherCancelFollower) => {
+    cancelFollowersRef.current.set(key, follower);
+    return () => { if (cancelFollowersRef.current.get(key) === follower) cancelFollowersRef.current.delete(key); };
+  }, []);
+  const followCancel = (v: Voucher) => {
+    if (!v.refType) return;
+    for (const fl of cancelFollowersRef.current.values()) {
+      if (!fl.refTypes.includes(v.refType)) continue;
+      try { fl.follow(v); } catch (e) { reportError('voucher-cancel-follow', e instanceof Error ? e.message : String(e), { voucherId: v.id, refType: v.refType }); }
+    }
+  };
+  const followedBy = (refType?: string): string | null => {
+    if (!refType) return null;
+    for (const fl of cancelFollowersRef.current.values()) if (fl.refTypes.includes(refType)) return fl.label;
+    return null;
+  };
+  // X-5: a deposit / withdrawal / closure voucher moved the passbook balance; it carries no refType, so the passbook
+  // cannot follow a cancel — it is changed only by a counter-entry on the Deposits page.
+  useEffect(() => registerVoucherOwner('deposits', id => findVoucherOwner([{ label: tr('जमा खाता पासबुक (Deposits)', 'Deposit passbook (Deposits)'), docs: depositTransactionsRef.current }], id)), [registerVoucherOwner]);
+  // X-5: a wage payment made before per-worker lines existed cannot say which muster entry got how much — it stays
+  // fixed while an entry still points at it. Newer ones carry musterEntryId on each line and are followed (below).
+  useEffect(() => registerVoucherOwner('muster-payment', id => {
+    const v = vouchersRef.current.find(x => x.id === id);
+    if (!v || v.refType !== 'wage.payment' || (v.lines || []).some(l => l.musterEntryId)) return null;
+    return musterEntriesRef.current.some(m => !m.isDeleted && m.paymentVoucherId === id) ? tr('मज़दूरी भुगतान (Muster Roll)', 'Wage payment (Muster Roll)') : null;
+  }), [registerVoucherOwner]);
+  useEffect(() => registerVoucherCancelFollower('muster-payment', {
+    refTypes: ['wage.payment'], label: tr('मज़दूरी भुगतान (Muster Roll)', 'Wage payment (Muster Roll)'),
+    follow: (v) => {
+      const back = new Map<string, number>();
+      for (const l of v.lines || []) if (l.musterEntryId) back.set(l.musterEntryId, (back.get(l.musterEntryId) || 0) + l.amount);
+      if (!back.size) return;
+      const wageOf = (m: MusterEntry) => (m.daysWorked || 0) * (m.dailyWage || 0);
+      const changed = musterEntriesRef.current.filter(m => back.has(m.id)).map(m => {
+        const paidAmount = figureAfterCancel(m.paidAmount || 0, back.get(m.id) || 0);
+        return { ...m, paidAmount, paid: paidAmount > 0.005 && paidAmount >= wageOf(m) - 0.005, ...(m.paymentVoucherId === v.id ? { paymentVoucherId: undefined } : {}) } as MusterEntry;
+      });
+      if (!changed.length) return;
+      const byId = new Map(changed.map(m => [m.id, m]));
+      setMusterEntriesState(prev => { const u = prev.map(m => byId.get(m.id) ?? m); storage.setMusterEntries(u); return u; });
+      supabase.from('muster_entries').upsert(changed.map(m => withSoc({ ...m, paymentVoucherId: m.paymentVoucherId ?? null }))).then(({ error }) => {
+        if (error) { reportError('voucher-cancel-follow', error.message, { voucherId: v.id, at: 'muster' }); toastRef.current({ title: tr('⚠ मस्टर ठीक नहीं हुआ', '⚠ Muster not updated'), description: tr(`भुगतान रद्द हुआ, पर मस्टर की भुगतान-राशि क्लाउड पर नहीं घटी — ${error.message}. Refresh करके देखें।`, `The payment was cancelled, but the muster's paid amount did not go down on the cloud — ${error.message}. Refresh and check.`), variant: 'destructive', duration: 15000 }); }
+      });
+      toastRef.current({ title: tr('मस्टर भी ठीक किया गया', 'Muster updated too'), description: tr(`मज़दूरी भुगतान रद्द हुआ — ${changed.length} श्रमिक(ों) की राशि फिर से बकाया है।`, `The wage payment was cancelled — ${changed.length} worker(s) are due again.`), duration: 10000 });
+    },
+  }), [registerVoucherCancelFollower]);
 
   // RM-17: GST goes head-wise (Output / Input CGST · SGST · IGST) — the one rule in lib/accounting/gstLedgers.
   // A head the database does not hold yet (merged on screen only, migration 156 not run) is not used: the
@@ -2877,7 +2935,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
         }
       }
-      if ((current.refType === 'sale.return' || current.refType === 'purchase.return') && !opts?.viaParent) {
+      if (current.refType === 'tds.challan' && !opts?.viaParent) {   // X-5: the challan would stay "paid"
+      toastRef.current({ title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'), description: tr('यह TDS चालान का भुगतान वाउचर है। TDS Register से चालान हटाएँ — चालान और वाउचर साथ हटेंगे।', 'This is a TDS challan payment voucher. Delete the challan from the TDS Register — the challan and the voucher go together.'), variant: 'destructive', duration: 10000 });
+      return false;
+    }
+    if ((current.refType === 'sale.return' || current.refType === 'purchase.return') && !opts?.viaParent) {
         const page = current.refType === 'sale.return' ? tr('बिक्री वापसी (Sales Return)', 'Sales Return') : tr('ख़रीद वापसी (Purchase Return)', 'Purchase Return');
         toastRef.current({ title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'), description: tr(`यह वाउचर ${page} से बना है। उसी page से return delete करें — तभी return, स्टॉक और बही तीनों साथ ठीक होंगे।`, `This voucher was created from ${page}. Delete the return from that page — only then will the return, stock and ledger all stay correct together.`), variant: 'destructive', duration: 10000 });
         return false;
@@ -3031,7 +3093,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         const serverEvents = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
         ledgerEventsRef.current = [...ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent?.eventId), ...serverEvents];
-        if (!opts?.viaParent) loanFollowsCancel(current);   // LOAN-04: confirmed
+        if (!opts?.viaParent) { loanFollowsCancel(current); followCancel(current); }   // LOAN-04 / X-5: confirmed
         opts?.onCancelled?.();
       }, (rejection: unknown) => {
         const msg = rejection instanceof Error ? rejection.message : String(rejection);
@@ -3060,7 +3122,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           toastRef.current({ title: tr('❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', '❌ Voucher cancellation not saved to the cloud'), description: tr(`${res.error ?? 'journal append failed'}. रद्द करना वापस ले लिया गया — वाउचर चालू और सुरक्षित है।`, `${res.error ?? 'journal append failed'}. The cancellation was undone — the voucher is active and safe.`), variant: 'destructive', duration: 15000 });
           return;
         }
-        if (!opts?.viaParent) loanFollowsCancel(current);   // LOAN-04: confirmed (the journal is the save)
+        if (!opts?.viaParent) { loanFollowsCancel(current); followCancel(current); }   // LOAN-04 / X-5: confirmed (the journal is the save)
         opts?.onCancelled?.();
         // Saved (journal). Project the soft-delete into the table best-effort — a failure is now
         // RECOVERABLE (the journal is the truth), so LOG, never roll back.
@@ -3086,7 +3148,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         opts?.onFailed?.(error.message);
       } else {
         deleteEntries(id); // remove from voucher_entries so cancelled voucher has no SQL-visible impact
-        if (!opts?.viaParent) loanFollowsCancel(current);   // LOAN-04: confirmed
+        if (!opts?.viaParent) { loanFollowsCancel(current); followCancel(current); }   // LOAN-04 / X-5: confirmed
         opts?.onCancelled?.();
         if (cancelEvent) persistLedgerEvent(cancelEvent); // durable append only after the cancel is confirmed
         // No cancelEvent → the in-memory journal did not hold this voucher's posting: either it was never
@@ -4693,6 +4755,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const oldWage = (old.daysWorked || 0) * (old.dailyWage || 0);
     const newWage = (updated.daysWorked || 0) * (updated.dailyWage || 0);
     const wageChanged = newWage !== oldWage;
+    // X-4 follow-up: superseding the old accrual is a CANCEL of an older voucher (often another day's / user's), which
+    // needs a delete role on the server. Ask before anything is posted — otherwise an accountant's edit left BOTH the
+    // old and the new accrual live (wage expense counted twice).
+    if (wageChanged && old.accrualVoucherId && guardPermission('delete', tr('accrual वाली मस्टर एंट्री की मज़दूरी बदलने', 'change the wage of an accrued muster entry'))) return;
     // If the wage amount changed, post a fresh accrual now; the old one is superseded
     // (cancelled) only after the entry update persists, so a failure leaves old intact.
     const newAv = wageChanged && newWage > 0 ? postWageAccrual(updated) : ({ id: '' } as Voucher);
@@ -4708,10 +4774,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (newAv.id) cancelVoucher(newAv.id, 'Muster edit rolled back (save failed)', user?.name || 'System', { viaParent: true, rollback: true });
         toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       } else if (wageChanged && old.accrualVoucherId) {
-        cancelVoucher(old.accrualVoucherId, 'Wage accrual superseded (muster edited)', user?.name || 'System');
+        cancelVoucher(old.accrualVoucherId, 'Wage accrual superseded (muster edited)', user?.name || 'System', {
+          viaParent: true,
+          onFailed: (msg) => toastRef.current({ title: tr('⚠ पुराना accrual रद्द नहीं हुआ', '⚠ Old accrual not cancelled'), description: tr(`मस्टर बदल गया, पर पुराना मज़दूरी-accrual वाउचर क्लाउड पर रद्द नहीं हुआ (${msg}) — मज़दूरी दो बार गिनी जा रही है। Vouchers से उसे रद्द करें।`, `The muster changed, but the old wage-accrual voucher was not cancelled on the cloud (${msg}) — the wage is counted twice. Cancel it from Vouchers.`), variant: 'destructive', duration: 15000 }),
+        });
       }
     });
-  }, [musterEntries, postWageAccrual, cancelVoucher, user]);
+  }, [musterEntries, postWageAccrual, cancelVoucher, guardPermission, user]);
 
   const deleteMusterEntry = useCallback((id: string) => {
     if (guardPermission('delete', tr('मस्टर एंट्री मिटाने', 'delete muster entries'))) return;   // ECR-06: role gate
@@ -4756,9 +4825,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const lid = () => crypto.randomUUID();
     const ref = data.reference?.trim() ? ` · Ref ${data.reference.trim()}` : '';
     const rem = data.remarks?.trim() ? ` · ${data.remarks.trim()}` : '';
-    const lines = [
-      ...(accruedPortion > 0 ? [{ id: lid(), accountId: '2109', type: 'Dr' as const, amount: accruedPortion }] : []),
-      ...(directPortion > 0 ? [{ id: lid(), accountId: '5202', type: 'Dr' as const, amount: directPortion }] : []),
+    // X-5: one Dr line per worker, tagged with its muster entry, so a cancel of this payment can give each worker's
+    // amount back (the muster follower). Same accounts and totals as before (2109 accrued / 5202 direct).
+    const lines: VoucherLine[] = [
+      ...allocs.map(a => ({ id: lid(), accountId: a.entry.accrued ? '2109' : '5202', type: 'Dr' as const, amount: a.amount, musterEntryId: a.entry.id })),
       { id: lid(), accountId: creditAcc, type: 'Cr' as const, amount: total },
     ];
     const voucher = addVoucher({
@@ -6261,16 +6331,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setProcurementLotsState(prev => { const u = prev.map(l => l.id === lot.id ? cancelledLot : l); storage.setProcurementLots(u); return u; });
 
     const left: string[] = [];
+    // X-3: a cancel the cloud refuses LATER (after the summary toast below) is named in its own warning.
+    const lateLeft = (what: string) => () => toastRef.current({ title: tr('⚠ लॉट रद्द हुआ, पर एक वाउचर बाकी है', '⚠ Lot cancelled, but one voucher remains'), description: tr(`${what} क्लाउड पर रद्द नहीं हुआ — इसे हाथ से ठीक करें (या admin को बताएँ)।`, `${what} was not cancelled on the cloud — fix it manually (or tell the admin).`), variant: 'destructive', duration: 20000 });
     // 2. Settlement (draft or approved) + its deduction voucher.
     if (stl) {
-      if (dedVoucher && !cancelVoucher(dedVoucher.id, `Lot cancelled — ${reason}`, by, { viaParent: true })) left.push(`कटौती वाउचर ${dedVoucher.voucherNo}`);
+      if (dedVoucher && !cancelVoucher(dedVoucher.id, `Lot cancelled — ${reason}`, by, { viaParent: true, onFailed: lateLeft(tr(`कटौती वाउचर ${dedVoucher.voucherNo}`, `Deduction voucher ${dedVoucher.voucherNo}`)) })) left.push(`कटौती वाउचर ${dedVoucher.voucherNo}`);
       const gone: FarmerSettlement = { ...stl, isDeleted: true, updatedAt: at };
       setProcurementSettlementsState(prev => { const u = prev.map(x => x.id === stl.id ? gone : x); storage.setProcurementSettlements(u); return u; });
       const { error: se } = await supabase.from('procurement_settlements').upsert(withSoc(gone));
       if (se) { reportError('write-partial', se.message, { at: 'cancelProcurementLot settlement' }); left.push(tr(`निपटान ${stl.settlementNo || ''} (${se.message})`, `Settlement ${stl.settlementNo || ''} (${se.message})`)); }
     }
     // 3. Commission accrual.
-    if (accrual && !cancelVoucher(accrual.id, `Lot cancelled — ${reason}`, by, { viaParent: true })) left.push(`कमीशन वाउचर ${accrual.voucherNo}`);
+    if (accrual && !cancelVoucher(accrual.id, `Lot cancelled — ${reason}`, by, { viaParent: true, onFailed: lateLeft(tr(`कमीशन वाउचर ${accrual.voucherNo}`, `Commission voucher ${accrual.voucherNo}`)) })) left.push(`कमीशन वाउचर ${accrual.voucherNo}`);
     // 4. The posting voucher: an engine reversal (equal and opposite), dated today.
     if (ev && rr && !reverseVoucher(ev.id, `Lot cancelled — ${reason}`, { engine: { refType: ENGINE_REVERSAL_REF_TYPE, refId: rr.id } })) left.push(`पोस्टिंग वाउचर ${ev.voucherNo} का reversal`);
     // 5. Immutable audit event (best-effort; the lot row is the record).
@@ -9058,7 +9130,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlements: procurementSettlementsView, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment, cancelProcurementLot,
-    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
+    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, registerVoucherCancelFollower, reverseVoucher, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
@@ -9097,7 +9169,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlementsView, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment, cancelProcurementLot,
-    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, reverseVoucher, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
+    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, registerVoucherCancelFollower, reverseVoucher, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,

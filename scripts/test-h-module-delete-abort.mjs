@@ -12,19 +12,20 @@ let pass = 0, fail = 0;
 const ok = (n, c) => { if (c) { pass++; console.log(`  ✓ ${n}`); } else { fail++; console.log(`  ✗ ${n}`); } };
 const read = p => readFileSync(resolve(root, p), 'utf8');
 
-const abortOn = (src, reason) => new RegExp(`&& !cancelVoucher\\([^;]*${reason.replace(/[()$]/g, m => '\\' + m)}[^;]*\\{ viaParent: true \\}\\)\\) return( false)?;`).test(src);
+// X-3: "aborts on a refused cancel" = the document changes only in onCancelled (a refusal now OR late leaves it as it was).
+const abortOn = (src, reason) => new RegExp(`cancelVoucher\\([^;]*${reason.replace(/[()$]/g, m => '\\' + m)}[^;]*\\{ viaParent: true, onCancelled: \\w+[^}]*\\}\\)`).test(src);
 const cc = read('src/contexts/ConsumerDataContext.tsx');
 ok('Consumer: patronage run delete aborts on a refused cancel', abortOn(cc, "'Patronage run deleted'"));
 const dd = read('src/contexts/DairyDataContext.tsx');
 for (const r of ["'Settlement deleted'", "'Dispatch deleted'", "'Input issue deleted'", "'Distribution deleted'"]) ok(`Dairy: ${r} aborts on a refused cancel`, abortOn(dd, r));
 const hh = read('src/contexts/HousingDataContext.tsx');
 ok('Housing: maintenance bill delete aborts and returns false', abortOn(hh, '`Maintenance bill ${bill.billNo} deleted`') && /deleteMaintenanceBill: \(id: string\) => boolean;/.test(hh));
-ok('Housing: fund investment cancels redemption first and stops at a refusal', abortOn(hh, '`Fund investment deleted (redemption reversed)`') && /if \(inv\.voucherId && !cancelVoucher\(inv\.voucherId, `Fund investment deleted`/.test(hh) && hh.indexOf('redemption reversed)`') < hh.indexOf("if (inv.voucherId && !cancelVoucher(inv.voucherId"));
+ok('Housing: fund investment cancels redemption first and stops at a refusal', abortOn(hh, '`Fund investment deleted (redemption reversed)`') && /cancelVoucher\(inv\.voucherId, `Fund investment deleted`, [^;]*onCancelled: removeRow, onFailed: partly \}\)/.test(hh) && hh.includes('onCancelled: cancelInvestment'));
 ok('Housing: flat transfer delete aborts on a refused cancel', abortOn(hh, '`Transfer ${t.flatNo} deleted`'));
 const ll = read('src/contexts/LabourDataContext.tsx');
 ok('Labour: every cascade checks its cancels and toasts a refusal (3 deletes)', (ll.match(/'वाउचर रद्द नहीं हुआ'/g) || []).length === 3 && !/^\s*if \(old\.(voucherId|depositVoucherId)\) cancelVoucher\(/m.test(ll) && !/\.forEach\(v => cancelVoucher\(/.test(ll));
 for (const [name, src] of [['Consumer', cc], ['Dairy', dd], ['Housing', hh]]) {
-  ok(`${name}: no delete-path cancel ignores its result`, !/^\s*if \([^)]*\) cancelVoucher\([^;]*deleted[^;]*;\s*$/m.test(src));
+  ok(`${name}: no delete-path cancel ignores its result`, !src.split('\n').some(l => /^\s*if \([^)]*\) cancelVoucher\([^;]*deleted[^;]*;\s*$/.test(l) && !/onCancelled/.test(l)));   // X-3: onCancelled carries the result
 }
 ok('MaintenanceBilling toasts "deleted" only when the delete ran', /if \(deleteMaintenanceBill\(id\)\) toast\(/.test(read('src/pages/MaintenanceBilling.tsx')));
 

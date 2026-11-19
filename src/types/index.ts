@@ -6,6 +6,8 @@ export interface VoucherLine {
   type: 'Dr' | 'Cr';
   amount: number;
   narration?: string;
+  /** X-5: a wage-payment Dr line names the muster entry it paid, so a cancel can give that worker's amount back. */
+  musterEntryId?: string;
 }
 // ECR-06 S3: the assignable society roles — the 4 legacy names plus the 12 mapped 17-role
 // names (Blueprint TASK3.3). superAdmin is platform-only and readOnly is assigned as the
