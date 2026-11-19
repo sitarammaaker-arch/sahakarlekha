@@ -4267,7 +4267,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const id = before.id;
     let balanceSaved = false;
     let undone = false;
-    const writeBackBefore = () => supabase.from('deposit_accounts').upsert(withSoc(before)).then(({ error }) => { if (error) reportCascade(`${label} undo`, error); }, () => {});
+    let updatedBalance = before.balance;
+    // DEP-03: the write-back is conditional too — only while the cloud still holds OUR new balance, so an undo never
+    // overwrites a later movement made from another window.
+    const writeBackBefore = () => supabase.from('deposit_accounts').update(withSoc(before)).eq('id', id).eq('balance', updatedBalance).then(({ error }) => { if (error) reportCascade(`${label} undo`, error); }, () => {});
     const leg = startLeg(() => {
       undone = true;
       depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === id ? before : d);
@@ -4276,12 +4279,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     if (leg === null) return null;
     const updated = makeUpdated(leg.balance);
+    updatedBalance = updated.balance;
     depositAccountsRef.current = depositAccountsRef.current.map(d => d.id === id ? updated : d);
     setDepositAccountsState(prev => prev.map(d => d.id === id ? updated : d));
-    supabase.from('deposit_accounts').upsert(withSoc(updated)).then(({ error }) => {
+    // DEP-03 (audit 2026-11-17): a whole-row upsert of the balance this screen READ let two windows both withdraw the
+    // same ₹1,000 — the second write simply overwrote the first. The balance is now written only while the cloud still
+    // holds the balance this movement started from (compare-and-set). No row matched ⇒ another movement got there
+    // first ⇒ this whole movement is undone (voucher cancelled, passbook line removed) and the clerk is told to refresh.
+    supabase.from('deposit_accounts').update(withSoc(updated)).eq('id', id).eq('balance', before.balance).select('id').then(({ data, error }) => {
       if (error) {
         reportCascade(label, error);
         leg.undo('balance', error.message);
+      } else if (!data || data.length === 0) {
+        reportError('deposit-balance-conflict', `${label}: balance changed elsewhere`, { depositAccountId: id });
+        leg.undo('balance', tr('इस खाते में इसी बीच कहीं और से लेनदेन हुआ — शेष बदल चुका है। पेज refresh करके दोबारा करें', 'another transaction changed this account\'s balance in the meantime — refresh the page and enter it again'));
       } else {
         balanceSaved = true;
         if (undone) writeBackBefore();
