@@ -65,6 +65,8 @@ export interface RestoreRunRecord {
   /** The backup to roll back to. Null for a Fresh restore, which has nothing to undo. */
   preRestoreBackup: PreRestoreBackup | null;
   message: string | null;
+  /** BKP-02: set when the archive came from ANOTHER society id (a restore into a re-created society). */
+  sourceSocietyId?: string | null;
 }
 
 /** One restore attempt, shaped for display. */

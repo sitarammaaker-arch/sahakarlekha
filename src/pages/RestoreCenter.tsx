@@ -27,7 +27,7 @@
  * assertion must reproduce the archived ledger, or nothing is written.
  * ─────────────────────────────────────────────────────────────────────────────────────
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,6 +35,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -45,7 +46,7 @@ import {
 import { REGISTRY } from '@/lib/export/registry';
 import { fetchEntityRows } from '@/lib/export/source';
 import { triggerDownload } from '@/lib/exportUtils';
-import { loadArchive, checkCompatibility, type Compatibility } from '@/lib/restore/archive';
+import { loadArchive, checkCompatibility, crossSocietyGate, rebaseArchiveRows, type Compatibility } from '@/lib/restore/archive';
 import { planRestore } from '@/lib/restore/dag';
 import { diffRestore, summarizeDiff, type RestoreDiff, type RestoreMode } from '@/lib/restore/diff';
 import { decryptArchive, WrongPassphraseError, NotAnEncryptedArchiveError } from '@/lib/backup/crypto';
@@ -66,7 +67,7 @@ type Stage = 'idle' | 'encrypted' | 'verified' | 'dry-run';
 const RestoreCenter: React.FC = () => {
   const { language } = useLanguage();
   const hi = language === 'hi';
-  const { society } = useData();
+  const { society, vouchers, members } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -81,6 +82,16 @@ const RestoreCenter: React.FC = () => {
   const [derivedEntries, setDerivedEntries] = useState<Row[]>([]);
   const [loadProblems, setLoadProblems] = useState<string[]>([]);
   const [compat, setCompat] = useState<Compatibility | null>(null);
+  // BKP-02: a re-created society (new id after a project loss) may restore its old archive — empty books + typed name.
+  const [crossName, setCrossName] = useState('');
+  const liveVoucherCount = vouchers.filter(v => !v.isDeleted).length;
+  const cross = crossSocietyGate({ compat, liveVouchers: liveVoucherCount, liveMembers: members.length, typedName: crossName });
+  const compatOk = !!compat?.safe || cross.allowed;
+  // The rows every step uses: the archive's, moved onto THIS society's id when the cross-society restore is confirmed.
+  const restoreRows = useMemo(
+    () => (cross.allowed && compat?.archiveSocietyId && user?.societyId ? rebaseArchiveRows(rows, compat.archiveSocietyId, user.societyId) : rows),
+    [cross.allowed, compat?.archiveSocietyId, user?.societyId, rows],
+  );
 
   const [passphrase, setPassphrase] = useState('');
   const [passError, setPassError] = useState<string | null>(null);
@@ -141,7 +152,7 @@ const RestoreCenter: React.FC = () => {
     : 'idle';
 
   function reset() {
-    setReport(null); setRows({}); setDerivedEntries([]); setLoadProblems([]); setCompat(null);
+    setReport(null); setRows({}); setDerivedEntries([]); setLoadProblems([]); setCompat(null); setCrossName('');
     setPassphrase(''); setPassError(null); setDiff(null); setDiffError(null); setCurrentRows(null);
     setRehearsal(null);
     setPreRestoreBackup(null); setConfirmText(''); setCommitOutcome(null);
@@ -245,7 +256,7 @@ const RestoreCenter: React.FC = () => {
       // Keep the live rows: the writer reuses them so the preview and the commit cannot
       // disagree about what exists (and it avoids a second full read at commit time).
       setCurrentRows(current);
-      setDiff(diffRestore(plan.insert, rows, current, mode));
+      setDiff(diffRestore(plan.insert, restoreRows, current, mode));
     } catch (err) {
       setDiffError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -387,11 +398,12 @@ const RestoreCenter: React.FC = () => {
       const outcome = await commitRestoreLive({
         mode,
         fyLocked: !!society?.fyLocked,
-        archiveRows: rows,
+        archiveRows: restoreRows,
         currentRows,
         archivedEntries: derivedEntries,
         societyId: user.societyId,
         sourceManifestHash: report.manifest.manifestHash,
+        sourceSocietyId: cross.allowed ? compat?.archiveSocietyId : undefined,
         preRestoreBackup: preRestoreBackup ?? undefined,
         auditContext: { societyId: user.societyId, actor: { name: user.name, email: user.email, role: user.role } },
         onProgress: (done, total, entityKey) => setProgress({ done, total, label: entityKey }),
@@ -415,7 +427,7 @@ const RestoreCenter: React.FC = () => {
   // A verified archive stays verified after a dry run: 'dry-run' only means a diff is on screen. Gating on
   // stage === 'verified' alone locked the Rehearse button (and a re-run of the dry run) as soon as the first dry
   // run finished — the first trial restore on the practice society could not proceed (2026-11-18).
-  const canDryRun = (stage === 'verified' || stage === 'dry-run') && !!compat?.safe && loadProblems.length === 0;
+  const canDryRun = (stage === 'verified' || stage === 'dry-run') && compatOk && loadProblems.length === 0;
   const changed = diff?.entities.filter(e => e.insert || e.update || e.conflicts.length || e.orphan) ?? [];
   const healthColor = (s: string) => (s === 'green' ? 'border-green-300 text-green-800' : s === 'red' ? 'border-red-300 text-red-800' : 'border-amber-300 text-amber-900');
 
@@ -430,7 +442,7 @@ const RestoreCenter: React.FC = () => {
   const backupReady = mode === 'fresh' ? true : !!preRestoreBackup;   // Fresh has nothing to undo
   const confirmOk = confirmText.trim() === confirmPhrase && confirmPhrase.length > 0;
   const canCommit =
-    !!compat?.safe && loadProblems.length === 0 && !society?.fyLocked &&
+    compatOk && loadProblems.length === 0 && !society?.fyLocked &&
     dryRunOkForMode && rehearsalPassed && backupReady && confirmOk;
 
   return (
@@ -560,7 +572,7 @@ const RestoreCenter: React.FC = () => {
 
       {/* ── Gate 5: compatibility ──────────────────────────────────────────── */}
       {compat && report?.ok && (
-        <Card className={compat.safe ? '' : 'border-red-300'}>
+        <Card className={compatOk ? '' : 'border-red-300'}>
           <CardHeader className="py-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Building2 className="h-4 w-4" />{hi ? 'क्या यह आर्काइव इसी संस्था का है?' : 'Does this archive belong here?'}
@@ -573,6 +585,36 @@ const RestoreCenter: React.FC = () => {
                   ? `यह आर्काइव "${compat.archiveSociety}" का है, इस संस्था का नहीं। इसे यहाँ restore करना किताबों में दूसरी संस्था का डेटा घोल देगा — ऑडिट तक किसी को पता नहीं चलेगा।`
                   : `This archive belongs to "${compat.archiveSociety}", not to this society. Restoring it here would mix another society's data into these books — and nobody would notice until an audit.`}
               </p>
+            )}
+            {/* BKP-02: a re-created society (new id after a project loss) may take its own old archive — only while empty. */}
+            {compat.status === 'different-society' && (
+              <div className="rounded border border-amber-300 bg-amber-50 p-3 space-y-2" data-testid="cross-society-restore">
+                <p className="text-amber-900">
+                  {hi
+                    ? 'अगर यह वही समिति है जिसे दोबारा पंजीकृत किया गया है (जैसे डेटा खोने के बाद), तो यह आर्काइव यहाँ restore हो सकता है — पर सिर्फ़ तब, जब इस समिति की किताबें अभी ख़ाली हों (कोई वाउचर नहीं, कोई सदस्य नहीं)।'
+                    : 'If this is the same society registered again (for example after a data loss), the archive can be restored here — but only while this society\'s books are still empty (no voucher, no member).'}
+                </p>
+                {cross.reason === 'books-not-empty' ? (
+                  <p className="text-red-800 font-medium">
+                    {hi
+                      ? `इस समिति में पहले से ${liveVoucherCount} वाउचर / ${members.length} सदस्य हैं — दूसरी समिति का आर्काइव यहाँ restore नहीं होगा।`
+                      : `This society already has ${liveVoucherCount} voucher(s) / ${members.length} member(s) — another society's archive will not be restored here.`}
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    <Label htmlFor="cross-name" className="text-xs">
+                      {hi ? `पक्का करने के लिए आर्काइव की समिति का नाम टाइप करें: ` : 'Type the archive\'s society name to confirm: '}
+                      <strong>{compat.archiveSociety}</strong>
+                    </Label>
+                    <Input id="cross-name" value={crossName} onChange={e => setCrossName(e.target.value)} disabled={busy || committing} className="max-w-md" />
+                    {cross.allowed && (
+                      <p className="text-green-800 text-xs">
+                        {hi ? 'ठीक है — आर्काइव की हर पंक्ति इस समिति के नाम से लिखी जाएगी।' : 'Confirmed — every archive row will be written as this society\'s.'}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
             {compat.status === 'different-fy' && (
               <p className="text-amber-900">
@@ -627,7 +669,7 @@ const RestoreCenter: React.FC = () => {
               </Button>
             </div>
 
-            {!canDryRun && compat && !compat.safe && (
+            {!canDryRun && compat && !compatOk && (
               <p className="text-sm text-red-800">
                 {hi ? 'दूसरी संस्था के आर्काइव पर dry run नहीं चलेगा।' : 'A dry run will not run against another society\'s archive.'}
               </p>
@@ -763,7 +805,7 @@ const RestoreCenter: React.FC = () => {
       )}
 
       {/* ── THE COMMIT (EXP-01). The one action on this page that writes. ──── */}
-      {report?.ok && compat?.safe && (
+      {report?.ok && compatOk && (
         <Card className="border-red-300">
           <CardHeader className="py-3">
             <CardTitle className="text-base flex items-center gap-2 text-red-800">

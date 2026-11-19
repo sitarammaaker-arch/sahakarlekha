@@ -147,6 +147,8 @@ export interface Compatibility {
   safe: boolean;
   archiveSociety: string;
   archiveFy: string;
+  /** The archive's own society id (BKP-02: what the rows are moved FROM in a cross-society restore). */
+  archiveSocietyId?: string;
 }
 
 /**
@@ -169,6 +171,7 @@ export function checkCompatibility(
       safe: false,
       archiveSociety: manifest.societyName,
       archiveFy: manifest.financialYear,
+      archiveSocietyId: manifest.societyId,
     };
   }
   const sameFy = manifest.financialYear === current.financialYear;
@@ -178,4 +181,48 @@ export function checkCompatibility(
     archiveSociety: manifest.societyName,
     archiveFy: manifest.financialYear,
   };
+}
+
+// ── BKP-02: restoring into a RE-CREATED society ─────────────────────────────────────────────────────────────────
+// After a project loss the society is registered again and gets a NEW id, so every archive reads "different
+// society" and gate 1 refused all of them — the one moment a backup is needed most. A cross-society restore is
+// allowed only into a society whose books are still EMPTY (no live voucher, no member) and only after the operator
+// types the archive's society name. The server still stamps every written row with the caller's society and refuses
+// any row that belongs to another society (178 restore_commit), so a live society can never be overwritten this way.
+
+export type CrossSocietyRefusal = 'not-different-society' | 'books-not-empty' | 'name-not-typed';
+
+/** PURE — may this different-society archive be restored here? */
+export function crossSocietyGate(input: {
+  compat: Compatibility | null;
+  liveVouchers: number;
+  liveMembers: number;
+  typedName: string;
+}): { allowed: boolean; reason?: CrossSocietyRefusal } {
+  if (!input.compat || input.compat.status !== 'different-society' || !input.compat.archiveSocietyId) {
+    return { allowed: false, reason: 'not-different-society' };
+  }
+  if (input.liveVouchers > 0 || input.liveMembers > 0) return { allowed: false, reason: 'books-not-empty' };
+  const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+  if (!norm(input.typedName) || norm(input.typedName) !== norm(input.compat.archiveSociety)) {
+    return { allowed: false, reason: 'name-not-typed' };
+  }
+  return { allowed: true };
+}
+
+/**
+ * PURE — the archive's rows moved onto the new society id. Every string value EXACTLY equal to the old society id
+ * becomes the new one, at any depth (society_id, society_settings.id — the settings row is keyed by the society id —
+ * and any reference inside JSON). Nothing else changes. Returns new objects; the input is untouched.
+ */
+export function rebaseArchiveRows(rows: Record<string, readonly Row[]>, fromId: string, toId: string): Record<string, Row[]> {
+  const swap = (v: unknown): unknown => {
+    if (typeof v === 'string') return v === fromId ? toId : v;
+    if (Array.isArray(v)) return v.map(swap);
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, swap(x)]));
+    return v;
+  };
+  const out: Record<string, Row[]> = {};
+  for (const [key, list] of Object.entries(rows)) out[key] = list.map((r) => swap(r) as Row);
+  return out;
 }
