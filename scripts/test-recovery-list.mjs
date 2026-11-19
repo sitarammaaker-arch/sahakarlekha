@@ -184,7 +184,7 @@ ok(post.indexOf('recoveryEntryProblems(') > 0 && post.indexOf('recoveryEntryProb
 ok(/\{canEdit && <Button size="sm" className="gap-1" onClick=\{startRlPosting\}/.test(dep), 'recording is offered only to a user who may edit');
 const hook = src('src/hooks/useLoanRepayment.ts');
 ok(/if \(society\.fyLocked\)[^\n]*return false;/.test(hook) && /return true;\n  \};\n  return recordRepayment;/.test(hook), 'shared repayment: FY-lock guard, true only at the end');
-ok(/const recordRepayment = useLoanRepayment\(dueOf\);/.test(src('src/pages/LoanRegister.tsx')), 'Loan Register uses the same routine');
+ok(/const recordRepayment = useLoanRepayment\(dueOf, accrualsReady\);/.test(src('src/pages/LoanRegister.tsx')), 'Loan Register uses the same routine');
 
 // 8. Monthly instalment (column 170): RULE 1 wiring, migration, form.
 const dcx = src('src/contexts/DataContext.tsx').replace(/\r\n/g, '\n');

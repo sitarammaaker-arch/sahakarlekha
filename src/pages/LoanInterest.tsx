@@ -4,7 +4,7 @@
  * Calculates simple interest on active member loans and posts
  * accrual journal entries: Dr 3313 (Interest Receivable) / Cr 4408 (Interest Income)
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { appliesSection65, isShortTermS65, section65Room, interestTakenToDate, S65_CITE } from '@/lib/loans/section65';
 import type { AccruableLoan } from '@/lib/loans/interestAccrual';
 import { asDayCount, periodDays, DAY_COUNT_OPTIONS, yearDaysLabel } from '@/lib/interestDayCount';
@@ -36,7 +36,7 @@ import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { interestPeriodDefaults, type InterestPeriodMode } from '@/lib/loans/interestPeriod';
 import {
-  accruableLoans, accrualRows, splitAccrual, accrualVoucherLines, accrualRecords, kccAccruables,
+  accruableLoans, accrualRows, splitAccrual, accrualVoucherLines, accrualRecords, kccAccruables, loanOutstandingAt, loansAccruedInPeriod,
   NARRATION_LOAN_ACCRUAL, NARRATION_KCC_ACCRUAL, type AccrualRow, type AccrualSplit,
   ACC_INTEREST_RECEIVABLE as ACC_INTEREST_REC, ACC_INTEREST_INCOME as ACC_INTEREST_INC, ACC_OVERDUE_INTEREST_RESERVE as ACC_OIR,
 } from '@/lib/loans/interestAccrual';
@@ -150,7 +150,16 @@ const LoanInterest: React.FC = () => {
     const isIncome = (id: string) => accounts.find(a => a.id === id)?.type === 'income';
     return (l: AccruableLoan) => (isShortTermS65(l) ? section65Room(l.amount, interestTakenToDate(l, postedAccruals, vouchers, isIncome)) : null);
   }, [s65, accounts, postedAccruals, vouchers]);
-  const accrual = useMemo(() => accrualRows(activeLoans, toDate, days, basis, interestRoom), [activeLoans, toDate, days, basis, interestRoom]);
+  // LOAN-02: interest on what was owed AS ON the period end (repayments dated after it are added back) — not on
+  // today's balance; a loan repaid since then still owes the period's interest.
+  // LOAN-01: a loan that already has a live accrual overlapping this window is left out (the same days never twice).
+  const isIncomeAcc = useCallback((id: string) => accounts.find(a => a.id === id)?.type === 'income', [accounts]);
+  const outstandingOn = useCallback((l: AccruableLoan) => loanOutstandingAt(l, toDate, vouchers, isIncomeAcc), [toDate, vouchers, isIncomeAcc]);
+  const alreadyAccrued = useMemo(() => loansAccruedInPeriod(postedAccruals, vouchers, fromDate, toDate), [postedAccruals, vouchers, fromDate, toDate]);
+  const loanCandidates = useMemo(() => loans.filter(l => !(l as { isDeleted?: boolean }).isDeleted), [loans]);
+  const accrualAll = useMemo(() => accrualRows(loanCandidates, toDate, days, basis, interestRoom, outstandingOn), [loanCandidates, toDate, days, basis, interestRoom, outstandingOn]);
+  const accrual = useMemo(() => accrualAll.filter(r => !alreadyAccrued.has(r.loanId)), [accrualAll, alreadyAccrued]);
+  const skippedOverlap = accrualAll.length - accrual.length;
   const rows: InterestRow[] = useMemo(() => accrual.map(r => {
     const member = members.find(m => m.id === r.memberId);
     return {
@@ -163,7 +172,9 @@ const LoanInterest: React.FC = () => {
   const totalInterest = split.total;
 
   // ── KCC loans (KCC-1): same rules, same outstanding the KCC page shows, their own journal ──
-  const kccAccrual = useMemo(() => accrualRows(kccAccruables(kccLoans), toDate, days, basis, interestRoom), [kccLoans, toDate, days, basis, interestRoom]);
+  const kccAccrualAll = useMemo(() => accrualRows(kccAccruables(kccLoans), toDate, days, basis, interestRoom, outstandingOn), [kccLoans, toDate, days, basis, interestRoom, outstandingOn]);
+  const kccAccrual = useMemo(() => kccAccrualAll.filter(r => !alreadyAccrued.has(r.loanId)), [kccAccrualAll, alreadyAccrued]);
+  const kccSkippedOverlap = kccAccrualAll.length - kccAccrual.length;
   const kccSplit = useMemo(() => splitAccrual(kccAccrual), [kccAccrual]);
   const kccName = (memberId: string) => members.find(m => m.id === memberId)?.name
     ?? kccLoans.find(k => k.memberId === memberId)?.memberName ?? '—';
@@ -314,6 +325,13 @@ const LoanInterest: React.FC = () => {
             {society.name} · {hi ? 'वित्तीय वर्ष' : 'FY'} {fy}
             {' · '}{activeLoans.length} {hi ? 'सक्रिय ऋण' : 'active loans'}
           </p>
+          {(skippedOverlap > 0 || kccSkippedOverlap > 0) && (
+            <p className="text-sm text-amber-800 mt-1" data-testid="accrual-overlap-skipped">
+              {hi
+                ? `${skippedOverlap + kccSkippedOverlap} ऋण छोड़े गए — इस अवधि के किसी हिस्से का ब्याज उन पर पहले से लगा है (वही दिन दो बार नहीं)।`
+                : `${skippedOverlap + kccSkippedOverlap} loan(s) left out — interest for part of this period is already accrued on them (the same days never twice).`}
+            </p>
+          )}
         </div>
         <div className="ml-auto flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadPDF}>

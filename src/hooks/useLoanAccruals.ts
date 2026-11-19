@@ -18,17 +18,22 @@ export function useLoanAccruals() {
   const societyId = user?.societyId;
   const [accruals, setAccruals] = useState<LoanInterestAccrual[]>([]);
   const [loaded, setLoaded] = useState(false);
+  // LOAN-03: a failed load used to look exactly like "no accruals" — a repayment then booked interest that WAS accrued
+  // straight to income (income twice). `ready` is true only once the rows really arrived.
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let live = true;
-    if (!societyId) { setAccruals([]); setLoaded(true); return; }
+    if (!societyId) { setAccruals([]); setLoaded(true); setFailed(false); return; }
     void supabase.from(TABLE).select('*').eq('society_id', societyId).eq('isDeleted', false).then(({ data, error }) => {
       if (!live) return;
       setAccruals(error || !data ? [] : (data as unknown as LoanInterestAccrual[]).map((a) => ({
         ...a, amount: num(a.amount), outstanding: num(a.outstanding), ratePa: num(a.ratePa), recovered: num(a.recovered), days: num(a.days),
       })));
+      // A missing table (069 not run) means there are no accruals to clear — that is a real "none", not a failure.
+      setFailed(!!error && !/loan_interest_accruals|does not exist|schema cache|PGRST205|42P01/i.test(error.message || ''));
       setLoaded(true);
-    });
+    }, () => { if (live) { setFailed(true); setLoaded(true); } });
     return () => { live = false; };
   }, [societyId]);
 
@@ -42,5 +47,5 @@ export function useLoanAccruals() {
     return { ok: true };
   }, [societyId]);
 
-  return { accruals, loaded, saveAccruals };
+  return { accruals, loaded, failed, ready: loaded && !failed, saveAccruals };
 }

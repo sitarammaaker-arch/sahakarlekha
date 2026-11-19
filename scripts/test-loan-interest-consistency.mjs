@@ -18,9 +18,9 @@ const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  �
 const li = strip('src/pages/LoanInterest.tsx');
 // H2-1: the rows now come from the shared accrual lib, which uses the shared loanOutstanding.
 const acc = strip('src/lib/loans/interestAccrual.ts');
-ok(/import \{ loanOutstanding[,} ][^\n]*from '\.\.\/memberSnapshot'/.test(acc) && /accrualRows\(activeLoans, toDate, days, basis(, interestRoom)?\)/.test(li), 'LoanInterest rows via the shared accrual lib (shared loanOutstanding)');
+ok(/import \{ loanOutstanding[,} ][^\n]*from '\.\.\/memberSnapshot'/.test(acc) && /accrualRows\(loanCandidates, toDate, days, basis, interestRoom, outstandingOn\)/.test(li), 'LoanInterest rows via the shared accrual lib (shared loanOutstanding)');
 ok(!/l(oan)?\.amount - \(l(oan)?\.repaidAmount/.test(li), 'no private outstanding formula left on the page');
-ok(/const outstanding = Math\.max\(0, loanOutstanding\(l\)\)/.test(acc), 'interest rows: shared formula, clamped at 0 for interest only');
+ok(/const outstanding = Math\.max\(0, outstandingOf \? outstandingOf\(l\) : loanOutstanding\(l\)\)/.test(acc), 'interest rows: shared formula, clamped at 0 for interest only');
 ok(/'ब्याज योग्य बकाया'/.test(li) && /value=\{fmt\(rows\.reduce\(\(s, r\) => s \+ r\.outstanding, 0\)\)\}/.test(li), 'card = interest-bearing outstanding (sum of the rows), labelled so');
 ok(!/'कुल बकाया'/.test(li), 'no second "कुल बकाया" that disagrees with the Loan Register');
 const post = li.slice(li.indexOf('const handlePost'), li.indexOf('const csvHeaders'));
@@ -36,7 +36,7 @@ for (const [name, blk] of [['add', add], ['edit', edt]]) ok(/\(Number\(form\.rep
 // The repayment routine moved to hooks/useLoanRepayment.ts (shared with the monthly recovery); it returns false on refusal.
 const hk = strip('src/hooks/useLoanRepayment.ts');
 const rep = hk.slice(hk.indexOf('const recordRepayment'), hk.indexOf('updateLoan(loan.id'));
-ok(/const recordRepayment = useLoanRepayment\(dueOf\);/.test(lr), 'Loan Register uses the shared repayment routine');
+ok(/const recordRepayment = useLoanRepayment\(dueOf, accrualsReady\);/.test(lr), 'Loan Register uses the shared repayment routine');
 ok(/if \(principal > loanOutstanding\(loan\) \+ 0\.005\)/.test(rep), 'repayment: principal can\'t exceed outstanding');
 ok(/posted = !!v\?\.id/.test(rep) && /if \(!posted\)[\s\S]*?return false;/.test(rep), 'refused receipt voucher → loan left unchanged');
 ok(!/catch \{ \/\* best-effort/.test(readFileSync(pathResolve(ROOT, 'src/pages/LoanRegister.tsx'), 'utf8')), 'no "best-effort, loan still updates" path');

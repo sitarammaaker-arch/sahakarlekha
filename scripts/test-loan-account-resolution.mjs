@@ -71,7 +71,7 @@ for (const f of ['src/hooks/useLoanRepayment.ts', 'src/pages/KccLoan.tsx']) {
 {
   const s = readFileSync(pathResolve(ROOT, 'src/pages/LoanRegister.tsx'), 'utf8');
   ok(!/a\.id === '4408' \|\|/.test(s) && !/a\.id === '3313' \|\|/.test(s) && !/a\.id === '3304' \|\|/.test(s), 'src/pages/LoanRegister.tsx: no "id || name" first-match lookups left');
-  ok(/const recordRepayment = useLoanRepayment\(dueOf\);/.test(s) && !/addVoucher\(/.test(s), 'Loan Register posts repayments only through the shared routine');
+  ok(/const recordRepayment = useLoanRepayment\(dueOf, accrualsReady\);/.test(s) && !/addVoucher\(/.test(s), 'Loan Register posts repayments only through the shared routine');
 }
 const kcc = readFileSync(pathResolve(ROOT, 'src/pages/KccLoan.tsx'), 'utf8');
 ok((kcc.match(/kccLoanAccountId\(accounts\)/g) || []).length === 2, 'KCC disbursement AND repayment use the asset resolver');
