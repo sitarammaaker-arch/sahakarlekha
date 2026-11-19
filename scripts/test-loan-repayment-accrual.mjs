@@ -89,7 +89,7 @@ const lr = strip('src/pages/LoanRegister.tsx');
 // The repayment routine moved to hooks/useLoanRepayment.ts (shared with the monthly recovery); it returns false on refusal.
 const hk = strip('src/hooks/useLoanRepayment.ts');
 const rep = hk.slice(hk.indexOf('const recordRepayment'), hk.indexOf('updateLoan(loan.id'));
-ok(/const recordRepayment = useLoanRepayment\(dueOf\);/.test(lr) && /const dueOf = \(loanId: string\): LoanInterestDue => loanInterestDue\(loanId, accruals, vouchers\);/.test(lr), 'Loan Register: shared routine, fed this society\'s accrued interest');
+ok(/const recordRepayment = useLoanRepayment\(dueOf, accrualsReady\);/.test(lr) && /const dueOf = \(loanId: string\): LoanInterestDue => loanInterestDue\(loanId, accruals, vouchers\);/.test(lr), 'Loan Register: shared routine, fed this society\'s accrued interest');
 ok(/repaymentInterestSplit\(interest, dueOf\(loan\.id\)\)/.test(rep), 'repayment uses the shared split for this loan');
 ok(/accountId: ACC_INTEREST_RECEIVABLE, type: 'Cr', amount: split\.toReceivable/.test(rep) && /accountId: incomeAccId, type: 'Cr', amount: split\.toIncome/.test(rep), 'receipt: Cr 3313 accrued + Cr income un-accrued only');
 ok(/refType: REF_LOAN_REPAYMENT, refId: loan\.id/.test(rep), 'receipt tagged with the loan (the derivation key)');

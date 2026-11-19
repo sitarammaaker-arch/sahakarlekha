@@ -17,7 +17,8 @@ ok(!R.touchesShareCapital({ debitAccountId: '3301', creditAccountId: '4101', lin
 const dc = read('src/contexts/DataContext.tsx');
 const add = dc.slice(dc.indexOf('const addVoucher = useCallback('), dc.indexOf('const addVoucher = useCallback(') + 6000);
 ok(add.includes("if (data.origin === 'manual' && data.memberId && touchesShareCapital(data, ACCOUNT_IDS.SHARE_CAP))"), 'addVoucher refuses a member-tagged manual Share Capital voucher');
-const upd = dc.slice(dc.indexOf('const updateVoucher = useCallback('), dc.indexOf('const updateVoucher = useCallback(') + 4000);
+// The whole function (the MEM-03 / LOAN-04 guards made it longer than the old fixed 4,000-character window).
+const upd = dc.slice(dc.indexOf('const updateVoucher = useCallback('), dc.indexOf('\n  }, [', dc.indexOf('const updateVoucher = useCallback(')));
 ok(upd.includes("current.origin === 'manual'") && upd.includes('!(current.memberId && touchesShareCapital(current, ACCOUNT_IDS.SHARE_CAP))'), 'updateVoucher: cannot edit INTO one; an existing one stays fixable');
 ok(R.MANUAL_MEMBER_SHARE_VOUCHER_MESSAGE.includes('शेयर रजिस्टर'), 'the refusal points to the Share Register');
 

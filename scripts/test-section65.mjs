@@ -70,7 +70,7 @@ ok(S.isShortTermS65({ loanType: 'short-term' }) && !S.isShortTermS65({ loanType:
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const li = read('src/pages/LoanInterest.tsx');
 ok(/appliesSection65\(society\.state\)/.test(li) && /isShortTermS65\(l\) \? section65Room\(l\.amount, interestTakenToDate\(l, postedAccruals, vouchers, isIncome\)\) : null/.test(li), 'page: Haryana + short-term ⇒ room from interest already taken');
-ok(/accrualRows\(activeLoans, toDate, days, basis, interestRoom\)/.test(li) && /accrualRows\(kccAccruables\(kccLoans\), toDate, days, basis, interestRoom\)/.test(li), 'member loans and KCC both capped');
+ok(/accrualRows\(loanCandidates, toDate, days, basis, interestRoom, outstandingOn\)/.test(li) && /accrualRows\(kccAccruables\(kccLoans\), toDate, days, basis, interestRoom, outstandingOn\)/.test(li), 'member loans and KCC both capped');
 ok((li.match(/r\.cappedBySection65 &&/g) || []).length === 2, 'the cap is shown on the row (both tables), with the Act cited');
 ok(/shall not recover interest on short term loans/.test(read('src/lib/loans/section65.ts')), 'the Act text is quoted at the rule');
 

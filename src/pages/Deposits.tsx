@@ -159,7 +159,7 @@ const Deposits: React.FC = () => {
   };
 
   // ── Monthly recovery list (a demand sheet — posts nothing) ─────────────────
-  const { accruals } = useLoanAccruals();
+  const { accruals, ready: accrualsReady } = useLoanAccruals();   // LOAN-03
   const [rlOpen, setRlOpen] = useState(false);
   const [rlMonth, setRlMonth] = useState(monthOf(today()));
   const rlRows = useMemo(() => (rlOpen && /^\d{4}-\d{2}$/.test(rlMonth)
@@ -169,7 +169,7 @@ const Deposits: React.FC = () => {
     id => { const m = members.find(x => x.id === id); return { memberNo: m?.memberId ?? '', name: m?.name ?? id }; });
   const rlTotals = recoveryTotals(rlRows);
   // Record the recovery: book what was actually received, for every member on the list, in one step.
-  const recordRepayment = useLoanRepayment(id => loanInterestDue(id, accruals, vouchers));
+  const recordRepayment = useLoanRepayment(id => loanInterestDue(id, accruals, vouchers), accrualsReady);
   const rlItems = useMemo(() => (rlOpen && /^\d{4}-\d{2}$/.test(rlMonth)
     ? recoveryItems({ month: rlMonth, depositAccounts, depositTransactions, loans, interestDueOf: id => loanInterestDue(id, accruals, vouchers).receivable })
     : []), [rlOpen, rlMonth, depositAccounts, depositTransactions, loans, accruals, vouchers]);

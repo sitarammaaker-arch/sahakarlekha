@@ -1,6 +1,7 @@
 import { tr } from '@/lib/uiLang';
 import { systemOwnedVoucherKind, systemOwnedVoucherMessage } from '@/lib/systemOwnedVoucher';
 import { isMemberShareVoucher } from '@/lib/members/memberShareVoucher';
+import { loanRepaymentPrincipal, REF_LOAN_REPAYMENT, REF_LOAN_INTEREST_RELEASE } from '@/lib/loans/interestAccrual';
 import { voucherRefusedToast } from '@/lib/voucherRefused';
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -1187,6 +1188,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => { procurementSettlementsRef.current = procurementSettlements; }, [procurementSettlements]);
   const loansRef = useRef<Loan[]>(loans);
   useEffect(() => { loansRef.current = loans; }, [loans]);
+  // LOAN-04: cancelVoucher (defined earlier) re-opens a repayment through updateLoan (defined later).
+  const updateLoanRef = useRef<(id: string, data: Partial<Loan>) => void>(() => {});
   const depositAccountsRef = useRef<DepositAccount[]>(depositAccounts);
   useEffect(() => { depositAccountsRef.current = depositAccounts; }, [depositAccounts]);
   const complianceFilingsRef = useRef<ComplianceFiling[]>(complianceFilings);
@@ -2496,6 +2499,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return true;
   };
+  // LOAN-04: a loan's own vouchers (disbursement, repayment receipt, reserve release) move the loan register with
+  // them. Reversing or editing one from the Vouchers page moved the ledger alone. A repayment is undone by CANCELLING
+  // its receipt (the register follows — loanFollowsCancel); the loan itself through the Loan Register.
+  const guardLoanVoucher = (id: string, what: { hi: string; en: string }): boolean => {
+    const v = vouchersRef.current.find(x => x.id === id);
+    if (!v) return false;
+    const isLoanDoc = v.refType === REF_LOAN_REPAYMENT || v.refType === REF_LOAN_INTEREST_RELEASE
+      || loansRef.current.some(l => !l.isDeleted && (l as { voucherId?: string }).voucherId === id);
+    if (!isLoanDoc) return false;
+    toastRef.current({
+      title: tr(`वाउचर ${what.hi} नहीं होगा`, `Voucher cannot be ${what.en}`),
+      description: tr('यह ऋण का वाउचर है (वितरण / चुकौती / संचय-मुक्ति) — इससे ऋण रजिस्टर भी बदलता है। चुकौती गलत हो तो उसकी रसीद रद्द करें (रजिस्टर साथ ठीक होगा); ऋण में बदलाव ऋण रजिस्टर से करें।', 'This is a loan voucher (disbursement / repayment / reserve release) — it moves the loan register too. For a wrong repayment, cancel its receipt (the register follows); change the loan from the Loan Register.'),
+      variant: 'destructive', duration: 12000,
+    });
+    return true;
+  };
   const guardSalaryVoucher = (id: string, what: string): boolean => {
     const slip = salaryRecordsRef.current.find(r => r.voucherId === id || r.accrualVoucherId === id);
     if (!slip) return false;
@@ -2512,6 +2531,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardSystemOwnedVoucher(id, { hi: 'बदला', en: 'changed' })) return false;
     if (!opts?.viaParent && guardStockDocumentVoucher(id, { hi: 'बदला', en: 'changed' })) return false;
     if (!opts?.viaParent && guardMemberShareVoucher(id, { hi: 'बदला', en: 'changed' })) return false;   // MEM-03
+    if (!opts?.viaParent && guardLoanVoucher(id, { hi: 'बदला', en: 'changed' })) return false;   // LOAN-04
     if (!opts?.viaParent && guardSalaryVoucher(id, tr('बदला', 'changed'))) return false;
     if (guardFYLocked()) return false;
     const current = vouchersRef.current.find(v => v.id === id);
@@ -2765,6 +2785,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // the live vouchers, so cancelling one of them keeps the screens and the ledger in step.
   useEffect(() => registerVoucherOwner('procurement', id => findVoucherOwner([{ label: tr('किसान निपटान (MSP)', 'Farmer settlement (MSP)'), docs: procurementSettlementsRef.current }], id)), [registerVoucherOwner]);
 
+  // LOAN-04 (audit 2026-11-17): cancelling a loan / KCC repayment receipt from the Vouchers page is the documented way
+  // to undo a repayment (deleteLoan says so) — but repaidAmount is a stored figure and did not follow, so the register
+  // kept the money as repaid. Called once the cancel is CONFIRMED and only for a direct cancel (a parent screen —
+  // viaParent — handles its own loan): the principal comes back onto the loan, a cleared loan re-opens, and the
+  // repayment's own reserve-release journal (same groupId) is cancelled with it.
+  const loanFollowsCancel = (v: Voucher) => {
+    if (v.refType !== REF_LOAN_REPAYMENT || !v.refId) return;
+    const accs = accountsRef.current;
+    const principal = loanRepaymentPrincipal(v, (id) => accs.find(a => a.id === id)?.type === 'income');
+    const loan = loansRef.current.find(l => l.id === v.refId);
+    const kcc = loan ? undefined : kccLoansRef.current.find(k => k.id === v.refId);
+    if (principal > 0.005 && loan) {
+      const repaid = toRupees(subMinor(toMinor(loan.repaidAmount || 0), toMinor(principal)));
+      const back = Math.max(0, repaid);
+      updateLoanRef.current(loan.id, { repaidAmount: back, status: loan.status === 'cleared' && loan.amount - back > 0.005 ? 'active' : loan.status });
+    } else if (principal > 0.005 && kcc) {
+      const back = Math.max(0, toRupees(subMinor(toMinor(kcc.repaidAmount || 0), toMinor(principal))));
+      const out = toRupees(addMinor(toMinor(Number((kcc as { outstandingAmount?: number }).outstandingAmount) || 0), toMinor(principal)));
+      const patch = { repaidAmount: back, outstandingAmount: out, ...(kcc.status === 'repaid' ? { status: 'active' } : {}) };
+      setKccLoansState(prev => prev.map(k => k.id === kcc.id ? { ...k, ...patch } as KccLoan : k));
+      supabase.from('kcc_loans').update(patch).eq('id', kcc.id).then(({ error }) => { if (error) reportCascade('KCC repayment cancel follow-up', error); });
+    }
+    if (v.groupId) {
+      const release = vouchersRef.current.filter(x => !x.isDeleted && x.id !== v.id && x.groupId === v.groupId && x.refType === REF_LOAN_INTEREST_RELEASE).map(x => x.id);
+      if (release.length) cancelLinkedVouchers(release, 'Loan repayment cancelled — its reserve release follows', 'System');
+    }
+    if (principal > 0.005 && (loan || kcc)) {
+      toastRef.current({ title: tr('ऋण रजिस्टर भी ठीक किया गया', 'Loan register updated too'), description: tr(`चुकौती रद्द हुई — ₹${principal.toLocaleString('en-IN')} मूलधन ${loan?.loanNo || kcc?.loanNo || ''} पर फिर से बकाया है।`, `The repayment was cancelled — ₹${principal.toLocaleString('en-IN')} of principal is outstanding again on ${loan?.loanNo || kcc?.loanNo || ''}.`), duration: 10000 });
+    }
+  };
+
   const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean }): boolean => {
     if (guardFYLocked()) return false;
     if (guardPermission('delete', tr('वाउचर रद्द करने', 'cancel vouchers'))) return false;   // ECR-06: role gate
@@ -2946,6 +2997,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         const serverEvents = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
         ledgerEventsRef.current = [...ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent?.eventId), ...serverEvents];
+        if (!opts?.viaParent) loanFollowsCancel(current);   // LOAN-04: confirmed
       }, (rejection: unknown) => {
         const msg = rejection instanceof Error ? rejection.message : String(rejection);
         reportError('voucher-cancel-post-service', msg, { voucherId: id });
@@ -2971,6 +3023,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           toastRef.current({ title: tr('❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', '❌ Voucher cancellation not saved to the cloud'), description: tr(`${res.error ?? 'journal append failed'}. रद्द करना वापस ले लिया गया — वाउचर चालू और सुरक्षित है।`, `${res.error ?? 'journal append failed'}. The cancellation was undone — the voucher is active and safe.`), variant: 'destructive', duration: 15000 });
           return;
         }
+        if (!opts?.viaParent) loanFollowsCancel(current);   // LOAN-04: confirmed (the journal is the save)
         // Saved (journal). Project the soft-delete into the table best-effort — a failure is now
         // RECOVERABLE (the journal is the truth), so LOG, never roll back.
         supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelledVoucher.deletedAt, deletedBy, deletedReason: reason }).eq('id', id).then(({ error }) => {
@@ -2994,6 +3047,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (cancelEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent!.eventId);
       } else {
         deleteEntries(id); // remove from voucher_entries so cancelled voucher has no SQL-visible impact
+        if (!opts?.viaParent) loanFollowsCancel(current);   // LOAN-04: confirmed
         if (cancelEvent) persistLedgerEvent(cancelEvent); // durable append only after the cancel is confirmed
         // No cancelEvent → the in-memory journal did not hold this voucher's posting: either it was never
         // loaded, OR the posting was written AFTER this tab loaded (another user / device — e.g. a voucher
@@ -3024,6 +3078,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardSystemOwnedVoucher(id, { hi: 'reverse', en: 'reversed' })) return null;
     if (!opts?.engine && guardStockDocumentVoucher(id, { hi: 'reverse', en: 'reversed' })) return null;
     if (!opts?.engine && guardMemberShareVoucher(id, { hi: 'reverse', en: 'reversed' })) return null;   // MEM-02
+    if (!opts?.engine && guardLoanVoucher(id, { hi: 'reverse', en: 'reversed' })) return null;   // LOAN-04
     if (guardSalaryVoucher(id, 'reverse')) return null;
     const revDate = new Date().toISOString().split('T')[0];
     if (guardPeriodLock(revDate)) return null; // reversal must post into an open period
@@ -6583,6 +6638,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
   }, []);
+  updateLoanRef.current = updateLoan;
 
   const deleteLoan = useCallback((id: string) => {
     if (guardPermission('delete', tr('ऋण मिटाने', 'delete loans'))) return;   // ECR-06: role gate

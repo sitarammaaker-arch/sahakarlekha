@@ -165,7 +165,7 @@ const LoanRegister: React.FC = () => {
   const { language } = useLanguage();
   const { members, loans, addLoan, updateLoan, deleteLoan, society, getTrialBalance, vouchers, accounts } = useData();
   // H2-2: each loan's open accrued interest (069 rows with a live journal − live repayments).
-  const { accruals } = useLoanAccruals();
+  const { accruals, ready: accrualsReady } = useLoanAccruals();   // LOAN-03
   const dueOf = (loanId: string): LoanInterestDue => loanInterestDue(loanId, accruals, vouchers);
   // Loan Ledger: disbursement + live repayment vouchers + live interest accruals (same sources as dueOf).
   const isIncome = (id: string) => accounts.find(a => a.id === id)?.type === 'income';
@@ -179,7 +179,7 @@ const LoanRegister: React.FC = () => {
   const hi = language === 'hi';
 
   // Record a loan repayment — the one posting routine, shared with the monthly recovery (hooks/useLoanRepayment.ts).
-  const recordRepayment = useLoanRepayment(dueOf);
+  const recordRepayment = useLoanRepayment(dueOf, accrualsReady);
   const approvedMembers = useMemo(() => members.filter(m => !m.approvalStatus || m.approvalStatus === 'approved'), [members]);
   // A new loan only for a live member (the edit form and the PDF keep every approved member's name).
   const lendableMembers = useMemo(() => members.filter(canHoldShares), [members]);

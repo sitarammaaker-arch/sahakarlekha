@@ -101,11 +101,15 @@ export function loanDaysInPeriod(loan: Pick<AccruableLoan, 'disbursementDate'>, 
   return Math.min(d, periodDays(from, periodTo));
 }
 
-export function accrualRows(loans: readonly AccruableLoan[], periodTo: string, days: number, basis: DayCountBasis = DEFAULT_DAY_COUNT, interestRoom?: (loan: AccruableLoan) => number | null): AccrualRow[] {
+export function accrualRows(loans: readonly AccruableLoan[], periodTo: string, days: number, basis: DayCountBasis = DEFAULT_DAY_COUNT, interestRoom?: (loan: AccruableLoan) => number | null,
+  /** LOAN-02: the outstanding AS ON periodTo (loanOutstandingAt). Omitted ⇒ today's figure (the old behaviour). */
+  outstandingOf?: (loan: AccruableLoan) => number): AccrualRow[] {
   // A loan disbursed after the period end has no interest for the period → no row (it would only add a ₹0 line).
-  return accruableLoans(loans).filter((l) => loanDaysInPeriod(l, periodTo, days) > 0).map((l) => {
+  // A loan cleared TODAY may still have owed money at periodTo — with outstandingOf it is considered too.
+  const candidates = outstandingOf ? loans.filter((l) => outstandingOf(l) > 0.005) : accruableLoans(loans);
+  return candidates.filter((l) => loanDaysInPeriod(l, periodTo, days) > 0).map((l) => {
     const loanDays = loanDaysInPeriod(l, periodTo, days);
-    const outstanding = Math.max(0, loanOutstanding(l));   // shared formula; clamp only for interest
+    const outstanding = Math.max(0, outstandingOf ? outstandingOf(l) : loanOutstanding(l));   // shared formula; clamp only for interest
     const full = basis === '365' ? simpleInterest(outstanding, l.interestRate, loanDays) : periodInterest(outstanding, l.interestRate, periodTo, loanDays, basis);
     const room = interestRoom ? interestRoom(l) : null;
     const capped = room == null ? full : Math.min(full, Math.max(0, room));
@@ -180,6 +184,37 @@ export function loanInterestDue(loanId: string, accruals: readonly LoanInterestA
   const cleared = sumLegs(repayments, ACC_INTEREST_RECEIVABLE, 'Cr');
   const released = sumLegs(releases, ACC_OVERDUE_INTEREST_RESERVE, 'Dr');
   return { receivable: Math.max(0, r2(accrued - cleared)), reserve: Math.max(0, r2(accruedOverdue - released)) };
+}
+
+/**
+ * LOAN-04: the PRINCIPAL a repayment receipt took off the loan — its credit legs that are neither the accrued-interest
+ * receivable (3313) nor an income head. The same for member loans and KCC (whatever loan head the receipt credited).
+ */
+export function loanRepaymentPrincipal(v: VoucherForDue, isIncome: (accountId: string) => boolean): number {
+  return r2(legs(v).filter((l) => l.type === 'Cr' && l.accountId !== ACC_INTEREST_RECEIVABLE && !isIncome(l.accountId))
+    .reduce((s, l) => s + (Number(l.amount) || 0), 0));
+}
+
+/**
+ * LOAN-02: a loan's outstanding AS ON a date. The register keeps only today's figure (amount − repaidAmount); every
+ * repayment dated AFTER the date is added back, so an accrual for a past period charges interest on what was really
+ * owed then — not on today's (possibly much smaller, or larger) balance.
+ */
+export function loanOutstandingAt(loan: AccruableLoan, asOf: string, vouchers: readonly (VoucherForDue & { date?: string })[], isIncome: (accountId: string) => boolean): number {
+  const later = vouchers.filter((v) => !v.isDeleted && v.refType === REF_LOAN_REPAYMENT && v.refId === loan.id && (v.date || '') > asOf);
+  return r2(Math.max(0, loanOutstanding(loan)) + later.reduce((s, v) => s + loanRepaymentPrincipal(v, isIncome), 0));
+}
+
+/**
+ * LOAN-01: loans that already have a LIVE accrual (its journal not cancelled) overlapping [periodFrom, periodTo] —
+ * accruing them again would charge the same days twice. The "already posted" check matched only the exact start
+ * date in a narration, so an overlapping window (1–30 April, then 15 April–14 May) went through.
+ */
+export function loansAccruedInPeriod(accruals: readonly LoanInterestAccrual[], vouchers: readonly VoucherForDue[], periodFrom: string, periodTo: string): Set<string> {
+  const live = new Set(vouchers.filter((v) => !v.isDeleted).map((v) => v.id));
+  return new Set(accruals
+    .filter((a) => !a.isDeleted && !!a.voucherId && live.has(a.voucherId) && a.periodFrom <= periodTo && a.periodTo >= periodFrom)
+    .map((a) => a.loanId));
 }
 
 export interface RepaymentInterestSplit {
