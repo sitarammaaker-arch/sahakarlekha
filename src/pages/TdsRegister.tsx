@@ -369,12 +369,16 @@ const TdsRegister: React.FC = () => {
   const handleDeleteChallan = (id: string) => {
     if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
     // RULE 3: the challan's ledger voucher goes with it. If it cannot be cancelled (period lock, approval), nothing is deleted.
-    for (const v of vouchers.filter(x => x.refType === CHALLAN_REF_TYPE && x.refId === id && !x.isDeleted)) {
-      if (!cancelVoucher(v.id, `TDS challan ${id} deleted`, user?.name || 'System')) {
-        toast({ title: hi ? 'चालान नहीं हटा' : 'Challan not deleted', description: hi ? `इससे जुड़ा वाउचर ${v.voucherNo} रद्द नहीं हो सका — पहले उसका कारण देखें।` : `Its voucher ${v.voucherNo} could not be cancelled.`, variant: 'destructive', duration: 12000 });
-        return;
-      }
-    }
+    // X-3: the vouchers are cancelled one after another, each waiting for the cloud to CONFIRM the previous one; the
+    // challan goes only after the last. A refusal (now or late from the cloud) stops here with the challan intact.
+    const linked = vouchers.filter(x => x.refType === CHALLAN_REF_TYPE && x.refId === id && !x.isDeleted);
+    const notDeleted = (no: string) => toast({ title: hi ? 'चालान नहीं हटा' : 'Challan not deleted', description: hi ? `इससे जुड़ा वाउचर ${no} रद्द नहीं हो सका — पहले उसका कारण देखें।` : `Its voucher ${no} could not be cancelled.`, variant: 'destructive', duration: 12000 });
+    const next = (i: number) => {
+      if (i >= linked.length) { removeChallan(); return; }
+      const v = linked[i];
+      if (!cancelVoucher(v.id, `TDS challan ${id} deleted`, user?.name || 'System', { viaParent: true, onCancelled: () => next(i + 1), onFailed: () => notDeleted(v.voucherNo) })) notDeleted(v.voucherNo);
+    };
+    const removeChallan = () => {
     const prevChallans = challans;
     const prevLinks = links;
     persistChallans(challans.filter(c => c.id !== id));
@@ -389,6 +393,8 @@ const TdsRegister: React.FC = () => {
         else toast({ title: hi ? 'चालान हटाया गया' : 'Challan deleted' });
       });
     }, () => failDelete(hi ? 'चालान' : 'Challan', 'network', () => { persistChallans(prevChallans); persistLinks(prevLinks); }));
+    };
+    next(0);
   };
 
   // 26Q Export

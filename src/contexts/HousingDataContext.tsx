@@ -18,7 +18,7 @@ import { voucherRefusedToast, inFlightToast } from '@/lib/voucherRefused';
 import { useLatest } from '@/hooks/useLatest';
 import { useInFlight } from '@/hooks/useInFlight';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
+import { findVoucherOwner, figureAfterCancel, type OwnerGroup } from '@/lib/voucherOwnership';
 import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
 import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { useAuth } from '@/contexts/AuthContext';
@@ -110,7 +110,7 @@ const HousingDataContext = createContext<HousingDataContextValue | undefined>(un
 export function HousingProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   // Compose core (never fork): FY-lock + chart from society; sub-ledgers + vouchers via the core engine.
-  const { society, accounts, members, vouchers, addAccount, addVoucher, cancelVoucher, registerVoucherOwner, gstLegs } = useData();
+  const { society, accounts, members, vouchers, addAccount, addVoucher, cancelVoucher, registerVoucherOwner, registerVoucherCancelFollower, gstLegs } = useData();
   // J6b: load this module's tables only when its capability is on for the society (same rule as the
   // sidebar / CapabilityGuard) — societies that don't use housing no longer fetch them on every login.
   const moduleOn = useCapabilityEnabled(['housing']);
@@ -440,15 +440,25 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (!bill) return false;
     // RULE 3: cancel the linked receivable voucher so no ghost receivable/income lingers.
     // H / RULE 3: abort if the receivable voucher cannot be cancelled (lock / permission).
-    if (bill.voucherId && !cancelVoucher(bill.voucherId, `Maintenance bill ${bill.billNo} deleted`, user?.name || 'System', { viaParent: true })) return false;
-    setMaintenanceBillsState(prev => { const u = prev.filter(b => b.id !== id); storage.setMaintenanceBills(u); return u; });
-    supabase.from('maintenance_bills').delete().eq('id', id).then(({ error }) => {
-      if (error) {
-        console.error('Maintenance bill delete error:', error.message); reportError('housing-save', error.message);
-        setMaintenanceBillsState(prev => { const u = [...prev, bill]; storage.setMaintenanceBills(u); return u; });
-        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
-      }
-    });
+    // X-5: a bill with collections would leave its receipt vouchers live and orphaned — cancel those receipts first (the
+    // bill's paidAmount follows each cancel), then delete the bill.
+    if ((bill.paidAmount || 0) > 0.005) {
+      toastRef.current({ title: tr('वसूली मौजूद', 'Collections exist'), description: tr('इस बिल पर वसूली (receipt) दर्ज है। पहले Vouchers से वे receipt रद्द करें — बिल की बकाया राशि अपने-आप ठीक होगी — फिर बिल हटाएँ।', 'This bill has collections. Cancel those receipts from Vouchers first (the bill\'s due amount follows), then delete the bill.'), variant: 'destructive', duration: 12000 });
+      return false;
+    }
+    // X-3: the bill row goes only once the cloud has CONFIRMED the receivable voucher's cancel.
+    const removeBill = () => {
+      setMaintenanceBillsState(prev => { const u = prev.filter(b => b.id !== id); storage.setMaintenanceBills(u); return u; });
+      supabase.from('maintenance_bills').delete().eq('id', id).then(({ error }) => {
+        if (error) {
+          console.error('Maintenance bill delete error:', error.message); reportError('housing-save', error.message);
+          setMaintenanceBillsState(prev => { const u = [...prev, bill]; storage.setMaintenanceBills(u); return u; });
+          toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
+        }
+      });
+    };
+    if (bill.voucherId) return cancelVoucher(bill.voucherId, `Maintenance bill ${bill.billNo} deleted`, user?.name || 'System', { viaParent: true, onCancelled: removeBill });
+    removeBill();
     return true;
   }, [maintenanceBills, cancelVoucher, user]);
 
@@ -706,19 +716,25 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const inv = fundInvestments.find(i => i.id === id);
     if (!inv) return;
     // H / RULE 3: redemption first, then the investment voucher; stop at the first refusal.
-    if (inv.redemptionVoucherId && !cancelVoucher(inv.redemptionVoucherId, `Fund investment deleted (redemption reversed)`, user?.name || 'System', { viaParent: true })) return;
-    if (inv.voucherId && !cancelVoucher(inv.voucherId, `Fund investment deleted`, user?.name || 'System', { viaParent: true })) {
-      toastRef.current({ title: tr('निवेश आंशिक रूप से हटा', 'Investment only partly removed'), description: tr('Redemption वाउचर रद्द हुआ, पर निवेश का वाउचर नहीं — निवेश चालू रखा गया है। Admin को बताएँ।', 'The redemption voucher was cancelled, but not the investment voucher — the investment has been kept active. Please tell the Admin.'), variant: 'destructive', duration: 15000 });
-      return;
-    }
-    setFundInvestmentsState(prev => { const u = prev.filter(i => i.id !== id); storage.setHousingFundInvestments(u); return u; });
-    supabase.from('housing_fund_investments').delete().eq('id', id).then(({ error }) => {
-      if (error) {
-        console.error('Fund investment delete error:', error.message); reportError('housing-save', error.message);
-        setFundInvestmentsState(prev => { const u = [...prev, inv]; storage.setHousingFundInvestments(u); return u; });
-        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
-      }
-    });
+    // X-3: each step waits for the cloud to CONFIRM the previous cancel; the row goes last. Re-running after a partial
+    // failure is safe (an already-cancelled voucher confirms at once).
+    const removeRow = () => {
+      setFundInvestmentsState(prev => { const u = prev.filter(i => i.id !== id); storage.setHousingFundInvestments(u); return u; });
+      supabase.from('housing_fund_investments').delete().eq('id', id).then(({ error }) => {
+        if (error) {
+          console.error('Fund investment delete error:', error.message); reportError('housing-save', error.message);
+          setFundInvestmentsState(prev => { const u = [...prev, inv]; storage.setHousingFundInvestments(u); return u; });
+          toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
+        }
+      });
+    };
+    const partly = () => toastRef.current({ title: tr('निवेश आंशिक रूप से हटा', 'Investment only partly removed'), description: tr('Redemption वाउचर रद्द हुआ, पर निवेश का वाउचर नहीं — निवेश चालू रखा गया है। Admin को बताएँ।', 'The redemption voucher was cancelled, but not the investment voucher — the investment has been kept active. Please tell the Admin.'), variant: 'destructive', duration: 15000 });
+    const cancelInvestment = () => {
+      if (!inv.voucherId) { removeRow(); return; }
+      if (!cancelVoucher(inv.voucherId, `Fund investment deleted`, user?.name || 'System', { viaParent: true, onCancelled: removeRow, onFailed: partly }) && inv.redemptionVoucherId) partly();
+    };
+    if (inv.redemptionVoucherId) cancelVoucher(inv.redemptionVoucherId, `Fund investment deleted (redemption reversed)`, user?.name || 'System', { viaParent: true, onCancelled: cancelInvestment });
+    else cancelInvestment();
   }, [fundInvestments, cancelVoucher, user]);
 
   // ── Complaints register (operational; Member-pattern persistence + RULE-1 rollback) ──
@@ -881,15 +897,19 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     const t = transfers.find(x => x.id === id);
     if (!t) return;
     // Cancels the fee voucher; does NOT auto-revert ownership (the flat may have had later activity).
-    if (t.voucherId && !cancelVoucher(t.voucherId, `Transfer ${t.flatNo} deleted`, user?.name || 'System', { viaParent: true })) return;   // H / RULE 3
-    setTransfersState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingTransfers(u); return u; });
-    supabase.from('housing_transfers').delete().eq('id', id).then(({ error }) => {
-      if (error) {
-        console.error('Transfer delete error:', error.message); reportError('housing-save', error.message);
-        setTransfersState(prev => { const u = [...prev, t]; storage.setHousingTransfers(u); return u; });
-        toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
-      }
-    });
+    // X-3: the row goes only once the cloud has CONFIRMED the fee voucher's cancel.   (H / RULE 3)
+    const removeRow = () => {
+      setTransfersState(prev => { const u = prev.filter(x => x.id !== id); storage.setHousingTransfers(u); return u; });
+      supabase.from('housing_transfers').delete().eq('id', id).then(({ error }) => {
+        if (error) {
+          console.error('Transfer delete error:', error.message); reportError('housing-save', error.message);
+          setTransfersState(prev => { const u = [...prev, t]; storage.setHousingTransfers(u); return u; });
+          toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
+        }
+      });
+    };
+    if (t.voucherId) cancelVoucher(t.voucherId, `Transfer ${t.flatNo} deleted`, user?.name || 'System', { viaParent: true, onCancelled: removeRow });
+    else removeRow();
   }, [transfers, cancelVoucher, user]);
 
   // ── Insurance register (operational; plain-table persistence + RULE-1 rollback) ──
@@ -1023,6 +1043,26 @@ export function HousingProvider({ children }: { children: ReactNode }) {
       if (error) { console.error('Building delete error:', error.message); reportError('housing-save', error.message); if (old) setBuildingsState(prev => { const u = [...prev, old]; storage.setHousingBuildings(u); return u; }); toastRef.current({ title: tr('डिलीट सेव नहीं हुआ', 'Delete not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 }); }
     });
   }, [buildings]);
+
+  // X-5 (audit 2026-11-17): a payment / collection voucher cancelled from the Vouchers page takes its amount back off
+  // its document here (DataContext calls this only after the cloud CONFIRMED the cancel, and only for a direct cancel).
+  const followFailedH = (what: string, msg: string) => {
+    reportError('voucher-cancel-follow', msg, { at: what });
+    toastRef.current({ title: tr('⚠ document ठीक नहीं हुआ', '⚠ Document not updated'), description: tr(`वाउचर रद्द हुआ, पर ${what} की राशि क्लाउड पर नहीं घटी — ${msg}. Refresh करके देखें।`, `The voucher was cancelled, but ${what}'s figure did not go down on the cloud — ${msg}. Refresh and check.`), variant: 'destructive', duration: 15000 });
+  };
+  const followedToastH = (what: string, due: number) => toastRef.current({ title: tr('document भी ठीक किया गया', 'Document updated too'), description: tr(`भुगतान रद्द हुआ — ${what} पर ₹${due.toLocaleString('en-IN')} फिर से बकाया है।`, `The payment was cancelled — ₹${due.toLocaleString('en-IN')} is due again on ${what}.`), duration: 10000 });
+  useEffect(() => registerVoucherCancelFollower('housing', {
+    refTypes: ['maintenance.receipt'], label: tr('रखरखाव बिल (Maintenance)', 'Maintenance bill'),
+    follow: (v) => {
+      const cur = maintenanceBillsLatest.current.find(b => b.id === v.refId && !b.isDeleted);
+      if (!cur) return;
+      const paidAmount = figureAfterCancel(cur.paidAmount, v.amount);
+      const next: MaintenanceBill = { ...cur, paidAmount, status: paidAmount >= cur.amount - 0.005 ? 'paid' : paidAmount > 0 ? 'partial' : 'unpaid' };
+      setMaintenanceBillsState(prev => { const u = prev.map(b => b.id === cur.id ? next : b); storage.setMaintenanceBills(u); return u; });
+      supabase.from('maintenance_bills').upsert(withSoc(next)).then(({ error }) => { if (error) followFailedH(tr(`बिल ${cur.billNo}`, `bill ${cur.billNo}`), error.message); });
+      followedToastH(tr(`बिल ${cur.billNo}`, `bill ${cur.billNo}`), +(cur.amount - paidAmount).toFixed(2));
+    },
+  }), [registerVoucherCancelFollower]);
 
   return (
     <HousingDataContext.Provider value={{

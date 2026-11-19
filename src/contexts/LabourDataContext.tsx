@@ -15,7 +15,8 @@ import { voucherRefusedToast, inFlightToast } from '@/lib/voucherRefused';
 import { useLatest } from '@/hooks/useLatest';
 import { useInFlight } from '@/hooks/useInFlight';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
+import { findVoucherOwner, figureAfterCancel, type OwnerGroup } from '@/lib/voucherOwnership';
+import { reportError } from '@/lib/errorReporting';
 import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
 import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { useAuth } from '@/contexts/AuthContext';
@@ -100,7 +101,7 @@ const LabourDataContext = createContext<LabourDataContextValue | undefined>(unde
 export function LabourProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   // Compose core (never fork): FY-lock from society; sub-ledger via the core account engine.
-  const { society, accounts, vouchers, musterEntries, addAccount, updateAccount, deleteAccount, addVoucher, cancelVoucher, getAccountBalance, registerVoucherOwner } = useData();
+  const { society, accounts, vouchers, musterEntries, addAccount, updateAccount, deleteAccount, addVoucher, cancelVoucher, getAccountBalance, registerVoucherOwner, registerVoucherCancelFollower } = useData();
   // J6b: load this module's tables only when its capability is on for the society (same rule as the
   // sidebar / CapabilityGuard) — societies that don't use labour no longer fetch them on every login.
   const moduleOn = useCapabilityEnabled(['labour', 'pf_esi']);
@@ -685,6 +686,36 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       if (!okRun || !okDep) toastRef.current({ title: tr('वाउचर रद्द नहीं हुआ', 'Voucher not cancelled'), description: tr('रिकॉर्ड हट गया, पर उसका वाउचर रद्द नहीं हो सका (lock / अनुमति)। वाउचर screen से उसे रद्द करें — अब वह अनाथ है, इसलिए रद्द हो जाएगा।', 'The record was removed, but its voucher could not be cancelled (lock / permission). Cancel it from the Voucher screen — it is now an orphan, so it will cancel.'), variant: 'destructive', duration: 15000 });
     });
   }, [pfEsiRuns, society, user, cancelVoucher]);
+
+  // X-5 (audit 2026-11-17): a payment / collection voucher cancelled from the Vouchers page takes its amount back off
+  // its document here (DataContext calls this only after the cloud CONFIRMED the cancel, and only for a direct cancel).
+  const followFailedL = (what: string, msg: string) => {
+    reportError('voucher-cancel-follow', msg, { at: what });
+    toastRef.current({ title: tr('⚠ document ठीक नहीं हुआ', '⚠ Document not updated'), description: tr(`वाउचर रद्द हुआ, पर ${what} की राशि क्लाउड पर नहीं घटी — ${msg}. Refresh करके देखें।`, `The voucher was cancelled, but ${what}'s figure did not go down on the cloud — ${msg}. Refresh and check.`), variant: 'destructive', duration: 15000 });
+  };
+  const followedToastL = (what: string, due: number) => toastRef.current({ title: tr('document भी ठीक किया गया', 'Document updated too'), description: tr(`भुगतान रद्द हुआ — ${what} पर ₹${due.toLocaleString('en-IN')} फिर से बकाया है।`, `The payment was cancelled — ₹${due.toLocaleString('en-IN')} is due again on ${what}.`), duration: 10000 });
+  useEffect(() => registerVoucherCancelFollower('labour', {
+    refTypes: ['dept.collection', 'worker.advance.recovery'], label: tr('विभागीय बिल / श्रमिक अग्रिम', 'Department bill / worker advance'),
+    follow: (v) => {
+      if (v.refType === 'dept.collection') {
+        const cur = departmentBillsLatest.current.find(b => b.id === v.refId);
+        if (!cur) return;
+        const paidAmount = figureAfterCancel(cur.paidAmount, v.amount);
+        const next: DepartmentBill = { ...cur, paidAmount, status: paidAmount >= cur.amount - 0.005 ? 'paid' : paidAmount > 0 ? 'partial' : 'unpaid' };
+        setDepartmentBillsState(prev => { const u = prev.map(b => b.id === cur.id ? next : b); storage.setDepartmentBills(u); return u; });
+        supabase.from('department_bills').upsert(withSoc(next)).then(({ error }) => { if (error) followFailedL(tr('विभागीय बिल', 'the department bill'), error.message); });
+        followedToastL(tr('विभागीय बिल', 'the department bill'), +(cur.amount - paidAmount).toFixed(2));
+      } else {
+        const cur = workerAdvancesLatest.current.find(a => a.id === v.refId);
+        if (!cur) return;
+        const recovered = figureAfterCancel(cur.recovered, v.amount);
+        const next: WorkerAdvance = { ...cur, recovered, status: recovered >= cur.amount - 0.005 ? 'cleared' : 'open' };
+        setWorkerAdvancesState(prev => { const u = prev.map(a => a.id === cur.id ? next : a); storage.setWorkerAdvances(u); return u; });
+        supabase.from('worker_advances').upsert(withSoc(next)).then(({ error }) => { if (error) followFailedL(tr(`अग्रिम ${cur.advanceNo}`, `advance ${cur.advanceNo}`), error.message); });
+        followedToastL(tr(`अग्रिम ${cur.advanceNo}`, `advance ${cur.advanceNo}`), +(cur.amount - recovered).toFixed(2));
+      }
+    },
+  }), [registerVoucherCancelFollower]);
 
   return (
     <LabourDataContext.Provider value={{ workers, addWorker, updateWorker, deleteWorker, departments, addDepartment, updateDepartment, deleteDepartment, departmentBills, addDepartmentBill, recordDepartmentCollection, deleteDepartmentBill, workerAdvances, addWorkerAdvance, recordAdvanceRecovery, deleteWorkerAdvance, pfEsiRuns, computePfEsi, postPfEsi, depositPfEsi, deletePfEsiRun }}>

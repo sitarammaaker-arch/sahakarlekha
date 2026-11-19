@@ -97,7 +97,7 @@ const rcpt = (id, date, principal, interestRec = 0, income = 0, extra = {}) => (
 // ── LOAN-04: the register follows a confirmed cancel; reverse / edit refused ──
 {
   const dc = read('src/contexts/DataContext.tsx');
-  ok((dc.match(/if \(!opts\?\.viaParent\) loanFollowsCancel\(current\);/g) || []).length === 3, 'every confirmed cancel path (posting service, journal-first, default) lets the register follow — direct cancels only');
+  ok((dc.match(/if \(!opts\?\.viaParent\) \{ loanFollowsCancel\(current\); followCancel\(current\); \}/g) || []).length === 3, 'every confirmed cancel path (posting service, journal-first, default) lets the register follow — direct cancels only');
   const f = dc.slice(dc.indexOf('const loanFollowsCancel = '), dc.indexOf('const cancelVoucher = useCallback('));
   ok(/loanRepaymentPrincipal\(v,/.test(f) && /updateLoanRef\.current\(loan\.id, \{ repaidAmount: back/.test(f), 'member loan: principal back on the loan');
   ok(/from\('kcc_loans'\)\.update\(patch\)/.test(f) && /outstandingAmount: out/.test(f), 'KCC: repaid down, outstanding up');
