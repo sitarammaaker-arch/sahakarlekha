@@ -117,7 +117,13 @@ ok(/values \('127', 'voucher_activity_tag_edit'\)/.test(up127) && /delete from p
 // No later migration redefines the two functions (else 127 would not be the live body) — EXCEPT 180 (ACC-02), which
 // is 127's edit_voucher with only the journal condition widened to date changes; its body must keep 127's activity tag.
 const later = readdirSync(new URL('../supabase/migrations/', import.meta.url)).filter(f => /^\d{3}_/.test(f) && f > '127_voucher_activity_tag_edit_down.sql' && f.endsWith('.sql'));
-const ALLOWED_LATER = new Set(['180_edit_voucher_date_journal.sql', '180_edit_voucher_date_journal_down.sql']);
+// 183 (SEC-06) redefines save_pending_voucher from the production body to stamp the maker; it must keep 127's tag.
+const ALLOWED_LATER = new Set(['180_edit_voucher_date_journal.sql', '180_edit_voucher_date_journal_down.sql', '183_maker_checker_server.sql', '183_maker_checker_server_down.sql']);
+for (const f of ['183_maker_checker_server.sql', '183_maker_checker_server_down.sql']) {
+  const s = mig(f), i = s.indexOf('CREATE OR REPLACE FUNCTION public.save_pending_voucher(');
+  const sp = i < 0 ? '' : s.slice(i, s.indexOf('$function$\n;', i));
+  ok(sp.includes(`"costCentreId" = v_new."costCentreId"`) && !/function public\.edit_voucher\(/i.test(s), `${f}: save_pending_voucher keeps 127's activity tag; edit_voucher untouched`);
+}
 ok(later.every(f => ALLOWED_LATER.has(f) || !/function public\.(edit_voucher|save_pending_voucher)\(/i.test(mig(f))), `no migration after 127 redefines edit_voucher / save_pending_voucher (${later.filter(f => !ALLOWED_LATER.has(f)).join(', ') || 'none'})`);
 {
   const up180 = mig('180_edit_voucher_date_journal.sql'), down180 = mig('180_edit_voucher_date_journal_down.sql');

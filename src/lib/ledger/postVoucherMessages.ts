@@ -37,6 +37,10 @@ const MESSAGES: Record<string, string> = {
   voucher_in_closed_fy: 'यह वाउचर बंद वित्तीय वर्ष का है — बदला या रद्द नहीं हो सकता।',
   self_approval: 'आप अपना ही बनाया वाउचर approve नहीं कर सकते — कोई दूसरा अधिकारी approve करे।',
   not_pending: 'यह वाउचर स्वीकृति के लिए रुका हुआ नहीं है।',
+  // 183 / SEC-06
+  needs_approval: 'समिति के नियम के अनुसार यह वाउचर स्वीकृति के बाद ही post होगा — page refresh करके फिर से save करें, यह स्वीकृति के लिए रुकेगा।',
+  not_an_approver: 'आपकी भूमिका वाउचर approve / reject नहीं कर सकती — यह काम admin, सचिव, प्रबंधक, अध्यक्ष या बोर्ड सदस्य करते हैं।',
+  no_email_claim: 'आपके login की email पता नहीं चली — एक बार logout करके फिर login करें।',
 };
 
 const MESSAGES_EN: Record<string, string> = {
@@ -65,6 +69,10 @@ const MESSAGES_EN: Record<string, string> = {
   voucher_in_closed_fy: 'This voucher belongs to a closed financial year — it cannot be changed or cancelled.',
   self_approval: 'You cannot approve a voucher you created — another officer must approve it.',
   not_pending: 'This voucher is not waiting for approval.',
+  // 183 / SEC-06
+  needs_approval: "Under the society's rules this voucher posts only after approval — refresh the page and save it again; it will wait for approval.",
+  not_an_approver: 'Your role cannot approve or reject vouchers — an admin, secretary, manager, chairman or board member does this.',
+  no_email_claim: 'Your login email could not be found — log out once and log in again.',
 };
 
 export function postVoucherMessage(code: string | null, raw?: string): string {
