@@ -27,6 +27,8 @@ import { shareCapWarning, canHoldShares, previousMarch31, refundLimitWarning, no
 import { shareHeldTwoYears, transferTwoYearWarning, REFUND_BASE_ACCOUNTS } from '@/lib/members/legal';
 import { isHaryana } from '@/lib/members/admission';
 import { useAuth } from '@/contexts/AuthContext';
+import { historicalShareGap } from '@/lib/members/historicalShareGap';
+import { societyFyStart } from '@/lib/fyPeriod';
 
 const ShareRegister: React.FC = () => {
   const { language } = useLanguage();
@@ -155,8 +157,31 @@ const ShareRegister: React.FC = () => {
     setEditMember(null);
   };
 
+  // MEM-01: old members (joined before this FY) carry their share capital in the register by rule, with no receipt —
+  // it belongs in the opening balance of 1102. Say so, with the amount, when the books at FY start do not hold it.
+  const fyStartIso = societyFyStart(society);
+  const shareGap = useMemo(() => {
+    if (!fyStartIso) return null;
+    const dayBefore = new Date(new Date(fyStartIso + 'T00:00:00Z').getTime() - 86400000).toISOString().slice(0, 10);
+    const row = getTrialBalance(dayBefore).find(b => b.account.id === '1102');
+    return historicalShareGap(members, society.financialYear, row ? -(row.netBalance || 0) : 0);
+  }, [members, society, fyStartIso, getTrialBalance]);
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {shareGap && shareGap.gap > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" data-testid="historical-share-gap">
+          <p className="font-semibold">
+            {hi ? `पुराने सदस्यों की ₹${shareGap.gap.toLocaleString('en-IN')} शेयर पूँजी बही में नहीं है` : `₹${shareGap.gap.toLocaleString('en-IN')} of old members' share capital is not in the ledger`}
+          </p>
+          <p>
+            {hi
+              ? `इस वित्तीय वर्ष से पहले जुड़े ${shareGap.members} सदस्यों की शेयर पूँजी ₹${shareGap.registerAmount.toLocaleString('en-IN')} है, पर वर्ष की शुरुआत में शेयर पूँजी (1102) खाते में ₹${shareGap.ledgerAtFyStart.toLocaleString('en-IN')} ही है। नियम के अनुसार पुराने सदस्यों की रसीद नहीं बनती — यह राशि opening balance में भरनी होती है, नहीं तो लाभांश ग़लत आधार पर बनेगा।`
+              : `${shareGap.members} members who joined before this financial year hold ₹${shareGap.registerAmount.toLocaleString('en-IN')} of share capital, but Share Capital (1102) holds only ₹${shareGap.ledgerAtFyStart.toLocaleString('en-IN')} at the start of the year. By rule old members get no receipt — this amount belongs in the opening balance, or the dividend is computed on the wrong base.`}
+          </p>
+          <Link to="/opening-balances" className="underline font-medium">{hi ? 'Opening Balances में 1102 भरें →' : 'Enter 1102 in Opening Balances →'}</Link>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
