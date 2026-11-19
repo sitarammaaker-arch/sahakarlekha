@@ -79,12 +79,13 @@ const fn = (name) => { const i = dc.indexOf(`const ${name} = useCallback(`); ret
 for (const name of ['refundShareCapital', 'purchaseShareCapital']) {
   const body = fn(name);
   const guard = body.indexOf('if (voucherBirthBlocked(date)) return;');
-  const check = body.indexOf('if (!voucher?.id) return;');
+  // MEM-04: the check also resolves the forward promise: `if (!voucher?.id) { markForward(false); return; }`.
+  const check = Math.max(body.indexOf('if (!voucher?.id) return;'), body.indexOf('if (!voucher?.id) { markForward(false); return; }'));
   const move = body.indexOf('withShareCapital(');
   ok(guard > 0 && check > guard && move > check, `${name}: refusals asked, voucher checked, THEN the capital moves (D1)`);
 }
 const tr = fn('transferShareCapital');
-ok(tr.indexOf('voucherBirthBlocked(date)') > 0 && tr.indexOf('if (!outHalf?.id) return;') > 0 && tr.indexOf('if (!inHalf?.id)') > 0
+ok(tr.indexOf('voucherBirthBlocked(date)') > 0 && (tr.indexOf('if (!outHalf?.id) return;') > 0 || tr.indexOf('if (!outHalf?.id) { markForward(false); return; }') > 0) && tr.indexOf('if (!inHalf?.id)') > 0
   && tr.indexOf('withShareCapital(from') > tr.indexOf('if (!inHalf?.id)'), 'transfer: both halves must post before either member moves (D1)');
 ok(/const voucherBirthBlocked = \(date: string\): boolean => \{[\s\S]*?guardPermission\('create'[\s\S]*?guardFYLocked\(\)[\s\S]*?guardSubscriptionExpired\(\)[\s\S]*?guardPeriodLock\(date\)/.test(dc), 'voucherBirthBlocked = the same refusals as addVoucher');
 for (const name of ['refundShareCapital', 'approveShareRefund', 'shareOperation', 'purchaseShareCapital']) ok(fn(name).includes('withShareCapital('), `${name}: share count kept in step (D2)`);

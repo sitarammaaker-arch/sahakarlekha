@@ -13,7 +13,8 @@ let pass = 0, fail = 0;
 const ok = (n, c) => { if (c) { pass++; console.log(`  ✓ ${n}`); } else { fail++; console.log(`  ✗ ${n}`); } };
 const dc = readFileSync(resolve(root, 'src/contexts/DataContext.tsx'), 'utf8');
 
-const tf = dc.slice(dc.indexOf('const transferShareCapital = useCallback'), dc.indexOf('const transferShareCapital = useCallback') + 4000);
+// The whole function (MEM-04 made it longer than the old fixed 4,000-character window).
+const tf = dc.slice(dc.indexOf('const transferShareCapital = useCallback'), dc.indexOf('\n  }, [', dc.indexOf('const transferShareCapital = useCallback')));
 ok('one transfer id per transfer', /const transferId = crypto\.randomUUID\(\);/.test(tf));
 ok('both halves tagged share.transfer with the same id', (tf.match(/refType: 'share\.transfer', refId: transferId/g) || []).length === 2);
 

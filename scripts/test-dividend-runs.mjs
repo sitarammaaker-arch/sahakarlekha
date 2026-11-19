@@ -106,7 +106,8 @@ ok(/if \(society\.fyLocked\)/.test(post), 'RULE 6: handlePost bails when FY is l
 ok(post.indexOf('await saveRun(run)') > -1 && post.indexOf('await saveRun(run)') < post.indexOf('addVoucher('), 'RULE 1: the split is saved to the cloud BEFORE the voucher is created');
 ok(/if \(!saved\.ok && !tableMissing\) \{[\s\S]*?variant: 'destructive', duration: 10000,\s*\}\);\s*\} else \{[\s\S]*?addVoucher\(/.test(post), 'failed save (table present) ⇒ destructive toast ≥10s and NO voucher (addVoucher only in the else branch)');
 ok(/amount: total,/.test(post), 'voucher amount = the run total (never out of step)');
-ok(/const tableMissing = !saved\.ok && \/member_distribution_runs\|does not exist/.test(post) && /if \(!saved\.ok && !tableMissing\)/.test(post), 'before 066 is run (table missing) the page posts the old way with a warning — year-end never blocked');
+// MEM-05: "table missing" is decided by classifyRunSaveError (a duplicate is NOT table-missing and posts nothing).
+ok(/const tableMissing = failure === 'table-missing';/.test(post) && /classifyRunSaveError\(saved\)/.test(post) && /if \(!saved\.ok && !tableMissing\)/.test(post), 'before 066 is run (table missing) the page posts the old way with a warning — year-end never blocked');
 ok(/dividendBreakdown\(\{ run: liveDividendRun/.test(page) && /const settlementRows = dividendSplit\.rows/.test(page), 'payment uses the frozen split (not a fresh share-capital split)');
 ok(/user\?\.role === 'admin' && \(\s*<Button[^>]*onClick=\{freezeLegacySplit\}/.test(page), '"हिस्से पक्के करें" is admin-only');
 ok(/const freezeLegacySplit = async \(\) => \{\s*if \(society\.fyLocked\)/.test(page), 'freeze respects the FY lock');

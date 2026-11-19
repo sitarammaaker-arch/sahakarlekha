@@ -29,6 +29,7 @@ import { statutoryLimits, dividendRateIssue } from '@/lib/rules/statutoryLimits'
 import { useDistributionRuns } from '@/hooks/useDistributionRuns';
 import { linesTotal } from '@/lib/distribution/engine';
 import { dividendRunLines, liveRunFor, existingRunFor, dividendBreakdown, snapshotLines, postedAppropriation, dividendPaymentsByMember, appropriationFunds, appropriatedToFunds } from '@/lib/distribution/dividendRuns';
+import { classifyRunSaveError } from '@/lib/distribution/runSaveError';
 
 // ── Account IDs ─────────────────────────────────────────────────────────────
 const ACC_NET_SURPLUS   = '1208';
@@ -266,7 +267,17 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean; section?: '
       const saved = await saveRun(run);
       // Migration 066 not run yet ⇒ the table does not exist: post the old way (as before this
       // feature) and say so, rather than blocking the society's year-end.
-      const tableMissing = !saved.ok && /member_distribution_runs|does not exist|schema cache|PGRST205|42P01/i.test(saved.error || '');
+      // MEM-05: a duplicate (a run for this year already exists) is NOT "table missing" — it posts nothing.
+      const failure = saved.ok ? null : classifyRunSaveError(saved);
+      const tableMissing = failure === 'table-missing';
+      if (failure === 'duplicate') {
+        toast({
+          title: hi ? 'लाभांश पहले से दर्ज है' : 'Dividend already recorded',
+          description: hi ? `FY ${fy} का लाभांश run पहले से मौजूद है (शायद किसी दूसरी विंडो या उपयोगकर्ता से) — दोबारा पोस्ट नहीं किया गया। पेज refresh करके देखें।` : `A dividend run for FY ${fy} already exists (perhaps from another window or user) — nothing was posted again. Refresh the page to see it.`,
+          variant: 'destructive', duration: 12000,
+        });
+        return;
+      }
       if (tableMissing) {
         toast({
           title: hi ? 'पुराने तरीके से पोस्ट हुआ' : 'Posted the old way',

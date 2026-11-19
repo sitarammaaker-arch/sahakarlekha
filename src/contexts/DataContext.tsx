@@ -1,5 +1,7 @@
 import { tr } from '@/lib/uiLang';
 import { systemOwnedVoucherKind, systemOwnedVoucherMessage } from '@/lib/systemOwnedVoucher';
+import { isMemberShareVoucher } from '@/lib/members/memberShareVoucher';
+import { voucherRefusedToast } from '@/lib/voucherRefused';
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -2479,6 +2481,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return true;
   };
+  // MEM-02 / MEM-03 (audit 2026-11-17): a member's system share / admission voucher (joining receipt, additional
+  // shares, refund, share operation, transfer) moves the member's share register WITH it. Cancel was already blocked;
+  // REVERSE and edit from the Vouchers page were not, so the ledger moved while the register stayed — register ≠ 1102,
+  // dividend on the wrong base. A hand-made voucher (origin 'manual') never moved the register, so it stays free.
+  // Returns true (and toasts) when BLOCKED.
+  const guardMemberShareVoucher = (id: string, what: { hi: string; en: string }): boolean => {
+    const v = vouchersRef.current.find(x => x.id === id);
+    if (!isMemberShareVoucher(v)) return false;
+    toastRef.current({
+      title: tr(`वाउचर ${what.hi} नहीं होगा`, `Voucher cannot be ${what.en}`),
+      description: tr('यह सदस्य के शेयर / प्रवेश शुल्क का वाउचर है — इससे सदस्य का शेयर रजिस्टर भी बदला था। सदस्य पेज या Share Register से ही बदलें (गलती हो तो उल्टी entry करें), तभी रजिस्टर और बही साथ ठीक रहेंगे।', 'This is a member\'s share / admission fee voucher — it also moved the member\'s share register. Change it only from the Members page or the Share Register (make the reverse entry for a mistake), so the register and the ledger stay together.'),
+      variant: 'destructive', duration: 12000,
+    });
+    return true;
+  };
   const guardSalaryVoucher = (id: string, what: string): boolean => {
     const slip = salaryRecordsRef.current.find(r => r.voucherId === id || r.accrualVoucherId === id);
     if (!slip) return false;
@@ -2494,6 +2511,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardPermission('update', tr('वाउचर बदलने', 'change vouchers'))) return false;   // ECR-06: role gate
     if (guardSystemOwnedVoucher(id, { hi: 'बदला', en: 'changed' })) return false;
     if (!opts?.viaParent && guardStockDocumentVoucher(id, { hi: 'बदला', en: 'changed' })) return false;
+    if (!opts?.viaParent && guardMemberShareVoucher(id, { hi: 'बदला', en: 'changed' })) return false;   // MEM-03
     if (!opts?.viaParent && guardSalaryVoucher(id, tr('बदला', 'changed'))) return false;
     if (guardFYLocked()) return false;
     const current = vouchersRef.current.find(v => v.id === id);
@@ -3005,6 +3023,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (isEngineVoucher(current) && !opts?.engine) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return null; }
     if (guardSystemOwnedVoucher(id, { hi: 'reverse', en: 'reversed' })) return null;
     if (!opts?.engine && guardStockDocumentVoucher(id, { hi: 'reverse', en: 'reversed' })) return null;
+    if (!opts?.engine && guardMemberShareVoucher(id, { hi: 'reverse', en: 'reversed' })) return null;   // MEM-02
     if (guardSalaryVoucher(id, 'reverse')) return null;
     const revDate = new Date().toISOString().split('T')[0];
     if (guardPeriodLock(revDate)) return null; // reversal must post into an open period
@@ -3577,7 +3596,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           { id: lid(), accountId: active.debitAccountId, type: 'Dr', amount: newAmount },
           { id: lid(), accountId: creditAccountId, type: 'Cr', amount: newAmount },
         ];
-        const applied = updateVoucher(active.id, { amount: newAmount, lines: newLines, narration: `${kind} updated for ${updatedMember.name}` });
+        // viaParent: the member edit IS the owning screen (MEM-03 blocks the same edit from the Vouchers page).
+        const applied = updateVoucher(active.id, { amount: newAmount, lines: newLines, narration: `${kind} updated for ${updatedMember.name}` }, { viaParent: true });
         if (!applied) {
           // updateVoucher already said why (FY/period lock, role, reversed…). Make the split visible.
           toastRef.current({ title: tr(`${kind} वाउचर नहीं बदला`, `${kind} voucher not changed`), description: tr(`सदस्य की राशि ₹${newAmount} हो गई, पर ${active.voucherNo} पुरानी राशि पर है — ऊपर बताया कारण देखें और वाउचर अलग से ठीक करें।`, `The member's amount is now ₹${newAmount}, but ${active.voucherNo} is still at the old amount — see the reason shown above and fix the voucher separately.`), variant: 'destructive', duration: 12000 });
@@ -3836,6 +3856,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // down now, the society's debt to them is booked. PAY: Dr Share Refund Payable / Cr Cash-Bank. Unlike refundShareCapital the
   // member row is only touched on approval (shareCapital is reduced then); the outstanding is read from live vouchers.
   // RULE 1: if the member row cannot be saved, the member is restored AND the voucher is cancelled again.
+  // MEM-04 (audit 2026-11-17): a share voucher the server refuses LATE (closed year, period lock) is rolled back by
+  // addVoucher, but the member's share capital had already moved — register ≠ ledger. The scalar still moves at once
+  // (that is what stops a second click), and on a late refusal it is moved back by the same delta, applied to the
+  // LATEST row. `forward` resolves true once the forward member save landed (false = it failed and already rolled
+  // itself back), so the undo is written strictly AFTER it and never twice.
+  const undoShareDeltas = (deltas: { memberId: string; deltaMinor: number }[], forward: Promise<boolean>, what: { hi: string; en: string }) => {
+    forward.then((ok) => {
+      if (!ok) return;
+      for (const d of deltas) {
+        const cur = membersRef.current.find(m => m.id === d.memberId);
+        if (!cur) continue;
+        const back = withShareCapital(cur, toRupees(subMinor(toMinor(cur.shareCapital || 0), d.deltaMinor)));
+        membersRef.current = membersRef.current.map(m => m.id === d.memberId ? back : m);
+        setMembersState(prev => prev.map(m => m.id === d.memberId ? back : m));
+        supabase.from('members').upsert(memberRow(back)).then(({ error }) => { if (error) reportCascade(`Share undo after refusal (${what.en})`, error); });
+      }
+      toastRef.current({ title: tr(`${what.hi} दर्ज नहीं हुआ`, `${what.en} not recorded`), description: tr('सर्वर ने इसका वाउचर स्वीकार नहीं किया, इसलिए सदस्य की शेयर राशि भी पहले जैसी कर दी गई। कारण ऊपर की सूचना में है।', 'The server did not accept its voucher, so the member\'s share amount was put back as well. The reason is in the message above.'), variant: 'destructive', duration: 12000 });
+    });
+  };
   const approveShareRefund = useCallback((memberId: string, amount: number, date: string, resolution: string): boolean => {
     if (guardFYLocked()) return false;
     const member = membersRef.current.find(m => m.id === memberId);
@@ -3852,8 +3891,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       type: 'journal', date, debitAccountId: ACCOUNT_IDS.SHARE_CAP, creditAccountId: payableId, amount: built.amount, lines: built.lines,
       narration: `Share refund approved for ${member.name} — resolution ${resolution.trim()} — ${date}`,
       refType: SHARE_REFUND_APPROVE_REF, refId: memberId, createdBy: userRef.current?.name ?? 'System', memberId,
+    }, {
+      onFailed: () => undoShareDeltas([{ memberId, deltaMinor: subMinor(0, toMinor(built.amount)) }], forward, { hi: 'शेयर वापसी', en: 'Share refund' }),   // MEM-04
     });
-    if (!v?.id) return false;   // addVoucher already told the user why
+    let markForward: (ok: boolean) => void = () => {};
+    const forward = new Promise<boolean>((res) => { markForward = res; });
+    if (!v?.id) { markForward(false); return false; }   // addVoucher already told the user why
     const before = member;
     const updated = withShareCapital(member, toRupees(subMinor(toMinor(member.shareCapital || 0), toMinor(built.amount))));
     membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
@@ -3868,6 +3911,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         cancelLinkedVouchers([v.id], 'Share refund approval not saved (cloud save failed)', userRef.current?.name ?? 'System');
         toastRef.current({ title: tr('शेयर वापसी सेव नहीं हुई', 'Share refund not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, `Not saved to the cloud — ${error.message}. The voucher was cancelled.`), variant: 'destructive', duration: 12000 });
       }
+      markForward(!error);
     });
     emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital }, after: { shareCapital: updated.shareCapital }, reason: `share:refund-approved — ${resolution.trim()}` });
     toastRef.current({ title: tr('✅ शेयर वापसी स्वीकृत', '✅ Share refund approved'), description: tr(`${member.name} · ₹${built.amount.toLocaleString('en-IN')} देय दर्ज`, `${member.name} · ₹${built.amount.toLocaleString('en-IN')} recorded as payable`) });
@@ -3891,9 +3935,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       type: 'payment', date, debitAccountId: payableId, creditAccountId: cashBank, amount: built.amount, lines: built.lines,
       narration: `Share refund paid to ${member.name} — ${date}`,
       refType: SHARE_REFUND_PAY_REF, refId: memberId, createdBy: userRef.current?.name ?? 'System', memberId,
+    }, {
+      // MEM-04: the payment IS its voucher (the outstanding is read from vouchers) — "paid" only once the server has it.
+      onSaved: () => toastRef.current({ title: tr('✅ शेयर वापसी का भुगतान', '✅ Share refund paid'), description: `${member.name} · ₹${built.amount.toLocaleString('en-IN')}` }),
+      onFailed: () => voucherRefusedToast(toastRef.current, tr('शेयर वापसी का भुगतान दर्ज नहीं हुआ', 'Share refund payment not recorded')),
     });
     if (!v?.id) return false;
-    toastRef.current({ title: tr('✅ शेयर वापसी का भुगतान', '✅ Share refund paid'), description: `${member.name} · ₹${built.amount.toLocaleString('en-IN')}` });
     return true;
   }, [accounts, addVoucher]);
 
@@ -3920,10 +3967,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       debitAccountId: posting.debitAccountId, creditAccountId: posting.creditAccountId, amount: amt,
       narration: `${LABELS[type]} ${member.name}${opts?.reason ? ' — ' + opts.reason : ''}`,
       createdBy: userRef.current?.name ?? 'System', memberId,
+    }, {
+      onFailed: () => undoShareDeltas([{ memberId, deltaMinor: opDeltaMinor }], forward, { hi: 'शेयर संचालन', en: 'Share operation' }),   // MEM-04
     });
-    if (!voucher?.id) return false; // addVoucher blocked (FY-lock / period-lock / unbalanced)
+    let markForward: (ok: boolean) => void = () => {};
+    const forward = new Promise<boolean>((res) => { markForward = res; });
+    if (!voucher?.id) { markForward(false); return false; } // addVoucher blocked (FY-lock / period-lock / unbalanced)
     const before = member;
     const updated = withShareCapital(member, applyShareOp(type, member.shareCapital || 0, amt));
+    const opDeltaMinor = subMinor(toMinor(updated.shareCapital || 0), toMinor(before.shareCapital || 0));
     membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
     supabase.from('members').upsert(memberRow(updated)).then(({ error }) => {
@@ -3934,6 +3986,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         cancelLinkedVouchers([voucher.id], `Share ${type} not saved (cloud save failed)`, userRef.current?.name ?? 'System');
         toastRef.current({ title: tr('शेयर संचालन सेव नहीं हुआ', 'Share operation not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, `Not saved to the cloud — ${error.message}. The voucher was cancelled.`), variant: 'destructive', duration: 12000 });
       }
+      markForward(!error);
     });
     emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital }, after: { shareCapital: updated.shareCapital }, reason: `share:${type}${opts?.reason ? ' — ' + opts.reason : ''}` });
     toastRef.current({ title: tr('✅ शेयर संचालन दर्ज', '✅ Share operation recorded'), description: `${LABELS[type]} ${member.name} · ₹${amt.toLocaleString('en-IN')}`, variant: 'default' });
@@ -3959,13 +4012,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       debitAccountId: debitAcc, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: buy,
       narration: `Additional share capital from ${member.name} — ${date}`,
       createdBy: user?.name ?? 'System', memberId,
+    }, {
+      onFailed: () => undoShareDeltas([{ memberId, deltaMinor: toMinor(buy) }], forward, { hi: 'अतिरिक्त शेयर', en: 'Additional shares' }),   // MEM-04
     });
-    if (!voucher?.id) return;   // D1: no voucher → the member's share capital must not move either
+    let markForward: (ok: boolean) => void = () => {};
+    const forward = new Promise<boolean>((res) => { markForward = res; });
+    if (!voucher?.id) { markForward(false); return; }   // D1: no voucher → the member's share capital must not move either
     const before = member;
     const updated = withShareCapital(member, toRupees(addMinor(toMinor(member.shareCapital || 0), toMinor(buy))));
     membersRef.current = membersRef.current.map(m => m.id === memberId ? updated : m);
     setMembersState(prev => prev.map(m => m.id === memberId ? updated : m));
     supabase.from('members').upsert(memberRow(updated)).then(({ error }) => {
+      markForward(!error);
       if (error) {
         reportCascade('Share purchase member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
@@ -4016,35 +4074,52 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // D1: ask every refusal first — the two halves (and the premium) must all post or none, and the scalars
     // below move only when they did.
     if (voucherBirthBlocked(date)) return;
+    // MEM-04: any of the 2–3 vouchers refused LATE → both members' share capital moves back (after the forward saves
+    // landed) and the transfer's other vouchers are unwound. Once, however many are refused.
+    let markForward: (ok: boolean) => void = () => {};
+    const forward = new Promise<boolean>((res) => { markForward = res; });
+    let refusedOnce = false;
+    const onRefused = () => {
+      if (refusedOnce) return;
+      refusedOnce = true;
+      forward.then((ok) => {
+        if (!ok) return;
+        const live = [outHalf?.id, inHalf?.id, premiumId].filter((x): x is string => !!x && vouchersRef.current.some(v => v.id === x && !v.isDeleted));
+        if (live.length) cancelLinkedVouchers(live, 'Share transfer voucher refused by the server (auto-unwind)', userRef.current?.name ?? 'System');
+      });
+      undoShareDeltas([{ memberId: fromMemberId, deltaMinor: subMinor(0, toMinor(amt)) }, { memberId: toMemberId, deltaMinor: toMinor(amt) }], forward, { hi: 'शेयर स्थानांतरण', en: 'Share transfer' });
+    };
+    let premiumId: string | undefined;
     const outHalf = addVoucher({
       type: 'journal', date, debitAccountId: ACCOUNT_IDS.SHARE_CAP, creditAccountId: SUSPENSE, amount: amt,
       narration: `Shares transferred from ${from.name} to ${to.name} — ${date}`,
       createdBy: user?.name ?? 'System', memberId: fromMemberId, refType: 'share.transfer', refId: transferId,
-    });
-    if (!outHalf?.id) return;
+    }, { onFailed: onRefused });
+    if (!outHalf?.id) { markForward(false); return; }
     const inHalf = addVoucher({
       type: 'journal', date, debitAccountId: SUSPENSE, creditAccountId: ACCOUNT_IDS.SHARE_CAP, amount: amt,
       narration: `Shares transferred from ${from.name} to ${to.name} — ${date}`,
       createdBy: user?.name ?? 'System', memberId: toMemberId, refType: 'share.transfer', refId: transferId,
-    });
+    }, { onFailed: onRefused });
     // Member-area stage A (H-3): a half-posted transfer is unwound here through the cascade path —
     // cancelVoucher refuses a lone transfer half, so asking the user to cancel it was a dead end.
     const unwind = (ids: string[], why: string) => cancelLinkedVouchers(ids, why, userRef.current?.name ?? 'System');
     if (!inHalf?.id) {
+      markForward(false);
       unwind([outHalf.id], 'Share transfer incomplete (second half not posted)');
       toastRef.current({ title: tr('शेयर स्थानांतरण नहीं हुआ', 'Share transfer failed'), description: tr(`दूसरा वाउचर नहीं बना, इसलिए पहला वाउचर (${outHalf.voucherNo || outHalf.id}) अपने-आप रद्द कर दिया गया। सदस्यों की शेयर राशि नहीं बदली — दोबारा करें।`, `The second voucher was not created, so the first voucher (${outHalf.voucherNo || outHalf.id}) was cancelled automatically. Members' share amounts did not change — please try again.`), variant: 'destructive', duration: 15000 });
       return;
     }
     // ECR-16 (MS-11): premium paid to the society → Dr Cash/Bank / Cr Reserve (capped above).
-    let premiumId: string | undefined;
     if (prem > 0) {
       const payout = opts?.mode === 'bank' ? (defaultBankAccountId(accounts) || ACCOUNT_IDS.BANK) : ACCOUNT_IDS.CASH;
       const premV = addVoucher({
         type: 'receipt', date, debitAccountId: payout, creditAccountId: opts?.reserveAccountId || '1201', amount: prem,
         narration: `Share transfer premium from ${to.name} (transfer from ${from.name}) — ${date}`,
         createdBy: user?.name ?? 'System', memberId: toMemberId,
-      });
+      }, { onFailed: onRefused });
       if (!premV?.id) {
+        markForward(false);
         unwind([outHalf.id, inHalf.id], 'Share transfer premium not posted');
         toastRef.current({ title: tr('शेयर स्थानांतरण नहीं हुआ', 'Share transfer failed'), description: tr('प्रीमियम का वाउचर नहीं बना, इसलिए दोनों ट्रांसफर वाउचर रद्द कर दिए गए। सदस्यों की शेयर राशि नहीं बदली — दोबारा करें।', 'The premium voucher was not created, so both transfer vouchers were cancelled. Members\' share amounts did not change — please try again.'), variant: 'destructive', duration: 15000 });
         return;
@@ -4068,7 +4143,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: tr('शेयर स्थानांतरण सेव नहीं हुआ', 'Share transfer not saved'), description: tr('क्लाउड में सेव नहीं हुआ — स्थानांतरण और उसके वाउचर वापस ले लिए गए। दोबारा करें।', 'Not saved to the cloud — the transfer and its vouchers were undone. Please try again.'), variant: 'destructive', duration: 12000 });
     };
     supabase.from('members').upsert(memberRow(updFrom)).then(({ error }) => {
-      if (error) { reportCascade('Share transfer (from) sync', error); rollback(); return; }
+      if (error) { reportCascade('Share transfer (from) sync', error); markForward(false); rollback(); return; }
       supabase.from('members').upsert(memberRow(updTo)).then(({ error: e2 }) => {
         if (e2) {
           reportCascade('Share transfer (to) sync', e2);
@@ -4079,9 +4154,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               toastRef.current({ title: tr('ध्यान दें: देने वाले सदस्य की राशि', 'Note: the sender\'s amount'), description: tr(`${beforeFrom.name} की शेयर राशि cloud में ₹${updFrom.shareCapital} रह गई हो सकती है (होनी चाहिए ₹${beforeFrom.shareCapital || 0})। Refresh करके Share Register में जाँचें।`, `${beforeFrom.name}'s share amount in the cloud may still be ₹${updFrom.shareCapital} (it should be ₹${beforeFrom.shareCapital || 0}). Refresh and check in the Share Register.`), variant: 'destructive', duration: 15000 });
             }
           });
+          markForward(false);
           rollback();
         }
         else {
+          markForward(true);
           emitAudit({ entityType: 'member', entityId: fromMemberId, action: 'update', before: { shareCapital: beforeFrom.shareCapital || 0 }, after: { shareCapital: updFrom.shareCapital, transferredTo: to.memberId, transferId }, reason: `Shares transferred ₹${amt} to ${to.name}` });
           emitAudit({ entityType: 'member', entityId: toMemberId, action: 'update', before: { shareCapital: beforeTo.shareCapital || 0 }, after: { shareCapital: updTo.shareCapital, transferredFrom: from.memberId, transferId }, reason: `Shares received ₹${amt} from ${from.name}` });
           toastRef.current({ title: tr('✅ शेयर स्थानांतरित', '✅ Shares transferred'), description: tr(`₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}${prem > 0 ? ` (+ प्रीमियम ₹${prem.toLocaleString('en-IN')})` : ''}`, `₹${amt.toLocaleString('en-IN')} · ${from.name} → ${to.name}${prem > 0 ? ` (+ premium ₹${prem.toLocaleString('en-IN')})` : ''}`) });
