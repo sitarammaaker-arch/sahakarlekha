@@ -194,7 +194,7 @@ export default function KccLoan() {
     const { error } = await kccLoanInsert(newLoan);
     if (error) {
       // RULE 1: the loan row did not save — take the disbursement back out of the books too.
-      if (voucherId) cancelVoucher(voucherId, 'KCC loan save failed — auto-cancelled', user?.name || 'System');
+      if (voucherId) cancelVoucher(voucherId, 'KCC loan save failed — auto-cancelled', user?.name || 'System', { viaParent: true, rollback: true });
       toast({ title: hi ? 'KCC ऋण सेव नहीं हुआ' : 'KCC loan save failed', description: `${error}${voucherId ? (hi ? ' — वितरण वाउचर रद्द कर दिया गया।' : ' — the disbursement voucher was cancelled.') : ''}`, variant: 'destructive', duration: 10000 }); return;
     }
     setLoans(prev => [newLoan, ...prev]);
@@ -244,7 +244,7 @@ export default function KccLoan() {
     const onLateRefusal = () => {
       if (refusedOnce) return;
       refusedOnce = true;
-      for (const vid of [voucherId, releaseId]) if (vid) cancelVoucher(vid, 'KCC repayment voucher refused by the server — auto-withdrawn', user?.name || 'System', { viaParent: true });
+      for (const vid of [voucherId, releaseId]) if (vid) cancelVoucher(vid, 'KCC repayment voucher refused by the server — auto-withdrawn', user?.name || 'System', { viaParent: true, rollback: true });
       if (loanMoved && principal > 0) {
         const cur = loansLatest.current.find(l => l.id === loanId);
         if (cur) {
@@ -282,7 +282,7 @@ export default function KccLoan() {
       } catch { releaseId = ''; }
       if (!releaseId) {
         refusedOnce = true;
-        cancelVoucher(voucherId, 'Reserve release failed — auto-cancelled', user?.name || 'System', { viaParent: true });
+        cancelVoucher(voucherId, 'Reserve release failed — auto-cancelled', user?.name || 'System', { viaParent: true, rollback: true });
         toast({ title: hi ? 'चुकौती दर्ज नहीं हुई' : 'Repayment NOT recorded', description: hi ? 'अतिदेय ब्याज संचय से आय का जर्नल नहीं बना, इसलिए रसीद भी रद्द कर दी गई और ऋण में कोई बदलाव नहीं हुआ।' : 'The reserve-to-income journal was not created, so the receipt was cancelled too and the loan was left unchanged.', variant: 'destructive', duration: 10000 });
         return;
       }
@@ -292,8 +292,8 @@ export default function KccLoan() {
     if (error) {
       // RULE 1: the loan did not update — take the receipt (and any reserve release) back out too.
       refusedOnce = true;
-      cancelVoucher(voucherId, 'KCC repayment save failed — auto-cancelled', user?.name || 'System', { viaParent: true });
-      if (releaseId) cancelVoucher(releaseId, 'KCC repayment save failed — auto-cancelled', user?.name || 'System', { viaParent: true });
+      cancelVoucher(voucherId, 'KCC repayment save failed — auto-cancelled', user?.name || 'System', { viaParent: true, rollback: true });
+      if (releaseId) cancelVoucher(releaseId, 'KCC repayment save failed — auto-cancelled', user?.name || 'System', { viaParent: true, rollback: true });
       toast({ title: hi ? 'चुकौती सेव नहीं हुई' : 'Repayment save failed', description: `${error}${hi ? ' — रसीद वाउचर रद्द कर दिया गया।' : ' — the receipt voucher was cancelled.'}`, variant: 'destructive', duration: 10000 }); return;
     }
     loanMoved = true;

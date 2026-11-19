@@ -1035,7 +1035,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       refType: DISPATCH_SHORTAGE_REF_TYPE, refId: d.agencyId,
       createdBy: user?.name || 'admin',
     } as Parameters<typeof addVoucher>[0], {
-      onSaved: (sv) => saveRow({ ...next, shortageVoucherId: sv.id }, () => cancelVoucher(sv.id, 'Dispatch acceptance not saved (auto-rollback)', user?.name || 'System', { viaParent: true })),
+      onSaved: (sv) => saveRow({ ...next, shortageVoucherId: sv.id }, () => cancelVoucher(sv.id, 'Dispatch acceptance not saved (auto-rollback)', user?.name || 'System', { viaParent: true, rollback: true })),
       onFailed: () => toastRef.current({ title: tr('स्वीकृति दर्ज नहीं हुई', 'Acceptance not recorded'), description: tr('कमी का वाउचर सेव नहीं हुआ, इसलिए डिस्पैच अभी "भेजा गया" ही है — दोबारा करें।', 'The shortage voucher was not saved, so the dispatch is still "Sent" — please try again.'), variant: 'destructive', duration: 12000 }),
     });
     if (v?.id) toastRef.current({ title: tr('एजेंसी स्वीकृति दर्ज', 'Agency acceptance recorded'), description: tr(`${d.dispatchNo} · कमी ${sh.qty} क्विंटल · ₹${sh.value.toLocaleString('en-IN')}`, `${d.dispatchNo} · shortage ${sh.qty} quintal · ₹${sh.value.toLocaleString('en-IN')}`) });
@@ -1124,7 +1124,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       refType: AGENCY_BILL_REF_TYPE, refId: b.agencyId,
       createdBy: user?.name || 'admin',
     } as Parameters<typeof addVoucher>[0], {
-      onSaved: (sv) => saveApproved(sv.id, () => cancelVoucher(sv.id, 'Agency bill approval not saved (auto-rollback)', user?.name || 'System', { viaParent: true })),
+      onSaved: (sv) => saveApproved(sv.id, () => cancelVoucher(sv.id, 'Agency bill approval not saved (auto-rollback)', user?.name || 'System', { viaParent: true, rollback: true })),
       onFailed: () => toastRef.current({ title: tr('बिल स्वीकृत नहीं हुआ', 'Bill not approved'), description: tr('बिल का वाउचर सेव नहीं हुआ, इसलिए बिल अभी ड्राफ्ट है — दोबारा करें।', 'The bill\'s voucher was not saved, so the bill is still a draft — please try again.'), variant: 'destructive', duration: 12000 }),
     });
     if (v?.id) toastRef.current({ title: tr('बिल स्वीकृत', 'Bill approved'), description: tr(`${b.billNo} · खर्च ₹${b.incidentalTotal.toLocaleString('en-IN')} एजेंसी प्राप्य में`, `${b.billNo} · expenses ₹${b.incidentalTotal.toLocaleString('en-IN')} added to agency receivable`) });
@@ -1232,7 +1232,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
           if (!error) { toastRef.current({ title: tr('योजना दावा दर्ज', 'Scheme claim recorded'), description: `${row.claimNo} · ₹${amt.toLocaleString('en-IN')}` }); return; }
           reportError('marketing-save', error.message);
           setSchemeClaimsState(prev => { const r = prev.filter(c => c.id !== row.id); storage.setSchemeClaims(r); return r; });
-          cancelVoucher(sv.id, 'Scheme claim row not saved (auto-rollback)', user?.name || 'System', { viaParent: true });
+          cancelVoucher(sv.id, 'Scheme claim row not saved (auto-rollback)', user?.name || 'System', { viaParent: true, rollback: true });
           toastRef.current({ title: tr('दावा सेव नहीं हुआ', 'Claim not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. उसका वाउचर भी रद्द किया गया। (migration 140 चलाई है?)`, `Not saved to the cloud — ${error.message}. Its voucher was also cancelled. (Has migration 140 been run?)`), variant: 'destructive', duration: 12000 });
         });
       },
@@ -1308,7 +1308,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
           if (!error) { toastRef.current({ title: tr('trip दर्ज', 'Trip recorded'), description: tr(`${row.tripNo} · भाड़ा ₹${freight.toLocaleString('en-IN')}`, `${row.tripNo} · freight ₹${freight.toLocaleString('en-IN')}`) }); return; }
           reportError('marketing-save', error.message);
           setHiredTripsState(prev => { const r = prev.filter(t => t.id !== row.id); storage.setHiredTrips(r); return r; });
-          cancelVoucher(sv.id, 'Hired trip row not saved (auto-rollback)', user?.name || 'System', { viaParent: true });
+          cancelVoucher(sv.id, 'Hired trip row not saved (auto-rollback)', user?.name || 'System', { viaParent: true, rollback: true });
           toastRef.current({ title: tr('trip सेव नहीं हुई', 'Trip not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. भाड़े का वाउचर भी रद्द किया गया। (migration 141 चलाई है?)`, `Not saved to the cloud — ${error.message}. The freight voucher was also cancelled. (Has migration 141 been run?)`), variant: 'destructive', duration: 12000 });
         });
       },

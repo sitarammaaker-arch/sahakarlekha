@@ -119,7 +119,17 @@ ok(/values \('127', 'voucher_activity_tag_edit'\)/.test(up127) && /delete from p
 const later = readdirSync(new URL('../supabase/migrations/', import.meta.url)).filter(f => /^\d{3}_/.test(f) && f > '127_voucher_activity_tag_edit_down.sql' && f.endsWith('.sql'));
 // 183 (SEC-06) redefines save_pending_voucher from the production body to stamp the maker; it must keep 127's tag.
 const ALLOWED_LATER = new Set(['180_edit_voucher_date_journal.sql', '180_edit_voucher_date_journal_down.sql', '183_maker_checker_server.sql', '183_maker_checker_server_down.sql',
-  '184_subscription_gate_and_change_log.sql', '184_subscription_gate_and_change_log_down.sql']);
+  '184_subscription_gate_and_change_log.sql', '184_subscription_gate_and_change_log_down.sql',
+  '185_legs_match_voucher.sql', '185_legs_match_voucher_down.sql']);
+// 185 (NEW-04) redefines BOTH from the production bodies to add one leg check; both must keep 127's tag.
+for (const f of ['185_legs_match_voucher.sql', '185_legs_match_voucher_down.sql']) {
+  const s = mig(f);
+  for (const name of ['save_pending_voucher', 'edit_voucher']) {
+    const i = s.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+    const b = i < 0 ? '' : s.slice(i, s.indexOf('$function$\n;', i));
+    ok(b.includes(`"costCentreId" = v_new."costCentreId"`), `${f}: ${name} keeps 127's activity tag`);
+  }
+}
 for (const f of ['183_maker_checker_server.sql', '183_maker_checker_server_down.sql', '184_subscription_gate_and_change_log.sql', '184_subscription_gate_and_change_log_down.sql']) {
   const s = mig(f), i = s.indexOf('CREATE OR REPLACE FUNCTION public.save_pending_voucher(');
   const sp = i < 0 ? '' : s.slice(i, s.indexOf('$function$\n;', i));

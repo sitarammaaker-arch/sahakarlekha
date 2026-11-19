@@ -25,6 +25,7 @@
     "test:sec-rls-182": "node scripts/test-sec-rls-182.mjs",
     "test:sec06-maker-checker": "node scripts/test-sec06-maker-checker.mjs",
     "test:sec0908-subscription-changelog": "node scripts/test-sec0908-subscription-changelog.mjs",
+    "test:new0304-legs-match": "node scripts/test-new0304-legs-match.mjs",
     "test:dep-p0": "node scripts/test-dep-p0.mjs",
     "test:mem-p0": "node scripts/test-mem-p0.mjs",
     "test:x1-onsaved-rule": "node scripts/test-x1-onsaved-rule.mjs",

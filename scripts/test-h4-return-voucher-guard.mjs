@@ -17,12 +17,12 @@ const read = p => readFileSync(resolve(root, p), 'utf8');
 
 const dc = read('src/contexts/DataContext.tsx');
 const cv = dc.slice(dc.indexOf('const cancelVoucher = useCallback'), dc.indexOf('const cancelVoucher = useCallback') + 4500);
-ok('cancelVoucher accepts { viaParent }', /cancelVoucher: \(id: string, reason: string, deletedBy: string, opts\?: \{ viaParent\?: boolean \}\) => boolean;/.test(dc) && /opts\?: \{ viaParent\?: boolean \}\): boolean =>/.test(cv));
-ok('already-cancelled voucher ⇒ true, before any other check', /if \(!current\) return false;\s*\n(?:\s*\/\/[^\n]*\n)*\s*if \(current\.isDeleted\) return true;/.test(cv));
+ok('cancelVoucher accepts { viaParent }', /cancelVoucher: \(id: string, reason: string, deletedBy: string, opts\?: \{ viaParent\?: boolean[^}]*\}\) => boolean;/.test(dc) && /opts\?: \{ viaParent\?: boolean[^}]*\}\): boolean =>/.test(cv));
+ok('already-cancelled voucher ⇒ true, before any other check', /if \(!current\) return false;\s*\n(?:\s*\/\/[^\n]*\n)*\s*if \(current\.isDeleted\) \{ opts\?\.onCancelled\?\.\(\); return true; \}/.test(cv));
 ok('return vouchers refused unless viaParent', /\(current\.refType === 'sale\.return' \|\| current\.refType === 'purchase\.return'\) && !opts\?\.viaParent[\s\S]{0,600}return false;/.test(cv));
 
 const cc = read('src/contexts/ConsumerDataContext.tsx');
-const viaParent = (cc.match(/cancelVoucher\([^;]*'(Sales|Purchase) return[^']*'[^;]*\{ viaParent: true \}\)/g) || []).length;
+const viaParent = (cc.match(/cancelVoucher\([^;]*'(Sales|Purchase) return[^']*'[^;]*\{ viaParent: true(?:, rollback: true)? \}\)/g) || []).length;
 ok('all 6 return cancel sites pass viaParent', viaParent === 6);
 ok('return delete aborts if its voucher stays live', /if \(cur\.voucherId && !cancelVoucher\(cur\.voucherId, 'Sales return deleted'[^)]*\{ viaParent: true \}\)\) return;/.test(cc) && /if \(cur\.voucherId && !cancelVoucher\(cur\.voucherId, 'Purchase return deleted'[^)]*\{ viaParent: true \}\)\) return;/.test(cc));
 // X-1: the edit now posts the NEW note first; in its onSaved, if the old note cannot be cancelled, the NEW one is

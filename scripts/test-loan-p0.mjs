@@ -111,10 +111,10 @@ const rcpt = (id, date, principal, interestRec = 0, income = 0, extra = {}) => (
   const rep = read('src/hooks/useLoanRepayment.ts');
   ok((rep.match(/\{ onFailed: onLateRefusal \}/g) || []).length === 2 && (rep.match(/groupId,\n/g) || []).length >= 2, 'member loan: receipt and release both report a late refusal and share a groupId');
   ok(/if \(refusedOnce\) return;/.test(rep) && /updateLoan\(cur\.id, \{ repaidAmount: back/.test(rep) && /loansLatest\.current\.find/.test(rep), 'once: the other voucher withdrawn, repaidAmount back from the LATEST row');
-  ok(/cancelVoucher\(receiptId, 'Reserve release failed — auto-cancelled', user\?\.name \?\? 'System', \{ viaParent: true \}\)/.test(rep), 'the routine\'s own auto-cancel is viaParent (the register must not "follow" a loan it never moved)');
+  ok(/cancelVoucher\(receiptId, 'Reserve release failed — auto-cancelled', user\?\.name \?\? 'System', \{ viaParent: true(?:, rollback: true)? \}\)/.test(rep), 'the routine\'s own auto-cancel is viaParent (the register must not "follow" a loan it never moved)');
   const k = read('src/pages/KccLoan.tsx');
   ok((k.match(/\{ onFailed: onLateRefusal \}/g) || []).length === 2 && /if \(loanMoved && principal > 0\)/.test(k), 'KCC: the same, moving back only a row that was moved');
-  ok((k.match(/auto-cancelled', user\?\.name \|\| 'System', \{ viaParent: true \}\)/g) || []).length === 3, 'KCC: all three auto-cancels are viaParent');
+  ok((k.match(/auto-cancelled', user\?\.name \|\| 'System', \{ viaParent: true(?:, rollback: true)? \}\)/g) || []).length === 4, 'KCC: all four auto-cancels are viaParent (X-4 added the disbursement rollback)');
 }
 
 console.log(`LOAN-01..05: ${pass} passed, ${fail} failed`);

@@ -29,7 +29,7 @@ const dc = read('src/contexts/DataContext.tsx');
 const cv = dc.slice(dc.indexOf('const cancelVoucher = useCallback'), dc.indexOf('const cancelVoucher = useCallback') + 6000);
 ok('DataContext exposes registerVoucherOwner', /registerVoucherOwner: \(key: string, check: VoucherOwnerCheck\) => \(\) => void;/.test(dc) && /cancelVoucher, registerVoucherOwner, reverseVoucher/.test(dc));
 ok('cancelVoucher consults every owner unless viaParent', /if \(!opts\?\.viaParent\) \{\s*for \(const check of voucherOwnersRef\.current\.values\(\)\)[\s\S]{0,800}return false;/.test(cv));
-ok('…after the already-cancelled no-op', cv.indexOf('if (current.isDeleted) return true;') < cv.indexOf('voucherOwnersRef.current.values()'));
+ok('…after the already-cancelled no-op', cv.indexOf('if (current.isDeleted) {') < cv.indexOf('voucherOwnersRef.current.values()'));
 for (const [ctx, key, arrays] of [
   ['Consumer', 'consumer', ['salesReturns', 'purchaseReturns', 'patronageRuns', 'purchaseOrders']],
   ['Dairy', 'dairy', ['settlements', 'dispatches', 'inputIssues', 'distributions']],
@@ -41,7 +41,7 @@ for (const [ctx, key, arrays] of [
 for (const ctx of ['Consumer', 'Dairy', 'Housing', 'Labour', 'Marketing']) {
   const s = read(`src/contexts/${ctx}DataContext.tsx`);
   const calls = [...s.matchAll(/cancelVoucher\((?!.*useData)[^;]*\)/g)].map(m => m[0]).filter(c => !c.includes('= useData'));
-  const missing = calls.filter(c => !c.includes('{ viaParent: true }'));
+  const missing = calls.filter(c => !/\{ viaParent: true(?:, rollback: true)? \}/.test(c));   // X-4: a rollback is also viaParent
   ok(`${ctx}: every module-initiated cancel passes viaParent (${calls.length})`, calls.length > 0 && missing.length === 0);
 }
 

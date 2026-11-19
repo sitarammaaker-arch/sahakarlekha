@@ -22,7 +22,7 @@ const cv = dc.slice(dc.indexOf('const cancelVoucher = useCallback'), dc.indexOf(
 ok('cancelVoucher refuses a tagged share-transfer half unless viaParent', /current\.refType === 'share\.transfer'[\s\S]{0,200}!opts\?\.viaParent[\s\S]{0,900}return false;/.test(cv));
 ok('…and a legacy (untagged) half recognised by narration', /!current\.refType && \(current\.narration \|\| ''\)\.startsWith\('Shares transferred from '\)/.test(cv));
 ok('the refusal points to a reverse transfer in Share Register', /Share Register से उल्टा ट्रांसफर/.test(cv));
-ok('guard sits after the already-cancelled no-op', cv.indexOf('if (current.isDeleted) return true;') > 0 && cv.indexOf('if (current.isDeleted) return true;') < cv.indexOf("current.refType === 'share.transfer'"));
+ok('guard sits after the already-cancelled no-op', cv.indexOf('if (current.isDeleted) {') > 0 && cv.indexOf('if (current.isDeleted) {') < cv.indexOf("current.refType === 'share.transfer'"));
 
 console.log(`\nH share transfer guard: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
