@@ -209,7 +209,9 @@ interface DataContextType {
   // engine voucher / unbalanced) — the guard already showed the real reason, so callers
   // must NOT show a success toast on false (mirrors cancelVoucher's contract).
   updateVoucher: (id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines' | 'costCentreId'>>, opts?: { viaParent?: boolean }) => boolean;
-  cancelVoucher: (id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean }) => boolean;
+  /** X-4: rollback = an app flow taking back the voucher it just posted (no delete role needed — server withdraw_voucher).
+   *  X-3: onCancelled / onFailed fire once the cloud has answered (the boolean only says the cancel was STARTED). */
+  cancelVoucher: (id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean; rollback?: boolean; onCancelled?: () => void; onFailed?: (message: string) => void }) => boolean;
   /** H: a domain context registers who owns its vouchers; returns the unregister fn. */
   registerVoucherOwner: (key: string, check: VoucherOwnerCheck) => () => void;
   /** RM-17: the ledger(s) a document's GST goes to — head-wise, or the combined 2201 / 3310 (lib/accounting/gstLedgers). */
@@ -1790,7 +1792,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // A failed cancel puts that voucher back on screen with a destructive toast (RULE 1). Idempotent:
   // already-cancelled / engine vouchers are skipped, so a re-run (or a StrictMode double call) is a no-op.
   // Limitation (S3-f): the parent row / stock writes are still separate calls from these.
-  const cancelLinkedVouchers = (ids: readonly string[], reason: string, by: string) => {
+  // X-4: opts.rollback = the flow is withdrawing vouchers it just posted (server withdraw_voucher — no delete role needed).
+  const cancelLinkedVouchers = (ids: readonly string[], reason: string, by: string, opts?: { rollback?: boolean }) => {
     const targets = vouchersRef.current.filter(v => ids.includes(v.id) && !v.isDeleted && !isEngineVoucher(v));
     if (!targets.length) return;
     const now = new Date().toISOString();
@@ -1807,7 +1810,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     for (const v of targets) {
       const fail = (e: unknown) => undo(v, e instanceof Error ? e.message : String(e));
       if (postingServiceRef.current) {
-        supabase.rpc('cancel_voucher', { p_id: v.id, p_reason: reason, p_deleted_by: by }).then(({ data, error }) => {
+        supabase.rpc(opts?.rollback ? 'withdraw_voucher' : 'cancel_voucher', { p_id: v.id, p_reason: reason, p_deleted_by: by }).then(({ data, error }) => {
           if (error) { undo(v, postVoucherMessage(postVoucherErrorCode(error.message), error.message)); return; }
           const evs = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
           if (evs.length) ledgerEventsRef.current = [...ledgerEventsRef.current, ...evs];
@@ -2526,6 +2529,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     return true;
   };
+  // X-2 (audit 2026-11-17): the vouchers a module document owns were protected from CANCEL only — edit and reverse from
+  // the Vouchers page still changed the ledger while the document (settlement, maintenance bill, worker advance, return,
+  // share transfer, muster accrual, depreciation run…) kept its own figures. Same checks as cancelVoucher, for both.
+  // Returns true (and toasts) when BLOCKED. An orphan (its document gone / cancelled) stays editable.
+  const guardDocumentOwnedVoucher = (id: string, what: { hi: string; en: string }): boolean => {
+    const v = vouchersRef.current.find(x => x.id === id);
+    if (!v) return false;
+    let owner: string | null = null;
+    for (const check of voucherOwnersRef.current.values()) { owner = check(id); if (owner) break; }
+    if (!owner && (v.refType === 'sale.return' || v.refType === 'purchase.return')) owner = v.refType === 'sale.return' ? tr('बिक्री वापसी (Sales Return)', 'Sales Return') : tr('ख़रीद वापसी (Purchase Return)', 'Purchase Return');
+    if (!owner && (v.refType === 'share.transfer' || (!v.refType && (v.narration || '').startsWith('Shares transferred from ')))) owner = tr('शेयर ट्रांसफर (Share Register)', 'Share transfer (Share Register)');
+    if (!owner && v.refType === 'wage.accrual' && musterEntriesRef.current.some(m => m.accrualVoucherId === id && !m.isDeleted)) owner = tr('मस्टर रोल (Muster Roll)', 'Muster Roll');
+    if (!owner && v.narration && /depreciation/i.test(v.narration)) {
+      const asset = assetsRef.current.find(a => a.assetNo && v.narration.includes(a.assetNo));
+      if (asset) owner = tr(`संपत्ति ${asset.assetNo} का ह्रास (Asset Register)`, `Depreciation of asset ${asset.assetNo} (Asset Register)`);
+    }
+    if (!owner) return false;
+    toastRef.current({
+      title: tr(`वाउचर ${what.hi} नहीं होगा`, `Voucher cannot be ${what.en}`),
+      description: tr(`यह वाउचर "${owner}" से जुड़ा है। उसी module से बदलें या हटाएँ — तभी document, बही और balances साथ ठीक रहेंगे।`, `This voucher belongs to "${owner}". Change or delete it from that module — only then do the document, the ledger and the balances stay together.`),
+      variant: 'destructive', duration: 12000,
+    });
+    return true;
+  };
   const updateVoucher = useCallback((id: string, data: Partial<Pick<Voucher, 'type' | 'date' | 'debitAccountId' | 'creditAccountId' | 'amount' | 'narration' | 'memberId' | 'lines' | 'costCentreId'>>, opts?: { viaParent?: boolean }): boolean => {
     if (guardPermission('update', tr('वाउचर बदलने', 'change vouchers'))) return false;   // ECR-06: role gate
     if (guardSystemOwnedVoucher(id, { hi: 'बदला', en: 'changed' })) return false;
@@ -2533,6 +2560,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!opts?.viaParent && guardMemberShareVoucher(id, { hi: 'बदला', en: 'changed' })) return false;   // MEM-03
     if (!opts?.viaParent && guardLoanVoucher(id, { hi: 'बदला', en: 'changed' })) return false;   // LOAN-04
     if (!opts?.viaParent && guardSalaryVoucher(id, tr('बदला', 'changed'))) return false;
+    if (!opts?.viaParent && guardDocumentOwnedVoucher(id, { hi: 'बदला', en: 'changed' })) return false;   // X-2
     if (guardFYLocked()) return false;
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return false;
@@ -2816,130 +2844,135 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean }): boolean => {
+  const cancelVoucher = useCallback((id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean; rollback?: boolean; onCancelled?: () => void; onFailed?: (message: string) => void }): boolean => {
     if (guardFYLocked()) return false;
-    if (guardPermission('delete', tr('वाउचर रद्द करने', 'cancel vouchers'))) return false;   // ECR-06: role gate
+    // X-4 (audit 2026-11-17): a ROLLBACK is the app withdrawing the voucher this same flow just posted because its own
+    // document failed to save. It needs no delete role (the server's withdraw_voucher allows the login that posted it,
+    // within 30 minutes) and skips the "cancel it from its document" guards — the document is exactly what failed.
+    if (!opts?.rollback && guardPermission('delete', tr('वाउचर रद्द करने', 'cancel vouchers'))) return false;   // ECR-06: role gate
     const current = vouchersRef.current.find(v => v.id === id);
     if (!current) return false;
     // H4: already cancelled ⇒ nothing to do. A parent cleanup (e.g. deleting a return whose voucher
     // was cancelled earlier) must not fire a second server cancel that is refused and toasts red.
-    if (current.isDeleted) return true;
-    // H4 / RULE 3: a return's voucher belongs to its Sales/Purchase Return document. Cancelling it
-    // here left the return live (still in the return register, still moving stock) while the ledger
-    // dropped it — found in prod (2 returns, 2026-10-01). Only the Returns page (viaParent) may.
-    // H / RULE 3: a share transfer is a PAIR of vouchers (bridged by Suspense 9999) plus both members'
-    // share balances; cancelling one half here left the other half and the balances standing (prod
-    // 2026-07). Legacy transfers carry no refType, so their narration identifies them.
-    if ((current.refType === 'share.transfer' || (!current.refType && (current.narration || '').startsWith('Shares transferred from '))) && !opts?.viaParent) {
-      toastRef.current({ title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'), description: tr('यह शेयर-ट्रांसफर का वाउचर है (दो वाउचरों का जोड़ा)। गलती सुधारने के लिए Share Register से उल्टा ट्रांसफर करें — तभी दोनों सदस्यों का शेयर और बही साथ ठीक रहेंगे।', 'This is a share-transfer voucher (a pair of two vouchers). To correct a mistake, make a reverse transfer from the Share Register — only then will both members\' shares and the ledger stay correct together.'), variant: 'destructive', duration: 10000 });
-      return false;
-    }
-    // H / RULE 3: a voucher a LIVE module document links to (settlement, maintenance bill, worker
-    // advance, …) is cancelled only through that document; an orphan (document gone) stays cancellable.
-    if (!opts?.viaParent) {
-      for (const check of voucherOwnersRef.current.values()) {
-        const owner = check(id);
-        if (owner) {
-          toastRef.current({ title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'), description: tr(`यह वाउचर "${owner}" से जुड़ा है। उसी module से उसे delete करें — तभी document, बही और balances साथ ठीक रहेंगे।`, `This voucher is linked to "${owner}". Delete it from that module — only then will the document, ledger and balances stay correct together.`), variant: 'destructive', duration: 10000 });
+    if (current.isDeleted) { opts?.onCancelled?.(); return true; }
+    if (!opts?.rollback) {
+      // H4 / RULE 3: a return's voucher belongs to its Sales/Purchase Return document. Cancelling it
+      // here left the return live (still in the return register, still moving stock) while the ledger
+      // dropped it — found in prod (2 returns, 2026-10-01). Only the Returns page (viaParent) may.
+      // H / RULE 3: a share transfer is a PAIR of vouchers (bridged by Suspense 9999) plus both members'
+      // share balances; cancelling one half here left the other half and the balances standing (prod
+      // 2026-07). Legacy transfers carry no refType, so their narration identifies them.
+      if ((current.refType === 'share.transfer' || (!current.refType && (current.narration || '').startsWith('Shares transferred from '))) && !opts?.viaParent) {
+        toastRef.current({ title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'), description: tr('यह शेयर-ट्रांसफर का वाउचर है (दो वाउचरों का जोड़ा)। गलती सुधारने के लिए Share Register से उल्टा ट्रांसफर करें — तभी दोनों सदस्यों का शेयर और बही साथ ठीक रहेंगे।', 'This is a share-transfer voucher (a pair of two vouchers). To correct a mistake, make a reverse transfer from the Share Register — only then will both members\' shares and the ledger stay correct together.'), variant: 'destructive', duration: 10000 });
+        return false;
+      }
+      // H / RULE 3: a voucher a LIVE module document links to (settlement, maintenance bill, worker
+      // advance, …) is cancelled only through that document; an orphan (document gone) stays cancellable.
+      if (!opts?.viaParent) {
+        for (const check of voucherOwnersRef.current.values()) {
+          const owner = check(id);
+          if (owner) {
+            toastRef.current({ title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'), description: tr(`यह वाउचर "${owner}" से जुड़ा है। उसी module से उसे delete करें — तभी document, बही और balances साथ ठीक रहेंगे।`, `This voucher is linked to "${owner}". Delete it from that module — only then will the document, ledger and balances stay correct together.`), variant: 'destructive', duration: 10000 });
+            return false;
+          }
+        }
+      }
+      if ((current.refType === 'sale.return' || current.refType === 'purchase.return') && !opts?.viaParent) {
+        const page = current.refType === 'sale.return' ? tr('बिक्री वापसी (Sales Return)', 'Sales Return') : tr('ख़रीद वापसी (Purchase Return)', 'Purchase Return');
+        toastRef.current({ title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'), description: tr(`यह वाउचर ${page} से बना है। उसी page से return delete करें — तभी return, स्टॉक और बही तीनों साथ ठीक होंगे।`, `This voucher was created from ${page}. Delete the return from that page — only then will the return, stock and ledger all stay correct together.`), variant: 'destructive', duration: 10000 });
+        return false;
+      }
+      if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
+      // ECR-08: a reversed voucher must not also be cancelled — its reversal would then
+      // net against nothing (phantom entry). Correction already stands via the reversal.
+      if (current.reversedBy) {
+        toastRef.current({ title: tr('रद्द नहीं होगा', 'Cannot be cancelled'), description: tr('यह वाउचर reverse हो चुका है — इसकी reversal entry ही correction है। इसे cancel न करें।', 'This voucher has been reversed — its reversal entry is the correction. Do not cancel it.'), variant: 'destructive', duration: 9000 });
+        return false;
+      }
+
+      // 🔒 Block deletion of vouchers ACTIVELY linked to a Purchase / Sale parent.
+      // If the parent purchase/sale no longer points to THIS voucher (i.e., it's an
+      // orphan or duplicate left over from auto-repair), allow cancellation so the
+      // user can clean up. Without this, duplicate cleanup is impossible.
+      if (current.refType === 'purchase') {
+        const parent = purchasesRef.current.find(p => p.id === current.refId);
+        const isActive = parent && parent.voucherId === current.id;
+        if (isActive) {
+          toastRef.current({
+            title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'),
+            description: tr('यह वाउचर Purchase Management से बना है। इसे Purchase Management → Purchase List से delete करें — तभी stock भी सही रहेगा।', 'This voucher was created from Purchase Management. Delete it from Purchase Management → Purchase List — only then will the stock stay correct too.'),
+            variant: 'destructive',
+          });
+          return false;
+        }
+        // else: orphan/duplicate — allow cancellation
+      }
+      if (current.refType === 'sale') {
+        const parent = salesRef.current.find(s => s.id === current.refId);
+        const isActive = parent && parent.voucherId === current.id;
+        if (isActive) {
+          toastRef.current({
+            title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'),
+            description: tr('यह वाउचर Sale Management से बना है। इसे Sale Management → Sale List से delete करें — तभी stock भी वापस आएगी।', 'This voucher was created from Sale Management. Delete it from Sale Management → Sale List — only then will the stock come back too.'),
+            variant: 'destructive',
+          });
+          return false;
+        }
+        // else: orphan/duplicate — allow cancellation
+      }
+
+      // H12: Block cancelling auto-generated vouchers — parent record would dangle
+      // Both the payment AND the accrual voucher of a salary slip (the accrual used to be cancellable here).
+      if (guardSystemOwnedVoucher(id, { hi: 'रद्द', en: 'cancelled' })) return false;
+      if (!opts?.viaParent && guardSalaryVoucher(id, tr('रद्द', 'cancelled'))) return false;
+      // Block cancelling an auto wage-accrual voucher while its muster entry is live —
+      // otherwise the entry's `accrued` flag goes stale and payWages would Dr 2109 against
+      // a liability that no longer exists (double-counting the expense).
+      if (current.refType === 'wage.accrual') {
+        const linkedMuster = musterEntriesRef.current.find(m => m.accrualVoucherId === id && !m.isDeleted);
+        if (linkedMuster) {
+          toastRef.current({
+            title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'),
+            description: tr('यह मज़दूरी-देयता (स्वतः) वाउचर मस्टर रोल से बना है। इसे Muster Roll → सम्बंधित प्रविष्टि को edit/delete करें — accrual अपने-आप उलट जाएगा।', 'This wage-liability (automatic) voucher was created from the Muster Roll. Edit/delete the related entry in Muster Roll — the accrual will reverse automatically.'),
+            variant: 'destructive', duration: 10000,
+          });
           return false;
         }
       }
-    }
-    if ((current.refType === 'sale.return' || current.refType === 'purchase.return') && !opts?.viaParent) {
-      const page = current.refType === 'sale.return' ? tr('बिक्री वापसी (Sales Return)', 'Sales Return') : tr('ख़रीद वापसी (Purchase Return)', 'Purchase Return');
-      toastRef.current({ title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'), description: tr(`यह वाउचर ${page} से बना है। उसी page से return delete करें — तभी return, स्टॉक और बही तीनों साथ ठीक होंगे।`, `This voucher was created from ${page}. Delete the return from that page — only then will the return, stock and ledger all stay correct together.`), variant: 'destructive', duration: 10000 });
-      return false;
-    }
-    if (isEngineVoucher(current)) { toastRef.current({ ...ENGINE_VOUCHER_BLOCK, variant: 'destructive', duration: 10000 }); return false; }
-    // ECR-08: a reversed voucher must not also be cancelled — its reversal would then
-    // net against nothing (phantom entry). Correction already stands via the reversal.
-    if (current.reversedBy) {
-      toastRef.current({ title: tr('रद्द नहीं होगा', 'Cannot be cancelled'), description: tr('यह वाउचर reverse हो चुका है — इसकी reversal entry ही correction है। इसे cancel न करें।', 'This voucher has been reversed — its reversal entry is the correction. Do not cancel it.'), variant: 'destructive', duration: 9000 });
-      return false;
-    }
-
-    // 🔒 Block deletion of vouchers ACTIVELY linked to a Purchase / Sale parent.
-    // If the parent purchase/sale no longer points to THIS voucher (i.e., it's an
-    // orphan or duplicate left over from auto-repair), allow cancellation so the
-    // user can clean up. Without this, duplicate cleanup is impossible.
-    if (current.refType === 'purchase') {
-      const parent = purchasesRef.current.find(p => p.id === current.refId);
-      const isActive = parent && parent.voucherId === current.id;
-      if (isActive) {
+      // Member-area stage A (H-3): a system share-capital DEBIT (refund, refund approval, forfeit / redeem /
+      // surrender) moved the member's share-capital scalar down. Cancelling it here restored the ledger
+      // but not the scalar (register ≠ ledger, dividend on the wrong base). A hand-made voucher
+      // (origin 'manual') never moved the scalar, so it stays cancellable.
+      if (current.memberId && current.debitAccountId === ACCOUNT_IDS.SHARE_CAP && current.origin !== 'manual' && !opts?.viaParent) {
         toastRef.current({
           title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'),
-          description: tr('यह वाउचर Purchase Management से बना है। इसे Purchase Management → Purchase List से delete करें — तभी stock भी सही रहेगा।', 'This voucher was created from Purchase Management. Delete it from Purchase Management → Purchase List — only then will the stock stay correct too.'),
-          variant: 'destructive',
-        });
-        return false;
-      }
-      // else: orphan/duplicate — allow cancellation
-    }
-    if (current.refType === 'sale') {
-      const parent = salesRef.current.find(s => s.id === current.refId);
-      const isActive = parent && parent.voucherId === current.id;
-      if (isActive) {
-        toastRef.current({
-          title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'),
-          description: tr('यह वाउचर Sale Management से बना है। इसे Sale Management → Sale List से delete करें — तभी stock भी वापस आएगी।', 'This voucher was created from Sale Management. Delete it from Sale Management → Sale List — only then will the stock come back too.'),
-          variant: 'destructive',
-        });
-        return false;
-      }
-      // else: orphan/duplicate — allow cancellation
-    }
-
-    // H12: Block cancelling auto-generated vouchers — parent record would dangle
-    // Both the payment AND the accrual voucher of a salary slip (the accrual used to be cancellable here).
-    if (guardSystemOwnedVoucher(id, { hi: 'रद्द', en: 'cancelled' })) return false;
-    if (!opts?.viaParent && guardSalaryVoucher(id, tr('रद्द', 'cancelled'))) return false;
-    // Block cancelling an auto wage-accrual voucher while its muster entry is live —
-    // otherwise the entry's `accrued` flag goes stale and payWages would Dr 2109 against
-    // a liability that no longer exists (double-counting the expense).
-    if (current.refType === 'wage.accrual') {
-      const linkedMuster = musterEntriesRef.current.find(m => m.accrualVoucherId === id && !m.isDeleted);
-      if (linkedMuster) {
-        toastRef.current({
-          title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'),
-          description: tr('यह मज़दूरी-देयता (स्वतः) वाउचर मस्टर रोल से बना है। इसे Muster Roll → सम्बंधित प्रविष्टि को edit/delete करें — accrual अपने-आप उलट जाएगा।', 'This wage-liability (automatic) voucher was created from the Muster Roll. Edit/delete the related entry in Muster Roll — the accrual will reverse automatically.'),
+          description: tr('यह सदस्य की शेयर-वापसी / शेयर-संचालन का वाउचर है — इससे सदस्य की शेयर राशि घटी थी। गलती सुधारने के लिए Share Register से उल्टी entry (अतिरिक्त शेयर) करें, तभी सदस्य की राशि और बही साथ ठीक रहेंगे।', 'This is a member\'s share refund / share operation voucher — it reduced the member\'s share amount. To correct a mistake, make the reverse entry (additional shares) from the Share Register; only then will the member\'s amount and the ledger stay correct together.'),
           variant: 'destructive', duration: 10000,
         });
         return false;
       }
-    }
-    // Member-area stage A (H-3): a system share-capital DEBIT (refund, refund approval, forfeit / redeem /
-    // surrender) moved the member's share-capital scalar down. Cancelling it here restored the ledger
-    // but not the scalar (register ≠ ledger, dividend on the wrong base). A hand-made voucher
-    // (origin 'manual') never moved the scalar, so it stays cancellable.
-    if (current.memberId && current.debitAccountId === ACCOUNT_IDS.SHARE_CAP && current.origin !== 'manual' && !opts?.viaParent) {
-      toastRef.current({
-        title: tr('यहाँ रद्द नहीं होगा', 'Cannot cancel here'),
-        description: tr('यह सदस्य की शेयर-वापसी / शेयर-संचालन का वाउचर है — इससे सदस्य की शेयर राशि घटी थी। गलती सुधारने के लिए Share Register से उल्टी entry (अतिरिक्त शेयर) करें, तभी सदस्य की राशि और बही साथ ठीक रहेंगे।', 'This is a member\'s share refund / share operation voucher — it reduced the member\'s share amount. To correct a mistake, make the reverse entry (additional shares) from the Share Register; only then will the member\'s amount and the ledger stay correct together.'),
-        variant: 'destructive', duration: 10000,
-      });
-      return false;
-    }
-    if (current.memberId && (current.creditAccountId === ACCOUNT_IDS.SHARE_CAP || current.creditAccountId === ACCOUNT_IDS.ADM_FEE)) {
-      const kind = current.creditAccountId === ACCOUNT_IDS.SHARE_CAP ? 'Share Capital' : 'Admission Fee';
-      toastRef.current({
-        title: tr('वाउचर नहीं हटाया जा सकता', 'Voucher cannot be deleted'),
-        description: tr(`यह सदस्य का अपने-आप बना ${kind} वाउचर है। सदस्य पेज से सदस्य को बदलें या हटाएँ।`, `This is an auto-created ${kind} voucher of a member. Change or delete the member from the Members page.`),
-        variant: 'destructive',
-      });
-      return false;
-    }
-    // Detect depreciation vouchers by narration pattern + asset link
-    if (current.narration && /depreciation/i.test(current.narration)) {
-      const linkedAsset = assetsRef.current.find(a => current.narration.includes(a.assetNo));
-      if (linkedAsset) {
+      if (current.memberId && (current.creditAccountId === ACCOUNT_IDS.SHARE_CAP || current.creditAccountId === ACCOUNT_IDS.ADM_FEE)) {
+        const kind = current.creditAccountId === ACCOUNT_IDS.SHARE_CAP ? 'Share Capital' : 'Admission Fee';
         toastRef.current({
           title: tr('वाउचर नहीं हटाया जा सकता', 'Voucher cannot be deleted'),
-          description: tr(`यह संपत्ति ${linkedAsset.assetNo} की ह्रास (depreciation) एंट्री है। संपत्ति रजिस्टर पेज पर "Reverse Depreciation" इस्तेमाल करें।`, `This is the depreciation entry of asset ${linkedAsset.assetNo}. Use "Reverse Depreciation" on the Asset Register page.`),
+          description: tr(`यह सदस्य का अपने-आप बना ${kind} वाउचर है। सदस्य पेज से सदस्य को बदलें या हटाएँ।`, `This is an auto-created ${kind} voucher of a member. Change or delete the member from the Members page.`),
           variant: 'destructive',
         });
         return false;
       }
-    }
+      // Detect depreciation vouchers by narration pattern + asset link
+      if (current.narration && /depreciation/i.test(current.narration)) {
+        const linkedAsset = assetsRef.current.find(a => current.narration.includes(a.assetNo));
+        if (linkedAsset) {
+          toastRef.current({
+            title: tr('वाउचर नहीं हटाया जा सकता', 'Voucher cannot be deleted'),
+            description: tr(`यह संपत्ति ${linkedAsset.assetNo} की ह्रास (depreciation) एंट्री है। संपत्ति रजिस्टर पेज पर "Reverse Depreciation" इस्तेमाल करें।`, `This is the depreciation entry of asset ${linkedAsset.assetNo}. Use "Reverse Depreciation" on the Asset Register page.`),
+            variant: 'destructive',
+          });
+          return false;
+        }
+      }
+    }   // end of the document guards (skipped for a rollback)
 
     const cancelledVoucher = { ...current, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy, deletedReason: reason };
     // T-06: shadow 'voucher.cancelled' event — REVERSING legs (Dr/Cr flipped) net the original's
@@ -2988,20 +3021,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setVouchersState(prev => prev.map(v => v.id === id ? current : v));
         if (cancelEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent!.eventId);
       };
-      supabase.rpc('cancel_voucher', { p_id: id, p_reason: reason, p_deleted_by: deletedBy ?? null }).then(({ data, error }) => {
+      supabase.rpc(opts?.rollback ? 'withdraw_voucher' : 'cancel_voucher', { p_id: id, p_reason: reason, p_deleted_by: deletedBy ?? null }).then(({ data, error }) => {
         if (error) {
           reportError('voucher-cancel-post-service', error.message, { voucherId: id });
           undoCancel();
+          opts?.onFailed?.(postVoucherMessage(postVoucherErrorCode(error.message), error.message));
           toastRef.current({ title: tr('❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', '❌ Voucher cancellation not saved to the cloud'), description: tr(`${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. रद्द करना वापस ले लिया गया — वाउचर चालू और सुरक्षित है।`, `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)}. The cancellation was undone — the voucher is active and safe.`), variant: 'destructive', duration: 15000 });
           return;
         }
         const serverEvents = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
         ledgerEventsRef.current = [...ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent?.eventId), ...serverEvents];
         if (!opts?.viaParent) loanFollowsCancel(current);   // LOAN-04: confirmed
+        opts?.onCancelled?.();
       }, (rejection: unknown) => {
         const msg = rejection instanceof Error ? rejection.message : String(rejection);
         reportError('voucher-cancel-post-service', msg, { voucherId: id });
         undoCancel();
+        opts?.onFailed?.(msg);
         toastRef.current({ title: tr('❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', '❌ Voucher cancellation not saved to the cloud'), description: tr(`Network error — ${msg}. रद्द करना वापस ले लिया गया — वाउचर चालू है।`, `Network error — ${msg}. The cancellation was undone — the voucher is active.`), variant: 'destructive', duration: 15000 });
       });
       return true;
@@ -3020,10 +3056,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           reportError('voucher-cancel-journal-append', res.error ?? 'append failed', { voucherId: id });
           setVouchersState(prev => prev.map(v => v.id === id ? current : v));
           ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent!.eventId);
+          opts?.onFailed?.(res.error ?? 'journal append failed');
           toastRef.current({ title: tr('❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', '❌ Voucher cancellation not saved to the cloud'), description: tr(`${res.error ?? 'journal append failed'}. रद्द करना वापस ले लिया गया — वाउचर चालू और सुरक्षित है।`, `${res.error ?? 'journal append failed'}. The cancellation was undone — the voucher is active and safe.`), variant: 'destructive', duration: 15000 });
           return;
         }
         if (!opts?.viaParent) loanFollowsCancel(current);   // LOAN-04: confirmed (the journal is the save)
+        opts?.onCancelled?.();
         // Saved (journal). Project the soft-delete into the table best-effort — a failure is now
         // RECOVERABLE (the journal is the truth), so LOG, never roll back.
         supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelledVoucher.deletedAt, deletedBy, deletedReason: reason }).eq('id', id).then(({ error }) => {
@@ -3045,9 +3083,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         failedCloudWrite(tr('वाउचर रद्द करना', 'Cancelling the voucher'), error, () => setVouchersState(prev => prev.map(v => v.id === id ? current : v)));
         // Keep the shadow ledger consistent with the un-cancelled voucher.
         if (cancelEvent) ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent!.eventId);
+        opts?.onFailed?.(error.message);
       } else {
         deleteEntries(id); // remove from voucher_entries so cancelled voucher has no SQL-visible impact
         if (!opts?.viaParent) loanFollowsCancel(current);   // LOAN-04: confirmed
+        opts?.onCancelled?.();
         if (cancelEvent) persistLedgerEvent(cancelEvent); // durable append only after the cancel is confirmed
         // No cancelEvent → the in-memory journal did not hold this voucher's posting: either it was never
         // loaded, OR the posting was written AFTER this tab loaded (another user / device — e.g. a voucher
@@ -3080,6 +3120,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!opts?.engine && guardMemberShareVoucher(id, { hi: 'reverse', en: 'reversed' })) return null;   // MEM-02
     if (!opts?.engine && guardLoanVoucher(id, { hi: 'reverse', en: 'reversed' })) return null;   // LOAN-04
     if (guardSalaryVoucher(id, 'reverse')) return null;
+    if (!opts?.engine && guardDocumentOwnedVoucher(id, { hi: 'reverse', en: 'reversed' })) return null;   // X-2
     const revDate = new Date().toISOString().split('T')[0];
     if (guardPeriodLock(revDate)) return null; // reversal must post into an open period
 
@@ -3898,7 +3939,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
         // …and the voucher with it — a refund voucher without the reduced scalar is register ≠ ledger.
-        cancelLinkedVouchers([voucher.id], 'Share refund not saved (cloud save failed)', userRef.current?.name ?? 'System');
+        cancelLinkedVouchers([voucher.id], 'Share refund not saved (cloud save failed)', userRef.current?.name ?? 'System', { rollback: true });
         toastRef.current({ title: tr('शेयर वापसी सेव नहीं हुई', 'Share refund not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, `Not saved to the cloud — ${error.message}. The voucher was cancelled.`), variant: 'destructive', duration: 12000 });
       } else {
         emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital || 0, shareCount: before.shareCount ?? null }, after: { shareCapital: updated.shareCapital, shareCount: updated.shareCount ?? null, voucherNo: voucher.voucherNo || voucher.id }, reason: `Share capital refunded ₹${refund}` });
@@ -3963,7 +4004,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
         // The cascade path, not cancelVoucher: the rollback must not depend on this user's delete right
         // nor be refused by the share-debit guard there.
-        cancelLinkedVouchers([v.id], 'Share refund approval not saved (cloud save failed)', userRef.current?.name ?? 'System');
+        cancelLinkedVouchers([v.id], 'Share refund approval not saved (cloud save failed)', userRef.current?.name ?? 'System', { rollback: true });
         toastRef.current({ title: tr('शेयर वापसी सेव नहीं हुई', 'Share refund not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, `Not saved to the cloud — ${error.message}. The voucher was cancelled.`), variant: 'destructive', duration: 12000 });
       }
       markForward(!error);
@@ -4038,7 +4079,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Share operation member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
-        cancelLinkedVouchers([voucher.id], `Share ${type} not saved (cloud save failed)`, userRef.current?.name ?? 'System');
+        cancelLinkedVouchers([voucher.id], `Share ${type} not saved (cloud save failed)`, userRef.current?.name ?? 'System', { rollback: true });
         toastRef.current({ title: tr('शेयर संचालन सेव नहीं हुआ', 'Share operation not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, `Not saved to the cloud — ${error.message}. The voucher was cancelled.`), variant: 'destructive', duration: 12000 });
       }
       markForward(!error);
@@ -4083,7 +4124,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportCascade('Share purchase member sync', error);
         membersRef.current = membersRef.current.map(m => m.id === memberId ? before : m);
         setMembersState(prev => prev.map(m => m.id === memberId ? before : m));   // RULE 1: roll back
-        cancelLinkedVouchers([voucher.id], 'Share purchase not saved (cloud save failed)', userRef.current?.name ?? 'System');
+        cancelLinkedVouchers([voucher.id], 'Share purchase not saved (cloud save failed)', userRef.current?.name ?? 'System', { rollback: true });
         toastRef.current({ title: tr('अतिरिक्त शेयर सेव नहीं हुए', 'Additional shares not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वाउचर रद्द कर दिया गया।`, `Not saved to the cloud — ${error.message}. The voucher was cancelled.`), variant: 'destructive', duration: 12000 });
       } else {
         emitAudit({ entityType: 'member', entityId: memberId, action: 'update', before: { shareCapital: before.shareCapital || 0, shareCount: before.shareCount ?? null }, after: { shareCapital: updated.shareCapital, shareCount: updated.shareCount ?? null, voucherNo: voucher.voucherNo || voucher.id }, reason: `Additional share capital ₹${buy}` });
@@ -4140,7 +4181,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       forward.then((ok) => {
         if (!ok) return;
         const live = [outHalf?.id, inHalf?.id, premiumId].filter((x): x is string => !!x && vouchersRef.current.some(v => v.id === x && !v.isDeleted));
-        if (live.length) cancelLinkedVouchers(live, 'Share transfer voucher refused by the server (auto-unwind)', userRef.current?.name ?? 'System');
+        if (live.length) cancelLinkedVouchers(live, 'Share transfer voucher refused by the server (auto-unwind)', userRef.current?.name ?? 'System', { rollback: true });
       });
       undoShareDeltas([{ memberId: fromMemberId, deltaMinor: subMinor(0, toMinor(amt)) }, { memberId: toMemberId, deltaMinor: toMinor(amt) }], forward, { hi: 'शेयर स्थानांतरण', en: 'Share transfer' });
     };
@@ -4158,7 +4199,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, { onFailed: onRefused });
     // Member-area stage A (H-3): a half-posted transfer is unwound here through the cascade path —
     // cancelVoucher refuses a lone transfer half, so asking the user to cancel it was a dead end.
-    const unwind = (ids: string[], why: string) => cancelLinkedVouchers(ids, why, userRef.current?.name ?? 'System');
+    const unwind = (ids: string[], why: string) => cancelLinkedVouchers(ids, why, userRef.current?.name ?? 'System', { rollback: true });
     if (!inHalf?.id) {
       markForward(false);
       unwind([outHalf.id], 'Share transfer incomplete (second half not posted)');
@@ -4247,7 +4288,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const undo = (why: 'voucher' | 'passbook' | 'balance', detail?: string) => {
       if (done) return;
       done = true;
-      if (voucherId && why !== 'voucher') cancelLinkedVouchers([voucherId], `Deposit not saved (${why})`, 'System');
+      if (voucherId && why !== 'voucher') cancelLinkedVouchers([voucherId], `Deposit not saved (${why})`, 'System', { rollback: true });
       if (txnId) {
         const id = txnId;
         setDepositTransactionsState(prev => prev.filter(t => t.id !== id));
@@ -4636,7 +4677,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Muster entry save error:', error.message);
         setMusterEntriesState(prev => { const r = prev.filter(x => x.id !== m.id); storage.setMusterEntries(r); return r; });
-        if (av.id) cancelVoucher(av.id, 'Muster entry rolled back (save failed)', user?.name || 'System');
+        if (av.id) cancelVoucher(av.id, 'Muster entry rolled back (save failed)', user?.name || 'System', { viaParent: true, rollback: true });
         toastRef.current({ title: tr('हाज़िरी सेव नहीं हुई', 'Attendance not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; add it again.`), variant: 'destructive', duration: 12000 });
       }
     });
@@ -4664,7 +4705,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Muster entry update error:', error.message);
         setMusterEntriesState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setMusterEntries(u); return u; });
-        if (newAv.id) cancelVoucher(newAv.id, 'Muster edit rolled back (save failed)', user?.name || 'System');
+        if (newAv.id) cancelVoucher(newAv.id, 'Muster edit rolled back (save failed)', user?.name || 'System', { viaParent: true, rollback: true });
         toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
       } else if (wageChanged && old.accrualVoucherId) {
         cancelVoucher(old.accrualVoucherId, 'Wage accrual superseded (muster edited)', user?.name || 'System');
@@ -4742,7 +4783,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Wage payment muster-mark error:', error.message);
         setMusterEntriesState(prev => { const u = prev.map(m => snapshot.get(m.id) ?? m); storage.setMusterEntries(u); return u; });
-        cancelVoucher(voucher.id, 'Wage payment rolled back (muster mark failed)', user?.name || 'System');
+        cancelVoucher(voucher.id, 'Wage payment rolled back (muster mark failed)', user?.name || 'System', { viaParent: true, rollback: true });
         toastRef.current({ title: tr('मज़दूरी भुगतान सेव नहीं हुआ', 'Wage payment not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. भुगतान वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The payment was undone; please try again.`), variant: 'destructive', duration: 12000 });
       }
     });
@@ -6046,7 +6087,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // RULE 1 — revert to draft AND cancel the accounting consequence so re-approval can't double-post.
           // viaParent: this module owns the voucher (the owner check would otherwise refuse it).
           revertLocal();
-          if (settlementVoucherId) cancelVoucher(settlementVoucherId, 'Settlement approval failed (auto-rollback)', user?.name || 'System', { viaParent: true });
+          if (settlementVoucherId) cancelVoucher(settlementVoucherId, 'Settlement approval failed (auto-rollback)', user?.name || 'System', { viaParent: true, rollback: true });
           toastRef.current({ title: tr('निपटान स्वीकृत नहीं हुआ', 'Settlement not approved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा approve करें।`, `Not saved to the cloud — ${error.message}. Nothing will go wrong on Refresh; please approve again.`), variant: 'destructive', duration: 12000 });
           return;
         }
@@ -8365,7 +8406,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         salaryRecordsRef.current = salaryRecordsRef.current.filter(r => r.id !== record.id);
         setSalaryRecordsState(prev => prev.filter(r => r.id !== record.id));   // RULE 1: roll back
         // …and its accrual voucher, or the ledger would carry a salary no slip explains (RULE 3).
-        if (record.accrualVoucherId) cancelLinkedVouchers([record.accrualVoucherId], `Salary slip ${record.slipNo} not saved`, 'System');
+        if (record.accrualVoucherId) cancelLinkedVouchers([record.accrualVoucherId], `Salary slip ${record.slipNo} not saved`, 'System', { rollback: true });
         toastRef.current({ title: tr('वेतन रिकॉर्ड सेव नहीं हुआ', 'Salary record not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. उसका बही-voucher भी रद्द किया गया।`, `Not saved to the cloud — ${error.message}. Its journal voucher was also cancelled.`), variant: 'destructive', duration: 12000 });
       }
     });
@@ -8515,7 +8556,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         salaryRecordsRef.current = salaryRecordsRef.current.map(r => r.id === id ? oldRecord : r);
         setSalaryRecordsState(prev => prev.map(r => r.id === id ? oldRecord : r));   // RULE 1: roll back to prior state
         // A payment voucher made by THIS edit goes too — the slip is back to unpaid (RULE 3).
-        if (!oldRecord.voucherId && merged.voucherId) cancelLinkedVouchers([merged.voucherId], `Salary slip ${oldRecord.slipNo} not saved`, 'System');
+        if (!oldRecord.voucherId && merged.voucherId) cancelLinkedVouchers([merged.voucherId], `Salary slip ${oldRecord.slipNo} not saved`, 'System', { rollback: true });
         toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh the old data will come back.`), variant: 'destructive', duration: 12000 });
       }
     });

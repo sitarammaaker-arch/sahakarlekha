@@ -240,7 +240,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
           if (error) {
             console.error('Trip save error:', error.message);
             setTrips(prev => prev.filter(t => t.id !== id));
-            cancelVoucher(trip.voucherId!, 'Trip rolled back (trip save failed)', actor(), { viaParent: true });
+            cancelVoucher(trip.voucherId!, 'Trip rolled back (trip save failed)', actor(), { viaParent: true, rollback: true });
             cloudFail(tr('ट्रिप सेव नहीं हुई', 'Trip not saved'), 'transport_trips', error.message, tr('उसका वाउचर रद्द कर दिया गया; दोबारा दर्ज करें।', 'Its voucher has been cancelled; please record it again.'));
             return;
           }
@@ -299,7 +299,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
           if (error) {
             console.error('Trip collection save error:', error.message);
             setTrips(prev => prev.map(t => t.id === trip.id ? apply(t, -1) : t));
-            cancelVoucher(vid, 'Trip collection rolled back (trip update failed)', actor(), { viaParent: true });
+            cancelVoucher(vid, 'Trip collection rolled back (trip update failed)', actor(), { viaParent: true, rollback: true });
             cloudFail(tr('वसूली सेव नहीं हुई', 'Collection not saved'), 'transport_trips', error.message, tr('रसीद रद्द कर दी गई; दोबारा करें।', 'The receipt has been cancelled; please do it again.'));
           }
         });
@@ -361,7 +361,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
           if (error) {
             console.error('Vehicle expense save error:', error.message);
             setExpenses(prev => prev.filter(e => e.id !== id));
-            cancelVoucher(exp.voucherId!, 'Vehicle expense rolled back (save failed)', actor(), { viaParent: true });
+            cancelVoucher(exp.voucherId!, 'Vehicle expense rolled back (save failed)', actor(), { viaParent: true, rollback: true });
             cloudFail(tr('खर्च सेव नहीं हुआ', 'Expense not saved'), 'transport_vehicle_expenses', error.message, tr('उसका वाउचर रद्द कर दिया गया; दोबारा दर्ज करें।', 'Its voucher has been cancelled; please record it again.'));
             return;
           }

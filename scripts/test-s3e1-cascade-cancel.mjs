@@ -27,7 +27,7 @@ console.log('The helper');
 const h = fnBody('cancelLinkedVouchers');
 ok('cancelLinkedVouchers exists', h.length > 200);
 ok('skips already-cancelled and engine vouchers (idempotent)', /filter\(v => ids\.includes\(v\.id\) && !v\.isDeleted && !isEngineVoucher\(v\)\)/.test(h));
-ok('posting service on → cancel_voucher RPC, server events swapped into the journal', /if \(postingServiceRef\.current\) \{\s*supabase\.rpc\('cancel_voucher', \{ p_id: v\.id, p_reason: reason, p_deleted_by: by \}\)/.test(h) && /mapLedgerEventRows\(/.test(h));
+ok('posting service on → cancel_voucher RPC, server events swapped into the journal', /if \(postingServiceRef\.current\) \{\s*supabase\.rpc\(opts\?\.rollback \? 'withdraw_voucher' : 'cancel_voucher', \{ p_id: v\.id, p_reason: reason, p_deleted_by: by \}\)/.test(h) && /mapLedgerEventRows\(/.test(h));
 ok('off → soft-delete with all four delete columns, then entries removed AND voucher.cancelled from the DB journal', /update\(\{ isDeleted: true, deletedAt: now, deletedBy: by, deletedReason: reason \}\)/.test(h)
   && /deleteEntries\(v\.id\);\s*void ensureVoucherCancelEvent\(v, by, reason\);/.test(h));
 ok('any failure (error or rejection, both paths) → that voucher restored + destructive toast + reportError', (h.match(/undo\(v, /g) || []).length >= 2 && (h.match(/, fail\);/g) || []).length === 2

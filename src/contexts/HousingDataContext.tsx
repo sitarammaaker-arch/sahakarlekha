@@ -337,7 +337,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
         if (error) {
           console.error('Maintenance bill save error:', error.message); reportError('housing-save', error.message);
           setMaintenanceBillsState(prev => { const r = prev.filter(b => b.id !== bill.id); storage.setMaintenanceBills(r); return r; });
-          if (bill.voucherId) cancelVoucher(bill.voucherId, 'Maintenance bill save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
+          if (bill.voucherId) cancelVoucher(bill.voucherId, 'Maintenance bill save failed (auto-rollback)', user?.name || 'System', { viaParent: true, rollback: true });
           toastRef.current({ title: tr('बिल सेव नहीं हुआ', 'Bill not saved'), description: tr(`${bill.billNo} — cloud save fail (${error.message}). इसका receivable voucher वापस ले लिया गया।`, `${bill.billNo} — cloud save failed (${error.message}). Its receivable voucher has been withdrawn.`), variant: 'destructive', duration: 12000 });
         }
       });
@@ -494,7 +494,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
           if (error) {
             console.error('Maintenance collection bill-update error:', error.message); reportError('housing-save', error.message);
             setMaintenanceBillsState(prev => { const u = prev.map(b => b.id === bill.id ? cur : b); storage.setMaintenanceBills(u); return u; });
-            cancelVoucher(sv.id, 'Maintenance collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true });
+            cancelVoucher(sv.id, 'Maintenance collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true, rollback: true });
             toastRef.current({ title: tr('वसूली सेव नहीं हुई', 'Collection not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The receipt has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
             return;
           }
@@ -639,7 +639,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
           if (error) {
             console.error('Fund investment save error:', error.message); reportError('housing-save', error.message);
             setFundInvestmentsState(prev => { const r = prev.filter(x => x.id !== inv.id); storage.setHousingFundInvestments(r); return r; });
-            cancelVoucher(sv.id, 'Fund investment save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
+            cancelVoucher(sv.id, 'Fund investment save failed (auto-rollback)', user?.name || 'System', { viaParent: true, rollback: true });
             toastRef.current({ title: tr('निवेश सेव नहीं हुआ', 'Investment not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. इसका voucher वापस ले लिया गया।`, `Not saved to the cloud — ${error.message}. Its voucher has been withdrawn.`), variant: 'destructive', duration: 12000 });
             return;
           }
@@ -689,7 +689,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
           if (error) {
             console.error('Fund investment redeem error:', error.message); reportError('housing-save', error.message);
             setFundInvestmentsState(prev => { const u = prev.map(i => i.id === inv.id ? cur : i); storage.setHousingFundInvestments(u); return u; });
-            cancelVoucher(sv.id, 'Redemption rolled back (row update failed)', user?.name || 'System', { viaParent: true });
+            cancelVoucher(sv.id, 'Redemption rolled back (row update failed)', user?.name || 'System', { viaParent: true, rollback: true });
             toastRef.current({ title: tr('भुनाना सेव नहीं हुआ', 'Redemption not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
             return;
           }
@@ -843,7 +843,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
           console.error('Transfer save error:', error.message); reportError('housing-save', error.message);
           setTransfersState(prev => { const r = prev.filter(x => x.id !== t.id); storage.setHousingTransfers(r); return r; });
           updateHousingFlat(flat.id, { memberId: oldOwner, receivableAccountId: flat.receivableAccountId, associateMemberId: flat.associateMemberId, nomineeName: flat.nomineeName, nomineeRelation: flat.nomineeRelation, nomineePhone: flat.nomineePhone });
-          if (voucherId) cancelVoucher(voucherId, 'Transfer save failed (auto-rollback)', user?.name || 'System', { viaParent: true });
+          if (voucherId) cancelVoucher(voucherId, 'Transfer save failed (auto-rollback)', user?.name || 'System', { viaParent: true, rollback: true });
           toastRef.current({ title: tr('हस्तांतरण सेव नहीं हुआ', 'Transfer not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. मालिक व शुल्क वापस ले लिए गए।`, `Not saved to the cloud — ${error.message}. The owner and the charges have been reverted.`), variant: 'destructive', duration: 12000 });
           return;
         }

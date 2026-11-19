@@ -331,7 +331,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
           if (error) {
             console.error('Department bill save error:', error.message);
             setDepartmentBillsState(prev => { const r = prev.filter(b => b.id !== bill.id); storage.setDepartmentBills(r); return r; });
-            cancelVoucher(sv.id, 'Department bill rolled back (save failed)', user?.name || 'System', { viaParent: true });
+            cancelVoucher(sv.id, 'Department bill rolled back (save failed)', user?.name || 'System', { viaParent: true, rollback: true });
             toastRef.current({ title: tr('बिल सेव नहीं हुआ', 'Bill not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. बिल वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The bill has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
             return;
           }
@@ -390,7 +390,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
           if (error) {
             console.error('Department collection bill-update error:', error.message);
             setDepartmentBillsState(prev => { const u = prev.map(b => b.id === bill.id ? cur : b); storage.setDepartmentBills(u); return u; });
-            cancelVoucher(sv.id, 'Department collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true });
+            cancelVoucher(sv.id, 'Department collection rolled back (bill update failed)', user?.name || 'System', { viaParent: true, rollback: true });
             toastRef.current({ title: tr('वसूली सेव नहीं हुई', 'Collection not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The receipt has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
             return;
           }
@@ -457,7 +457,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
           if (error) {
             console.error('Worker advance save error:', error.message);
             setWorkerAdvancesState(prev => { const r = prev.filter(a => a.id !== adv.id); storage.setWorkerAdvances(r); return r; });
-            cancelVoucher(sv.id, 'Worker advance rolled back (save failed)', user?.name || 'System', { viaParent: true });
+            cancelVoucher(sv.id, 'Worker advance rolled back (save failed)', user?.name || 'System', { viaParent: true, rollback: true });
             toastRef.current({ title: tr('अग्रिम सेव नहीं हुआ', 'Advance not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. It has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
             return;
           }
@@ -504,7 +504,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
           if (error) {
             console.error('Advance recovery update error:', error.message);
             setWorkerAdvancesState(prev => { const u = prev.map(a => a.id === adv.id ? cur : a); storage.setWorkerAdvances(u); return u; });
-            cancelVoucher(sv.id, 'Advance recovery rolled back (update failed)', user?.name || 'System', { viaParent: true });
+            cancelVoucher(sv.id, 'Advance recovery rolled back (update failed)', user?.name || 'System', { viaParent: true, rollback: true });
             toastRef.current({ title: tr('वसूली सेव नहीं हुई', 'Recovery not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. रसीद वापस ले ली गई; दोबारा करें।`, `Not saved to the cloud — ${error.message}. The receipt has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
             return;
           }
@@ -608,7 +608,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
           if (error) {
             console.error('PF/ESI run save error:', error.message);
             setPfEsiRunsState(prev => { const r = prev.filter(x => x.id !== run.id); storage.setPfEsiRuns(r); return r; });
-            cancelVoucher(sv.id, 'PF/ESI run rolled back (save failed)', user?.name || 'System', { viaParent: true });
+            cancelVoucher(sv.id, 'PF/ESI run rolled back (save failed)', user?.name || 'System', { viaParent: true, rollback: true });
             toastRef.current({ title: tr('EPF/ESI सेव नहीं हुआ', 'EPF/ESI not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया; दोबारा करें।`, `Not saved to the cloud — ${error.message}. It has been withdrawn; please do it again.`), variant: 'destructive', duration: 12000 });
             return;
           }
@@ -655,7 +655,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
           if (error) {
             console.error('PF/ESI deposit update error:', error.message);
             setPfEsiRunsState(prev => { const u = prev.map(r => r.id === run.id ? cur : r); storage.setPfEsiRuns(u); return u; });
-            cancelVoucher(sv.id, 'PF/ESI deposit rolled back (update failed)', user?.name || 'System', { viaParent: true });
+            cancelVoucher(sv.id, 'PF/ESI deposit rolled back (update failed)', user?.name || 'System', { viaParent: true, rollback: true });
             toastRef.current({ title: tr('जमा सेव नहीं हुई', 'Deposit not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. वापस ले लिया गया।`, `Not saved to the cloud — ${error.message}. It has been withdrawn.`), variant: 'destructive', duration: 12000 });
             return;
           }

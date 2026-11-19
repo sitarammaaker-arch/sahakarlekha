@@ -257,7 +257,7 @@ const MSP = new Set(['procurement_msp']);
   // P0-2: approval is committed only after its deduction voucher saved; a failed voucher reverts to draft.
   const appr = body('approveFarmerSettlement');
   ok(/onSaved: \(\) => commitApproval\(\)/.test(appr) && /onFailed: \(\) => \{\s*revertLocal\(\)/.test(appr), 'approval waits for the voucher save; failure reverts to draft');
-  ok(/cancelVoucher\(settlementVoucherId, .*\{ viaParent: true \}\)/.test(appr), 'auto-rollback cancel passes the owner check');
+  ok(/cancelVoucher\(settlementVoucherId, .*\{ viaParent: true(?:, rollback: true)? \}\)/.test(appr), 'auto-rollback cancel passes the owner check');
   // P1-4: the approved settlement owns its deduction voucher.
   ok(/registerVoucherOwner\('procurement'/.test(dc), 'procurement voucher owner registered');
   // P1-3: quality refused once the J-Form exists.

@@ -80,7 +80,7 @@ export function useLoanRepayment(dueOf: (loanId: string) => LoanInterestDue, acc
     const onLateRefusal = () => {
       if (refusedOnce) return;
       refusedOnce = true;
-      for (const vid of [receiptId, releaseId]) if (vid) cancelVoucher(vid, 'Loan repayment voucher refused by the server — auto-withdrawn', user?.name ?? 'System', { viaParent: true });
+      for (const vid of [receiptId, releaseId]) if (vid) cancelVoucher(vid, 'Loan repayment voucher refused by the server — auto-withdrawn', user?.name ?? 'System', { viaParent: true, rollback: true });
       const cur = loansLatest.current.find(l => l.id === loan.id);
       if (cur && principal > 0) {
         const back = Math.max(0, round2((cur.repaidAmount || 0) - principal));
@@ -120,7 +120,7 @@ export function useLoanRepayment(dueOf: (loanId: string) => LoanInterestDue, acc
         // RULE 1: both entries or neither — take the receipt back out and leave the loan unchanged.
         // viaParent: the loan was never moved, so the register must not "follow" this cancel (LOAN-04).
         refusedOnce = true;   // nothing to undo on the loan; a late refusal of the receipt must not move it either
-        cancelVoucher(receiptId, 'Reserve release failed — auto-cancelled', user?.name ?? 'System', { viaParent: true });
+        cancelVoucher(receiptId, 'Reserve release failed — auto-cancelled', user?.name ?? 'System', { viaParent: true, rollback: true });
         toast({ title: hi ? 'चुकौती दर्ज नहीं हुई' : 'Repayment NOT recorded', description: hi ? 'अतिदेय ब्याज संचय से आय का जर्नल नहीं बना, इसलिए रसीद भी रद्द कर दी गई और ऋण में कोई बदलाव नहीं हुआ।' : 'The reserve-to-income journal was not created, so the receipt was cancelled too and the loan was left unchanged.', variant: 'destructive', duration: 10000 });
         return false;
       }

@@ -338,7 +338,7 @@ const TdsRegister: React.FC = () => {
       if (error) {
         console.error('TDS challan save error:', error.message);
         persistChallans(prev); // RULE-1 rollback
-        if (voucherId) cancelVoucher(voucherId, 'TDS challan not saved (cloud save failed)', user?.name || 'System');   // the voucher must not outlive its challan
+        if (voucherId) cancelVoucher(voucherId, 'TDS challan not saved (cloud save failed)', user?.name || 'System', { viaParent: true, rollback: true });   // the voucher must not outlive its challan
         toast({ title: hi ? 'चालान सेव नहीं हुआ' : 'Challan not saved', description: hi ? `क्लाउड में सेव नहीं हुआ — ${error.message}. (पहली बार: tds_challans block चलाएँ।)` : `Not saved to the cloud — ${error.message}. (First time: run the tds_challans block.)`, variant: 'destructive', duration: 12000 });
       } else {
         toast({ title: hi ? '✅ चालान जोड़ा गया' : '✅ Challan added' });

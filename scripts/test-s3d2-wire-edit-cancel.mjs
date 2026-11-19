@@ -63,7 +63,7 @@ ok('persistVoucherEditEvents: reads this voucher\'s events from ledger_events an
 const can = between('const cancelVoucher = useCallback(', 'const reverseVoucher = useCallback(');
 const canRpc = can.slice(can.indexOf('// ── S3-d posting service'), can.indexOf('// ── journal-first-write (slice 6)'));
 ok('cancelVoucher: RPC branch after every business guard and before the other paths', canRpc.length > 200 && can.indexOf('// ── S3-d posting service') > can.indexOf("current.refType === 'wage.accrual'"));
-ok('cancelVoucher: calls cancel_voucher(id, reason, deletedBy)', /supabase\.rpc\('cancel_voucher', \{ p_id: id, p_reason: reason, p_deleted_by: deletedBy \?\? null \}\)/.test(canRpc));
+ok('cancelVoucher: calls cancel_voucher(id, reason, deletedBy)', /supabase\.rpc\(opts\?\.rollback \? 'withdraw_voucher' : 'cancel_voucher', \{ p_id: id, p_reason: reason, p_deleted_by: deletedBy \?\? null \}\)/.test(canRpc));
 ok('cancelVoucher: error AND network rejection → un-cancel + destructive toast + reportError', (canRpc.match(/undoCancel\(\)/g) || []).length === 2 && /variant: 'destructive', duration: 15000/.test(canRpc) && /reportError\('voucher-cancel-post-service'/.test(canRpc));
 ok("cancelVoucher: the server's event replaces the optimistic cancel event", /filter\(e => e\.eventId !== cancelEvent\?\.eventId\), \.\.\.serverEvents\]/.test(canRpc));
 ok('cancelVoucher: RPC branch never writes vouchers / voucher_entries / events itself', !/from\('vouchers'\)|deleteEntries\(|persistLedgerEvent\(|ensureVoucherCancelEvent\(/.test(canRpc));

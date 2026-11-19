@@ -1522,8 +1522,11 @@ function uiLanguage() {
 
 // src/lib/ledger/postVoucherMessages.ts
 function postVoucherErrorCode(message) {
-  const m = String(message ?? "").match(/post_voucher:(\w+)/);
-  return m ? m[1] : null;
+  const text = String(message ?? "");
+  const m = text.match(/post_voucher:(\w+)/);
+  if (m) return m[1];
+  if (/voucher_lines_account_fkey/.test(text)) return "account_not_found";
+  return null;
 }
 var MESSAGES = {
   not_a_society_user: "\u0906\u092A\u0915\u093E login \u0915\u093F\u0938\u0940 \u0938\u092E\u093F\u0924\u093F \u0938\u0947 \u091C\u0941\u0921\u093C\u093E \u0928\u0939\u0940\u0902 \u0939\u0948\u0964",
@@ -1555,6 +1558,8 @@ var MESSAGES = {
   needs_approval: "\u0938\u092E\u093F\u0924\u093F \u0915\u0947 \u0928\u093F\u092F\u092E \u0915\u0947 \u0905\u0928\u0941\u0938\u093E\u0930 \u092F\u0939 \u0935\u093E\u0909\u091A\u0930 \u0938\u094D\u0935\u0940\u0915\u0943\u0924\u093F \u0915\u0947 \u092C\u093E\u0926 \u0939\u0940 post \u0939\u094B\u0917\u093E \u2014 page refresh \u0915\u0930\u0915\u0947 \u092B\u093F\u0930 \u0938\u0947 save \u0915\u0930\u0947\u0902, \u092F\u0939 \u0938\u094D\u0935\u0940\u0915\u0943\u0924\u093F \u0915\u0947 \u0932\u093F\u090F \u0930\u0941\u0915\u0947\u0917\u093E\u0964",
   not_an_approver: "\u0906\u092A\u0915\u0940 \u092D\u0942\u092E\u093F\u0915\u093E \u0935\u093E\u0909\u091A\u0930 approve / reject \u0928\u0939\u0940\u0902 \u0915\u0930 \u0938\u0915\u0924\u0940 \u2014 \u092F\u0939 \u0915\u093E\u092E admin, \u0938\u091A\u093F\u0935, \u092A\u094D\u0930\u092C\u0902\u0927\u0915, \u0905\u0927\u094D\u092F\u0915\u094D\u0937 \u092F\u093E \u092C\u094B\u0930\u094D\u0921 \u0938\u0926\u0938\u094D\u092F \u0915\u0930\u0924\u0947 \u0939\u0948\u0902\u0964",
   no_email_claim: "\u0906\u092A\u0915\u0947 login \u0915\u0940 email \u092A\u0924\u093E \u0928\u0939\u0940\u0902 \u091A\u0932\u0940 \u2014 \u090F\u0915 \u092C\u093E\u0930 logout \u0915\u0930\u0915\u0947 \u092B\u093F\u0930 login \u0915\u0930\u0947\u0902\u0964",
+  withdraw_not_allowed: "\u092F\u0939 \u0935\u093E\u0909\u091A\u0930 \u0905\u092A\u0928\u0947-\u0906\u092A \u0935\u093E\u092A\u0938 \u0928\u0939\u0940\u0902 \u0939\u094B \u0938\u0915\u093E (\u092F\u0939 \u0906\u092A\u0915\u093E \u0928\u0939\u0940\u0902 \u0939\u0948, \u092F\u093E 30 \u092E\u093F\u0928\u091F \u0938\u0947 \u092A\u0941\u0930\u093E\u0928\u093E \u0939\u0948) \u2014 admin \u092F\u093E \u0938\u091A\u093F\u0935 \u0938\u0947 \u0907\u0938\u0947 \u0930\u0926\u094D\u0926 \u0915\u0930\u093E\u090F\u0901\u0964",
+  account_not_found: "\u0907\u0938 \u0935\u093E\u0909\u091A\u0930 \u0915\u093E \u0915\u094B\u0908 \u0916\u093E\u0924\u093E cloud \u092A\u0930 \u0928\u0939\u0940\u0902 \u0939\u0948 (\u092F\u093E \u0915\u093F\u0938\u0940 \u0914\u0930 \u0938\u092E\u093F\u0924\u093F \u0915\u093E \u0939\u0948) \u2014 page refresh \u0915\u0930\u0915\u0947 \u0916\u093E\u0924\u093E \u092B\u093F\u0930 \u0938\u0947 \u091A\u0941\u0928\u0947\u0902\u0964",
   // 184 / SEC-09
   subscription_expired: "\u0906\u092A\u0915\u093E trial / plan \u0938\u092E\u093E\u092A\u094D\u0924 \u0939\u094B \u0917\u092F\u093E \u0939\u0948, \u0907\u0938\u0932\u093F\u090F \u0928\u0908 \u090F\u0902\u091F\u094D\u0930\u0940 \u0930\u0941\u0915\u0940 \u0939\u0948\u0964 \u0921\u0947\u091F\u093E \u0938\u0941\u0930\u0915\u094D\u0937\u093F\u0924 \u0939\u0948 \u2014 \u0930\u093F\u092A\u094B\u0930\u094D\u091F \u0914\u0930 export \u091A\u093E\u0932\u0942 \u0939\u0948\u0902\u0964 User Management \u0938\u0947 plan \u0932\u0947\u0924\u0947 \u0939\u0940 \u090F\u0902\u091F\u094D\u0930\u0940 \u092B\u093F\u0930 \u0936\u0941\u0930\u0942 \u0939\u094B \u091C\u093E\u090F\u0917\u0940\u0964"
 };
@@ -1588,6 +1593,8 @@ var MESSAGES_EN = {
   needs_approval: "Under the society's rules this voucher posts only after approval \u2014 refresh the page and save it again; it will wait for approval.",
   not_an_approver: "Your role cannot approve or reject vouchers \u2014 an admin, secretary, manager, chairman or board member does this.",
   no_email_claim: "Your login email could not be found \u2014 log out once and log in again.",
+  withdraw_not_allowed: "This voucher could not be taken back automatically (it is not yours, or older than 30 minutes) \u2014 ask an admin or the secretary to cancel it.",
+  account_not_found: "An account on this voucher is not on the cloud (or belongs to another society) \u2014 refresh the page and pick the account again.",
   // 184 / SEC-09
   subscription_expired: "Your trial / plan has ended, so new entries are paused. Your data is safe \u2014 reports and export still work. Entries resume as soon as you buy a plan in User Management."
 };

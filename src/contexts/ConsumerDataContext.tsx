@@ -310,7 +310,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         inFlight.end(`patronage-run:${cur.id}`);
         const now = patronageRunsLatest.current.find(r => r.id === cur.id) ?? cur;
         const next: PatronageRun = { ...now, status: 'approved', resolutionNo: args.resolutionNo.trim(), resolutionDate: args.resolutionDate, voucherId: sv.id, approvedAt: new Date().toISOString(), approvedBy: user?.name || 'admin' };
-        commitPatronageRun(next, now, () => cancelVoucher(sv.id, `${label} approval rolled back (cloud save failed)`, user?.name || 'System', { viaParent: true }));
+        commitPatronageRun(next, now, () => cancelVoucher(sv.id, `${label} approval rolled back (cloud save failed)`, user?.name || 'System', { viaParent: true, rollback: true }));
         toastRef.current({ title: `✅ ${label} approved`, description: tr(`प्रस्ताव ${args.resolutionNo} — कुल ₹${cur.total.toLocaleString('en-IN')}`, `Resolution ${args.resolutionNo} — total ₹${cur.total.toLocaleString('en-IN')}`) });
       },
       onFailed: () => { inFlight.end(`patronage-run:${cur.id}`); voucherRefused(tr(`${label} approve नहीं हुआ`, 'Run not approved')); },
@@ -344,7 +344,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         inFlight.end(`patronage-run:${cur.id}`);
         const now = patronageRunsLatest.current.find(r => r.id === cur.id) ?? cur;
         const next: PatronageRun = { ...now, amountPaid: +(now.amountPaid + amount).toFixed(2) };
-        commitPatronageRun(next, now, () => cancelVoucher(sv.id, 'Patronage payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true }));
+        commitPatronageRun(next, now, () => cancelVoucher(sv.id, 'Patronage payment rolled back (cloud save failed)', user?.name || 'System', { viaParent: true, rollback: true }));
         toastRef.current({ title: tr('✅ भुगतान दर्ज', '✅ Payment recorded'), description: `₹${amount.toLocaleString('en-IN')}` });
       },
       onFailed: () => { inFlight.end(`patronage-run:${cur.id}`); voucherRefused(tr('भुगतान दर्ज नहीं हुआ', 'Payment not recorded')); },
@@ -602,7 +602,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         // Goods back in stock (positive adjustment; canonical stock formula adds it).
         items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: returnNo, narration: `Sales return ${sale.saleNo}` }));
         commitSalesReturn({ ...ret, voucherId: sv.id }, null, () => {
-          cancelVoucher(sv.id, 'Sales return rolled back (cloud save failed)', user?.name || 'System', { viaParent: true });
+          cancelVoucher(sv.id, 'Sales return rolled back (cloud save failed)', user?.name || 'System', { viaParent: true, rollback: true });
           // RULE 1/2: also reverse the stock added back at creation (compensating negative adjustment),
           // else a failed cloud save leaves phantom inventory with no return record — mirrors deleteSalesReturn.
           items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: `${returnNo}/REV`, narration: `Sales return rolled back ${sale.saleNo}` }));
@@ -680,7 +680,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         // 1. Reverse the OLD return: cancel its voucher + compensating −qty stock (mirrors delete).
         // H4: if the old voucher cannot be cancelled (lock/permission), withdraw the NEW one — never two live postings.
         if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Sales return edited', user?.name || 'System', { viaParent: true })) {
-          cancelVoucher(sv.id, 'Sales return edit withdrawn (old credit note could not be cancelled)', user?.name || 'System', { viaParent: true });
+          cancelVoucher(sv.id, 'Sales return edit withdrawn (old credit note could not be cancelled)', user?.name || 'System', { viaParent: true, rollback: true });
           toastRef.current({ title: tr('वापसी संशोधित नहीं हुई', 'Return not revised'), description: tr('पुराना credit note रद्द नहीं हो सका, इसलिए नया भी वापस ले लिया गया — वापसी पहले जैसी है।', 'The old credit note could not be cancelled, so the new one was withdrawn too — the return is as it was.'), variant: 'destructive', duration: 12000 });
           return;
         }
@@ -809,7 +809,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         // Goods leave stock (negative adjustment; canonical stock formula subtracts it).
         items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: -it.qty, rate: it.rate, amount: -it.amount, referenceNo: returnNo, narration: `Purchase return ${purchase.purchaseNo}` }));
         commitPurchaseReturn({ ...ret, voucherId: sv.id }, null, () => {
-          cancelVoucher(sv.id, 'Purchase return rolled back (cloud save failed)', user?.name || 'System', { viaParent: true });
+          cancelVoucher(sv.id, 'Purchase return rolled back (cloud save failed)', user?.name || 'System', { viaParent: true, rollback: true });
           // RULE 1/2: also restore the stock removed at creation (compensating positive adjustment),
           // else a failed cloud save leaves inventory understated with no return record — mirrors deletePurchaseReturn.
           items.forEach(it => addStockMovement({ date: data.date, itemId: it.itemId, type: 'adjustment', qty: it.qty, rate: it.rate, amount: it.amount, referenceNo: `${returnNo}/REV`, narration: `Purchase return rolled back ${purchase.purchaseNo}` }));
@@ -896,7 +896,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
         // 1. Reverse the OLD return: cancel its voucher + restore the stock it removed (+qty).
         // If the old voucher cannot be cancelled, withdraw the NEW one — never two live postings.
         if (cur.voucherId && !cancelVoucher(cur.voucherId, 'Purchase return edited', user?.name || 'System', { viaParent: true })) {
-          cancelVoucher(sv.id, 'Purchase return edit withdrawn (old debit note could not be cancelled)', user?.name || 'System', { viaParent: true });
+          cancelVoucher(sv.id, 'Purchase return edit withdrawn (old debit note could not be cancelled)', user?.name || 'System', { viaParent: true, rollback: true });
           toastRef.current({ title: tr('खरीद वापसी संशोधित नहीं हुई', 'Purchase return not revised'), description: tr('पुराना debit note रद्द नहीं हो सका, इसलिए नया भी वापस ले लिया गया — वापसी पहले जैसी है।', 'The old debit note could not be cancelled, so the new one was withdrawn too — the return is as it was.'), variant: 'destructive', duration: 12000 });
           return;
         }
