@@ -213,6 +213,14 @@ const SocietySetup: React.FC = () => {
   };
 
   const handleSaveFY = () => {
+    // YE-08: once the books have entries, changing the year label here was an ungated rollover — no snapshot, no server
+    // year, and (with the rollover's fyLocked:false) a way for one admin to step around the two-admin unlock. It now only
+    // sets the starting year of a society with no vouchers; afterwards the year moves only through "नया वर्ष शुरू करें".
+    if (fyForm.financialYear !== society.financialYear && vouchers.some(v => !v.isDeleted)) {
+      toast({ title: language === 'hi' ? 'वित्तीय वर्ष यहाँ से नहीं बदलेगा' : 'The financial year does not change here', description: language === 'hi' ? 'इस समिति में एंट्री हो चुकी हैं। नया वर्ष "नया वर्ष शुरू करें" (rollover) से शुरू करें — वह पिछले वर्ष का snapshot बचाता है और server पर वर्ष खोलता है।' : 'This society already has entries. Start the new year with "Start new year" (rollover) — it keeps the previous year\'s snapshot and opens the year on the server.', variant: 'destructive', duration: 12000 });
+      setFyForm(f => ({ ...f, financialYear: society.financialYear }));
+      return;
+    }
     const financialYearStart = fyStartFromLabel(fyForm.financialYear);
     if (!financialYearStart) {
       toast({ title: language === 'hi' ? 'वित्तीय वर्ष चुनें' : 'Choose the financial year', description: language === 'hi' ? 'वित्तीय वर्ष 2026-27 जैसा होना चाहिए।' : 'The financial year must look like 2026-27.', variant: 'destructive' });

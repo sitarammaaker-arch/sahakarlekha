@@ -20,6 +20,7 @@ import { FundAppropriationPanel } from '@/pages/ReserveFund';
 import { ProfitDistributionPanel } from '@/pages/ProfitDistribution';
 import { appropriationFunds, appropriatedToFunds, postedAppropriation, ACC_NET_SURPLUS, ACC_DIVIDEND } from '@/lib/distribution/dividendRuns';
 import { balanceSheetTallied, fyEndDate } from '@/lib/balanceSheetLeaves';
+import { useAppropriationYear } from '@/hooks/useAppropriationYear';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -31,10 +32,11 @@ const SurplusAppropriation: React.FC = () => {
   const [params] = useSearchParams();
   const [step, setStep] = useState<Step>(1);
   useEffect(() => { const n = Number(params.get('step')); if (n >= 1 && n <= 4) setStep(n as Step); }, [params]);
-  const fy = society.financialYear;
+  // YE-07: the year being appropriated — a rolled-over year still closing, else the current one — read as on ITS end.
+  const { fy } = useAppropriationYear();
 
   const s = useMemo(() => {
-    const { netProfit, balanceSheetResult } = getProfitLoss();
+    const { netProfit, balanceSheetResult } = getProfitLoss(fyEndDate(fy));
     const toFunds = appropriatedToFunds(vouchers, appropriationFunds(accounts).map(a => a.id), fy);
     const dividend = postedAppropriation(vouchers, ACC_NET_SURPLUS, ACC_DIVIDEND, fy)?.amount ?? 0;
     const fyEnd = fyEndDate(fy);

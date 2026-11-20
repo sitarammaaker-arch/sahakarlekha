@@ -28,7 +28,8 @@ import { StatutoryAppropriationPanel } from '@/components/StatutoryAppropriation
 import { statutoryLimits, dividendRateIssue } from '@/lib/rules/statutoryLimits';
 import { useDistributionRuns } from '@/hooks/useDistributionRuns';
 import { linesTotal } from '@/lib/distribution/engine';
-import { dividendRunLines, liveRunFor, existingRunFor, dividendBreakdown, snapshotLines, postedAppropriation, dividendPaymentsByMember, appropriationFunds, appropriatedToFunds } from '@/lib/distribution/dividendRuns';
+import { dividendRunLines, liveRunFor, existingRunFor, dividendBreakdown, snapshotLines, postedAppropriation, dividendPaymentsByMember, appropriationFunds, appropriatedToFunds, APPROPRIATION_REF } from '@/lib/distribution/dividendRuns';
+import { useAppropriationYear } from '@/hooks/useAppropriationYear';
 import { classifyRunSaveError } from '@/lib/distribution/runSaveError';
 
 // ── Account IDs ─────────────────────────────────────────────────────────────
@@ -70,10 +71,11 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean; section?: '
   const { toast } = useToast();
 
   const hi = language === 'hi';
-  const fy = society.financialYear;
+  // YE-07: the year being appropriated (a rolled-over year still closing, else the current one) and ITS surplus.
+  const { fy, fyEnd } = useAppropriationYear();
 
   // ── Net Surplus ────────────────────────────────────────────────────────────
-  const { netProfit } = useMemo(() => getProfitLoss(), [getProfitLoss]);
+  const { netProfit } = useMemo(() => getProfitLoss(fyEnd), [getProfitLoss, fyEnd]);
 
   // Appropriations are OPTIONAL — subtract the TOTAL actually posted to ANY fund
   // (Dr 1208 / Cr <fund under group 1200>), whichever funds the society chose.
@@ -299,6 +301,7 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean; section?: '
           creditAccountId: ACC_DIVIDEND,
           amount: total,
           narration: `Dividend Appropriation @ ${dividendRatePct}% of Share Capital — FY ${fy}`,
+          refType: APPROPRIATION_REF, refId: fy,   // YE-07
           createdBy: user?.name ?? 'System',
         });
         if (v.id) {

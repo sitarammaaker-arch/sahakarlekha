@@ -20,7 +20,7 @@ interface ClosingYear { fy_label: string; end_date: string }
  * happen (surplus, closing stock), takes the board-resolution reference (D4) and calls it.
  */
 export const YearCloseCard: React.FC = () => {
-  const { society, getProfitLoss, getTradingAccount } = useData();
+  const { society, getProfitLoss, getTradingAccount, activeBranchId } = useData();
   const { user } = useAuth();
   const { language } = useLanguage();
   const { toast } = useToast();
@@ -46,7 +46,14 @@ export const YearCloseCard: React.FC = () => {
     return { end, surplus, stockMinor };
   };
 
+  // YE-05: the close posts society-wide (closing stock, the whole year's result). From a branch view the preview and
+  // the stock sent were that branch's (stock 0 — physical stock is society-level) → an irreversible wrong posting.
+  const branchView = !!activeBranchId && activeBranchId !== 'all';
   const doClose = async (y: ClosingYear) => {
+    if (branchView) {
+      toast({ title: hi ? 'पूरी समिति का view चुनें' : 'Switch to the whole-society view', description: hi ? 'वर्ष close पूरी समिति का होता है। ऊपर branch चुनने वाले से "सभी शाखाएँ" चुनें, फिर close करें।' : 'A year close covers the whole society. Pick "All branches" in the branch selector, then close.', variant: 'destructive', duration: 12000 });
+      return;
+    }
     setBusy(true);
     const { stockMinor } = preview(y);
     const { data, error } = await supabase.rpc('close_financial_year', { p_fy_label: y.fy_label, p_authority: authority.trim(), p_closing_stock_minor: stockMinor });
