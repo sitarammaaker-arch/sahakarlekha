@@ -515,7 +515,8 @@
     "test:opening-difference": "node scripts/test-opening-difference.mjs",
     "test:fy-start-single-source": "node scripts/test-fy-start-single-source.mjs",
     "test:arch-03-04": "node scripts/test-arch-03-04.mjs",
-    "test:live01-easy-batch": "node scripts/test-live01-easy-batch.mjs"
+    "test:live01-easy-batch": "node scripts/test-live01-easy-batch.mjs",
+    "test:provider-contract": "node scripts/test-provider-contract.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -582,6 +583,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@happy-dom/global-registrator": "21.0.4",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^22.16.5",
