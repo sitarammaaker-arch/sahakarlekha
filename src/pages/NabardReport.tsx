@@ -18,17 +18,16 @@ import { getVoucherLines } from '@/lib/voucherUtils';
 import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFileName, rightAlignAmountColumns } from '@/lib/pdf';
 import { loanOutstanding, kccOutstanding } from '@/lib/memberSnapshot';
 import { isCountedVoucher } from '@/lib/countedVoucher';
+import { balanceSheetLeaves, ownedFunds, fyEndDate as bsFyEnd } from '@/lib/balanceSheetLeaves';
+import { reportAsOf, overdueDaysAt, npaClassForDays, type NpaClass } from '@/lib/loans/npaClass';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 const pct = (n: number) => `${n.toFixed(2)}%`;
 
-// Days between two dates (positive = d2 is after d1)
-const daysBetween = (d1: Date, d2: Date) =>
-  Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
 
-type NpaClass = 'Standard' | 'Sub-Standard' | 'Doubtful' | 'Loss';
+// NpaClass — lib/loans/npaClass (one banding rule for NABARD and the Federation return).
 
 interface NpaRow {
   classification: NpaClass;
@@ -39,11 +38,12 @@ interface NpaRow {
 
 const NabardReport: React.FC = () => {
   const { language } = useLanguage();
-  const { society, accounts, loans, members, vouchers, kccLoans } = useData();
+  const { society, accounts, loans, members, vouchers, kccLoans, getTrialBalance, getProfitLoss, getTradingAccount } = useData();
   const hi = language === 'hi';
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // RPT-18: everything dated in this return is as on ITS date — the FY end (or today while the FY runs), not the day
+  // the page is opened (lib/loans/npaClass.reportAsOf).
+  const today = reportAsOf(society.financialYear);
 
   // ── Section A: KCC NPA Classification ───────────────────────────────────────
   const npaData = useMemo((): NpaRow[] => {
@@ -56,17 +56,11 @@ const NabardReport: React.FC = () => {
 
     kccLoans.forEach(loan => {
       if (loan.status === 'repaid') return; // exclude fully repaid
-      const due = new Date(loan.dueDate);
-      due.setHours(0, 0, 0, 0);
-      const overdueDays = daysBetween(due, today);
+      const overdueDays = overdueDaysAt(loan.dueDate, today);   // RPT-18: a missing due date is not overdue (was NaN → Loss)
       const outstanding = kccOutstanding(loan);
       const overdueAmt = overdueDays > 0 ? outstanding : 0;
 
-      let cls: NpaClass;
-      if (overdueDays <= 90) cls = 'Standard';
-      else if (overdueDays <= 365) cls = 'Sub-Standard';
-      else if (overdueDays <= 1095) cls = 'Doubtful';
-      else cls = 'Loss';
+      const cls: NpaClass = npaClassForDays(overdueDays);
 
       rows[cls].accounts += 1;
       rows[cls].outstanding += outstanding;
@@ -131,13 +125,18 @@ const NabardReport: React.FC = () => {
     return { total, active, withLoans };
   }, [members, loans]);
 
+  // RPT-17: owned funds = the Balance Sheet's own figure (lib/balanceSheetLeaves.ownedFunds) as at the FY end — signed
+  // equity (a deficit reduces it) plus the year's unclosed result. It used to add only the positive equity balances, all dates.
+  const bsOwnedFunds = useMemo(() => {
+    const asOf = bsFyEnd(society.financialYear);
+    const { balanceSheetResult } = getProfitLoss(asOf);
+    const { physicalClosingStock, closingStockPosted, tracksStock } = getTradingAccount(asOf);
+    const leaves = balanceSheetLeaves(getTrialBalance(asOf), { closingStockPosted, physicalClosingStock, netProfit: balanceSheetResult, tracksStock }, accounts);
+    return ownedFunds(leaves, balanceSheetResult);
+  }, [society.financialYear, getProfitLoss, getTradingAccount, getTrialBalance, accounts]);
   // ── Section D: Working Capital ───────────────────────────────────────────────
   const workingCapital = useMemo(() => {
-    const equityAccounts = accounts.filter(a => !a.isGroup && a.type === 'equity');
-    const ownFunds = equityAccounts.reduce((s, a) => {
-      const b = getBalance(a.id);
-      return s + (b > 0 ? b : 0);
-    }, 0);
+    const ownFunds = bsOwnedFunds;
 
     const liabilityAccounts = accounts.filter(a => !a.isGroup && a.type === 'liability');
     const borrowedFunds = liabilityAccounts.reduce((s, a) => {
@@ -146,7 +145,7 @@ const NabardReport: React.FC = () => {
     }, 0);
 
     return { ownFunds, borrowedFunds, total: ownFunds + borrowedFunds };
-  }, [accounts, vouchers]);
+  }, [accounts, vouchers, bsOwnedFunds]);
 
   // ── CSV / Excel Export ───────────────────────────────────────────────────────
   const npaHeaders = ['Classification', 'No. of Accounts', 'Outstanding Amount (Rs.)', 'Overdue Amount (Rs.)'];

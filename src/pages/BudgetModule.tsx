@@ -17,15 +17,18 @@ import { generateBudgetPDF } from '@/lib/pdf';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { Budget, BudgetHead } from '@/types';
 import { getVoucherLines } from '@/lib/voucherUtils';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 import { budgetSelect, budgetInsert, budgetUpdate } from '@/lib/supabaseService';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
 
-function variance(actual: number, budget: number) {
+// RPT-21/22 (audit 2026-11-17): income ABOVE budget is favourable, expense above budget adverse — the variance used to
+// call any overrun adverse, income included.
+function variance(actual: number, budget: number, type: 'income' | 'expense') {
   if (budget === 0) return { pct: 0, fav: true };
   const diff = actual - budget;
-  return { pct: Math.abs((diff / budget) * 100), fav: diff <= 0 };
+  return { pct: Math.abs((diff / budget) * 100), fav: type === 'income' ? diff >= 0 : diff <= 0 };
 }
 
 export default function BudgetModule() {
@@ -61,19 +64,27 @@ export default function BudgetModule() {
   const { from, to } = fyBounds(selectedFY);
 
   const incomeExpAccounts = useMemo(() =>
-    accounts.filter(a => a.type === 'income' || a.type === 'expense'),
+    accounts.filter(a => !a.isGroup && (a.type === 'income' || a.type === 'expense')),
     [accounts]);
 
   const actualMap = useMemo(() => {
     const map: Record<string, number> = {};
-    const active = vouchers.filter(v => !v.isDeleted && v.date >= from && v.date <= to);
+    // RPT-21/22: the actual is SIGNED by the account's nature (income = Cr − Dr, expense = Dr − Cr) over the COUNTED
+    // vouchers of the year — every line used to ADD, so a sales return raised sales and an expense refund raised the
+    // expense; pending / rejected vouchers counted too. The year-close transfer (refType 'fy.close') is not this
+    // year's activity and is left out.
+    const typeOf = new Map(accounts.map(a => [a.id, a.type]));
+    const active = vouchers.filter(v => isCountedVoucher(v) && v.refType !== 'fy.close' && v.date >= from && v.date <= to);
     for (const v of active) {
       getVoucherLines(v).forEach(l => {
-        map[l.accountId] = (map[l.accountId] || 0) + l.amount;
+        const t = typeOf.get(l.accountId);
+        if (t !== 'income' && t !== 'expense') return;
+        const signed = (t === 'income') === (l.type === 'Cr') ? l.amount : -l.amount;
+        map[l.accountId] = Math.round(((map[l.accountId] || 0) + signed) * 100) / 100;
       });
     }
     return map;
-  }, [vouchers, from, to]);
+  }, [vouchers, accounts, from, to]);
 
   const currentBudget = useMemo(() =>
     budgets.find(b => b.financialYear === selectedFY),
@@ -89,7 +100,7 @@ export default function BudgetModule() {
     return incomeExpAccounts.map(a => {
       const budgeted = budgetMap[a.id] || 0;
       const actual = actualMap[a.id] || 0;
-      const v = variance(actual, budgeted);
+      const v = variance(actual, budgeted, a.type as 'income' | 'expense');
       return { account: a, budgeted, actual, variancePct: v.pct, favourable: v.fav };
     });
   }, [incomeExpAccounts, budgetMap, actualMap]);

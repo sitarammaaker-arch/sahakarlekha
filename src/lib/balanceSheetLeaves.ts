@@ -83,3 +83,16 @@ export function balanceSheetTallied(
 
 /** The FY-end date the dashboards tally at ("2026-27" → "2027-03-31") — keeps a voucher mis-dated into the next FY out. */
 export const fyEndDate = (financialYear: string): string => `20${financialYear.split('-')[1]}-03-31`;
+
+/**
+ * RPT-17 (audit 2026-11-17) — OWNED FUNDS as the Balance Sheet shows them: every equity leaf on the capital side,
+ * SIGNED (a brought-forward deficit or an appropriation contra reduces it), plus the year's result not yet closed into
+ * 1208 (balanceSheetResult). The NABARD and Federation returns summed only the positive equity balances over all dates —
+ * share capital 3,00,000 + reserves 3,00,000 with a 1,50,000 deficit printed 6,00,000 where the Balance Sheet says 4,50,000.
+ */
+export function ownedFunds(leaves: Pick<BalanceSheetLeaves, 'capLiabLeaves'>, balanceSheetResult: number): number {
+  const equityMinor = leaves.capLiabLeaves
+    .filter(b => b.account.type === 'equity')
+    .reduce((s, b) => s + Math.round(-(Number(b.netBalance) || 0) * 100), 0);
+  return (equityMinor + Math.round((Number(balanceSheetResult) || 0) * 100)) / 100;
+}

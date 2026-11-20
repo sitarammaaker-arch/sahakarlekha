@@ -30,7 +30,7 @@ const fmt = (n: number) =>
 
 const AuditCertificate: React.FC = () => {
   const { language } = useLanguage();
-  const { society, accounts, vouchers, members, getProfitLoss, auditObjections, updateSociety, getAccountBalance } = useData();
+  const { society, accounts, vouchers, members, getProfitLoss, auditObjections, updateSociety, getTrialBalance } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -44,36 +44,31 @@ const AuditCertificate: React.FC = () => {
     [auditObjections, fy],
   );
 
-  // ── Auto-computed figures ─────────────────────────────────────────────────
-  // NOTE: getProfitLoss() returns `totalExpenses` (plural). Reading `totalExpense`
-  // (singular) gave undefined → "NaN" in the certificate. Use the correct key.
-  const { totalIncome, totalExpenses, netProfit } = useMemo(() => getProfitLoss(), [getProfitLoss]);
   const stateName = INDIAN_STATES.find(s => s.value === society.state)?.label || society.state || '—';
-
-  // Credit-positive balance from the ONE shared balance (DataContext.getAccountBalance, Dr−Cr: journal-aware,
-  // same as Trial Balance / Balance Sheet). This page kept its own voucher loop — a second balance formula (RULE 2).
-  const getBalance = (id: string) => -getAccountBalance(id);
-
-  // getBalance is credit-positive; cash/bank are debit-nature assets, so negate to show the
-  // real Dr balance (audit A-04: the raw value was negative and Math.max(0, …) printed Rs 0).
-  const cashBalance  = -getBalance('3301'); // Cash in Hand
-  const bankIds = getBankAccountIds(accounts);
-  const bankBalance = -bankIds.reduce((sum, bid) => sum + getBalance(bid), 0);
-  // Paid-up Share Capital ONLY (1101/1102/1103) — NOT reserves/surplus, which are also
-  // type 'equity' (subtype 'reserve'/'surplus' under 1200) and must stay a separate head.
-  const shareCapital = accounts
-    .filter(a => !a.isGroup && a.subtype === 'share_capital')
-    .reduce((s, a) => {
-      const b = getBalance(a.id);
-      return s + (b > 0 ? b : 0);
-    }, 0);
-
-  const totalMembersCount = members.filter(m => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved')).length;
 
   // ── Editable fields ────────────────────────────────────────────────────────
   const [auditDate, setAuditDate]         = useState(todayStr());
   const [auditFrom, setAuditFrom]         = useState('');
   const [auditTo,   setAuditTo]           = useState('');
+
+  // ── Auto-computed figures ─────────────────────────────────────────────────
+  // RPT-19 (audit 2026-11-17): every figure as on ONE date — the audit period's end, else the FY end. Income / surplus
+  // were read at the FY end while cash, bank and share capital were all-time balances (a receipt dated after the FY end
+  // moved the cash but not the income) and members were counted as of today. Balances now come from the trial balance
+  // as on that date (the Balance Sheet's own source); share capital is signed (a Dr balance is not dropped).
+  const asOn = auditTo || `20${String(fy || '').split('-')[1]}-03-31`;
+  const asOnTb = useMemo(() => getTrialBalance(asOn), [getTrialBalance, asOn]);
+  // NOTE: getProfitLoss() returns `totalExpenses` (plural). Reading `totalExpense`
+  // (singular) gave undefined → "NaN" in the certificate. Use the correct key.
+  const { totalIncome, totalExpenses, netProfit } = useMemo(() => getProfitLoss(asOn), [getProfitLoss, asOn]);
+  const drBalanceOf = (ids: readonly string[]) => Math.round(asOnTb.filter(b => ids.includes(b.account.id)).reduce((t, b) => t + (Number(b.netBalance) || 0) * 100, 0)) / 100;
+  const cashBalance = drBalanceOf(['3301']);                    // Cash in Hand (Dr)
+  const bankBalance = drBalanceOf(getBankAccountIds(accounts));   // every bank ledger (Dr)
+  // Paid-up Share Capital ONLY (subtype share_capital) — NOT reserves / surplus, which are also type 'equity'.
+  const shareCapital = -Math.round(asOnTb.filter(b => !b.account.isGroup && b.account.subtype === 'share_capital').reduce((t, b) => t + (Number(b.netBalance) || 0) * 100, 0)) / 100;
+  // Members on the register as on that date (joined on or before it, still active, approved).
+  const totalMembersCount = members.filter(m => m.status === 'active' && (!m.approvalStatus || m.approvalStatus === 'approved')
+    && (!(m.admissionDate || m.joinDate) || (m.admissionDate || m.joinDate) <= asOn)).length;
   const [auditorName,  setAuditorName]    = useState('');
   const [auditorRegNo, setAuditorRegNo]   = useState('');
   const [auditorAddress, setAuditorAddress] = useState('');

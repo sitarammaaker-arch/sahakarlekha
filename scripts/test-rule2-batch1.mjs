@@ -76,9 +76,14 @@ const hd = read('contexts/HousingDataContext.tsx');
 ok(/if \(!data\.toFund\) \{\s*const corpus = buildFundStatement\(fund, vouchers\.filter\(isCountedVoucher\)\)\.closing;\s*if \(data\.amount > corpus \+ 0\.005\)/.test(hd), 'housing fund spend refuses more than the fund holds (same rule as DataContext)');
 
 // 7. Shared balance
-for (const f of ['pages/AuditCertificate.tsx', 'pages/ReserveFund.tsx', 'pages/ProfitDistribution.tsx']) {
+for (const f of ['pages/ReserveFund.tsx', 'pages/ProfitDistribution.tsx']) {
   const s = read(f);
   ok(/const getBalance = \(id: string\) => -getAccountBalance\(id\);/.test(s) && !/let bal = acc\.openingBalanceType === 'credit'/.test(s), `${f}: balance from the shared getAccountBalance (no local voucher loop)`);
+}
+// RPT-19: the Audit Certificate reads the shared trial balance AS ON one date (stricter than the all-time getAccountBalance).
+{
+  const s = read('pages/AuditCertificate.tsx');
+  ok(/const asOnTb = useMemo\(\(\) => getTrialBalance\(asOn\)/.test(s) && !/let bal = acc\.openingBalanceType === 'credit'/.test(s), 'pages/AuditCertificate.tsx: balances from the shared trial balance as on one date (no local voucher loop)');
 }
 
 console.log(`RULE 2 batch 1: ${pass} passed, ${fail} failed`);

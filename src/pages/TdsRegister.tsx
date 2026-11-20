@@ -32,6 +32,7 @@ import { tdsPayableAccountId, penaltyAccountId, MISSING_HEAD_TOAST } from '@/lib
 import { tdsLedgerTie, quarterRange } from '@/lib/tdsLedgerTie';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { Checkbox } from '@/components/ui/checkbox';
+import { purchaseTdsParty } from '@/lib/tax/purchaseTdsParty';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -148,16 +149,19 @@ const TdsRegister: React.FC = () => {
         const pd = new Date(p.date);
         const psy = pd.getMonth() >= 3 ? pd.getFullYear() : pd.getFullYear() - 1;
         const pfy = `${psy}-${String((psy + 1) % 100).padStart(2, '0')}`;
+        // RPT-13: section / deductee type / nature / PAN from the SUPPLIER (lib/tax/purchaseTdsParty) — not a hard-coded
+        // 194Q "firm" for every purchase; the rate is the bill's own (no invented 0.1% fallback).
+        const party = purchaseTdsParty(supplier);
         return {
           id: `pur-${p.id}`,
           date: p.date,
-          deducteePan: panFromGstin(supplier?.gstNo),
+          deducteePan: party.deducteePan,
           deducteeName: p.supplierName || supplier?.name || '',
-          deducteeType: 'firm' as TdsDeducteeType,
-          section: '194Q' as TdsSection,
-          natureOfPayment: 'Purchase of Goods',
+          deducteeType: party.deducteeType,
+          section: party.section,
+          natureOfPayment: party.natureOfPayment,
           grossAmount: p.netAmount,
-          tdsRate: p.tdsPct || 0.1,
+          tdsRate: p.tdsPct || 0,
           tdsAmount: p.tdsAmount,
           quarter: getQuarterFromDate(p.date),
           financialYear: pfy,

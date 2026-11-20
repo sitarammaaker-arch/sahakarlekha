@@ -43,16 +43,18 @@ const GSTR9: React.FC = () => {
   const [from, setFrom] = useState(defFrom);
   const [to, setTo] = useState(defTo);
 
+  // ECR-22 slice B: reverse-charge liability from RCM-flagged purchases.
+  const rcm = useMemo(() => computeRCM(purchases as unknown as RcmPurchase[], from, to), [purchases, from, to]);
+
+  // RPT-07: the RCM liability is part of the payable (Table 9), as on GST Summary — not only a side card.
   const g = useMemo(() => computeGSTR9({
     sales: sales as unknown as GstRecord[],
     purchases: purchases as unknown as GstRecord[],
     salesReturns: salesReturns as unknown as GstRecord[],
     purchaseReturns: purchaseReturns as unknown as GstRecord[],
+    rcm,
     from, to,
-  }), [sales, purchases, salesReturns, purchaseReturns, from, to]);
-
-  // ECR-22 slice B: reverse-charge liability from RCM-flagged purchases.
-  const rcm = useMemo(() => computeRCM(purchases as unknown as RcmPurchase[], from, to), [purchases, from, to]);
+  }), [sales, purchases, salesReturns, purchaseReturns, rcm, from, to]);
 
   // ECR-22 slice C: read-only data checks over the period's GST records.
   const issues = useMemo(() => {

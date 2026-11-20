@@ -78,7 +78,9 @@ export interface GSTR9 {
   itcAvailed: GstTotals;   // Table 6 — ITC on inward supplies
   itcReversed: GstTotals;  // Table 7 — ITC reversed (debit notes)
   netItc: GstTotals;       // 6 − 7
-  netLiability: { cgst: number; sgst: number; igst: number; total: number };       // output − net ITC (floored at 0 per head)
+  /** RPT-07: tax payable under reverse charge (Table 4G / 6C) — a liability AND an ITC, so it nets out like GST Summary. */
+  rcm: { cgst: number; sgst: number; igst: number; total: number };
+  netLiability: { cgst: number; sgst: number; igst: number; total: number };       // output + RCM − net ITC (floored at 0 per head)
   creditCarryForward: { cgst: number; sgst: number; igst: number; total: number }; // net ITC − output (per head, if positive)
   outwardByRate: Array<{ rate: number; taxableValue: number; cgst: number; sgst: number; igst: number }>;
 }
@@ -89,10 +91,15 @@ export function computeGSTR9(input: {
   purchases: GstRecord[];
   salesReturns?: GstRecord[];
   purchaseReturns?: GstRecord[];
+  /** RPT-07: the period's reverse-charge tax (computeRCM). Its tax already sits in the purchases' ITC, so leaving it out
+   *  understated the payable by exactly that tax (GST Summary adds it back). */
+  rcm?: { cgst: number; sgst: number; igst: number };
   from: string;
   to: string;
 }): GSTR9 {
   const { sales, purchases, salesReturns = [], purchaseReturns = [], from, to } = input;
+  const rcm = { cgst: r2(input.rcm?.cgst || 0), sgst: r2(input.rcm?.sgst || 0), igst: r2(input.rcm?.igst || 0), total: 0 };
+  rcm.total = r2(rcm.cgst + rcm.sgst + rcm.igst);
 
   const salesT = sumGst(sales, from, to);
   const salesRetT = sumGst(salesReturns, from, to);
@@ -105,16 +112,16 @@ export function computeGSTR9(input: {
   const head = (out: number, itc: number) => r2(Math.max(0, out - itc));
   const carry = (out: number, itc: number) => r2(Math.max(0, itc - out));
   const netLiability = {
-    cgst: head(outward.cgst, netItc.cgst),
-    sgst: head(outward.sgst, netItc.sgst),
-    igst: head(outward.igst, netItc.igst),
+    cgst: head(outward.cgst + rcm.cgst, netItc.cgst),
+    sgst: head(outward.sgst + rcm.sgst, netItc.sgst),
+    igst: head(outward.igst + rcm.igst, netItc.igst),
     total: 0,
   };
   netLiability.total = r2(netLiability.cgst + netLiability.sgst + netLiability.igst);
   const creditCarryForward = {
-    cgst: carry(outward.cgst, netItc.cgst),
-    sgst: carry(outward.sgst, netItc.sgst),
-    igst: carry(outward.igst, netItc.igst),
+    cgst: carry(outward.cgst + rcm.cgst, netItc.cgst),
+    sgst: carry(outward.sgst + rcm.sgst, netItc.sgst),
+    igst: carry(outward.igst + rcm.igst, netItc.igst),
     total: 0,
   };
   creditCarryForward.total = r2(creditCarryForward.cgst + creditCarryForward.sgst + creditCarryForward.igst);
@@ -140,5 +147,5 @@ export function computeGSTR9(input: {
     .filter(b => Math.abs(b.taxableValue) > 0.005)
     .sort((a, b) => a.rate - b.rate);
 
-  return { period: { from, to }, outward, itcAvailed, itcReversed, netItc, netLiability, creditCarryForward, outwardByRate };
+  return { period: { from, to }, outward, itcAvailed, itcReversed, netItc, rcm, netLiability, creditCarryForward, outwardByRate };
 }

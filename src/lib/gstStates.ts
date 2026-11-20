@@ -66,3 +66,46 @@ export function societyStateCode(society: { gstin?: string; state?: string }, st
 export function placeOfSupply(recipientGstin: string | undefined, recipientState: string | undefined, supplierCode: string): string {
   return resolveStateCode(recipientGstin, recipientState) || supplierCode;
 }
+
+/**
+ * RPT-09 (audit 2026-11-17): is this supply inter-state? Derived from the society's state and the party's place of
+ * supply — never from the typed CGST/SGST/IGST percentages. False when either state is unknown (no basis to call it
+ * inter-state; the intra-state default of placeOfSupply).
+ */
+export function isInterState(societyCode: string, partyGstin?: string, partyState?: string): boolean {
+  if (!societyCode) return false;
+  const pos = placeOfSupply(partyGstin, partyState, societyCode);
+  return !!pos && pos !== societyCode;
+}
+
+/** RPT-09: the typed tax heads disagree with the place of supply (IGST on an intra-state supply or CGST/SGST across states). */
+export function taxHeadMismatch(interState: boolean, heads: { cgst?: number; sgst?: number; igst?: number }): boolean {
+  const local = (Number(heads.cgst) || 0) > 0.005 || (Number(heads.sgst) || 0) > 0.005;
+  const inter = (Number(heads.igst) || 0) > 0.005;
+  return interState ? local : inter;
+}
+
+const lastDayOf = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();   // m = 1..12; UTC — no IST day-shift
+
+/** RPT-08: "YYYY-MM-DD" of a month's last day, built by hand (toISOString of a local midnight lands on the day before in IST). */
+export function monthLastDay(y: number, m: number): string {
+  return `${y}-${String(m).padStart(2, '0')}-${String(lastDayOf(y, m)).padStart(2, '0')}`;
+}
+
+/**
+ * RPT-08 (audit 2026-11-17): the GST return period (GSTN "MMYYYY") of a date range — only when the range is exactly ONE
+ * month (1st → last day) or one calendar quarter (QRMP: the quarter's last month). The JSON used to take the from-date's
+ * month whatever the range, so a whole financial year was filed as April and a 15-Jul → 14-Aug range as July.
+ */
+export function gstReturnPeriod(from: string, to: string): { fp: string } | { error: string } {
+  const re = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const a = re.exec(from || ''), b = re.exec(to || '');
+  if (!a || !b) return { error: 'dates' };
+  const [fy, fm, fd] = [Number(a[1]), Number(a[2]), Number(a[3])];
+  const [ty, tm, td] = [Number(b[1]), Number(b[2]), Number(b[3])];
+  if (fd !== 1 || td !== lastDayOf(ty, tm)) return { error: 'not_whole_months' };
+  const months = (ty - fy) * 12 + (tm - fm) + 1;
+  const quarterStart = fm === 4 || fm === 7 || fm === 10 || fm === 1;
+  if (months === 1 || (months === 3 && quarterStart)) return { fp: `${String(tm).padStart(2, '0')}${ty}` };
+  return { error: 'not_one_period' };
+}
