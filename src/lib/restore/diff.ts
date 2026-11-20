@@ -186,7 +186,10 @@ export function diffEntity(
   }
 
   // Rows the database has and the archive does not.
-  result.orphan = currentRows.length - [...c.byKey.keys()].filter(k => a.byKey.has(k)).length;
+  // BKP-05: a table the archive does not CARRY at all (an older archive, made before the table existed) is left alone
+  // — Replace used to read "no rows" and delete every live row of it. Only a table the archive lists is authoritative.
+  // (Merge never deletes, so it keeps reporting those rows as "only in the database".)
+  result.orphan = archiveRows === null && mode === 'replace' ? 0 : currentRows.length - [...c.byKey.keys()].filter(k => a.byKey.has(k)).length;
 
   return result;
 }

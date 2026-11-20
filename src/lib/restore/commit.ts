@@ -183,6 +183,9 @@ async function runSaga(input: RestoreCommitInput): Promise<RestoreOutcome> {
       if (entity.key === VOUCHER_ENTRY_KEY) continue;
 
       input.onProgress?.(i, total, entity.key);
+      // BKP-05: a table the archive does not carry (older archive) is not touched — Replace would otherwise plan a
+      // delete of every live row (no archive rows = "none should exist"). The dry-run diff counts it the same way.
+      if (input.mode === 'replace' && !Object.prototype.hasOwnProperty.call(input.archiveRows, entity.key)) continue;
       const rows = input.archiveRows[entity.key] ?? [];
 
       try {
