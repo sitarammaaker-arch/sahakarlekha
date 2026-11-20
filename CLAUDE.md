@@ -65,8 +65,11 @@ pattern inline (or create a sibling helper if you're adding ≥ 3 paths).
 
 ### When adding a new column to a TypeScript type
 
-1. Add it to `supabase-tables.sql` with `alter table X add column if not exists`.
-2. Tell the user (in chat) that they MUST run the migration in Supabase SQL Editor.
+1. Add it in a NEW numbered migration — `supabase/migrations/NNN_<name>.sql` (next free number) with
+   `alter table X add column if not exists …`, a matching `NNN_<name>_down.sql`, and an
+   `insert into public.app_migrations …` row. Do NOT add it to `supabase-tables.sql`: that is the
+   original bootstrap file, and since SEC-01 (2026-11-20) it refuses to run on a live database.
+2. Tell the user (in chat) that they MUST run that migration in Supabase SQL Editor.
 3. In the save function, put the column in the **Step 2 / extras** bucket so the
    base upsert still succeeds even before the user runs the migration.
 
