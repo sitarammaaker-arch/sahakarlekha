@@ -46,6 +46,7 @@ import { getBillReceivedMap, getBillStatus, getSaleReturnedMap } from '@/lib/bil
 import type { SaleItem, PaymentMode } from '@/types';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 import CreditTermsField from '@/components/CreditTermsField';
+import { societyStateCode, isInterState, taxHeadMismatch } from '@/lib/gstStates';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -784,6 +785,20 @@ const SaleManagement: React.FC = () => {
                     <span className="w-24 text-right text-blue-600">{igstAmount > 0 ? fmt(igstAmount) : '—'}</span>
                   </div>
                 </div>
+                {/* RPT-09: the tax head must follow the place of supply — CGST+SGST within the state, IGST across states. */}
+                {(() => {
+                  const sc = societyStateCode(society);
+                  const party = customers.find(c => c.id === customerId);
+                  const inter = isInterState(sc, party?.gstin || party?.gstNo, party?.state || party?.placeOfSupply);
+                  if (!sc || !party || !taxHeadMismatch(inter, { cgst: cgstPct, sgst: sgstPct, igst: igstPct })) return null;
+                  return (
+                    <p className="text-xs font-medium text-red-700">
+                      {language === 'hi'
+                        ? (inter ? '⚠ यह पार्टी दूसरे राज्य की है — IGST लगना चाहिए, CGST/SGST नहीं।' : '⚠ यह पार्टी इसी राज्य की है — CGST + SGST लगना चाहिए, IGST नहीं।')
+                        : (inter ? '⚠ This party is in another state — charge IGST, not CGST/SGST.' : '⚠ This party is in the same state — charge CGST + SGST, not IGST.')}
+                    </p>
+                  );
+                })()}
                 {taxAmount > 0 && (
                   <div className="flex justify-between text-xs text-muted-foreground border-t pt-1">
                     <span>{language === 'hi' ? 'कुल GST' : 'Total GST'}</span>

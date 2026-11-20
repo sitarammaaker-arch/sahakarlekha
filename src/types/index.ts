@@ -1933,6 +1933,9 @@ export interface TdsChallan {
   challanDate: string;
   challanSerial: string;
   amount: number;
+  /** RPT-12 (migration 190): what of `amount` was interest / late fee & other charges — NOT TDS deposited. */
+  interestAmount?: number;
+  otherAmount?: number;
   bankName: string;
   quarter: TdsQuarter;
   financialYear: string;

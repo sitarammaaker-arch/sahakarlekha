@@ -2933,6 +2933,9 @@ var tdsChallan = {
     c13("challanDate", "Challan Date", "\u091A\u093E\u0932\u093E\u0928 \u0924\u093F\u0925\u093F", { type: "date" }),
     c13("challanSerial", "Challan Serial", "\u091A\u093E\u0932\u093E\u0928 \u0915\u094D\u0930\u092E\u093E\u0902\u0915"),
     money11("amount", "Amount", "\u0930\u093E\u0936\u093F"),
+    money11("interestAmount", "Interest", "\u092C\u094D\u092F\u093E\u091C", { defaultVisible: false }),
+    // RPT-12: not TDS deposited
+    money11("otherAmount", "Late Fee / Other", "\u0935\u093F\u0932\u0902\u092C \u0936\u0941\u0932\u094D\u0915 / \u0905\u0928\u094D\u092F", { defaultVisible: false }),
     c13("bankName", "Bank Name", "\u092C\u0948\u0902\u0915 \u0928\u093E\u092E"),
     c13("quarter", "Quarter", "\u0924\u093F\u092E\u093E\u0939\u0940"),
     c13("financialYear", "Financial Year", "\u0935\u093F\u0924\u094D\u0924\u0940\u092F \u0935\u0930\u094D\u0937"),

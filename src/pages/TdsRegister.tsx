@@ -27,7 +27,7 @@ import { applyPercent, toMinor, toRupees } from '@/lib/money';
 import type { TdsEntry, TdsChallan, TdsChallanLink, TdsSection, TdsDeducteeType, TdsQuarter } from '@/types';
 import { resolveSectionRef, describeSectionRef, isAct2025 } from '@/lib/rules/tdsSections';
 import { reportError } from '@/lib/errorReporting';
-import { buildChallanPosting, CHALLAN_REF_TYPE, CHALLAN_POSTING_MESSAGE } from '@/lib/tax/challanPosting';
+import { buildChallanPosting, CHALLAN_REF_TYPE, CHALLAN_POSTING_MESSAGE, challanTdsPart } from '@/lib/tax/challanPosting';
 import { tdsPayableAccountId, penaltyAccountId, MISSING_HEAD_TOAST } from '@/lib/accounting/headResolve';
 import { tdsLedgerTie, quarterRange } from '@/lib/tdsLedgerTie';
 import { getVoucherLines } from '@/lib/voucherUtils';
@@ -244,7 +244,8 @@ const TdsRegister: React.FC = () => {
 
   // Stats
   const totalDeducted = quarterEntries.reduce((s, e) => s + e.tdsAmount, 0);
-  const totalDeposited = quarterChallans.filter(c => c.status === 'paid').reduce((s, c) => s + c.amount, 0);
+  // RPT-12: only the TDS part of each challan (its total less interest and late fee / other) is TDS deposited.
+  const totalDeposited = Math.round(quarterChallans.filter(c => c.status === 'paid').reduce((s, c) => s + challanTdsPart(c) * 100, 0)) / 100;
   const totalPending = totalDeducted - totalDeposited;
   const dueDate = getQuarterDueDate(selectedQuarter, fy);
 
@@ -328,6 +329,8 @@ const TdsRegister: React.FC = () => {
     }
     const challan: TdsChallan = {
       ...challanForm,
+      interestAmount: challanInterest || 0,   // RPT-12: kept on the challan, not only in the voucher lines
+      otherAmount: challanOther || 0,
       id: challanId,
       financialYear: fy,
       quarter: selectedQuarter,
@@ -338,7 +341,15 @@ const TdsRegister: React.FC = () => {
     setShowAddChallan(false);
     setChallanForm(EMPTY_CHALLAN());
     setChallanBankId(''); setChallanInterest(0); setChallanOther(0); setPostChallanVoucher(true);
-    supabase.from('tds_challans').upsert(withSoc(challan)).then(({ error }) => {
+    // RULE 1: the base row first (columns that always exist); interest / other ride a second update — a database where
+    // migration 190 has not run yet keeps the challan and only warns.
+    const { interestAmount, otherAmount, ...baseChallan } = challan;
+    supabase.from('tds_challans').upsert(withSoc(baseChallan)).then(({ error }) => {
+      if (!error && (interestAmount || otherAmount)) {
+        supabase.from('tds_challans').update({ interestAmount, otherAmount }).eq('id', challanId).then(({ error: e2 }) => {
+          if (e2) toast({ title: hi ? 'चालान सेव हुआ — ब्याज / शुल्क नहीं' : 'Challan saved — interest / fee not', description: hi ? `Migration 190 चलाएँ: ${e2.message}` : `Run migration 190: ${e2.message}`, duration: 10000 });
+        });
+      }
       if (error) {
         console.error('TDS challan save error:', error.message);
         persistChallans(prev); // RULE-1 rollback

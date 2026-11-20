@@ -16,6 +16,7 @@ import { computeTds, isRefusal } from './computeTds';
 import { fyStartOf } from '../fyPeriod';
 import type { Minor } from '../money';
 import type { TaxContext } from '../rules/tax';
+import { isValidPan, noPanRatePct, NO_PAN_CITE } from '@/lib/rules/noPanRate';
 
 export interface PurchaseLite { id?: string; supplierId?: string; date: string; netAmount: number; isDeleted?: boolean }
 
@@ -23,7 +24,9 @@ export type PurchaseTdsAdvice =
   | { kind: 'none' }                                    // not a 194Q supplier — nothing to say
   | { kind: 'refused'; reason: string }                 // the engine refused (no verified rule)
   | { kind: 'below'; aggregateMinor: Minor; thresholdMinor: Minor; explain: string; caveats: string[] }
-  | { kind: 'above'; aggregateMinor: Minor; thresholdMinor: Minor; ratePct: number; billTdsMinor: Minor; billTdsPct: number; explain: string; caveats: string[] };
+  | { kind: 'above'; aggregateMinor: Minor; thresholdMinor: Minor; ratePct: number; billTdsMinor: Minor; billTdsPct: number; explain: string; caveats: string[];
+      /** RPT-14: the supplier has no valid PAN — the higher no-PAN rate (s.397(2)(b)(i)) and this bill's TDS at it. */
+      noPan?: { ratePct: number; billTdsMinor: Minor; cite: string } };
 
 const toMinorR = (r: number) => Math.round((Number(r) || 0) * 100) as Minor;
 
@@ -35,6 +38,8 @@ export const PURCHASE_194Q_CAVEATS = [
 export function purchaseTdsAdvice(args: {
   supplierSection?: string | null;
   supplierId?: string;
+  /** RPT-14: the supplier's PAN (or GSTIN-derived PAN); a missing / invalid one raises the rate. */
+  supplierPan?: string;
   bill: { id?: string; date: string; netAmount: number };
   purchases: readonly PurchaseLite[];
   ctx?: Omit<TaxContext, 'asOf'>;
@@ -56,9 +61,15 @@ export function purchaseTdsAdvice(args: {
   const beforeTds = !isRefusal(b) && b.applicable ? b.tdsMinor : 0;
   const billTdsMinor = (a.tdsMinor - beforeTds) as Minor;
   const billNet = toMinorR(args.bill.netAmount);
+  // RPT-14: no valid PAN → the higher of the section rate and the no-PAN floor (lib/rules/noPanRate, sourced). The TDS
+  // is proportional to the amount over the threshold, so the bill's share scales with the rate.
+  const npRate = args.supplierPan !== undefined && !isValidPan(args.supplierPan) ? noPanRatePct('194Q', a.ratePct, args.bill.date) : null;
+  const noPan = npRate !== null && a.ratePct > 0
+    ? { ratePct: npRate, billTdsMinor: Math.round((billTdsMinor * npRate) / a.ratePct) as Minor, cite: NO_PAN_CITE }
+    : undefined;
   return {
     kind: 'above', aggregateMinor: after, thresholdMinor: a.thresholdMinor, ratePct: a.ratePct, billTdsMinor,
     billTdsPct: billNet > 0 ? Math.round((billTdsMinor / billNet) * 100 * 10000) / 10000 : 0,
-    explain: a.explain, caveats: PURCHASE_194Q_CAVEATS,
+    explain: a.explain, caveats: PURCHASE_194Q_CAVEATS, ...(noPan ? { noPan } : {}),
   };
 }
