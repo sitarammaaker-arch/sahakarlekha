@@ -51,7 +51,8 @@ ok('network failure → skip nothing (never rejects)', (await m.fetchEmptyTables
 
 // ── wiring ───────────────────────────────────────────────────────────────────────────────────────
 const dc = readFileSync(PR(SRC, 'contexts/DataContext.tsx'), 'utf8');
-const wrapped = [...dc.matchAll(/unlessEmpty\(emptyP, '([a-z_]+)', \(\) => supabase\.from\('([a-z_]+)'\)/g)];
+// ARCH-02: growing side tables now load through the pager (fetchAllPaged) — same wrapping, same table on both sides.
+const wrapped = [...dc.matchAll(/unlessEmpty\(emptyP, '([a-z_]+)', \(\) => (?:supabase\.from|fetchAllPaged)\('([a-z_]+)'\)/g)];
 ok('DataContext: every side-load table wrapped, and only those', JSON.stringify(wrapped.map(w => w[1]).sort()) === JSON.stringify([...m.SIDE_LOAD_TABLES].sort())
   && wrapped.every(w => w[1] === w[2]));
 ok('DataContext: no side-load left unwrapped', !/sideLoad\(supabase\.from\(/.test(dc));

@@ -1097,8 +1097,21 @@ function get<T>(key: string, defaultValue: T): T {
   }
 }
 
+// ARCH-01 (audit 2026-11-17): the full voucher / member / account arrays are mirrored here. Past the browser's ~5 MB
+// quota setItem THROWS — inside the load's try (fresh cloud data replaced by the stale cache, entry blocked, a message
+// blaming the network) or inside a React state updater (white screen). The cache is a convenience, never the truth:
+// a write that does not fit is dropped, and the now-stale copy of that key is removed so it is never read back.
+const quotaWarned = new Set<string>();
 function set<T>(key: string, value: T): void {
-  localStorage.setItem(key, JSON.stringify(value));
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    try { localStorage.removeItem(key); } catch { /* storage unavailable — nothing to clean */ }
+    if (!quotaWarned.has(key)) {
+      quotaWarned.add(key);
+      console.warn(`[storage] "${key}" not cached locally (${e instanceof Error ? e.name : 'error'}) — the app keeps working from the cloud.`);
+    }
+  }
 }
 
 export const getVouchers = (): Voucher[] => get(KEYS.vouchers, []);
