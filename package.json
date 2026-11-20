@@ -30,6 +30,7 @@
     "test:sec07-activate-order": "node scripts/test-sec07-activate-order.mjs",
     "test:ye0408-year-close": "node scripts/test-ye0408-year-close.mjs",
     "test:bkp05-imp01": "node scripts/test-bkp05-imp01.mjs",
+    "test:bkp06-rederive-fy": "node scripts/test-bkp06-rederive-fy.mjs",
     "test:dep-p0": "node scripts/test-dep-p0.mjs",
     "test:mem-p0": "node scripts/test-mem-p0.mjs",
     "test:x1-onsaved-rule": "node scripts/test-x1-onsaved-rule.mjs",
