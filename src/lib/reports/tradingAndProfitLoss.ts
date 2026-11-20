@@ -101,20 +101,25 @@ export function computeTradingAccount({ tb: rawTb, fy, effDate, vouchers, stockI
   // Detect the posting against the SAME date window as the balances (effDate),
   // else an interim Balance Sheet before the posting date would drop closing stock.
   const closingScopedVouchers = vouchers.filter(v => v.date <= effDate);
+  // YE-04: the journal belongs to the year being reported when it is DATED inside that year (fyStart..effDate). The
+  // narration carries the label of the year it was posted for, but `fy` here is the society's CURRENT label — after a
+  // rollover the closed year's statements stopped finding their own journal (and the new year's found none / the old).
+  // Without fyStart (old callers) the narration rule stays.
+  const inReportedYear = (v: Voucher) => (fyStart ? v.date >= fyStart : v.narration.includes(fy));
   const closingViaLegacy = closingScopedVouchers.some(v =>
     getVoucherLines(v).some(l => l.accountId === '3403' && l.type === 'Dr') &&
     getVoucherLines(v).some(l => l.accountId === '5101' && l.type === 'Cr') &&
-    v.narration.includes(fy)
+    inReportedYear(v)
   );
   const closingViaDedicated = closingScopedVouchers.some(v =>
     getVoucherLines(v).some(l => l.accountId === '3403' && l.type === 'Dr') &&
     getVoucherLines(v).some(l => l.accountId === '5150' && l.type === 'Cr') &&
-    v.narration.includes(fy)
+    inReportedYear(v)
   );
   // Phase-2 C (091): the server's year-close posts the closing stock as ONE journal moving the stock
   // ledger to the counted value — Dr 3403 / Cr 5150 for an increase, the reverse for a decrease.
   const closingViaYearClose = closingScopedVouchers.some(v =>
-    (v as { refType?: string }).refType === 'fy.close.stock' && v.narration.includes(fy));
+    (v as { refType?: string }).refType === 'fy.close.stock' && inReportedYear(v));
   const closingStockPosted = closingViaLegacy || closingViaDedicated || closingViaYearClose;
 
   // RULE 2: THE closing-stock rule (lib/tradingAccount.closingStock) — the SAME one the Balance

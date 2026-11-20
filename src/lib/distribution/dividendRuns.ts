@@ -119,13 +119,21 @@ type VoucherLike = Parameters<typeof getVoucherLines>[0];
 const standsForPosting = (v: VoucherLike): boolean =>
   !(v as { isDeleted?: boolean }).isDeleted && (v as { approvalStatus?: string }).approvalStatus !== 'rejected';
 
-/** The live appropriation voucher of an FY: Dr `debitId` / Cr `creditId`, narration names the FY. */
+/** YE-07: every appropriation voucher is tagged with the FY it appropriates (refType + refId = FY label), so editing its
+ *  narration can no longer hide it from the duplicate check. Older ones are still recognised by the narration. */
+export const APPROPRIATION_REF = 'fy.appropriation';
+export function appropriationFor(v: VoucherLike, fy: string): boolean {
+  const t = v as { refType?: string; refId?: string; narration?: string };
+  return (t.refType === APPROPRIATION_REF && t.refId === fy) || (t.narration || '').includes(fy);
+}
+
+/** The live appropriation voucher of an FY: Dr `debitId` / Cr `creditId`, tagged with / narration names the FY. */
 export function postedAppropriation<V extends VoucherLike>(vouchers: ReadonlyArray<V>, debitId: string, creditId: string, fy: string): V | undefined {
   return vouchers.find((v) =>
     standsForPosting(v)
     && getVoucherLines(v).some((l) => l.accountId === debitId && l.type === 'Dr')
     && getVoucherLines(v).some((l) => l.accountId === creditId && l.type === 'Cr')
-    && (v.narration || '').includes(fy));
+    && appropriationFor(v, fy));
 }
 
 /** Per-member dividend PAYMENTS of an FY (Dr 1211, memberId-tagged, "dividend paid" narration). */
@@ -208,7 +216,7 @@ export function appropriationFunds<A extends { id: string; parentId?: string; is
 export function appropriatedToFunds(vouchers: ReadonlyArray<VoucherLike>, fundIds: ReadonlyArray<string>, fy: string): number {
   let minor = 0;
   for (const v of vouchers) {
-    if (!standsForPosting(v) || !((v as { narration?: string }).narration || '').includes(fy)) continue;
+    if (!standsForPosting(v) || !appropriationFor(v, fy)) continue;
     const lines = getVoucherLines(v);
     if (!lines.some((l) => l.accountId === ACC_NET_SURPLUS && l.type === 'Dr')) continue;
     for (const l of lines) if (l.type === 'Cr' && fundIds.includes(l.accountId)) minor += Math.round(l.amount * 100);

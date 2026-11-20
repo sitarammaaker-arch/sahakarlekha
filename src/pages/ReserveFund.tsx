@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { appropriationFunds, postedAppropriation } from '@/lib/distribution/dividendRuns';
+import { appropriationFunds, postedAppropriation, APPROPRIATION_REF } from '@/lib/distribution/dividendRuns';
+import { useAppropriationYear } from '@/hooks/useAppropriationYear';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -45,10 +46,11 @@ export const FundAppropriationPanel: React.FC<{ embedded?: boolean }> = ({ embed
   const { toast } = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const fy = society.financialYear; // e.g. "2024-25"
+  // YE-07: the year being appropriated (a rolled-over year still closing, else the current one) and ITS surplus.
+  const { fy, fyEnd } = useAppropriationYear(); // e.g. "2024-25"
   const hi = language === 'hi';
 
-  const { netProfit } = useMemo(() => getProfitLoss(), [getProfitLoss]);
+  const { netProfit } = useMemo(() => getProfitLoss(fyEnd), [getProfitLoss, fyEnd]);
 
   // ── All appropriable funds = credit accounts under "Reserves & Surplus" ──────
   // (excludes the Net Surplus source 1208 and the debit-side Dividend/Patronage).
@@ -135,6 +137,7 @@ export const FundAppropriationPanel: React.FC<{ embedded?: boolean }> = ({ embed
         creditAccountId: f.id,
         amount: inputAmount(f.id),
         narration: `${f.name} Appropriation ${mode === 'pct' ? `@ ${value}%` : '(fixed amount)'} — FY ${fy}`,
+        refType: APPROPRIATION_REF, refId: fy,   // YE-07: the duplicate check does not depend on the narration
         createdBy: user?.name ?? 'System',
       });
       if (v?.id) posted++; else failed.push(fundName(f));
