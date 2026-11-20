@@ -548,7 +548,7 @@ export default function GstSummary() {
     }));
 
     const b2csArr = b2csSummary.map(r => ({
-      sply_ty: 'INTRA',
+      sply_ty: r.igst > 0.005 ? 'INTER' : 'INTRA',   // RPT-09: an IGST row is an inter-state supply (was always INTRA)
       rt: r.rate,
       typ: 'OE',
       txval: r.taxableValue,

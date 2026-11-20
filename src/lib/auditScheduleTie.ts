@@ -34,10 +34,14 @@ export interface TieInput {
 export interface TieResult { schedules: ResolvedSchedule[]; ties: { liabilities: number; assets: number; bsLiabilities: number; bsAssets: number; ok: boolean } }
 
 type Side = 'liab' | 'asset' | 'income' | 'expense';
+// RPT-16 (audit 2026-11-17): a ledger's schedule is decided by its SUBTYPE first and the standard group id only as the
+// fallback. Placing by group id alone sent share capital kept under a custom group to Schedule VII (current
+// liabilities) — the totals still tied, so the tie check could not see it.
+const RESERVE_SUBTYPES = new Set(['reserve', 'surplus', 'patronage_distribution', 'dividend_distribution']);
 const LIAB_SCHEDULES: Record<string, (a: LedgerAccount, under: (g: string) => boolean) => boolean> = {
-  'sch-I': (_a, under) => under('1100'),
-  'sch-II': (_a, under) => under('1200'),
-  'sch-III': (_a, under) => under('2300'),
+  'sch-I': (a, under) => a.subtype === 'share_capital' || (under('1100') && !RESERVE_SUBTYPES.has(a.subtype || '') && a.subtype !== 'long_term_loan'),
+  'sch-II': (a, under) => RESERVE_SUBTYPES.has(a.subtype || '') || (under('1200') && a.subtype !== 'share_capital' && a.subtype !== 'long_term_loan'),
+  'sch-III': (a, under) => a.subtype === 'long_term_loan' || (under('2300') && a.subtype !== 'share_capital' && !RESERVE_SUBTYPES.has(a.subtype || '')),
 };
 const ASSET_SCHEDULES: Record<string, (a: LedgerAccount, under: (g: string) => boolean) => boolean> = {
   'sch-IV': (a, under) => under('3100') || a.subtype === 'fixed_asset' || a.subtype === 'accumulated_dep',
@@ -77,7 +81,9 @@ export function tieSchedules(resolved: readonly ResolvedSchedule[], input: TieIn
 
   const matches = (li: ScheduleLineItem, a: LedgerAccount): boolean => {
     const s = li.source;
-    if (s.kind === 'account') return s.accountIds.includes(a.id);
+    // RPT-16: an account line covers that ledger AND any ledger under it (a head turned into a group of sub-ledgers
+    // used to show 0 on its own line while each sub-ledger printed as a loose line).
+    if (s.kind === 'account') return s.accountIds.includes(a.id) || s.accountIds.some((id) => underOf(a)(id));
     if (s.kind === 'parentGroup') return s.parentIds.some((g) => a.parentId === g || underOf(a)(g));
     if (s.kind === 'subtype') return s.subtypes.includes(a.subtype || '');
     return false;

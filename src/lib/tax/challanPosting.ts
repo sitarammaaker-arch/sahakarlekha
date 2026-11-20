@@ -66,3 +66,13 @@ export const CHALLAN_POSTING_MESSAGE: Record<Exclude<ChallanPostingError, 'no_td
   no_tds: 'ब्याज और अन्य शुल्क जोड़कर चालान की राशि से कम रहने चाहिए — देय TDS का हिस्सा शून्य या ऋणात्मक बन रहा है।',
   no_bank: 'बैंक खाता चुनें (वाउचर के लिए)।',
 };
+
+/**
+ * RPT-12 (audit 2026-11-17): the TDS part of a challan — its total less the interest and the late fee / other charges
+ * it also paid. "TDS deposited" used to add the whole challan total, so interest and fee counted as TDS (₹5,120 shown
+ * deposited against ₹5,000 of TDS). One rule for the register's cards and any report that totals deposited TDS.
+ */
+export function challanTdsPart(c: { amount: number; interestAmount?: number; otherAmount?: number }): number {
+  const p = Math.round((Number(c.amount) || 0) * 100) - Math.round((Number(c.interestAmount) || 0) * 100) - Math.round((Number(c.otherAmount) || 0) * 100);
+  return Math.max(0, p) / 100;
+}

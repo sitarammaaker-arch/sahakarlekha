@@ -39,8 +39,10 @@ import { toMinor, toRupees, mulMinor } from '@/lib/money';
 import { useToast } from '@/hooks/use-toast';
 import type { PurchaseItem, PaymentMode } from '@/types';
 import { purchaseTdsAdvice } from '@/lib/tax/purchaseTdsAdvice';
+import { supplierPan } from '@/lib/tax/purchaseTdsParty';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 import CreditTermsField from '@/components/CreditTermsField';
+import { societyStateCode, isInterState, taxHeadMismatch } from '@/lib/gstStates';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -155,6 +157,7 @@ const PurchaseManagement: React.FC = () => {
   const tdsAdvice = useMemo(() => purchaseTdsAdvice({
     supplierSection: suppliers.find(s => s.id === supplierId)?.tdsSection,
     supplierId: supplierId || undefined,
+    supplierPan: supplierId ? supplierPan(suppliers.find(s => s.id === supplierId)) : undefined,   // RPT-14
     bill: { id: editingId ?? undefined, date: purchaseDate, netAmount },
     purchases: purchases as unknown as { id?: string; supplierId?: string; date: string; netAmount: number; isDeleted?: boolean }[],
   }), [suppliers, supplierId, editingId, purchaseDate, netAmount, purchases]);
@@ -782,6 +785,20 @@ const PurchaseManagement: React.FC = () => {
                     <Input type="number" min={0} max={28} step={0.5} value={igstPct} onChange={e => setIgstPct(Math.max(0, Number(e.target.value)))} className="w-20 h-7 text-right text-sm" />
                     <span className="w-24 text-right text-muted-foreground">{fmt(igstAmount)}</span>
                   </div>
+                {/* RPT-09: the tax head must follow the place of supply — CGST+SGST within the state, IGST across states. */}
+                {(() => {
+                  const sc = societyStateCode(society);
+                  const party = suppliers.find(x => x.id === supplierId);
+                  const inter = isInterState(sc, party?.gstin || party?.gstNo, party?.state || party?.placeOfSupply);
+                  if (!sc || !party || !taxHeadMismatch(inter, { cgst: cgstPct, sgst: sgstPct, igst: igstPct })) return null;
+                  return (
+                    <p className="text-xs font-medium text-red-700">
+                      {language === 'hi'
+                        ? (inter ? '⚠ यह पार्टी दूसरे राज्य की है — IGST लगना चाहिए, CGST/SGST नहीं।' : '⚠ यह पार्टी इसी राज्य की है — CGST + SGST लगना चाहिए, IGST नहीं।')
+                        : (inter ? '⚠ This party is in another state — charge IGST, not CGST/SGST.' : '⚠ This party is in the same state — charge CGST + SGST, not IGST.')}
+                    </p>
+                  );
+                })()}
                   {/* ECR-22: Reverse Charge Mechanism */}
                   <label className="flex items-center gap-2 pt-1 text-sm cursor-pointer">
                     <input type="checkbox" checked={rcmApplicable} onChange={e => setRcmApplicable(e.target.checked)} className="h-4 w-4" />
@@ -819,6 +836,14 @@ const PurchaseManagement: React.FC = () => {
                           {language === 'hi'
                             ? `इस बिल का हिस्सा: ${fmt(tdsAdvice.billTdsMinor / 100)} (बिल का लगभग ${tdsAdvice.billTdsPct}%)।`
                             : `This bill's share: ${fmt(tdsAdvice.billTdsMinor / 100)} (≈ ${tdsAdvice.billTdsPct}% of the bill).`}
+                        </p>
+                      )}
+                      {tdsAdvice.kind === 'above' && tdsAdvice.noPan && (
+                        <p className="font-medium text-red-700">
+                          {language === 'hi'
+                            ? `⚠ इस आपूर्तिकर्ता का मान्य PAN नहीं है — TDS ${tdsAdvice.noPan.ratePct}% की ऊँची दर से कटेगा: इस बिल का हिस्सा ${fmt(tdsAdvice.noPan.billTdsMinor / 100)}। आपूर्तिकर्ता में PAN भरें।`
+                            : `⚠ This supplier has no valid PAN — TDS is due at the higher ${tdsAdvice.noPan.ratePct}%: this bill's share ${fmt(tdsAdvice.noPan.billTdsMinor / 100)}. Add the PAN on the supplier.`}
+                          <span className="block text-xs font-normal opacity-80">{tdsAdvice.noPan.cite}</span>
                         </p>
                       )}
                       {(tdsAdvice.kind === 'below' || tdsAdvice.kind === 'above') && tdsAdvice.caveats.map(c => (

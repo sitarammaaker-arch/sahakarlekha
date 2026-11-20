@@ -12,6 +12,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { addHeader, addPageNumbers, addDocumentSignatureBlock, getSignatoryNames, pdfFileName } from '@/lib/pdf';
+import { purchaseTdsParty } from '@/lib/tax/purchaseTdsParty';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -30,10 +31,14 @@ interface TdsEntry {
   tdsPct: number;
   tdsAmount: number;
   netAmount: number;
+  /** RPT-15: the bill number, the section and the deductee's PAN (from the supplier — lib/tax/purchaseTdsParty). */
+  docNo: string;
+  section: string;
+  deducteePan: string;
 }
 
 export default function TdsForm16A() {
-  const { purchases: allPurchases, society, matchesActiveBranch } = useData();
+  const { purchases: allPurchases, suppliers, society, matchesActiveBranch } = useData();
   // ECR-17: honour the active branch (same rule as GstSummary / TdsRegister).
   const purchases = useMemo(() => allPurchases.filter(p => matchesActiveBranch(p.branchId)), [allPurchases, matchesActiveBranch]);
   const { language } = useLanguage();
@@ -41,8 +46,14 @@ export default function TdsForm16A() {
 
   const [selectedFY, setSelectedFY] = useState(society.financialYear);
   const [deductorName, setDeductorName] = useState(society.name);
-  const [deductorPan, setDeductorPan] = useState('');
-  const [deductorTan, setDeductorTan] = useState('');
+  // RPT-15: prefilled from the society record (they printed as blanks), still editable.
+  const [deductorPan, setDeductorPan] = useState(society.entityPan || '');
+  const [deductorTan, setDeductorTan] = useState(society.tan || '');
+  // RPT-15: the FY list follows the society's own year (it was hard-coded up to 2025-26).
+  const fyOptions = useMemo(() => {
+    const start = Number(String(society.financialYear || '').split('-')[0]) || new Date().getFullYear();
+    return Array.from({ length: 5 }, (_, i) => { const y = start - i; return `${y}-${String((y + 1) % 100).padStart(2, '0')}`; });
+  }, [society.financialYear]);
   const [filterSupplier, setFilterSupplier] = useState('__all__');
 
   const { from, to } = fyBounds(selectedFY);
@@ -54,17 +65,23 @@ export default function TdsForm16A() {
         p.date >= from && p.date <= to &&
         p.tdsAmount > 0
       )
-      .map(p => ({
-        purchaseId: p.id,
-        date: p.date,
-        supplierName: p.supplierName,
-        supplierId: p.supplierId,
-        grossAmount: p.netAmount,
-        tdsPct: p.tdsPct,
-        tdsAmount: p.tdsAmount,
-        netAmount: p.grandTotal,
-      }));
-  }, [purchases, from, to]);
+      .map(p => {
+        const party = purchaseTdsParty(suppliers.find(x => x.id === p.supplierId));
+        return {
+          purchaseId: p.id,
+          date: p.date,
+          supplierName: p.supplierName,
+          supplierId: p.supplierId,
+          grossAmount: p.netAmount,
+          tdsPct: p.tdsPct,
+          tdsAmount: p.tdsAmount,
+          netAmount: p.grandTotal,
+          docNo: p.purchaseNo || p.id.slice(-6),
+          section: party.section,
+          deducteePan: party.deducteePan,
+        };
+      });
+  }, [purchases, suppliers, from, to]);
 
   // Group by supplier
   const supplierMap = useMemo(() => {
@@ -82,21 +99,16 @@ export default function TdsForm16A() {
   const totalTds = filtered.reduce((s, e) => s + e.tdsAmount, 0);
   const totalGross = filtered.reduce((s, e) => s + e.grossAmount, 0);
 
-  const tdsHeaders = ['#', 'Date', 'Particulars', 'Gross Amount', 'TDS %', 'TDS Amount'];
+  const tdsHeaders = ['#', 'Date', 'Bill No.', 'Deductee', 'PAN', 'Section', 'Gross Amount', 'TDS %', 'TDS Amount'];
+  const rowOf = (e: TdsEntry, i: number) => [i + 1, e.date, e.docNo, e.supplierName, e.deducteePan || 'PAN not available', e.section, e.grossAmount, `${e.tdsPct}%`, e.tdsAmount];
 
   const handleCSV = () => {
-    const rows = tdsEntries.map((e, i) => [
-      i + 1, e.date, `Purchase #${e.purchaseId.slice(-6)}`,
-      e.grossAmount, `${e.tdsPct}%`, e.tdsAmount,
-    ]);
+    const rows = filtered.map(rowOf);   // RPT-15: honours the supplier filter
     downloadCSV(tdsHeaders, rows, 'tds-form-16a');
   };
 
   const handleExcel = () => {
-    const rows = tdsEntries.map((e, i) => [
-      i + 1, e.date, `Purchase #${e.purchaseId.slice(-6)}`,
-      e.grossAmount, `${e.tdsPct}%`, e.tdsAmount,
-    ]);
+    const rows = filtered.map(rowOf);
     downloadExcelSingle(tdsHeaders, rows, 'tds-form-16a', 'TDS Form 16A');
   };
 
@@ -108,7 +120,7 @@ export default function TdsForm16A() {
 
     const subtitle = supplierName
       ? `Deductee: ${supplierName} | FY: ${selectedFY}`
-      : `[Under Section 203 of Income Tax Act, 1961] | FY: ${selectedFY}`;
+      : `Statement of TDS on purchases — NOT the TRACES certificate | FY: ${selectedFY}`;   // RPT-15: honest label (no 1961-Act citation)
     const { startY, font } = addHeader(doc, 'TDS Form 16A', society, subtitle, { reportCode: 'F16A' });
 
     // Deductor Info
@@ -125,9 +137,9 @@ export default function TdsForm16A() {
 
       autoTable(doc, {
         startY: y,
-        head: [['#', 'Date', 'Particulars', 'Gross Amount', 'TDS %', 'TDS']],
-        body: entries.map((e, i) => [i + 1, e.date, `Purchase #${e.purchaseId.slice(-6)}`, e.grossAmount.toFixed(2), `${e.tdsPct}%`, e.tdsAmount.toFixed(2)]),
-        foot: [['', '', 'Total', totalDedGross.toFixed(2), '', totalDedTds.toFixed(2)]],
+        head: [['#', 'Date', 'Bill No.', 'PAN', 'Section', 'Gross Amount', 'TDS %', 'TDS']],
+        body: entries.map((e, i) => [i + 1, e.date, e.docNo, e.deducteePan || 'PAN not available', e.section, e.grossAmount.toFixed(2), `${e.tdsPct}%`, e.tdsAmount.toFixed(2)]),
+        foot: [['', '', '', '', 'Total', totalDedGross.toFixed(2), '', totalDedTds.toFixed(2)]],
         styles: { fontSize: 8 },
         headStyles: { fillColor: [41, 128, 185] },
         footStyles: { fontStyle: 'bold' },
@@ -201,7 +213,7 @@ export default function TdsForm16A() {
             <Select value={selectedFY} onValueChange={setSelectedFY}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {['2022-23', '2023-24', '2024-25', '2025-26'].map(fy => (
+                {fyOptions.map(fy => (
                   <SelectItem key={fy} value={fy}>{fy}</SelectItem>
                 ))}
               </SelectContent>

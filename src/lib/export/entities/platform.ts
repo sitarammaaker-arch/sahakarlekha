@@ -172,6 +172,8 @@ const tdsChallan: EntityDescriptor = {
     c('challanDate', 'Challan Date', 'चालान तिथि', { type: 'date' }),
     c('challanSerial', 'Challan Serial', 'चालान क्रमांक'),
     money('amount', 'Amount', 'राशि'),
+    money('interestAmount', 'Interest', 'ब्याज', { defaultVisible: false }),   // RPT-12: not TDS deposited
+    money('otherAmount', 'Late Fee / Other', 'विलंब शुल्क / अन्य', { defaultVisible: false }),
     c('bankName', 'Bank Name', 'बैंक नाम'),
     c('quarter', 'Quarter', 'तिमाही'),
     c('financialYear', 'Financial Year', 'वित्तीय वर्ष'),

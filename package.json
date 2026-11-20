@@ -34,6 +34,7 @@
     "test:arch-big-society": "node scripts/test-arch-big-society.mjs",
     "test:security-leftovers": "node scripts/test-security-leftovers.mjs",
     "test:reports-rpt-batch-a": "node scripts/test-reports-rpt-batch-a.mjs",
+    "test:reports-rpt-batch-b": "node scripts/test-reports-rpt-batch-b.mjs",
     "test:dep-p0": "node scripts/test-dep-p0.mjs",
     "test:mem-p0": "node scripts/test-mem-p0.mjs",
     "test:x1-onsaved-rule": "node scripts/test-x1-onsaved-rule.mjs",

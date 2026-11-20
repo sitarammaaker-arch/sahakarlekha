@@ -202,7 +202,7 @@ ok(validateRegistry([ent('a', { columns: [], naturalKey: [] })]).length >= 2, 'e
 // supabase-tables.sql. FAIL-CLOSED: if the import fails we exit 1 rather than
 // skipping, so a broken registry can never pass silently.
 // ══════════════════════════════════════════════════════════════════════════════
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { register } from 'node:module';
 import { dirname, resolve as pathResolve } from 'node:path';
@@ -282,10 +282,19 @@ function parseSchema(sql) {
   return tables;
 }
 
+// CLAUDE.md RULE 1 (since SEC-01): new columns arrive in numbered migrations, so they count as schema too.
+const numberedMigrations = readdirSync(pathResolve(HERE, '../supabase/migrations'))
+  .filter((n) => /^\d{3}_.*\.sql$/.test(n) && !n.endsWith('_down.sql')).sort()
+  .map((n) => readFileSync(pathResolve(HERE, '../supabase/migrations', n), 'utf8')).join('\n');
 const schema = parseSchema(
   readFileSync(pathResolve(HERE, '../supabase-tables.sql'), 'utf8') +
   '\n' +
   readFileSync(pathResolve(HERE, '../MIGRATIONS.sql'), 'utf8')
+);
+// Columns a numbered migration adds to a known table count as existing (table coverage still reads the base schema).
+const columnSchema = parseSchema(
+  readFileSync(pathResolve(HERE, '../supabase-tables.sql'), 'utf8') + '\n' +
+  readFileSync(pathResolve(HERE, '../MIGRATIONS.sql'), 'utf8') + '\n' + numberedMigrations
 );
 
 // ── 5. The real registry is structurally valid ────────────────────────────────
@@ -299,7 +308,8 @@ for (const e of REGISTRY) {
   const cols = schema.get(e.table);
   ok(!!cols, `[${e.key}] table "${e.table}" exists in supabase-tables.sql`);
   if (!cols) continue;
-  const missing = e.columns.map(c => c.key).filter(k => !cols.has(k));
+  const migCols = columnSchema.get(e.table) ?? new Set();
+  const missing = e.columns.map(c => c.key).filter(k => !cols.has(k) && !migCols.has(k));
   ok(missing.length === 0, `[${e.key}] all declared columns exist (missing: ${missing.join(', ') || 'none'})`);
 }
 
