@@ -25,6 +25,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { patchRow } from '@/lib/rowPatch';
 import { fetchAllPaged } from '@/lib/supabasePaging';
 import { resolveJurisdiction } from '@/lib/jurisdiction';
 import { reportError } from '@/lib/errorReporting';
@@ -246,7 +247,7 @@ export function DairyProvider({ children }: { children: ReactNode }) {
       const u = prev.map(c => c.id === id ? { ...c, ...data } : c);
       storage.setDairyRateCharts(u);
       const next = u.find(c => c.id === id);
-      if (next && before) supabase.from('dairy_rate_charts').upsert(withSoc(next)).then(({ error }) => {
+      if (next && before) patchRow('dairy_rate_charts', id, before, next).then(({ error }) => {
         if (error) {
           setRateChartsState(p => { const r = p.map(c => c.id === id ? before : c); storage.setDairyRateCharts(r); return r; });
           toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });

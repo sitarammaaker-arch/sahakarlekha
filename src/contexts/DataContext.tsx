@@ -60,9 +60,10 @@ import { computeGodownStock, godownMovementsWithOpening, UNASSIGNED_GODOWN } fro
 import { validateTransfer, buildTransferLegs } from '@/lib/godownTransfer';
 import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, defaultBankAccountId, defaultDebtorsAccountId, defaultCreditorsAccountId } from '@/lib/storage';
-import { isUniqueViolation, isMissingBranchColumn, payloadWithoutMissingColumn, nextDocSeq, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
+import { isUniqueViolation, isMissingBranchColumn, payloadWithoutMissingColumn, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import { voucherLinesBalance, snapSubRupeeResidual } from '@/lib/validation';
 import { supabase } from '@/lib/supabase';
+import { patchRow } from '@/lib/rowPatch';
 import type { SocietyCapabilityRow, Capability, SocietyActivityRow } from '@/lib/navigation';
 import { navigationService, declaredActivities } from '@/lib/navigation';
 import { clearedKeysAsNull } from '@/lib/settingsPayload';
@@ -738,9 +739,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // the ledger cutover that flips reports to the projection is T-09. In-memory this session.
   const ledgerEventsRef = useRef<LedgerEvent[]>([]);
   // S3-b: society_flags.posting_service — when true, a new posted voucher is saved by ONE server call
-  // (post_voucher, migration 077) instead of the client's multi-call save. Read-only, fail-safe: any
-  // read error / missing table leaves it false, i.e. today's path.
-  const postingServiceRef = useRef(false);
+  // (post_voucher, migration 077) instead of the client's multi-call save.
+  // ARCH-03 (migration 191): ON for every society. A missing row or a read error leaves it ON (the server's
+  // posting_service_on() reads a missing row the same way); only an explicit false row turns the voucher-level
+  // paths back to the client save. Sales / purchases ignore it — they save only through the server now.
+  const postingServiceRef = useRef(true);
   // Migration 127: edit_voucher / save_pending_voucher keep an edited activity tag (costCentreId) only once
   // the founder has run it. Probed at load via voucher_edit_capabilities() (absent before 127 → stays false),
   // so the edit dialog never offers a tag change the server would silently drop (RULE 1).
@@ -943,60 +946,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
   }, [setActiveGodown]);
-  // Persist a stock movement safely (ECR-17 Phase 3): base upsert WITHOUT godownId
-  // (never fails pre-migration), then a best-effort step-2 patch of godownId.
-  const persistMovement = (mv: StockMovement) => {
-    const { godownId, ...base } = mv;
-    supabase.from('stock_movements').upsert(withSoc(base)).then(({ error }) => {
-      if (error) { console.error('DB sync error (movement):', error.message); reportError('stock-movement-save', error.message, { movementId: mv.id, itemId: mv.itemId }); return; }
-      if (godownId) supabase.from('stock_movements').update({ godownId }).eq('id', mv.id).then(({ error: gErr }) => { if (gErr) { console.warn('Movement godown patch:', gErr.message); reportError('write-partial', gErr.message, { at: 'Movement godown patch:' }); } });
-    });
-  };
-
-  // Step-2 "extras" update that survives a pre-migration column (RULE 1). The base row is
-  // already saved; this patches the columns added later by ALTER TABLE (GST/TDS/TCS,
-  // customerId, …). PostgREST fails the WHOLE update on ONE unknown column, so on a stale/
-  // un-migrated schema we drop exactly that column and retry — every column that DOES exist
-  // still lands, instead of one un-migrated flag silently taking all of them (the rcmApplicable
-  // incident: months of purchases kept their base row but lost all GST, under a console.warn
-  // nobody saw). Only when a column that is genuinely missing can't be trimmed away do we stop
-  // and show a VISIBLE toast naming it — never a silent warn. On a migrated DB the first update
-  // succeeds and none of this runs, so healthy societies see no change.
-  const persistExtras = (
-    table: 'sales' | 'purchases',
-    id: string,
-    extras: Record<string, unknown>,
-    label: string,
-    dropped: string[] = [],
-  ) => {
-    supabase.from(table).update(extras).eq('id', id).then(({ error }) => {
-      if (!error) {
-        // Everything we could save is saved. If we had to drop un-migrated columns to get
-        // here, say so — mildly, not destructively: the money columns landed, only a missing
-        // flag/column didn't. Silence here is exactly what hid the rcmApplicable loss.
-        if (dropped.length) toastRef.current({
-          title: tr('सहेजा गया — पर कुछ कॉलम इस DB में नहीं हैं', 'Saved — but some columns are missing in this DB'),
-          description: tr(`${label}: बाक़ी सब सेव हुआ; ये कॉलम database में नहीं हैं — बाकी migration चलाएँ: ${dropped.join(', ')}.`, `${label}: everything else was saved; these columns are not in the database — run the pending migrations: ${dropped.join(', ')}.`),
-          duration: 12000,
-        });
-        return;
-      }
-      const trimmed = dropped.length < 24 ? payloadWithoutMissingColumn(error, extras) : null;
-      if (trimmed && Object.keys(trimmed).length > 0) {
-        const col = Object.keys(extras).find(k => !(k in trimmed))!;
-        persistExtras(table, id, trimmed, label, [...dropped, col]);
-        return;
-      }
-      // Not a missing-column error, or nothing left to trim: surface it, never bury it.
-      console.warn(`${label} (extras) update:`, error.message);
-      toastRef.current({
-        title: tr('कुछ फ़ील्ड सेव नहीं हुए', 'Some fields were not saved'),
-        description: tr(`${label}: मुख्य रिकॉर्ड सुरक्षित है, पर अतिरिक्त जानकारी सेव नहीं हुई — बाकी migration चलाएँ। (${error.message})`, `${label}: the main record is safe, but the extra details were not saved — run the pending migrations. (${error.message})`),
-        variant: 'destructive',
-        duration: 14000,
-      });
-    });
-  };
+  // ARCH-03: persistMovement / persistExtras (the client-side sale & purchase save) are gone — stock documents
+  // save only through post_stock_document / update_stock_document.
 
   const [members, setMembersState] = useState<Member[]>([]);
   const membersRef = useRef<Member[]>(members);
@@ -1321,9 +1272,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         const emptyP = knownEmptyTables(sid);   // S2: in flight alongside the core load below
         // S3-b: read-only flag read (RM-01-safe); never blocks or fails the load.
-        postingServiceRef.current = false;
+        postingServiceRef.current = true;
         supabase.from('society_flags').select('posting_service').eq('society_id', sid).maybeSingle()
-          .then(({ data, error }) => { postingServiceRef.current = !error && data?.posting_service === true; }, () => { /* stays false */ });
+          .then(({ data, error }) => { if (!error) postingServiceRef.current = data?.posting_service !== false; }, () => { /* stays on */ });
         activityTagEditableRef.current = false;
         void probeActivityTagEditable().then(v => { activityTagEditableRef.current = v === true; });
         const loadResults = await Promise.all([
@@ -2157,6 +2108,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     if (opts?.persistWith && shadowEvent) { opts.persistWith(newVoucher, shadowEvent, rollbackOptimistic); return newVoucher; }
+    // ARCH-03: a stock document (sale / purchase) saves ONLY through the server (post_stock_document) — the
+    // old client multi-call path is gone. Without its ledger event (pending, or the event failed to build) it
+    // cannot be posted there, so nothing is saved and the caller stops on the empty id.
+    if (opts?.persistWith) {
+      rollbackOptimistic();
+      reportError('stock-document-no-event', 'stock document voucher has no ledger event', { voucherId: newVoucher.id, approvalStatus: newVoucher.approvalStatus });
+      toastRef.current({ title: tr('❌ बिल सेव नहीं हुआ', '❌ Bill not saved'), description: tr('इस बिल का वाउचर नहीं बन सका, इसलिए कुछ भी सेव नहीं हुआ। दोबारा कोशिश करें।', 'The voucher for this bill could not be built, so nothing was saved. Please try again.'), variant: 'destructive', duration: 10000 });
+      opts?.onFailed?.();
+      return { ...newVoucher, id: '' };
+    }
 
     // ── journal-first-write (slice 4) — DORMANT, per-tenant flag, default OFF ────────────────────
     // When journalFirstWrites is on AND this voucher is journaled (posted, has a shadow event), the
@@ -3246,7 +3207,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const sid = societyIdRef.current;
       if (!userRef.current || !sid || document.visibilityState !== 'visible') return;   // J6: not when logged out
       supabase.from('society_flags').select('posting_service').eq('society_id', sid).maybeSingle()
-        .then(({ data, error }) => { if (!error) postingServiceRef.current = data?.posting_service === true; }, () => { /* keep */ });
+        .then(({ data, error }) => { if (!error) postingServiceRef.current = data?.posting_service !== false; }, () => { /* keep */ });
       // 127 run (or rolled back) while this tab was open: picked up here, without a reload. A failed read keeps the value.
       void probeActivityTagEditable().then(v => { if (v !== null) activityTagEditableRef.current = v; });
     };
@@ -3435,7 +3396,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!before) return;
     const updated = { ...before, ...data };
     setAuditObjectionsState(prev => prev.map(o => o.id === id ? updated : o));
-    supabase.from('audit_objections').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('audit_objections', id, before, updated).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setAuditObjectionsState(prev => prev.map(o => o.id === id ? before : o));   // RULE 1: roll back to prior state
@@ -3479,7 +3440,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!before) return;
     const updated = { ...before, ...data };
     setRecoverablesState(prev => prev.map(r => r.id === id ? updated : r));
-    supabase.from('recoverables').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('recoverables', id, before, updated).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setRecoverablesState(prev => prev.map(r => r.id === id ? before : r));   // RULE 1: roll back to prior state
@@ -3519,7 +3480,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!before) return;
     const updated = { ...before, ...data };
     setKachiAaratEntriesState(prev => prev.map(e => e.id === id ? updated : e));
-    supabase.from('kachi_aarat_entries').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('kachi_aarat_entries', id, before, updated).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setKachiAaratEntriesState(prev => prev.map(e => e.id === id ? before : e));   // RULE 1: roll back to prior state
@@ -4697,7 +4658,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!old) return;
     const updated = { ...old, ...data };
     setWorkOrdersState(prev => { const u = prev.map(w => w.id === id ? updated : w); storage.setWorkOrders(u); return u; });
-    supabase.from('work_orders').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('work_orders', id, old, updated).then(({ error }) => {
       if (error) {
         console.error('Work order update error:', error.message);
         setWorkOrdersState(prev => { const u = prev.map(w => w.id === id ? old : w); storage.setWorkOrders(u); return u; });
@@ -4785,7 +4746,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ? { ...updated, accrued: newWage > 0, accrualVoucherId: newAv.id || undefined }
       : updated;
     setMusterEntriesState(prev => { const u = prev.map(x => x.id === id ? next : x); storage.setMusterEntries(u); return u; });
-    supabase.from('muster_entries').upsert(withSoc(next)).then(({ error }) => {
+    patchRow('muster_entries', id, old, next).then(({ error }) => {
       if (error) {
         console.error('Muster entry update error:', error.message);
         setMusterEntriesState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setMusterEntries(u); return u; });
@@ -5084,7 +5045,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         for (const k of Object.keys(data) as (keyof LedgerAccount)[]) {
           if (data[k] === undefined) row[k] = k === 'isGroup' || k === 'isSystem' ? false : null;
         }
-        supabase.from('accounts').upsert(row).then(({ error }) => {
+        patchRow('accounts', id, before, row).then(({ error }) => {
           if (error) {
             console.error('DB sync error:', error.message); reportError('db-sync', error.message);
             setAccountsState(p => p.map(a => a.id === id ? before : a));   // RULE 1: roll back to prior state
@@ -5628,7 +5589,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!before) return;
     const next: Farmer = { ...before, ...data, updatedAt: new Date().toISOString() };
     setProcurementFarmersState(prev => { const u = prev.map(f => f.id === id ? next : f); storage.setProcurementFarmers(u); return u; });
-    supabase.from('procurement_farmers').upsert(withSoc(farmerBase(next))).then(({ error }) => {
+    patchRow('procurement_farmers', id, before, farmerBase(next)).then(({ error }) => {
       if (!error) { persistFarmerExtras(next, true); return; }
       setProcurementFarmersState(prev => { const u = prev.map(f => f.id === id ? before : f); storage.setProcurementFarmers(u); return u; });
       toastRef.current({ title: tr('किसान अपडेट नहीं हुआ', 'Farmer not updated'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh the old data will come back.`), variant: 'destructive', duration: 12000 });
@@ -6759,7 +6720,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updated = { ...before, ...data };
     setLoansState(prev => prev.map(l => l.id === id ? updated : l));
     const { sureties: updatedSureties, monthlyInstallment: updatedInstalment, ...updatedBase } = updated;   // step 1: base columns only (169, 170 go in step 2)
-    supabase.from('loans').upsert(withSoc(updatedBase)).then(({ error }) => {
+    patchRow('loans', id, before, updatedBase).then(({ error }) => {
       if (!error && suretiesChanged) saveLoanSureties(id, updatedSureties ?? [], before.sureties);   // step 2
       if (!error && instalmentChanged && (updatedInstalment ?? null) !== (before.monthlyInstallment ?? null)) saveLoanInstalment(id, updatedInstalment ?? null, before.monthlyInstallment);   // step 2 (own write), only when it really changed
       if (error) {
@@ -6866,7 +6827,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!before) return;
     const updated = { ...before, ...data };
     setAssetsState(prev => prev.map(a => a.id === id ? updated : a));
-    supabase.from('assets').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('assets', id, before, updated).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setAssetsState(prev => prev.map(a => a.id === id ? before : a));   // RULE 1: roll back to prior state
@@ -7551,7 +7512,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const vType = data.paymentMode === 'credit' ? 'sale' : 'receipt';
     const saleId = lid();
-    // S3-f-1: under the posting service the voucher is saved together with the sale (postStockDocument).
+    // S3-f-1 / ARCH-03: the voucher is saved together with the sale in ONE server call (postStockDocument).
     let viaServer: { v: Voucher; ev: LedgerEvent; rollback: () => void } | null = null;
     const newVoucher = addVoucher({
       type: vType,
@@ -7564,13 +7525,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       createdBy: data.createdBy,
       refType: 'sale',
       refId: saleId,
-    }, postingServiceRef.current ? { persistWith: (v, ev, rollback) => { viaServer = { v, ev, rollback }; } } : undefined);
+    }, { persistWith: (v, ev, rollback) => { viaServer = { v, ev, rollback }; } });
     // RM-01: no voucher ⇒ no sale. addVoucher already toasted why; stop before stock or the sale row
     // is written, so a sale can never exist without its voucher (nothing repairs it on load any more).
-    if (!newVoucher.id) return { ...data, id: '' } as unknown as Sale;
-
-    // Stock movements (under the posting service: local only — the server writes them with the sale)
     const server = viaServer as { v: Voucher; ev: LedgerEvent; rollback: () => void } | null;
+    if (!newVoucher.id || !server) return { ...data, id: '' } as unknown as Sale;
+
+    // Stock movements — local only; the server writes them with the sale.
     const saleMovements: StockMovement[] = [];
     const stockBefore = new Map(stockItems.map(i => [i.id, i.currentStock]));
     data.items.forEach(item => {
@@ -7578,8 +7539,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const updated = prev.map(i => {
           if (i.id !== item.itemId) return i;
           const newStock = Math.max(0, i.currentStock - item.qty);
-          if (!server) supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id)
-            .then(({ error }) => { if (error) { reportCascade('Stock sync error', error); toastRef.current({ title: tr('स्टॉक एंट्री क्लाउड में सेव नहीं हुई', 'Stock entry not saved to the cloud'), description: tr(`Refresh के बाद स्टॉक जाँचें। (Stock save failed.) ${error.message}`, `Check the stock after Refresh. (Stock save failed.) ${error.message}`), variant: 'destructive', duration: 10000 }); } });
           return { ...i, currentStock: newStock };
         });
         return updated;
@@ -7587,7 +7546,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'sale', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: saleNo, narration: `Sale to ${data.customerName}`, godownId: activeGodownIdRef.current || undefined, createdAt: new Date().toISOString() };
       saleMovements.push(mv);
       setStockMovementsState(prev => [...prev, mv]);
-      if (!server) persistMovement(mv);
     });
 
     // receivableAccountId is routing-only (chose the credit debtor above) — never store it on
@@ -7599,67 +7557,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     salesRef.current = [...salesRef.current, sale];
     setSalesState(prev => [...prev, sale]);
 
-    if (server) {
-      const mvIds = new Set(saleMovements.map(m => m.id));
-      postStockDocument({
-        kind: 'sale', doc: sale, voucher: server.v, event: server.ev, movements: saleMovements, rollbackVoucher: server.rollback,
-        undoLocal: () => {
-          salesRef.current = salesRef.current.filter(s => s.id !== sale.id);
-          setSalesState(prev => prev.filter(s => s.id !== sale.id));
-          stockMovementsRef.current = stockMovementsRef.current.filter(m => !mvIds.has(m.id));
-          setStockMovementsState(prev => prev.filter(m => !mvIds.has(m.id)));
-          setStockItemsState(prev => prev.map(i => stockBefore.has(i.id) && data.items.some(it => it.itemId === i.id) ? { ...i, currentStock: stockBefore.get(i.id)! } : i));
-        },
-      });
-      return sale;
-    }
-
-    // Two-step save — same pattern as purchases fix:
-    // Step 1: upsert base columns only (schema cache always knows these)
-    // Step 2: update GST columns separately (ALTER TABLE columns — schema cache may lag)
-    // ECR-17 Phase 5: branchId stays IN saleBase — the branch-scoped RLS SELECT policies
-    // (migration 039) must see it on the row from birth, or a branch-restricted user's own
-    // sale vanishes from their next load. Stale-schema-cache fallback below (RULE 1).
-    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound, customerId, memberId: sMember, bankAccountId: sBankId, gstVoucherIds: _gv, creditDays: sCreditDays, dueDate: sDueDate, lateFeeRule: sLateFee, ...saleBase } = sale;
-    // Feature 6: a duplicate saleNo (another till) makes the base upsert fail with 23505 —
-    // bump to the next number, restamp local state, and retry (only saleNo changes).
-    const attemptSaleSave = (base: typeof saleBase, tries: number) => {
-      supabase.from('sales').upsert(withSoc(base)).then(({ error }) => {
-        if (!error) {
-          // Step 2: Sale GST + customer/member (no TDS on sales). Same missing-column guard as
-          // purchases — one un-migrated column can't silently drop the GST anymore (RULE 1).
-          persistExtras('sales', sale.id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound ?? 0, creditDays: sCreditDays ?? null, dueDate: sDueDate ?? null, lateFeeRule: sLateFee ?? null, customerId, memberId: sMember, bankAccountId: sBankId ?? null }, `Sale ${sale.saleNo}`);
-          return;
-        }
-        if (isMissingBranchColumn(error) && 'branchId' in base) {
-          const { branchId: _b, ...noBranch } = base;
-          attemptSaleSave(noBranch as typeof saleBase, tries);
-          return;
-        }
-        if (isUniqueViolation(error) && tries < MAX_RENUMBER_RETRIES) {
-          const seq = nextDocSeq(salesRef.current.filter(s => s.id !== sale.id).map(s => s.saleNo), fy);
-          const newNo = `SL/${fy}/${String(seq).padStart(3, '0')}`;
-          salesRef.current = salesRef.current.map(s => s.id === sale.id ? { ...s, saleNo: newNo } : s);
-          setSalesState(prev => prev.map(s => s.id === sale.id ? { ...s, saleNo: newNo } : s));
-          attemptSaleSave({ ...base, saleNo: newNo }, tries + 1);
-          return;
-        }
-        console.error('Sale save failed:', error.message);
+    const mvIds = new Set(saleMovements.map(m => m.id));
+    postStockDocument({
+      kind: 'sale', doc: sale, voucher: server.v, event: server.ev, movements: saleMovements, rollbackVoucher: server.rollback,
+      undoLocal: () => {
         salesRef.current = salesRef.current.filter(s => s.id !== sale.id);
         setSalesState(prev => prev.filter(s => s.id !== sale.id));
-        toastRef.current({ title: tr('बिक्री सेव नहीं हुई', 'Sale not saved'), description: error.message, variant: 'destructive' });
-      });
-    };
-    // T-03 (ADR-0005): take the OFFICIAL saleNo from the server sequence (book 'SL') at persist;
-    // restamp local state. Falls back to the provisional number on offline/RPC failure — the
-    // saleNo unique-index collision-retry above stays the safety net.
-    issueOfficialNumber(nextDocNumber, societyIdRef.current, sale.saleNo).then((officialNo) => {
-      const changed = !!officialNo && officialNo !== sale.saleNo;
-      if (changed) {
-        salesRef.current = salesRef.current.map(s => s.id === sale.id ? { ...s, saleNo: officialNo! } : s);
-        setSalesState(prev => prev.map(s => s.id === sale.id ? { ...s, saleNo: officialNo! } : s));
-      }
-      attemptSaleSave(changed ? { ...saleBase, saleNo: officialNo! } : saleBase, 0);
+        stockMovementsRef.current = stockMovementsRef.current.filter(m => !mvIds.has(m.id));
+        setStockMovementsState(prev => prev.filter(m => !mvIds.has(m.id)));
+        setStockItemsState(prev => prev.map(i => stockBefore.has(i.id) && data.items.some(it => it.itemId === i.id) ? { ...i, currentStock: stockBefore.get(i.id)! } : i));
+      },
     });
     return sale;
   }, [society.financialYear, customers, accounts, addVoucher, stockItems]);
@@ -7680,44 +7587,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardPermission('delete', tr('बिक्री मिटाने', 'delete sales'))) return false;   // ECR-06: role gate
     if (guardFYLocked()) return false;
     if (guardLiveReturns('sale', id)) return false;
-    // S3-f-2: under the posting service the whole delete is one server transaction.
-    if (postingServiceRef.current) {
-      const sale = salesRef.current.find(s => s.id === id);
-      if (!sale) return false;
-      cancelStockDocument('sale', sale, sale.saleNo, [sale.voucherId, ...(sale.gstVoucherIds ?? [])].filter(Boolean) as string[], `Sale ${sale.saleNo} deleted`);
-      emitAudit({ entityType: 'sale', entityId: id, action: 'delete', reason: 'Sale deleted' });
-      return true;
-    }
-    const sale = salesRef.current.find(x => x.id === id);
+    // S3-f-2 / ARCH-03: the whole delete is one server transaction (the old client path is gone).
+    const sale = salesRef.current.find(s => s.id === id);
     if (!sale) return false;
-    setSalesState(prev => prev.filter(x => x.id !== id));
-    // Soft-delete (ECR-02 / RULE-5): retain the sale row (isDeleted=true) for audit — mirrors
-    // deletePurchase. Linked vouchers are soft-cancelled and movements audit-snapshotted below.
-    // The cascade (linked vouchers, stock, movements) runs only once the sale row is soft-deleted in the
-    // cloud (RULE 1 + 3) — it used to run first, so a failed delete left a live sale with its vouchers
-    // cancelled and its stock reversed after F5.
-    supabase.from('sales').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
-      if (error) { failedCloudWrite(tr('बिक्री हटाना', 'Deleting the sale'), error, () => setSalesState(prev => putBack(prev, sale))); return; }
-      // Soft-delete all linked vouchers (main + GST)
-      const linkedIds = ([sale.voucherId, ...(sale.gstVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
-      cancelLinkedVouchers(linkedIds, `Sale ${sale.saleNo} deleted`, 'System');
-      // Reverse stock deductions on stock_items.currentStock
-      sale.items.forEach(item => {
-        setStockItemsState(s => {
-          const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = i.currentStock + item.qty; supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: tr('स्टॉक मात्रा क्लाउड में सेव नहीं हुई', 'Stock quantity not saved to the cloud'), description: tr(`Refresh के बाद स्टॉक जाँचें। (Stock update failed.) ${error.message}`, `Check the stock after Refresh. (Stock update failed.) ${error.message}`), variant: 'destructive', duration: 10000 }); } }); return { ...i, currentStock: newStock }; });
-          return updated;
-        });
-      });
-      // Cascade-delete stock_movements for this sale
-      // (Inventory / Stock Valuation / Closing Stock all derive qty from movements.)
-      const _delSaleMovs = stockMovementsRef.current.filter(m => m.referenceNo === sale.saleNo);   // ECR-21: archive before hard-delete
-      if (_delSaleMovs.length) emitAudit({ entityType: 'stockMovement', entityId: sale.saleNo, action: 'delete', before: { count: _delSaleMovs.length, movements: snapshotDeletedMovements(_delSaleMovs) }, reason: `Sale ${sale.saleNo} deleted` });
-      setStockMovementsState(s => s.filter(m => m.referenceNo !== sale.saleNo));
-      supabase.from('stock_movements').delete().eq('referenceNo', sale.saleNo)
-        .then(({ error }) => { if (error) reportCascade('Movements cascade-delete sync', error); });
-      emitAudit({ entityType: 'sale', entityId: id, action: 'delete', reason: 'Sale deleted' });
-      console.info(`[AUDIT-DELETE] Sale id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
-    });
+    cancelStockDocument('sale', sale, sale.saleNo, [sale.voucherId, ...(sale.gstVoucherIds ?? [])].filter(Boolean) as string[], `Sale ${sale.saleNo} deleted`);
+    emitAudit({ entityType: 'sale', entityId: id, action: 'delete', reason: 'Sale deleted' });
     return true;
   }, []);
 
@@ -7755,9 +7629,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const now = new Date().toISOString();
     const lid = () => crypto.randomUUID();
-    // S3-f-3: under the posting service every write below is LOCAL only; update_stock_document then does
-    // them all in one transaction, and the snapshots here undo the local state if it refuses.
-    const server = postingServiceRef.current;
+    // S3-f-3 / ARCH-03: every write below is LOCAL only; update_stock_document then does them all in one
+    // transaction, and the snapshots here undo the local state if it refuses (the old client path is gone).
     const stockBefore = new Map<string, { cs: number; rate: number }>();
     const oldMovs = stockMovementsRef.current.filter(m => m.referenceNo === original.saleNo);
     const newMovs: StockMovement[] = [];
@@ -7778,8 +7651,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (delta == null || delta === 0) return i;
       const newStock = Math.max(0, i.currentStock + delta);
       stockBefore.set(i.id, { cs: i.currentStock, rate: i.purchaseRate });
-      if (!server) supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id)
-        .then(({ error }) => { if (error) reportCascade('Stock update sync', error); });
       return { ...i, currentStock: newStock };
     }));
 
@@ -7788,18 +7659,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (_delSaleEditMovs.length) emitAudit({ entityType: 'stockMovement', entityId: original.saleNo, action: 'delete', before: { count: _delSaleEditMovs.length, movements: snapshotDeletedMovements(_delSaleEditMovs) }, reason: `Sale ${original.saleNo} edited (movements replaced)` });
     stockMovementsRef.current = stockMovementsRef.current.filter(m => m.referenceNo !== original.saleNo);
     setStockMovementsState(prev => prev.filter(m => m.referenceNo !== original.saleNo));
-    if (!server) supabase.from('stock_movements').delete().eq('referenceNo', original.saleNo)
-      .then(({ error }) => { if (error) reportCascade('Old movements delete sync', error); });
 
     // 2️⃣ Soft-cancel the original sale voucher(s) + drop voucher_entries
     const linkedIds = ([original.voucherId, ...(original.gstVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
-    if (server) {
-      oldVouchers = vouchersRef.current.filter(v => linkedIds.includes(v.id) && !v.isDeleted);
-      const oldIds = new Set(oldVouchers.map(v => v.id));
-      const cancelV = (v: Voucher) => oldIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: data.createdBy || 'System', deletedReason: `Sale ${original.saleNo} edited` } : v;
-      vouchersRef.current = vouchersRef.current.map(cancelV);
-      setVouchersState(prev => prev.map(cancelV));
-    } else cancelLinkedVouchers(linkedIds, `Sale ${original.saleNo} edited`, data.createdBy || 'System');
+    oldVouchers = vouchersRef.current.filter(v => linkedIds.includes(v.id) && !v.isDeleted);
+    const oldIds = new Set(oldVouchers.map(v => v.id));
+    const cancelV = (v: Voucher) => oldIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: data.createdBy || 'System', deletedReason: `Sale ${original.saleNo} edited` } : v;
+    vouchersRef.current = vouchersRef.current.map(cancelV);
+    setVouchersState(prev => prev.map(cancelV));
     const undoLocal = () => {
       const back = new Map(oldVouchers.map(v => [v.id, v]));
       vouchersRef.current = vouchersRef.current.map(v => back.get(v.id) ?? v);
@@ -7844,16 +7711,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       createdBy: data.createdBy,
       refType: 'sale',
       refId: id,
-    }, server ? { persistWith: (v, ev, rollback) => { viaServer = { v, ev, rollback }; } } : undefined);
-    // Nothing was sent yet under the posting service — a refused voucher just undoes the local edit.
-    if (server && !newVoucher.id) { undoLocal(); return null; }
-    // RM-01: the pre-check above makes this rare (e.g. an unbalanced edit). If the new voucher was still
-    // refused, the old one is already cancelled — say so loudly instead of leaving a silent gap; the
-    // document now shows in getPhantomVoucherDiagnostics() for an explicit fix.
-    if (!newVoucher.id) {
-      reportError('sale-edit-voucher-refused', 'replacement voucher refused after the original was cancelled', { id, no: original.saleNo });
-      toastRef.current({ title: tr('❌ नया वाउचर नहीं बना', '❌ New voucher not created'), description: tr(`${original.saleNo}: पुराना वाउचर रद्द हो चुका है पर नया नहीं बना — इस entry को दोबारा edit करके save करें। (Replacement voucher was refused.)`, `${original.saleNo}: the old voucher is cancelled but the new one was not created — edit this entry again and save. (Replacement voucher was refused.)`), variant: 'destructive', duration: 15000 });
-    }
+    }, { persistWith: (v, ev, rollback) => { viaServer = { v, ev, rollback }; } });
+    // Nothing was sent yet — a refused voucher just undoes the local edit.
+    const srv = viaServer as { v: Voucher; ev: LedgerEvent; rollback: () => void } | null;
+    if (!newVoucher.id || !srv) { undoLocal(); return null; }
 
     // 4️⃣ Add fresh stock_movement rows for the edited sale
     data.items.forEach(item => {
@@ -7861,7 +7722,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       newMovs.push(mv);
       stockMovementsRef.current = [...stockMovementsRef.current, mv];
       setStockMovementsState(prev => [...prev, mv]);
-      if (!server) persistMovement(mv);
     });
 
     // 5️⃣ Update the sale record in place (same id + saleNo)
@@ -7881,35 +7741,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // H11: a bill edited after the fact was audited to the console only — now a durable row.
     emitAudit({ entityType: 'sale', entityId: id, action: 'update', before: { date: original.date, grandTotal: original.grandTotal, items: original.items.length }, after: { date: updated.date, grandTotal: updated.grandTotal, items: updated.items.length }, reason: `Sale ${original.saleNo} edited` });
 
-    const srv = viaServer as { v: Voucher; ev: LedgerEvent; rollback: () => void } | null;
-    if (srv) {
-      postStockDocumentEdit({ kind: 'sale', doc: updated, voucher: srv.v, event: srv.ev, movements: newMovs, undo: () => { srv.rollback(); undoLocal(); } });
-      return updated;
-    }
-
-    // ECR-17 Phase 5: branchId stays IN saleBase (see addSale); stale-schema-cache fallback (RULE 1).
-    const { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound, customerId, bankAccountId: sBankId, gstVoucherIds: _gv, creditDays: sCreditDays, dueDate: sDueDate, lateFeeRule: sLateFee, ...saleBase } = updated;
-    const attemptSaleUpdate = (payload: typeof saleBase) => {
-      supabase.from('sales').upsert(withSoc(payload)).then(({ error }) => {
-        if (error) {
-          if (isMissingBranchColumn(error) && 'branchId' in payload) {
-            const { branchId: _b, ...noBranch } = payload;
-            attemptSaleUpdate(noBranch as typeof saleBase);
-            return;
-          }
-          console.error('Sale update failed:', error.message);
-          // A sale edit is a multi-write cascade (stock + vouchers already posted); only the
-          // sale ROW failed here, and the cascade can't be cleanly undone from the client. Per
-          // RULE 1 we make the failure impossible to miss and tell the user to refresh and
-          // re-verify. (A fully atomic sale-edit is a separate, larger redesign.)
-          toastRef.current({ title: tr('बिक्री edit cloud-save fail', 'Sale edit cloud-save failed'), description: tr(`बिक्री क्लाउड में सेव नहीं हुई — ${error.message}. Refresh करके बिक्री दोबारा जाँचें; ज़रूरत हो तो फिर से edit करें।`, `Sale not saved to the cloud — ${error.message}. Refresh and check the sale again; edit it again if needed.`), variant: 'destructive', duration: 15000 });
-        } else {
-          persistExtras('sales', id, { cgstPct: sCgst, sgstPct: sSgst, igstPct: sIgst, cgstAmount: sCgstA, sgstAmount: sSgstA, igstAmount: sIgstA, taxAmount: sTaxA, grandTotal: sGrand, roundOff: sRound ?? 0, creditDays: sCreditDays ?? null, dueDate: sDueDate ?? null, lateFeeRule: sLateFee ?? null, customerId, bankAccountId: sBankId ?? null }, `Sale ${original.saleNo}`);
-        }
-      });
-    };
-    attemptSaleUpdate(saleBase);
-
+    postStockDocumentEdit({ kind: 'sale', doc: updated, voucher: srv.v, event: srv.ev, movements: newMovs, undo: () => { srv.rollback(); undoLocal(); } });
     return updated;
   }, [society.fyLocked, customers, accounts, addVoucher, stockItems]);
 
@@ -7995,7 +7827,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const vType = data.paymentMode === 'credit' ? 'purchase' : 'payment';
     const purchaseId = lid();
-    // S3-f-1: under the posting service the voucher is saved together with the purchase (postStockDocument).
+    // S3-f-1 / ARCH-03: the voucher is saved together with the purchase in ONE server call (postStockDocument).
     let viaServer: { v: Voucher; ev: LedgerEvent; rollback: () => void } | null = null;
     const newVoucher = addVoucher({
       type: vType,
@@ -8008,12 +7840,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       createdBy: data.createdBy,
       refType: 'purchase',
       refId: purchaseId,
-    }, postingServiceRef.current ? { persistWith: (v, ev, rollback) => { viaServer = { v, ev, rollback }; } } : undefined);
+    }, { persistWith: (v, ev, rollback) => { viaServer = { v, ev, rollback }; } });
     // RM-01: no voucher ⇒ no purchase (see addSale). Stop before stock or the purchase row is written.
-    if (!newVoucher.id) return { ...data, id: '' } as unknown as Purchase;
-
-    // Stock movements (under the posting service: local only — the server writes them with the purchase)
     const server = viaServer as { v: Voucher; ev: LedgerEvent; rollback: () => void } | null;
+    if (!newVoucher.id || !server) return { ...data, id: '' } as unknown as Purchase;
+
+    // Stock movements — local only; the server writes them with the purchase.
     const purMovements: StockMovement[] = [];
     const stockBefore = new Map(stockItems.map(i => [i.id, { cs: i.currentStock, rate: i.purchaseRate }]));
     data.items.forEach(item => {
@@ -8021,8 +7853,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const updated = prev.map(i => {
           if (i.id !== item.itemId) return i;
           const newStock = i.currentStock + item.qty;
-          if (!server) supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: item.rate }).eq('id', i.id)
-            .then(({ error }) => { if (error) { reportCascade('Stock sync error', error); toastRef.current({ title: tr('स्टॉक एंट्री क्लाउड में सेव नहीं हुई', 'Stock entry not saved to the cloud'), description: tr(`Refresh के बाद स्टॉक जाँचें। (Stock save failed.) ${error.message}`, `Check the stock after Refresh. (Stock save failed.) ${error.message}`), variant: 'destructive', duration: 10000 }); } });
           return { ...i, currentStock: newStock, purchaseRate: item.rate };
         });
         return updated;
@@ -8030,7 +7860,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const mv: StockMovement = { id: lid(), date: data.date, itemId: item.itemId, type: 'purchase', qty: item.qty, rate: item.rate, amount: item.amount, referenceNo: purchaseNo, narration: `Purchase from ${data.supplierName}`, godownId: activeGodownIdRef.current || undefined, createdAt: new Date().toISOString() };
       purMovements.push(mv);
       setStockMovementsState(prev => [...prev, mv]);
-      if (!server) persistMovement(mv);
     });
 
     const purSupplier = data.supplierId ? suppliers.find(s => s.id === data.supplierId) : undefined;
@@ -8039,65 +7868,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     purchasesRef.current = [...purchasesRef.current, purchase];
     setPurchasesState(prev => [...prev, purchase]);
 
-    if (server) {
-      const mvIds = new Set(purMovements.map(m => m.id));
-      postStockDocument({
-        kind: 'purchase', doc: purchase, voucher: server.v, event: server.ev, movements: purMovements, rollbackVoucher: server.rollback,
-        undoLocal: () => {
-          purchasesRef.current = purchasesRef.current.filter(p => p.id !== purchase.id);
-          setPurchasesState(prev => prev.filter(p => p.id !== purchase.id));
-          stockMovementsRef.current = stockMovementsRef.current.filter(m => !mvIds.has(m.id));
-          setStockMovementsState(prev => prev.filter(m => !mvIds.has(m.id)));
-          setStockItemsState(prev => prev.map(i => stockBefore.has(i.id) && data.items.some(it => it.itemId === i.id) ? { ...i, currentStock: stockBefore.get(i.id)!.cs, purchaseRate: stockBefore.get(i.id)!.rate } : i));
-        },
-      });
-      return purchase;
-    }
-
-    // Two-step save — same pattern as editHistory fix for vouchers:
-    // Step 1: upsert ONLY the original-table base columns (schema cache always knows these → never fails)
-    // Step 2: update GST/TDS columns separately (added via ALTER TABLE — schema cache may lag)
-    // ECR-17 Phase 5: branchId stays IN purchaseBase — the branch-scoped RLS SELECT policies
-    // (migration 039) must see it on the row from birth, or a branch-restricted user's own
-    // purchase vanishes from their next load. Stale-schema-cache fallback below (RULE 1).
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc, roundOff: pRound, supplierId: pSupplierId, rcmApplicable: pRcm, bankAccountId: pBankId, supplierBillNo: pBillNo, supplierBillDate: pBillDate, taxVoucherIds: _tv, creditDays: pCreditDays, dueDate: pDueDate, lateFeeRule: pLateFee, ...purchaseBase } = purchase;
-    // Feature 6: duplicate purchaseNo (another till) → 23505; bump + retry (only purchaseNo changes).
-    const attemptPurchaseSave = (base: typeof purchaseBase, tries: number) => {
-      supabase.from('purchases').upsert(withSoc(base)).then(({ error }) => {
-        if (!error) {
-          // Step 2: GST/TDS/TCS columns — one un-migrated column no longer takes the rest (RULE 1).
-          persistExtras('purchases', purchase.id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc ?? 0, roundOff: pRound ?? 0, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null, supplierBillNo: pBillNo ?? null, supplierBillDate: pBillDate ?? null, creditDays: pCreditDays ?? null, dueDate: pDueDate ?? null, lateFeeRule: pLateFee ?? null }, `Purchase ${purchase.purchaseNo}`);
-          return;
-        }
-        if (isMissingBranchColumn(error) && 'branchId' in base) {
-          const { branchId: _b, ...noBranch } = base;
-          attemptPurchaseSave(noBranch as typeof purchaseBase, tries);
-          return;
-        }
-        if (isUniqueViolation(error) && tries < MAX_RENUMBER_RETRIES) {
-          const seq = nextDocSeq(purchasesRef.current.filter(p => p.id !== purchase.id).map(p => p.purchaseNo), fy);
-          const newNo = `PUR/${fy}/${String(seq).padStart(3, '0')}`;
-          purchasesRef.current = purchasesRef.current.map(p => p.id === purchase.id ? { ...p, purchaseNo: newNo } : p);
-          setPurchasesState(prev => prev.map(p => p.id === purchase.id ? { ...p, purchaseNo: newNo } : p));
-          attemptPurchaseSave({ ...base, purchaseNo: newNo }, tries + 1);
-          return;
-        }
-        console.error('Purchase save failed:', error.message);
+    const mvIds = new Set(purMovements.map(m => m.id));
+    postStockDocument({
+      kind: 'purchase', doc: purchase, voucher: server.v, event: server.ev, movements: purMovements, rollbackVoucher: server.rollback,
+      undoLocal: () => {
         purchasesRef.current = purchasesRef.current.filter(p => p.id !== purchase.id);
         setPurchasesState(prev => prev.filter(p => p.id !== purchase.id));
-        toastRef.current({ title: tr('खरीद सेव नहीं हुई', 'Purchase not saved'), description: error.message, variant: 'destructive' });
-      });
-    };
-    // T-03 (ADR-0005): take the OFFICIAL purchaseNo from the server sequence (book 'PUR') at
-    // persist; restamp local state. Falls back to the provisional on offline/RPC failure — the
-    // purchaseNo unique-index collision-retry above stays the safety net.
-    issueOfficialNumber(nextDocNumber, societyIdRef.current, purchase.purchaseNo).then((officialNo) => {
-      const changed = !!officialNo && officialNo !== purchase.purchaseNo;
-      if (changed) {
-        purchasesRef.current = purchasesRef.current.map(p => p.id === purchase.id ? { ...p, purchaseNo: officialNo! } : p);
-        setPurchasesState(prev => prev.map(p => p.id === purchase.id ? { ...p, purchaseNo: officialNo! } : p));
-      }
-      attemptPurchaseSave(changed ? { ...purchaseBase, purchaseNo: officialNo! } : purchaseBase, 0);
+        stockMovementsRef.current = stockMovementsRef.current.filter(m => !mvIds.has(m.id));
+        setStockMovementsState(prev => prev.filter(m => !mvIds.has(m.id)));
+        setStockItemsState(prev => prev.map(i => stockBefore.has(i.id) && data.items.some(it => it.itemId === i.id) ? { ...i, currentStock: stockBefore.get(i.id)!.cs, purchaseRate: stockBefore.get(i.id)!.rate } : i));
+      },
     });
     return purchase;
   }, [society.financialYear, suppliers, accounts, addVoucher, stockItems]);
@@ -8106,45 +7886,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardPermission('delete', tr('खरीद मिटाने', 'delete purchases'))) return false;   // ECR-06: role gate
     if (guardFYLocked()) return false;
     if (guardLiveReturns('purchase', id)) return false;
-    // S3-f-2: under the posting service the whole delete is one server transaction.
-    if (postingServiceRef.current) {
-      const purchase = purchasesRef.current.find(p => p.id === id);
-      if (!purchase) return false;
-      cancelStockDocument('purchase', purchase, purchase.purchaseNo, [purchase.voucherId, ...(purchase.taxVoucherIds ?? [])].filter(Boolean) as string[], `Purchase ${purchase.purchaseNo} deleted`);
-      emitAudit({ entityType: 'purchase', entityId: id, action: 'delete', reason: 'Purchase deleted' });
-      return true;
-    }
-    const purchase = purchasesRef.current.find(x => x.id === id);
+    // S3-f-2 / ARCH-03: the whole delete is one server transaction (the old client path is gone).
+    const purchase = purchasesRef.current.find(p => p.id === id);
     if (!purchase) return false;
-    setPurchasesState(prev => prev.filter(x => x.id !== id));
-    // Soft-delete (P0 #2): retain the purchase row (isDeleted=true); linked vouchers, tax
-    // vouchers, stock and movements are still cascaded below. Load filters isDeleted out.
-    // The cascade (linked vouchers, stock, movements) runs only once the purchase row is soft-deleted in the
-    // cloud (RULE 1 + 3) — it used to run first, so a failed delete left a live purchase with its vouchers
-    // cancelled and its stock reversed after F5.
-    supabase.from('purchases').update({ isDeleted: true }).eq('id', id).then(({ error }) => {
-      if (error) { failedCloudWrite(tr('खरीद हटाना', 'Deleting the purchase'), error, () => setPurchasesState(prev => putBack(prev, purchase))); return; }
-      // Cascade soft-delete: main voucher + all GST/TDS tax vouchers
-      const linkedIds = ([purchase.voucherId, ...(purchase.taxVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
-      cancelLinkedVouchers(linkedIds, `Purchase ${purchase.purchaseNo} deleted`, 'System');
-      // Reverse stock additions on stock_items.currentStock
-      purchase.items.forEach(item => {
-        setStockItemsState(s => {
-          const updated = s.map(i => { if (i.id !== item.itemId) return i; const newStock = Math.max(0, i.currentStock - item.qty); supabase.from('stock_items').update({ currentStock: newStock }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: tr('स्टॉक मात्रा क्लाउड में सेव नहीं हुई', 'Stock quantity not saved to the cloud'), description: tr(`Refresh के बाद स्टॉक जाँचें। (Stock update failed.) ${error.message}`, `Check the stock after Refresh. (Stock update failed.) ${error.message}`), variant: 'destructive', duration: 10000 }); } }); return { ...i, currentStock: newStock }; });
-          return updated;
-        });
-      });
-      // Cascade-delete stock_movements for this purchase
-      // (Inventory / Stock Valuation / Closing Stock all compute qty from movements,
-      //  so orphan movements would keep stock showing as if the purchase still existed.)
-      const _delPurMovs = stockMovementsRef.current.filter(m => m.referenceNo === purchase.purchaseNo);   // ECR-21: archive before hard-delete
-      if (_delPurMovs.length) emitAudit({ entityType: 'stockMovement', entityId: purchase.purchaseNo, action: 'delete', before: { count: _delPurMovs.length, movements: snapshotDeletedMovements(_delPurMovs) }, reason: `Purchase ${purchase.purchaseNo} deleted` });
-      setStockMovementsState(s => s.filter(m => m.referenceNo !== purchase.purchaseNo));
-      supabase.from('stock_movements').delete().eq('referenceNo', purchase.purchaseNo)
-        .then(({ error }) => { if (error) reportCascade('Movements cascade-delete sync', error); });
-      emitAudit({ entityType: 'purchase', entityId: id, action: 'delete', reason: 'Purchase deleted' });
-      console.info(`[AUDIT-DELETE] Purchase id=${id} deleted by ${user?.name || 'unknown'} at ${new Date().toISOString()}`);
-    });
+    cancelStockDocument('purchase', purchase, purchase.purchaseNo, [purchase.voucherId, ...(purchase.taxVoucherIds ?? [])].filter(Boolean) as string[], `Purchase ${purchase.purchaseNo} deleted`);
+    emitAudit({ entityType: 'purchase', entityId: id, action: 'delete', reason: 'Purchase deleted' });
     return true;
   }, []);
 
@@ -8190,9 +7936,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const now = new Date().toISOString();
     const lid = () => crypto.randomUUID();
-    // S3-f-3: under the posting service every write below is LOCAL only; update_stock_document then does
-    // them all in one transaction, and the snapshots here undo the local state if it refuses.
-    const server = postingServiceRef.current;
+    // S3-f-3 / ARCH-03: every write below is LOCAL only; update_stock_document then does them all in one
+    // transaction, and the snapshots here undo the local state if it refuses (the old client path is gone).
     const stockBefore = new Map<string, { cs: number; rate: number }>();
     const oldMovs = stockMovementsRef.current.filter(m => m.referenceNo === original.purchaseNo);
     const newMovs: StockMovement[] = [];
@@ -8216,8 +7961,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const newStock = Math.max(0, i.currentStock + (delta || 0));
       const newRate = newRateMap.get(i.id) ?? i.purchaseRate;
       stockBefore.set(i.id, { cs: i.currentStock, rate: i.purchaseRate });
-      if (!server) supabase.from('stock_items').update({ currentStock: newStock, purchaseRate: newRate }).eq('id', i.id)
-        .then(({ error }) => { if (error) reportCascade('Stock update sync', error); });
       return { ...i, currentStock: newStock, purchaseRate: newRate };
     }));
 
@@ -8226,18 +7969,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (_delPurEditMovs.length) emitAudit({ entityType: 'stockMovement', entityId: original.purchaseNo, action: 'delete', before: { count: _delPurEditMovs.length, movements: snapshotDeletedMovements(_delPurEditMovs) }, reason: `Purchase ${original.purchaseNo} edited (movements replaced)` });
     stockMovementsRef.current = stockMovementsRef.current.filter(m => m.referenceNo !== original.purchaseNo);
     setStockMovementsState(prev => prev.filter(m => m.referenceNo !== original.purchaseNo));
-    if (!server) supabase.from('stock_movements').delete().eq('referenceNo', original.purchaseNo)
-      .then(({ error }) => { if (error) reportCascade('Old movements delete sync', error); });
 
     // 2️⃣ Soft-delete the original purchase voucher(s)
     const linkedIds = ([original.voucherId, ...(original.taxVoucherIds ?? [])].filter(Boolean) as string[]).filter(vid => !isEngineVoucher(vouchersRef.current.find(v => v.id === vid)));
-    if (server) {
-      oldVouchers = vouchersRef.current.filter(v => linkedIds.includes(v.id) && !v.isDeleted);
-      const oldIds = new Set(oldVouchers.map(v => v.id));
-      const cancelV = (v: Voucher) => oldIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: data.createdBy || 'System', deletedReason: `Purchase ${original.purchaseNo} edited` } : v;
-      vouchersRef.current = vouchersRef.current.map(cancelV);
-      setVouchersState(prev => prev.map(cancelV));
-    } else cancelLinkedVouchers(linkedIds, `Purchase ${original.purchaseNo} edited`, data.createdBy || 'System');
+    oldVouchers = vouchersRef.current.filter(v => linkedIds.includes(v.id) && !v.isDeleted);
+    const oldIds = new Set(oldVouchers.map(v => v.id));
+    const cancelV = (v: Voucher) => oldIds.has(v.id) ? { ...v, isDeleted: true, deletedAt: now, deletedBy: data.createdBy || 'System', deletedReason: `Purchase ${original.purchaseNo} edited` } : v;
+    vouchersRef.current = vouchersRef.current.map(cancelV);
+    setVouchersState(prev => prev.map(cancelV));
     const undoLocal = () => {
       const back = new Map(oldVouchers.map(v => [v.id, v]));
       vouchersRef.current = vouchersRef.current.map(v => back.get(v.id) ?? v);
@@ -8293,16 +8032,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       createdBy: data.createdBy,
       refType: 'purchase',
       refId: id,
-    }, server ? { persistWith: (v, ev, rollback) => { viaServer = { v, ev, rollback }; } } : undefined);
-    // Nothing was sent yet under the posting service — a refused voucher just undoes the local edit.
-    if (server && !newVoucher.id) { undoLocal(); return null; }
-    // RM-01: the pre-check above makes this rare (e.g. an unbalanced edit). If the new voucher was still
-    // refused, the old one is already cancelled — say so loudly instead of leaving a silent gap; the
-    // document now shows in getPhantomVoucherDiagnostics() for an explicit fix.
-    if (!newVoucher.id) {
-      reportError('purchase-edit-voucher-refused', 'replacement voucher refused after the original was cancelled', { id, no: original.purchaseNo });
-      toastRef.current({ title: tr('❌ नया वाउचर नहीं बना', '❌ New voucher not created'), description: tr(`${original.purchaseNo}: पुराना वाउचर रद्द हो चुका है पर नया नहीं बना — इस entry को दोबारा edit करके save करें। (Replacement voucher was refused.)`, `${original.purchaseNo}: the old voucher is cancelled but the new one was not created — edit this entry again and save. (Replacement voucher was refused.)`), variant: 'destructive', duration: 15000 });
-    }
+    }, { persistWith: (v, ev, rollback) => { viaServer = { v, ev, rollback }; } });
+    // Nothing was sent yet — a refused voucher just undoes the local edit.
+    const srv = viaServer as { v: Voucher; ev: LedgerEvent; rollback: () => void } | null;
+    if (!newVoucher.id || !srv) { undoLocal(); return null; }
 
     // 4️⃣ Add fresh stock_movement rows for the edited purchase
     //    (stock currentStock was already updated above via net-delta;
@@ -8312,7 +8045,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       newMovs.push(mv);
       stockMovementsRef.current = [...stockMovementsRef.current, mv];
       setStockMovementsState(prev => [...prev, mv]);
-      if (!server) persistMovement(mv);
     });
 
     // 5️⃣ Update the purchase record in place (same id + purchaseNo)
@@ -8332,31 +8064,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // H11: a bill edited after the fact was audited to the console only — now a durable row.
     emitAudit({ entityType: 'purchase', entityId: id, action: 'update', before: { date: original.date, grandTotal: original.grandTotal, items: original.items.length }, after: { date: updated.date, grandTotal: updated.grandTotal, items: updated.items.length }, reason: `Purchase ${original.purchaseNo} edited` });
 
-    const srv = viaServer as { v: Voucher; ev: LedgerEvent; rollback: () => void } | null;
-    if (srv) {
-      postStockDocumentEdit({ kind: 'purchase', doc: updated, voucher: srv.v, event: srv.ev, movements: newMovs, undo: () => { srv.rollback(); undoLocal(); } });
-      return updated;
-    }
-
-    // ECR-17 Phase 5: branchId stays IN purchaseBase (see addPurchase); stale-schema-cache fallback (RULE 1).
-    const { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc, roundOff: pRound, supplierId: pSupplierId, rcmApplicable: pRcm, bankAccountId: pBankId, supplierBillNo: pBillNo, supplierBillDate: pBillDate, taxVoucherIds: _tv, creditDays: pCreditDays, dueDate: pDueDate, lateFeeRule: pLateFee, ...purchaseBase } = updated;
-    const attemptPurchaseUpdate = (payload: typeof purchaseBase) => {
-      supabase.from('purchases').upsert(withSoc(payload)).then(({ error }) => {
-        if (error) {
-          if (isMissingBranchColumn(error) && 'branchId' in payload) {
-            const { branchId: _b, ...noBranch } = payload;
-            attemptPurchaseUpdate(noBranch as typeof purchaseBase);
-            return;
-          }
-          console.error('Purchase update failed:', error.message);
-          toastRef.current({ title: tr('खरीद का बदलाव सेव नहीं हुआ', 'Purchase change not saved'), description: error.message, variant: 'destructive' });
-        } else {
-          persistExtras('purchases', id, { cgstPct: pCgstPct, sgstPct: pSgstPct, igstPct: pIgstPct, tdsPct: pTdsPct, tcsPct: pTcsPct ?? 0, cgstAmount: pCgstAmt, sgstAmount: pSgstAmt, igstAmount: pIgstAmt, tdsAmount: pTdsAmt, tcsAmount: pTcsAmt ?? 0, taxAmount: pTaxAmt, grandTotal: pGrandTotal, cashDiscount: pCashDisc ?? 0, roundOff: pRound ?? 0, supplierId: pSupplierId, rcmApplicable: pRcm ?? false, bankAccountId: pBankId ?? null, supplierBillNo: pBillNo ?? null, supplierBillDate: pBillDate ?? null, creditDays: pCreditDays ?? null, dueDate: pDueDate ?? null, lateFeeRule: pLateFee ?? null }, `Purchase ${original.purchaseNo}`);
-        }
-      });
-    };
-    attemptPurchaseUpdate(purchaseBase);
-
+    postStockDocumentEdit({ kind: 'purchase', doc: updated, voucher: srv.v, event: srv.ev, movements: newMovs, undo: () => { srv.rollback(); undoLocal(); } });
     return updated;
   }, [society.fyLocked, suppliers, accounts, addVoucher, stockItems]);
 
@@ -8397,7 +8105,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!before) return;
     const updated = { ...before, ...data };
     setEmployeesState(prev => prev.map(e => e.id === id ? updated : e));
-    supabase.from('employees').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('employees', id, before, updated).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setEmployeesState(prev => prev.map(e => e.id === id ? before : e));   // RULE 1: roll back to prior state
@@ -8586,7 +8294,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const back: SalaryRecord = { ...cur, isPaid: false, paidDate: undefined, voucherId: undefined };
           salaryRecordsRef.current = salaryRecordsRef.current.map(r => r.id === id ? back : r);
           setSalaryRecordsState(prev => prev.map(r => r.id === id ? back : r));
-          supabase.from('salary_records').upsert(withSoc(back)).then(({ error }) => {
+          patchRow('salary_records', id, cur, back).then(({ error }) => {
             if (error) reportError('salary-unpay-sync', error.message, { id });
           }, () => {});
           toastRef.current({ title: tr('भुगतान दर्ज नहीं हुआ / Not marked paid', 'Not marked paid'), description: tr(`${oldRecord.slipNo}: भुगतान voucher cloud में save नहीं हुआ, इसलिए पर्ची फिर unpaid है। / The payment voucher was not saved, so the slip is unpaid again.`, `${oldRecord.slipNo}: The payment voucher was not saved in the cloud, so the slip is unpaid again.`), variant: 'destructive', duration: 12000 });
@@ -8640,7 +8348,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     salaryRecordsRef.current = salaryRecordsRef.current.map(r => r.id === id ? merged : r);
     setSalaryRecordsState(prev => prev.map(r => r.id === id ? merged : r));
-    supabase.from('salary_records').upsert(withSoc(merged)).then(({ error }) => {
+    patchRow('salary_records', id, oldRecord, merged).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         salaryRecordsRef.current = salaryRecordsRef.current.map(r => r.id === id ? oldRecord : r);

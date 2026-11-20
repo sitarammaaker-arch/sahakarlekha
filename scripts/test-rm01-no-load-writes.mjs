@@ -128,10 +128,11 @@ ok(gaps.some(g => g.kind === 'voucher_without_parent' && g.voucherId === 'vorph'
 const fnBody = (name) => code(blockAfter(SRC, SRC.indexOf('=> {', SRC.indexOf(`const ${name} = useCallback(`))));
 const ADD_SALE = fnBody('addSale'), ADD_PUR = fnBody('addPurchase'), UPD_SALE = fnBody('updateSale'), UPD_PUR = fnBody('updatePurchase');
 ok(/guardVoucherPostable\(data\.date\)/.test(ADD_SALE) && /guardVoucherPostable\(data\.date\)/.test(ADD_PUR), 'addSale/addPurchase refuse up front for addVoucher\'s reasons');
-const stopsBeforeStock = (body) => { const g = body.indexOf('if (!newVoucher.id) return'); const st = body.indexOf('data.items.forEach'); return g > 0 && st > g; };
+const stopsBeforeStock = (body) => { const g = body.indexOf('if (!newVoucher.id || !server) return'); const st = body.indexOf('data.items.forEach'); return g > 0 && st > g; };
 ok(stopsBeforeStock(ADD_SALE) && stopsBeforeStock(ADD_PUR), 'addSale/addPurchase stop before stock/row writes when the voucher is refused (no voucher ⇒ no document)');
-// S3-e-1: the old voucher is cancelled through cancelLinkedVouchers (with its journal event).
-const preBeforeCancel = (body) => { const g = body.indexOf('guardVoucherPostable(original.date, data.date)'); const c = body.indexOf('cancelLinkedVouchers('); return g > 0 && c > g; };
+// ARCH-03: the old voucher is cancelled locally (cancelV) and update_stock_document cancels it on the server in the same
+// transaction as the new one — the refusal checks still run before any of that.
+const preBeforeCancel = (body) => { const g = body.indexOf('guardVoucherPostable(original.date, data.date)'); const c = body.indexOf('const cancelV = '); return g > 0 && c > g; };
 ok(preBeforeCancel(UPD_SALE) && preBeforeCancel(UPD_PUR), 'updateSale/updatePurchase check refusals BEFORE cancelling the old voucher');
 const ADD_MEMBER = fnBody('addMember');
 // The receipt logic moved into postJoiningReceipts (one rule for add / approve / import).

@@ -25,6 +25,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { patchRow } from '@/lib/rowPatch';
 import { fetchAllPaged } from '@/lib/supabasePaging';
 import { resolveJurisdiction } from '@/lib/jurisdiction';
 import { reportError } from '@/lib/errorReporting';
@@ -226,7 +227,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (!old) return;
     const updated = { ...old, ...data };
     setChargeHeadsState(prev => { const u = prev.map(h => h.id === id ? updated : h); storage.setHousingChargeHeads(u); return u; });
-    supabase.from('housing_charge_heads').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('housing_charge_heads', id, old, updated).then(({ error }) => {
       if (error) {
         console.error('Charge head update error:', error.message); reportError('housing-save', error.message);
         setChargeHeadsState(prev => { const u = prev.map(h => h.id === id ? old : h); storage.setHousingChargeHeads(u); return u; });
@@ -269,7 +270,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (!old) return false;
     const updated = { ...old, ...data };
     setHousingFlatsState(prev => { const u = prev.map(f => f.id === id ? updated : f); storage.setHousingFlats(u); return u; });
-    supabase.from('housing_flats').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('housing_flats', id, old, updated).then(({ error }) => {
       if (error) {
         console.error('Housing flat update error:', error.message); reportError('housing-save', error.message);
         setHousingFlatsState(prev => { const u = prev.map(f => f.id === id ? old : f); storage.setHousingFlats(u); return u; });
@@ -759,7 +760,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (!old) return;
     const updated = { ...old, ...data };
     setComplaintsState(prev => { const u = prev.map(c => c.id === id ? updated : c); storage.setHousingComplaints(u); return u; });
-    supabase.from('housing_complaints').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('housing_complaints', id, old, updated).then(({ error }) => {
       if (error) {
         console.error('Complaint update error:', error.message); reportError('housing-save', error.message);
         setComplaintsState(prev => { const u = prev.map(c => c.id === id ? old : c); storage.setHousingComplaints(u); return u; });
@@ -802,7 +803,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (!old) return;
     const updated = { ...old, ...data };
     setParkingState(prev => { const u = prev.map(p => p.id === id ? updated : p); storage.setHousingParking(u); return u; });
-    supabase.from('housing_parking').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('housing_parking', id, old, updated).then(({ error }) => {
       if (error) {
         console.error('Parking update error:', error.message); reportError('housing-save', error.message);
         setParkingState(prev => { const u = prev.map(p => p.id === id ? old : p); storage.setHousingParking(u); return u; });
@@ -932,7 +933,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (!old) return;
     const updated = { ...old, ...data };
     setInsurancesState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingInsurance(u); return u; });
-    supabase.from('housing_insurance').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('housing_insurance', id, old, updated).then(({ error }) => {
       if (error) { console.error('Insurance update error:', error.message); reportError('housing-save', error.message); setInsurancesState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingInsurance(u); return u; }); toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 }); }
     });
   }, [insurances]);
@@ -965,7 +966,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (!old) return;
     const updated = { ...old, ...data };
     setAmcsState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingAmc(u); return u; });
-    supabase.from('housing_amc').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('housing_amc', id, old, updated).then(({ error }) => {
       if (error) { console.error('AMC update error:', error.message); reportError('housing-save', error.message); setAmcsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingAmc(u); return u; }); toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 }); }
     });
   }, [amcs]);
@@ -998,7 +999,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (!old) return;
     const updated = { ...old, ...data };
     setDocumentsState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingDocuments(u); return u; });
-    supabase.from('housing_documents').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('housing_documents', id, old, updated).then(({ error }) => {
       if (error) { console.error('Document update error:', error.message); reportError('housing-save', error.message); setDocumentsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingDocuments(u); return u; }); toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 }); }
     });
   }, [documents]);
@@ -1031,7 +1032,7 @@ export function HousingProvider({ children }: { children: ReactNode }) {
     if (!old) return;
     const updated = { ...old, ...data };
     setBuildingsState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setHousingBuildings(u); return u; });
-    supabase.from('housing_buildings').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('housing_buildings', id, old, updated).then(({ error }) => {
       if (error) { console.error('Building update error:', error.message); reportError('housing-save', error.message); setBuildingsState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setHousingBuildings(u); return u; }); toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 }); }
     });
   }, [buildings]);

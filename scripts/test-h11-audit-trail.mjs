@@ -18,8 +18,9 @@ for (const [fn, type, action] of [['updateSale', 'sale', 'update'], ['updatePurc
 }
 for (const fn of ['updateSale', 'updatePurchase']) {
   const b = fnBody(fn);
-  const at = b.indexOf("action: 'update'"), srv = b.indexOf('const srv =');
-  ok(`${fn} audits BEFORE the server/legacy split (both paths record the edit)`, at > 0 && srv > 0 && at < srv);
+  // ARCH-03: one (server) path now — the audit row is written before the server edit is sent.
+  const at = b.indexOf("action: 'update'"), srv = b.indexOf('postStockDocumentEdit(');
+  ok(`${fn} audits BEFORE the server edit is sent`, at > 0 && srv > 0 && at < srv);
 }
 ok('no console-only edit audit remains', !dc.includes('[AUDIT-EDIT]'));
 

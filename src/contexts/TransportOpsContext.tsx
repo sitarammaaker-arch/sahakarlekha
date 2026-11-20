@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { patchRow } from '@/lib/rowPatch';
 import { fetchAllPaged } from '@/lib/supabasePaging';
 import { resolveJurisdiction } from '@/lib/jurisdiction';
 import { isMissingTableError } from '@/lib/export/missingTable';
@@ -154,7 +155,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
     }
     const updated: TransportVehicle = { ...old, ...data, ...(data.regNo !== undefined ? { regNo: data.regNo.trim().toUpperCase() } : {}) };
     setVehicles(prev => prev.map(v => v.id === id ? updated : v));
-    supabase.from('transport_vehicles').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('transport_vehicles', id, old, updated).then(({ error }) => {
       if (error) {
         console.error('Vehicle update error:', error.message);
         setVehicles(prev => prev.map(v => v.id === id ? old : v));

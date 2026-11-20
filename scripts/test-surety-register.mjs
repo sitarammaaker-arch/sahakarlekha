@@ -117,7 +117,7 @@ ok(/const \{ sureties: loanSuretiesToSave, monthlyInstallment: loanInstalmentToS
 ok(/if \(!error && loanSuretiesToSave && loanSuretiesToSave\.length > 0\) saveLoanSureties\(newLoan\.id, loanSuretiesToSave, \[\]\);/.test(add), 'addLoan: sureties saved in step 2, only after the row exists');
 ok(/if \(refuseBadSureties\(data\.memberId, data\.sureties\)\) return/.test(add) && add.indexOf('refuseBadSureties(') < add.indexOf('crypto.randomUUID()'), 'addLoan: a bad surety list is refused before anything is created');
 const upd = dc.slice(dc.indexOf('const updateLoan = useCallback('), dc.indexOf('const deleteLoan = useCallback('));
-ok(/const \{ sureties: updatedSureties, monthlyInstallment: updatedInstalment, \.\.\.updatedBase \} = updated;/.test(upd) && /upsert\(withSoc\(updatedBase\)\)/.test(upd) && !/upsert\(withSoc\(updated\)\)/.test(upd), 'updateLoan: sureties are not in the base upsert');
+ok(/const \{ sureties: updatedSureties, monthlyInstallment: updatedInstalment, \.\.\.updatedBase \} = updated;/.test(upd) && /patchRow\('loans', id, before, updatedBase\)/.test(upd) && !/upsert\(/.test(upd), 'updateLoan: sureties are not in the base write (ARCH-04: changed base columns only)');
 ok(/if \(!error && suretiesChanged\) saveLoanSureties\(id, updatedSureties \?\? \[\], before\.sureties\);/.test(upd), 'updateLoan: step 2 only when the sureties were part of the change (a repayment does not rewrite them)');
 const sv = dc.slice(dc.indexOf('const saveLoanSureties ='), dc.indexOf('const saveLoanInstalment ='));
 ok(/\.update\(\{ sureties \}\)\.eq\('id', loanId\)\.eq\('society_id', societyIdRef\.current\)/.test(sv), 'step 2 updates this society\'s loan only');

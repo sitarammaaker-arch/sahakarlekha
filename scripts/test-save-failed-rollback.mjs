@@ -44,8 +44,6 @@ const SITES = [
   ['deleteLoan', 'ऋण हटाना', /putBack\(prev, loan\)/],
   ['deleteAsset', 'संपत्ति हटाना', /putBack\(prev, asset\)/],
   ['deleteStockItem', 'स्टॉक मद हटाना', /prev\.map\(i => i\.id === id \? item : i\)/],
-  ['deleteSale', 'बिक्री हटाना', /putBack\(prev, sale\)/],
-  ['deletePurchase', 'खरीद हटाना', /putBack\(prev, purchase\)/],
   ['deleteEmployee', 'कर्मचारी हटाना', /putBack\(prev, removed\)/],
   ['deleteSalaryRecord', 'वेतन पर्ची हटाना', /putBack\(prev, record\)/],
   ['deleteSupplier', 'आपूर्तिकर्ता हटाना', /putBack\(prev, sup\)/],
@@ -67,8 +65,9 @@ ok(after('deleteMember', 'cancelLinkedVouchers('), 'member: linked vouchers canc
 ok(after('deleteLoan', 'cancelLinkedVouchers('), 'loan: disbursement voucher cancelled only after the loan row is saved');
 ok(after('deleteAsset', 'cancelLinkedVouchers('), 'asset: capitalisation / depreciation vouchers cancelled only after the asset row is saved');
 ok(after('deleteSalaryRecord', 'cancelLinkedVouchers('), 'salary slip: accrual + payment cancelled only after the slip row is deleted');
-ok(after('deleteSale', 'cancelLinkedVouchers(') && after('deleteSale', "supabase.from('stock_movements').delete()"), 'sale (legacy path): vouchers + movements only after the sale row is saved');
-ok(after('deletePurchase', 'cancelLinkedVouchers(') && after('deletePurchase', "supabase.from('stock_movements').delete()"), 'purchase (legacy path): vouchers + movements only after the purchase row is saved');
+// ARCH-03: a sale / purchase delete is ONE server transaction (cancel_stock_document); its failure restores the row,
+// vouchers, movements and stock — pinned in test-s3f2-cancel-stock-document. No client cascade is left to order.
+for (const fn of ['deleteSale', 'deletePurchase']) ok(body(fn).includes('cancelStockDocument(') && !body(fn).includes('cancelLinkedVouchers('), `${fn}: one server transaction — nothing half-done on failure`);
 ok(after('deleteStockItem', 'addVoucher(') && after('deleteStockItem', "supabase.from('stock_movements').delete()"), 'stock item: write-off + movement clean-up only after the item row is saved');
 ok(after('deleteSupplier', 'deleteAccountRow(') && after('deleteCustomer', 'deleteAccountRow('), 'party: its ledger is removed / renamed only after the party row is deleted');
 ok(!/setSalesState\(prev => \{\s*const sale = prev\.find/.test(dc) && !/setPurchasesState\(prev => \{\s*const purchase = prev\.find/.test(dc), 'no cascade side effects inside a state updater (sale / purchase)');

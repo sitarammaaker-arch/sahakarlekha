@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { patchRow } from '@/lib/rowPatch';
 import { fetchAllPaged } from '@/lib/supabasePaging';
 import { resolveJurisdiction } from '@/lib/jurisdiction';
 import * as storage from '@/lib/storage';
@@ -187,7 +188,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     if (!old) return;
     const updated = { ...old, ...data };
     setWorkersState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setWorkers(u); return u; });
-    supabase.from('workers').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('workers', id, old, updated).then(({ error }) => {
       if (error) {
         console.error('Worker update error:', error.message);
         setWorkersState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setWorkers(u); return u; });
@@ -252,7 +253,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     const updated = { ...old, ...data };
     setDepartmentsState(prev => { const u = prev.map(d => d.id === id ? updated : d); storage.setDepartments(u); return u; });
     if (data.name && data.name !== old.name) updateAccount(old.accountId, { name: data.name, nameHi: data.name });
-    supabase.from('departments').upsert(withSoc(updated)).then(({ error }) => {
+    patchRow('departments', id, old, updated).then(({ error }) => {
       if (error) {
         console.error('Department update error:', error.message);
         setDepartmentsState(prev => { const u = prev.map(d => d.id === id ? old : d); storage.setDepartments(u); return u; });

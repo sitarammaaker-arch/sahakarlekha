@@ -49,8 +49,9 @@ ok('server events swapped into the journal', /mapLedgerEventRows\(/.test(h));
 for (const [fn, kind] of [['deleteSale', 'sale'], ['deletePurchase', 'purchase']]) {
   const a = dc.indexOf(`const ${fn} = useCallback(`);
   const body = dc.slice(a, dc.indexOf('\n  const ', a + 40));
-  ok(`${fn}: guards first, then the server branch (posting service) that returns before the old path`, body.indexOf('guardFYLocked()') < body.indexOf('if (postingServiceRef.current)')
-    && new RegExp(`cancelStockDocument\\('${kind}'`).test(body) && body.indexOf('cancelStockDocument(') < body.indexOf('cancelLinkedVouchers('));
+  // ARCH-03: the server transaction is the only path — no flag, no client cascade.
+  ok(`${fn}: guards first, then ONE server transaction (no old path)`, body.indexOf('guardFYLocked()') > 0 && body.indexOf('guardFYLocked()') < body.indexOf('cancelStockDocument(')
+    && new RegExp(`cancelStockDocument\\('${kind}'`).test(body) && !body.includes('postingServiceRef') && !body.includes('cancelLinkedVouchers('));
 }
 
 console.log(`\nS3-f-2 cancel_stock_document (static): ${pass} passed, ${fail} failed`);
