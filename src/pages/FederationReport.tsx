@@ -21,6 +21,8 @@ import { addHeader, addPageNumbers, addSignatureBlock, getSignatoryNames, pdfFil
 import { loanOutstanding, kccOutstanding } from '@/lib/memberSnapshot';
 import { isCountedVoucher } from '@/lib/countedVoucher';
 import { isDepositLiabilityName } from '@/lib/depositLiabilityName';
+import { balanceSheetLeaves, ownedFunds, fyEndDate as bsFyEnd } from '@/lib/balanceSheetLeaves';
+import { reportAsOf } from '@/lib/loans/npaClass';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -42,10 +44,11 @@ const fyEnd = (fy: string): Date => {
 
 const FederationReport: React.FC = () => {
   const { language } = useLanguage();
-  const { society, accounts, loans, members, vouchers, getProfitLoss, kccLoans } = useData();
+  const { society, accounts, loans, members, vouchers, getProfitLoss, kccLoans, getTrialBalance, getTradingAccount } = useData();
   const hi = language === 'hi';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // RPT-18: everything dated in this return is as on ITS date — the FY end (or today while the FY runs), not the day
+  // the page is opened (lib/loans/npaClass.reportAsOf).
+  const today = reportAsOf(society.financialYear);
 
   // ── Editable field: audit completion date ──────────────────────────────────
   const [auditDate, setAuditDate] = useState('');
@@ -152,11 +155,18 @@ const FederationReport: React.FC = () => {
     return { sanctioned, disbursed, recovered, outstanding, overdue, npaAmt, npaPct };
   }, [loans, kccLoans, today]);
 
+  // RPT-17: owned funds = the Balance Sheet's own figure (lib/balanceSheetLeaves.ownedFunds) as at the FY end — signed
+  // equity (a deficit reduces it) plus the year's unclosed result. It used to add only the positive equity balances, all dates.
+  const bsOwnedFunds = useMemo(() => {
+    const asOf = bsFyEnd(society.financialYear);
+    const { balanceSheetResult } = getProfitLoss(asOf);
+    const { physicalClosingStock, closingStockPosted, tracksStock } = getTradingAccount(asOf);
+    const leaves = balanceSheetLeaves(getTrialBalance(asOf), { closingStockPosted, physicalClosingStock, netProfit: balanceSheetResult, tracksStock }, accounts);
+    return ownedFunds(leaves, balanceSheetResult);
+  }, [society.financialYear, getProfitLoss, getTradingAccount, getTrialBalance, accounts]);
   // ── Section 6: Working Capital ───────────────────────────────────────────────
   const wcData = useMemo(() => {
-    const ownFunds = accounts
-      .filter(a => !a.isGroup && a.type === 'equity')
-      .reduce((s, a) => { const b = getBalance(a.id); return s + (b > 0 ? b : 0); }, 0);
+    const ownFunds = bsOwnedFunds;
     // Borrowed funds = deposits + loans/borrowings ONLY — not trade payables, statutory
     // dues, provisions etc. (those are operating liabilities, Audit #17).
     const borrowings = accounts
@@ -164,7 +174,7 @@ const FederationReport: React.FC = () => {
         (a.subtype === 'deposit' || a.subtype === 'long_term_loan' || /deposit|fd|rd|loan|borrow|overdraft|\bod\b|\bcc\b/i.test(a.name)))
       .reduce((s, a) => { const b = getBalance(a.id); return s + (b > 0 ? b : 0); }, 0);
     return { ownFunds, borrowings, total: ownFunds + borrowings };
-  }, [accounts, vouchers]);
+  }, [accounts, vouchers, bsOwnedFunds]);
 
   // ── Section 7: Profit & Loss Appropriation ──────────────────────────────────
   const plData = useMemo(() => {

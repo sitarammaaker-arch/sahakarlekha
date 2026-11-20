@@ -16,6 +16,7 @@ import { downloadCSV } from '@/lib/exportUtils';
 import { isFundAccount, buildFundStatement } from '@/lib/housing/funds';
 import { round2 } from '@/lib/housing/billing';
 import { PiggyBank, TrendingUp, MinusCircle, PlusCircle, Download, Trash2, Landmark } from 'lucide-react';
+import { isCountedVoucher } from '@/lib/countedVoucher';
 
 type OpType = 'interest' | 'utilisation' | 'contribution';
 
@@ -29,14 +30,17 @@ export default function FundStatement() {
   const today = () => new Date().toISOString().split('T')[0];
 
   const funds = useMemo(() => accounts.filter(isFundAccount), [accounts]);
+  // RPT-20 (audit 2026-11-17): the counted vouchers only (not pending / rejected / cancelled) — the SAME set the Fund
+  // Register, the spend guard and the Balance Sheet use. A pending utilisation used to lower the corpus here alone.
+  const counted = useMemo(() => vouchers.filter(isCountedVoucher), [vouchers]);
   // Precompute each fund's corpus once per data change (not once per fund per render).
-  const fundBalances = useMemo(() => new Map(funds.map(f => [f.id, buildFundStatement(f, vouchers).closing])), [funds, vouchers]);
+  const fundBalances = useMemo(() => new Map(funds.map(f => [f.id, buildFundStatement(f, counted).closing])), [funds, counted]);
   const bankIds = getBankAccountIds(accounts);
   const bankAccounts = accounts.filter(a => bankIds.includes(a.id));
 
   const [fundId, setFundId] = useState('');
   const fund = funds.find(f => f.id === fundId);
-  const statement = useMemo(() => (fund ? buildFundStatement(fund, vouchers) : null), [fund, vouchers]);
+  const statement = useMemo(() => (fund ? buildFundStatement(fund, counted) : null), [fund, counted]);
 
   const investAccounts = accounts.filter(a => !a.isGroup && a.type === 'asset');
   const fundInvs = fundInvestments.filter(i => !i.isDeleted && i.fundAccountId === fundId);

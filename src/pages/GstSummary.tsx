@@ -17,7 +17,7 @@ import { fmtDate } from '@/lib/dateUtils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
-import { partyGstin, societyStateCode, placeOfSupply } from '@/lib/gstStates';
+import { partyGstin, societyStateCode, placeOfSupply, gstReturnPeriod, monthLastDay } from '@/lib/gstStates';
 import { INDIAN_STATES } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
 import { computeRCM, type RcmPurchase } from '@/lib/rcm';
@@ -385,10 +385,27 @@ export default function GstSummary() {
   };
 
   // GSTR-3B JSON export
+  // RPT-08: a return is ONE month (or one QRMP quarter). The JSON used to stamp the from-date's month on whatever the
+  // range held — a whole financial year went out as April.
+  const returnPeriod = (): string | null => {
+    const p = gstReturnPeriod(fromDate, toDate);
+    if ('fp' in p) return p.fp;
+    toast({
+      title: hi ? 'रिटर्न की अवधि सही नहीं' : 'Return period is not one month',
+      description: hi
+        ? 'GST रिटर्न एक महीने (1 से आख़िरी तारीख़) या एक तिमाही (अप्रैल–जून आदि) का होता है। "इस माह" दबाएँ या तारीख़ें ठीक करें, फिर JSON बनाएँ।'
+        : 'A GST return covers one month (1st to last day) or one quarter (Apr–Jun etc.). Press "This Month" or fix the dates, then build the JSON.',
+      variant: 'destructive', duration: 10000,
+    });
+    return null;
+  };
+
   const handleGstr3bJson = () => {
+    const retPeriod = returnPeriod();
+    if (!retPeriod) return;
     const payload = {
       gstin: society.gstin || 'GSTIN_NOT_SET',
-      ret_period: fromDate.slice(5, 7) + fromDate.slice(0, 4), // MMYYYY (GSTN format)
+      ret_period: retPeriod, // MMYYYY (GSTN format) — RPT-08: the range's own month / quarter
       sup_details: {
         osup_det: { txval: outwardTaxable.taxable, iamt: outwardTaxable.igst, camt: outwardTaxable.cgst, samt: outwardTaxable.sgst, csamt: 0 },
         osup_zero: { txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0 },
@@ -495,7 +512,8 @@ export default function GstSummary() {
       });
       return;
     }
-    const fp = fromDate.slice(5, 7) + fromDate.slice(0, 4); // MMYYYY
+    const fp = returnPeriod(); // MMYYYY — RPT-08
+    if (!fp) return;
 
     // Group B2B by customer GSTIN
     const b2bMap = new Map<string, typeof b2bSales>();
@@ -732,7 +750,7 @@ export default function GstSummary() {
                 const now = new Date();
                 const y = now.getFullYear(), m = now.getMonth() + 1;
                 const firstDay = `${y}-${String(m).padStart(2,'0')}-01`;
-                const lastDay = new Date(y, m, 0).toISOString().split('T')[0];
+                const lastDay = monthLastDay(y, m);   // RPT-08: toISOString of a local midnight lost the last day in IST
                 setFromDate(firstDay); setToDate(lastDay);
               }}>
                 {hi ? 'इस माह' : 'This Month'}

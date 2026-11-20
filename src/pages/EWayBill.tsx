@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import { Download, Truck, Copy, CheckCircle2, Hash } from 'lucide-react';
 import { ewayBillSelect, ewayBillInsert, ewayBillUpdate } from '@/lib/supabaseService';
-import { resolveStateCode, stateCodeFromGstin } from '@/lib/gstStates';
+import { resolveStateCode, stateCodeFromGstin, societyStateCode } from '@/lib/gstStates';
+import { ewayValues, needsEwayBill, type EwayDoc } from '@/lib/ewayValues';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n);
@@ -81,11 +82,11 @@ export default function EWayBill() {
   }, [societyId]);
 
   const eligibleSales = useMemo(() =>
-    sales.filter(s => !(s as any).isDeleted && s.grandTotal >= 50000),
+    sales.filter(s => !(s as any).isDeleted && needsEwayBill(s)),   // RPT-10: invoice value > ₹50,000 (Rule 138)
     [sales]);
 
   const eligiblePurchases = useMemo(() =>
-    purchases.filter(p => !(p as any).isDeleted && p.grandTotal >= 50000),
+    purchases.filter(p => !(p as any).isDeleted && needsEwayBill(p)),
     [purchases]);
 
   const currentList = sourceType === 'sale' ? eligibleSales : eligiblePurchases;
@@ -110,7 +111,7 @@ export default function EWayBill() {
     const toAddr1 = party?.addressLine1 || party?.address || '';
     const toPinCode = (party?.pincode || '').trim();
     const toStateCode = resolveStateCode(toGstin === 'URP' ? undefined : toGstin, party?.state || party?.placeOfSupply);
-    const fromStateCode = stateCodeFromGstin(society.gstin) || '09';
+    const fromStateCode = societyStateCode(society);   // RPT-10: never a hard-coded '09' (Uttar Pradesh)
 
     // ── Pre-generate validation: refuse to emit a JSON the portal will reject ──
     const problems: string[] = [];
@@ -135,15 +136,17 @@ export default function EWayBill() {
       return;
     }
 
-    const itemList = (s.items || []).map((item: any) => {
+    // RPT-10: one set of values — taxable after the trade discount (spread over the items), invoice value = taxable + GST.
+    const ev = ewayValues(s as unknown as EwayDoc);
+    const itemList = (s.items || []).map((item: any, idx: number) => {
       const stockItem = stockItems.find(si => si.id === item.itemId);
       return {
         name: item.itemName,
         hsn: stockItem?.hsnCode || stockItem?.sacCode || '9999',
         qty: item.qty,
         unit: toUqc(item.unit),   // GST UQC ('KGS', 'QTL', …) — the portal refuses free text (lib/units)
-        taxable: item.amount,
-        gstRate: s.cgstPct * 2 || s.igstPct || 0,
+        taxable: ev.itemTaxable[idx] ?? 0,
+        gstRate: ev.rate,
       };
     });
 
@@ -166,12 +169,12 @@ export default function EWayBill() {
         docType: 'INV',
         docNo: isSale ? s.saleNo : s.purchaseNo,
         docDate: s.date,
-        totalValue: s.totalAmount,
+        totalValue: ev.taxable,
         cgstValue: s.cgstAmount || 0,
         sgstValue: s.sgstAmount || 0,
         igstValue: s.igstAmount || 0,
         cessValue: 0,
-        totInvValue: s.grandTotal,
+        totInvValue: ev.invoiceValue,
         transMode: transportModes.indexOf(transportMode) + 1,
         transDistance: parseInt(distance) || 0,
         transporterId: transporterGstin.trim().toUpperCase() || undefined,
