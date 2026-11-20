@@ -33,7 +33,7 @@ type CounterTender = Extract<PaymentMode, 'cash' | 'bank' | 'credit'>;
 const RetailCounter: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { sales, stockItems, reconciledStockMovements, customers, members, addSale, society, usesPostingService } = useData();
+  const { sales, stockItems, reconciledStockMovements, customers, members, addSale, society } = useData();
   const { resolvePrice, memberReceivableAccountId, getMemberOutstanding } = useConsumerData();
 
   const { toast } = useToast();
@@ -243,7 +243,7 @@ const RetailCounter: React.FC = () => {
       setCustomerId('');
       setMemberId('');
       // Posting service: the server issues the number after this returns — DataContext toasts it then.
-      if (!usesPostingService()) toast({ title: hi ? `बिक्री दर्ज: ${newSale.saleNo}` : `Sale posted: ${newSale.saleNo}` });
+      // ARCH-03: the "posted" toast comes from the server save (with the official number), never from here.
       focusSearch();
     } catch (err) {
       toast({

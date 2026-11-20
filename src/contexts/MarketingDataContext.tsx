@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { patchRow } from '@/lib/rowPatch';
 import { fetchAllPaged } from '@/lib/supabasePaging';
 import { unlessEmpty } from '@/lib/emptyTables';
 import { applyLoadsTogether } from '@/lib/batchedLoads';
@@ -304,7 +305,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       const u = prev.map(c => c.id === id ? { ...c, ...data, updatedAt: new Date().toISOString() } : c);
       storage.setProcurementCrops(u);
       const next = u.find(c => c.id === id);
-      if (next && before) supabase.from('procurement_crops').upsert(withSoc(next)).then(({ error }) => {
+      if (next && before) patchRow('procurement_crops', id, before, next).then(({ error }) => {
         if (error) {
           setCropsState(p => { const r = p.map(c => c.id === id ? before : c); storage.setProcurementCrops(r); return r; });
           toastRef.current({ title: tr('फसल अपडेट नहीं हुई', 'Crop not updated'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
@@ -377,7 +378,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       const u = prev.map(v => v.id === id ? { ...v, ...data, updatedAt: new Date().toISOString() } : v);
       storage.setProcurementVarieties(u);
       const next = u.find(v => v.id === id);
-      if (next && before) supabase.from('procurement_varieties').upsert(withSoc(next)).then(({ error }) => {
+      if (next && before) patchRow('procurement_varieties', id, before, next).then(({ error }) => {
         if (error) {
           setVarietiesState(p => { const r = p.map(v => v.id === id ? before : v); storage.setProcurementVarieties(r); return r; });
           toastRef.current({ title: tr('किस्म अपडेट नहीं हुई', 'Variety not updated'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
@@ -428,7 +429,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       const u = prev.map(s => s.id === id ? { ...s, ...data, updatedAt: new Date().toISOString() } : s);
       storage.setProcurementSeasons(u);
       const next = u.find(s => s.id === id);
-      if (next && before) supabase.from('procurement_seasons').upsert(withSoc(next)).then(({ error }) => {
+      if (next && before) patchRow('procurement_seasons', id, before, next).then(({ error }) => {
         if (error) {
           setSeasonsState(p => { const r = p.map(s => s.id === id ? before : s); storage.setProcurementSeasons(r); return r; });
           toastRef.current({ title: tr('सीज़न अपडेट नहीं हुआ', 'Season not updated'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
@@ -493,7 +494,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       const u = prev.map(a => a.id === id ? { ...a, ...data, updatedAt: new Date().toISOString() } : a);
       storage.setProcurementAgencies(u);
       const next = u.find(a => a.id === id);
-      if (next && before) supabase.from('procurement_agencies').upsert(withSoc(agencyBase(next))).then(({ error }) => {
+      if (next && before) patchRow('procurement_agencies', id, before, agencyBase(next)).then(({ error }) => {
         if (!error) { persistAgencyExtras(next); return; }
         {
           setAgenciesState(p => { const r = p.map(a => a.id === id ? before : a); storage.setProcurementAgencies(r); return r; });
@@ -545,7 +546,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       const u = prev.map(c => c.id === id ? { ...c, ...data, updatedAt: new Date().toISOString() } : c);
       storage.setProcurementCentres(u);
       const next = u.find(c => c.id === id);
-      if (next && before) supabase.from('procurement_centres').upsert(withSoc(next)).then(({ error }) => {
+      if (next && before) patchRow('procurement_centres', id, before, next).then(({ error }) => {
         if (error) {
           setCentresState(p => { const r = p.map(c => c.id === id ? before : c); storage.setProcurementCentres(r); return r; });
           toastRef.current({ title: tr('केंद्र अपडेट नहीं हुआ', 'Centre not updated'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
@@ -644,7 +645,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       const u = prev.map(r => r.id === id ? { ...r, ...data, rate: data.rate != null ? { value: data.rate } : r.rate, updatedAt: new Date().toISOString() } : r);
       storage.setProcurementDeductionRules(u);
       const next = u.find(r => r.id === id);
-      if (next && before) supabase.from('procurement_deduction_rules').upsert(withSoc((({ basisUnit: _u, ...b }) => b)(next))).then(({ error }) => {
+      if (next && before) patchRow('procurement_deduction_rules', id, before, (({ basisUnit: _u, ...b }) => b)(next)).then(({ error }) => {
         if (!error) { persistRuleUnit(next, () => setDeductionRulesState(p => { const r = p.map(x => x.id === id ? before : x); storage.setProcurementDeductionRules(r); return r; }), before.basisUnit); return; }
         {
           setDeductionRulesState(p => { const r = p.map(x => x.id === id ? before : x); storage.setProcurementDeductionRules(r); return r; });
@@ -748,7 +749,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     if (!before) return;
     const next: Arhtiya = { ...before, ...data, updatedAt: new Date().toISOString() };
     setArhtiyasState(prev => { const u = prev.map(a => a.id === id ? next : a); storage.setProcurementArhtiyas(u); return u; });
-    supabase.from('procurement_arhtiyas').upsert(withSoc(next)).then(({ error }) => {
+    patchRow('procurement_arhtiyas', id, before, next).then(({ error }) => {
       if (!error) return;
       setArhtiyasState(p => { const r = p.map(a => a.id === id ? before : a); storage.setProcurementArhtiyas(r); return r; });
       toastRef.current({ title: tr('आढ़ती अपडेट नहीं हुआ', 'Arhtiya not updated'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
@@ -835,7 +836,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
       const u = prev.map(t => t.id === id ? { ...t, ...data, updatedAt: new Date().toISOString() } : t);
       storage.setMarketingTransporters(u);
       const next = u.find(t => t.id === id);
-      if (next && before) supabase.from('marketing_transporters').upsert(withSoc(transporterBase(next))).then(({ error }) => {
+      if (next && before) patchRow('marketing_transporters', id, before, transporterBase(next)).then(({ error }) => {
         if (!error) { persistTransporterLedger(next); return; }
         {
           setTransportersState(p => { const r = p.map(t => t.id === id ? before : t); storage.setMarketingTransporters(r); return r; });

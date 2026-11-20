@@ -30,7 +30,8 @@ for (const [page, add, idState, list, noKey] of [
 ]) {
   const s = read(page);
   console.log(page);
-  ok('no provisional-number toast under the posting service', /if \(!usesPostingService\(\)\) toast\(/.test(s) && !new RegExp(`\\n\\s+toast\\(\\{ title: [^\\n]*\\$\\{new(Sale|Purchase)\\.${noKey}\\}`).test(s.replace(/if \(!usesPostingService\(\)\) toast\(/g, 'GUARDED(')));
+  // ARCH-03: the page never toasts — the server save toasts with the official number.
+  ok('no provisional-number toast at all (the server save toasts the official number)', !s.includes('usesPostingService') && !new RegExp(`\\n\\s+toast\\(\\{ title: [^\\n]*\\$\\{new(Sale|Purchase)\\.${noKey}\\}`).test(s));
   ok('the saved banner reads the number from the list by id (restamped)', new RegExp(`${idState}\\) => .*|\\(${idState} && ${list}\\.find\\(\\w+ => \\w+\\.id === ${idState}\\)\\?\\.${noKey}\\)`).test(s) && /shown(Sale|Purchase)No/.test(s));
   ok(`the id is kept from ${add}'s result`, new RegExp(`set\\w+Id\\(new(Sale|Purchase)\\.id \\|\\| null\\)`).test(s));
 }

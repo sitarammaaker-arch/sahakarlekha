@@ -24,7 +24,7 @@ ok('the old journalLoaded-only fallback is gone', !/else if \(!journalLoadedRef\
 
 ok('flag re-read on visibilitychange', /document\.addEventListener\('visibilitychange', refreshPostingFlag\)/.test(src));
 ok('flag re-read every 5 minutes, cleaned up on unmount', /setInterval\(refreshPostingFlag, 5 \* 60 \* 1000\)/.test(src) && /clearInterval\(timer\)/.test(src) && /removeEventListener\('visibilitychange', refreshPostingFlag\)/.test(src));
-ok('a failed flag read keeps the current value', /if \(!error\) postingServiceRef\.current = data\?\.posting_service === true/.test(src));
+ok('a failed flag read keeps the current value', /if \(!error\) postingServiceRef\.current = data\?\.posting_service !== false/.test(src));
 
 console.log(`\ncancel stale tab: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

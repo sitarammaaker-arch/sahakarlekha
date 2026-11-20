@@ -193,7 +193,7 @@ const updL = dcx.slice(dcx.indexOf('const updateLoan = useCallback('), dcx.index
 const svI = dcx.slice(dcx.indexOf('const saveLoanInstalment ='), dcx.indexOf('const addLoan = useCallback('));
 ok(/monthlyInstallment: loanInstalmentToSave, \.\.\.loanBase \} = loanToSave;/.test(addL) && /upsert\(withSoc\(loanBase\)\)/.test(addL), 'addLoan: the instalment is not in the base upsert');
 ok(/if \(!error && loanInstalmentToSave\) saveLoanInstalment\(newLoan\.id, loanInstalmentToSave, null\);/.test(addL), 'addLoan: instalment saved in step 2, only when one was entered');
-ok(/monthlyInstallment: updatedInstalment, \.\.\.updatedBase \} = updated;/.test(updL) && /upsert\(withSoc\(updatedBase\)\)/.test(updL), 'updateLoan: the instalment is not in the base upsert');
+ok(/monthlyInstallment: updatedInstalment, \.\.\.updatedBase \} = updated;/.test(updL) && /patchRow\('loans', id, before, updatedBase\)/.test(updL), 'updateLoan: the instalment is not in the base write (ARCH-04: changed base columns only)');
 ok(/if \(!error && instalmentChanged && \(updatedInstalment \?\? null\) !== \(before\.monthlyInstallment \?\? null\)\) saveLoanInstalment\(/.test(updL), 'updateLoan: step 2 only when the instalment really changed (no write, no error, on a database without the column)');
 ok(/\.update\(\{ monthlyInstallment \}\)\.eq\('id', loanId\)\.eq\('society_id', societyIdRef\.current\)/.test(svI) && !/sureties/.test(svI.slice(0, svI.indexOf('const cleanInstalment'))), 'its own update — never in the same write as the sureties');
 ok(/monthlyInstallment: restore \} : l\)\)/.test(svI) && /migration 170/.test(svI) && /variant: 'destructive', duration: 15000/.test(svI), 'a failed step 2 restores the screen and names migration 170');

@@ -41,14 +41,22 @@ ok('append failure is reported, success mirrored into the loaded journal', /repo
 console.log('Every cascade goes through the helper');
 const sites = [
   ['deleteMember', "'Member deleted'"], ['deleteLoan', "'Loan deleted'"], ['deleteAsset', "'Asset deleted'"],
-  ['deleteSale', '`Sale ${sale.saleNo} deleted`'], ['updateSale', '`Sale ${original.saleNo} edited`'],
-  ['deletePurchase', '`Purchase ${purchase.purchaseNo} deleted`'], ['updatePurchase', '`Purchase ${original.purchaseNo} edited`'],
   ['updateSalaryRecord', '`Salary slip ${oldRecord.slipNo} marked unpaid`'], ['deleteSalaryRecord', '`Salary slip ${record?.slipNo} deleted`'],
 ];
 for (const [fn, reason] of sites) {
   const b = fnBody(fn);
   ok(`${fn}: cancelLinkedVouchers(…, ${reason}, …) and no direct isDeleted write`, b.includes('cancelLinkedVouchers(') && b.includes(reason)
     && !/from\('vouchers'\)\.update\(\{ isDeleted: true/.test(b), b ? '' : 'function not found');
+}
+// ARCH-03: a sale / purchase is a stock document — its vouchers are cancelled by the server in the same transaction
+// (cancel_stock_document / update_stock_document), never by a client cascade or a direct isDeleted write.
+for (const [fn, call, reason] of [
+  ['deleteSale', 'cancelStockDocument(', '`Sale ${sale.saleNo} deleted`'], ['updateSale', 'postStockDocumentEdit(', '`Sale ${original.saleNo} edited`'],
+  ['deletePurchase', 'cancelStockDocument(', '`Purchase ${purchase.purchaseNo} deleted`'], ['updatePurchase', 'postStockDocumentEdit(', '`Purchase ${original.purchaseNo} edited`'],
+]) {
+  const b = fnBody(fn);
+  ok(`${fn}: ${call}…) carries ${reason}; no client cascade, no direct isDeleted write`, b.includes(call) && b.includes(reason)
+    && !b.includes('cancelLinkedVouchers(') && !/from\('vouchers'\)\.update\(\{ isDeleted: true/.test(b), b ? '' : 'function not found');
 }
 
 console.log('No other code soft-deletes a voucher behind the journal\'s back');

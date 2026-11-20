@@ -55,10 +55,11 @@ ok('success restamps document number, movements, voucher number/narration and th
 for (const [fn, kind] of [['addSale', 'sale'], ['addPurchase', 'purchase']]) {
   const a = dc.indexOf(`const ${fn} = useCallback(`);
   const body = dc.slice(a, dc.indexOf('\n  const ', a + 40));
-  ok(`${fn}: persistWith only under the posting service`, /postingServiceRef\.current \? \{ persistWith: \(v, ev, rollback\) => \{ viaServer = \{ v, ev, rollback \}; \} \} : undefined/.test(body));
-  ok(`${fn}: no direct stock_items / movement writes on the server path`, /if \(!server\) supabase\.from\('stock_items'\)\.update/.test(body) && /if \(!server\) persistMovement\(mv\);/.test(body));
-  ok(`${fn}: server path posts via postStockDocument ('${kind}') and returns before the table save`, new RegExp(`postStockDocument\\(\\{\\s*kind: '${kind}'`).test(body)
-    && body.indexOf('postStockDocument(') < body.indexOf('issueOfficialNumber(') && /return (sale|purchase);\s*\}/.test(body));
+  // ARCH-03: the server path is the ONLY path — persistWith always, no direct table writes, no client numbering.
+  ok(`${fn}: persistWith always (no flag)`, /\}, \{ persistWith: \(v, ev, rollback\) => \{ viaServer = \{ v, ev, rollback \}; \} \}\);/.test(body) && !body.includes('postingServiceRef'));
+  ok(`${fn}: no direct stock_items / movement / document writes`, !/supabase\.from\('(stock_items|stock_movements|sales|purchases)'\)/.test(body) && !body.includes('persistMovement('));
+  ok(`${fn}: posts via postStockDocument ('${kind}') — no client-side numbering or table save`, new RegExp(`postStockDocument\\(\\{\\s*kind: '${kind}'`).test(body)
+    && !body.includes('issueOfficialNumber(') && /return (sale|purchase);\n  \}, \[/.test(body.replace(/\r\n/g, '\n')));
 }
 
 console.log(`\nS3-f-1 post_stock_document (static): ${pass} passed, ${fail} failed`);

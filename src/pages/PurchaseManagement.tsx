@@ -73,7 +73,7 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const PurchaseManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { purchases, stockItems, suppliers, accounts, addPurchase, updatePurchase, deletePurchase, addStockItem, society, usesPostingService, matchesActiveBranch } = useData();
+  const { purchases, stockItems, suppliers, accounts, addPurchase, updatePurchase, deletePurchase, addStockItem, society, matchesActiveBranch } = useData();
   const { toast } = useToast();
 
   // ── New Purchase form state ───────────────────────────────────────────────
@@ -345,11 +345,7 @@ const PurchaseManagement: React.FC = () => {
         setSavedPurchaseNo(newPurchase.purchaseNo);
         setSavedPurchaseId(newPurchase.id || null);
         // Posting service: the server issues the number after this returns — DataContext toasts it then.
-        if (!usesPostingService()) toast({
-          title: language === 'hi'
-            ? `खरीद सहेजी गई: ${newPurchase.purchaseNo}`
-            : `Purchase saved: ${newPurchase.purchaseNo}`,
-        });
+        // ARCH-03: the "saved" toast comes from the server save (with the official number), never from here.
         if (duplicateBill) {
           toast({
             title: language === 'hi' ? '⚠️ यह बिल नंबर पहले से मौजूद है' : '⚠️ Bill number already exists',

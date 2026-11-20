@@ -58,10 +58,11 @@ ok('success restamps the voucher number and swaps the journal events', /voucherN
 for (const [fn, kind, no] of [['updateSale', 'sale', 'saleNo'], ['updatePurchase', 'purchase', 'purchaseNo']]) {
   const a = dc.indexOf(`const ${fn} = useCallback(`);
   const body = dc.slice(a, dc.indexOf('\n  const ', a + 40));
-  ok(`${fn}: every DB write is skipped under the posting service`, /if \(!server\) supabase\.from\('stock_items'\)\.update/.test(body) && new RegExp(`if \\(!server\\) supabase\\.from\\('stock_movements'\\)\\.delete\\(\\)\\.eq\\('referenceNo', original\\.${no}\\)`).test(body)
-    && /\} else cancelLinkedVouchers\(linkedIds,/.test(body) && /if \(!server\) persistMovement\(mv\);/.test(body));
-  ok(`${fn}: addVoucher hands the voucher over (persistWith) and a refused voucher undoes the local edit`, /server \? \{ persistWith: \(v, ev, rollback\) => \{ viaServer = \{ v, ev, rollback \}; \} \} : undefined/.test(body) && /if \(server && !newVoucher\.id\) \{ undoLocal\(\); return null; \}/.test(body));
-  ok(`${fn}: server path calls postStockDocumentEdit('${kind}') and returns before the table upsert`, new RegExp(`postStockDocumentEdit\\(\\{ kind: '${kind}'`).test(body) && body.indexOf('postStockDocumentEdit(') < body.indexOf(".upsert(withSoc(payload))"));
+  // ARCH-03: the server transaction is the only path — every write below is local until update_stock_document.
+  ok(`${fn}: no direct DB write at all (${no} edit is one server transaction)`, !/supabase\.from\('(stock_items|stock_movements|sales|purchases|vouchers)'\)/.test(body)
+    && !body.includes('cancelLinkedVouchers(') && !body.includes('persistMovement(') && !body.includes('postingServiceRef') && /const cancelV = /.test(body));
+  ok(`${fn}: addVoucher always hands the voucher over (persistWith) and a refused voucher undoes the local edit`, /\}, \{ persistWith: \(v, ev, rollback\) => \{ viaServer = \{ v, ev, rollback \}; \} \}\);/.test(body) && /if \(!newVoucher\.id \|\| !srv\) \{ undoLocal\(\); return null; \}/.test(body));
+  ok(`${fn}: calls postStockDocumentEdit('${kind}') — no table upsert left`, new RegExp(`postStockDocumentEdit\\(\\{ kind: '${kind}'`).test(body) && !body.includes('.upsert('));
   ok(`${fn}: undo restores old vouchers, movements, stock (+rate) and the original row`, /const undoLocal = \(\) => \{/.test(body) && /\.\.\.oldMovs\]/.test(body) && /stockBefore\.get\(i\.id\)!\.cs, purchaseRate: stockBefore\.get\(i\.id\)!\.rate/.test(body) && /x\.id === id \? original : x/.test(body));
 }
 

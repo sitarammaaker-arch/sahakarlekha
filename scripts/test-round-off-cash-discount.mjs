@@ -108,7 +108,8 @@ const dc = readFileSync(pathResolve(SRC, 'contexts/DataContext.tsx'), 'utf8');
 ok((dc.match(/goodsBase\('sale', grandTotal, data\.roundOff\)/g) || []).length === 2, 'addSale + updateSale split goods from goodsBase');
 ok((dc.match(/goodsBase\('purchase', grandTotal, data\.roundOff, data\.cashDiscount\)/g) || []).length === 2, 'addPurchase + updatePurchase split goods from goodsBase');
 ok((dc.match(/adjustmentLines\('sale'/g) || []).length === 2 && (dc.match(/adjustmentLines\('purchase'/g) || []).length === 2, 'adjustment lines on all four paths');
-ok(/roundOff: sRound \?\? 0/.test(dc) && /cashDiscount: pCashDisc \?\? 0, roundOff: pRound \?\? 0/.test(dc), 'new columns are saved in step-2 extras (RULE 1), not the base upsert');
+// ARCH-03: the client step-2 extras save is gone — the bill (with roundOff / cashDiscount) goes whole to post_stock_document.
+ok(!/roundOff: sRound \?\? 0/.test(dc) && !/persistExtras\(/.test(dc) && (dc.replace(/\r\n/g, '\n').match(/postStockDocument\(\{\n\s+kind: '(sale|purchase)', doc: (sale|purchase),/g) || []).length === 2, 'roundOff / cashDiscount travel on the bill to the server save (no client extras write)');
 const cdc = readFileSync(pathResolve(SRC, 'contexts/ConsumerDataContext.tsx'), 'utf8');
 ok((cdc.match(/const cashDiscShare = /g) || []).length === 2 && (cdc.match(/resolveDiscountReceivedAccountId\(accounts\), type: 'Dr', amount: cashDiscShare/g) || []).length === 2, 'purchase return (add + edit) reverses the cash discount in proportion');
 

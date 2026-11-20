@@ -84,9 +84,10 @@ ok('the RPC branch never calls persistVoucher / persistLedgerEvent (the server w
 ok('flag-off path unchanged: persistVoucher, event appended only after base success', /persistVoucher\(newVoucher, \{\s*isUpdate: false,[\s\S]*?onBaseSuccess: \(\) => \{\s*if \(shadowEvent\) persistLedgerEvent\(shadowEvent\);\s*opts\?\.onSaved\?\.\([\s\S]*?\},\s*onBaseFail: \(\) => \{ rollbackOptimistic\(\); opts\?\.onFailed\?\.\(\); \},/.test(dc));
 const at = dc.indexOf('const loadFromSupabase = async');
 const load = dc.slice(at, at + 900);
-ok('flag loaded by a read-only select, reset to false first, false on any error', /postingServiceRef\.current = false;/.test(load)
-  && /from\('society_flags'\)\.select\('posting_service'\)/.test(load) && /!error && data\?\.posting_service === true/.test(load));
-ok('the flag ref defaults to false', /const postingServiceRef = useRef\(false\);/.test(dc));
+// ARCH-03 (191): every society is on the posting service — a missing row / read error keeps it ON.
+ok('flag loaded by a read-only select, reset to ON first, ON on a missing row or error', /postingServiceRef\.current = true;/.test(load)
+  && /from\('society_flags'\)\.select\('posting_service'\)/.test(load) && /if \(!error\) postingServiceRef\.current = data\?\.posting_service !== false;/.test(load));
+ok('the flag ref defaults to ON (ARCH-03)', /const postingServiceRef = useRef\(true\);/.test(dc));
 ok('the app never writes society_flags', !/from\('society_flags'\)\.(upsert|insert|update|delete)/.test(dc));
 
 console.log(`\nS3-b post_voucher client: ${pass} passed, ${fail} failed`);

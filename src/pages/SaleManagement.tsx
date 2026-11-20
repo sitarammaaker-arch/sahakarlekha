@@ -77,7 +77,7 @@ const paymentModeLabel: Record<PaymentMode, { hi: string; en: string }> = {
 const SaleManagement: React.FC = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { sales, vouchers, stockItems, reconciledStockMovements, customers, members, accounts, addSale, updateSale, deleteSale, addStockItem, society, usesPostingService, matchesActiveBranch } = useData();
+  const { sales, vouchers, stockItems, reconciledStockMovements, customers, members, accounts, addSale, updateSale, deleteSale, addStockItem, society, matchesActiveBranch } = useData();
   // Available qty is ALWAYS movement-based (RULE 2), reconciled to live docs (RULE 3). Never read
   // stockItem.currentStock here — that cache drifts when a purchase voucher is edited/deleted and
   // caused the "sale shows 120 but stock report shows 0" bug.
@@ -338,11 +338,7 @@ const SaleManagement: React.FC = () => {
         setSavedSaleNo(newSale.saleNo);
         setSavedSaleId(newSale.id || null);
         // Posting service: the server issues the number after this returns — DataContext toasts it then.
-        if (!usesPostingService()) toast({
-          title: language === 'hi'
-            ? `बिक्री सहेजी गई: ${newSale.saleNo}`
-            : `Sale saved: ${newSale.saleNo}`,
-        });
+        // ARCH-03: the "saved" toast comes from the server save (with the official number), never from here.
         resetForm();
       }
     } catch (err) {
