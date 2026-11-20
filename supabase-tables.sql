@@ -1,4 +1,16 @@
 -- =============================================
+-- ⚠ SEC-01 (audit 2026-11-17): this is the ORIGINAL bootstrap schema. It must NEVER be run on a live database —
+--   the live policies and hardened functions come from supabase/migrations (072+, tracked in app_migrations), and
+--   this file still holds older, weaker function bodies. The block below refuses to run where app_migrations exists.
+--   New columns: write a numbered migration in supabase/migrations (alter table … add column if not exists …).
+-- =============================================
+do $$ begin
+  if to_regclass('public.app_migrations') is not null then
+    raise exception 'supabase-tables.sql is the original bootstrap — do NOT run it on a live database. Use the numbered files in supabase/migrations.';
+  end if;
+end $$;
+
+-- =============================================
 -- Sahakarlekha - Complete Supabase Schema
 -- Column names match TypeScript field names exactly
 -- Run in Supabase SQL Editor (fresh setup)
@@ -359,51 +371,51 @@ alter table salary_records enable row level security;
 do $$ begin
   -- societies
   if not exists (select 1 from pg_policies where tablename='societies' and policyname='allow_all_societies') then
-    create policy "allow_all_societies" on societies for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   -- society_users
   if not exists (select 1 from pg_policies where tablename='society_users' and policyname='allow_all_society_users') then
-    create policy "allow_all_society_users" on society_users for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   -- data tables
   if not exists (select 1 from pg_policies where tablename='society_settings' and policyname='allow_all') then
-    create policy "allow_all" on society_settings for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='accounts' and policyname='allow_all') then
-    create policy "allow_all" on accounts for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='members' and policyname='allow_all') then
-    create policy "allow_all" on members for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='vouchers' and policyname='allow_all') then
-    create policy "allow_all" on vouchers for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='loans' and policyname='allow_all') then
-    create policy "allow_all" on loans for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='assets' and policyname='allow_all') then
-    create policy "allow_all" on assets for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='audit_objections' and policyname='allow_all') then
-    create policy "allow_all" on audit_objections for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='stock_items' and policyname='allow_all') then
-    create policy "allow_all" on stock_items for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='stock_movements' and policyname='allow_all') then
-    create policy "allow_all" on stock_movements for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='sales' and policyname='allow_all') then
-    create policy "allow_all" on sales for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='purchases' and policyname='allow_all') then
-    create policy "allow_all" on purchases for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='employees' and policyname='allow_all') then
-    create policy "allow_all" on employees for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='salary_records' and policyname='allow_all') then
-    create policy "allow_all" on salary_records for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 
@@ -443,10 +455,10 @@ alter table customers enable row level security;
 
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='suppliers' and policyname='allow_all') then
-    create policy "allow_all" on suppliers for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='customers' and policyname='allow_all') then
-    create policy "allow_all" on customers for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 
@@ -565,7 +577,7 @@ create index if not exists idx_salary_records_employee   on salary_records("empl
 alter table suppliers enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='suppliers' and policyname='allow_all') then
-    create policy "allow_all" on suppliers for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 create index if not exists idx_suppliers_society on suppliers(society_id);
@@ -578,7 +590,7 @@ alter table suppliers add column if not exists "nameHi" text;
 alter table customers enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='customers' and policyname='allow_all') then
-    create policy "allow_all" on customers for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 create index if not exists idx_customers_society on customers(society_id);
@@ -606,7 +618,7 @@ create table if not exists meeting_register (
 alter table meeting_register enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='meeting_register' and policyname='allow_all') then
-    create policy "allow_all" on meeting_register for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 create index if not exists idx_meeting_register_society on meeting_register(society_id);
@@ -637,7 +649,7 @@ create table if not exists kcc_loans (
 alter table kcc_loans enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='kcc_loans' and policyname='allow_all') then
-    create policy "allow_all" on kcc_loans for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 create index if not exists idx_kcc_loans_society on kcc_loans(society_id);
@@ -656,7 +668,7 @@ create table if not exists budgets (
 alter table budgets enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='budgets' and policyname='allow_all') then
-    create policy "allow_all" on budgets for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 create index if not exists idx_budgets_society on budgets(society_id);
@@ -682,7 +694,7 @@ create table if not exists eway_bills (
 alter table eway_bills enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='eway_bills' and policyname='allow_all') then
-    create policy "allow_all" on eway_bills for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 create index if not exists idx_eway_bills_society on eway_bills(society_id);
@@ -708,7 +720,7 @@ create table if not exists elections (
 alter table elections enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='elections' and policyname='allow_all') then
-    create policy "allow_all" on elections for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 create index if not exists idx_elections_society on elections(society_id);
@@ -762,7 +774,7 @@ create table if not exists hsn_master (
 alter table hsn_master enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='hsn_master' and policyname='allow_all') then
-    create policy "allow_all" on hsn_master for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 create index if not exists idx_hsn_master_society on hsn_master(society_id);
@@ -790,7 +802,7 @@ alter table voucher_entries add column if not exists "costCentreId" text;
 alter table voucher_entries enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='voucher_entries' and policyname='allow_all') then
-    create policy "allow_all" on voucher_entries for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 create index if not exists idx_ve_voucher on voucher_entries("voucherId");
@@ -954,10 +966,10 @@ create index if not exists audit_log_scope_idx on audit_log (society_id, entity_
 alter table audit_log enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='audit_log' and policyname='audit_insert') then
-    create policy "audit_insert" on audit_log for insert with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='audit_log' and policyname='audit_select') then
-    create policy "audit_select" on audit_log for select using (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   -- Intentionally NO update/delete policy ⇒ audit_log is WORM (append-only).
 end $$;
@@ -3217,10 +3229,10 @@ alter table deposit_accounts enable row level security;
 alter table deposit_transactions enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='deposit_accounts' and policyname='allow_all') then
-    create policy "allow_all" on deposit_accounts for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='deposit_transactions' and policyname='allow_all') then
-    create policy "allow_all" on deposit_transactions for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 
@@ -3261,7 +3273,7 @@ create index if not exists compliance_filings_scope_idx on compliance_filings (s
 alter table compliance_filings enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='compliance_filings' and policyname='allow_all') then
-    create policy "allow_all" on compliance_filings for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 
@@ -3536,7 +3548,7 @@ create table if not exists branches (
 alter table branches enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='branches' and policyname='allow_all_branches') then
-    create policy "allow_all_branches" on branches for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 
@@ -3558,7 +3570,7 @@ create table if not exists godowns (
 alter table godowns enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='godowns' and policyname='allow_all_godowns') then
-    create policy "allow_all_godowns" on godowns for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 
@@ -3652,7 +3664,7 @@ create table if not exists p7_entries (
 alter table p7_entries enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='p7_entries' and policyname='allow_all') then
-    create policy "allow_all" on p7_entries for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 create index if not exists idx_p7_entries_society on p7_entries(society_id);
@@ -3727,7 +3739,7 @@ create table if not exists document_sequences (
 alter table document_sequences enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='document_sequences' and policyname='allow_all') then
-    create policy "allow_all" on document_sequences for all using (true) with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
 end $$;
 
@@ -3802,10 +3814,10 @@ create index if not exists ledger_events_scope
 alter table ledger_events enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where tablename='ledger_events' and policyname='ledger_events_insert') then
-    create policy "ledger_events_insert" on ledger_events for insert with check (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   if not exists (select 1 from pg_policies where tablename='ledger_events' and policyname='ledger_events_select') then
-    create policy "ledger_events_select" on ledger_events for select using (true);
+    null;  -- SEC-01: an allow-everyone policy was here — removed. Real policies come from supabase/migrations.
   end if;
   -- Intentionally NO update/delete policy ⇒ ledger_events is WORM (append-only, CL-2).
 end $$;
