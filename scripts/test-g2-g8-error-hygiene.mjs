@@ -33,7 +33,7 @@ const spaRules = (vercel.rewrites || []).filter(r => r.destination === '/index.h
 const toRe = (source) => new RegExp('^' + source.replace('/:path*', '(/.*)?') + '$');
 const spaRes = spaRules.map(r => toRe(r.source));
 const re = spaRes.length ? { test: (p) => spaRes.some(x => x.test(p)) } : null;
-ok('SPA rewrite still serves app routes', !!re && re.test('/dashboard') && re.test('/login') && re.test('/members/123') && re.test('/en/guide/any-chapter'));
+ok('SPA rewrite still serves app routes', !!re && re.test('/dashboard') && re.test('/login') && re.test('/members/123') && !re.test('/en/guide/any-chapter'));   // SEO-01: /en pages are prerendered files, never the SPA shell
 ok('SPA rewrite does not answer an unknown top-level path (a real 404, not a soft one)', !!re && !re.test('/no-such-page') && !re.test('/PRICING') && !re.test('/manifest.json') && !re.test('/wp-login.php'));
 ok('SPA rewrite never serves index.html for /assets/* (missing chunk ⇒ 404)', !!re && !re.test('/assets/BlogIndex-NHzHmXeZ.js'));
 ok('…nor for /api/*', !!re && !re.test('/api/x'));

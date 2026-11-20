@@ -65,7 +65,9 @@ for (const f of ['src/components/PublicLayout.tsx', 'src/components/HindiOnlyNot
 const meta = read('src/lib/useDocumentMeta.ts');
 ok(/hreflangAlternates\(canonicalPath, SITE\)/.test(meta) && /toEn\(canonicalPath\)/.test(meta), 'useDocumentMeta: self canonical on /en + hreflang trio');
 const rr = read('scripts/spa-rewrite.mjs');
-ok(/EXTRA_SEGMENTS = \['en'\]/.test(rr), '/en/* reaches the app on a hard reload (SPA rewrite)');
+// SEO-01: every English page is a prerendered file; /en is out of the SPA rewrite (unknown /en/… = real 404) and the
+// /en address of a Hindi-only page redirects to it (spa-rewrite.mjs EN_REDIRECTS, checked by test:spa-rewrite).
+ok(/EXTRA_SEGMENTS = \[\];/.test(rr) && rr.includes('const EN_REDIRECTS = ['), '/en/* is served from prerendered files; Hindi-only pages redirect, unknown /en/… is a 404');
 
 // E2 pages: the schema follows the twin (English names, inLanguage 'en', /en/… URLs) and a not-found redirect stays in
 // the page's language; the prerender builds the English blog/author/policy/glossary twins from the same modules.
