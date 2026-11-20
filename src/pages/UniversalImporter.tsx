@@ -21,6 +21,7 @@ import { getBankAccountIds, defaultBankAccountId } from '@/lib/storage';
 import {
   accountsTemplate, membersTemplate, openingBalancesTemplate, vouchersTemplate, parseCSV,
   validateAccountRow, resolveParentGroup, validateMemberRow, validateObRow, validateVoucherRow, type RowError,
+  parseImportNumber,
 } from '@/lib/importTemplates';
 import { matchImportAccount } from '@/lib/importAccountMatch';
 
@@ -187,7 +188,7 @@ const UniversalImporter: React.FC = () => {
     const skipped = validRows.length - toSave.length;
     // A skipped (already existing) account's opening is NOT applied — say so, with names (2026-10-11).
     const droppedOpenings = validRows
-      .filter(row => !toSave.includes(row) && (parseFloat(row.data.opening_balance) || 0) > 0)
+      .filter(row => !toSave.includes(row) && (parseImportNumber(row.data.opening_balance) || 0) > 0)
       .map(row => row.data.account_name.trim());
     const droppedNote = droppedOpenings.length > 0
       ? (hi
@@ -224,7 +225,7 @@ const UniversalImporter: React.FC = () => {
         nameHi: row.data.account_name.trim(),
         type: row.data.account_type.toLowerCase() as LedgerAccount['type'],
         parentId: resolveParentGroup(row.data, accounts).parentId ?? undefined,
-        openingBalance: parseFloat(row.data.opening_balance) || 0,
+        openingBalance: parseImportNumber(row.data.opening_balance) || 0,
         openingBalanceType: row.data.balance_type.toLowerCase() as 'debit' | 'credit',
         isSystem: false,
       }, {
@@ -254,7 +255,7 @@ const UniversalImporter: React.FC = () => {
         if (r.status !== 'ok') return r;
         const plan = planJoiningReceipts({
           name: r.data.name || '', joinDate: r.data.join_date,
-          shareCapital: parseFloat(r.data.share_capital) || 0, admissionFee: parseFloat(r.data.admission_fee) || 0,
+          shareCapital: parseImportNumber(r.data.share_capital) || 0, admissionFee: parseImportNumber(r.data.admission_fee) || 0,
           paymentMode: (['cash', 'cheque', 'online'].includes((r.data.payment_mode || '').toLowerCase()) ? r.data.payment_mode.toLowerCase() : undefined) as 'cash' | 'cheque' | 'online' | undefined,
         }, planOpts);
         return { ...r, data: { ...r.data, join_kind: joiningKindLabel(plan, r.data.join_date, society.financialYear) } };
@@ -307,13 +308,13 @@ const UniversalImporter: React.FC = () => {
         fatherName: row.data.father_name?.trim() || '',
         address: row.data.address?.trim() || '',
         phone: row.data.phone?.trim() || '',
-        shareCapital: parseFloat(row.data.share_capital) || 0,
-        admissionFee: parseFloat(row.data.admission_fee) || 0,
+        shareCapital: parseImportNumber(row.data.share_capital) || 0,
+        admissionFee: parseImportNumber(row.data.admission_fee) || 0,
         memberType: ((['nominal', 'associate'] as string[]).includes(row.data.member_type?.toLowerCase()) ? row.data.member_type.toLowerCase() : 'member') as Member['memberType'],
         joinDate: row.data.join_date?.trim() || new Date().toISOString().split('T')[0],
         status: (row.data.status?.toLowerCase() === 'inactive' ? 'inactive' : 'active') as Member['status'],
-        shareCount: parseFloat(row.data.share_count) || undefined,
-        shareFaceValue: parseFloat(row.data.share_face_value) || undefined,
+        shareCount: parseImportNumber(row.data.share_count) || undefined,
+        shareFaceValue: parseImportNumber(row.data.share_face_value) || undefined,
         nomineeName: row.data.nominee_name?.trim() || undefined,
         nomineeRelation: row.data.nominee_relation?.trim() || undefined,
         nomineePhone: row.data.nominee_phone?.trim() || undefined,
@@ -490,7 +491,7 @@ const UniversalImporter: React.FC = () => {
         date: row.data.date.trim(),
         debitAccountId: dr.id,
         creditAccountId: cr.id,
-        amount: parseFloat(row.data.amount) || 0,
+        amount: parseImportNumber(row.data.amount) || 0,
         narration: (row.data.narration || '').trim(),
         createdBy: user?.name || 'Bulk Import',
         ...(hasRef ? { refType: 'bulk-import', refId: ref } : {}),

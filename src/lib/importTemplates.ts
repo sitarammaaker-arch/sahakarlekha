@@ -150,6 +150,20 @@ export function membersTemplate(fyStart: string): string {
 
 // ─── Validators ───────────────────────────────────────────────────────────────
 
+/**
+ * IMP-01 (audit 2026-11-17): an amount from a sheet, as people type it — "1,20,000", "₹ 5,000.50", "Rs. 2500", "300/-".
+ * parseFloat('1,20,000') is 1: the import validated, previewed the raw text and saved ONE rupee. This strips the rupee
+ * sign, "Rs" / "INR", spaces, thousands commas (Indian or Western grouping) and a trailing "/-", then accepts only a plain
+ * number. Anything else (blank, "12a", "1.2.3") is NaN — the row is refused, never saved as a wrong figure.
+ */
+export function parseImportNumber(raw: string | number | null | undefined): number {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : NaN;
+  let s = String(raw ?? '').trim();
+  if (!s) return NaN;
+  s = s.replace(/^(₹|rs\.?|inr)\s*/i, '').replace(/\s*\/-$/, '').replace(/[\s,]/g, '');
+  return /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : NaN;
+}
+
 export const VALID_ACCOUNT_TYPES = ['asset', 'liability', 'income', 'expense', 'equity'];
 export const VALID_BALANCE_TYPES = ['debit', 'credit'];
 export const VALID_MEMBER_TYPES = ['member', 'nominal', 'associate'];
@@ -199,7 +213,7 @@ export function validateVoucherRow(
     || (!isExample(dn) && !isExample(cn) && dn.toLowerCase().trim() === cn.toLowerCase().trim()))
     errors.push({ row: rowNum, field: 'credit_account', message: tr(`Row ${rowNum}: debit और credit खाता एक ही नहीं हो सकते`, `Row ${rowNum}: debit and credit account cannot be the same`) });
 
-  const amt = parseFloat(row.amount);
+  const amt = parseImportNumber(row.amount);
   if (isExample(row.amount)) errors.push({ row: rowNum, field: 'amount', message: tr(`Row ${rowNum}: amount खाली/example है`, `Row ${rowNum}: amount is blank/example`) });
   else if (isNaN(amt) || amt <= 0) errors.push({ row: rowNum, field: 'amount', message: tr(`Row ${rowNum}: amount "${row.amount}" 0 से बड़ा valid number होना चाहिए`, `Row ${rowNum}: amount "${row.amount}" must be a valid number above 0`) });
 
@@ -247,7 +261,7 @@ export function validateAccountRow(row: Record<string, string>, rowNum: number, 
     errors.push({ row: rowNum, field: 'account_name', message: tr(`Row ${rowNum}: account_name खाली है या example row है`, `Row ${rowNum}: account_name is blank or this is an example row`) });
   if (!VALID_ACCOUNT_TYPES.includes((row.account_type || '').toLowerCase()))
     errors.push({ row: rowNum, field: 'account_type', message: tr(`Row ${rowNum}: account_type "${row.account_type}" गलत है — Asset, Liability, Equity, Income, Expense में से एक होना चाहिए`, `Row ${rowNum}: account_type "${row.account_type}" is wrong — must be one of Asset, Liability, Equity, Income, Expense`) });
-  const bal = parseFloat(row.opening_balance);
+  const bal = parseImportNumber(row.opening_balance);
   if (isNaN(bal) || bal < 0)
     errors.push({ row: rowNum, field: 'opening_balance', message: tr(`Row ${rowNum}: opening_balance "${row.opening_balance}" एक valid number होना चाहिए`, `Row ${rowNum}: opening_balance "${row.opening_balance}" must be a valid number`) });
   if (!VALID_BALANCE_TYPES.includes((row.balance_type || '').toLowerCase()))
@@ -278,7 +292,7 @@ export function validateMemberRow(row: Record<string, string>, rowNum: number, t
     errors.push({ row: rowNum, field: 'join_date', message: tr(`Row ${rowNum}: join_date "${row.join_date}" भविष्य की तारीख़ है`, `Row ${rowNum}: join_date "${row.join_date}" is a future date`) });
   if (!VALID_STATUS.includes((row.status || '').toLowerCase()))
     errors.push({ row: rowNum, field: 'status', message: tr(`Row ${rowNum}: status "${row.status}" गलत है — active या inactive होना चाहिए`, `Row ${rowNum}: status "${row.status}" is wrong — must be active or inactive`) });
-  const sc = parseFloat(row.share_capital);
+  const sc = parseImportNumber(row.share_capital);
   if (isNaN(sc) || sc < 0)
     errors.push({ row: rowNum, field: 'share_capital', message: tr(`Row ${rowNum}: share_capital "${row.share_capital}" एक valid number होना चाहिए`, `Row ${rowNum}: share_capital "${row.share_capital}" must be a valid number`) });
   return errors;
@@ -300,7 +314,7 @@ export function validateObRow(row: Record<string, string>, accounts: LedgerAccou
     else if (!found)
       errors.push({ row: rowNum, field: 'account_name', message: tr(`Row ${rowNum}: account "${row.account_name}" system में नहीं मिला — पहले Ledger Heads में account बनाएं या नाम check करें`, `Row ${rowNum}: account "${row.account_name}" not found in the system — first create the account in Ledger Heads or check the name`) });
   }
-  const bal = parseFloat(row.opening_balance);
+  const bal = parseImportNumber(row.opening_balance);
   if (isNaN(bal) || bal < 0)
     errors.push({ row: rowNum, field: 'opening_balance', message: tr(`Row ${rowNum}: opening_balance "${row.opening_balance}" एक valid number होना चाहिए`, `Row ${rowNum}: opening_balance "${row.opening_balance}" must be a valid number`) });
   if (!VALID_BALANCE_TYPES.includes((row.balance_type || '').toLowerCase()))
