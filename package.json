@@ -517,7 +517,8 @@
     "test:arch-03-04": "node scripts/test-arch-03-04.mjs",
     "test:live01-easy-batch": "node scripts/test-live01-easy-batch.mjs",
     "test:provider-contract": "node scripts/test-provider-contract.mjs",
-    "test:provider-contract-2": "node scripts/test-provider-contract-2.mjs"
+    "test:provider-contract-2": "node scripts/test-provider-contract-2.mjs",
+    "test:provider-contract-domains": "node scripts/test-provider-contract-domains.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -5124,7 +5124,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardFYLocked()) return false;
 
     // H11: Block deletion of built-in system accounts (CASH, BANK, 5101, 3403, etc.)
-    const account = accounts.find(a => a.id === id);
+    // TEST-01 finding: read the REF, not the render's `accounts` — a caller that rolls back a sub-ledger it created a
+    // moment ago (Labour addDepartment's failed save) holds this callback from BEFORE that account existed, so the
+    // lookup said "Account not found" and left the orphan ledger on screen and in the cloud.
+    const account = accountsRef.current.find(a => a.id === id) ?? accounts.find(a => a.id === id);
     if (!account) { toastRef.current({ title: tr('खाता नहीं मिला', 'Account not found'), description: tr('Refresh करके दोबारा देखें। (Account not found.)', 'Refresh and check again. (Account not found.)'), variant: 'destructive' }); return false; }
     if (account.isSystem) {
       toastRef.current({ title: tr('सिस्टम खाता नहीं हटेगा', 'System account cannot be deleted'), description: tr(`"${account.name}" सॉफ़्टवेयर का अपना खाता है — बिक्री/खरीद/अंतिम स्टॉक की पोस्टिंग इसी में होती है। (Built-in system account — cannot be deleted.)`, `"${account.name}" is the software's own built-in account — sales/purchase/closing stock postings go into it. It cannot be deleted.`), variant: 'destructive', duration: 10000 });

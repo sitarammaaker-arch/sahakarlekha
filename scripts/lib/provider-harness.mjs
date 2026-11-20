@@ -68,10 +68,25 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import { DataProvider, useData } from '@/contexts/DataContext';
-export function mount(onCtx) {
-  const Probe = () => { onCtx(useData()); return null; };
+import { HousingProvider, useHousingData } from '@/contexts/HousingDataContext';
+import { MarketingProvider, useMarketingData } from '@/contexts/MarketingDataContext';
+import { LabourProvider, useLabourData } from '@/contexts/LabourDataContext';
+import { DairyProvider, useDairyData } from '@/contexts/DairyDataContext';
+import { TransportOpsProvider, useTransportOps } from '@/contexts/TransportOpsContext';
+import { ConsumerProvider, useConsumerData } from '@/contexts/ConsumerDataContext';
+// The domain providers sit INSIDE DataProvider, as in the app; each one is the shipped code.
+const DOMAINS = [
+  ['housing', HousingProvider, useHousingData], ['marketing', MarketingProvider, useMarketingData],
+  ['labour', LabourProvider, useLabourData], ['dairy', DairyProvider, useDairyData],
+  ['transport', TransportOpsProvider, useTransportOps], ['consumer', ConsumerProvider, useConsumerData],
+];
+export function mount(onCtx, withDomains) {
+  const list = withDomains ? DOMAINS : [];
+  const Probe = () => { const v = { data: useData() }; for (const [k, , use] of list) v[k] = use(); onCtx(v); return null; };
+  let tree = React.createElement(Probe);
+  for (let i = list.length - 1; i >= 0; i--) tree = React.createElement(list[i][1], null, tree);
   const root = createRoot(document.createElement('div'));
-  act(() => { root.render(React.createElement(DataProvider, null, React.createElement(Probe))); });
+  act(() => { root.render(React.createElement(DataProvider, null, tree)); });
   return root;
 }
 export { act };
@@ -107,8 +122,9 @@ function resolveSrc(rel) {
   return base;   // has its own extension (.json, .css, …)
 }
 
-/** Render the real DataProvider and wait for its load. `seed` = rows per table returned by the load's selects. */
-export async function mountDataProvider({ seed = {}, user } = {}) {
+/** Render the real DataProvider and wait for its load. `seed` = rows per table returned by the load's selects.
+ *  `domains: true` also mounts the six domain providers inside it (domain('housing') etc. reads their context). */
+export async function mountDataProvider({ seed = {}, user, domains = false } = {}) {
   if (!globalThis.window) GlobalRegistrator.register({ url: 'http://localhost/' });
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   const calls = [];
@@ -135,12 +151,13 @@ export async function mountDataProvider({ seed = {}, user } = {}) {
   };
   globalThis.__harness = harness;
   const { mount, act } = await bundle();
-  let ctx;
-  mount((c) => { ctx = c; });
+  let all;
+  mount((c) => { all = c; }, domains);
   const settle = async (ms = 30) => { await act(async () => { await new Promise((r) => setTimeout(r, ms)); }); };
   await settle(80);
   return {
-    ctx: () => ctx,
+    ctx: () => all.data,
+    domain: (name) => all[name],
     calls,
     toasts,
     settle,
