@@ -9,7 +9,8 @@
  *     so Supabase Auth cannot be attacked directly for a keyed login;
  *   - every attempt first TAKES a slot from member_portal_login_begin (migration 123): 5 per 15 minutes per login,
  *     then a 15-minute lock — atomically, so parallel guesses cannot slip past;
- *   - legacy (unkeyed) logins still work here until their PIN is reset (reset_pin moves them to the keyed email);
+ *   - legacy (unkeyed) logins still work here, and the first successful legacy login MOVES itself to the keyed email
+ *     (MP-01) — an admin PIN reset (reset_pin) does the same;
  *   - every refusal is the same generic answer, so nothing reveals which member numbers exist.
  *
  * Called with the anon key (the member has no session yet). Secrets: SUPABASE_URL, SUPABASE_ANON_KEY,
@@ -59,6 +60,21 @@ Deno.serve(async (req) => {
       const { data, error } = await anon.auth.signInWithPassword({ email, password: parsed.pin });
       if (!error && data.session) {
         await svc.rpc('member_portal_login_success', { p_key: key });
+        // MP-01 (audit 2026-11-17): a legacy login's address is sha256(society|member no) — anyone can compute it and
+        // guess PINs straight against Supabase Auth, past this function's lockout. The member just proved the PIN, so
+        // move the login to the keyed (HMAC) address now, instead of waiting for an admin PIN reset; then hand out a
+        // session for the new address. If the move fails, the member still gets in (logged) and it is retried next time.
+        if (email === legacyEmail && data.user?.id) {
+          const { error: moveErr } = await svc.auth.admin.updateUserById(data.user.id, { email: keyedEmail, email_confirm: true });
+          if (moveErr) console.error('member-portal-login: legacy → keyed move failed', moveErr.message);
+          else {
+            const again = await anon.auth.signInWithPassword({ email: keyedEmail, password: parsed.pin });
+            if (!again.error && again.data.session) {
+              return json({ ok: true, access_token: again.data.session.access_token, refresh_token: again.data.session.refresh_token });
+            }
+            console.error('member-portal-login: re-sign-in on the keyed address failed', again.error?.message ?? 'no session');
+          }
+        }
         return json({ ok: true, access_token: data.session.access_token, refresh_token: data.session.refresh_token });
       }
       if (error?.status === 429) rateLimited = true;
