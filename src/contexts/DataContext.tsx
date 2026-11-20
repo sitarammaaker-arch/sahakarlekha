@@ -1469,70 +1469,70 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Deposits module — independent, error-tolerant load (a missing table pre-migration
         // NEVER breaks the main data load).
-        sideLoad(unlessEmpty(emptyP, 'deposit_accounts', () => supabase.from('deposit_accounts').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'deposit_accounts', () => fetchAllPaged('deposit_accounts')),
           ({ data, error }) => { if (!error && data) setDepositAccountsState(data as DepositAccount[]); },
           () => { /* table absent pre-migration — ignore */ },
         );
-        sideLoad(unlessEmpty(emptyP, 'deposit_transactions', () => supabase.from('deposit_transactions').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'deposit_transactions', () => fetchAllPaged('deposit_transactions')),
           ({ data, error }) => { if (!error && data) setDepositTransactionsState(data as DepositTransaction[]); },
           () => { /* table absent pre-migration — ignore */ },
         );
-        sideLoad(unlessEmpty(emptyP, 'compliance_filings', () => supabase.from('compliance_filings').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'compliance_filings', () => fetchAllPaged('compliance_filings')),
           ({ data, error }) => { if (!error && data) setComplianceFilingsState(data as ComplianceFiling[]); },
           () => { /* table absent pre-migration — ignore */ },
         );
 
         // Procurement Phase 1.0 — error-tolerant load (Supabase → localStorage fallback). Independent
         // queries: a missing table NEVER breaks the main data load; the demo persists via localStorage.
-        sideLoad(unlessEmpty(emptyP, 'procurement_farmers', () => supabase.from('procurement_farmers').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'procurement_farmers', () => fetchAllPaged('procurement_farmers')),
           ({ data, error }) => setProcurementFarmersState(error || !data ? storage.getProcurementFarmers() : (data as unknown as Farmer[])),
           () => setProcurementFarmersState(storage.getProcurementFarmers()),
         );
-        sideLoad(unlessEmpty(emptyP, 'procurement_lots', () => supabase.from('procurement_lots').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'procurement_lots', () => fetchAllPaged('procurement_lots')),
           ({ data, error }) => setProcurementLotsState(error || !data ? storage.getProcurementLots() : (data as unknown as ProcurementLot[])),
           () => setProcurementLotsState(storage.getProcurementLots()),
         );
-        sideLoad(unlessEmpty(emptyP, 'procurement_events', () => supabase.from('procurement_events').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'procurement_events', () => fetchAllPaged('procurement_events')),
           ({ data, error }) => setProcurementEventsState(error || !data ? storage.getProcurementEvents() : (data as unknown as ProcurementEvent[])),
           () => setProcurementEventsState(storage.getProcurementEvents()),
         );
-        sideLoad(unlessEmpty(emptyP, 'procurement_quality_tests', () => supabase.from('procurement_quality_tests').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'procurement_quality_tests', () => fetchAllPaged('procurement_quality_tests')),
           ({ data, error }) => setProcurementQualityTestsState(error || !data ? storage.getProcurementQualityTests() : (data as unknown as QualityTest[])),
           () => setProcurementQualityTestsState(storage.getProcurementQualityTests()),
         );
-        sideLoad(unlessEmpty(emptyP, 'procurement_moisture_records', () => supabase.from('procurement_moisture_records').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'procurement_moisture_records', () => fetchAllPaged('procurement_moisture_records')),
           ({ data, error }) => setProcurementMoistureRecordsState(error || !data ? storage.getProcurementMoistureRecords() : (data as unknown as MoistureRecord[])),
           () => setProcurementMoistureRecordsState(storage.getProcurementMoistureRecords()),
         );
-        sideLoad(unlessEmpty(emptyP, 'procurement_jforms', () => supabase.from('procurement_jforms').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'procurement_jforms', () => fetchAllPaged('procurement_jforms')),
           // T-05 dual-read: prefer the typed money columns, JSONB as fallback (hydrateJForm).
           ({ data, error }) => setProcurementJFormsState(error || !data ? storage.getProcurementJForms() : (data as Record<string, unknown>[]).map(hydrateJForm) as unknown as JForm[]),
           () => setProcurementJFormsState(storage.getProcurementJForms()),
         );
-        sideLoad(unlessEmpty(emptyP, 'procurement_financial_intents', () => supabase.from('procurement_financial_intents').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'procurement_financial_intents', () => fetchAllPaged('procurement_financial_intents')),
           // T-05 dual-read: prefer the typed money columns, JSONB as fallback (hydrateAmount).
           ({ data, error }) => setProcurementFinancialIntentsState(error || !data ? storage.getProcurementFinancialIntents() : (data as Record<string, unknown>[]).map(hydrateAmount) as unknown as FinancialIntentRecord[]),
           () => setProcurementFinancialIntentsState(storage.getProcurementFinancialIntents()),
         );
-        sideLoad(unlessEmpty(emptyP, 'procurement_posting_requests', () => supabase.from('procurement_posting_requests').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'procurement_posting_requests', () => fetchAllPaged('procurement_posting_requests')),
           // T-05 dual-read: prefer the typed money columns, JSONB as fallback (hydrateAmount).
           ({ data, error }) => setProcurementPostingRequestsState(error || !data ? storage.getProcurementPostingRequests() : (data as Record<string, unknown>[]).map(hydrateAmount) as unknown as PostingRequest[]),
           () => setProcurementPostingRequestsState(storage.getProcurementPostingRequests()),
         );
-        sideLoad(unlessEmpty(emptyP, 'procurement_posting_rule_results', () => supabase.from('procurement_posting_rule_results').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'procurement_posting_rule_results', () => fetchAllPaged('procurement_posting_rule_results')),
           ({ data, error }) => setProcurementPostingRuleResultsState(error || !data ? storage.getProcurementPostingRuleResults() : (data as unknown as PostingRuleResult[])),
           () => setProcurementPostingRuleResultsState(storage.getProcurementPostingRuleResults()),
         );
-        sideLoad(unlessEmpty(emptyP, 'procurement_settlements', () => supabase.from('procurement_settlements').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'procurement_settlements', () => fetchAllPaged('procurement_settlements')),
           // T-05 dual-read: prefer the typed money columns, JSONB as fallback (hydrateSettlement).
           ({ data, error }) => setProcurementSettlementsState(error || !data ? storage.getProcurementSettlements() : (data as Record<string, unknown>[]).map(hydrateSettlement) as unknown as FarmerSettlement[]),
           () => setProcurementSettlementsState(storage.getProcurementSettlements()),
         );
-        sideLoad(unlessEmpty(emptyP, 'work_orders', () => supabase.from('work_orders').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'work_orders', () => fetchAllPaged('work_orders')),
           ({ data, error }) => setWorkOrdersState(error || !data ? storage.getWorkOrders() : (data as unknown as WorkOrder[])),
           () => setWorkOrdersState(storage.getWorkOrders()),
         );
-        sideLoad(unlessEmpty(emptyP, 'muster_entries', () => supabase.from('muster_entries').select('*').eq('society_id', sid)),
+        sideLoad(unlessEmpty(emptyP, 'muster_entries', () => fetchAllPaged('muster_entries')),
           ({ data, error }) => setMusterEntriesState(error || !data ? storage.getMusterEntries() : (data as unknown as MusterEntry[])),
           () => setMusterEntriesState(storage.getMusterEntries()),
         );
@@ -3774,8 +3774,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // ECR-17 Phase 5: branchId rides IN the base upsert (see addMember); stale-schema-cache
     // fallback keeps RULE 1 intact.
+    // ARCH-04 (audit 2026-11-17): send ONLY the base columns this edit changed. The whole-row upsert rebuilt the member
+    // from the snapshot this tab loaded at login — a tab open since morning, correcting a phone number, wrote back its
+    // stale share capital over another user's newer one. An unchanged column is no longer sent, so it cannot be undone.
+    const changedBase = (payload: Member): Record<string, unknown> => {
+      const base = memberRow(payload) as Record<string, unknown>;
+      const before = oldMember as unknown as Record<string, unknown>;
+      const patch: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(base)) {
+        if (k === 'id' || k === 'society_id' || !(k in data)) continue;
+        if (JSON.stringify(v ?? null) !== JSON.stringify(before[k] ?? null)) patch[k] = v;
+      }
+      return patch;
+    };
     const attemptMemberUpdate = (payload: Member) => {
-      supabase.from('members').upsert(memberRow(payload)).then(({ error }) => {
+      const patch = changedBase(payload);
+      const write = Object.keys(patch).length === 0
+        ? Promise.resolve({ error: null as { message: string; code?: string } | null })   // only side-table fields changed
+        : supabase.from('members').update(patch).eq('id', id).select('id').then(({ data: rows, error }) =>
+            ({ error: error ?? (!rows?.length ? { message: tr('सदस्य cloud पर नहीं मिला / अनुमति नहीं', 'member not found on the cloud / not permitted') } : null) }));
+      write.then(({ error }) => {
         if (error) {
           if (isMissingBranchColumn(error) && 'branchId' in payload) {
             const { branchId: _b, ...noBranch } = payload;
