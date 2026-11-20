@@ -30,8 +30,12 @@ const vercel = JSON.parse(readFileSync(vercelPath, 'utf8'));
 // manifest), quick-start, certificate, verify and the ten quiz pages are every one a prerendered file, and
 // the certificate number travels in the query string (/guide/verify?id=…), not in the path.
 export const NOT_REWRITTEN = ['blog', 'software', 'cooperative-software', 'glossary', 'help', 'cookbook', 'tools', 'author', 'guide'];
-/** Segments routed without a <Route path> of their own — /en/<path> is the English twin of <path> (lib/enRoutes). */
-export const EXTRA_SEGMENTS = ['en'];
+/** Segments routed without a <Route path> of their own. */
+// SEO-01 (audit 2026-11-17): 'en' is NOT here any more. Every English page is a prerendered file (dist/en/…), so the
+// rewrite only ever answered addresses that had no page — /en/zzz-none and /en/dashboard came back 200 with the home
+// page's HTML and "index, follow". Now an unknown /en/… is a real 404, and the /en/ address of an app page (no English
+// twin) is REDIRECTED to the Hindi page (EN_REDIRECTS below), never served as a copy of the home page.
+export const EXTRA_SEGMENTS = [];
 
 const paths = [...app.matchAll(/<Route\s+path="([^"]+)"/g)].map((m) => m[1]);
 const seg = (p) => p.replace(/^\//, '').split('/')[0];
@@ -47,10 +51,35 @@ const RULES = [
 ];
 const isSpaRule = (r) => r.destination === DEST;
 
+// SEO-01: /en/<app page> → /<app page> (temporary — the page may get an English twin later). Vercel runs redirects
+// BEFORE the filesystem, so a segment that HAS English pages (lib/enRoutes EN_SECTIONS) is never redirected — /en/pricing
+// is a real file. EN_EXCLUDED paths (inside a twin section but Hindi-only) are redirected one by one.
+const enRoutes = readFileSync(resolve(ROOT, 'src/lib/enRoutes.ts'), 'utf8');
+const listOf = (name) => {
+  const body = enRoutes.split(`export const ${name}: readonly string[] = [`)[1]?.split('];')[0] ?? '';
+  return [...body.matchAll(/^\s*'([^']+)'/gm)].map((m) => m[1]);
+};
+export const EN_SECTION_SEGMENTS = [...new Set(listOf('EN_SECTIONS').map(seg).filter(Boolean))].sort();
+export const EN_EXCLUDED = listOf('EN_EXCLUDED');
+// App segments + the prerender-only Hindi sections (software, cooperative-software) — every page a visitor can
+// reach in Hindi whose English address has no page.
+export const EN_REDIRECT_SEGMENTS = [...new Set([...SEGMENTS, ...NOT_REWRITTEN])].filter((s) => !EN_SECTION_SEGMENTS.includes(s)).sort();
+const enAlt = EN_REDIRECT_SEGMENTS.join('|');
+const EN_REDIRECTS = [
+  { source: `/en/:seg(${enAlt})`, destination: '/:seg', permanent: false },
+  { source: `/en/:seg(${enAlt})/:path*`, destination: '/:seg/:path*', permanent: false },
+  ...EN_EXCLUDED.flatMap((x) => [
+    { source: `/en${x}`, destination: x, permanent: false },
+    { source: `/en${x}/:path*`, destination: `${x}/:path*`, permanent: false },
+  ]),
+];
+const isEnRedirect = (r) => typeof r.source === 'string' && r.source.startsWith('/en/') && r.permanent === false;
+
 if (process.argv.includes('--write')) {
   vercel.rewrites = [...(vercel.rewrites || []).filter((r) => !isSpaRule(r)), ...RULES];
+  vercel.redirects = [...(vercel.redirects || []).filter((r) => !isEnRedirect(r)), ...EN_REDIRECTS];
   writeFileSync(vercelPath, JSON.stringify(vercel, null, 2) + '\n');
-  console.log(`vercel.json: SPA rewrite for ${SEGMENTS.length} route segments`);
+  console.log(`vercel.json: SPA rewrite for ${SEGMENTS.length} route segments; ${EN_REDIRECTS.length} /en redirects`);
   process.exit(0);
 }
 
@@ -68,6 +97,16 @@ ok('both the exact and the sub-path rule exist', rules.some((r) => !r.source.inc
 ok('no catch-all rewrite is left (an unknown path must be a real 404)', rules.every((r) => /^\/\([^)]+\)(\/:path\*)?$/.test(r.source)), rules.map((r) => r.source.slice(0, 40)).join(' ; '));
 for (const s of [...NOT_REWRITTEN, 'api', 'assets']) ok(`/${s} is not rewritten to the app`, !covered.has(s));
 for (const s of ['dashboard', 'login', 'register', 'reset-password', 'verify-email', 'vouchers', 'member']) ok(`/${s} reaches the app`, covered.has(s));
+// SEO-01
+const enR = (vercel.redirects || []).filter(isEnRedirect);
+const enMatches = (path) => enR.some((r) => new RegExp('^' + r.source.replace(/:seg\(([^)]+)\)/, '($1)').replace('/:path*', '(/.*)?') + '$').test(path));
+ok('/en is not rewritten to the app — an unknown /en/… is a real 404', !covered.has('en') && !enMatches('/en/zzz-none'));
+ok('the /en redirects in vercel.json match the generated list', JSON.stringify(enR) === JSON.stringify(EN_REDIRECTS), FIX);
+for (const s of ['dashboard', 'login', 'vouchers', 'member']) ok(`/en/${s} redirects to /${s}`, enMatches(`/en/${s}`) && enMatches(`/en/${s}/x`));
+ok('the English twin sections were read from lib/enRoutes', EN_SECTION_SEGMENTS.includes('pricing') && EN_SECTION_SEGMENTS.includes('blog') && EN_EXCLUDED.includes('/guide/quiz'));
+for (const s of EN_SECTION_SEGMENTS) ok(`/en/${s} is never redirected (it has English pages)`, !enMatches(`/en/${s}`) && !enMatches(`/en/${s}/x`) || EN_EXCLUDED.some((x) => x.startsWith(`/${s}/`)) && !enMatches(`/en/${s}`));
+ok('/en/guide/quiz (Hindi-only) redirects to /guide/quiz', enMatches('/en/guide/quiz') && enMatches('/en/guide/quiz/3'));
+ok('every /en redirect stays inside the 4096-character limit', enR.every((r) => r.source.length <= 4096), enR.map((r) => r.source.length).join(', '));
 ok('each rule stays inside Vercel\'s 4096-character source limit', rules.every((r) => r.source.length <= 4096), rules.map((r) => r.source.length).join(', '));
 const pre = readFileSync(resolve(ROOT, 'scripts/prerender-guide.mjs'), 'utf8');
 ok('the build writes dist/404.html (what an unknown path is answered with)', pre.includes("file: '404.html'"));

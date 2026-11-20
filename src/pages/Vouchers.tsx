@@ -207,7 +207,10 @@ const Vouchers: React.FC = () => {
         }
         trackEvent('voucher_created', { type: sv.type, mode });
         setSubmitForApproval(false);   // UX-01: never sticky — each voucher is sent for approval on purpose
-        handleClear();
+        // LIVE-01 (audit 2026-11-17): an Easy-mode tile stays open for the next voucher of a batch, so its accounts must
+        // stay too — clearing them left a form that read "Dr Cash / Cr Interest" but answered "Select debit account"
+        // (Easy mode has no account field) after every save.
+        handleClear({ keepTemplateAccounts: mode === 'simple' });
       },
       onFailed: () => { window.clearTimeout(safety); setSaving(false); },
     };
@@ -619,9 +622,13 @@ const Vouchers: React.FC = () => {
     if (!v?.id) { setSaving(false); return; }
   };
 
-  const handleClear = () => {
-    setDebitAccount('');
-    setCreditAccount('');
+  // keepTemplateAccounts: after an Easy-mode save the selected tile stays, and so do its Dr / Cr accounts (LIVE-01).
+  // A click handler passes the event here — it has no such field, so every button still clears everything.
+  const handleClear = (opts?: { keepTemplateAccounts?: boolean }) => {
+    if (!opts?.keepTemplateAccounts) {
+      setDebitAccount('');
+      setCreditAccount('');
+    }
     setAmount('');
     setNarration('');
     setLinkedMemberId('');
@@ -1289,7 +1296,7 @@ const Vouchers: React.FC = () => {
                         <Save className="h-5 w-5" />
                         {saving ? (language === 'hi' ? 'सेव हो रहा है…' : 'Saving…') : approvalOn && submitForApproval ? (language === 'hi' ? 'अनुमोदन हेतु भेजें' : 'Submit for Approval') : t('save')}
                       </Button>
-                      <Button type="button" variant="outline" size="lg" className="gap-2" onClick={handleClear}>
+                      <Button type="button" variant="outline" size="lg" className="gap-2" onClick={() => handleClear()}>
                         <X className="h-5 w-5" />
                         {language === 'hi' ? 'साफ़ करें' : 'Clear'}
                       </Button>
