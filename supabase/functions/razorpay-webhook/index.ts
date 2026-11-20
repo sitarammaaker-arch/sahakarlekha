@@ -4,8 +4,9 @@
  * Razorpay POSTs here after a payment. We (1) verify the HMAC-SHA256 signature over
  * the RAW body with RAZORPAY_WEBHOOK_SECRET, (2) on payment.captured read the order_id,
  * (3) look up OUR `orders` row (created in create-order, holds society_id + plan — we
- * never trust amounts/plan from the payload), (4) mark the order paid, and (5) activate
- * the subscription (service-role upsert), then (6) issues the GST tax invoice via
+ * never trust amounts/plan from the payload), (4)+(5) mark the order paid AND activate the
+ * subscription in ONE transaction — activate_order() (migration 186, SEC-07), which also checks
+ * the captured amount and is safe to retry — then (6) issues the GST tax invoice via
  * issue_invoice() (migration 130) — non-fatal. The browser is never trusted for activation.
  *
  * Secrets (owner sets in Supabase → Edge Functions → Secrets; never in repo/browser):
@@ -26,9 +27,7 @@ const invoiceEmailConfig = () => ({
   appUrl: Deno.env.get('APP_URL') ?? 'https://sahakarlekha.com',
 });
 
-// Seats per plan — mirrors src/lib/plans.ts / migration 058 (null = unlimited).
-const SEATS: Record<string, number | null> = { starter: 1, plus: 6, pro: null };
-const PERIOD_MONTHS = 12;
+// Seats per plan and the 12-month default period live in activate_order() (migration 186), mirroring src/lib/plans.ts.
 
 function hex(buf: ArrayBuffer): string {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -73,31 +72,26 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
-    // Trust OUR record for society_id + plan + the target period_end (not the payload).
-    const { data: order } = await supa
-      .from('orders').select('society_id, plan, status, set_period_end').eq('id', orderId).maybeSingle();
-    if (!order) return new Response('unknown order', { status: 200 });
-    if (order.status === 'paid') return new Response('already processed', { status: 200 }); // idempotent
-
-    await supa.from('orders').update({ status: 'paid', payment_id: payment.id, updated_at: new Date().toISOString() }).eq('id', orderId);
-
-    // period_end was decided at order time in create-order (proration/renew/new). Older
-    // orders without it fall back to now + 12mo.
-    const now = new Date();
-    const end = order.set_period_end
-      ? new Date(order.set_period_end)
-      : (() => { const e = new Date(now); e.setMonth(e.getMonth() + PERIOD_MONTHS); return e; })();
-    await supa.from('subscriptions').upsert({
-      society_id:   order.society_id,
-      plan:         order.plan,
-      status:       'active',
-      period_start: now.toISOString(),
-      period_end:   end.toISOString(),
-      seats_limit:  SEATS[order.plan] ?? null,
-      source:       'razorpay',
-      activated_by: `razorpay:${payment.id}`,
-      updated_at:   now.toISOString(),
-    }, { onConflict: 'society_id' });
+    // (4)+(5) SEC-07 (migration 186): ONE transaction marks the order paid AND activates the plan, from OUR order row
+    // (society, plan, period_end, amount — never the payload's), after checking the captured amount. Before, the two
+    // writes were separate and unchecked: a failed subscription write left the order "paid" with no plan, and the
+    // retry was answered "already processed". Now a failure returns 500 so Razorpay retries, and the retry is safe.
+    const { data: act, error: actErr } = await supa.rpc('activate_order', {
+      p_order_id: orderId, p_payment_id: payment.id ?? null,
+      p_amount_paise: Number.isFinite(Number(payment.amount)) ? Number(payment.amount) : null,
+    });
+    if (actErr) {
+      console.error(`activate_order failed for ${orderId}: ${actErr.message}`);
+      return new Response('activation failed — retry', { status: 500 });
+    }
+    const status = (act as { status?: string } | null)?.status ?? '';
+    if (status === 'unknown_order') return new Response('unknown order', { status: 200 });
+    if (status === 'amount_mismatch' || status === 'different_payment') {
+      // Money arrived that does not match this order — never activate; a human must look (logged for SuperAdmin).
+      console.error(`order ${orderId} NOT activated: ${status} ${JSON.stringify(act)}`);
+      return new Response(status, { status: 200 });
+    }
+    // 'activated' or 'already' → (6)/(7) below are idempotent, so a retry also finishes a pending invoice.
 
     // (6) Tax invoice (migration 130). AFTER activation and never fatal: a missing seller row,
     // an unknown buyer state or any error leaves the order "invoice pending" (paid, no invoice
