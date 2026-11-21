@@ -42,6 +42,10 @@ const BLOG_DIR = resolve(ROOT, 'src', 'content', 'blog');
 const AUTHORS_FILE = resolve(ROOT, 'src', 'content', 'blog', 'authors.ts');
 const BLOG_CATEGORIES_FILE = resolve(ROOT, 'src', 'content', 'blog', 'categories.ts');
 const EDITORIAL_POLICY_FILE = resolve(ROOT, 'src', 'content', 'editorialPolicy.ts');
+// SEO-04: the binding Privacy / Terms text, rendered from the same section modules the pages use
+const LEGAL_HTML_FILE = resolve(ROOT, 'src', 'content', 'legal', 'legalHtml.tsx');
+// SEO-03: /register /partner /search /ask — title, description and h1 shared with the pages
+const PUBLIC_SHELL_META_FILE = resolve(ROOT, 'src', 'content', 'publicShellMeta.ts');
 const HINDI_DATE_FILE = resolve(ROOT, 'src', 'lib', 'hindiDate.ts');
 const GUIDE_DIR = resolve(ROOT, 'src', 'content', 'guide');
 const HELP_FILE = resolve(ROOT, 'src', 'content', 'help', 'index.ts');
@@ -331,6 +335,8 @@ async function loadData() {
     ['rel', RELATED_FILE, null], // whole module (edge maps + helpers), GOS-11
     ['authors', AUTHORS_FILE, null], // /author/<slug> profile pages (E-E-A-T) — AUTHORS + DEFAULT_AUTHOR_SLUG
     ['blogCats', BLOG_CATEGORIES_FILE, 'BLOG_CATEGORIES'], // /blog sections + /blog/category/<slug> hubs
+    ['shellMeta', PUBLIC_SHELL_META_FILE, 'PUBLIC_SHELL_META'], // SEO-03
+    ['legal', LEGAL_HTML_FILE, null], // SEO-04: legalHtml('privacy' | 'terms', 'hi' | 'en') — the full policy text
     ['policy', EDITORIAL_POLICY_FILE, null], // /editorial-policy text + the article trust note — same module as the pages
     ['hindiDate', HINDI_DATE_FILE, 'formatHindiDate'],
     ['seo', SEO_FILE, null], // fitTitle / glossaryTitle / pricingJsonLd — the same module the live pages use
@@ -1398,6 +1404,12 @@ function downloadsPages(DATA) {
   }];
 }
 
+/** SEO-04: the full Privacy / Terms text, or '' if the module did not load (the page then keeps its short body). */
+function legalBody(DATA, which, lang) {
+  try { return DATA && DATA.legal && typeof DATA.legal.legalHtml === 'function' ? DATA.legal.legalHtml(which, lang) : ''; }
+  catch (e) { console.warn(`[prerender] legalHtml(${which}, ${lang}) failed: ${e && e.message}`); return ''; }
+}
+
 /* ---------------- app-shell publics (L2) ---------------- */
 
 // These routes were in the sitemap with NO static file: crawlers got the homepage template (homepage
@@ -1409,13 +1421,26 @@ function appShellPages(DATA) {
     path, title, description, lastmod: LASTMOD.static,
     body: shell({ crumbs, current: h1, html: `<h1>${esc(h1)}</h1><p>${esc(description)}</p>` + html }),
   });
+  // SEO-03: the four public app screens a crawler used to get as the homepage. /search is noindex (it is a results
+  // page; its hubs are linked instead). Skipped (old behaviour) if the shared meta module did not load.
+  const M = DATA.shellMeta;
+  const hub = '<p><a href="/help">मदद केंद्र</a> · <a href="/cookbook">एंट्री कुकबुक</a> · <a href="/guide">लेखांकन गाइड</a> · <a href="/blog">ब्लॉग</a> · <a href="/glossary">शब्दकोश</a> · <a href="/faq">FAQ</a></p>';
+  const shellPages = M ? [
+    page('/register', M.register.hi.title, M.register.hi.description, M.register.hi.h1,
+      '<p><a href="/pricing">सभी plan देखें</a> · <a href="/software">सॉफ़्टवेयर</a> · <a href="/login">पहले से खाता है? लॉगिन करें</a></p>'),
+    page('/partner', M.partner.hi.title, M.partner.hi.description, M.partner.hi.h1,
+      '<p><a href="/register">समिति रजिस्टर करें</a> · <a href="/pricing">मूल्य</a> · <a href="/contact">संपर्क करें</a></p>'),
+    { ...page('/search', M.search.hi.title, M.search.hi.description, M.search.hi.h1, hub), noindex: true },
+    page('/ask', M.ask.hi.title, M.ask.hi.description, M.ask.hi.h1, hub),
+  ] : [];
   const pages = [
+    ...shellPages,
     page('/privacy', 'गोपनीयता नीति — SahakarLekha | Privacy Policy',
       'SahakarLekha आपकी समिति का कौन-सा डेटा रखता है और उसे कैसे सुरक्षित रखता है — society-level isolation व एन्क्रिप्शन. What data SahakarLekha holds and how it protects your cooperative society data.',
-      'गोपनीयता नीति — Privacy Policy', '<p><a href="/terms">नियम व शर्तें</a> · <a href="/contact">संपर्क करें</a></p>'),
+      'गोपनीयता नीति — Privacy Policy', legalBody(DATA, 'privacy', 'hi') + '<p><a href="/terms">नियम व शर्तें</a> · <a href="/contact">संपर्क करें</a></p>'),
     page('/terms', 'नियम व शर्तें — SahakarLekha | Terms & Conditions',
       'SahakarLekha सहकारी लेखा प्लेटफ़ॉर्म के उपयोग की नियम व शर्तें. Terms and conditions for using the SahakarLekha cooperative accounting platform.',
-      'नियम व शर्तें — Terms & Conditions', '<p><a href="/privacy">गोपनीयता नीति</a> · <a href="/contact">संपर्क करें</a></p>'),
+      'नियम व शर्तें — Terms & Conditions', legalBody(DATA, 'terms', 'hi') + '<p><a href="/privacy">गोपनीयता नीति</a> · <a href="/contact">संपर्क करें</a></p>'),
     page('/guide/quick-start', 'SahakarLekha कैसे चलाएँ? — पूर्ण उपयोग गाइड | सहकार लेखा',
       'सहकारी समिति के क्लर्क, लेखाकार, प्रबंधक और ऑडिटर के लिए STEP-BY-STEP सरल हिंदी गाइड — बिना किसी ट्रेनिंग के सहकार लेखा सॉफ्टवेयर चलाएँ।',
       'SahakarLekha कैसे चलाएँ?', '<p><a href="/guide">पूरा लेखांकन कोर्स</a> · <a href="/help">मदद केंद्र</a></p>' + registerCta(), [['/guide', 'गाइड']]),
@@ -1694,8 +1719,8 @@ function englishTwin(hp, DATA) {
         : undefined } };
   }
   // short app-shell pages: same shape as appShellPages' page()
-  const simple = { '/privacy': ['privacy', 'Privacy Policy', '<p><a href="/terms">Terms & Conditions</a> · <a href="/contact">Contact us</a></p>', []],
-    '/terms': ['terms', 'Terms & Conditions', '<p><a href="/privacy">Privacy Policy</a> · <a href="/contact">Contact us</a></p>', []],
+  const simple = { '/privacy': ['privacy', 'Privacy Policy', legalBody(DATA, 'privacy', 'en') + '<p><a href="/terms">Terms & Conditions</a> · <a href="/contact">Contact us</a></p>', []],
+    '/terms': ['terms', 'Terms & Conditions', legalBody(DATA, 'terms', 'en') + '<p><a href="/privacy">Privacy Policy</a> · <a href="/contact">Contact us</a></p>', []],
     '/guide/quick-start': ['quickStart', 'How to use SahakarLekha?', '<p><a href="/guide">The full accounting course</a> · <a href="/help">Help Center</a></p>' + registerCtaEn(), [['/guide', 'Guide']]],
     '/guide/certificate': ['certificate', 'Completion Certificate', '<p><a href="/guide">Start the course</a> · <a href="/guide/verify">Verify a certificate</a></p>', [['/guide', 'Guide']]],
     '/guide/verify': ['verify', 'Certificate Verification', '<p><a href="/guide/certificate">Completion Certificate</a></p>', [['/guide', 'Guide']]] }[p];

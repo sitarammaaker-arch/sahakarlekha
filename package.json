@@ -536,7 +536,8 @@
     "schema:snapshot": "node scripts/schema-snapshot.mjs",
     "test:perf01-voucher-list": "node scripts/test-perf01-voucher-list.mjs",
     "test:report-leftovers": "node scripts/test-report-leftovers.mjs",
-    "test:arch06-voucher-paths": "node scripts/test-arch06-voucher-paths.mjs"
+    "test:arch06-voucher-paths": "node scripts/test-arch06-voucher-paths.mjs",
+    "test:seo-public-pages": "node scripts/test-seo-public-pages.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

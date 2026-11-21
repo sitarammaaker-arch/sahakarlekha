@@ -142,7 +142,7 @@ ok(/p\.status === 'approved' && <PartnerSocieties/.test(portalPage), 'the portal
 ok(/data\.dashboard\?\.ok \? \(data\.dashboard\.societies \?\? \[\]\) : 'error'/.test(portalPage) && /सूची लोड नहीं हो सकी/.test(page), 'a dashboard load failure is shown, never shown as "0 societies"');
 ok(/timeZone: 'Asia\/Kolkata'/.test(page), 'dates on the dashboard are IST calendar dates');
 ok(/उस partner को आपकी समिति का नाम, ज़िला और plan की स्थिति दिखेगी/.test(reg), 'Register tells the society what the partner will see');
-const privacy = read('src/pages/PrivacyPolicy.tsx');
+const privacy = read('src/content/legal/privacySections.tsx');   // SEO-04: policy text moved here
 ok(/Referral partner — Partner Program/.test(privacy) && /नाम, ज़िला,\s*जुड़ने की तारीख़ और plan की स्थिति/.test(privacy), 'Privacy Policy discloses what partners see');
 const admin = read('src/pages/SuperAdminPartners.tsx');
 ok(/rpc\('admin_referral_events'/.test(admin) && /downloadCSV\(/.test(admin), 'admin page wires history and CSV export');
@@ -249,7 +249,7 @@ ok(/p_expected_net_paise: preview\.net_paise/.test(payPanel), 'the admin records
 const page4 = read('src/pages/PartnerProgram.tsx');
 ok(/data\.payouts\?\.ok \? data\.payouts : 'error'/.test(portalPage) && /भुगतान का हिसाब लोड नहीं हो सका/.test(page4), 'the portal shows payouts and a load failure');
 ok(/AdminPayoutsPanel/.test(read('src/pages/SuperAdminPartners.tsx')), 'Payouts tab is on the partners admin page');
-ok(/PAN, बैंक खाता \/ UPI और GSTIN/.test(read('src/pages/PrivacyPolicy.tsx')), 'Privacy Policy discloses PAN/bank collection for payouts');
+ok(/PAN, बैंक खाता \/ UPI और GSTIN/.test(read('src/content/legal/privacySections.tsx')), 'Privacy Policy discloses PAN/bank collection for payouts');
 
 // ── 7. partner portal: email OTP login, own session, change requests (migration 168) ───────────────────────────
 const S = await import('../src/lib/referral/partnerSession.ts');

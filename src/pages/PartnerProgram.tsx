@@ -13,6 +13,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { useDocumentMeta, useNoIndex } from '@/lib/useDocumentMeta';
+import { PUBLIC_SHELL_META } from '@/content/publicShellMeta';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -97,11 +98,9 @@ export const PartnerApply: React.FC = () => {
   const { language } = useLanguage();
   const L = (hi: string, en: string) => (language === 'hi' ? hi : en);
   useDocumentMeta({
-    title: L('Partner बनें — SahakarLekha referral program', 'Become a Partner — SahakarLekha referral program'),
-    description: L(
-      'सहकारी समितियों को SahakarLekha से जोड़िए। Partner बनने पर आपको अपना referral code और link मिलेगा, जिससे आपके द्वारा जुड़ी हर समिति का रिकॉर्ड रहेगा।',
-      'Bring cooperative societies to SahakarLekha. As a partner you get your own referral code and link, and every society that joins through you is recorded in your name.',
-    ),
+    // SEO-03: the same text the static /partner page carries (content/publicShellMeta).
+    title: L(PUBLIC_SHELL_META.partner.hi.title, PUBLIC_SHELL_META.partner.en.title),
+    description: L(PUBLIC_SHELL_META.partner.hi.description, PUBLIC_SHELL_META.partner.en.description),
     canonicalPath: '/partner',
   });
   const { toast } = useToast();
