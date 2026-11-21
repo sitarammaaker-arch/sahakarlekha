@@ -301,8 +301,10 @@ const LoanRegister: React.FC = () => {
       repaidAmount: Number(form.repaidAmount) || 0,
       status: form.status,
       security: form.security,
+    }, {
+      // NEW-08: say "updated" only once the cloud write landed (a refusal shows DataContext's own red toast).
+      onSaved: () => toast({ title: hi ? 'ऋण अपडेट किया गया' : 'Loan updated' }),
     });
-    toast({ title: hi ? 'ऋण अपडेट किया गया' : 'Loan updated' });
     setEditLoan(null);
   };
 

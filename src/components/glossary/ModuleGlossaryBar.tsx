@@ -29,7 +29,7 @@ const ModuleGlossaryBar: React.FC = () => {
         <GlossaryHint
           key={t.slug}
           slug={t.slug}
-          label={t.hindiName || t.englishName}
+          label={L(t.hindiName || t.englishName, t.englishName || t.hindiName)}   // LIVE-04: the term in the screen's language
           className="inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-0.5 text-xs text-foreground hover:border-primary/50 hover:text-primary transition-colors"
         />
       ))}

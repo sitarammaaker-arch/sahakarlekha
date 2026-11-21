@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import * as storage from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
+import { fetchAllPaged } from '@/lib/supabasePaging';
 import { useToast } from '@/hooks/use-toast';
 import { fmtDate } from '@/lib/dateUtils';
 import { getVoucherLines } from '@/lib/voucherUtils';
@@ -84,7 +85,8 @@ const BankReconciliation: React.FC = () => {
   const [records, setRecords] = useState<BankReconciliationRecord[]>(() => storage.getBankReconciliations());
   useEffect(() => {
     if (!user?.societyId) { setRecords([]); return; }
-    supabase.from('bank_reconciliations').select('*').eq('society_id', user.societyId).then(
+    // NEW-10: page past the 1,000-row response cap.
+    fetchAllPaged<BankReconciliationRecord>('bank_reconciliations', user.societyId).then(
       ({ data, error }) => setRecords(error || !data ? storage.getBankReconciliations() : (data as BankReconciliationRecord[])),
       () => setRecords(storage.getBankReconciliations()),
     );

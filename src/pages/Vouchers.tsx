@@ -38,7 +38,7 @@ import { canShareReceipt, receiptHead, receiptMessage } from '@/lib/whatsappShar
 import { allocBillNo, allocMethod } from '@/lib/billUtils';
 import type { Voucher, VoucherType, VoucherLine } from '@/types';
 import { Plus, Minus } from 'lucide-react';
-import { getNextVoucherNo, VOUCHER_TEMPLATES, ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
+import { VOUCHER_TEMPLATES, ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { availableTemplates } from '@/lib/voucherTemplateAvailability';
 import type { LedgerAccount } from '@/types';
 import { validateVoucher } from '@/lib/validation';
@@ -622,6 +622,11 @@ const Vouchers: React.FC = () => {
     if (!v?.id) { setSaving(false); return; }
   };
 
+  // LIVE-02 (audit 2026-11-17): the server issues the official number when the voucher is saved (096). The field used to
+  // show a local guess (RV/…/931, 932, 938 … on each opening) that never matched the saved number — a paper-register
+  // user wrote the wrong one down. Now it says the number comes on save; the toast and the saved banner show the real one.
+  const autoNoLabel = language === 'hi' ? 'सेव पर मिलेगा' : 'Auto on save';
+  const autoNoHint = language === 'hi' ? 'वाउचर नंबर सेव होते ही सर्वर से मिलता है (सही, बिना छूटे क्रम में)। अपना नंबर लिखना हो तो यहाँ लिखें।' : 'The official number is issued by the server when the voucher is saved (in sequence, no gaps). Type here only to use your own number.';
   // keepTemplateAccounts: after an Easy-mode save the selected tile stays, and so do its Dr / Cr accounts (LIVE-01).
   // A click handler passes the event here — it has no such field, so every button still clears everything.
   const handleClear = (opts?: { keepTemplateAccounts?: boolean }) => {
@@ -897,7 +902,8 @@ const Vouchers: React.FC = () => {
                         <Input
                           value={voucherNoInput}
                           onChange={e => setVoucherNoInput(e.target.value)}
-                          placeholder={getNextVoucherNo(selectedTemplate.type, society.financialYear, vouchers)}
+                          placeholder={autoNoLabel}
+                          title={autoNoHint}
                           className="h-8 w-36 text-sm bg-white/20 border-white/30 text-white placeholder:text-white/50 text-right"
                         />
                       </div>
@@ -1053,7 +1059,8 @@ const Vouchers: React.FC = () => {
                     <Input
                       value={voucherNoInput}
                       onChange={e => setVoucherNoInput(e.target.value)}
-                      placeholder={getNextVoucherNo(voucherType, society.financialYear, vouchers)}
+                      placeholder={autoNoLabel}
+                      title={autoNoHint}
                       className="h-8 w-36 text-sm bg-white/20 border-white/30 text-white placeholder:text-white/50 text-right"
                     />
                   </div>
@@ -1290,6 +1297,14 @@ const Vouchers: React.FC = () => {
                     )}
                     {cashWarningText && (
                       <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-2">⚠️ {cashWarningText}</p>
+                    )}
+                    {/* LIVE-06: say WHY Save is disabled instead of a silent grey button. */}
+                    {!saving && voucherType !== 'contra' && !linesBalanced && (
+                      <p className="text-sm text-muted-foreground" role="status">
+                        {drTotal <= 0 || crTotal <= 0
+                          ? (language === 'hi' ? 'सेव करने के लिए कम से कम एक Dr और एक Cr पंक्ति में खाता और रक़म भरें।' : 'To save, fill an account and amount in at least one Dr and one Cr line.')
+                          : (language === 'hi' ? `सेव करने के लिए Dr और Cr बराबर करें — अभी ₹${lineDiff.toLocaleString('en-IN', { maximumFractionDigits: 2 })} का अंतर है।` : `To save, make Dr and Cr equal — they differ by ₹${lineDiff.toLocaleString('en-IN', { maximumFractionDigits: 2 })}.`)}
+                      </p>
                     )}
                     <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
                       <Button type="submit" size="lg" className="flex-1 h-12 text-lg gap-2" disabled={saving || (voucherType !== 'contra' && !linesBalanced)}>
@@ -1631,6 +1646,13 @@ const Vouchers: React.FC = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>{language === 'hi' ? 'वाउचर रद्द करें?' : 'Cancel Voucher?'}</AlertDialogTitle>
             <AlertDialogDescription>
+              {/* LIVE-03: say WHICH voucher — number, date, amount, narration — before it is cancelled. */}
+              {(() => { const cv = vouchers.find(v => v.id === cancelId); return cv ? (
+                <span className="block mb-2 rounded-md border bg-muted/40 px-3 py-2 text-foreground">
+                  <span className="font-mono font-semibold">{cv.voucherNo}</span>{' · '}{fmtDate(cv.date)}{' · '}<span className="font-semibold">₹{Number(cv.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  {cv.narration ? <span className="block text-xs text-muted-foreground mt-0.5">{cv.narration}</span> : null}
+                </span>
+              ) : null; })()}
               {language === 'hi'
                 ? 'यह वाउचर रद्द (cancelled) किया जाएगा। यह लेखांकन से हट जाएगा लेकिन ऑडिट रिकॉर्ड में रहेगा।'
                 : 'This voucher will be marked as cancelled. It will be excluded from accounts but remain in audit records.'}

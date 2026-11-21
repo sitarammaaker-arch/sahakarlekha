@@ -269,16 +269,16 @@ const Ledger: React.FC = () => {
               <div className="flex gap-8 text-sm">
                 <div className="text-center">
                   <p className="text-muted-foreground">{t('debit')}</p>
-                  <p className="text-lg font-bold text-red-600">Rs. {fmt(totalDebit)}</p>
+                  <p className="text-lg font-bold text-red-600">₹{fmt(totalDebit)}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-muted-foreground">{t('credit')}</p>
-                  <p className="text-lg font-bold text-green-600">Rs. {fmt(totalCredit)}</p>
+                  <p className="text-lg font-bold text-green-600">₹{fmt(totalCredit)}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-muted-foreground">{language === 'hi' ? 'शेष' : 'Balance'}</p>
                   <p className="text-lg font-bold text-primary">
-                    Rs. {closing ? fmt(closing.balance) : '0'} {closing?.balanceType}
+                    ₹{closing ? fmt(closing.balance) : '0'} {closing?.balanceType}
                   </p>
                 </div>
               </div>
@@ -333,19 +333,19 @@ const Ledger: React.FC = () => {
                         <TableCell className="text-right text-sm">
                           {entry.debit > 0 && (
                             <span className="font-semibold text-red-600">
-                              Rs. {fmt(entry.debit)}
+                              ₹{fmt(entry.debit)}
                             </span>
                           )}
                         </TableCell>
                         <TableCell className="text-right text-sm">
                           {entry.credit > 0 && (
                             <span className="font-semibold text-green-600">
-                              Rs. {fmt(entry.credit)}
+                              ₹{fmt(entry.credit)}
                             </span>
                           )}
                         </TableCell>
                         <TableCell className="text-right font-bold text-sm whitespace-nowrap">
-                          Rs. {fmt(entry.balance)}{' '}
+                          ₹{fmt(entry.balance)}{' '}
                           <span className="text-xs text-muted-foreground">{entry.balanceType}</span>
                         </TableCell>
                       </TableRow>
@@ -355,10 +355,10 @@ const Ledger: React.FC = () => {
                       <TableCell colSpan={3} className="text-right">
                         {t('total')}
                       </TableCell>
-                      <TableCell className="text-right">Rs. {fmt(totalDebit)}</TableCell>
-                      <TableCell className="text-right">Rs. {fmt(totalCredit)}</TableCell>
+                      <TableCell className="text-right">₹{fmt(totalDebit)}</TableCell>
+                      <TableCell className="text-right">₹{fmt(totalCredit)}</TableCell>
                       <TableCell className="text-right">
-                        Rs. {closing ? fmt(closing.balance) : '0'} {closing?.balanceType}
+                        ₹{closing ? fmt(closing.balance) : '0'} {closing?.balanceType}
                       </TableCell>
                     </TableRow>
                   </>
@@ -394,12 +394,12 @@ const Ledger: React.FC = () => {
                         {b.kind === 'sale' ? (language === 'hi' ? 'बिक्री' : 'Sale') : (language === 'hi' ? 'खरीद' : 'Purchase')}
                         {' · '}{b.mode === 'cash' ? (language === 'hi' ? 'नकद' : 'Cash') : (language === 'hi' ? 'बैंक' : 'Bank')}
                       </TableCell>
-                      <TableCell className="text-right text-sm">Rs. {fmt(b.amount)}</TableCell>
+                      <TableCell className="text-right text-sm">₹{fmt(b.amount)}</TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="font-semibold">
                     <TableCell colSpan={3} className="text-right">{t('total')}</TableCell>
-                    <TableCell className="text-right">Rs. {fmt(directTotal)}</TableCell>
+                    <TableCell className="text-right">₹{fmt(directTotal)}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>

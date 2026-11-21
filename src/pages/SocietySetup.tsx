@@ -45,6 +45,8 @@ const SocietySetup: React.FC = () => {
 
   // ECR-07: period-lock date input (back-dating prevention)
   const [periodLockInput, setPeriodLockInput] = useState(society.periodLockDate || '');
+  // LIVE-09: the earliest live voucher date — a lock date before it blocks nothing.
+  const earliestVoucherDate = useMemo(() => vouchers.reduce<string | null>((min, v) => (!v.isDeleted && v.date && (!min || v.date < min) ? v.date : min), null), [vouchers]);
   // T-23: the board resolution that authorizes the FY close (only used when the tenant requires it).
   const [brRef, setBrRef] = useState('');
   const [brDate, setBrDate] = useState('');
@@ -991,6 +993,15 @@ const SocietySetup: React.FC = () => {
                           ? 'किसी माह/अवधि के audit के बाद उस तारीख तक lock करें ताकि उसमें back-dated entry न हो सके।'
                           : 'Lock everything up to a date (e.g. after a month is audited) so no back-dated entries can slip in.')}
                     </p>
+                    {/* LIVE-09: a lock date older than every voucher (e.g. 2000-04-01) blocks nothing — say so instead of
+                        presenting it like a decision someone made about real entries. */}
+                    {society.periodLockDate && earliestVoucherDate && society.periodLockDate < earliestVoucherDate && (
+                      <p className="text-xs text-amber-700 mt-1">
+                        {language === 'hi'
+                          ? `ध्यान दें: यह तारीख आपके सबसे पहले वाउचर (${earliestVoucherDate}) से भी पहले की है — इस lock से अभी कोई entry नहीं रुकती। चाहें तो सही तारीख डालें या "अनलॉक" करें।`
+                          : `Note: this date is before your earliest voucher (${earliestVoucherDate}) — the lock does not stop any entry yet. Set the real date, or unlock.`}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-end gap-2">
                     <Input
