@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
 import { computeBillLines, billTotal } from '@/lib/housing/billing';
-import { generateMaintenanceBillPDF, generateMaintenanceReceiptPDF } from '@/lib/pdf';
+import { generateMaintenanceBillPDF, generateMaintenanceReceiptPDF, pdfNow } from '@/lib/pdfLazy';
 import type { HousingFlat, MaintenanceBill } from '@/types';
 import { Receipt, Trash2, HandCoins, FileText } from 'lucide-react';
 import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
@@ -102,8 +102,16 @@ export default function MaintenanceBilling() {
     }
   };
 
-  const printBill = (bill: MaintenanceBill, output: 'save' | 'file' = 'save'): File | void =>
-    generateMaintenanceBillPDF(bill, housingFlats.find(f => f.id === bill.flatId), members.find(m => m.id === bill.memberId), society, { output });
+  // PERF-02: the WhatsApp share path ('file') cannot await (Safari) — it uses the module the share menu preloaded.
+  const printBill = (bill: MaintenanceBill, output: 'save' | 'file' = 'save'): File | void => {
+    const args = [bill, housingFlats.find(f => f.id === bill.flatId), members.find(m => m.id === bill.memberId), society, { output }] as const;
+    if (output === 'file') {
+      const pdf = pdfNow();
+      if (!pdf) throw new Error('PDF module not loaded yet');
+      return pdf.generateMaintenanceBillPDF(...args);
+    }
+    void generateMaintenanceBillPDF(...args);
+  };
 
   // WhatsApp: the bill (with what is paid / still due) to the flat owner billed; on phones, with the bill PDF.
   const shareButton = (b: MaintenanceBill) => {

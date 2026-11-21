@@ -530,7 +530,8 @@
     "test:migration-manifest": "node scripts/migration-manifest.mjs",
     "test:ops0102-migrations": "node scripts/test-ops0102-migrations.mjs",
     "test:db09-party-identity": "node scripts/test-db09-party-identity.mjs",
-    "test:arch0708-page-guards": "node scripts/test-arch0708-page-guards.mjs"
+    "test:arch0708-page-guards": "node scripts/test-arch0708-page-guards.mjs",
+    "test:perf02-lazy-export": "node scripts/test-perf02-lazy-export.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

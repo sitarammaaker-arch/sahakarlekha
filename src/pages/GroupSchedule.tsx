@@ -19,7 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { fmtDate } from '@/lib/dateUtils';
 import { fyStartOf } from '@/lib/fyPeriod';
 import { downloadExcel } from '@/lib/exportUtils';
-import { generateGroupSchedulePDF } from '@/lib/pdf';
+import { generateGroupSchedulePDF } from '@/lib/pdfLazy';
 import {
   buildGroupSchedule, allBalanceSheetSchedules, balanceSheetHeads, trialBalanceGroupTotals, scheduleSheetRows, SCHEDULE_HEADERS,
   type GroupSchedule as Schedule,

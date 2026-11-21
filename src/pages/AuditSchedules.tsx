@@ -24,7 +24,7 @@ import {
   type StateAuditFormat,
   type ResolverContext,
 } from '@/lib/stateAuditFormats';
-import { generateAuditSchedulesPDF } from '@/lib/pdf';
+import { generateAuditSchedulesPDF } from '@/lib/pdfLazy';
 import { balanceSheetLeaves } from '@/lib/balanceSheetLeaves';
 import { tieSchedules, hideZeroLines } from '@/lib/auditScheduleTie';
 import { CasStatements } from '@/components/cas/CasStatements';

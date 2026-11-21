@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { generateHousingShareNominationPDF } from '@/lib/pdf';
+import { generateHousingShareNominationPDF } from '@/lib/pdfLazy';
 import { ScrollText, Pencil, Download } from 'lucide-react';
 import type { HousingFlat } from '@/types';
 

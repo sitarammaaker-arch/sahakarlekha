@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { ShoppingCart, Plus, Trash2, Eye, Pencil, Search, FileSpreadsheet, Download, AlertTriangle, Printer } from 'lucide-react';
-import { generateSaleInvoicePDF } from '@/lib/pdf';
+import { generateSaleInvoicePDF, pdfNow } from '@/lib/pdfLazy';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { getBankAccountIds } from '@/lib/storage';
@@ -423,7 +423,7 @@ const SaleManagement: React.FC = () => {
       hsn: stockItems.find(s => s.id === it.itemId)?.hsnCode,
     }));
     try {
-      const file = generateSaleInvoicePDF({
+      const input: Parameters<typeof generateSaleInvoicePDF>[0] = {
         saleNo: sale.saleNo,
         date: sale.date,
         customer: invoiceCustomer,
@@ -445,9 +445,16 @@ const SaleManagement: React.FC = () => {
         dueDate: sale.dueDate,
         lateFeeRule: sale.lateFeeRule,
         narration: sale.narration,
-      }, society, { output });
-      if (output === 'file') return file;
-      toast({ title: language === 'hi' ? `Invoice download: ${sale.saleNo}` : `Invoice downloaded: ${sale.saleNo}` });
+      };
+      // PERF-02: the share path cannot await (Safari), so it uses the module the share menu preloaded.
+      if (output === 'file') {
+        const pdf = pdfNow();
+        if (!pdf) throw new Error('PDF module not loaded yet');
+        return pdf.generateSaleInvoicePDF(input, society, { output });
+      }
+      void generateSaleInvoicePDF(input, society, { output }).then((r) => {
+        if (r !== null) toast({ title: language === 'hi' ? `Invoice download: ${sale.saleNo}` : `Invoice downloaded: ${sale.saleNo}` });
+      });
     } catch (err) {
       if (output === 'file') throw err;
       toast({

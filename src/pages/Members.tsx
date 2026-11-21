@@ -34,7 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { MemberType, CasteCategory } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { useDeepLinkQuery } from '@/hooks/useDeepLinkQuery';
-import { generateMemberPassbookPDF, generateMemberApplicationPDF } from '@/lib/pdf';
+import { generateMemberPassbookPDF, generateMemberApplicationPDF } from '@/lib/pdfLazy';
 import { fmtDate, todayStr } from '@/lib/dateUtils';
 import type { Member, MemberStatus, Nominee, KycStatus, ShareCertStatus } from '@/types';
 import { validateNominees, nomineeShareTotal } from '@/lib/nomineeUtils';
@@ -51,7 +51,7 @@ import { admissionClock, applicationReceivedOn, validateAdmission, validateRejec
 import { minorWarning, agmBlackoutWarning, expulsionAppealLastDate, deathNomineeChoiceUntil, s40ChangeReminder, validateCessation, type CessationDetails } from '@/lib/members/legal';
 import { useMemberDues } from '@/hooks/useMemberDues';
 import { meetingSelect } from '@/lib/supabaseService';
-import { generateMemberRefusalLetterPDF, generateShareCertificatePDF } from '@/lib/pdf';
+import { generateMemberRefusalLetterPDF, generateShareCertificatePDF } from '@/lib/pdfLazy';
 import { urlToDataUrl } from '@/lib/members/photo';
 import { nomineeCountWarning, certificateNoTakenBy } from '@/lib/members/shareRules';
 import { validateStatusChange, liabilityUntil, isExit, deathSettlement } from '@/lib/members/cessation';

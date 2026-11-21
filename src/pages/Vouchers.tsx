@@ -29,7 +29,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { FileText, ArrowDownLeft, ArrowUpRight, RefreshCw, Save, X, Trash2, CheckCircle, EyeOff, Eye, Pencil, Printer, Zap, Settings2, ArrowLeft, ArrowLeftRight, Search, FileSpreadsheet, Download, HandCoins } from 'lucide-react';
 import EmptyState from '@/components/EmptyState';
 import BillWiseSettlement from '@/components/BillWiseSettlement';
-import { generateVoucherPDF } from '@/lib/pdf';
+import { generateVoucherPDF, pdfNow } from '@/lib/pdfLazy';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -371,7 +371,7 @@ const Vouchers: React.FC = () => {
       }
     }
     try {
-      const file = generateVoucherPDF({
+      const input: Parameters<typeof generateVoucherPDF>[0] = {
         voucher: {
           id: v.id,
           voucherNo: v.voucherNo,
@@ -389,9 +389,16 @@ const Vouchers: React.FC = () => {
         members,
         partyName,
         partyAddress: partyAddress || undefined,
-      }, society, { output });
-      if (output === 'file') return file;
-      toast({ title: language === 'hi' ? `Voucher PDF: ${v.voucherNo}` : `Voucher PDF: ${v.voucherNo}` });
+      };
+      // PERF-02: the share path cannot await (Safari), so it uses the module the share menu preloaded.
+      if (output === 'file') {
+        const pdf = pdfNow();
+        if (!pdf) throw new Error('PDF module not loaded yet');
+        return pdf.generateVoucherPDF(input, society, { output });
+      }
+      void generateVoucherPDF(input, society, { output }).then((r) => {
+        if (r !== null) toast({ title: `Voucher PDF: ${v.voucherNo}` });
+      });
     } catch (err) {
       if (output === 'file') throw err;
       toast({ title: language === 'hi' ? 'PDF नहीं बना' : 'PDF generation failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });

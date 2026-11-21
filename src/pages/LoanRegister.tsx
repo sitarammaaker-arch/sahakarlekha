@@ -19,7 +19,7 @@ import { loanLedgerTable } from '@/lib/registers/ledgerTables';
 import { ledgerExcel, ledgerPdf } from '@/lib/registers/ledgerExport';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { generateLoanRegisterPDF } from '@/lib/pdf';
+import { generateLoanRegisterPDF } from '@/lib/pdfLazy';
 import { loanOutstanding } from '@/lib/memberSnapshot';
 import { loanInterestDue, type LoanInterestDue } from '@/lib/loans/interestAccrual';
 import { useLoanAccruals } from '@/hooks/useLoanAccruals';

@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { round2 } from '@/lib/housing/billing';
 import { buildAgingRegister, plannedBillInterest } from '@/lib/housing/arrears';
 import { buildMemberStatement } from '@/lib/housing/statement';
-import { generateDemandNoticePDF } from '@/lib/pdf';
+import { generateDemandNoticePDF } from '@/lib/pdfLazy';
 import { Clock, Percent, FileWarning } from 'lucide-react';
 
 const BUCKETS = ['0-30', '31-60', '61-90', '90+'] as const;

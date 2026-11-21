@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { fmtDate } from '@/lib/dateUtils';
 import { downloadExcel } from '@/lib/exportUtils';
-import { generateVotersListPDF, generateDefaulterListPDF } from '@/lib/pdf';
+import { generateVotersListPDF, generateDefaulterListPDF } from '@/lib/pdfLazy';
 import { voterRoll, defaulterList, reservationSummary, EXCLUSION_LABEL, EXCLUSION_LABEL_EN } from '@/lib/members/voters';
 import { useMemberDues } from '@/hooks/useMemberDues';
 import { ListPager, usePaged } from '@/components/ListPager';

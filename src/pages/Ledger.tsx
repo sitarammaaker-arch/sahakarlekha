@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/table';
 import { AccountPicker } from '@/components/AccountPicker';
 import { BookOpen, Download, Calendar, FileText, FileSpreadsheet } from 'lucide-react';
-import { generateLedgerPDF } from '@/lib/pdf';
+import { generateLedgerPDF } from '@/lib/pdfLazy';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { PrintButton, PrintHeader } from '@/components/ReportPrint';

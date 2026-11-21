@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BookMarked, Download, Search, Edit, Users, History } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { generateShareRegisterPDF, generateShareCertificatePDF } from '@/lib/pdf';
+import { generateShareRegisterPDF, generateShareCertificatePDF } from '@/lib/pdfLazy';
 import type { Member } from '@/types';
 import type { ShareOpType } from '@/lib/shareOps';
 import { premiumCap as sharePremiumCap, premiumAllowed as isSharePremiumAllowed } from '@/lib/sharePremium';

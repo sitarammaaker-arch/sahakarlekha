@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import * as XLSX from 'xlsx';
+import { loadXlsx } from '@/lib/exportUtils';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -44,9 +44,10 @@ function parseFileToRows(file: File): Promise<string[][]> {
     const isExcel = /\.(xlsx|xls)$/i.test(file.name);
     if (isExcel) {
       const reader = new FileReader();
-      reader.onload = ev => {
+      reader.onload = async ev => {
         try {
           const buffer = ev.target?.result as ArrayBuffer;
+          const XLSX = await loadXlsx();   // PERF-02: SheetJS loads on the first Excel file, not with the page
           const wb = XLSX.read(buffer, { type: 'array' });
           const ws = wb.Sheets[wb.SheetNames[0]];
           const raw = XLSX.utils.sheet_to_json<(string | number)[]>(ws, { header: 1, defval: '' });
@@ -75,7 +76,8 @@ function downloadTemplate(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-function downloadExcelTemplate(filename: string, csvContent: string) {
+async function downloadExcelTemplate(filename: string, csvContent: string) {
+  const XLSX = await loadXlsx();   // PERF-02
   const rows = csvContent.split('\n').map(r => r.split(','));
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();

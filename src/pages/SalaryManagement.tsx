@@ -38,7 +38,7 @@ import { fmtDate } from '@/lib/dateUtils';
 import { useToast } from '@/hooks/use-toast';
 import type { Employee, SalaryRecord, PaymentMode, EntityLink } from '@/types';
 import { LinkedDeleteDialog } from '@/components/LinkedDeleteDialog';
-import { generateSalarySlipPDF } from '@/lib/pdf';
+import { generateSalarySlipPDF } from '@/lib/pdfLazy';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TrendingDown, Download, FileSpreadsheet, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { generateDepreciationSchedulePDF } from '@/lib/pdf';
+import { generateDepreciationSchedulePDF } from '@/lib/pdfLazy';
 import { calcDepForFY, parseFY, DEP_ACCOUNTS, wdvAccumulatedBefore, accumulatedDepThrough } from '@/lib/depreciation';
 import { fmtDate } from '@/lib/dateUtils';
 import type { Asset, AssetCategory } from '@/types';
