@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,6 +57,94 @@ const TYPE_BADGE_CLASS: Record<AccountType, string> = {
   income:    'bg-green-100 text-green-700 border-green-200',
   expense:   'bg-red-100 text-red-700 border-red-200',
 };
+
+// PERF-01 / LIVE-07: ~605 rows. As a memoised component they re-render only when the list itself (or the language)
+// changes — not on every keystroke in the Add / Edit / Merge dialogs, which used to rebuild every row.
+const fmtInr = (amount: number) =>
+  new Intl.NumberFormat('hi-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
+const LedgerHeadRows = React.memo(function LedgerHeadRows({ rows, hi, onEdit, onDelete }: {
+  rows: { acc: LedgerAccount; depth: number }[];
+  hi: boolean;
+  onEdit: (acc: LedgerAccount) => void;
+  onDelete: (acc: LedgerAccount) => void;
+}) {
+  const fmtBalance = (amount: number, type: 'debit' | 'credit') =>
+    `${fmtInr(amount)} ${type === 'debit' ? (hi ? 'ना.' : 'Dr') : (hi ? 'ज.' : 'Cr')}`;
+  const getTypeLabel = (type: AccountType) => {
+    const opt = TYPE_OPTIONS.find(o => o.value === type);
+    return opt ? (hi ? opt.labelHi : opt.label) : type;
+  };
+  return (
+    <>
+      {rows.map(({ acc, depth }) => (
+        <TableRow
+          key={acc.id}
+          className={cn(
+            'hover:bg-muted/30',
+            acc.isGroup && 'bg-muted/20 font-semibold',
+          )}
+        >
+          {/* User-created accounts have a UUID id (DataContext addAccount). Show their readable
+              accounts.code (migration 109) — or "—" until one is assigned; full id on hover. The id
+              itself never changes because vouchers reference it. */}
+          <TableCell className="font-mono text-xs text-muted-foreground" title={isUuidId(acc.id) ? acc.id : undefined}>
+            {accountCode(acc) || '—'}
+          </TableCell>
+          <TableCell>
+            <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 16}px` }}>
+              {acc.isGroup && <FolderOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+              <span className={cn(acc.isGroup ? 'font-semibold' : 'font-medium')}>
+                {acc.name}
+              </span>
+              {acc.isSystem && (
+                <Badge variant="secondary" className="text-xs ml-1 px-1 py-0">
+                  {hi ? 'सिस्टम' : 'Sys'}
+                </Badge>
+              )}
+            </div>
+          </TableCell>
+          <TableCell className="text-muted-foreground hidden md:table-cell">
+            {acc.nameHi || '—'}
+          </TableCell>
+          <TableCell>
+            <Badge variant="outline" className={cn('text-xs', TYPE_BADGE_CLASS[acc.type])}>
+              {getTypeLabel(acc.type)}
+            </Badge>
+          </TableCell>
+          <TableCell className="text-right font-semibold hidden sm:table-cell">
+            {!acc.isGroup && acc.openingBalance
+              ? fmtBalance(acc.openingBalance, acc.openingBalanceType ?? 'debit')
+              : <span className="text-muted-foreground text-xs">—</span>}
+          </TableCell>
+          <TableCell>
+            <div className="flex items-center justify-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => onEdit(acc)}
+                title={hi ? 'संपादित करें' : 'Edit'}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              {!acc.isSystem && !acc.isGroup && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => onDelete(acc)}
+                  title={hi ? 'हटाएं' : 'Delete'}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
+});
 
 const LedgerHeads: React.FC = () => {
   const { language } = useLanguage();
@@ -353,6 +441,12 @@ const LedgerHeads: React.FC = () => {
     setDeleteGuard({ open: true, id: acc.id, name: acc.name, links });
   };
 
+  // PERF-01: stable identities for the memoised rows; they always call the latest handlers.
+  const rowActions = useRef({ openEdit, handleDeleteClick });
+  rowActions.current = { openEdit, handleDeleteClick };
+  const onEditRow = useCallback((acc: LedgerAccount) => rowActions.current.openEdit(acc), []);
+  const onDeleteRow = useCallback((acc: LedgerAccount) => rowActions.current.handleDeleteClick(acc), []);
+
   const getTypeLabel = (type: AccountType) => {
     const opt = TYPE_OPTIONS.find(o => o.value === type);
     return opt ? (hi ? opt.labelHi : opt.label) : type;
@@ -564,72 +658,7 @@ const LedgerHeads: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {displayList.map(({ acc, depth }) => (
-                    <TableRow
-                      key={acc.id}
-                      className={cn(
-                        'hover:bg-muted/30',
-                        acc.isGroup && 'bg-muted/20 font-semibold',
-                      )}
-                    >
-                      {/* User-created accounts have a UUID id (DataContext addAccount). Show their readable
-                          accounts.code (migration 109) — or "—" until one is assigned; full id on hover. The id
-                          itself never changes because vouchers reference it. */}
-                      <TableCell className="font-mono text-xs text-muted-foreground" title={isUuidId(acc.id) ? acc.id : undefined}>
-                        {accountCode(acc) || '—'}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 16}px` }}>
-                          {acc.isGroup && <FolderOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                          <span className={cn(acc.isGroup ? 'font-semibold' : 'font-medium')}>
-                            {acc.name}
-                          </span>
-                          {acc.isSystem && (
-                            <Badge variant="secondary" className="text-xs ml-1 px-1 py-0">
-                              {hi ? 'सिस्टम' : 'Sys'}
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground hidden md:table-cell">
-                        {acc.nameHi || '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn('text-xs', TYPE_BADGE_CLASS[acc.type])}>
-                          {getTypeLabel(acc.type)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold hidden sm:table-cell">
-                        {!acc.isGroup && acc.openingBalance
-                          ? fmtBalance(acc.openingBalance, acc.openingBalanceType ?? 'debit')
-                          : <span className="text-muted-foreground text-xs">—</span>}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => openEdit(acc)}
-                            title={hi ? 'संपादित करें' : 'Edit'}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          {!acc.isSystem && !acc.isGroup && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => handleDeleteClick(acc)}
-                              title={hi ? 'हटाएं' : 'Delete'}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  <LedgerHeadRows rows={displayList} hi={hi} onEdit={onEditRow} onDelete={onDeleteRow} />
                 </TableBody>
               </Table>
             </div>
