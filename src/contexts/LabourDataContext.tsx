@@ -25,6 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { patchRow } from '@/lib/rowPatch';
 import { fetchAllPaged } from '@/lib/supabasePaging';
+import { applyPartyIdentity, canReadPartyPii, isMissingPartyIdentityTable, partyIdentityRowFor, partyPIIChanged, pickPartyPII, stripPartyPII, PARTY_PII_FIELDS, type PartyIdentityRow } from '@/lib/partyIdentity';
 import { resolveJurisdiction } from '@/lib/jurisdiction';
 import * as storage from '@/lib/storage';
 import { resolveStatutory, type ParamSegment, type StatutoryParamKey } from '@/lib/rules/epfEsi';
@@ -142,12 +143,42 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   ownerGroupsRef.current = [{ label: tr('विभाग बिल', 'Department bill'), docs: departmentBills }, { label: tr('श्रमिक अग्रिम', 'Worker advance'), docs: workerAdvances }, { label: 'PF/ESI', docs: pfEsiRuns }];
   useEffect(() => registerVoucherOwner('labour', id => findVoucherOwner(ownerGroupsRef.current, id)), [registerVoucherOwner]);
 
+  // DB-09 (migration 195): workers' PAN / Aadhaar / bank live in party_identity once that table exists (SPLIT mode).
+  const partySplitRef = useRef(false);
+  const workerPii = (from: Worker | undefined) => Object.fromEntries(PARTY_PII_FIELDS.worker.map((f) => [f, from ? (from as unknown as Record<string, unknown>)[f] : undefined]));
+  const persistWorkerIdentity = (w: Worker, before: Worker | undefined, revert: () => void) => {
+    if (!partySplitRef.current) return;
+    if (before ? !partyPIIChanged(before, w, 'worker') : Object.keys(pickPartyPII(w, 'worker')).length === 0) return;
+    if (!canReadPartyPii(user?.role, 'worker')) {
+      revert();
+      toastRef.current({ title: tr('PAN/आधार/बैंक विवरण सेव नहीं हुआ', 'PAN / Aadhaar / bank details not saved'), description: tr('यह भूमिका ये विवरण नहीं बदल सकती — बाकी जानकारी सेव हो गई है। Admin/Accountant से करवाएँ।', 'This role cannot change these details — the rest was saved. Ask an Admin/Accountant to do it.'), variant: 'destructive', duration: 10000 });
+      return;
+    }
+    supabase.from('party_identity').upsert(partyIdentityRowFor(user?.societyId || '', 'worker', w.id, w), { onConflict: 'society_id,entity_type,entity_id' }).then(({ error }) => {
+      if (!error) return;
+      reportError('db-sync', error.message, { at: 'party_identity', type: 'worker' });
+      revert();
+      toastRef.current({ title: tr('PAN/आधार/बैंक विवरण सेव नहीं हुआ', 'PAN / Aadhaar / bank details not saved'), description: tr(`बाकी जानकारी सेव हो गई (${error.message})। दोबारा कोशिश करें।`, `The rest was saved (${error.message}). Please try again.`), variant: 'destructive', duration: 12000 });
+    }, () => revert());
+  };
+
   // Load when the society changes; Supabase is SSOT, localStorage is offline fallback.
   useEffect(() => {
     const sid = loadSid;
     if (!sid) { setWorkersState([]); setDepartmentsState([]); setDepartmentBillsState([]); setWorkerAdvancesState([]); setPfEsiRunsState([]); return; }
-    fetchAllPaged<Worker>('workers', sid).then(
-      ({ data, error }) => setWorkersState(error || !data ? storage.getWorkers() : (data as unknown as Worker[])),
+    // DB-09: read party_identity alongside; present → SPLIT (overlay / strip by role), missing → LEGACY.
+    partySplitRef.current = false;
+    Promise.all([
+      fetchAllPaged<Worker>('workers', sid),
+      fetchAllPaged<PartyIdentityRow>('party_identity', sid, ['entity_type', 'entity_id']).catch((e) => ({ data: [] as PartyIdentityRow[], error: { message: String(e) } })),
+    ]).then(
+      ([{ data, error }, pRes]) => {
+        if (error || !data) { setWorkersState(storage.getWorkers()); return; }
+        let rows = data as unknown as Worker[];
+        if (!pRes.error) { partySplitRef.current = true; rows = applyPartyIdentity(rows, pRes.data, 'worker', canReadPartyPii(user?.role, 'worker')); }
+        else if (!isMissingPartyIdentityTable(pRes.error)) console.warn('party_identity load failed — workers stay in legacy PII mode:', pRes.error.message);
+        setWorkersState(rows);
+      },
       () => setWorkersState(storage.getWorkers()),
     );
     fetchAllPaged<Department>('departments', sid).then(
@@ -172,12 +203,14 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     if (guardFYLocked()) return { ...data, id: '', createdAt: '' } as Worker;
     const w: Worker = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
     setWorkersState(prev => { const u = [...prev, w]; storage.setWorkers(u); return u; });
-    supabase.from('workers').upsert(withSoc(w)).then(({ error }) => {
+    supabase.from('workers').upsert(withSoc(partySplitRef.current ? stripPartyPII(w, 'worker') : w)).then(({ error }) => {   // DB-09
       if (error) {
         console.error('Worker save error:', error.message);
         setWorkersState(prev => { const r = prev.filter(x => x.id !== w.id); storage.setWorkers(r); return r; });
         toastRef.current({ title: tr('श्रमिक सेव नहीं हुआ', 'Worker not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर कुछ ग़लत नहीं होगा; दोबारा जोड़ें।`, `Not saved to the cloud — ${error.message}. Refreshing will not cause any problem; please add it again.`), variant: 'destructive', duration: 12000 });
+        return;
       }
+      persistWorkerIdentity(w, undefined, () => setWorkersState(prev => { const u = prev.map(x => x.id === w.id ? { ...x, ...workerPii(undefined) } as Worker : x); storage.setWorkers(u); return u; }));
     });
     return w;
   }, [society, user]);
@@ -188,12 +221,15 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     if (!old) return;
     const updated = { ...old, ...data };
     setWorkersState(prev => { const u = prev.map(x => x.id === id ? updated : x); storage.setWorkers(u); return u; });
-    patchRow('workers', id, old, updated).then(({ error }) => {
+    const split = partySplitRef.current;   // DB-09: the row diff leaves PII out; it goes to party_identity
+    patchRow('workers', id, split ? stripPartyPII(old, 'worker') : old, split ? stripPartyPII(updated, 'worker') : updated).then(({ error }) => {
       if (error) {
         console.error('Worker update error:', error.message);
         setWorkersState(prev => { const u = prev.map(x => x.id === id ? old : x); storage.setWorkers(u); return u; });
         toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 12000 });
+        return;
       }
+      persistWorkerIdentity(updated, old, () => setWorkersState(prev => { const u = prev.map(x => x.id === id ? { ...x, ...workerPii(old) } as Worker : x); storage.setWorkers(u); return u; }));
     });
   }, [workers, society, user]);
 

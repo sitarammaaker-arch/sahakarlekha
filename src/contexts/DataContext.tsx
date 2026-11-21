@@ -47,6 +47,7 @@ import { buildPostVoucherPayload, buildEditVoucherPayload, buildStockDocumentPay
 import { reverseEntryLines, isEditLocked } from '@/lib/voucherReversal';
 import { fyStartOf, fyStartFromLabel, societyFyStart } from '@/lib/fyPeriod';
 import { canReadMemberPii, stripMemberPII, applyMemberIdentity, isMissingIdentityTable, identityRowFor, type IdentityRow } from '@/lib/memberIdentity';
+import { applyPartyIdentity, canReadPartyPii, isMissingPartyIdentityTable, partyIdentityRowFor, partyPIIChanged, pickPartyPII, stripPartyPII, PARTY_PII_FIELDS, type PartyType, type PartyIdentityRow } from '@/lib/partyIdentity';
 import { computeTrialBalance } from '@/lib/reports/trialBalance';
 import { computeTradingAccount, computeProfitLoss } from '@/lib/reports/tradingAndProfitLoss';
 import { computeReceiptsPayments } from '@/lib/reports/receiptsPayments';
@@ -497,6 +498,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // (they would re-expose PII to every role) and PII is saved to member_identity instead. false =
   // LEGACY (table not migrated yet): behaviour is exactly as before, nothing is lost.
   const identitySplitRef = useRef(false);
+  // DB-09 (migration 195): the same split for customers / suppliers / farmers / employees — true once party_identity is
+  // found at load. Then party rows never carry PAN / bank / Aadhaar; they are read from / written to party_identity.
+  const partySplitRef = useRef(false);
   // M2: the admission columns (migration 116) never ride the base upsert — persistMemberAdmission writes them after.
   const memberRow = (m: Record<string, any>) => {
     const base: Record<string, any> = splitAdmissionFields(identitySplitRef.current ? stripMemberPII(m) : m).base;
@@ -1336,6 +1340,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.warn('member_identity load failed — staying in legacy PII mode:', idRes.error.message);
           }
         } catch (e) { console.warn('member_identity load threw — staying in legacy PII mode:', e); }
+        // DB-09: party PII split (migration 195). Table present → SPLIT (overlay for roles allowed to read, strip for the
+        // rest); missing → LEGACY (unchanged). One read for all party types; farmers overlay later from the same rows.
+        partySplitRef.current = false;
+        let partyRows: PartyIdentityRow[] = [];
+        try {
+          const pRes = await fetchAllPaged<PartyIdentityRow>('party_identity', ['entity_type', 'entity_id']);
+          if (!pRes.error) { partySplitRef.current = true; partyRows = pRes.data; }
+          else if (!isMissingPartyIdentityTable(pRes.error)) console.warn('party_identity load failed — staying in legacy PII mode:', pRes.error.message);
+        } catch (e) { console.warn('party_identity load threw — staying in legacy PII mode:', e); }
+        const overlayParty = <T extends { id: string }>(rows: T[], t: PartyType): T[] =>
+          partySplitRef.current ? applyPartyIdentity(rows, partyRows, t, canReadPartyPii(userRef.current?.role, t)) : rows;
         if (activeMembers.length > 0) { setMembersState(activeMembers); storage.setMembers(activeMembers); }
         else setMembersState([]);
 
@@ -1437,7 +1452,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Procurement Phase 1.0 — error-tolerant load (Supabase → localStorage fallback). Independent
         // queries: a missing table NEVER breaks the main data load; the demo persists via localStorage.
         sideLoad(unlessEmpty(emptyP, 'procurement_farmers', () => fetchAllPaged('procurement_farmers')),
-          ({ data, error }) => setProcurementFarmersState(error || !data ? storage.getProcurementFarmers() : (data as unknown as Farmer[])),
+          ({ data, error }) => setProcurementFarmersState(error || !data ? storage.getProcurementFarmers() : overlayParty(data as unknown as Farmer[], 'farmer')),
           () => setProcurementFarmersState(storage.getProcurementFarmers()),
         );
         sideLoad(unlessEmpty(emptyP, 'procurement_lots', () => fetchAllPaged('procurement_lots')),
@@ -1500,10 +1515,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSalesState((slData || []).filter(s => !s.isDeleted));          // ECR-02: exclude archived
         setPurchasesState((puData || []).filter(p => !p.isDeleted));      // P0 #2: exclude archived
 
-        setEmployeesState((emData || []).filter(e => !e.isDeleted));       // ECR-02: exclude archived employees
+        setEmployeesState(overlayParty((emData || []).filter(e => !e.isDeleted), 'employee'));       // ECR-02: exclude archived employees · DB-09 PII overlay
         setSalaryRecordsState(srData || []);
-        setSuppliersState(supData || []);
-        setCustomersState(cusData || []);
+        setSuppliersState(overlayParty(supData || [], 'supplier'));   // DB-09 PII overlay
+        setCustomersState(overlayParty(cusData || [], 'customer'));
         setKccLoansState(kccData || []);
         setRecoverablesState(recData || []);
         setKachiAaratEntriesState(kaData || []);
@@ -3606,6 +3621,33 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Member PII split, step 2 of the two-step save (RULE 1): the base `members` row is already safe; this
   // writes aadhaar/pan to member_identity. Failure never loses the member — it reverts the PII shown in
   // state and tells the user clearly. No-op in LEGACY mode (PII rode in the members row).
+  // DB-09: the party PII write (step 2 after the party row is safe). Writes party_identity only when the PII changed
+  // (before = undefined for a new party). A role that may not store it, or a refused write, reverts the PII on screen
+  // and says so (RULE 1) — the rest of the party is already saved. No-op in LEGACY mode (PII rode on the party row).
+  const persistPartyIdentity = (type: PartyType, entityId: string, row: object, before: object | undefined, revert: () => void) => {
+    if (!partySplitRef.current) return;
+    if (before ? !partyPIIChanged(before, row, type) : Object.keys(pickPartyPII(row, type)).length === 0) return;
+    const what = tr('PAN/बैंक विवरण', 'PAN / bank details');
+    if (!canReadPartyPii(userRef.current?.role, type)) {
+      revert();
+      toastRef.current({ title: tr(`${what} सेव नहीं हुआ`, `${what} not saved`), description: tr('यह भूमिका PAN/आधार/बैंक विवरण नहीं बदल सकती — बाकी जानकारी सेव हो गई है। Admin/Accountant से करवाएँ।', 'This role cannot change PAN / Aadhaar / bank details — the other details were saved. Ask an Admin/Accountant to do it.'), variant: 'destructive', duration: 10000 });
+      return;
+    }
+    const r = partyIdentityRowFor(societyIdRef.current, type, entityId, row);
+    supabase.from('party_identity').upsert(r, { onConflict: 'society_id,entity_type,entity_id' }).then(({ error }) => {
+      if (!error) return;
+      console.error('party_identity sync error:', error.message); reportError('db-sync', error.message, { at: 'party_identity', type });
+      revert();
+      toastRef.current({ title: tr(`${what} सेव नहीं हुआ`, `${what} not saved`), description: tr(`बाकी जानकारी सेव हो गई, पर PAN/बैंक विवरण नहीं (${error.message})। दोबारा कोशिश करें।`, `The other details were saved, but not the PAN / bank details (${error.message}). Please try again.`), variant: 'destructive', duration: 12000 });
+    }, () => { revert(); });
+  };
+  /** DB-09: put a party's PII fields back to `from` on screen (used as the revert of persistPartyIdentity). */
+  const piiOf = (from: object | undefined, type: PartyType): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
+    for (const f of PARTY_PII_FIELDS[type]) out[f] = from ? (from as Record<string, unknown>)[f] : undefined;
+    return out;
+  };
+
   const persistMemberIdentity = (memberId: string, pii: { aadhaar?: string; pan?: string }, revert: () => void) => {
     if (!identitySplitRef.current) return;
     if (!canReadMemberPii(userRef.current?.role)) {
@@ -5529,10 +5571,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // saves before the migration; a miss is a mild warning (payment then needs the details re-entered).
   const FARMER_EXTRA_KEYS = ['village', 'bankName', 'bankAccountNo', 'ifsc', 'portalId'] as const;
   const farmerBase = (f: Farmer) => { const b: Record<string, unknown> = { ...f }; for (const k of FARMER_EXTRA_KEYS) delete b[k]; return b; };
-  const persistFarmerExtras = (f: Farmer, force = false) => {
+  // DB-09: before = the farmer before an edit (undefined for a new one). In SPLIT mode the bank fields go to
+  // party_identity (a procurementOfficer may write them there), never to the farmer row.
+  const persistFarmerExtras = (f: Farmer, force = false, before?: Farmer) => {
+    const split = partySplitRef.current;
+    if (split) persistPartyIdentity('farmer', f.id, f, before, () => {
+      const back = (x: Farmer) => x.id === f.id ? { ...x, ...piiOf(before, 'farmer') } as Farmer : x;
+      setProcurementFarmersState(prev => { const u = prev.map(back); storage.setProcurementFarmers(u); return u; });
+    });
     const extras: Record<string, unknown> = {};
-    for (const k of FARMER_EXTRA_KEYS) if (f[k] !== undefined) extras[k] = f[k] || null;
+    for (const k of FARMER_EXTRA_KEYS) if (f[k] !== undefined && !(split && (PARTY_PII_FIELDS.farmer as readonly string[]).includes(k))) extras[k] = f[k] || null;
     if (!force && Object.keys(extras).length === 0) return;
+    if (Object.keys(extras).length === 0) return;
     supabase.from('procurement_farmers').update(extras).eq('id', f.id).then(({ error }) => {
       if (!error) return;
       reportError('write-partial', error.message, { at: 'procurement_farmers bank columns (migration 138)' });
@@ -5594,7 +5644,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const next: Farmer = { ...before, ...data, updatedAt: new Date().toISOString() };
     setProcurementFarmersState(prev => { const u = prev.map(f => f.id === id ? next : f); storage.setProcurementFarmers(u); return u; });
     patchRow('procurement_farmers', id, before, farmerBase(next)).then(({ error }) => {
-      if (!error) { persistFarmerExtras(next, true); return; }
+      if (!error) { persistFarmerExtras(next, true, before); return; }
       setProcurementFarmersState(prev => { const u = prev.map(f => f.id === id ? before : f); storage.setProcurementFarmers(u); return u; });
       toastRef.current({ title: tr('किसान अपडेट नहीं हुआ', 'Farmer not updated'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh the old data will come back.`), variant: 'destructive', duration: 12000 });
     });
@@ -8094,13 +8144,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         employeesRef.current = employeesRef.current.map(e => e.id === emp.id ? toSave : e);
         setEmployeesState(prev => prev.map(e => e.id === emp.id ? toSave : e));
       }
-      supabase.from('employees').upsert(withSoc(toSave)).then(({ error }) => {
+      // DB-09: in SPLIT mode the row never carries PAN / bank — they go to party_identity once the row is safe.
+      supabase.from('employees').upsert(withSoc(partySplitRef.current ? stripPartyPII(toSave, 'employee') : toSave)).then(({ error }) => {
         if (error) {
           console.error('DB sync error:', error.message); reportError('db-sync', error.message);
           employeesRef.current = employeesRef.current.filter(e => e.id !== emp.id);
           setEmployeesState(prev => prev.filter(e => e.id !== emp.id));   // RULE 1: roll back
           toastRef.current({ title: tr('कर्मचारी सेव नहीं हुआ', 'Employee not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
+          return;
         }
+        persistPartyIdentity('employee', emp.id, toSave, undefined, () => {
+          const strip = (e: Employee) => e.id === emp.id ? { ...e, ...piiOf(undefined, 'employee') } as Employee : e;
+          employeesRef.current = employeesRef.current.map(strip); setEmployeesState(prev => prev.map(strip));
+        });
       });
     });
     return emp;
@@ -8112,12 +8168,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!before) return;
     const updated = { ...before, ...data };
     setEmployeesState(prev => prev.map(e => e.id === id ? updated : e));
-    patchRow('employees', id, before, updated).then(({ error }) => {
+    // DB-09: the row diff leaves PAN / bank out in SPLIT mode; they go to party_identity after the row is safe.
+    const rowBefore = partySplitRef.current ? stripPartyPII(before, 'employee') : before;
+    const rowAfter = partySplitRef.current ? stripPartyPII(updated, 'employee') : updated;
+    patchRow('employees', id, rowBefore, rowAfter).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setEmployeesState(prev => prev.map(e => e.id === id ? before : e));   // RULE 1: roll back to prior state
         toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh the old data will come back.`), variant: 'destructive', duration: 12000 });
+        return;
       }
+      persistPartyIdentity('employee', id, updated, before, () => setEmployeesState(prev => prev.map(e => e.id === id ? { ...e, ...piiOf(before, 'employee') } as Employee : e)));
     });
   }, []);
 
@@ -8413,7 +8474,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Two-step supplier save (mirror of persistCustomer — RULE 1).
   // Base columns save first; Tally extras patched separately so missing
   // migration only shows a soft warning.
-  const persistSupplier = (s: Supplier, opts: { onBaseFail: () => void; isUpdate: boolean; onBaseSuccess?: () => void }) => {
+  const persistSupplier = (s: Supplier, opts: { onBaseFail: () => void; isUpdate: boolean; onBaseSuccess?: () => void; before?: Supplier; onIdentityFail?: () => void }) => {
     const {
       legalName, tradeName, mailingName, supplierType,
       addressLine1, addressLine2, city, state, pincode, country,
@@ -8437,6 +8498,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
       opts.onBaseSuccess?.();
+      persistPartyIdentity('supplier', s.id, s, opts.before, opts.onIdentityFail ?? (() => {}));
       const extras: Record<string, unknown> = {};
       const setIf = (k: string, v: unknown) => { if (v !== undefined) extras[k] = v; };
       setIf('legalName', legalName); setIf('tradeName', tradeName); setIf('mailingName', mailingName);
@@ -8446,10 +8508,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIf('mobile', mobile); setIf('landline', landline); setIf('email', email);
       setIf('website', website); setIf('contactPerson', contactPerson); setIf('contactDesignation', contactDesignation);
       setIf('salesRep', salesRep);
-      setIf('gstin', gstin); setIf('pan', pan); setIf('registrationType', registrationType);
+      setIf('gstin', gstin); if (!partySplitRef.current) setIf('pan', pan); setIf('registrationType', registrationType);   // DB-09: PII → party_identity in SPLIT mode
       setIf('placeOfSupply', placeOfSupply); setIf('tdsApplicable', tdsApplicable);
       setIf('tdsSection', tdsSection); setIf('tcsApplicable', tcsApplicable);
-      setIf('bankName', bankName); setIf('accountNo', accountNo); setIf('ifsc', ifsc);
+      if (!partySplitRef.current) { setIf('bankName', bankName); setIf('accountNo', accountNo); setIf('ifsc', ifsc); }
       setIf('branch', branch); setIf('upiId', upiId); setIf('beneficiaryName', beneficiaryName);
       setIf('creditDays', creditDays); setIf('lateFeeRule', lateFeeRule); setIf('creditLimit', creditLimit); setIf('discountPercent', discountPercent);
       setIf('openingBalance', openingBalance); setIf('openingBalanceType', openingBalanceType);
@@ -8531,6 +8593,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       persistSupplier(supplier, {
         isUpdate: false,
+        // DB-09: PII not stored in party_identity → take it off the screen too (never shown as saved)
+        onIdentityFail: () => { const strip = (x: Supplier) => x.id === supplier.id ? { ...x, ...piiOf(undefined, 'supplier') } as Supplier : x; suppliersRef.current = suppliersRef.current.map(strip); setSuppliersState(prev => prev.map(strip)); },
         onBaseFail: () => {
           undoLocal();
           // no orphan ledger — the one rollback-aware account delete (puts it back on screen if the cloud refuses)
@@ -8567,6 +8631,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     persistSupplier(updated, {
       isUpdate: true,
+      before,
+      onIdentityFail: () => { const back = (x: Supplier) => x.id === id ? { ...x, ...piiOf(before, 'supplier') } as Supplier : x; suppliersRef.current = suppliersRef.current.map(back); setSuppliersState(prev => prev.map(back)); },
       onBaseFail: () => {
         suppliersRef.current = suppliersRef.current.map(s => s.id === id ? before : s);
         setSuppliersState(prev => prev.map(s => s.id === id ? before : s));
@@ -8620,7 +8686,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // ifsc, branch, upiId, creditDays, creditLimit, discountPercent, openingBalance,
   // openingBalanceType, notes, mailingName) patch separately so missing migration only
   // shows a soft warning instead of nuking the row.
-  const persistCustomer = (c: Customer, opts: { onBaseFail: () => void; isUpdate: boolean; onBaseSuccess?: () => void }) => {
+  const persistCustomer = (c: Customer, opts: { onBaseFail: () => void; isUpdate: boolean; onBaseSuccess?: () => void; before?: Customer; onIdentityFail?: () => void }) => {
     const {
       legalName, tradeName, mailingName, customerType,
       addressLine1, addressLine2, city, state, pincode, country,
@@ -8644,6 +8710,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
       opts.onBaseSuccess?.();
+      persistPartyIdentity('customer', c.id, c, opts.before, opts.onIdentityFail ?? (() => {}));
       const extras: Record<string, unknown> = {};
       const setIf = (k: string, v: unknown) => { if (v !== undefined) extras[k] = v; };
       setIf('legalName', legalName); setIf('tradeName', tradeName); setIf('mailingName', mailingName);
@@ -8652,9 +8719,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIf('city', city); setIf('state', state); setIf('pincode', pincode); setIf('country', country);
       setIf('mobile', mobile); setIf('landline', landline); setIf('email', email);
       setIf('website', website); setIf('contactPerson', contactPerson); setIf('contactDesignation', contactDesignation);
-      setIf('gstin', gstin); setIf('pan', pan); setIf('registrationType', registrationType);
+      setIf('gstin', gstin); if (!partySplitRef.current) setIf('pan', pan); setIf('registrationType', registrationType);   // DB-09: PII → party_identity in SPLIT mode
       setIf('placeOfSupply', placeOfSupply); setIf('tdsApplicable', tdsApplicable); setIf('tcsApplicable', tcsApplicable);
-      setIf('bankName', bankName); setIf('accountNo', accountNo); setIf('ifsc', ifsc);
+      if (!partySplitRef.current) { setIf('bankName', bankName); setIf('accountNo', accountNo); setIf('ifsc', ifsc); }
       setIf('branch', branch); setIf('upiId', upiId);
       setIf('creditDays', creditDays); setIf('lateFeeRule', lateFeeRule); setIf('creditLimit', creditLimit); setIf('discountPercent', discountPercent);
       setIf('openingBalance', openingBalance); setIf('openingBalanceType', openingBalanceType);
@@ -8736,6 +8803,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       persistCustomer(customer, {
         isUpdate: false,
+        onIdentityFail: () => { const strip = (x: Customer) => x.id === customer.id ? { ...x, ...piiOf(undefined, 'customer') } as Customer : x; customersRef.current = customersRef.current.map(strip); setCustomersState(prev => prev.map(strip)); },
         onBaseFail: () => {
           undoLocal();
           // no orphan ledger — the one rollback-aware account delete (puts it back on screen if the cloud refuses)
@@ -8772,6 +8840,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     persistCustomer(updated, {
       isUpdate: true,
+      before,
+      onIdentityFail: () => { const back = (x: Customer) => x.id === id ? { ...x, ...piiOf(before, 'customer') } as Customer : x; customersRef.current = customersRef.current.map(back); setCustomersState(prev => prev.map(back)); },
       onBaseFail: () => {
         customersRef.current = customersRef.current.map(c => c.id === id ? before : c);
         setCustomersState(prev => prev.map(c => c.id === id ? before : c));

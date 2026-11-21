@@ -330,6 +330,33 @@ const hsn: EntityDescriptor = {
   ],
 };
 
+// ─── party_identity ──────────────────────────────────────────────────────────────────
+// DB-09 (migration 195): PAN / Aadhaar / bank details of customers, suppliers, farmers, employees and workers, split
+// out of the party tables like member_identity. minRole admin (the table's RLS is jwt_can_read_party_pii). optionalTable:
+// created by a hand-run migration, so a backup taken before it exists must not fail. Once 196 blanks the party columns
+// this entity is what keeps that PII inside the backup.
+const partyIdentity: EntityDescriptor = {
+  key: 'party_identity',
+  table: 'party_identity',
+  domain: 'trade',
+  label: 'Party identity (PAN / Aadhaar / bank)',
+  labelHi: 'पक्ष पहचान (पैन / आधार / बैंक)',
+  minRole: 'admin',
+  scope: 'society',
+  nature: 'master',
+  dependsOn: ['society'],
+  naturalKey: ['entity_type', 'entity_id'],
+  formats: ['csv', 'xlsx', 'json'],
+  backupPolicy: 'full',
+  optionalTable: true,
+  columns: [
+    c('entity_type', 'Party Type', 'पक्ष प्रकार', { type: 'enum' }),
+    c('entity_id', 'Party ID', 'पक्ष आईडी'),
+    c('fields', 'PAN / Aadhaar / Bank', 'पैन / आधार / बैंक', { type: 'json', piiClass: 'identity' }),
+    c('updated_at', 'Updated At', 'अद्यतन समय', { type: 'date', defaultVisible: false }),
+  ],
+};
+
 export const TRADE_ENTITIES: EntityDescriptor[] = [
-  supplier, customer, sale, purchase, salesReturn, purchaseReturn, hsn,
+  supplier, customer, sale, purchase, salesReturn, purchaseReturn, hsn, partyIdentity,
 ];
