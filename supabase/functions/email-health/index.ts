@@ -28,6 +28,7 @@ Deno.serve(async (req) => {
     apiKey: Deno.env.get('RESEND_API_KEY') ?? '',
     from: Deno.env.get('RESEND_FROM_NOTIFY') || Deno.env.get('RESEND_FROM') || '',
     appUrl: Deno.env.get('APP_URL') ?? 'https://sahakarlekha.com',
+    probe: true,   // 192 · OPS-03: also check that the live site answers (site down → alert)
   });
   if (result.status === 'error') console.error(`email-health: ${result.error}`);
   return json({ ok: result.status !== 'error', ...result }, result.status === 'error' ? 500 : 200);

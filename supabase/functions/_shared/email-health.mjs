@@ -21,7 +21,44 @@ export function healthProblems(h) {
   if (n('complained_24h') > 0) out.push(`पिछले 24 घंटे में ${n('complained_24h')} spam शिकायत आई।`);
   if (n('failed_24h') > 0) out.push(`पिछले 24 घंटे में ${n('failed_24h')} ईमेल fail हुए।`);
   if (n('bounced_24h') > 0) out.push(`पिछले 24 घंटे में ${n('bounced_24h')} ईमेल bounce हुए।`);
+  out.push(...appProblems(h));
   return out;
+}
+
+/** 192 · OPS-03 — the lines for the site probe, app errors and backup staleness (empty when all is well). */
+export function appProblems(h) {
+  const out = [];
+  const n = (k) => Number(h?.[k] ?? 0);
+  if (h?.site && h.site.ok === false) out.push(`🔴 वेबसाइट नहीं खुल रही: ${h.site.url ?? ''} → ${h.site.status ?? h.site.error ?? 'कोई जवाब नहीं'}। सदस्य/स्टाफ़ login नहीं कर पा रहे होंगे।`);
+  if (n('integrity_errors_6h') > 0) {
+    const top = Array.isArray(h.integrity_top) ? h.integrity_top.map((t) => `${t.source} ×${t.n}${t.sample ? ` ("${String(t.sample).slice(0, 80)}")` : ''}`).join('; ') : '';
+    out.push(`पिछले 6 घंटे में ${n('integrity_errors_6h')} सेव/पोस्टिंग/सर्वर error दर्ज हुए${top ? ` — ${top}` : ''}।`);
+  }
+  if (n('backup_stale_24h') > 0) out.push(`पिछले 24 घंटे में ${n('backup_stale_24h')} बार किसी समिति का backup पुराना पाया गया (backup-stale)।`);
+  if (n('app_spike_1h') >= 50) out.push(`पिछले 1 घंटे में browser पर ${n('app_spike_1h')} error आए (सामान्य से बहुत ज़्यादा) — किसी deploy के बाद कोई page टूट रहा हो सकता है।`);
+  return out;
+}
+
+/**
+ * 192 · OPS-03 — is the live site answering? A browser-style navigation to "/" and "/login" (the Cloudflare Worker
+ * serves the SPA shell for /login only to a navigation — wrangler.jsonc). ok = both 200. Never throws.
+ */
+export async function probeSite(appUrl, fetchFn = fetch, timeoutMs = 10000) {
+  const base = String(appUrl || 'https://sahakarlekha.com').replace(/\/+$/, '');
+  for (const path of ['/', '/login']) {
+    const url = base + path;
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+    try {
+      const res = await fetchFn(url, { method: 'GET', redirect: 'manual', signal: ctrl?.signal, headers: { 'Sec-Fetch-Mode': 'navigate', Accept: 'text/html', 'User-Agent': 'sahakarlekha-health/1' } });
+      if (res.status !== 200) return { ok: false, status: res.status, url };
+    } catch (e) {
+      return { ok: false, status: null, url, error: (e instanceof Error ? e.message : String(e)).slice(0, 120) };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+  return { ok: true, status: 200, url: base + '/' };
 }
 
 /** Subject, html, text for the alert / recovery email. */
@@ -36,7 +73,9 @@ export function buildHealthEmail(action, h, { appUrl }) {
     return { subject, html, text };
   }
   const problems = healthProblems(h);
-  const subject = 'ALERT: सहकार लेखा ईमेल सिस्टम में गड़बड़ / Email system problem';
+  const subject = h?.site && h.site.ok === false ? 'ALERT: सहकार लेखा वेबसाइट बंद है / Website is down'
+    : appProblems(h).length ? 'ALERT: सहकार लेखा में error / Platform errors'
+    : 'ALERT: सहकार लेखा ईमेल सिस्टम में गड़बड़ / Email system problem';
   const text = ['⚠ ईमेल सिस्टम में गड़बड़ मिली:', '', ...problems.map((p) => `• ${p}`), '', `जाँचें: ${link}`].join('\n');
   const html = `<div style="font-family:Arial,'Noto Sans Devanagari',sans-serif;line-height:1.6;color:#0f172a;max-width:600px">
     <p><b>⚠ ईमेल सिस्टम में गड़बड़ मिली</b><br><span style="color:#475569">The email system needs attention.</span></p>
@@ -48,13 +87,15 @@ export function buildHealthEmail(action, h, { appUrl }) {
 
 /**
  * @param {*} supa  SERVICE-ROLE client
- * @param {{ apiKey?: string, from?: string, appUrl?: string, fetch?: typeof fetch }} cfg
- * @returns {Promise<{ status: string, action?: string, level?: string, sent?: number, error?: string }>}
+ * @param {{ apiKey?: string, from?: string, appUrl?: string, fetch?: typeof fetch, probe?: boolean }} cfg
+ *   probe: true (192, set by the email-health function) → check the live site first and pass it to the claim.
+ * @returns {Promise<{ status: string, action?: string, level?: string, sent?: number, error?: string, site?: object }>}
  */
 export async function runHealthCheck(supa, cfg = {}) {
   let claim;
+  const site = cfg.probe ? await probeSite(cfg.appUrl, cfg.fetch ?? fetch) : null;
   try {
-    const { data, error } = await supa.rpc('claim_email_health_alert');
+    const { data, error } = await (site ? supa.rpc('claim_email_health_alert', { p_site: site }) : supa.rpc('claim_email_health_alert'));
     if (error) return { status: 'error', error: `claim: ${error.message}` };
     claim = data ?? {};
   } catch (e) {
