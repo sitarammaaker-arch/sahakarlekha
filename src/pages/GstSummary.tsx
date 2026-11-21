@@ -18,6 +18,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { downloadCSV, downloadExcel } from '@/lib/exportUtils';
 import { partyGstin, societyStateCode, placeOfSupply, gstReturnPeriod, monthLastDay } from '@/lib/gstStates';
+import { isB2CL, buildB2clSection, b2clThreshold } from '@/lib/gst/b2cl';
 import { INDIAN_STATES } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
 import { computeRCM, type RcmPurchase } from '@/lib/rcm';
@@ -223,10 +224,15 @@ export default function GstSummary() {
   // ── GSTR-1: B2CS Sales (all consumer sales not in B2B) ───────────────────
   const b2bIds = useMemo(() => new Set(b2bSales.map(s => s.id)), [b2bSales]);
 
+  // ── GSTR-1 Table 5: B2CL — inter-State sales to unregistered buyers above the threshold (lib/gst/b2cl, sourced:
+  // Notification 12/2024–CT; ₹1 lakh from 2024-08-01, ₹2.5 lakh before). Reported invoice-wise, NOT in B2CS.
+  const b2clSales = useMemo(() => activeSales.filter(s => !b2bIds.has(s.id) && isB2CL(s)), [activeSales, b2bIds]);
+  const b2clIds = useMemo(() => new Set(b2clSales.map(s => s.id)), [b2clSales]);
+
   const b2csSummary = useMemo(() => {
     const map = new Map<number, { rate: number; taxableValue: number; igst: number; cgst: number; sgst: number; count: number }>();
     for (const s of activeSales) {
-      if (b2bIds.has(s.id)) continue;
+      if (b2bIds.has(s.id) || b2clIds.has(s.id)) continue;   // B2CL invoices are reported in Table 5, not here
       const rate = s.cgstPct + s.sgstPct + s.igstPct;
       const existing = map.get(rate) ?? { rate, taxableValue: 0, igst: 0, cgst: 0, sgst: 0, count: 0 };
       existing.taxableValue += s.netAmount;
@@ -243,7 +249,7 @@ export default function GstSummary() {
       map.set(rate, e);
     }
     return Array.from(map.values()).sort((a, b) => a.rate - b.rate);
-  }, [activeSales, b2bIds, returnClassification]);
+  }, [activeSales, b2bIds, b2clIds, returnClassification]);
 
   // ── Slice 5: HSN gaps — fix BEFORE filing GSTR-1 ─────────────────────────
   // Sales items whose stock item has NO HSN/SAC, or whose code has too few digits
@@ -547,6 +553,8 @@ export default function GstSummary() {
       })),
     }));
 
+    const b2clArr = buildB2clSection(b2clSales, (sale) => placeOfSupply(undefined, sale.customerId ? customerMap.get(sale.customerId)?.state : undefined, stateCode));
+
     const b2csArr = b2csSummary.map(r => ({
       sply_ty: r.igst > 0.005 ? 'INTER' : 'INTRA',   // RPT-09: an IGST row is an inter-state supply (was always INTRA)
       rt: r.rate,
@@ -597,6 +605,7 @@ export default function GstSummary() {
       fp,
       b2b: b2bArr,
       b2cs: b2csArr,
+      ...(b2clArr.length > 0 ? { b2cl: b2clArr } : {}),
       ...(cdnrArr.length > 0 ? { cdnr: cdnrArr } : {}),
       hsn: { data: hsnArr },
     };
@@ -637,11 +646,25 @@ export default function GstSummary() {
     }
 
     const y2 = b2bSales.length > 0 ? (doc as any).lastAutoTable.finalY + 8 : hdrY + 14;
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-    doc.text('B2CS — Consumer Sales by Rate', 14, y2);
-    if (b2csSummary.length > 0) {
+    let yB2cs = y2;
+    if (b2clSales.length > 0) {
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+      doc.text('5 — B2CL: Inter-State to Unregistered, invoice value above the limit', 14, y2);
       autoTable(doc, {
         startY: y2 + 4,
+        head: [['Invoice', 'Date', 'Rate %', 'Invoice Value', 'Taxable Value', 'IGST']],
+        body: b2clSales.map(s => [s.saleNo, s.date, pct(s.cgstPct + s.sgstPct + s.igstPct), s.grandTotal.toFixed(2), s.netAmount.toFixed(2), s.igstAmount.toFixed(2)]),
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [21, 128, 61], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+        columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+      });
+      yB2cs = (doc as any).lastAutoTable.finalY + 8;
+    }
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.text('B2CS — Consumer Sales by Rate', 14, yB2cs);
+    if (b2csSummary.length > 0) {
+      autoTable(doc, {
+        startY: yB2cs + 4,
         head: [['Rate %', 'Count', 'Taxable Value', 'IGST', 'CGST', 'SGST']],
         body: b2csSummary.map(r => [pct(r.rate), r.count, r.taxableValue.toFixed(2), r.igst.toFixed(2), r.cgst.toFixed(2), r.sgst.toFixed(2)]),
         styles: { fontSize: 7, cellPadding: 1.5 },
@@ -1196,6 +1219,46 @@ export default function GstSummary() {
                           <TableCell className="text-right font-mono text-rose-700">{fmt(-n.samt)}</TableCell>
                         </TableRow>
                       )))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* B2CL — GSTR-1 Table 5 */}
+            {b2clSales.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4 text-orange-600" />
+                    {hi ? 'B2CL — दूसरे राज्य के बिना-GSTIN ग्राहक, सीमा से बड़े बिल (तालिका 5)' : 'B2CL — Inter-State to unregistered buyers, invoices above the limit (Table 5)'}
+                    <Badge variant="secondary" className="ml-auto">{b2clSales.length}</Badge>
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    {hi ? 'सीमा: 1 अगस्त 2024 से ₹1 लाख से अधिक (पहले ₹2.5 लाख) — अधिसूचना 12/2024-केंद्रीय कर। ये बिल B2CS में नहीं गिने जाते।' : 'Limit: more than ₹1 lakh from 1 Aug 2024 (₹2.5 lakh before) — Notification 12/2024-Central Tax. These invoices are not counted in B2CS.'}
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{hi ? 'बिल' : 'Invoice'}</TableHead>
+                        <TableHead>{hi ? 'तारीख' : 'Date'}</TableHead>
+                        <TableHead className="text-right">{hi ? 'बिल मूल्य' : 'Invoice Value'}</TableHead>
+                        <TableHead className="text-right">{hi ? 'कर योग्य मूल्य' : 'Taxable Value'}</TableHead>
+                        <TableHead className="text-right">IGST</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {b2clSales.map(sale => (
+                        <TableRow key={sale.id} title={`limit ${b2clThreshold(sale.date)}`}>
+                          <TableCell className="font-mono text-xs">{sale.saleNo}</TableCell>
+                          <TableCell>{sale.date}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(sale.grandTotal)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(sale.netAmount)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(sale.igstAmount)}</TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
                 </CardContent>

@@ -534,7 +534,8 @@
     "test:perf02-lazy-export": "node scripts/test-perf02-lazy-export.mjs",
     "test:schema-snapshot": "node scripts/test-schema-snapshot.mjs",
     "schema:snapshot": "node scripts/schema-snapshot.mjs",
-    "test:perf01-voucher-list": "node scripts/test-perf01-voucher-list.mjs"
+    "test:perf01-voucher-list": "node scripts/test-perf01-voucher-list.mjs",
+    "test:report-leftovers": "node scripts/test-report-leftovers.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
