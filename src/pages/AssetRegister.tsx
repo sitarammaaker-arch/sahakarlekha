@@ -14,7 +14,7 @@ import { Plus, Download, Search, Edit, Trash2, Package, RefreshCw, CheckCircle, 
 import EmptyState from '@/components/EmptyState';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { generateAssetRegisterPDF } from '@/lib/pdf';
+import { generateAssetRegisterPDF } from '@/lib/pdfLazy';
 import type { Asset, AssetCategory, AssetStatus } from '@/types';
 import { standardDepreciationRate, assetRateDeviations } from '@/lib/depreciationRateMaster';
 import { capexPendingAssets } from '@/lib/capexApproval';

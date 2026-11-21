@@ -16,7 +16,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { ScanBarcode, Trash2, Plus, Minus, AlertTriangle, Printer, X, CheckCircle2 } from 'lucide-react';
-import { generateSaleInvoicePDF } from '@/lib/pdf';
+import { generateSaleInvoicePDF } from '@/lib/pdfLazy';
 import { computeCartGst } from '@/lib/consumer/posGst';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';

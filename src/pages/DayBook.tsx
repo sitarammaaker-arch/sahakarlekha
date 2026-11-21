@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { BookOpen, Download, Filter, Wallet, Pencil, Save, X, FileSpreadsheet } from 'lucide-react';
-import { generateDayBookPDF } from '@/lib/pdf';
+import { generateDayBookPDF } from '@/lib/pdfLazy';
 import { useToast } from '@/hooks/use-toast';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import type { VoucherType } from '@/types';

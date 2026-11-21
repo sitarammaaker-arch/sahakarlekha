@@ -11,7 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Scale, Download, CheckCircle, AlertTriangle, Calendar, FileSpreadsheet } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { generateTrialBalancePDF } from '@/lib/pdf';
+import { generateTrialBalancePDF } from '@/lib/pdfLazy';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { isEmptyPeriod } from '@/lib/reportComparative';

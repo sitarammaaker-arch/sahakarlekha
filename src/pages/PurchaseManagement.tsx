@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { PackagePlus, Plus, Trash2, Eye, Pencil, Printer, Search, FileSpreadsheet, Download } from 'lucide-react';
-import { generatePurchaseRecordPDF } from '@/lib/pdf';
+import { generatePurchaseRecordPDF } from '@/lib/pdfLazy';
 import { rcmTaxOutsideTotal } from '@/lib/rcm';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -419,7 +419,8 @@ const PurchaseManagement: React.FC = () => {
       hsn: stockItems.find(s => s.id === it.itemId)?.hsnCode,
     }));
     try {
-      generatePurchaseRecordPDF({
+      // PERF-02: the PDF library loads on this click; the message waits for the file.
+      void generatePurchaseRecordPDF({
         rcmApplicable: rcmTaxOutsideTotal(purchase),
         purchaseNo: purchase.purchaseNo,
         date: purchase.date,
@@ -448,8 +449,7 @@ const PurchaseManagement: React.FC = () => {
         creditDays: purchase.creditDays,
         dueDate: purchase.dueDate,
         narration: purchase.narration,
-      }, society);
-      toast({ title: language === 'hi' ? `Purchase Record: ${purchase.purchaseNo}` : `Purchase Record: ${purchase.purchaseNo}` });
+      }, society).then((r) => { if (r !== null) toast({ title: `Purchase Record: ${purchase.purchaseNo}` }); });
     } catch (err) {
       toast({
         title: language === 'hi' ? 'PDF नहीं बना' : 'Could not generate PDF',

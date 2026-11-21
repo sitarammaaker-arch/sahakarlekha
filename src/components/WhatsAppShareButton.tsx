@@ -21,6 +21,7 @@ import { WHATSAPP_ICON_PATHS, SocialIcon } from '@/lib/socials';
 import { whatsappLink } from '@/lib/whatsappShare';
 import { trackEvent } from '@/lib/analytics';
 import { cn } from '@/lib/utils';
+import { preloadPdf, pdfNow } from '@/lib/pdfLazy';
 
 let fileShareSupport: boolean | undefined;
 function canShareFiles(): boolean {
@@ -69,6 +70,7 @@ export function WhatsAppShareButton({ kind, phone, message, hi, getPdf, iconOnly
   const sharePdf = async () => {
     setBusy(true);
     try {
+      if (!pdfNow()) await preloadPdf();   // PERF-02: normally already loaded when the menu opened
       const file = getPdf();
       if (!file) throw new Error('no pdf');
       // Start the copy but don't await it before share(): Safari drops the tap's user activation across an await.
@@ -96,7 +98,7 @@ export function WhatsAppShareButton({ kind, phone, message, hi, getPdf, iconOnly
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => { if (open) void preloadPdf().catch(() => {}); }}>
       <DropdownMenuTrigger asChild>
         <Button {...btnProps} title={label} aria-label={label} disabled={busy}>{icon}{!iconOnly && label}</Button>
       </DropdownMenuTrigger>

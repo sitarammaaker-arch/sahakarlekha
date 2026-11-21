@@ -25,7 +25,24 @@
  * appears only when `meta` is supplied, and it goes LAST, so the sheet Excel opens on is
  * still the data.
  */
-import * as XLSX from 'xlsx';
+import type * as XLSXTypes from 'xlsx';
+
+// PERF-02 (product audit 2026-11-17): SheetJS (~161 KB gzip) is loaded on the first Excel export, not with every page
+// that can export. loadXlsx() is shared by every caller; buildWorkbook uses the loaded module.
+type XlsxModule = typeof XLSXTypes;
+let xlsxP: Promise<XlsxModule> | null = null;
+let xlsxMod: XlsxModule | null = null;
+export function loadXlsx(): Promise<XlsxModule> {
+  if (!xlsxP) {
+    xlsxP = import('xlsx').then((m) => { xlsxMod = ((m as { default?: XlsxModule }).default ?? m) as XlsxModule; return xlsxMod; });
+    xlsxP.catch(() => { xlsxP = null; });   // a later click may retry
+  }
+  return xlsxP;
+}
+// The app registers how a failed export is shown (a destructive toast); this file stays free of UI imports so the
+// Node tests can load it directly.
+let notifyExportFailed: ((detail: string) => void) | null = null;
+export function setExportFailureNotifier(fn: ((detail: string) => void) | null): void { notifyExportFailed = fn; }
 import { standardFileStem, type NamingSociety } from './exportNaming.ts';
 
 /** Bumped when the JSON envelope's shape changes. Consumers key off this. */
@@ -131,7 +148,9 @@ export function buildReadmeSheet(meta: ExportMeta, sheets: Sheet[]): Sheet | nul
  * PURE — build the workbook. Column widths are sized to the widest cell, as before.
  * Sheet names are truncated to Excel's 31-character limit.
  */
-export function buildWorkbook(sheets: Sheet[], meta?: ExportMeta): XLSX.WorkBook {
+export function buildWorkbook(sheets: Sheet[], meta?: ExportMeta, X: XlsxModule | null = xlsxMod): XLSXTypes.WorkBook {
+  if (!X) throw new Error('xlsx not loaded — await loadXlsx() first');
+  const XLSX = X;
   const all = [...sheets];
   if (meta) {
     const readme = buildReadmeSheet(meta, sheets);
@@ -247,12 +266,19 @@ export function downloadCSV(headers: string[], rows: Cell[][], filename: string)
 /**
  * Download data as Excel (.xlsx). Pass several sheets to get a multi-sheet workbook.
  * Supply `meta` to append a README sheet recording who exported what, when.
+ * PERF-02: resolves true once the file was handed to the browser, false when it could not be made (the user was told
+ * through the registered notifier). Existing callers may ignore the promise.
  */
-export function downloadExcel(sheets: Sheet[], filename: string, meta?: ExportMeta): void {
+export async function downloadExcel(sheets: Sheet[], filename: string, meta?: ExportMeta): Promise<boolean> {
   const now = new Date();
   const base = contextMeta(exportContext, now);
   const merged = base ? { ...base, ...meta } : meta;       // a caller's own meta (e.g. the registry exporter) wins
-  XLSX.writeFile(buildWorkbook(sheets, merged), exportFileName(filename, 'xlsx', exportContext, now));
+  let X: XlsxModule;
+  try { X = await loadXlsx(); } catch (e) { console.error('xlsx load failed:', e); notifyExportFailed?.('load'); return false; }
+  try {
+    X.writeFile(buildWorkbook(sheets, merged, X), exportFileName(filename, 'xlsx', exportContext, now));
+    return true;
+  } catch (e) { console.error('excel export failed:', e); notifyExportFailed?.('build'); return false; }
 }
 
 /** Convenience: single-sheet Excel. */
@@ -262,8 +288,8 @@ export function downloadExcelSingle(
   filename: string,
   sheetName = 'Report',
   meta?: ExportMeta,
-): void {
-  downloadExcel([{ name: sheetName, headers, rows }], filename, meta);
+): Promise<boolean> {
+  return downloadExcel([{ name: sheetName, headers, rows }], filename, meta);
 }
 
 /**

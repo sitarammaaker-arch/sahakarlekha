@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Package, Download, FileSpreadsheet, Info } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { generateClosingStockPDF } from '@/lib/pdf';
+import { generateClosingStockPDF } from '@/lib/pdfLazy';
 import { parseFY } from '@/lib/depreciation';
 import { computeStock, computeStockCostRate } from '@/lib/stockUtils';
 import ReportSignatureRow from '@/components/reports/ReportSignatureRow';

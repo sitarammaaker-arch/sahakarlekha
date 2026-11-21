@@ -2,8 +2,9 @@
 // crashes, 32,767-char cell cap, ".csv.csv" double extension).
 // Run: node scripts/test-export-hardening.mjs   (npm run test:export-hardening)
 import {
-  neutraliseFormula, safeSheetName, stripExt, buildCsv, buildWorkbook,
+  neutraliseFormula, safeSheetName, stripExt, buildCsv, buildWorkbook, loadXlsx,
 } from '../src/lib/exportUtils.ts';
+await loadXlsx();   // PERF-02: SheetJS loads on demand; buildWorkbook uses the loaded module
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

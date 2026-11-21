@@ -15,7 +15,7 @@ import { AccountPicker } from '@/components/AccountPicker';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Building2, Download, CreditCard, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { generateBankBookPDF } from '@/lib/pdf';
+import { generateBankBookPDF } from '@/lib/pdfLazy';
 import { selectableBankIds, bankBookZeroWarning } from '@/lib/reports/bankBookPick';
 import { fmtDate } from '@/lib/dateUtils';
 import { bookWindow } from '@/lib/reports/bookWindow';

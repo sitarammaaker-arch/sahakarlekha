@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ShoppingCart, Download, FileSpreadsheet, Info, ChevronRight, ChevronDown } from 'lucide-react';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
-import { generateSaleRegisterPDF } from '@/lib/pdf';
+import { generateSaleRegisterPDF } from '@/lib/pdfLazy';
 import { fmtDate } from '@/lib/dateUtils';
 import { parseFY } from '@/lib/depreciation';
 import { getBillReceivedMap, getBillStatus, getSaleReturnedMap } from '@/lib/billUtils';

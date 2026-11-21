@@ -9,9 +9,10 @@
 // Run: node scripts/test-export-utils.mjs   (npm run test:export-utils)
 
 import {
-  buildCsv, buildWorkbook, buildReadmeSheet, buildJsonEnvelope,
+  buildCsv, buildWorkbook, buildReadmeSheet, buildJsonEnvelope, loadXlsx,
   EXPORT_SCHEMA_VERSION,
 } from '../src/lib/exportUtils.ts';
+await loadXlsx();   // PERF-02: SheetJS loads on demand; buildWorkbook uses the loaded module
 import * as XLSX from 'xlsx';
 
 let pass = 0, fail = 0;

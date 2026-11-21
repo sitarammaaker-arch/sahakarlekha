@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TrendingUp, TrendingDown, Download, ArrowUp, ArrowDown, FileSpreadsheet, Shield, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { generateIncomeExpenditurePDF } from '@/lib/pdf';
+import { generateIncomeExpenditurePDF } from '@/lib/pdfLazy';
 import { profitLossStatement } from '@/lib/reports/statements';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { reclassifyIncomeExpenditure } from '@/lib/reports/negativeLines';

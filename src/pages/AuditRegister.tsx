@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Plus, Download, Search, Edit, Trash2, ShieldCheck, AlertTriangle, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { generateAuditRegisterPDF } from '@/lib/pdf';
+import { generateAuditRegisterPDF } from '@/lib/pdfLazy';
 import type { AuditObjection, ObjectionStatus, ObjectionCategory } from '@/types';
 import { auditYearOptions, isFyString } from '@/lib/auditYear';
 

@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { generateMemberApplicationPDF } from '@/lib/pdf';
+import { generateMemberApplicationPDF } from '@/lib/pdfLazy';
 import { validateKyc } from '@/lib/kycUtils';
 import { ageOn } from '@/lib/members/voters';
 import { minorWarning } from '@/lib/members/legal';

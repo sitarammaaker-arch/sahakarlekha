@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ShoppingCart, Download, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { generateTradingAccountPDF } from '@/lib/pdf';
+import { generateTradingAccountPDF } from '@/lib/pdfLazy';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { PrintButton, PrintHeader } from '@/components/ReportPrint';
 import { splitNegativeLines } from '@/lib/reports/negativeLines';

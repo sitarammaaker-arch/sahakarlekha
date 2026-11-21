@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { loadXlsx } from '@/lib/exportUtils';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,7 +28,6 @@ import { pdfFileName, addHeader, addPageNumbers } from '@/lib/pdf';
 import autoTable from 'jspdf-autotable';
 import type { BankReconciliationRecord } from '@/types';
 
-import * as XLSX from 'xlsx';
 import { reportError } from '@/lib/errorReporting';
 
 // ── CSV/Excel Import helpers ──────────────────────────────────────────────────
@@ -56,7 +56,9 @@ function parseBankCsv(text: string): CsvRow[] {
   return normalizeBankRows(dataRows);
 }
 
-function parseBankExcel(buffer: ArrayBuffer): CsvRow[] {
+// PERF-02: SheetJS loads when a statement file is actually read (loadXlsx), not with the page.
+async function parseBankExcel(buffer: ArrayBuffer): Promise<CsvRow[]> {
+  const XLSX = await loadXlsx();
   const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
@@ -400,7 +402,7 @@ const BankReconciliation: React.FC = () => {
                 };
                 const reader = new FileReader();
                 if (isExcel) {
-                  reader.onload = ev => processRows(parseBankExcel(ev.target?.result as ArrayBuffer));
+                  reader.onload = ev => { parseBankExcel(ev.target?.result as ArrayBuffer).then(processRows, (err) => toast({ title: language === 'hi' ? 'फ़ाइल नहीं पढ़ी जा सकी' : 'Could not read the file', description: err instanceof Error ? err.message : String(err), variant: 'destructive', duration: 10000 })); };
                   reader.readAsArrayBuffer(file);
                 } else {
                   reader.onload = ev => processRows(parseBankCsv(ev.target?.result as string));

@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { FileSpreadsheet, Download, Calendar, ExternalLink } from 'lucide-react';
-import { generateBalanceSheetPDF } from '@/lib/pdf';
+import { generateBalanceSheetPDF } from '@/lib/pdfLazy';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { isEmptyPeriod, comparative } from '@/lib/reportComparative';

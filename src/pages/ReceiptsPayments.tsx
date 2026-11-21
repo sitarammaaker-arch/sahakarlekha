@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeftRight, Download, FileSpreadsheet } from 'lucide-react';
-import { generateReceiptsPaymentsPDF } from '@/lib/pdf';
+import { generateReceiptsPaymentsPDF } from '@/lib/pdfLazy';
 import { groupWithSubtotals } from '@/lib/reports/groupSubtotals';
 import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import type { ReceiptsPaymentsItem } from '@/types';
