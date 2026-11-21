@@ -48,6 +48,11 @@ const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  âœ
   const m = read('supabase/migrations/178_restore_commit_server.sql');
   const block = m.slice(m.indexOf('insert into public.restore_tables (table_name) values'), m.indexOf('create or replace function public.restore_stage'));
   const sqlTables = new Set([...block.matchAll(/\('([a-z0-9_]+)'\)/g)].map((x) => x[1]));
+  // Tables added to the allowlist by later migrations (e.g. 195 party_identity) count too.
+  const { readdirSync } = await import('node:fs');
+  for (const f of readdirSync(new URL('../supabase/migrations/', import.meta.url)).filter((x) => /^\d{3}_.*\.sql$/.test(x) && !x.endsWith('_down.sql') && x > '178')) {
+    for (const mm of read(`supabase/migrations/${f}`).matchAll(/insert into public\.restore_tables \(table_name\) values \('([a-z0-9_]+)'\)/g)) sqlTables.add(mm[1]);
+  }
   const full = new Set(REGISTRY.filter((e) => e.backupPolicy === 'full' && e.scope === 'society').map((e) => e.table));
   const missing = [...full].filter((t) => !sqlTables.has(t));
   const extra = [...sqlTables].filter((t) => !full.has(t));

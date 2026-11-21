@@ -739,6 +739,27 @@ var hsn = {
     internal4("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]
 };
+var partyIdentity = {
+  key: "party_identity",
+  table: "party_identity",
+  domain: "trade",
+  label: "Party identity (PAN / Aadhaar / bank)",
+  labelHi: "\u092A\u0915\u094D\u0937 \u092A\u0939\u091A\u093E\u0928 (\u092A\u0948\u0928 / \u0906\u0927\u093E\u0930 / \u092C\u0948\u0902\u0915)",
+  minRole: "admin",
+  scope: "society",
+  nature: "master",
+  dependsOn: ["society"],
+  naturalKey: ["entity_type", "entity_id"],
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  optionalTable: true,
+  columns: [
+    c4("entity_type", "Party Type", "\u092A\u0915\u094D\u0937 \u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),
+    c4("entity_id", "Party ID", "\u092A\u0915\u094D\u0937 \u0906\u0908\u0921\u0940"),
+    c4("fields", "PAN / Aadhaar / Bank", "\u092A\u0948\u0928 / \u0906\u0927\u093E\u0930 / \u092C\u0948\u0902\u0915", { type: "json", piiClass: "identity" }),
+    c4("updated_at", "Updated At", "\u0905\u0926\u094D\u092F\u0924\u0928 \u0938\u092E\u092F", { type: "date", defaultVisible: false })
+  ]
+};
 var TRADE_ENTITIES = [
   supplier,
   customer,
@@ -746,7 +767,8 @@ var TRADE_ENTITIES = [
   purchase,
   salesReturn,
   purchaseReturn,
-  hsn
+  hsn,
+  partyIdentity
 ];
 
 // src/lib/export/entities/lending.ts

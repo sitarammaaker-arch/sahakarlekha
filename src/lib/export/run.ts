@@ -28,6 +28,10 @@ import type { EntityDescriptor } from './registry.types';
 import { fetchEntityRows } from './source';
 import { getEntity } from './registry';
 import { applyMemberIdentity, canReadMemberPii } from '@/lib/memberIdentity';
+import { applyPartyIdentity, canReadPartyPii, type PartyType, type PartyIdentityRow } from '@/lib/partyIdentity';
+
+/** DB-09: export entity key → party type whose PII lives in party_identity. */
+const PARTY_TYPE_OF_ENTITY: Record<string, PartyType> = { customer: 'customer', supplier: 'supplier', procurement_farmer: 'farmer', employee: 'employee', worker: 'worker' };
 import {
   exportEntity, ExportDeniedError,
   type ExportEnvironment, type ExportRequest,
@@ -88,6 +92,18 @@ export async function runEntityExport(
       if (idRes.error) return { status: 'read-failed', message: `member_identity: ${idRes.error}` };
       if (idRes.truncated) return { status: 'too-large', fetched: idRes.fetched };
       rows = applyMemberIdentity(rows as { id: string; aadhaar?: string; pan?: string }[], idRes.rows as { member_id: string; aadhaar?: string | null; pan?: string | null }[], canReadMemberPii(env.principal.role)) as typeof rows;
+    }
+  }
+
+  // DB-09: the same overlay for customers / suppliers / farmers / employees / workers (party_identity, migration 195).
+  const partyType = PARTY_TYPE_OF_ENTITY[entity.key];
+  if (partyType) {
+    const pEntity = getEntity('party_identity');
+    if (pEntity) {
+      const pRes = await fetchRows(pEntity, societyId);
+      if (pRes.error) return { status: 'read-failed', message: `party_identity: ${pRes.error}` };
+      if (pRes.truncated) return { status: 'too-large', fetched: pRes.fetched };
+      rows = applyPartyIdentity(rows as { id: string }[], pRes.rows as unknown as PartyIdentityRow[], partyType, canReadPartyPii(env.principal.role, partyType)) as typeof rows;
     }
   }
 

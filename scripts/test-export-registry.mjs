@@ -259,7 +259,7 @@ function parseSchema(sql) {
   // phrase "create table if not exists suppliers (...)" is parsed as a real statement:
   // the body capture then runs to the next `\n);`, swallowing whole tables. That is not
   // hypothetical — a T-12 comment did exactly this.
-  const createRe = /^create table if not exists\s+(\w+)\s*\(([\s\S]*?)\n\);/gim;
+  const createRe = /^create table if not exists\s+(?:public\.)?(\w+)\s*\(([\s\S]*?)\n\);/gim;
   for (const m of sql.matchAll(createRe)) {
     const [, table, body] = m;
     const cols = tables.get(table) ?? new Set();
@@ -286,10 +286,16 @@ function parseSchema(sql) {
 const numberedMigrations = readdirSync(pathResolve(HERE, '../supabase/migrations'))
   .filter((n) => /^\d{3}_.*\.sql$/.test(n) && !n.endsWith('_down.sql')).sort()
   .map((n) => readFileSync(pathResolve(HERE, '../supabase/migrations', n), 'utf8')).join('\n');
+// Since SEC-01 (#911, migration 189) supabase-tables.sql refuses to run on a live database, so a NEW table arrives
+// only through a numbered migration (190+). Those count as base schema for table coverage.
+const postSec01Migrations = readdirSync(pathResolve(HERE, '../supabase/migrations'))
+  .filter((n) => /^\d{3}_.*\.sql$/.test(n) && !n.endsWith('_down.sql') && Number(n.slice(0, 3)) >= 190).sort()
+  .map((n) => readFileSync(pathResolve(HERE, '../supabase/migrations', n), 'utf8')).join('\n');
 const schema = parseSchema(
   readFileSync(pathResolve(HERE, '../supabase-tables.sql'), 'utf8') +
   '\n' +
-  readFileSync(pathResolve(HERE, '../MIGRATIONS.sql'), 'utf8')
+  readFileSync(pathResolve(HERE, '../MIGRATIONS.sql'), 'utf8') +
+  '\n' + postSec01Migrations
 );
 // Columns a numbered migration adds to a known table count as existing (table coverage still reads the base schema).
 const columnSchema = parseSchema(
@@ -366,6 +372,8 @@ const keys = REGISTRY.map(e => e.key).sort();
 const EXPECTED = [
   // T-06 core + member
   'account', 'member', 'member_identity', 'society', 'voucher', 'voucher_entry',
+  // DB-09 (migration 195): PAN / bank of customers, suppliers, farmers, employees, workers
+  'party_identity',
   // T-07 inventory
   'branch', 'godown', 'stock_item', 'stock_movement',
   // T-07 trade

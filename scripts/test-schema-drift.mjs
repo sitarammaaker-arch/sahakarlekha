@@ -54,6 +54,13 @@ const bad = (msg) => { fail++; console.error('  ✗ ' + msg); };
 // Line-anchored: a comment quoting "create table if not exists foo (" is not a statement.
 const sqlText = readFileSync(join(ROOT, 'supabase-tables.sql'), 'utf8');
 const sqlCreates = [...sqlText.matchAll(/^create table if not exists\s+(?:public\.)?(\w+)\s*\(/gim)].map(m => m[1]);
+// Since SEC-01 (#911, migration 189) supabase-tables.sql refuses to run on a live database: a NEW table arrives only
+// through a numbered migration (190+), so those count as declared SQL too.
+const MIG_DIR = join(ROOT, 'supabase', 'migrations');
+for (const n of readdirSync(MIG_DIR).filter((f) => /^\d{3}_.*\.sql$/.test(f) && !f.endsWith('_down.sql') && Number(f.slice(0, 3)) >= 190)) {
+  for (const m of readFileSync(join(MIG_DIR, n), 'utf8').matchAll(/^create table if not exists\s+(?:public\.)?(\w+)\s*\(/gim)) if (!sqlCreates.includes(m[1])) sqlCreates.push(m[1]);
+}
+
 
 const sqlTables = new Set(sqlCreates);
 const sqlDupes = sqlCreates.filter((t, i) => sqlCreates.indexOf(t) !== i);
