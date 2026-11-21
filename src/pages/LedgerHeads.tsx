@@ -725,7 +725,7 @@ const LedgerHeads: React.FC = () => {
       <Dialog open={!!editAccount} onOpenChange={o => { if (!o) { setEditAccount(null); resetForm(); } }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{hi ? 'खाता संपादित करें' : 'Edit Account'} — <span className="font-mono text-sm">{editAccount?.id}</span></DialogTitle>
+            <DialogTitle>{hi ? 'खाता संपादित करें' : 'Edit Account'} — {/* LIVE-07: the readable code, not the raw UUID (full id on hover) */}<span className="font-mono text-sm" title={editAccount?.id}>{editAccount ? (accountCode(editAccount) || '—') : ''}</span></DialogTitle>
             <DialogDescription>
               {hi ? 'नाम और प्रारंभिक शेष बदला जा सकता है' : 'You can edit name and opening balance'}
             </DialogDescription>

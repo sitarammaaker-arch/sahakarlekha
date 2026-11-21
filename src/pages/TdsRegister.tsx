@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { supabase } from '@/lib/supabase';
+import { fetchAllPaged } from '@/lib/supabasePaging';
 import * as storage from '@/lib/storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -112,15 +113,16 @@ const TdsRegister: React.FC = () => {
   const [links, setLinks] = useState<TdsChallanLink[]>(() => storage.getTdsChallanLinks());
   useEffect(() => {
     if (!user?.societyId) { setEntries([]); setChallans([]); setLinks([]); return; }
-    supabase.from('tds_entries').select('*').eq('society_id', user.societyId).then(
+    // NEW-10: page past the 1,000-row response cap (a plain select silently returned only the first 1,000).
+    fetchAllPaged<TdsEntry>('tds_entries', user.societyId).then(
       ({ data, error }) => setEntries(error || !data ? storage.getTdsEntries() : (data as TdsEntry[])),
       () => setEntries(storage.getTdsEntries()),
     );
-    supabase.from('tds_challans').select('*').eq('society_id', user.societyId).then(
+    fetchAllPaged<TdsChallan>('tds_challans', user.societyId).then(
       ({ data, error }) => setChallans(error || !data ? storage.getTdsChallans() : (data as TdsChallan[])),
       () => setChallans(storage.getTdsChallans()),
     );
-    supabase.from('tds_challan_links').select('*').eq('society_id', user.societyId).then(
+    fetchAllPaged<TdsChallanLink>('tds_challan_links', user.societyId, ['entryId']).then(
       ({ data, error }) => setLinks(error || !data ? storage.getTdsChallanLinks() : (data as TdsChallanLink[])),
       () => setLinks(storage.getTdsChallanLinks()),
     );

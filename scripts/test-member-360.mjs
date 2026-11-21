@@ -200,7 +200,7 @@ ok(verticals.dairy.milkFrom === undefined, 'staff snapshot carries no milk windo
 const accountUi = strip2('src/components/member-portal/MemberAccountView.tsx');
 ok(/addEventListener\('beforeprint'/.test(accountUi) && /addEventListener\('afterprint'/.test(accountUi), 'print opener lives in the SHARED view (portal + 360)');
 ok(!/beforeprint/.test(strip2('src/pages/MemberPortal.tsx')), 'no duplicate print opener left in the portal page');
-ok(/print:hidden fixed bottom-5 right-5/.test(strip2('src/components/FeedbackFab.tsx')), 'feedback button is never printed (was overlapping the statement)');
+ok(/print:hidden fixed bottom-3 right-3 sm:bottom-5 sm:right-5/.test(strip2('src/components/FeedbackFab.tsx')), 'feedback button is never printed (was overlapping the statement)');
 const header = strip2('src/components/member-portal/SectionHeader.tsx');
 ok(/print:hidden/.test(header), 'source links are never printed');
 const p360 = strip2('src/pages/Member360.tsx');

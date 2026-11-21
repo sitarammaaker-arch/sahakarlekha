@@ -72,7 +72,8 @@ export const FeedbackFab: React.FC = () => {
       <button
         onClick={() => setOpen(true)}
         aria-label={hi ? 'सुझाव या समस्या बताएँ' : 'Share a suggestion or problem'}
-        className="print:hidden fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-3 shadow-lg hover:shadow-xl transition-shadow"
+        // LIVE-10: smaller, tucked into the corner and see-through on a phone so it does not cover form help text; full size from sm up.
+        className="print:hidden fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-40 inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground p-2.5 sm:px-4 sm:py-3 shadow-lg opacity-80 hover:opacity-100 focus:opacity-100 sm:opacity-100 hover:shadow-xl transition"
       >
         <MessageSquarePlus className="h-5 w-5" />
         <span className="hidden sm:inline text-sm font-medium">{hi ? 'सुझाव / समस्या' : 'Feedback'}</span>

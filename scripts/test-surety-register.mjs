@@ -122,7 +122,7 @@ ok(/if \(!error && suretiesChanged\) saveLoanSureties\(id, updatedSureties \?\? 
 const sv = dc.slice(dc.indexOf('const saveLoanSureties ='), dc.indexOf('const saveLoanInstalment ='));
 ok(/\.update\(\{ sureties \}\)\.eq\('id', loanId\)\.eq\('society_id', societyIdRef\.current\)/.test(sv), 'step 2 updates this society\'s loan only');
 ok(/setLoansState\(prev => prev\.map\(l => l\.id === loanId \? \{ \.\.\.l, sureties: restore \} : l\)\)/.test(sv) && /variant: 'destructive', duration: 15000/.test(sv) && /migration 169/.test(sv), 'a failed step 2 restores the screen and says so loudly, naming the migration');
-ok(/if \(guardFYLocked\(\)\) return;/.test(upd) && /if \(guardFYLocked\(\)\) return \{ \.\.\.data, id: '' \}/.test(add), 'FY-lock guard still first on both');
+ok(/if \(guardFYLocked\(\)\) return false;/.test(upd) &&/if \(guardFYLocked\(\)\) return \{ \.\.\.data, id: '' \}/.test(add), 'FY-lock guard still first on both');
 
 // 6. The column exists everywhere it must.
 const mig = read('supabase/migrations/169_loan_sureties.sql');

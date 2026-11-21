@@ -314,7 +314,8 @@ interface DataContextType {
   closeFinancialYear: (opts?: { attestation?: AuthorityAttestation }) => boolean;
 
   addLoan: (data: Omit<Loan, 'id' | 'loanNo' | 'createdAt'>) => Loan;
-  updateLoan: (id: string, data: Partial<Loan>) => void;
+  /** NEW-08: returns false when a guard refused up front; onSaved runs only once the cloud write landed. */
+  updateLoan: (id: string, data: Partial<Loan>, opts?: { onSaved?: () => void }) => boolean;
   deleteLoan: (id: string) => void;
 
   addAsset: (data: Omit<Asset, 'id' | 'assetNo'>, opts?: { capitalize?: boolean; mode?: 'cash' | 'bank' }) => Asset;
@@ -6708,16 +6709,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return newLoan;
   }, [society.financialYear, accounts, addVoucher, user?.name]);
 
-  const updateLoan = useCallback((id: string, data: Partial<Loan>) => {
-    if (guardFYLocked()) return;
+  const updateLoan = useCallback((id: string, data: Partial<Loan>, opts?: { onSaved?: () => void }): boolean => {
+    if (guardFYLocked()) return false;
     const before = loansRef.current.find(l => l.id === id);
-    if (!before) return;
+    if (!before) return false;
     const suretiesChanged = 'sureties' in data;
-    if (suretiesChanged && refuseBadSureties(data.memberId ?? before.memberId, data.sureties)) return;
+    if (suretiesChanged && refuseBadSureties(data.memberId ?? before.memberId, data.sureties)) return false;
     if (suretiesChanged) data = { ...data, sureties: normalizeSureties(data.sureties) };
     const instalmentChanged = 'monthlyInstallment' in data;
     if (instalmentChanged) {
-      if (refuseBadInstalment(cleanInstalment(data.monthlyInstallment), data.amount ?? before.amount)) return;
+      if (refuseBadInstalment(cleanInstalment(data.monthlyInstallment), data.amount ?? before.amount)) return false;
       data = { ...data, monthlyInstallment: cleanInstalment(data.monthlyInstallment) };
     }
     const updated = { ...before, ...data };
@@ -6730,8 +6731,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         setLoansState(prev => prev.map(l => l.id === id ? before : l));   // RULE 1: roll back to prior state
         toastRef.current({ title: tr('अपडेट सेव नहीं हुआ', 'Update not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}. Refresh करने पर पुराना data वापस आ जाएगा।`, `Not saved to the cloud — ${error.message}. On Refresh the old data will come back.`), variant: 'destructive', duration: 12000 });
+        return;
       }
+      opts?.onSaved?.();   // NEW-08: the page's "Loan updated" toast waits for this
     });
+    return true;
   }, []);
   updateLoanRef.current = updateLoan;
 
