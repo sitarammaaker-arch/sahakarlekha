@@ -32,8 +32,9 @@ const num = (key: string, header: string, headerHi: string, over: Partial<Column
 const internal = (key: string, header: string, headerHi: string, over: Partial<ColumnDescriptor> = {}): ColumnDescriptor =>
   c(key, header, headerHi, { defaultVisible: false, ...over });
 
-/** Tax + total columns shared verbatim by sales and purchases. */
-const taxColumns = (): ColumnDescriptor[] => [
+/** Tax + total columns shared by sales and purchases. TDS exists on purchases only (DB-01: production has no
+ *  sales.tdsPct / sales.tdsAmount, so the sales export carried two always-blank columns). */
+const taxColumns = (opts: { tds?: boolean } = {}): ColumnDescriptor[] => [
   money('totalAmount', 'Total Amount', 'कुल राशि'),
   money('discount', 'Discount', 'छूट'),
   money('netAmount', 'Net Amount', 'शुद्ध राशि'),
@@ -43,8 +44,7 @@ const taxColumns = (): ColumnDescriptor[] => [
   money('cgstAmount', 'CGST', 'सीजीएसटी'),
   money('sgstAmount', 'SGST', 'एसजीएसटी'),
   money('igstAmount', 'IGST', 'आईजीएसटी'),
-  internal('tdsPct', 'TDS %', 'टीडीएस %', { type: 'number' }),
-  money('tdsAmount', 'TDS', 'टीडीएस'),
+  ...(opts.tds ? [internal('tdsPct', 'TDS %', 'टीडीएस %', { type: 'number' }), money('tdsAmount', 'TDS', 'टीडीएस')] : []),
   money('taxAmount', 'Total Tax', 'कुल कर'),
   money('grandTotal', 'Grand Total', 'महायोग'),
 ];
@@ -212,7 +212,7 @@ const purchase: EntityDescriptor = {
     c('supplierPhone', 'Supplier Phone', 'आपूर्तिकर्ता फ़ोन', { piiClass: 'contact' }),
     internal('supplierId', 'Supplier Ref', 'आपूर्तिकर्ता संदर्भ'),
     internal('items', 'Line Items', 'पंक्ति आइटम', { type: 'json' }),
-    ...taxColumns(),
+    ...taxColumns({ tds: true }),
     internal('rcmApplicable', 'RCM Applicable', 'आरसीएम लागू', { type: 'boolean' }),
     c('paymentMode', 'Payment Mode', 'भुगतान माध्यम', { type: 'enum' }),
     internal('creditDays', 'Credit Days', 'उधार दिन', { type: 'number' }),
