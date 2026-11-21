@@ -14,7 +14,7 @@ const body = (src, name) => { const i = src.indexOf(`const ${name} = (`); return
 ok('no console.warn-only delete left in either page', !/console\.warn\(/.test(tds) && !/console\.warn\(/.test(brs));
 for (const [src, fn, label] of [[tds, 'handleDeleteEntry', 'TDS entry'], [tds, 'handleDeleteChallan', 'TDS challan'], [brs, 'deleteReconciliation', 'BRS']]) {
   const b = body(src, fn);
-  ok(`${label}: FY-lock guard`, /fyLocked/.test(b));
+  ok(`${label}: FY-lock guard`, /fyLocked|guardPageWrite\('delete'/.test(b));
   ok(`${label}: verifies rows (.select('id') + !data?.length)`, /\.select\('id'\)/.test(b) && /!data\?\.length/.test(b));
   ok(`${label}: keeps the previous state for rollback`, /const prev/.test(b));
 }

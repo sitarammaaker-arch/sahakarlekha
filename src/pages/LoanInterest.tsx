@@ -73,7 +73,7 @@ const buildDefaultDates = (mode: InterestPeriodMode) => interestPeriodDefaults(m
 const LoanInterest: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { loans, kccLoans: ctxKccLoans, members, vouchers, society, addVoucher, accounts } = useData();
+  const { loans, kccLoans: ctxKccLoans, members, vouchers, society, addVoucher, accounts, guardPageWrite } = useData();
   // KCC loans are edited on the KCC page against its own list — read the table fresh here so a
   // repayment made earlier in this session is never accrued on a stale balance.
   const [freshKcc, setFreshKcc] = useState<KccLoan[] | null>(null);
@@ -193,11 +193,7 @@ const LoanInterest: React.FC = () => {
     const kTotal = kSplit.total;
     const label = kind === 'kcc' ? NARRATION_KCC_ACCRUAL : NARRATION_LOAN_ACCRUAL;
     if (kTotal <= 0) return;
-    if (society.fyLocked) {
-      setConfirmOpen(false);
-      toast({ title: hi ? 'FY लॉक है' : 'FY Locked', description: hi ? 'वित्त वर्ष ऑडिट-लॉक है — ब्याज जर्नल पोस्ट नहीं हो सकता।' : 'Cannot post while the Financial Year is audit-locked.', variant: 'destructive' });
-      return;
-    }
+    if (guardPageWrite('create', toDate)) { setConfirmOpen(false); return; }   // ARCH-07: role / FY lock / plan / period lock — the same refusals as every DataContext save. Checked BEFORE the per-loan rows are saved.
 
     setConfirmOpen(false);
     // RULE 1: each loan's accrual is saved to the cloud FIRST; no per-loan record ⇒ no journal (a

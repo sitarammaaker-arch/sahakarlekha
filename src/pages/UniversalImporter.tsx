@@ -24,6 +24,7 @@ import {
   parseImportNumber,
 } from '@/lib/importTemplates';
 import { matchImportAccount } from '@/lib/importAccountMatch';
+import { createBulkTally } from '@/lib/import/bulkTally';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -285,7 +286,7 @@ const UniversalImporter: React.FC = () => {
       return;
     }
     setMemberImporting(true);
-    let imported = 0;
+    // ARCH-08: the summary waits for the cloud — one handle per member, counted when its save answers (RULE 1).
     let skipped = 0;
     // Same rule addMember applies per member (joiningReceipts) — collected for ONE summary instead of a toast per row.
     const plans: JoiningReceiptPlan[] = [];
@@ -294,6 +295,7 @@ const UniversalImporter: React.FC = () => {
     // `members` is a snapshot from before the loop, so in-file repeats used to slip through as two members.
     const seen = new Set(members.map(m => m.memberId.trim().toLowerCase()));
     let repeatedInFile = 0;
+    const tally = createBulkTally(({ saved: imported, failed }) => finishMemberImport(imported, failed));
     for (const row of validRows) {
       const mid = row.data.member_id.trim();
       const key = mid.toLowerCase();
@@ -333,10 +335,13 @@ const UniversalImporter: React.FC = () => {
         nomineeAddress: row.data.nominee_address?.trim() || undefined,
         nomineeShares: parseInt(row.data.nominee_shares) || undefined,
       };
-      addMember(memberData, { quiet: true });
-      plans.push(planJoiningReceipts(memberData, planOpts));
-      imported++;
+      const h = tally.item();
+      const plan = planJoiningReceipts(memberData, planOpts);
+      const m = addMember(memberData, { quiet: true, onSaved: () => { plans.push(plan); h.ok(); }, onFailed: h.fail });
+      if (!m?.id) h.fail();   // refused before any save (FY lock / offline) — counted, never "imported"
     }
+    tally.close();
+    function finishMemberImport(imported: number, failed: number) {
     setMemberImporting(false);
     setMemberPreview(null);
     const sum = summariseJoiningPlans(plans);
@@ -348,10 +353,14 @@ const UniversalImporter: React.FC = () => {
     const notes = [
       skipped > 0 ? (hi ? `${skipped} सदस्य पहले से थे (वही सदस्य संख्या) — छोड़े गए` : `${skipped} members already existed (same member number) — skipped`) : '',
       repeatedInFile > 0 ? (hi ? `${repeatedInFile} पंक्तियों में सदस्य संख्या फ़ाइल में दोबारा आई — पहली ही ली गई` : `${repeatedInFile} rows repeated a member number in the file — only the first was taken`) : '',
+      failed > 0 ? (hi ? `${failed} सदस्य सेव नहीं हुए — फ़ाइल दोबारा import करें, जो सेव हो चुके वे अपने-आप छूट जाएँगे` : `${failed} members were not saved — import the file again; the ones already saved are skipped`) : '',
     ].filter(Boolean);
     toast({
-      title: hi ? `${imported} Members Import हुए` : `${imported} members imported`,
-      description: notes.length ? notes.join(' · ') : L('सभी members successfully import हो गए', 'All members imported successfully'),
+      title: failed > 0
+        ? (hi ? `${imported} सदस्य सेव हुए, ${failed} सेव नहीं हुए` : `${imported} members saved, ${failed} not saved`)
+        : (hi ? `${imported} Members Import हुए` : `${imported} members imported`),
+      description: notes.length ? notes.join(' · ') : L('सभी members क्लाउड में सेव हो गए', 'All members saved to the cloud'),
+      ...(failed > 0 ? { variant: 'destructive' as const, duration: 12000 } : {}),
     });
     if (sum.historicalMembers > 0) {
       // Old members get no cash receipt — their share belongs in the opening balances (joiningReceipts).
@@ -362,6 +371,7 @@ const UniversalImporter: React.FC = () => {
           : `These members joined before this financial year. Include their share capital ₹${sum.historicalShare}${sum.historicalAdmission ? ` (admission fee ₹${sum.historicalAdmission})` : ''} in the opening balances (Share Capital 1102).`,
         duration: 15000,
       });
+    }
     }
   }
 
@@ -415,10 +425,15 @@ const UniversalImporter: React.FC = () => {
       accounts
     );
 
+    // ARCH-08: the summary waits until every opening's cloud save has answered (RULE 1).
+    const tally = createBulkTally(({ saved, failed }) => finishObImport(saved, failed));
     for (const entry of entries) {
-      updateAccount(entry.accountId, { openingBalance: entry.amount, openingBalanceType: entry.type });
+      const h = tally.item();
+      const started = updateAccount(entry.accountId, { openingBalance: entry.amount, openingBalanceType: entry.type }, { onSaved: h.ok, onFailed: h.fail });
+      if (!started) h.fail();
     }
-
+    tally.close();
+    function finishObImport(saved: number, failed: number) {
     setObImporting(false);
     setObPreview(null);
 
@@ -434,10 +449,17 @@ const UniversalImporter: React.FC = () => {
         duration: 12000,
       });
     }
-    toast({
-      title: hi ? `${entries.length} Opening Balances Set हुए` : `${entries.length} opening balances set`,
-      description: L('Supabase में save हो रहे हैं। कोई cloud error आया तो अलग से चेतावनी दिखेगी। Opening Balances page से verify करें।', 'Saving to the cloud. If a cloud error comes, a separate warning will show. Verify on the Opening Balances page.'),
-    });
+    toast(failed > 0
+      ? {
+        title: hi ? `${saved} Opening Balances सेव हुए, ${failed} सेव नहीं हुए` : `${saved} opening balances saved, ${failed} not saved`,
+        description: L('जो सेव नहीं हुए वे पुराने मान पर लौट गए — फ़ाइल दोबारा import करें।', 'The unsaved ones went back to their old value — import the file again.'),
+        variant: 'destructive' as const, duration: 12000,
+      }
+      : {
+        title: hi ? `${saved} Opening Balances Set हुए` : `${saved} opening balances set`,
+        description: L('सभी क्लाउड में सेव हो गए। Opening Balances page से verify करें।', 'All saved to the cloud. Verify on the Opening Balances page.'),
+      });
+    }
   }
 
   // ── Vouchers (bulk) ──
@@ -474,7 +496,10 @@ const UniversalImporter: React.FC = () => {
     // Idempotency: skip rows whose `reference` was already bulk-imported (re-uploading
     // the same file won't double-post). `seen` also dedupes repeats WITHIN this file.
     const seen = new Set(vouchers.filter(v => v.refType === 'bulk-import' && v.refId).map(v => v.refId!));
-    let imported = 0, skipped = 0, failed = 0;
+    // ARCH-08: "N imported" only once every voucher's cloud save has answered (RULE 1). Rows refused before a save
+    // (no matching ledger, FY lock, imbalance) count as failed straight away.
+    let skipped = 0;
+    const tally = createBulkTally(({ saved, failed }) => finishVoucherImport(saved, failed));
     for (const row of validRows) {
       const ref = (row.data.reference || '').trim();
       const hasRef = ref !== '' && !ref.startsWith('(');
@@ -485,7 +510,8 @@ const UniversalImporter: React.FC = () => {
       const crM = matchImportAccount(row.data.credit_account, accounts);
       const dr = drM.status === 'ok' ? drM.account : undefined;
       const cr = crM.status === 'ok' ? crM.account : undefined;
-      if (!dr || !cr) { failed++; continue; }
+      if (!dr || !cr) { tally.item().fail(); continue; }
+      const h = tally.item();
       const v = addVoucher({
         type: row.data.type.toLowerCase() as VoucherType,
         date: row.data.date.trim(),
@@ -495,11 +521,12 @@ const UniversalImporter: React.FC = () => {
         narration: (row.data.narration || '').trim(),
         createdBy: user?.name || 'Bulk Import',
         ...(hasRef ? { refType: 'bulk-import', refId: ref } : {}),
-      });
-      if (!v.id) { failed++; continue; } // FY-lock / imbalance guard returned a dummy
+      }, { onSaved: h.ok, onFailed: h.fail });
+      if (!v.id) { h.fail(); continue; } // FY-lock / imbalance guard returned a dummy
       if (hasRef) seen.add(ref);
-      imported++;
     }
+    tally.close();
+    function finishVoucherImport(imported: number, failed: number) {
     setVoucherImporting(false);
     setVoucherPreview(null);
     const parts = [];
@@ -507,8 +534,10 @@ const UniversalImporter: React.FC = () => {
     if (failed) parts.push(hi ? `${failed} fail हुए` : `${failed} failed`);
     toast({
       title: hi ? `${imported} वाउचर Import हुए` : `${imported} vouchers imported`,
-      description: parts.length ? parts.join(' · ') : L('सभी वाउचर successfully बन गए। Vouchers / Day Book से verify करें।', 'All vouchers created. Verify from Vouchers / Day Book.'),
+      description: parts.length ? parts.join(' · ') : L('सभी वाउचर क्लाउड में सेव हो गए। Vouchers / Day Book से verify करें।', 'All vouchers saved to the cloud. Verify from Vouchers / Day Book.'),
+      ...(failed > 0 ? { variant: 'destructive' as const, duration: 12000 } : {}),
     });
+    }
   }
 
   // ── Opening checks shown under a preview, BEFORE import (2026-10-11) ──

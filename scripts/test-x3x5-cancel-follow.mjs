@@ -27,7 +27,7 @@ const dc = read('src/contexts/DataContext.tsx');
 // ── DataContext: registry + follow on the confirmed paths ──
 {
   ok(/registerVoucherCancelFollower: \(key: string, follower: VoucherCancelFollower\) => \(\) => void;/.test(dc), 'DataContext exposes registerVoucherCancelFollower');
-  ok((dc.match(/cancelVoucher, registerVoucherOwner, registerVoucherCancelFollower, reverseVoucher,/g) || []).length === 2, '…in both context values');
+  ok((dc.match(/cancelVoucher, (?:guardPageWrite, )?registerVoucherOwner, registerVoucherCancelFollower, reverseVoucher,/g) || []).length === 2, '…in both context values');
   const cv = dc.slice(dc.indexOf('const cancelVoucher = useCallback('), dc.indexOf('\n  }, []);', dc.indexOf('const cancelVoucher = useCallback(')));
   ok((cv.match(/if \(!opts\?\.viaParent\) \{ loanFollowsCancel\(current\); followCancel\(current\); \}/g) || []).length === 3, 'followers run after a CONFIRMED direct cancel on all three paths (a module cancelling its own document does not)');
   const fc = dc.slice(dc.indexOf('const followCancel = '), dc.indexOf('const followedBy = '));

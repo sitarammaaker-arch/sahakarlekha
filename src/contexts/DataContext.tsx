@@ -214,6 +214,10 @@ interface DataContextType {
   /** X-4: rollback = an app flow taking back the voucher it just posted (no delete role needed — server withdraw_voucher).
    *  X-3: onCancelled / onFailed fire once the cloud has answered (the boolean only says the cancel was STARTED). */
   cancelVoucher: (id: string, reason: string, deletedBy: string, opts?: { viaParent?: boolean; rollback?: boolean; onCancelled?: () => void; onFailed?: (message: string) => void }) => boolean;
+  /** ARCH-07: the refusals every DataContext mutation applies, for a page that writes its own table (TDS register, bank
+   *  reconciliation, loan accruals, distribution runs): offline / failed load, role, FY lock, expired plan (new entries
+   *  only) and period lock on every supplied date. Returns TRUE when BLOCKED and has already told the user why. */
+  guardPageWrite: (action: 'create' | 'update' | 'delete', ...dates: (string | undefined)[]) => boolean;
   /** H: a domain context registers who owns its vouchers; returns the unregister fn. */
   registerVoucherOwner: (key: string, check: VoucherOwnerCheck) => () => void;
   /** X-5: told about every CONFIRMED direct cancel of a voucher whose refType it lists (takes the amount back off its document). */
@@ -1094,6 +1098,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (guardPermission('create', tr('वाउचर बनाने', 'create vouchers'))) return true;
     if (guardFYLocked()) return true;
     if (guardSubscriptionExpired()) return true;
+    if (guardPeriodLock(...dates)) return true;
+    return false;
+  }, [guardPermission, guardFYLocked, guardSubscriptionExpired, guardPeriodLock]);
+  // ARCH-07: one guard for the pages that write their own tables (see the interface). Same order and toasts as
+  // guardVoucherPostable; an expired plan pauses NEW entries only (edits and deletes of existing rows still work).
+  const guardPageWrite = useCallback((action: 'create' | 'update' | 'delete', ...dates: (string | undefined)[]): boolean => {
+    const what = action === 'create' ? tr('नई एंट्री बनाने', 'create entries') : action === 'update' ? tr('एंट्री बदलने', 'edit entries') : tr('एंट्री हटाने', 'delete entries');
+    if (guardPermission(action, what)) return true;
+    if (guardFYLocked()) return true;
+    if (action === 'create' && guardSubscriptionExpired()) return true;
     if (guardPeriodLock(...dates)) return true;
     return false;
   }, [guardPermission, guardFYLocked, guardSubscriptionExpired, guardPeriodLock]);
@@ -8933,7 +8947,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlements: procurementSettlementsView, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment, cancelProcurementLot,
-    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, registerVoucherCancelFollower, reverseVoucher, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
+    addVoucher, updateVoucher, cancelVoucher, guardPageWrite, registerVoucherOwner, registerVoucherCancelFollower, reverseVoucher, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
@@ -8972,7 +8986,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlementsView, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment, cancelProcurementLot,
-    addVoucher, updateVoucher, cancelVoucher, registerVoucherOwner, registerVoucherCancelFollower, reverseVoucher, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
+    addVoucher, updateVoucher, cancelVoucher, guardPageWrite, registerVoucherOwner, registerVoucherCancelFollower, reverseVoucher, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,

@@ -70,7 +70,7 @@ const TODAY = new Date().toISOString().split('T')[0];
 
 const BankReconciliation: React.FC = () => {
   const { language } = useLanguage();
-  const { vouchers, accounts, society, getAccountBalance, clearVoucher, unclearVoucher, addVoucher } = useData();
+  const { vouchers, accounts, society, getAccountBalance, clearVoucher, unclearVoucher, addVoucher, guardPageWrite } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const hi = language === 'hi';
@@ -201,7 +201,7 @@ const BankReconciliation: React.FC = () => {
   const persistRecords = (next: BankReconciliationRecord[]) => { setRecords(next); storage.setBankReconciliations(next); };
 
   const saveReconciliation = () => {
-    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', description: hi ? 'ऑडिट-लॉक होने पर सहेज नहीं सकते।' : 'Cannot save while FY is audit-locked.', variant: 'destructive' }); return; }
+    if (guardPageWrite('create', asOfDate)) return;   // ARCH-07: role / FY lock / plan / period lock — the same refusals as every DataContext save.
     if (!activeBankId) { toast({ title: hi ? 'बैंक खाता चुनें' : 'Select a bank account', variant: 'destructive' }); return; }
     if (statementBalance === '') { toast({ title: hi ? 'पहले स्टेटमेंट शेष दर्ज करें' : 'Enter the statement balance first', variant: 'destructive' }); return; }
     const rec: BankReconciliationRecord = {
@@ -226,7 +226,7 @@ const BankReconciliation: React.FC = () => {
   };
 
   const deleteReconciliation = (id: string) => {
-    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', description: hi ? 'ऑडिट-लॉक होने पर हटा नहीं सकते।' : 'Cannot delete while FY is audit-locked.', variant: 'destructive' }); return; }
+    if (guardPageWrite('delete', records.find(r => r.id === id)?.asOfDate)) return;   // ARCH-07: role / FY lock / plan / period lock — the same refusals as every DataContext save.
     const prev = records;
     persistRecords(records.filter(r => r.id !== id));
     // RULE 1 (TAX-02): RLS can refuse with 0 rows and NO error — count the rows, not just the error.
