@@ -1,0 +1,824 @@
+{
+  "note": "GENERATED from vercel.json by scripts/cloudflare-config.mjs — do not edit by hand",
+  "redirects": [
+    {
+      "re": "^/blog/category$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/guide/bhumika$",
+      "to": "/guide/introduction",
+      "status": 308
+    },
+    {
+      "re": "^/guide/samapan$",
+      "to": "/guide/conclusion",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-1$",
+      "to": "/guide/accounting-foundations",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-2$",
+      "to": "/guide/society-setup-and-roles",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-3$",
+      "to": "/guide/chart-of-accounts",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-4$",
+      "to": "/guide/opening-balances",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-5$",
+      "to": "/guide/member-management",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-6$",
+      "to": "/guide/voucher-types",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-7$",
+      "to": "/guide/sales-entries",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-8$",
+      "to": "/guide/purchase-entries",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-9$",
+      "to": "/guide/inventory-management",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-10$",
+      "to": "/guide/bill-wise-settlement",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-11$",
+      "to": "/guide/salary-management",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-12$",
+      "to": "/guide/daybook-and-ledger",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-13$",
+      "to": "/guide/trial-balance",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-14$",
+      "to": "/guide/trading-account",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-15$",
+      "to": "/guide/income-and-expenditure",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-16$",
+      "to": "/guide/balance-sheet",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-17$",
+      "to": "/guide/receipts-and-payments",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-18$",
+      "to": "/guide/gst-management",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-19$",
+      "to": "/guide/tds-and-26q",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-20$",
+      "to": "/guide/depreciation",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-21$",
+      "to": "/guide/stock-valuation",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-22$",
+      "to": "/guide/profit-distribution",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-23$",
+      "to": "/guide/statutory-returns",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-24$",
+      "to": "/guide/year-end-and-fy-lock",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-25$",
+      "to": "/guide/audit-preparation",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-26$",
+      "to": "/guide/data-security-and-backup",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-27$",
+      "to": "/guide/golden-rules",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-28$",
+      "to": "/guide/case-study-full-year",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-29$",
+      "to": "/guide/special-registers",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-30$",
+      "to": "/guide/comprehensive-faq",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-31$",
+      "to": "/guide/msp-procurement-entries",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-32$",
+      "to": "/guide/society-type-entries",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-33$",
+      "to": "/guide/error-rectification-entries",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-34$",
+      "to": "/guide/financial-ratios-and-lifecycle",
+      "status": 308
+    },
+    {
+      "re": "^/guide/adhyay-35$",
+      "to": "/guide/expense-dictionary",
+      "status": 308
+    },
+    {
+      "re": "^/guide/parishisht-a$",
+      "to": "/guide/standard-chart-of-accounts",
+      "status": 308
+    },
+    {
+      "re": "^/guide/parishisht-b$",
+      "to": "/guide/glossary",
+      "status": 308
+    },
+    {
+      "re": "^/guide/parishisht-c$",
+      "to": "/guide/report-to-statutory-form-map",
+      "status": 308
+    },
+    {
+      "re": "^/guide/parishisht-d$",
+      "to": "/guide/quick-reference-card",
+      "status": 308
+    },
+    {
+      "re": "^/guide/parishisht-e$",
+      "to": "/guide/year-end-checklist",
+      "status": 308
+    },
+    {
+      "re": "^/guide/parishisht-f$",
+      "to": "/guide/exercise-answers",
+      "status": 308
+    },
+    {
+      "re": "^/guide/parishisht-g$",
+      "to": "/guide/voucher-entry-quick-reference",
+      "status": 308
+    },
+    {
+      "re": "^/guide/parishisht-h$",
+      "to": "/guide/account-name-glossary",
+      "status": 308
+    },
+    {
+      "re": "^/guide/parishisht-i$",
+      "to": "/guide/troubleshooting-guide",
+      "status": 308
+    },
+    {
+      "re": "^/guide/parishisht-j$",
+      "to": "/guide/society-type-quick-card",
+      "status": 308
+    },
+    {
+      "re": "^/guide/quiz/bhag-1$",
+      "to": "/guide/quiz/part-1",
+      "status": 308
+    },
+    {
+      "re": "^/guide/quiz/bhag-2$",
+      "to": "/guide/quiz/part-2",
+      "status": 308
+    },
+    {
+      "re": "^/guide/quiz/bhag-3$",
+      "to": "/guide/quiz/part-3",
+      "status": 308
+    },
+    {
+      "re": "^/guide/quiz/bhag-4$",
+      "to": "/guide/quiz/part-4",
+      "status": 308
+    },
+    {
+      "re": "^/guide/quiz/bhag-5$",
+      "to": "/guide/quiz/part-5",
+      "status": 308
+    },
+    {
+      "re": "^/guide/quiz/bhag-6$",
+      "to": "/guide/quiz/part-6",
+      "status": 308
+    },
+    {
+      "re": "^/guide/quiz/bhag-7$",
+      "to": "/guide/quiz/part-7",
+      "status": 308
+    },
+    {
+      "re": "^/guide/quiz/bhag-8$",
+      "to": "/guide/quiz/part-8",
+      "status": 308
+    },
+    {
+      "re": "^/guide/quiz/bhag-9$",
+      "to": "/guide/quiz/part-9",
+      "status": 308
+    },
+    {
+      "re": "^/guide/quiz/bhag-10$",
+      "to": "/guide/quiz/part-10",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-society-cash-book-format$",
+      "to": "/blog/cash-book-vs-bank-book",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-society-agm-notice-agenda-minutes-format$",
+      "to": "/blog/agm-preparation-checklist",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-society-member-register-rule-22-format$",
+      "to": "/blog/member-and-share-accounting",
+      "status": 308
+    },
+    {
+      "re": "^/cm-pacs-bye-laws-amendment-dissolution$",
+      "to": "/blog/cooperative-society-byelaws",
+      "status": 308
+    },
+    {
+      "re": "^/cm-pacs-reserve-fund-rule-74$",
+      "to": "/blog/profit-distribution-and-reserves",
+      "status": 308
+    },
+    {
+      "re": "^/section-28-haryana-cooperative-societies-act-election-rules$",
+      "to": "/blog/cooperative-society-elections",
+      "status": 308
+    },
+    {
+      "re": "^/amul-safalta-ki-kahani-anand-pattern$",
+      "to": "/blog/amul-anand-pattern-dairy-cooperative",
+      "status": 308
+    },
+    {
+      "re": "^/iffco-safalta-ki-kahani$",
+      "to": "/blog/iffco-fertiliser-cooperative",
+      "status": 308
+    },
+    {
+      "re": "^/cm-pacs-gst-mutuality-members-supply$",
+      "to": "/blog/gst-for-cooperatives",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-society-registration-documents-checklist$",
+      "to": "/blog/how-to-register-a-cooperative-society",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-society-registration-process-online-guide$",
+      "to": "/blog/how-to-register-a-cooperative-society",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-society-audit-records-guide$",
+      "to": "/blog/how-cooperative-society-audit-works",
+      "status": 308
+    },
+    {
+      "re": "^/epfo-wage-ceiling-25000-haryana-cooperative-employees$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/hafed-cms-employees-union-reminder-7-demands-sept-2026$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/vamnicom-pune-faculty-recruitment-2026$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/hafed-194q-tds-cooperative-marketing-societies-dispute$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-marketing-cooperative-societies-data-letter-performa-guide-2026$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/belagavi-dcc-bank-recruitment-2026$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/apcob-recruitment-338-posts-2026$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/upcisb-bharti-pariksha-2026$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/kribhco-senior-manager-junior-accounts-assistant-job$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/hpscb-cooperative-intern-bharti-2026$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/rbi-urban-co-operative-banks-idpic-equity-shares$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-group-housing-society-rti-registrar-sic$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-employees-sanyukt-morcha-kurukshetra-sept-2026$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-pacs-count-discrepancy-622-to-804-analysis$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/palwal-cooperative-seminar-gaurav-gautam-fact-check$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-pacs-profitable-33-to-51-scdc-review-2026$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/hafed-work-allocation-policy-cooperative-societies-2026$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/telangana-pacs-elections-nominated-committee-dispute$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/bholath-cooperative-society-property-sale-dispute$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/%e0%a4%9d%e0%a4%9c%e0%a5%8d%e0%a4%9c%e0%a4%b0-%e0%a4%b8%e0%a4%b9%e0%a4%95%e0%a4%be%e0%a4%b0%e0%a5%80-%e0%a4%ac%e0%a5%88%e0%a4%82%e0%a4%95-%e0%a4%a8%e0%a4%bf%e0%a4%b2%e0%a4%82%e0%a4%ac%e0%a4%a8$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-banks-vacant-posts-recruitment-2026$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cm-pacs-804-pacs-33-profitable-budget-analysis$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/ncui-cyber-security-fraud-prevention-training-cooperative-banks$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cotton-farmers-subsidy-pacs-cooperative-2026$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/hafed-paddy-commission-union-struggle-analysis$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/national-cooperation-policy-implementation-roadmap$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/sahakarita-mantralay-5-saal-uplabdhiyan$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-pacs-rural-cooperatives-strengthening$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/hafed-paddy-commission-haryana$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/assam-cooperative-society-online-registration$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/ncdc-cooperative-handloom-sector-roadmap$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/nafed-fpo-bizconnect-market-linkages$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/ncui-students-mother-dairy-cooperative-education$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/ncdc-amendment-bill-2026-cooperative-direct-finance$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/nucfdc-bank-in-a-box-urban-cooperative-banks$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/pacs-model-hr-policy-2026-staffing-recruitment$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/national-cooperation-policy-2025-cooperative-law-impact$",
+      "to": "/blog",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-society-agm-rules-deadline-2026$",
+      "to": "/blog/agm-preparation-checklist",
+      "status": 308
+    },
+    {
+      "re": "^/sahakari-samiti-rti-dhara-2h-registrar-adhikar$",
+      "to": "/blog/rti-and-cooperative-societies",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-society-complaint-where-to-go$",
+      "to": "/blog/cooperative-society-dispute-resolution-haryana",
+      "status": 308
+    },
+    {
+      "re": "^/section-27-haryana-cooperative-societies-act-registrar-resolution-suspend$",
+      "to": "/blog/cooperative-society-dispute-resolution-haryana",
+      "status": 308
+    },
+    {
+      "re": "^/section-102-haryana-cooperative-societies-act-civil-court-jurisdiction$",
+      "to": "/blog/cooperative-society-dispute-resolution-haryana",
+      "status": 308
+    },
+    {
+      "re": "^/cooperative-society-government-body-high-court-article-226-haryana$",
+      "to": "/blog/cooperative-society-writ-jurisdiction-article-226",
+      "status": 308
+    },
+    {
+      "re": "^/cm-pacs-legal-status-section-4-object-test$",
+      "to": "/blog/cm-pacs-kya-hai",
+      "status": 308
+    },
+    {
+      "re": "^/cm-pacs-kya-hai-haryana-sahkari-samiti$",
+      "to": "/blog/cm-pacs-kya-hai",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cm-pacs-activities-business-opportunities$",
+      "to": "/blog/cm-pacs-kya-hai",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-societies-act-1984-complete-guide$",
+      "to": "/blog/haryana-cooperative-act-1984-rules-1989-guide",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-societies-rules-1989-guide$",
+      "to": "/blog/haryana-cooperative-act-1984-rules-1989-guide",
+      "status": 308
+    },
+    {
+      "re": "^/multi-state-cooperative-society-member-rights-ombudsman-election$",
+      "to": "/blog/multi-state-cooperative-society-member-rights",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-society-member-rights-guide$",
+      "to": "/blog/membership-rights-and-duties",
+      "status": 308
+    },
+    {
+      "re": "^/cm-pacs-registration-process-haryana$",
+      "to": "/blog/cm-pacs-registration-process-haryana",
+      "status": 308
+    },
+    {
+      "re": "^/cm-pacs-documents-checklist-registration$",
+      "to": "/blog/cm-pacs-registration-process-haryana",
+      "status": 308
+    },
+    {
+      "re": "^/cm-pacs-registration-time-fees-haryana$",
+      "to": "/blog/cm-pacs-registration-process-haryana",
+      "status": 308
+    },
+    {
+      "re": "^/cm-pacs-accounting-audit-basics$",
+      "to": "/blog/cm-pacs-accounting-tax-audit-guide",
+      "status": 308
+    },
+    {
+      "re": "^/cm-pacs-income-tax-section-80p-exemption$",
+      "to": "/blog/cm-pacs-accounting-tax-audit-guide",
+      "status": 308
+    },
+    {
+      "re": "^/cm-pacs-common-mistakes-haryana$",
+      "to": "/blog/cm-pacs-common-mistakes",
+      "status": 308
+    },
+    {
+      "re": "^/pm-kusum-pacs-haryana-solar-income-model$",
+      "to": "/blog/pm-kusum-pacs-solar-power-haryana",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-pacs-employees-job-security-act-2024$",
+      "to": "/blog/haryana-pacs-job-security-act-eligibility",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-pacs-service-rules-recruitment-disputes$",
+      "to": "/blog/haryana-pacs-cms-service-rules-recruitment-guide",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-pacs-cms-recruitment-rules$",
+      "to": "/blog/haryana-pacs-cms-service-rules-recruitment-guide",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-societies-ex-gratia-policy-guide$",
+      "to": "/blog/haryana-cms-ex-gratia-compassionate-policy",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-pacs-cms-epf-esi-ehs-exemption-rules$",
+      "to": "/blog/haryana-pacs-cms-epf-esi-exemption-rules",
+      "status": 308
+    },
+    {
+      "re": "^/nandini-sahakar-yojana-mahila$",
+      "to": "/blog/ncdc-cooperative-credit-schemes-nandini-yuva-chini-mill",
+      "status": 308
+    },
+    {
+      "re": "^/yuva-sahakar-yojana-ncdc$",
+      "to": "/blog/ncdc-cooperative-credit-schemes-nandini-yuva-chini-mill",
+      "status": 308
+    },
+    {
+      "re": "^/sahakari-chini-mill-adhunikikaran-rin$",
+      "to": "/blog/ncdc-cooperative-credit-schemes-nandini-yuva-chini-mill",
+      "status": 308
+    },
+    {
+      "re": "^/dalhan-tilhan-msp-kharid-nafed-nccf$",
+      "to": "/blog/dalhan-tilhan-msp-procurement-nafed-nccf",
+      "status": 308
+    },
+    {
+      "re": "^/pacs-godown-yojana-anna-bhandaran$",
+      "to": "/blog/pacs-godown-grain-storage-scheme-ami-aif-nabard",
+      "status": 308
+    },
+    {
+      "re": "^/pacs-grain-storage-scheme-ami-aif-nabard-2026$",
+      "to": "/blog/pacs-godown-grain-storage-scheme-ami-aif-nabard",
+      "status": 308
+    },
+    {
+      "re": "^/sewa-safalta-ki-kahani$",
+      "to": "/blog/cooperative-success-stories-sewa-ulccs-lijjat-papad",
+      "status": 308
+    },
+    {
+      "re": "^/ulccs-safalta-ki-kahani-kerala$",
+      "to": "/blog/cooperative-success-stories-sewa-ulccs-lijjat-papad",
+      "status": 308
+    },
+    {
+      "re": "^/lijjat-papad-safalta-ki-kahani$",
+      "to": "/blog/cooperative-success-stories-sewa-ulccs-lijjat-papad",
+      "status": 308
+    },
+    {
+      "re": "^/ignou-swayam-free-course-cooperatives$",
+      "to": "/blog/cooperative-management-courses-career-guide",
+      "status": 308
+    },
+    {
+      "re": "^/irma-anand-pgdm-rural-management$",
+      "to": "/blog/cooperative-management-courses-career-guide",
+      "status": 308
+    },
+    {
+      "re": "^/hdcm-higher-diploma-cooperative-management-ricm$",
+      "to": "/blog/cooperative-management-courses-career-guide",
+      "status": 308
+    },
+    {
+      "re": "^/vamnicom-pune-pgdm-agribusiness-course$",
+      "to": "/blog/cooperative-management-courses-career-guide",
+      "status": 308
+    },
+    {
+      "re": "^/tribhuvan-sahkari-university-course-admission$",
+      "to": "/blog/cooperative-management-courses-career-guide",
+      "status": 308
+    },
+    {
+      "re": "^/nddb-kya-hai-shwet-kranti-sahkari-sanstha$",
+      "to": "/blog/nddb-white-revolution-dairy-cooperative",
+      "status": 308
+    },
+    {
+      "re": "^/bharat-taxi-cooperative-model-driver-owner$",
+      "to": "/blog/bharat-taxi-cooperative-model-driver-ownership",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-development-history-1947-2026$",
+      "to": "/blog/haryana-cooperative-movement-history-1947-2026",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-schemes-eligibility-application-record$",
+      "to": "/blog/haryana-cooperative-department-schemes-guide",
+      "status": 308
+    },
+    {
+      "re": "^/gaurav-mehla-supreme-court-cooperative-society-appointment$",
+      "to": "/blog/gaurav-mehla-supreme-court-cooperative-recruitment-case",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-society-membership-application-form$",
+      "to": "/blog/haryana-cooperative-society-membership-application-guide",
+      "status": 308
+    },
+    {
+      "re": "^/haryana-cooperative-society-board-resolution-format$",
+      "to": "/blog/haryana-cooperative-society-board-resolution-guide",
+      "status": 308
+    },
+    {
+      "re": "^/en/(?<seg>activity-income-expenditure|advance-register|agency-receipts|aging-analysis|amc|analytics|ask|asset-register|audit-certificate|audit-register|audit-schedules|audit-trail|backup-restore|balance-sheet|bank-book|bank-reconciliation|barcode-labels|bills-outstanding|board-of-directors|branches|budget-module|buildings|cash-book|charge-heads|closing-stock-report|complaints|compliance-calendar|compound-voucher|consumer-dividend|consumer-registers|cooperative-software|customers|dairy-distribution|dairy-inputs|dairy-rate-charts|dairy-registers|dashboard|day-book|dealer-compliance|deleted-vouchers|department-bills|department-master|deposits|depreciation-schedule|downloads|election-module|email-unsubscribe|eway-bill|expiry-damage|export-center|farmer-settlement|features|federation-report|flats-register|form1-member-list|fund-register|fund-statement|godowns|group-schedule|gst-summary|gstr-9|hsn-master|hub|insurance|inventory|kachi-aarat|kcc-loan|ledger|ledger-heads|ledger-hygiene|legal-documents|loan-interest|loan-register|login|maintenance-billing|make-payment|meeting-register|member|member-application|member-credit|member-statement|members|milk-collection|milk-dispatch|multi-society-consolidation|muster-roll|my-dashboard|nabard-report|nomination-register|opening-balances|outstanding-register|parking|partner|patronage|payroll|pf-esi|price-lists|procurement-lots|procurement-masters|procurement-match|procurement-registers|profit-distribution|profit-loss|purchase-orders|purchase-register|purchase-return|purchases|receipts-payments|receive-payment|recoverables|register|reports|reserve-fund|reset-password|restore-center|retail-counter|sadasya|salary|sale-register|sales|sales-return|search|share-nomination-register|share-register|society-setup|software|statutory-reconciliation|stock-valuation|super-admin|suppliers|surplus-appropriation|tds-form16a|tds-register|trading-account|transfer-register|transport|transport-trips|transport-vehicles|trial-balance|universal-importer|user-management|vehicle-expenses|vehicle-profit|verify-backup|verify-email|voters-list|voucher-approval|vouchers|wage-register|wage-slip|work-order-profit|work-orders|worker-advances|worker-ledger|worker-master)$",
+      "to": "/:seg",
+      "status": 307
+    },
+    {
+      "re": "^/en/(?<seg>activity-income-expenditure|advance-register|agency-receipts|aging-analysis|amc|analytics|ask|asset-register|audit-certificate|audit-register|audit-schedules|audit-trail|backup-restore|balance-sheet|bank-book|bank-reconciliation|barcode-labels|bills-outstanding|board-of-directors|branches|budget-module|buildings|cash-book|charge-heads|closing-stock-report|complaints|compliance-calendar|compound-voucher|consumer-dividend|consumer-registers|cooperative-software|customers|dairy-distribution|dairy-inputs|dairy-rate-charts|dairy-registers|dashboard|day-book|dealer-compliance|deleted-vouchers|department-bills|department-master|deposits|depreciation-schedule|downloads|election-module|email-unsubscribe|eway-bill|expiry-damage|export-center|farmer-settlement|features|federation-report|flats-register|form1-member-list|fund-register|fund-statement|godowns|group-schedule|gst-summary|gstr-9|hsn-master|hub|insurance|inventory|kachi-aarat|kcc-loan|ledger|ledger-heads|ledger-hygiene|legal-documents|loan-interest|loan-register|login|maintenance-billing|make-payment|meeting-register|member|member-application|member-credit|member-statement|members|milk-collection|milk-dispatch|multi-society-consolidation|muster-roll|my-dashboard|nabard-report|nomination-register|opening-balances|outstanding-register|parking|partner|patronage|payroll|pf-esi|price-lists|procurement-lots|procurement-masters|procurement-match|procurement-registers|profit-distribution|profit-loss|purchase-orders|purchase-register|purchase-return|purchases|receipts-payments|receive-payment|recoverables|register|reports|reserve-fund|reset-password|restore-center|retail-counter|sadasya|salary|sale-register|sales|sales-return|search|share-nomination-register|share-register|society-setup|software|statutory-reconciliation|stock-valuation|super-admin|suppliers|surplus-appropriation|tds-form16a|tds-register|trading-account|transfer-register|transport|transport-trips|transport-vehicles|trial-balance|universal-importer|user-management|vehicle-expenses|vehicle-profit|verify-backup|verify-email|voters-list|voucher-approval|vouchers|wage-register|wage-slip|work-order-profit|work-orders|worker-advances|worker-ledger|worker-master)(?<path>(?:/.*)?)$",
+      "to": "/:seg/:path*",
+      "status": 307
+    },
+    {
+      "re": "^/en/guide/quiz$",
+      "to": "/guide/quiz",
+      "status": 307
+    },
+    {
+      "re": "^/en/guide/quiz(?<path>(?:/.*)?)$",
+      "to": "/guide/quiz/:path*",
+      "status": 307
+    }
+  ],
+  "spa": [
+    "^/(about|activity-income-expenditure|advance-register|agency-receipts|aging-analysis|amc|analytics|ask|asset-register|audit-certificate|audit-register|audit-schedules|audit-trail|backup-restore|balance-sheet|bank-book|bank-reconciliation|barcode-labels|bills-outstanding|board-of-directors|branches|budget-module|buildings|cash-book|charge-heads|closing-stock-report|complaints|compliance-calendar|compound-voucher|consumer-dividend|consumer-registers|contact|customers|dairy-distribution|dairy-inputs|dairy-rate-charts|dairy-registers|dashboard|day-book|dealer-compliance|deleted-vouchers|department-bills|department-master|deposits|depreciation-schedule|downloads|editorial-policy|election-module|email-unsubscribe|eway-bill|expiry-damage|export-center|faq|farmer-settlement|features|federation-report|flats-register|form1-member-list|fund-register|fund-statement|godowns|group-schedule|gst-summary|gstr-9|hsn-master|hub|insurance|inventory|kachi-aarat|kcc-loan|ledger|ledger-heads|ledger-hygiene|legal-documents|loan-interest|loan-register|login|maintenance-billing|make-payment|meeting-register|member|member-application|member-credit|member-statement|members|milk-collection|milk-dispatch|multi-society-consolidation|muster-roll|my-dashboard|nabard-report|nomination-register|opening-balances|outstanding-register|parking|partner|patronage|payroll|pf-esi|price-lists|pricing|privacy|procurement-lots|procurement-masters|procurement-match|procurement-registers|profit-distribution|profit-loss|purchase-orders|purchase-register|purchase-return|purchases|receipts-payments|receive-payment|recoverables|register|reports|reserve-fund|reset-password|restore-center|retail-counter|sadasya|salary|sale-register|sales|sales-return|search|share-nomination-register|share-register|society-setup|statutory-reconciliation|stock-valuation|super-admin|suppliers|surplus-appropriation|tds-form16a|tds-register|terms|trading-account|transfer-register|transport|transport-trips|transport-vehicles|trial-balance|universal-importer|user-management|vehicle-expenses|vehicle-profit|verify-backup|verify-email|voters-list|voucher-approval|vouchers|wage-register|wage-slip|work-order-profit|work-orders|worker-advances|worker-ledger|worker-master)$",
+    "^/(about|activity-income-expenditure|advance-register|agency-receipts|aging-analysis|amc|analytics|ask|asset-register|audit-certificate|audit-register|audit-schedules|audit-trail|backup-restore|balance-sheet|bank-book|bank-reconciliation|barcode-labels|bills-outstanding|board-of-directors|branches|budget-module|buildings|cash-book|charge-heads|closing-stock-report|complaints|compliance-calendar|compound-voucher|consumer-dividend|consumer-registers|contact|customers|dairy-distribution|dairy-inputs|dairy-rate-charts|dairy-registers|dashboard|day-book|dealer-compliance|deleted-vouchers|department-bills|department-master|deposits|depreciation-schedule|downloads|editorial-policy|election-module|email-unsubscribe|eway-bill|expiry-damage|export-center|faq|farmer-settlement|features|federation-report|flats-register|form1-member-list|fund-register|fund-statement|godowns|group-schedule|gst-summary|gstr-9|hsn-master|hub|insurance|inventory|kachi-aarat|kcc-loan|ledger|ledger-heads|ledger-hygiene|legal-documents|loan-interest|loan-register|login|maintenance-billing|make-payment|meeting-register|member|member-application|member-credit|member-statement|members|milk-collection|milk-dispatch|multi-society-consolidation|muster-roll|my-dashboard|nabard-report|nomination-register|opening-balances|outstanding-register|parking|partner|patronage|payroll|pf-esi|price-lists|pricing|privacy|procurement-lots|procurement-masters|procurement-match|procurement-registers|profit-distribution|profit-loss|purchase-orders|purchase-register|purchase-return|purchases|receipts-payments|receive-payment|recoverables|register|reports|reserve-fund|reset-password|restore-center|retail-counter|sadasya|salary|sale-register|sales|sales-return|search|share-nomination-register|share-register|society-setup|statutory-reconciliation|stock-valuation|super-admin|suppliers|surplus-appropriation|tds-form16a|tds-register|terms|trading-account|transfer-register|transport|transport-trips|transport-vehicles|trial-balance|universal-importer|user-management|vehicle-expenses|vehicle-profit|verify-backup|verify-email|voters-list|voucher-approval|vouchers|wage-register|wage-slip|work-order-profit|work-orders|worker-advances|worker-ledger|worker-master)(?<path>(?:/.*)?)$"
+  ],
+  "headers": [
+    {
+      "re": "^/assets/(.*)$",
+      "set": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
+    },
+    {
+      "re": "^/(.*)$",
+      "set": {
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
+      }
+    },
+    {
+      "re": "^/(activity-income-expenditure|advance-register|agency-receipts|aging-analysis|amc|analytics|asset-register|audit-certificate|audit-register|audit-schedules|audit-trail|backup-restore|balance-sheet|bank-book|bank-reconciliation|barcode-labels|bills-outstanding|board-of-directors|branches|budget-module|buildings|cash-book|charge-heads|closing-stock-report|complaints|compliance-calendar|consumer-dividend|consumer-registers|customers|dairy-distribution|dairy-inputs|dairy-rate-charts|dairy-registers|dashboard|day-book|dealer-compliance|deleted-vouchers|department-bills|department-master|deposits|depreciation-schedule|election-module|eway-bill|expiry-damage|export-center|farmer-settlement|features|federation-report|flats-register|form1-member-list|fund-register|fund-statement|godowns|group-schedule|gst-summary|gstr-9|hsn-master|hub|insurance|inventory|kachi-aarat|kcc-loan|ledger|ledger-heads|ledger-hygiene|legal-documents|loan-interest|loan-register|maintenance-billing|meeting-register|member|member-application|member-credit|member-statement|members|milk-collection|milk-dispatch|multi-society-consolidation|muster-roll|my-dashboard|nabard-report|nomination-register|opening-balances|outstanding-register|parking|patronage|payroll|pf-esi|price-lists|procurement-lots|procurement-masters|procurement-match|procurement-registers|profit-loss|purchase-orders|purchase-register|purchase-return|purchases|receipts-payments|recoverables|reports|reset-password|restore-center|retail-counter|sadasya|salary|sale-register|sales|sales-return|share-nomination-register|share-register|society-setup|statutory-reconciliation|stock-valuation|super-admin|suppliers|surplus-appropriation|tds-form16a|tds-register|trading-account|transfer-register|transport|transport-trips|transport-vehicles|trial-balance|universal-importer|user-management|vehicle-expenses|vehicle-profit|voters-list|voucher-approval|vouchers|wage-register|wage-slip|work-order-profit|work-orders|worker-advances|worker-ledger|worker-master)$",
+      "set": {
+        "X-Robots-Tag": "noindex"
+      }
+    },
+    {
+      "re": "^/(activity-income-expenditure|advance-register|agency-receipts|aging-analysis|amc|analytics|asset-register|audit-certificate|audit-register|audit-schedules|audit-trail|backup-restore|balance-sheet|bank-book|bank-reconciliation|barcode-labels|bills-outstanding|board-of-directors|branches|budget-module|buildings|cash-book|charge-heads|closing-stock-report|complaints|compliance-calendar|consumer-dividend|consumer-registers|customers|dairy-distribution|dairy-inputs|dairy-rate-charts|dairy-registers|dashboard|day-book|dealer-compliance|deleted-vouchers|department-bills|department-master|deposits|depreciation-schedule|election-module|eway-bill|expiry-damage|export-center|farmer-settlement|features|federation-report|flats-register|form1-member-list|fund-register|fund-statement|godowns|group-schedule|gst-summary|gstr-9|hsn-master|hub|insurance|inventory|kachi-aarat|kcc-loan|ledger|ledger-heads|ledger-hygiene|legal-documents|loan-interest|loan-register|maintenance-billing|meeting-register|member|member-application|member-credit|member-statement|members|milk-collection|milk-dispatch|multi-society-consolidation|muster-roll|my-dashboard|nabard-report|nomination-register|opening-balances|outstanding-register|parking|patronage|payroll|pf-esi|price-lists|procurement-lots|procurement-masters|procurement-match|procurement-registers|profit-loss|purchase-orders|purchase-register|purchase-return|purchases|receipts-payments|recoverables|reports|reset-password|restore-center|retail-counter|sadasya|salary|sale-register|sales|sales-return|share-nomination-register|share-register|society-setup|statutory-reconciliation|stock-valuation|super-admin|suppliers|surplus-appropriation|tds-form16a|tds-register|trading-account|transfer-register|transport|transport-trips|transport-vehicles|trial-balance|universal-importer|user-management|vehicle-expenses|vehicle-profit|voters-list|voucher-approval|vouchers|wage-register|wage-slip|work-order-profit|work-orders|worker-advances|worker-ledger|worker-master)(?<path>(?:/.*)?)$",
+      "set": {
+        "X-Robots-Tag": "noindex"
+      }
+    }
+  ]
+}

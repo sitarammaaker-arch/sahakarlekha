@@ -1,0 +1,18 @@
+// Cloudflare Workers hosting for sahakarlekha.com (2026-11-21). Static files come straight from dist/ (built by
+// `npm run build`, then `node scripts/cloudflare-config.mjs --write` adds dist/_headers). cloudflare/worker.js runs
+// only when no file matches: redirects, the SPA shell for app routes, a real 404 otherwise, and /api/subscribe.
+// Deploy: npm run deploy:cloudflare   (needs `npx wrangler login` once, by the account owner)
+// Secrets (set by the owner, never in this file): npx wrangler secret put RESEND_API_KEY / RESEND_FROM
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sahakarlekha",
+  "main": "cloudflare/worker.js",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "drop-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "observability": { "enabled": true }
+}
