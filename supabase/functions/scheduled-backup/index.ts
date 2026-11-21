@@ -21,12 +21,18 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { AwsClient } from 'npm:aws4fetch@1.0.20';
-import { buildArchive, archiveFileName, planArchive, REGISTRY, BACKUP_FORMAT_VERSION, evaluate321, resolveJurisdiction } from '../_shared/backup-core.mjs';
+import { buildArchive, archiveFileName, planArchive, REGISTRY, BACKUP_FORMAT_VERSION, evaluate321, resolveJurisdiction, encryptArchive } from '../_shared/backup-core.mjs';
 import { planRetention } from '../_shared/retention-plan.mjs';
 import { resolvePlacements } from '../_shared/placement-config.mjs';
 import { pickDueSocieties, attemptsFromAuditRows } from '../_shared/backup-due.mjs';
 
 const PAGE = 1000;
+// DB-10 (audit 2026-11-17): the platform backup key. When set, every scheduled archive is sealed with it
+// (AES-256-GCM, PBKDF2-SHA256 600k — the SAME `.slbak` container the browser writes, src/lib/backup/crypto.ts) BEFORE it
+// is uploaded to Storage or replicated off-vendor, so neither copy is readable without the key. The founder keeps
+// an offline copy of it; Restore Center / Verify Backup open the file with it. Unset → plain archives (as before),
+// reported as `encrypted: false` in the result and the audit row so the gap stays visible.
+const ENC_PASSPHRASE = Deno.env.get('BACKUP_ENCRYPTION_PASSPHRASE') ?? '';
 // Per-table row ceiling. A table above this makes buildArchive refuse (no partial backups),
 // which — before this slice — silently dropped the biggest societies from the weekly backup.
 // Env-overridable so the cap can be raised without a redeploy (Slice 2) and so the failure
@@ -204,9 +210,21 @@ async function backupSociety(supabase: any, societyId: string) {
 
   const filename = archiveFileName(meta.societyName, meta.financialYear, createdAt);
   const path = `${societyId}/${filename}`;
+  // DB-10: seal the archive before ANY copy leaves this function (both copies get the same sealed bytes).
+  const encrypted = !!ENC_PASSPHRASE;
+  const stored: Uint8Array = encrypted
+    ? await encryptArchive(archive, ENC_PASSPHRASE, {
+        formatVersion: BACKUP_FORMAT_VERSION,
+        societyName: meta.societyName,
+        registrationNo: meta.registrationNo,
+        financialYear: meta.financialYear,
+        createdAt,
+        trigger: 'scheduled',
+      })
+    : archive;
   const { error: upErr } = await supabase.storage
     .from(BUCKET)
-    .upload(path, archive, { contentType: 'application/zip', upsert: false });
+    .upload(path, stored, { contentType: encrypted ? 'application/octet-stream' : 'application/zip', upsert: false });
   if (upErr) throw new Error(`storage upload failed: ${upErr.message}`);
 
   // ── T-36 · the second, off-vendor copy ─────────────────────────────────────
@@ -215,7 +233,7 @@ async function backupSociety(supabase: any, societyId: string) {
   let secondaryLanded: { provider: string; region: string; jurisdiction: string } | null = null;
   let offVendor = 'not configured';
   if (S3_ENABLED) {
-    const rep = await replicateOffVendor(path, archive);
+    const rep = await replicateOffVendor(path, stored);
     if (rep.ok) { secondaryLanded = { provider: S3_PROVIDER, region: S3_REGION, jurisdiction: S3_JURISDICTION }; offVendor = 'landed'; }
     else { offVendor = `failed: ${rep.error}`; }
   }
@@ -252,7 +270,8 @@ async function backupSociety(supabase: any, societyId: string) {
       action: 'export',
       before: null,
       after: {
-        trigger: 'scheduled', filename, path, byteSize: archive.length,
+        trigger: 'scheduled', filename, path, byteSize: stored.length,
+        encrypted,   // DB-10 — never the key itself
         entityCount: manifest.totals.entityCount, rowCount: manifest.totals.rowCount,
         manifestHash: manifest.manifestHash,
         // T-36: where the copies actually landed, and how that placement grades (DP-P4).
@@ -267,7 +286,7 @@ async function backupSociety(supabase: any, societyId: string) {
     if (error) recorded = false;
   } catch { recorded = false; }
 
-  return { societyId, ok: true, filename, path, bytes: archive.length, entities: manifest.totals.entityCount, rows: manifest.totals.rowCount, recorded };
+  return { societyId, ok: true, filename, path, bytes: stored.length, encrypted, entities: manifest.totals.entityCount, rows: manifest.totals.rowCount, recorded };
 }
 
 /**

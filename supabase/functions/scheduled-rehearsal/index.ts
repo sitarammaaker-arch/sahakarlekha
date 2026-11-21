@@ -23,7 +23,7 @@
  *     (schedule it AFTER scheduled-backup so the archive being rehearsed is fresh.)
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { REGISTRY, loadArchive, runRehearsal } from '../_shared/rehearsal-core.mjs';
+import { REGISTRY, loadArchive, runRehearsal, decryptArchive, isEncryptedArchive } from '../_shared/rehearsal-core.mjs';
 
 const PAGE = 1000;
 const MAX_ROWS = 50_000;
@@ -81,7 +81,19 @@ async function rehearseSociety(supabase: any, societyId: string) {
   const path = `${societyId}/${latest.name}`;
   const { data: blob, error: dlErr } = await supabase.storage.from(BUCKET).download(path);
   if (dlErr || !blob) throw new Error(`download failed: ${dlErr?.message ?? 'no bytes'}`);
-  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const raw = new Uint8Array(await blob.arrayBuffer());
+  // DB-10: a sealed archive is opened with the platform backup key (and the previous one, during a key rotation).
+  let bytes = raw;
+  if (isEncryptedArchive(raw)) {
+    const keys = [Deno.env.get('BACKUP_ENCRYPTION_PASSPHRASE'), Deno.env.get('BACKUP_ENCRYPTION_PASSPHRASE_PREVIOUS')].filter((k): k is string => !!k);
+    if (!keys.length) return { societyId, ok: false, reason: 'encrypted-no-key', backup: latest.name, recorded: false };
+    let opened: Uint8Array | null = null;
+    for (const k of keys) {
+      try { opened = await decryptArchive(raw, k); break; } catch { /* try the next key */ }
+    }
+    if (!opened) return { societyId, ok: false, reason: 'encrypted-wrong-key', backup: latest.name, recorded: false };
+    bytes = opened;
+  }
 
   const now = new Date().toISOString();
   const outcome = await runRehearsal({
