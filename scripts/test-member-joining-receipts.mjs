@@ -63,7 +63,7 @@ const appr = dc.slice(dc.indexOf('const approveMember = useCallback'), dc.indexO
 ok('approveMember uses the helper and no longer builds cash receipts itself', /postJoiningReceipts\(approved,/.test(appr) && !/ACCOUNT_IDS\.CASH/.test(appr));
 ok('no other place builds a member joining receipt', (dc.match(/Share Capital received from \$\{/g) || []).length === 0);
 const imp = readFileSync(pathResolve(HERE, '../src/pages/UniversalImporter.tsx'), 'utf8');
-ok('importer adds quietly and plans with the same rule', /addMember\(memberData, \{ quiet: true \}\)/.test(imp) && /plans\.push\(planJoiningReceipts\(memberData, planOpts\)\)/.test(imp));
+ok('importer adds quietly and plans with the same rule', /addMember\(memberData, \{ quiet: true,/.test(imp) && /const plan = planJoiningReceipts\(memberData, planOpts\)/.test(imp) && /onSaved: \(\) => \{ plans\.push\(plan\)/.test(imp));
 ok('importer shows one historical summary', /summariseJoiningPlans\(plans\)/.test(imp) && /पुराने सदस्य — नकद रसीद नहीं बनी/.test(imp));
 
 console.log(`\nMember joining receipts: ${pass} passed, ${fail} failed`);

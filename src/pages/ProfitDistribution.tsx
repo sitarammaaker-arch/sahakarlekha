@@ -66,7 +66,7 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean; section?: '
   const showDividend = section !== 'bonus';
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { vouchers, accounts, members, society, getProfitLoss, addVoucher, getShareCapitalReconciliation, getAccountBalance } = useData();
+  const { vouchers, accounts, members, society, getProfitLoss, addVoucher, getShareCapitalReconciliation, getAccountBalance, guardPageWrite } = useData();
   const shareRecon = getShareCapitalReconciliation();   // ECR-05: dividend reads the member (subsidiary) base — enforce it ties to the control ledger first
   const { toast } = useToast();
 
@@ -171,7 +171,7 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean; section?: '
   const settlementRows = dividendSplit.rows;
 
   const freezeLegacySplit = async () => {
-    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    if (guardPageWrite('update')) return;   // ARCH-07: role / FY lock / plan / period lock — the same refusals as every DataContext save.
     if (!existingDivVoucher || dividendSplit.source !== 'proportional' || settlementRows.length === 0) return;
     const prior = existingRunFor(distributionRuns, fy, 'dividend');
     const res = await saveRun({
@@ -185,7 +185,7 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean; section?: '
   };
 
   const settleDividend = () => {
-    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    if (guardPageWrite('create', payDate)) return;   // ARCH-07: role / FY lock / plan / period lock — the same refusals as every DataContext save.
     if (!divPosted || divPaid || settlementRows.length === 0) return;
     const creditAcc = payMode === 'bank' ? defaultBankAccountId(accounts) : '3301';
     let n = 0;
@@ -235,10 +235,7 @@ export const ProfitDistributionPanel: React.FC<{ embedded?: boolean; section?: '
 
   const handlePost = async () => {
     // RULE 6: nothing is written while the FY is audit-locked (the run is saved before the voucher).
-    if (society.fyLocked) {
-      toast({ title: 'FY Locked', description: hi ? 'FY ऑडिट-लॉक है — कोई बदलाव नहीं हो सकता।' : 'Cannot modify data while Financial Year is audit-locked.', variant: 'destructive' });
-      return;
-    }
+    if (guardPageWrite('create', new Date().toISOString().split('T')[0])) return;   // ARCH-07: role / FY lock / plan / period lock — the same refusals as every DataContext save. The run is saved BEFORE the voucher, so a refusal must come first.
     // Guard: the statutory dividend cap (never post a dividend the law forbids).
     if (dividendCapIssue && effDividend > 0) {
       toast({ title: hi ? 'लाभांश दर क़ानूनी सीमा से अधिक' : 'Dividend rate above the legal cap', description: `${hi ? dividendCapIssue.hi : dividendCapIssue.en} (${dividendCapIssue.cite})`, variant: 'destructive', duration: 10000 });

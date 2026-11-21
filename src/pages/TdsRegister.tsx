@@ -93,7 +93,7 @@ const EMPTY_CHALLAN = (): Omit<TdsChallan, 'id' | 'createdAt'> => ({
 const TdsRegister: React.FC = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { purchases: allPurchases, suppliers, society, matchesActiveBranch, salaryRecords: allSalaryRecords, employees, accounts, vouchers, addVoucher, cancelVoucher } = useData();
+  const { purchases: allPurchases, suppliers, society, matchesActiveBranch, salaryRecords: allSalaryRecords, employees, accounts, vouchers, addVoucher, cancelVoucher, guardPageWrite } = useData();
   // ECR-17: honour the active branch (same rule as GstSummary / the registers).
   const purchases = useMemo(() => allPurchases.filter(p => matchesActiveBranch(p.branchId)), [allPurchases, matchesActiveBranch]);
   /* Salary is NOT branch-scoped — `SalaryRecord` has no branchId (verified, not assumed:
@@ -258,7 +258,7 @@ const TdsRegister: React.FC = () => {
 
   // Assign an entry to a challan ('' = unlink). RULE-1 rollback on cloud-fail.
   const setEntryChallan = (entryId: string, challanId: string) => {
-    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    if (guardPageWrite('update')) return;   // ARCH-07: role / FY lock / plan / period lock — the same refusals as every DataContext save.
     const prev = links;
     persistLinks(challanId ? [...links.filter(l => l.entryId !== entryId), { entryId, challanId }] : links.filter(l => l.entryId !== entryId));
     if (challanId) {
@@ -275,7 +275,7 @@ const TdsRegister: React.FC = () => {
 
   // Add manual entry
   const handleAddEntry = () => {
-    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', description: hi ? 'ऑडिट-लॉक होने पर जोड़ नहीं सकते।' : 'Cannot add while FY is audit-locked.', variant: 'destructive' }); return; }
+    if (guardPageWrite('create', entryForm.date)) return;   // ARCH-07: role / FY lock / plan / period lock — the same refusals as every DataContext save.
     const entry: TdsEntry = {
       ...entryForm,
       id: crypto.randomUUID(),
@@ -304,7 +304,7 @@ const TdsRegister: React.FC = () => {
   // deducting TDS created actually comes down. Order: the voucher first (its guards — FY / period lock — decide), the challan row
   // second, and a failed cloud save of the row cancels the voucher again (RULE 1).
   const handleAddChallan = () => {
-    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', description: hi ? 'ऑडिट-लॉक होने पर जोड़ नहीं सकते।' : 'Cannot add while FY is audit-locked.', variant: 'destructive' }); return; }
+    if (guardPageWrite('create', challanForm.challanDate)) return;   // ARCH-07: role / FY lock / plan / period lock — the same refusals as every DataContext save.
     const challanId = crypto.randomUUID();
     let voucherId: string | undefined;
     if (challanForm.status === 'paid' && postChallanVoucher) {
@@ -373,7 +373,7 @@ const TdsRegister: React.FC = () => {
     toast({ title: hi ? `${what} नहीं हटा` : `${what} not deleted`, description: hi ? `क्लाउड में सेव नहीं हुआ — ${msg}. बदलाव वापस लिया गया; refresh पर भी वही दिखेगा।` : `Not saved to the cloud — ${msg}. The change was undone; a refresh will show the same.`, variant: 'destructive', duration: 12000 });
   };
   const handleDeleteEntry = (id: string) => {
-    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    if (guardPageWrite('delete', entries.find(e => e.id === id)?.date)) return;   // ARCH-07: role / FY lock / plan / period lock — the same refusals as every DataContext save.
     // Automatic entries (purchase / salary) are not rows of tds_entries — change their source document instead.
     if (id.startsWith('sal-') || id.startsWith('pur-')) return;
     const prev = entries;
@@ -384,7 +384,7 @@ const TdsRegister: React.FC = () => {
     }, () => failDelete(hi ? 'TDS एंट्री' : 'TDS entry', 'network', () => persistEntries(prev)));
   };
   const handleDeleteChallan = (id: string) => {
-    if (society.fyLocked) { toast({ title: hi ? 'FY लॉक' : 'FY Locked', variant: 'destructive' }); return; }
+    if (guardPageWrite('delete', challans.find(c => c.id === id)?.challanDate)) return;   // ARCH-07: role / FY lock / plan / period lock — the same refusals as every DataContext save.
     // RULE 3: the challan's ledger voucher goes with it. If it cannot be cancelled (period lock, approval), nothing is deleted.
     // X-3: the vouchers are cancelled one after another, each waiting for the cloud to CONFIRM the previous one; the
     // challan goes only after the last. A refusal (now or late from the cloud) stops here with the challan intact.

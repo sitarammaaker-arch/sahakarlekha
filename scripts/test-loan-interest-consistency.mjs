@@ -24,7 +24,7 @@ ok(/const outstanding = Math\.max\(0, outstandingOf \? outstandingOf\(l\) : loan
 ok(/'ब्याज योग्य बकाया'/.test(li) && /value=\{fmt\(rows\.reduce\(\(s, r\) => s \+ r\.outstanding, 0\)\)\}/.test(li), 'card = interest-bearing outstanding (sum of the rows), labelled so');
 ok(!/'कुल बकाया'/.test(li), 'no second "कुल बकाया" that disagrees with the Loan Register');
 const post = li.slice(li.indexOf('const handlePost'), li.indexOf('const csvHeaders'));
-ok(/if \(society\.fyLocked\)/.test(post) && post.indexOf('society.fyLocked') < post.indexOf('addVoucher('), 'FY-lock checked before posting (RULE 6)');
+ok(/if \(guardPageWrite\('create', toDate\)\)/.test(post) && post.indexOf('guardPageWrite(') < post.indexOf('addVoucher('), 'FY-lock checked before posting (RULE 6, via ARCH-07 guardPageWrite)');
 ok(/const v = addVoucher\(/.test(post) && /if \(!v\?\.id\)/.test(post), 'refused voucher detected');
 ok(post.indexOf('if (!v?.id)') < post.indexOf('ब्याज जर्नल पोस्ट हो गया'), 'success toast only after the voucher exists');
 ok(/अतिदेय ब्याज संचय" \(2211\)/.test(li) && /धारा 87 व्याख्या/.test(li), 'page states the s.87 overdue-interest treatment (H2-1 supersedes the interim note)');

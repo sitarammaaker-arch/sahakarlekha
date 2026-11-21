@@ -102,7 +102,7 @@ ok(frozen.length === 2 && frozen.every((l) => l.amount === 100 && l.base === 100
 const strip = (f) => readFileSync(pathResolve(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
 const page = strip('src/pages/ProfitDistribution.tsx');
 const post = page.slice(page.indexOf('const handlePost = async'), page.indexOf('setConfirmOpen(false)', page.indexOf('const handlePost = async')));
-ok(/if \(society\.fyLocked\)/.test(post), 'RULE 6: handlePost bails when FY is locked');
+ok(/if \(guardPageWrite\('create'/.test(post), 'RULE 6: handlePost bails when FY is locked (ARCH-07 guardPageWrite)');
 ok(post.indexOf('await saveRun(run)') > -1 && post.indexOf('await saveRun(run)') < post.indexOf('addVoucher('), 'RULE 1: the split is saved to the cloud BEFORE the voucher is created');
 ok(/if \(!saved\.ok && !tableMissing\) \{[\s\S]*?variant: 'destructive', duration: 10000,\s*\}\);\s*\} else \{[\s\S]*?addVoucher\(/.test(post), 'failed save (table present) ⇒ destructive toast ≥10s and NO voucher (addVoucher only in the else branch)');
 ok(/amount: total,/.test(post), 'voucher amount = the run total (never out of step)');
@@ -110,7 +110,7 @@ ok(/amount: total,/.test(post), 'voucher amount = the run total (never out of st
 ok(/const tableMissing = failure === 'table-missing';/.test(post) && /classifyRunSaveError\(saved\)/.test(post) && /if \(!saved\.ok && !tableMissing\)/.test(post), 'before 066 is run (table missing) the page posts the old way with a warning — year-end never blocked');
 ok(/dividendBreakdown\(\{ run: liveDividendRun/.test(page) && /const settlementRows = dividendSplit\.rows/.test(page), 'payment uses the frozen split (not a fresh share-capital split)');
 ok(/user\?\.role === 'admin' && \(\s*<Button[^>]*onClick=\{freezeLegacySplit\}/.test(page), '"हिस्से पक्के करें" is admin-only');
-ok(/const freezeLegacySplit = async \(\) => \{\s*if \(society\.fyLocked\)/.test(page), 'freeze respects the FY lock');
+ok(/const freezeLegacySplit = async \(\) => \{\s*if \(guardPageWrite\('update'\)\)/.test(page), 'freeze respects the FY lock');
 const hook = strip('src/hooks/useDistributionRuns.ts');
 ok(/const \{ error \} = await supabase\.from\(TABLE\)\.upsert/.test(hook) && hook.indexOf('if (error) return') < hook.indexOf('setRuns((prev)'), 'hook is non-optimistic: state changes only after the cloud confirmed');
 const mig = strip('supabase/migrations/066_member_distribution_runs.sql');
