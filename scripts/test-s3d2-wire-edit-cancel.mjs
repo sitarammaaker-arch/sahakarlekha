@@ -45,8 +45,8 @@ console.log('DataContext wiring');
 const dc = readFileSync(pathResolve(SRC, 'contexts/DataContext.tsx'), 'utf8');
 const between = (from, to) => { const a = dc.indexOf(from); return dc.slice(a, dc.indexOf(to, a)); };
 const upd = between('const updateVoucher = useCallback(', 'const cancelVoucher = useCallback(');
-const updRpc = upd.slice(upd.indexOf('// ── S3-d posting service'), upd.indexOf('// ── journal-first-write (slice 6)'));
-ok('updateVoucher: RPC branch sits before the journal-first and default paths', updRpc.length > 200);
+const updRpc = upd.slice(upd.indexOf('// ── S3-d posting service'), upd.indexOf('// ── Client save'));   // ARCH-06: journal-first removed
+ok('updateVoucher: RPC branch sits before the client-save path', updRpc.length > 200);
 ok('updateVoucher: gated on the flag and a non-pending voucher', /if \(postingServiceRef\.current && current\.approvalStatus !== 'pending'\)/.test(updRpc));
 ok("updateVoucher: calls edit_voucher with the lib payload", /supabase\.rpc\('edit_voucher', \{ \.\.\.p, p_producer:/.test(updRpc) && /buildEditVoucherPayload\(updatedVoucher[,)]/.test(updRpc));
 ok('updateVoucher: error AND network rejection → revertEdit + destructive toast + reportError', (updRpc.match(/revertEdit\(\)/g) || []).length >= 2 /* + S4-a pending branch (104) */ && /variant: 'destructive', duration: 15000/.test(updRpc) && /reportError\('voucher-edit-post-service'/.test(updRpc));
@@ -61,7 +61,7 @@ ok('persistVoucherEditEvents: reads this voucher\'s events from ledger_events an
   /const persistVoucherEditEvents = async[\s\S]*?\.from\('ledger_events'\)[\s\S]*?\.eq\('aggregate_id', voucher\.id\)[\s\S]*?insert\(events\.map\(toLedgerEventRow\)\)[\s\S]*?variant: 'destructive'/.test(dc));
 
 const can = between('const cancelVoucher = useCallback(', 'const reverseVoucher = useCallback(');
-const canRpc = can.slice(can.indexOf('// ── S3-d posting service'), can.indexOf('// ── journal-first-write (slice 6)'));
+const canRpc = can.slice(can.indexOf('// ── S3-d posting service'), can.indexOf('// ── Emergency switch'));   // ARCH-06: journal-first removed
 ok('cancelVoucher: RPC branch after every business guard and before the other paths', canRpc.length > 200 && can.indexOf('// ── S3-d posting service') > can.indexOf("current.refType === 'wage.accrual'"));
 ok('cancelVoucher: calls cancel_voucher(id, reason, deletedBy)', /supabase\.rpc\(opts\?\.rollback \? 'withdraw_voucher' : 'cancel_voucher', \{ p_id: id, p_reason: reason, p_deleted_by: deletedBy \?\? null \}\)/.test(canRpc));
 ok('cancelVoucher: error AND network rejection → un-cancel + destructive toast + reportError', (canRpc.match(/undoCancel\(\)/g) || []).length === 2 && /variant: 'destructive', duration: 15000/.test(canRpc) && /reportError\('voucher-cancel-post-service'/.test(canRpc));

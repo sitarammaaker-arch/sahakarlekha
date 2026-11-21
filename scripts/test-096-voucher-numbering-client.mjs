@@ -21,7 +21,7 @@ const rpc = async (s, b, f) => { calls.push([s, b, f]); return 1940; };
 ok('issueOfficialNumber sequences a voucher number on (book, YYYY/YY) — the server key', (await issueOfficialNumber(rpc, 'S1', 'RV/2026/27/017')) === 'RV/2026/27/1940' && calls[0][1] === 'RV' && calls[0][2] === '2026/27');
 
 const dc = readFileSync(resolve(root, 'src/contexts/DataContext.tsx'), 'utf8');
-const ps = dc.slice(dc.indexOf('if (postingServiceRef.current && shadowEvent) {'), dc.indexOf('// ── Default (flag OFF)'));
+const ps = dc.slice(dc.indexOf('if (postingServiceRef.current && shadowEvent) {'), dc.indexOf('// ── Client save: the emergency switch'));   // ARCH-06
 ok('posting path no longer pre-issues a number', !ps.includes('issueOfficialNumber(') && /attempt\(newVoucher, 0\);/.test(ps));
 ok('posting path restamps the official number post_voucher returns', /const officialNo = \(data as \{ voucherNo\?: string \} \| null\)\?\.voucherNo;/.test(ps) && /restamp\(nv, nev\)/.test(ps));
 const mig = readFileSync(resolve(root, 'supabase/migrations/096_server_voucher_numbering.sql'), 'utf8');

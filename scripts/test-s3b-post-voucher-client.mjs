@@ -67,11 +67,13 @@ ok('unknown code → still a message carrying the raw error', postVoucherMessage
 
 console.log('DataContext wiring');
 const dc = readFileSync(pathResolve(SRC, 'contexts/DataContext.tsx'), 'utf8');
-const add = dc.slice(dc.indexOf('// ── S3-b posting service'), dc.indexOf('// ── Default (flag OFF): table-first save'));
+const add = dc.slice(dc.indexOf('// ── S3-b posting service'), dc.indexOf('// ── Client save: the emergency switch'));   // ARCH-06: renamed default path
 ok('the RPC branch exists and sits BEFORE the default table path', add.length > 200);
 ok('gated on the society flag AND a posted (non-pending) voucher', /if \(postingServiceRef\.current && shadowEvent\)/.test(add));
 ok("calls supabase.rpc('post_voucher') with the lib payload", /supabase\.rpc\('post_voucher', p\)/.test(add) && /buildPostVoucherPayload\(v, ev\)/.test(add));
-ok('a refusal rolls back + destructive toast ≥10s + reportError (RULE 1)', /rollbackOptimistic\(\)/.test(add) && /variant: 'destructive', duration: 15000/.test(add) && /reportError\('voucher-post-service'/.test(add));
+// ARCH-06: the toast is the shared toastVoucherNotSaved (destructive, 15 s), used by every voucher save path.
+const toastHelper = dc.slice(dc.indexOf('const toastVoucherNotSaved = (msg: string) =>'), dc.indexOf('const restampVoucherNo ='));
+ok('a refusal rolls back + destructive toast ≥10s + reportError (RULE 1)', /rollbackOptimistic\(\)/.test(add) && /toastVoucherNotSaved\(msg\);/.test(add) && /variant: 'destructive',\s*duration: 15000/.test(toastHelper) && /reportError\('voucher-post-service'/.test(add));
 ok('network rejection also rolls back', /\(rejection: unknown\) =>[\s\S]*?fail\(/.test(add));
 ok('number collision renumbers and retries (bounded)', /isUniqueViolation\(error\) && tries < MAX_RENUMBER_RETRIES/.test(add));
 // 096: the official number is issued by post_voucher inside its transaction (gapless) — the client no
