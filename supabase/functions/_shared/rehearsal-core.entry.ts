@@ -19,5 +19,8 @@
 export { REGISTRY } from '../../../src/lib/export/registry';
 export { loadArchive } from '../../../src/lib/restore/archive';
 export { runRehearsal } from '../../../src/lib/backup/rehearsalRun';
+// DB-10: scheduled archives are sealed with the platform backup key — the rehearsal opens them with the SAME code the
+// browser's Restore Center uses.
+export { decryptArchive, isEncryptedArchive } from '../../../src/lib/backup/crypto';
 export type { EntityDescriptor } from '../../../src/lib/export/registry.types';
 export type { Row } from '../../../src/lib/backup/ndjson';

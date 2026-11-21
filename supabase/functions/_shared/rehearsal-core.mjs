@@ -4004,12 +4004,44 @@ async function verifyFiles(digests, contents) {
 
 // src/lib/backup/crypto.ts
 var CONTAINER_MAGIC = "SLBAK1\n";
+var WrongPassphraseError = class extends Error {
+  constructor() {
+    super("wrong passphrase, or the archive has been altered");
+    this.name = "WrongPassphraseError";
+  }
+};
 var NotAnEncryptedArchiveError = class extends Error {
   constructor(message) {
     super(message);
     this.name = "NotAnEncryptedArchiveError";
   }
 };
+function fromBase64(text) {
+  if (typeof atob === "function") {
+    const binary = atob(text);
+    const out = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+    return out;
+  }
+  return new Uint8Array(Buffer.from(text, "base64"));
+}
+async function deriveKey(passphrase, salt, iterations) {
+  const material = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(passphrase),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+    material,
+    { name: "AES-GCM", length: 256 },
+    false,
+    // not extractable
+    ["encrypt", "decrypt"]
+  );
+}
 var MAGIC_BYTES = new TextEncoder().encode(CONTAINER_MAGIC);
 function isEncryptedArchive(bytes) {
   if (bytes.length < MAGIC_BYTES.length) return false;
@@ -4045,6 +4077,22 @@ function splitContainer(bytes) {
 }
 function readContainerHeader(bytes) {
   return splitContainer(bytes).header;
+}
+async function decryptArchive(bytes, passphrase) {
+  const { header, ciphertext, aad } = splitContainer(bytes);
+  const salt = fromBase64(header.encryption.salt);
+  const iv = fromBase64(header.encryption.iv);
+  const key = await deriveKey(passphrase, salt, header.encryption.iterations);
+  try {
+    const plain = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv, additionalData: aad },
+      key,
+      ciphertext
+    );
+    return new Uint8Array(plain);
+  } catch {
+    throw new WrongPassphraseError();
+  }
 }
 
 // src/lib/backup/manifest.ts
@@ -4572,6 +4620,8 @@ async function runRehearsal(input) {
 }
 export {
   REGISTRY,
+  decryptArchive,
+  isEncryptedArchive,
   loadArchive,
   runRehearsal
 };

@@ -122,3 +122,36 @@ shows up in the verdict instead.
 - **Key escrow** — scheduled backups are unencrypted by decision D3; client backups have no
   escrow by design (`BackupRestore.tsx`). That is the BK-5 "lost key = lost data" trade-off,
   deliberately taken.
+
+## DB-10 · Encryption with the platform backup key (2026-11-21)
+
+Every scheduled archive is sealed with ONE platform key before either copy is written: AES-256-GCM with
+PBKDF2-SHA256 at 600,000 iterations, in the same `.slbak` container the browser writes (`src/lib/backup/crypto.ts`).
+Both copies get the same sealed bytes: the `backups` bucket and the R2/S3 copy. Neither is readable without the key.
+
+1. **Make the key on your own machine.** Do not paste it into chat or any file in the repo. In PowerShell:
+   ```powershell
+   -join ((1..48) | ForEach-Object { [char[]]'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789' | Get-Random })
+   ```
+2. **Keep it where you can find it without this system.** Use your password manager, plus a paper copy in a safe.
+   If the key is lost, every sealed backup is lost too. Nobody, including SahakarLekha, can open them.
+3. **Give it to the functions:**
+   ```powershell
+   npx supabase secrets set BACKUP_ENCRYPTION_PASSPHRASE="<the key>"
+   ```
+4. **Redeploy both functions.** Keep `--no-verify-jwt`.
+   ```powershell
+   npx supabase functions deploy scheduled-backup --no-verify-jwt
+   npx supabase functions deploy scheduled-rehearsal --no-verify-jwt
+   ```
+5. **Restore a sealed backup.** Download it from Storage (or R2). Open **Restore Center** or **Verify Backup**, choose the
+   file, and enter the key.
+
+**Rotating the key.**
+- Copy the old value into `BACKUP_ENCRYPTION_PASSPHRASE_PREVIOUS`, set the new one, and redeploy both functions.
+- The rehearsal tries the current key and then the previous one.
+- Old archives still open with the old key, so keep the old key in the password manager too.
+
+**Without the secret:**
+- Archives stay plain, as before, and the audit row says `encrypted: false`.
+- The rehearsal reports `encrypted-no-key` for a sealed archive it cannot open.
