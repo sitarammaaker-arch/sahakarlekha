@@ -18,5 +18,11 @@
     "html_handling": "drop-trailing-slash",
     "not_found_handling": "404-page"
   },
+  // The live domain. www.sahakarlekha.com → sahakarlekha.com is a Cloudflare Redirect Rule on the zone (dashboard),
+  // because www requests for static files never reach this Worker.
+  "routes": [{ "pattern": "sahakarlekha.com", "custom_domain": true }],
+  // No second public copy of the site on *.workers.dev once the domain is live (duplicate content for search).
+  "workers_dev": false,
+  "preview_urls": false,
   "observability": { "enabled": true }
 }
