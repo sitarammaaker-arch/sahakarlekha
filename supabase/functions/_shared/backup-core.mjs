@@ -467,7 +467,7 @@ var c4 = (key, header, headerHi, over = {}) => ({ key, header, headerHi, type: "
 var money4 = (key, header, headerHi, over = {}) => c4(key, header, headerHi, { type: "currency", ...over });
 var num2 = (key, header, headerHi, over = {}) => c4(key, header, headerHi, { type: "number", ...over });
 var internal4 = (key, header, headerHi, over = {}) => c4(key, header, headerHi, { defaultVisible: false, ...over });
-var taxColumns = () => [
+var taxColumns = (opts = {}) => [
   money4("totalAmount", "Total Amount", "\u0915\u0941\u0932 \u0930\u093E\u0936\u093F"),
   money4("discount", "Discount", "\u091B\u0942\u091F"),
   money4("netAmount", "Net Amount", "\u0936\u0941\u0926\u094D\u0927 \u0930\u093E\u0936\u093F"),
@@ -477,8 +477,7 @@ var taxColumns = () => [
   money4("cgstAmount", "CGST", "\u0938\u0940\u091C\u0940\u090F\u0938\u091F\u0940"),
   money4("sgstAmount", "SGST", "\u090F\u0938\u091C\u0940\u090F\u0938\u091F\u0940"),
   money4("igstAmount", "IGST", "\u0906\u0908\u091C\u0940\u090F\u0938\u091F\u0940"),
-  internal4("tdsPct", "TDS %", "\u091F\u0940\u0921\u0940\u090F\u0938 %", { type: "number" }),
-  money4("tdsAmount", "TDS", "\u091F\u0940\u0921\u0940\u090F\u0938"),
+  ...opts.tds ? [internal4("tdsPct", "TDS %", "\u091F\u0940\u0921\u0940\u090F\u0938 %", { type: "number" }), money4("tdsAmount", "TDS", "\u091F\u0940\u0921\u0940\u090F\u0938")] : [],
   money4("taxAmount", "Total Tax", "\u0915\u0941\u0932 \u0915\u0930"),
   money4("grandTotal", "Grand Total", "\u092E\u0939\u093E\u092F\u094B\u0917")
 ];
@@ -631,7 +630,7 @@ var purchase = {
     c4("supplierPhone", "Supplier Phone", "\u0906\u092A\u0942\u0930\u094D\u0924\u093F\u0915\u0930\u094D\u0924\u093E \u092B\u093C\u094B\u0928", { piiClass: "contact" }),
     internal4("supplierId", "Supplier Ref", "\u0906\u092A\u0942\u0930\u094D\u0924\u093F\u0915\u0930\u094D\u0924\u093E \u0938\u0902\u0926\u0930\u094D\u092D"),
     internal4("items", "Line Items", "\u092A\u0902\u0915\u094D\u0924\u093F \u0906\u0907\u091F\u092E", { type: "json" }),
-    ...taxColumns(),
+    ...taxColumns({ tds: true }),
     internal4("rcmApplicable", "RCM Applicable", "\u0906\u0930\u0938\u0940\u090F\u092E \u0932\u093E\u0917\u0942", { type: "boolean" }),
     c4("paymentMode", "Payment Mode", "\u092D\u0941\u0917\u0924\u093E\u0928 \u092E\u093E\u0927\u094D\u092F\u092E", { type: "enum" }),
     internal4("creditDays", "Credit Days", "\u0909\u0927\u093E\u0930 \u0926\u093F\u0928", { type: "number" }),

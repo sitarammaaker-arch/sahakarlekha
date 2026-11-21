@@ -72,6 +72,9 @@ pattern inline (or create a sibling helper if you're adding ≥ 3 paths).
 2. Tell the user (in chat) that they MUST run that migration in Supabase SQL Editor.
 3. In the save function, put the column in the **Step 2 / extras** bucket so the
    base upsert still succeeds even before the user runs the migration.
+4. After the user has run it, refresh the production schema snapshot (DB-01, read-only):
+   `node scripts/schema-snapshot.mjs` → commit `supabase/schema/production-schema.txt`.
+   `test:schema-snapshot` fails while a migration's table is missing from it.
 
 ### Forbidden patterns
 
