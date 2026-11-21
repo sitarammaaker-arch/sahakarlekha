@@ -30,6 +30,11 @@ interface EmailHealth {
   stalled: number; stuck: number; failed_24h: number; bounced_24h: number; complained_24h: number;
   http_errors_6h: number | null; http_last_error: string | null;
   cron_failed_24h: number | null; missing_jobs: string[] | null;
+  // 192 · OPS-03 (absent before migration 192 → undefined)
+  http_timeouts_6h?: number | null;
+  app_errors_1h?: number | null; app_errors_24h?: number | null; app_spike_1h?: number | null;
+  integrity_errors_6h?: number | null; integrity_top?: { source: string; n: number; sample: string | null }[] | null;
+  backup_stale_24h?: number | null;
   last_alert: { sent_at: string; resolved_at: string | null } | null;
 }
 
@@ -48,6 +53,14 @@ function healthLines(h: EmailHealth, hi = true): string[] {
   if (h.complained_24h > 0) out.push(L(`पिछले 24 घंटे में ${h.complained_24h} spam शिकायत।`, `${h.complained_24h} spam complaints in the last 24 hours.`));
   if (h.failed_24h > 0) out.push(L(`पिछले 24 घंटे में ${h.failed_24h} ईमेल fail हुए।`, `${h.failed_24h} emails failed in the last 24 hours.`));
   if (h.bounced_24h > 0) out.push(L(`पिछले 24 घंटे में ${h.bounced_24h} ईमेल bounce हुए।`, `${h.bounced_24h} emails bounced in the last 24 hours.`));
+  // 192 · OPS-03 — app errors / backups (the site probe runs in the email-health function, not here)
+  if ((h.integrity_errors_6h ?? 0) > 0) {
+    const top = (h.integrity_top ?? []).map(t => `${t.source} ×${t.n}`).join(', ');
+    out.push(L(`पिछले 6 घंटे में ${h.integrity_errors_6h} सेव/पोस्टिंग/सर्वर error${top ? ` — ${top}` : ''}।`, `${h.integrity_errors_6h} save/posting/server errors in the last 6 hours${top ? ` — ${top}` : ''}.`));
+  }
+  if ((h.backup_stale_24h ?? 0) > 0) out.push(L(`पिछले 24 घंटे में ${h.backup_stale_24h} बार किसी समिति का backup पुराना पाया गया।`, `${h.backup_stale_24h} stale-backup warnings in the last 24 hours.`));
+  if ((h.app_spike_1h ?? 0) >= 50) out.push(L(`पिछले 1 घंटे में browser पर ${h.app_spike_1h} error — सामान्य से बहुत ज़्यादा।`, `${h.app_spike_1h} browser errors in the last hour — far above normal.`));
+  if ((h.http_timeouts_6h ?? 0) > 0) out.push(L(`(जानकारी) ${h.http_timeouts_6h} लंबी cron call 5 सेकंड में जवाब नहीं दे पाईं — function चलता रहता है, यह alert नहीं है।`, `(info) ${h.http_timeouts_6h} long cron calls did not answer within 5 s — the function keeps running; not an alert.`));
   return out;
 }
 

@@ -4,8 +4,8 @@ name: Deploy to Cloudflare
 # Vercel build, adds dist/_headers + the routing Worker (wrangler.jsonc, cloudflare/worker.js), and deploys.
 #
 #   · every push to main            → deploy (what Vercel did on merge)
-#   · daily 00:05 / 09:00 IST       → deploy ONLY when a blog post is due today/yesterday (same GOS-05 guard as
-#                                     scheduled-rebuild.yml), so a scheduled post's static page goes live on time
+#   · daily 00:05 / 09:00 IST       → deploy ONLY when a blog post is due today/yesterday (the GOS-05 guard the old
+#                                     Vercel scheduled-rebuild.yml had — retired 2026-11-21), so a scheduled post's static page goes live on time
 #   · Actions tab → Run workflow    → deploy
 #
 # One-time setup (the account owner, never in code):

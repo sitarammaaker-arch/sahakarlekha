@@ -841,7 +841,7 @@ function blogPages(DATA) {
   }
   // A scheduled (drip) post's URL used to fall through to the SPA rewrite and serve the HOMEPAGE
   // template (canonical "/", HTTP 200). Give it its own noindex stub until its date; the daily
-  // rebuild (scheduled-rebuild.yml, just after midnight IST) replaces it with the real article.
+  // rebuild (deploy-cloudflare.yml schedule, just after midnight IST) replaces it with the real article.
   for (const s of scheduled) {
     pages.push({
       path: `/blog/${s.slug}`,
