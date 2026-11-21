@@ -67,7 +67,8 @@ const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.error('  âœ
   const f = read('src/pages/TdsForm16A.tsx');
   ok(f.includes("useState(society.entityPan || '')") && f.includes("useState(society.tan || '')"), 'deductor PAN / TAN prefilled from the society');
   ok(f.includes('fyOptions.map(fy =>') && !f.includes("['2022-23', '2023-24', '2024-25', '2025-26']"), 'the FY list follows the society year (current FY selectable)');
-  ok(f.includes('const party = purchaseTdsParty(suppliers.find(x => x.id === p.supplierId));') && f.includes("'Bill No.', 'Deductee', 'PAN', 'Section'"), 'each entry shows bill no., deductee PAN and section');
+  // Leftovers (2026-11-21): rows now come from lib/tax/form16aRows (purchases + manual entries); same columns.
+  ok(f.includes('partyOf: (p) => purchaseTdsParty(suppliers.find(x => x.id === p.supplierId)),') && f.includes("'Bill / Nature', 'Deductee', 'PAN', 'Section'"), 'each entry shows bill no., deductee PAN and section');
   ok(f.includes('const rows = filtered.map(rowOf);') && !f.includes('const rows = tdsEntries.map('), 'CSV / Excel honour the supplier filter');
   ok(f.includes('NOT the TRACES certificate') && !f.includes('Section 203 of Income Tax Act, 1961'), 'labelled honestly â€” a statement, not the TRACES certificate');
 }
