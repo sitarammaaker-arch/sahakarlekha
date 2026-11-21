@@ -533,7 +533,8 @@
     "test:arch0708-page-guards": "node scripts/test-arch0708-page-guards.mjs",
     "test:perf02-lazy-export": "node scripts/test-perf02-lazy-export.mjs",
     "test:schema-snapshot": "node scripts/test-schema-snapshot.mjs",
-    "schema:snapshot": "node scripts/schema-snapshot.mjs"
+    "schema:snapshot": "node scripts/schema-snapshot.mjs",
+    "test:perf01-voucher-list": "node scripts/test-perf01-voucher-list.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

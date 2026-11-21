@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react';
+import { matchesVoucherQuery, pageOf } from '@/lib/voucherListView';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Link } from '@/components/LocalLink';
 import { MemberPicker } from '@/components/MemberPicker';
@@ -181,6 +182,10 @@ const Vouchers: React.FC = () => {
   const [reverseId, setReverseId] = useState<string | null>(null);
   const [reverseReason, setReverseReason] = useState('');
   const [showCancelled, setShowCancelled] = useState(false);
+  // PERF-01: the list is searched and shown one page at a time (it used to render every voucher).
+  const [listQuery, setListQuery] = useState('');
+  const [listPage, setListPage] = useState(1);
+  const deferredListQuery = useDeferredValue(listQuery);
   const [savedVoucherNo, setSavedVoucherNo] = useState<string | null>(null);
   // Usability audit P0-7: the form is cleared (and "saved" shown) only once the cloud confirms the save.
   // If the save fails, addVoucher rolls the row back + shows why, and everything typed stays in the form
@@ -651,12 +656,20 @@ const Vouchers: React.FC = () => {
 
   // ECR-17: honour the active branch — the Trial Balance / Day Book are branch-scoped, so the list
   // you drill into must be too, or the numbers contradict each other ('all' = no filter, as ever).
-  const branchVouchers = vouchers.filter(v => matchesActiveBranch(v.branchId));
-  const sortedVouchers = branchVouchers
+  // PERF-01: memoised — typing in the entry form no longer re-filters and re-sorts every voucher on each key.
+  const branchVouchers = useMemo(() => vouchers.filter(v => matchesActiveBranch(v.branchId)), [vouchers, matchesActiveBranch]);
+  const accountById = useMemo(() => new Map(accounts.map(a => [a.id, a])), [accounts]);
+  const sortedVouchers = useMemo(() => branchVouchers
     .filter(v => showCancelled ? v.isDeleted : !v.isDeleted)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const activeCount = branchVouchers.filter(v => !v.isDeleted).length;
-  const cancelledCount = branchVouchers.filter(v => v.isDeleted).length;
+    .filter(v => !deferredListQuery.trim() || matchesVoucherQuery(v, deferredListQuery, getVoucherLines(v).map(l => accountById.get(l.accountId)?.name ?? '')))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [branchVouchers, showCancelled, deferredListQuery, accountById]);
+  const { activeCount, cancelledCount } = useMemo(() => {
+    let cancelled = 0;
+    for (const v of branchVouchers) if (v.isDeleted) cancelled++;
+    return { activeCount: branchVouchers.length - cancelled, cancelledCount: cancelled };
+  }, [branchVouchers]);
+  useEffect(() => { setListPage(1); }, [deferredListQuery, showCancelled]);
+  const listSlice = pageOf(sortedVouchers, listPage);
 
   // A sale/purchase voucher still actively referenced by its parent CANNOT be cancelled
   // here — it must be deleted from Sale/Purchase Management so stock + sub-ledger reverse.
@@ -675,7 +688,7 @@ const Vouchers: React.FC = () => {
     if (v.refType === 'sale' && sales.find(s => s.id === v.refId)?.voucherId === v.id) return false;
     return true;
   };
-  const selectableVouchers = isAdmin && !showCancelled ? sortedVouchers.filter(bulkCancellable) : [];
+  const selectableVouchers = isAdmin && !showCancelled ? listSlice.rows.filter(bulkCancellable) : [];   // PERF-01: this page only
   const allSelected = selectableVouchers.length > 0 && selectableVouchers.every(v => selectedIds.has(v.id));
   const toggleOne = (id: string) => setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const toggleAll = () => setSelectedIds(prev => prev.size >= selectableVouchers.length && selectableVouchers.every(v => prev.has(v.id))
@@ -1376,6 +1389,20 @@ const Vouchers: React.FC = () => {
                 </div>
               </div>
             )}
+            {/* PERF-01: search across voucher no., narration, amount, date and account names */}
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div className="relative w-full sm:w-80">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input value={listQuery} onChange={e => setListQuery(e.target.value)} className="pl-8 h-9"
+                  placeholder={language === 'hi' ? 'खोजें — वाउचर नं., विवरण, राशि, खाता…' : 'Search — voucher no., narration, amount, account…'}
+                  aria-label={language === 'hi' ? 'वाउचर खोजें' : 'Search vouchers'} />
+              </div>
+              {listQuery.trim() && (
+                <span className="text-xs text-muted-foreground">
+                  {language === 'hi' ? `${sortedVouchers.length} वाउचर मिले` : `${sortedVouchers.length} found`}
+                </span>
+              )}
+            </div>
             {sortedVouchers.length === 0 ? (
               vouchers.filter(v => !v.isDeleted).length === 0 ? (
                 <EmptyState
@@ -1413,11 +1440,11 @@ const Vouchers: React.FC = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sortedVouchers.map(v => {
+                    {listSlice.rows.map(v => {
                       const drLines = getVoucherLines(v).filter(l => l.type === 'Dr');
                       const crLines = getVoucherLines(v).filter(l => l.type === 'Cr');
-                      const debitAcc = accounts.find(a => a.id === drLines[0]?.accountId);
-                      const creditAcc = accounts.find(a => a.id === crLines[0]?.accountId);
+                      const debitAcc = accountById.get(drLines[0]?.accountId);
+                      const creditAcc = accountById.get(crLines[0]?.accountId);
                       const cancelled = !!v.isDeleted;
                       // ECR-08: reversed / reversal / checker-approved entries are edit-locked (same rule as updateVoucher).
                       const editLocked = isEditLocked(v, !!society.approvalRequired);
@@ -1503,6 +1530,24 @@ const Vouchers: React.FC = () => {
                     })}
                   </TableBody>
                 </Table>
+                {listSlice.pages > 1 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-sm">
+                    <span className="text-muted-foreground">
+                      {language === 'hi'
+                        ? `${listSlice.total} में से ${listSlice.from}–${listSlice.to}`
+                        : `${listSlice.from}–${listSlice.to} of ${listSlice.total}`}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" disabled={listSlice.page <= 1} onClick={() => setListPage(listSlice.page - 1)}>
+                        {language === 'hi' ? '← पिछला' : '← Prev'}
+                      </Button>
+                      <span className="tabular-nums">{listSlice.page} / {listSlice.pages}</span>
+                      <Button variant="outline" size="sm" disabled={listSlice.page >= listSlice.pages} onClick={() => setListPage(listSlice.page + 1)}>
+                        {language === 'hi' ? 'अगला →' : 'Next →'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
