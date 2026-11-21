@@ -8,6 +8,10 @@
   "name": "sahakarlekha",
   "main": "cloudflare/worker.js",
   "compatibility_date": "2026-11-01",
+  // A browser navigation (Sec-Fetch-Mode: navigate) to /login or /dashboard must reach the Worker so it can serve the
+  // SPA shell. Since 2025-04-01 Cloudflare answers navigations with not_found_handling (the 404 page) WITHOUT running
+  // the Worker; this flag turns that off. Found on the first deploy: curl got 200, a real browser got 404.
+  "compatibility_flags": ["assets_navigation_has_no_effect"],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

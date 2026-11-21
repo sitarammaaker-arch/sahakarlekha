@@ -83,6 +83,7 @@ ok('app routes carry X-Robots-Tag: noindex in the Worker rules', headers.some((h
 const hf = headersFile();
 ok('dist/_headers covers /* (security) and /assets/* (immutable cache)', hf.includes('/*\n  Strict-Transport-Security:') && hf.includes('/assets/*\n  Cache-Control: public, max-age=31536000, immutable'));
 const wr = readFileSync(resolve(ROOT, 'wrangler.jsonc'), 'utf8');
+ok('wrangler: a browser navigation still reaches the Worker (assets_navigation_has_no_effect) — else /login is a 404 in a real browser', wr.includes('"compatibility_flags": ["assets_navigation_has_no_effect"]'));
 ok('wrangler: dist/ assets, drop-trailing-slash, 404 page, Worker only when no file matches', wr.includes('"directory": "./dist"') && wr.includes('"html_handling": "drop-trailing-slash"') && wr.includes('"not_found_handling": "404-page"') && wr.includes('"main": "cloudflare/worker.js"'));
 console.log(`\ncloudflare config: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
