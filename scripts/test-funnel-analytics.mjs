@@ -88,7 +88,7 @@ for (const file of walk(pathResolve(ROOT, 'src'))) {
 }
 ok(`scanned ${calls} trackEvent calls`, calls >= 45);
 ok(`none passes a personal-data parameter${bad.length ? ' — ' + bad.join(' | ') : ''}`, bad.length === 0);
-const pp = read('src/pages/PrivacyPolicy.tsx');
+const pp = read('src/content/legal/privacySections.tsx');   // SEO-04: the policy text moved here (the page renders it)
 ok('the privacy policy says login / registration steps are sent, and what is not', /लॉगिन\/पंजीकरण के चरण/.test(pp) && /login \/ registration steps/.test(pp) && /never your email, your password or anything typed into a form/.test(pp));
 
 console.log(`\nfunnel-analytics / sprint-5: ${pass} passed, ${fail} failed`);

@@ -8,6 +8,7 @@ import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { PUBLIC_SHELL_META } from '@/content/publicShellMeta';
 import { trackEvent } from '@/lib/analytics';
 import { search, TYPE_LABEL, TYPE_LABEL_EN, type SearchType } from '@/lib/siteSearch';
 import { allGlossary } from '@/content/glossary';
@@ -32,8 +33,8 @@ const SiteSearch: React.FC = () => {
   useDocumentMeta({
     title: q
       ? L(`"${q}" — खोज परिणाम | SahakarLekha`, `"${q}" — Search results | SahakarLekha`)
-      : L('खोजें — SahakarLekha मदद, कुकबुक, गाइड, ब्लॉग व शब्दकोश', 'Search — SahakarLekha help, cookbook, guide, blog and glossary'),
-    description: L('सहकारी समिति लेखांकन से जुड़ा कुछ भी खोजें — मदद लेख, एंट्री कुकबुक, गाइड अध्याय, ब्लॉग और शब्दकोश, एक साथ।', 'Search anything about cooperative society accounting — help articles, entry cookbook, guide chapters, blog and glossary, all at once.'),
+      : L(PUBLIC_SHELL_META.search.hi.title, PUBLIC_SHELL_META.search.en.title),   // SEO-03: same as the static page
+    description: L(PUBLIC_SHELL_META.search.hi.description, PUBLIC_SHELL_META.search.en.description),
     canonicalPath: '/search',
   });
 

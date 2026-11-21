@@ -22,6 +22,8 @@ import { PasswordToggle } from '@/components/PasswordToggle';
 import { needsAppData } from '@/lib/appDataPaths';
 import { NEXT_PARAM, safeNext, withNext, resolveEntryType, resolveEntryState } from '@/lib/auth/entryContext';
 import { PLAN_CATALOG, TRIAL_DAYS, priceLabel } from '@/lib/plans';
+import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { PUBLIC_SHELL_META } from '@/content/publicShellMeta';
 const STATES = INDIAN_STATES;
 
 /**
@@ -55,6 +57,9 @@ const Register: React.FC = () => {
   const entryState = resolveEntryState(searchParams.get('state'), INDIAN_STATES);
   // RULE 7: Hindi first; English when the visitor switches language.
   const L = (hiText: string, enText: string) => (language === 'hi' ? hiText : enText);
+  // SEO-03: its own title / description / canonical (it showed the homepage's) — same text as the static page.
+  const meta = PUBLIC_SHELL_META.register;
+  useDocumentMeta({ title: L(meta.hi.title, meta.en.title), description: L(meta.hi.description, meta.en.description), canonicalPath: '/register' });
   const [step, setStep] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

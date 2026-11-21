@@ -21,6 +21,7 @@ import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
+import { PUBLIC_SHELL_META } from '@/content/publicShellMeta';
 import { trackEvent } from '@/lib/analytics';
 import { search, TYPE_LABEL, TYPE_LABEL_EN } from '@/lib/siteSearch';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -49,8 +50,9 @@ const AskAssistant: React.FC = () => {
   useDocumentMeta({
     // The question is deliberately NOT in the title: GA attaches the document title to every event it sends,
     // and a question can name a member.
-    title: 'पूछें (Ask SahakarLekha) — सहकारी समिति लेखांकन सहायक',
-    description: 'सहकारी समिति लेखांकन का कोई भी सवाल पूछें — मदद, एंट्री कुकबुक, गाइड व FAQ से सीधा, स्रोत-सहित जवाब। कोई अनुमान नहीं, सिर्फ़ असली जानकारी।',
+    // SEO-03: the same text as the static /ask page (content/publicShellMeta).
+    title: PUBLIC_SHELL_META.ask.hi.title,
+    description: PUBLIC_SHELL_META.ask.hi.description,
     canonicalPath: '/ask',
   });
 
