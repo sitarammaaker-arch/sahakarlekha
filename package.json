@@ -522,7 +522,8 @@
     "build:cloudflare": "npm run build && node scripts/cloudflare-config.mjs --write",
     "deploy:cloudflare": "npm run build:cloudflare && wrangler deploy",
     "test:cloudflare-config": "node scripts/cloudflare-config.mjs",
-    "test:cloudflare-worker": "node scripts/test-cloudflare-worker.mjs"
+    "test:cloudflare-worker": "node scripts/test-cloudflare-worker.mjs",
+    "test:provider-contract-4": "node scripts/test-provider-contract-4.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
