@@ -2,7 +2,6 @@ import { lazy, Suspense, ComponentType, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
 import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
 import { isEnPath, stripEn, hasEnglishRoute, routeLanguage } from "@/lib/enRoutes";
@@ -239,8 +238,6 @@ const PartnerPortalHome = lazyWithRetry(() => import("./pages/PartnerPortal").th
 import { SuperAdminRoute } from "@/components/SuperAdminRoute";
 
 import { staticSnapshotFor } from '@/lib/staticSnapshot';
-
-const queryClient = new QueryClient();
 
 // Protected Route wrapper — the login check, loading screen, layout and capability guard are
 // AppDataShell's ProtectedShell (same code as before, in the lazy app chunk).
@@ -533,21 +530,19 @@ const AppDataGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <LanguageProvider>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <AppDataGate>
-              <AppRoutes />
-            </AppDataGate>
-          </BrowserRouter>
-        </TooltipProvider>
-      </AuthProvider>
-    </LanguageProvider>
-  </QueryClientProvider>
+  <LanguageProvider>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AppDataGate>
+            <AppRoutes />
+          </AppDataGate>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
+  </LanguageProvider>
 );
 
 export default App;

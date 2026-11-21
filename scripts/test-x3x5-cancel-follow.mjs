@@ -29,7 +29,7 @@ const dc = read('src/contexts/DataContext.tsx');
   ok(/registerVoucherCancelFollower: \(key: string, follower: VoucherCancelFollower\) => \(\) => void;/.test(dc), 'DataContext exposes registerVoucherCancelFollower');
   ok((dc.match(/cancelVoucher, (?:guardPageWrite, )?registerVoucherOwner, registerVoucherCancelFollower, reverseVoucher,/g) || []).length === 2, '…in both context values');
   const cv = dc.slice(dc.indexOf('const cancelVoucher = useCallback('), dc.indexOf('\n  }, []);', dc.indexOf('const cancelVoucher = useCallback(')));
-  ok((cv.match(/if \(!opts\?\.viaParent\) \{ loanFollowsCancel\(current\); followCancel\(current\); \}/g) || []).length === 3, 'followers run after a CONFIRMED direct cancel on all three paths (a module cancelling its own document does not)');
+  ok((cv.match(/if \(!opts\?\.viaParent\) \{ loanFollowsCancel\(current\); followCancel\(current\); \}/g) || []).length === 2, 'followers run after a CONFIRMED direct cancel on both paths (a module cancelling its own document does not) — ARCH-06 removed journal-first');
   const fc = dc.slice(dc.indexOf('const followCancel = '), dc.indexOf('const followedBy = '));
   ok(fc.includes('fl.refTypes.includes(v.refType)') && fc.includes("reportError('voucher-cancel-follow'"), 'a follower sees only its own refTypes; one failing follower cannot break the cancel');
   const g = dc.slice(dc.indexOf('const guardDocumentOwnedVoucher = '), dc.indexOf('const updateVoucher = useCallback('));

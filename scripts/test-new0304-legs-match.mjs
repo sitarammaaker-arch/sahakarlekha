@@ -58,7 +58,7 @@ const STAMP_NEW = `            -- 185 / X-4: who posted it and when, from the to
   ok(cv.includes(`if (!opts?.rollback && guardPermission('delete'`), 'a rollback needs no delete role on the screen');
   ok(cv.includes('if (!opts?.rollback) {') && cv.includes('}   // end of the document guards (skipped for a rollback)'), 'a rollback skips the document guards');
   ok(cv.includes(`supabase.rpc(opts?.rollback ? 'withdraw_voucher' : 'cancel_voucher'`), 'a rollback calls withdraw_voucher');
-  ok((cv.match(/opts\?\.onCancelled\?\.\(\)/g) || []).length === 4 && (cv.match(/opts\?\.onFailed\?\.\(/g) || []).length === 4, 'onCancelled / onFailed fire once the cloud answers, on every path');
+  ok((cv.match(/opts\?\.onCancelled\?\.\(\)/g) || []).length === 3 && (cv.match(/opts\?\.onFailed\?\.\(/g) || []).length === 3, 'onCancelled / onFailed fire once the cloud answers, on every path (ARCH-06: journal-first path removed)');
   const cl = dc.slice(dc.indexOf('const cancelLinkedVouchers = ('), dc.indexOf('\n  };', dc.indexOf('const cancelLinkedVouchers = (')));
   ok(cl.includes(`supabase.rpc(opts?.rollback ? 'withdraw_voucher' : 'cancel_voucher'`), 'cancelLinkedVouchers can roll back too');
   // every "rolled back / auto-rollback / not saved" withdrawal of a just-posted voucher carries rollback: true

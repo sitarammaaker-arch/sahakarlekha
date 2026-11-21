@@ -80,7 +80,7 @@ import { planOpeningDelta } from '@/lib/ledger/genesis';
 import { voucherPostingLines, voucherReversalLines, voucherEventMeta } from '@/lib/ledger/voucherEvent';
 import { currentPostingEventId } from '@/lib/ledger/aggregateState';
 import { planAccountMerge, repointVoucher, isJournaledForMerge } from '@/lib/ledger/accountMerge';
-import { persistEventAuthoritative, persistEventsAuthoritative } from '@/lib/ledger/persist';
+import { persistEventsAuthoritative } from '@/lib/ledger/persist';
 import { planSocietyAppropriation, appropriationVoucherContent } from '@/lib/rules/societyAppropriation';
 import { resolveRebatePayableAccountId } from '@/lib/consumer/accounts';
 import { authorizeFinalization, type AuthorityAttestation } from '@/lib/governance/authority';
@@ -1854,7 +1854,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return error || data == null ? null : (typeof data === 'number' ? data : Number(data));
   };
 
-  const persistVoucher = (v: Voucher, opts: { onBaseFail: () => void; onBaseSuccess?: () => void; isUpdate?: boolean; journalFirst?: boolean }) => {
+  // ARCH-06: ONE message and ONE restamp for every voucher save path (client save, posting service, pending save) —
+  // they used to carry their own copies, which is how three paths drift apart.
+  const toastVoucherNotSaved = (msg: string) => toastRef.current({
+    title: tr('❌ वाउचर क्लाउड में सेव नहीं हुआ', '❌ Voucher not saved to the cloud'),
+    description: tr(`${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, `${msg}. The entry was removed from the screen — nothing will go wrong on refresh.`),
+    variant: 'destructive',
+    duration: 15000,
+  });
+  /** The server issued the official number: put it on the voucher on screen (ref + state). */
+  const restampVoucherNo = (id: string, officialNo: string) => {
+    vouchersRef.current = vouchersRef.current.map(x => x.id === id ? { ...x, voucherNo: officialNo } : x);
+    setVouchersState(prev => prev.map(x => x.id === id ? { ...x, voucherNo: officialNo } : x));
+  };
+  const persistVoucher = (v: Voucher, opts: { onBaseFail: () => void; onBaseSuccess?: () => void; isUpdate?: boolean }) => {
     // journal-first-write (slice 4): when true, the voucher is ALREADY durably saved as a journal
     // event (the number was issued + the event verified before this call). This table write is now a
     // best-effort PROJECTION: skip re-issuing the number (the event's number is authoritative) and skip
@@ -1874,12 +1887,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // audit P0-2: the RULE-1 divergence the operator must SEE — surface it off-device.
       reportError('voucher-save', msg, { voucherId: v.id, voucherNo: (v as { voucherNo?: string }).voucherNo, isUpdate: !!opts.isUpdate });
       opts.onBaseFail();
-      toastRef.current({
-        title: tr('❌ वाउचर क्लाउड में सेव नहीं हुआ', '❌ Voucher not saved to the cloud'),
-        description: tr(`${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, `${msg}. The entry was removed from the screen — nothing will go wrong on refresh.`),
-        variant: 'destructive',
-        duration: 15000,
-      });
+      toastVoucherNotSaved(msg);
     };
 
     // Feature 6: a duplicate voucherNo (another till minted it) fails the base upsert
@@ -1904,7 +1912,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           attemptBase(noBranch, tries);
           return;
         }
-        if (isUniqueViolation(error) && !opts.isUpdate && !opts.journalFirst && tries < MAX_RENUMBER_RETRIES) {
+        if (isUniqueViolation(error) && !opts.isUpdate && tries < MAX_RENUMBER_RETRIES) {
           const newNo = renumberVoucher((cols as { voucherNo?: string }).voucherNo);
           vouchersRef.current = vouchersRef.current.map(x => x.id === v.id ? { ...x, voucherNo: newNo } : x);
           setVouchersState(prev => prev.map(x => x.id === v.id ? { ...x, voucherNo: newNo } : x));
@@ -1962,15 +1970,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // offline/RPC failure; the 23505 collision-retry above stays the safety net, so this is safe
     // even BEFORE the document_sequences backfill (migration 016) runs. Updates keep their number.
     const provisionalNo = (baseCols as { voucherNo?: string }).voucherNo;
-    if (opts.isUpdate || opts.journalFirst) {
-      // journalFirst: the official number was issued BEFORE the authoritative event append, so the
-      // voucher already carries it — don't re-issue (would mint a second, gapful number).
-      attemptBase(baseCols, 0);
+    if (opts.isUpdate) {
+      attemptBase(baseCols, 0);   // an update keeps its number
     } else {
       issueOfficialNumber(nextDocNumber, societyIdRef.current, provisionalNo).then((officialNo) => {
         if (officialNo && officialNo !== provisionalNo) {
-          vouchersRef.current = vouchersRef.current.map(x => x.id === v.id ? { ...x, voucherNo: officialNo } : x);
-          setVouchersState(prev => prev.map(x => x.id === v.id ? { ...x, voucherNo: officialNo } : x));
+          restampVoucherNo(v.id, officialNo);
         }
         attemptBase({ ...baseCols, voucherNo: officialNo ?? provisionalNo }, 0);
       });
@@ -2149,52 +2154,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { ...newVoucher, id: '' };
     }
 
-    // ── journal-first-write (slice 4) — DORMANT, per-tenant flag, default OFF ────────────────────
-    // When journalFirstWrites is on AND this voucher is journaled (posted, has a shadow event), the
-    // SAVE is a durable, VERIFIED journal append; the vouchers table is then a best-effort projection.
-    // So a table-write failure is recoverable (the journal is the truth) — the RULE-1 rollback retires
-    // for the voucher path. Flag OFF (default) → the exact table-first path below, byte-identical.
-    if (societyRef.current?.journalFirstWrites && shadowEvent) {
-      const provisionalNo = newVoucher.voucherNo;
-      // Number FIRST — so the authoritative event carries the official (gapless) number.
-      issueOfficialNumber(nextDocNumber, societyIdRef.current, provisionalNo).then((officialNo) => {
-        const finalNo = officialNo ?? provisionalNo;
-        const finalVoucher: Voucher = finalNo === provisionalNo ? newVoucher : { ...newVoucher, voucherNo: finalNo };
-        if (finalNo !== provisionalNo) {
-          vouchersRef.current = vouchersRef.current.map(x => x.id === newVoucher.id ? finalVoucher : x);
-          setVouchersState(prev => prev.map(x => x.id === newVoucher.id ? finalVoucher : x));
-        }
-        // Rebuild the event with the FINAL number and swap it for the optimistic one in the ref.
-        const finalEvent = buildEvent({
-          eventType: 'voucher.posted', tenantId: societyIdRef.current, jurisdiction: jurisdictionRef.current,
-          aggregateType: 'voucher', aggregateId: finalVoucher.id, sequence: 1,
-          producer: { kind: 'human', id: userRef.current?.name ?? null },
-          payload: { lines: voucherPostingLines(finalVoucher), ...voucherEventMeta(finalVoucher) },
-        }, { eventId: shadowEvent!.eventId, occurredAt: shadowEvent!.occurredAt });
-        ledgerEventsRef.current = ledgerEventsRef.current.map(e => e.eventId === shadowEvent!.eventId ? finalEvent : e);
-
-        // THE SAVE: a durable, verified journal append.
-        persistEventAuthoritative(finalEvent, ledgerAppendIO).then((res) => {
-          if (!res.ok) {
-            // The append is the save — its failure IS a failed save (RULE 1). Roll back + surface loudly.
-            reportError('voucher-journal-append', res.error ?? 'append failed', { voucherId: finalVoucher.id, voucherNo: finalNo });
-            rollbackOptimistic();
-            toastRef.current({ title: tr('❌ वाउचर क्लाउड में सेव नहीं हुआ', '❌ Voucher not saved to the cloud'), description: tr(`${res.error ?? 'journal append failed'}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, `${res.error ?? 'journal append failed'}. The entry was removed from the screen — nothing will go wrong on refresh.`), variant: 'destructive', duration: 15000 });
-            opts?.onFailed?.();
-            return;
-          }
-          opts?.onSaved?.(finalVoucher);
-          // Saved (journal). Project into the vouchers table best-effort — a table failure is now
-          // RECOVERABLE (rebuildable from the journal), so onBaseFail LOGS, never rolls back.
-          persistVoucher(finalVoucher, {
-            isUpdate: false, journalFirst: true,
-            onBaseFail: () => reportError('voucher-table-projection', 'table write failed after durable journal append (recoverable)', { voucherId: finalVoucher.id, voucherNo: finalNo }),
-          });
-        }, () => opts?.onFailed?.());
-      }, () => opts?.onFailed?.());
-      return newVoucher;
-    }
-
     // ── S3-b posting service — per-society flag (society_flags.posting_service), default OFF ─────
     // ONE server call writes the vouchers row, voucher_lines, voucher_entries and the journal event in
     // one transaction (post_voucher, migration 077) — no half-saved voucher on a dropped connection.
@@ -2206,7 +2165,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const failPending = (msg: string, raw: string) => {
         reportError('voucher-pending-post-service', raw, { voucherId: newVoucher.id });
         rollbackOptimistic();
-        toastRef.current({ title: tr('❌ वाउचर क्लाउड में सेव नहीं हुआ', '❌ Voucher not saved to the cloud'), description: tr(`${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, `${msg}. The entry was removed from the screen — nothing will go wrong on refresh.`), variant: 'destructive', duration: 15000 });
+        toastVoucherNotSaved(msg);
         opts?.onFailed?.();
       };
       const pp = buildPendingVoucherPayload(newVoucher);
@@ -2214,8 +2173,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (error) { failPending(postVoucherMessage(postVoucherErrorCode(error.message), error.message), error.message); return; }
         const officialNo = (data as { voucherNo?: string } | null)?.voucherNo;
         if (officialNo && officialNo !== newVoucher.voucherNo) {
-          vouchersRef.current = vouchersRef.current.map(x => x.id === newVoucher.id ? { ...x, voucherNo: officialNo } : x);
-          setVouchersState(prev => prev.map(x => x.id === newVoucher.id ? { ...x, voucherNo: officialNo } : x));
+          restampVoucherNo(newVoucher.id, officialNo);
         }
         opts?.onPersisted?.({ ...newVoucher, voucherNo: officialNo || newVoucher.voucherNo });
         opts?.onSaved?.({ ...newVoucher, voucherNo: officialNo || newVoucher.voucherNo });
@@ -2239,7 +2197,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const fail = (msg: string, raw: string) => {
         reportError('voucher-post-service', raw, { voucherId: newVoucher.id, voucherNo: provisionalNo });
         rollbackOptimistic();
-        toastRef.current({ title: tr('❌ वाउचर क्लाउड में सेव नहीं हुआ', '❌ Voucher not saved to the cloud'), description: tr(`${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, `${msg}. The entry was removed from the screen — nothing will go wrong on refresh.`), variant: 'destructive', duration: 15000 });
+        toastVoucherNotSaved(msg);
         opts?.onFailed?.();
       };
       const attempt = (v: Voucher, tries: number) => {
@@ -2282,7 +2240,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return newVoucher;
     }
 
-    // ── Default (flag OFF): table-first save with two-step + rollback (RULE 1). BYTE-IDENTICAL. ──
+    // ── Client save: the emergency switch (society_flags.posting_service = false), or a voucher with no ledger
+    //    event to post. Table-first, two-step + rollback (RULE 1). ──
     // If base save fails, REMOVE the voucher from local state so the UI reflects what's actually in
     // Supabase — F5 won't silently delete the user's work because the work was never optimistically
     // shown as "saved" once the failure was confirmed.
@@ -2744,35 +2703,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return true;
     }
 
-    // ── journal-first-write (slice 6) — DORMANT, per-tenant flag, default OFF ─────────────────────
-    // A POSTINGS-CHANGED edit under the flag makes the reverse+repost PAIR the authoritative save
-    // (whole-or-nothing via persistEventsAuthoritative — a half-written pair on a WORM log is a
-    // permanent parity break); the vouchers table is then a best-effort projection. A postings-NEUTRAL
-    // edit (narration/member/date only) emits NO event, so it has nothing to make authoritative — it
-    // falls through to the table-first path below even under the flag. Flag OFF → table-first, byte-identical.
-    if (societyRef.current?.journalFirstWrites && editEvents.length > 0) {
-      persistEventsAuthoritative(editEvents, ledgerAppendIO).then((res) => {
-        if (!res.ok) {
-          // The append IS the save — its failure is a failed edit (RULE 1). Revert + surface loudly.
-          reportError('voucher-edit-journal-append', res.error ?? 'append failed', { voucherId: id });
-          revertEdit();
-          toastRef.current({ title: tr('❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', '❌ Voucher change not saved to the cloud'), description: tr(`${res.error ?? 'journal append failed'}. बदलाव वापस ले लिया गया — refresh करने पर पुराना data सुरक्षित है।`, `${res.error ?? 'journal append failed'}. The change was undone — your old data is safe on refresh.`), variant: 'destructive', duration: 15000 });
-          return;
-        }
-        // Saved (journal). Project the edited row into the table best-effort — a table failure is now
-        // RECOVERABLE (rebuildable from the journal), so onBaseFail LOGS, never rolls back.
-        persistVoucher(updatedVoucher, {
-          isUpdate: true, journalFirst: true,
-          onBaseFail: () => reportError('voucher-edit-table-projection', 'table write failed after durable journal append (recoverable)', { voucherId: id }),
-        });
-        syncEntries(updatedVoucher);
-      });
-      // The edit passed all guards and was applied to local state above (the async journal
-      // append/table projection surface their own failure toast + revert). Report success.
-      return true;
-    }
-
-    // ── Default (flag OFF, or a postings-neutral edit): two-step persist + rollback. BYTE-IDENTICAL. ──
+    // ── Client save: the emergency switch (posting_service = false), or an edit of a PENDING voucher (no postings
+    //    yet). Two-step persist + rollback (RULE 1). ──
     persistVoucher(updatedVoucher, {
       isUpdate: true,
       // The reverse-old + repost-new pair is durably appended only after the base row is confirmed —
@@ -3096,36 +3028,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return true;
     }
 
-    // ── journal-first-write (slice 6) — DORMANT, per-tenant flag, default OFF ─────────────────────
-    // Under the flag, when there IS a posting to reverse, the cancel's SAVE is the authoritative
-    // append of the reversing event (which nets the voucher's postings out of the journal); the table
-    // soft-delete is then a best-effort projection. A pre-T-06 orphan with no posting (cancelEvent
-    // null) has nothing to append and already contributes nothing → it falls through to the table-first
-    // path below even under the flag. Flag OFF → table-first, byte-identical.
-    if (societyRef.current?.journalFirstWrites && cancelEvent) {
-      persistEventAuthoritative(cancelEvent, ledgerAppendIO).then((res) => {
-        if (!res.ok) {
-          // The append IS the save — its failure is a failed cancel (RULE 1). Un-cancel + surface loudly.
-          reportError('voucher-cancel-journal-append', res.error ?? 'append failed', { voucherId: id });
-          setVouchersState(prev => prev.map(v => v.id === id ? current : v));
-          ledgerEventsRef.current = ledgerEventsRef.current.filter(e => e.eventId !== cancelEvent!.eventId);
-          opts?.onFailed?.(res.error ?? 'journal append failed');
-          toastRef.current({ title: tr('❌ वाउचर रद्द करना क्लाउड में सेव नहीं हुआ', '❌ Voucher cancellation not saved to the cloud'), description: tr(`${res.error ?? 'journal append failed'}. रद्द करना वापस ले लिया गया — वाउचर चालू और सुरक्षित है।`, `${res.error ?? 'journal append failed'}. The cancellation was undone — the voucher is active and safe.`), variant: 'destructive', duration: 15000 });
-          return;
-        }
-        if (!opts?.viaParent) { loanFollowsCancel(current); followCancel(current); }   // LOAN-04 / X-5: confirmed (the journal is the save)
-        opts?.onCancelled?.();
-        // Saved (journal). Project the soft-delete into the table best-effort — a failure is now
-        // RECOVERABLE (the journal is the truth), so LOG, never roll back.
-        supabase.from('vouchers').update({ isDeleted: true, deletedAt: cancelledVoucher.deletedAt, deletedBy, deletedReason: reason }).eq('id', id).then(({ error }) => {
-          if (error) reportError('voucher-cancel-table-projection', 'table soft-delete failed after durable journal append (recoverable): ' + error.message, { voucherId: id });
-          else deleteEntries(id); // remove from voucher_entries so the cancelled voucher has no SQL-visible impact
-        });
-      });
-      return true;
-    }
-
-    // ── Default (flag OFF, or no posting to reverse): table-first soft-delete. BYTE-IDENTICAL. ──
+    // ── Emergency switch (posting_service = false): table-first soft-delete (RULE 1). ──
     // Soft-delete via a TARGETED update of only the delete columns. Upserting the
     // whole voucher object fails with a schema-cache error when it carries any
     // late-added column the table lacks (RULE 1) — which silently left cancelled
