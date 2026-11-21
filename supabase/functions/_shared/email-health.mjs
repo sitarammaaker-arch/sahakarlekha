@@ -30,6 +30,8 @@ export function appProblems(h) {
   const out = [];
   const n = (k) => Number(h?.[k] ?? 0);
   if (h?.site && h.site.ok === false) out.push(`🔴 वेबसाइट नहीं खुल रही: ${h.site.url ?? ''} → ${h.site.status ?? h.site.error ?? 'कोई जवाब नहीं'}। सदस्य/स्टाफ़ login नहीं कर पा रहे होंगे।`);
+  const mm = Array.isArray(h?.site?.missing_migrations) ? h.site.missing_migrations : [];
+  if (mm.length) out.push(`🟠 नया code live है पर ये migration production में अभी नहीं चलीं: ${mm.join(', ')} — Supabase SQL Editor में supabase/migrations/ की वही file चलाएँ।`);
   if (n('integrity_errors_6h') > 0) {
     const top = Array.isArray(h.integrity_top) ? h.integrity_top.map((t) => `${t.source} ×${t.n}${t.sample ? ` ("${String(t.sample).slice(0, 80)}")` : ''}`).join('; ') : '';
     out.push(`पिछले 6 घंटे में ${n('integrity_errors_6h')} सेव/पोस्टिंग/सर्वर error दर्ज हुए${top ? ` — ${top}` : ''}।`);
@@ -59,6 +61,30 @@ export async function probeSite(appUrl, fetchFn = fetch, timeoutMs = 10000) {
     }
   }
   return { ok: true, status: 200, url: base + '/' };
+}
+
+/**
+ * 194 · OPS-02 — migrations the LIVE build expects but production has not run. Reads the build's /migrations.json
+ * (scripts/migration-manifest.mjs) and public.app_migrations. Only reported once the build is older than
+ * `graceMs` (default 2 h), so the founder has time to run a new migration after merging. Never throws: an unreadable
+ * manifest or table → [] (no alert), because a guess would be worse than silence here.
+ */
+export async function pendingMigrations(supa, appUrl, fetchFn = fetch, { now = Date.now(), graceMs = 2 * 3600 * 1000 } = {}) {
+  try {
+    const base = String(appUrl || 'https://sahakarlekha.com').replace(/\/+$/, '');
+    const res = await fetchFn(`${base}/migrations.json`, { method: 'GET', headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } });
+    if (!res || res.status !== 200) return [];
+    const man = await res.json();
+    const expected = Array.isArray(man?.expected) ? man.expected.map(String) : [];
+    const builtAt = Date.parse(man?.builtAt ?? '');
+    if (!expected.length || !Number.isFinite(builtAt) || now - builtAt < graceMs) return [];
+    const { data, error } = await supa.from('app_migrations').select('version');
+    if (error || !Array.isArray(data)) return [];
+    const have = new Set(data.map((r) => String(r.version)));
+    return expected.filter((v) => !have.has(v));
+  } catch {
+    return [];
+  }
 }
 
 /** Subject, html, text for the alert / recovery email. */
@@ -94,6 +120,11 @@ export function buildHealthEmail(action, h, { appUrl }) {
 export async function runHealthCheck(supa, cfg = {}) {
   let claim;
   const site = cfg.probe ? await probeSite(cfg.appUrl, cfg.fetch ?? fetch) : null;
+  // 194 · OPS-02: migrations the live build needs but production has not run (after a 2 h grace).
+  if (site) {
+    const missing = await pendingMigrations(supa, cfg.appUrl, cfg.fetch ?? fetch, { now: cfg.now ?? Date.now() });
+    if (missing.length) site.missing_migrations = missing;
+  }
   try {
     const { data, error } = await (site ? supa.rpc('claim_email_health_alert', { p_site: site }) : supa.rpc('claim_email_health_alert'));
     if (error) return { status: 'error', error: `claim: ${error.message}` };
