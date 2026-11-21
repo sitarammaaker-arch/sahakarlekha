@@ -518,7 +518,12 @@
     "test:live01-easy-batch": "node scripts/test-live01-easy-batch.mjs",
     "test:provider-contract": "node scripts/test-provider-contract.mjs",
     "test:provider-contract-2": "node scripts/test-provider-contract-2.mjs",
-    "test:provider-contract-domains": "node scripts/test-provider-contract-domains.mjs"
+    "test:provider-contract-domains": "node scripts/test-provider-contract-domains.mjs",
+    "build:cloudflare": "npm run build && node scripts/cloudflare-config.mjs --write",
+    "deploy:cloudflare": "npm run build:cloudflare && wrangler deploy",
+    "test:cloudflare-config": "node scripts/cloudflare-config.mjs",
+    "test:cloudflare-worker": "node scripts/test-cloudflare-worker.mjs",
+    "test:provider-contract-4": "node scripts/test-provider-contract-4.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -606,6 +611,7 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
-    "vite": "^5.4.19"
+    "vite": "^5.4.19",
+    "wrangler": "4.158.0"
   }
 }

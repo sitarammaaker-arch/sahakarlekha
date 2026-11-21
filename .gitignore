@@ -32,3 +32,6 @@ supabase/.temp/
 # Playwright (I6 e2e) artefacts
 test-results/
 playwright-report/
+
+# Cloudflare wrangler local state (wrangler dev)
+.wrangler/

@@ -1,0 +1,28 @@
+// Cloudflare Workers hosting for sahakarlekha.com (2026-11-21). Static files come straight from dist/ (built by
+// `npm run build`, then `node scripts/cloudflare-config.mjs --write` adds dist/_headers). cloudflare/worker.js runs
+// only when no file matches: redirects, the SPA shell for app routes, a real 404 otherwise, and /api/subscribe.
+// Deploy: npm run deploy:cloudflare   (needs `npx wrangler login` once, by the account owner)
+// Secrets (set by the owner, never in this file): npx wrangler secret put RESEND_API_KEY / RESEND_FROM
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sahakarlekha",
+  "main": "cloudflare/worker.js",
+  "compatibility_date": "2026-11-01",
+  // A browser navigation (Sec-Fetch-Mode: navigate) to /login or /dashboard must reach the Worker so it can serve the
+  // SPA shell. Since 2025-04-01 Cloudflare answers navigations with not_found_handling (the 404 page) WITHOUT running
+  // the Worker; this flag turns that off. Found on the first deploy: curl got 200, a real browser got 404.
+  "compatibility_flags": ["assets_navigation_has_no_effect"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "drop-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  // The live domain. www.sahakarlekha.com → sahakarlekha.com is a Cloudflare Redirect Rule on the zone (dashboard),
+  // because www requests for static files never reach this Worker.
+  "routes": [{ "pattern": "sahakarlekha.com", "custom_domain": true }],
+  // No second public copy of the site on *.workers.dev once the domain is live (duplicate content for search).
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true }
+}
