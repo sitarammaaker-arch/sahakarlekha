@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Credit always means money received / an increase." → For cash (an asset), a credit is a *decrease*.
 - ❌ "Credit is the opposite of good." → It's simply the right side, value-neutral.
 
+**परिभाषा:** जमा (Credit/Cr) किसी खाते की एंट्री का दायाँ पक्ष है। मोटे तौर पर, जमा से लायबिलिटी, कैपिटल या आय में बढ़ोतरी, या एसेट या खर्च में कमी दर्ज होती है।
+
+**क्यों ज़रूरी:** हर वाउचर में नाम (debit) के साथ जमा (credit) जुड़ा होता है। किस खाते को जमा करना है, यह जानना सही एंट्री और मिलान वाले Trial Balance की बुनियाद है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "जमा का मतलब हमेशा पैसा मिलना या बढ़ना है।" → नकद (एक एसेट) में जमा का मतलब *कमी* होता है।
+- ❌ "जमा कोई बुरी या उल्टी चीज़ है।" → यह बस दायाँ पक्ष है, इसमें अच्छा-बुरा कुछ नहीं।
+
+**सीखने के लक्ष्य:**
+- जमा को एंट्री के दाएँ पक्ष के रूप में पहचान सकें।
+- समझ सकें कि हर लेन-देन में जमा अपने मेल वाले नाम (debit) के बराबर होता है।
+
 **Related concepts:** [[KI-000027]] Debit · [[KI-000026]] Double-entry system · [[KI-000029]] Golden rules
 
 **Internal links:** /guide/golden-rules · /guide/accounting-foundations

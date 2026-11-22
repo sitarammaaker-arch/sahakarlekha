@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "All banks share one entry." → Each bank account is added and tracked separately.
 - ❌ "Opening balance can be skipped." → Enter the bank's opening balance so its records are complete.
 
+**परिभाषा:** बैंक खाता जोड़ना यानी बही में नया बैंक सेट करना — बैंक/शाखा का नाम और उसका ओपनिंग बैलेंस डालना — ताकि उस बैंक के लेन-देन कैश और दूसरे बैंकों से अलग दर्ज हों और उनका अलग मिलान (reconcile) हो सके।
+
+**क्यों ज़रूरी:** समितियों के अक्सर कई बैंक खाते होते हैं। हर खाते को सही ढंग से जोड़ने से बैलेंस और मिलान सही रहते हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "सारे बैंकों की एक ही एंट्री होती है।" → हर बैंक खाता अलग जोड़ा और अलग ट्रैक किया जाता है।
+- ❌ "ओपनिंग बैलेंस छोड़ा जा सकता है।" → बैंक का ओपनिंग बैलेंस डालें, ताकि उसका हिसाब पूरा रहे।
+
+**सीखने के लक्ष्य:**
+- ओपनिंग बैलेंस के साथ नया बैंक खाता जोड़ सकें।
+- हर बैंक का हिसाब अलग-अलग रख सकें।
+
 **Related concepts:** [[KI-000113]] Bank account · [[KI-000114]] Bank book · [[KI-000127]] Multi-bank handling · [[KI-000329]] Enter opening balances (task)
 
 **Internal links:** /guide/receipts-and-payments · /bank-book

@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Account = bank account only." → In accounting, every item (cash, expense, member, asset) has an account.
 - ❌ "Accounts are created fresh each time." → They are set up once (in the chart of accounts) and reused.
 
+**परिभाषा:** खाता (account) एक रिकॉर्ड है जिसमें किसी एक मद — जैसे कैश, बैंक, कोई सदस्य या कोई खर्च — के सारे लेन-देन एक जगह इकट्ठे होते हैं, और उसका बढ़ना, घटना और चालू शेष (running balance) दिखता है।
+
+**क्यों ज़रूरी:** खाते ही लेजर और खातों की सूची (chart of accounts) की बुनियादी ईंटें हैं। हर वाउचर किसी न किसी खाते में दर्ज (post) होता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "खाता मतलब सिर्फ़ बैंक खाता।" → लेखांकन में हर मद (कैश, खर्च, सदस्य, संपत्ति) का अपना खाता होता है।
+- ❌ "हर बार नया खाता बनाना पड़ता है।" → खाते एक बार (chart of accounts में) बनाए जाते हैं और फिर बार-बार इस्तेमाल होते हैं।
+
+**सीखने के लक्ष्य:**
+- खाते की परिभाषा बता सकें और समझा सकें कि उसमें क्या-क्या इकट्ठा होता है।
+- पहचान सकें कि हर मद का (सिर्फ़ बैंक का नहीं) अपना खाता होता है।
+
 **Related concepts:** [[KI-000034]] Asset · [[KI-000035]] Liability · [[KI-000079]] Ledger · [[KI-000029]] Golden rules
 
 **Internal links:** /guide/chart-of-accounts · /ledger-heads

@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "The passbook is the society's own record." → It is the bank's record; the society keeps its bank book.
 - ❌ "Passbook and bank book must match exactly at all times." → Timing differences are normal and explained by reconciliation.
 
+**परिभाषा:** पासबुक बैंक द्वारा दिया गया वह रिकॉर्ड है जिसमें समिति के खाते के लेन-देन और शेष होते हैं, और जिसे बैंक ही छापता/अपडेट करता है — यह खाते का बैंक वाला रूप है, जिससे समिति की बैंक बुक की जाँच की जाती है।
+
+**क्यों ज़रूरी:** पासबुक/स्टेटमेंट बैंक मिलान (reconciliation) का स्वतंत्र स्रोत है — यह एक बुनियादी जाँच है कि समिति के रिकॉर्ड सही हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "पासबुक समिति का अपना रिकॉर्ड है।" → यह बैंक का रिकॉर्ड है; समिति अपनी बैंक बुक रखती है।
+- ❌ "पासबुक और बैंक बुक हर समय बिल्कुल बराबर होनी चाहिए।" → समय के अंतर (timing differences) आम बात हैं, और मिलान से इन्हें समझाया जाता है।
+
+**सीखने के लक्ष्य:**
+- पासबुक को बैंक के रिकॉर्ड के रूप में परिभाषित कर सकें।
+- इससे बैंक बुक का मिलान कर सकें।
+
 **Related concepts:** [[KI-000121]] Bank statement · [[KI-000114]] Bank book · [[KI-000113]] Bank account
 
 **Internal links:** /guide/receipts-and-payments · /bank-reconciliation

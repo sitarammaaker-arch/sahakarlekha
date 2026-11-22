@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Authorised capital = paid-up capital." → Authorised is the permitted ceiling; paid-up is what was actually paid.
 - ❌ "Paid-up capital is the society's profit." → It is members' contributed capital, not earnings.
 
+**परिभाषा:** पेड-अप कैपिटल (चुकता पूँजी) वह कुल राशि है जो सदस्यों ने अपने शेयरों के लिए सच में चुका दी है — यानी समिति को असल में मिला शेयर का पैसा, न कि सिर्फ़ वादा की गई या स्वीकृत (authorised) राशि।
+
+**क्यों ज़रूरी:** पेड-अप कैपिटल बैलेंस शीट का एक असली आँकड़ा है और अक्सर पात्रता, कर्ज़ लेने और सदस्यों के भरोसे के लिए मायने रखता है — इसलिए इसका हिसाब बिल्कुल सही रखना ज़रूरी है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "स्वीकृत पूँजी = पेड-अप कैपिटल।" → स्वीकृत पूँजी अनुमति वाली ऊपरी सीमा है; पेड-अप वह है जो सच में चुकाया गया।
+- ❌ "पेड-अप कैपिटल समिति का मुनाफ़ा है।" → यह सदस्यों की लगाई हुई पूँजी है, कमाई नहीं।
+
+**सीखने के लक्ष्य:**
+- पेड-अप कैपिटल की परिभाषा बता सकें।
+- पेड-अप को स्वीकृत/जारी (issued) पूँजी से अलग कर सकें।
+
 **Related concepts:** [[KI-000153]] Share · [[KI-000155]] Authorised capital (planned) · [[KI-000156]] Issued capital (planned) · [[KI-000158]] Face value · [[KI-000036]] Capital
 
 **Internal links:** /guide/member-management · /share-register

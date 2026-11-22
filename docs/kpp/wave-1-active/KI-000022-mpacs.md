@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "MPACS and PACS are unrelated." → An MPACS is a PACS doing multiple activities.
 - ❌ "One combined account covers everything." → Each activity should be tracked clearly for audit.
 
+**परिभाषा:** MPACS एक बहुउद्देशीय प्राथमिक कृषि साख समिति है, जो फसली कर्ज़ के अलावा सदस्यों के लिए कई सेवाएँ एक साथ चलाती है — जैसे खाद-बीज की आपूर्ति, PDS/राशन वितरण, भंडारण और खरीद — गाँव के स्तर पर।
+
+**क्यों ज़रूरी:** MPACS को कई कामों का हिसाब (कर्ज़, स्टॉक, आपूर्ति) रखना पड़ता है; SahakarLekha इन्हें अलग-अलग भी रख सकता है और जोड़कर भी दिखा सकता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "MPACS और PACS का आपस में कोई संबंध नहीं है।" → MPACS असल में वही PACS है जो कई काम करती है।
+- ❌ "एक ही मिला-जुला खाता सब कुछ संभाल लेता है।" → ऑडिट के लिए हर काम का हिसाब साफ़-साफ़ अलग रखना चाहिए।
+
+**सीखने के लक्ष्य:**
+- MPACS की परिभाषा बता सकें और समझा सकें कि यह PACS से आगे कैसे बढ़ती है।
+- हर काम का हिसाब अलग रखने की ज़रूरत समझ सकें।
+
 **Related concepts:** [[KI-000010]] PACS · [[KI-000009]] Society types · [[KI-000014]] Credit society
 
 **Internal links:** /software · /guide/society-type-entries

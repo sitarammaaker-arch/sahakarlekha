@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Bank book = bank passbook." → The bank book is the society's record; the passbook/statement is the bank's record. They are reconciled, not assumed equal.
 - ❌ "One bank book covers all banks together." → Each bank account has its own running balance.
 
+**परिभाषा:** बैंक बुक वह बही है जिसमें हर बैंक खाते की सारी जमा (receipt) और भुगतान (payment) तारीख के क्रम में दर्ज होते हैं, और समिति के रिकॉर्ड के अनुसार बैंक शेष दिखता है।
+
+**क्यों ज़रूरी:** इससे बैंक का पैसा नकद से अलग रहता है, कई बैंक खाते संभाले जा सकते हैं, और यही बैंक मिलान (bank reconciliation) का आधार है — जो ऑडिट का एक अहम बिंदु है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "बैंक बुक और बैंक पासबुक एक ही हैं।" → बैंक बुक समिति का रिकॉर्ड है; पासबुक/स्टेटमेंट बैंक का रिकॉर्ड है। दोनों का मिलान किया जाता है, यह मानकर नहीं चलते कि दोनों बराबर हैं।
+- ❌ "एक ही बैंक बुक में सारे बैंक एक साथ आ जाते हैं।" → हर बैंक खाते का अपना अलग चालू शेष होता है।
+
+**सीखने के लक्ष्य:**
+- बैंक बुक की परिभाषा बता सकें और समझा सकें कि उसमें क्या दर्ज होता है।
+- बैंक बुक (समिति का रिकॉर्ड) और पासबुक (बैंक का रिकॉर्ड) का फ़र्क समझ सकें।
+
 **Related concepts:** [[KI-000113]] Bank account · [[KI-000121]] Bank statement · [[KI-000122]] Bank reconciliation (planned) · [[KI-000101]] Cash book
 
 **Internal links:** /guide/receipts-and-payments · /bank-book

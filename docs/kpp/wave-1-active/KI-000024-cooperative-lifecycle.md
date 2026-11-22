@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "A society just runs once registered." → Each year brings recurring duties (audit, AGM, returns).
 - ❌ "Closing a society is informal." → Dissolution follows a defined legal process.
 
+**परिभाषा:** सहकारी समिति का जीवन-चक्र वे चरण हैं जिनसे समिति गुज़रती है — गठन और पंजीकरण, रोज़ का कामकाज, हर साल ऑडिट और वार्षिक आम सभा (AGM), विकास, और (ज़रूरत पड़े तो) विघटन — हर चरण की अपनी ज़िम्मेदारियाँ और रिकॉर्ड होते हैं।
+
+**क्यों ज़रूरी:** जीवन-चक्र देखने से पता चलता है कि कौन-सा काम (पंजीकरण, सालाना ऑडिट, AGM, साल के अंत का क्लोज़) *कब* होता है — और हर चरण में SahakarLekha कहाँ मदद करता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "पंजीकरण के बाद समिति बस चलती रहती है।" → हर साल कुछ काम दोहराने पड़ते हैं (ऑडिट, AGM, रिटर्न)।
+- ❌ "समिति बंद करना एक अनौपचारिक काम है।" → विघटन एक तय कानूनी प्रक्रिया से होता है।
+
+**सीखने के लक्ष्य:**
+- सहकारी समिति के जीवन-चक्र के चरण गिना सकें।
+- हर साल होने वाले कामों को इन चरणों में सही जगह रख सकें।
+
 **Related concepts:** [[KI-000001]] Cooperative society · [[KI-000049]] Accounting cycle · [[KI-000005]] Byelaws (planned)
 
 **Internal links:** /guide/introduction · /guide/society-setup-and-roles

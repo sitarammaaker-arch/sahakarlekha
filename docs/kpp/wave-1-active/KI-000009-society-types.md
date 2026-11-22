@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "All societies keep identical books." → The core is the same, but the emphasis (loans vs stock vs procurement) differs by type.
 - ❌ "A society can only do one activity." → Multi-purpose societies (MPACS) combine several.
 
+**परिभाषा:** सहकारी समितियों को इस आधार पर बाँटा जाता है कि वे सदस्यों के लिए मुख्य रूप से कौन-सा काम करती हैं — जैसे साख (कर्ज़), खेती (PACS), डेयरी, उपभोक्ता, विपणन (marketing), हाउसिंग, श्रमिक (labour), प्रसंस्करण (processing), और शीर्ष/संघ (apex/federation) संस्थाएँ।
+
+**क्यों ज़रूरी:** समिति का प्रकार तय करता है कि वह SahakarLekha की कौन-सी सुविधाएँ सबसे ज़्यादा इस्तेमाल करेगी (जैसे साख समिति के लिए कर्ज़, उपभोक्ता समिति के लिए स्टॉक) — और इसी से setup की दिशा मिलती है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "सभी समितियाँ बिल्कुल एक जैसी बही रखती हैं।" → मूल ढाँचा एक ही है, पर ज़ोर (कर्ज़, स्टॉक या खरीद) प्रकार के हिसाब से बदलता है।
+- ❌ "समिति सिर्फ़ एक ही काम कर सकती है।" → बहुउद्देशीय समितियाँ (MPACS) कई काम एक साथ करती हैं।
+
+**सीखने के लक्ष्य:**
+- सहकारी समितियों के मुख्य प्रकारों के नाम बता सकें।
+- मुख्य काम देखकर समिति का प्रकार पहचान सकें।
+
 **Related concepts:** [[KI-000010]] PACS · [[KI-000014]] Credit society · [[KI-000011]] Dairy · [[KI-000012]] Consumer · [[KI-000013]] Marketing · [[KI-000001]] Cooperative society
 
 **Internal links:** /software · /guide/society-type-entries

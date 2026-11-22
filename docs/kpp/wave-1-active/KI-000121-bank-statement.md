@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "The statement balance must equal the book balance exactly at all times." → Timing differences (uncleared cheques, etc.) are normal and resolved by reconciliation.
 - ❌ "The bank statement replaces the bank book." → Both are kept; one is the bank's record, the other the society's.
 
+**परिभाषा:** बैंक स्टेटमेंट बैंक का अपना रिकॉर्ड है जिसमें एक अवधि में समिति के बैंक खाते के सारे लेन-देन दिखते हैं — जमा, निकासी, शुल्क (charges) और बैंक के अनुसार अंतिम शेष।
+
+**क्यों ज़रूरी:** यह बैंक मिलान (bank reconciliation) का स्वतंत्र आधार है — यह जाँचने का मुख्य तरीका कि समिति का बैंक का हिसाब सही और पूरा है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "स्टेटमेंट का शेष हर समय बही के शेष के बिल्कुल बराबर होना चाहिए।" → समय का अंतर (जैसे क्लियर न हुए चेक) सामान्य है और मिलान से सुलझ जाता है।
+- ❌ "बैंक स्टेटमेंट होने पर बैंक बुक की ज़रूरत नहीं।" → दोनों रखे जाते हैं; एक बैंक का रिकॉर्ड है, दूसरा समिति का।
+
+**सीखने के लक्ष्य:**
+- बैंक स्टेटमेंट की परिभाषा और उसे कौन जारी करता है, यह बता सकें।
+- मिलान के आधार के रूप में उसकी भूमिका समझा सकें।
+
 **Related concepts:** [[KI-000114]] Bank book · [[KI-000122]] Bank reconciliation (planned) · [[KI-000120]] Passbook (planned) · [[KI-000113]] Bank account
 
 **Internal links:** /guide/receipts-and-payments · /bank-reconciliation

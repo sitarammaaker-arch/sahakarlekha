@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Posting is a separate manual step in software." → Modern software posts vouchers to ledgers instantly.
 - ❌ "Posting changes the amount." → It only moves the same entry into the account; amounts don't change.
 
+**परिभाषा:** पोस्टिंग का मतलब है जर्नल/वाउचर की एंट्री को संबंधित लेजर खातों में चढ़ाना, ताकि हर खाते में उसके सारे लेन-देन इकट्ठा हों और उसका बैलेंस दिखे।
+
+**क्यों ज़रूरी:** पोस्टिंग ही बिखरी हुई एंट्री को खाते-वार बैलेंस में बदलती है, जिनसे Trial Balance और रिपोर्ट बनती हैं। SahakarLekha पोस्टिंग अपने-आप करता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "सॉफ़्टवेयर में पोस्टिंग अलग से हाथ से करनी पड़ती है।" → आधुनिक सॉफ़्टवेयर वाउचर को तुरंत लेजर में पोस्ट कर देता है।
+- ❌ "पोस्टिंग से रकम बदल जाती है।" → यह बस वही एंट्री खाते में ले जाती है; रकम नहीं बदलती।
+
+**सीखने के लक्ष्य:**
+- वाउचर से लेजर तक पोस्टिंग की परिभाषा बता सकें।
+- पहचान सकें कि सॉफ़्टवेयर में पोस्टिंग अपने-आप होती है।
+
 **Related concepts:** [[KI-000047]] Journal · [[KI-000079]] Ledger · [[KI-000055]] Voucher · [[KI-000185]] Trial balance (planned)
 
 **Internal links:** /guide/daybook-and-ledger · /ledger

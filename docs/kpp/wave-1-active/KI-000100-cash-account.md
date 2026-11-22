@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Cash account and bank account are one." → They are separate accounts.
 - ❌ "A negative cash balance is normal." → Cash in hand cannot be negative; a negative balance signals an error.
 
+**परिभाषा:** कैश अकाउंट वह लेजर खाता है जिसमें सारी नकद प्राप्ति (Dr) और सारा नकद भुगतान (Cr) दर्ज होता है, और इसका बैलेंस हाथ में मौजूद कैश दिखाता है।
+
+**क्यों ज़रूरी:** यह कैश बुक को लेजर और Trial Balance से जोड़ता है; जाँच के समय इसका बैलेंस गिनकर देखे गए नकद से मिलना चाहिए।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "कैश अकाउंट और बैंक अकाउंट एक ही हैं।" → ये दोनों अलग-अलग खाते हैं।
+- ❌ "कैश का बैलेंस माइनस होना सामान्य है।" → हाथ में नकद माइनस नहीं हो सकता; माइनस बैलेंस का मतलब है कि कहीं गलती है।
+
+**सीखने के लक्ष्य:**
+- कैश अकाउंट की परिभाषा और उसके बैलेंस का मतलब बता सकें।
+- जान सकें कि कैश का माइनस बैलेंस गलती का संकेत है।
+
 **Related concepts:** [[KI-000099]] Cash · [[KI-000101]] Cash book · [[KI-000080]] Ledger account · [[KI-000113]] Bank account
 
 **Internal links:** /guide/receipts-and-payments · /cash-book

@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "A federation controls its member societies." → It supports/coordinates; member societies stay autonomous.
 - ❌ "Individuals are members of a federation." → Its members are societies, not (usually) individuals.
 
+**परिभाषा:** शीर्ष संस्था या संघ (federation) ऊँचे स्तर की सहकारी संस्था है जिसके सदस्य दूसरी सहकारी समितियाँ होती हैं — यह जिला, राज्य या राष्ट्रीय स्तर पर उनके काम में तालमेल बिठाती है, उन्हें सहयोग देती है और उनका प्रतिनिधित्व करती है (जैसे जिला केंद्रीय सहकारी बैंक या राज्य विपणन संघ)।
+
+**क्यों ज़रूरी:** संघ अपनी सदस्य समितियों का डेटा और रिपोर्ट एक जगह जोड़ते हैं; SahakarLekha कई समितियों को जोड़कर (consolidation) देखने और संघ की रिपोर्ट बनाने में मदद करता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "संघ अपनी सदस्य समितियों पर नियंत्रण रखता है।" → संघ सहयोग और तालमेल देता है; सदस्य समितियाँ स्वतंत्र (autonomous) रहती हैं।
+- ❌ "संघ के सदस्य आम लोग होते हैं।" → इसके सदस्य समितियाँ होती हैं, (आम तौर पर) अलग-अलग व्यक्ति नहीं।
+
+**सीखने के लक्ष्य:**
+- शीर्ष संस्था/संघ को "समितियों की समिति" के रूप में परिभाषित कर सकें।
+- सहकारी ढाँचे के स्तरों में उसकी जगह समझ सकें।
+
 **Related concepts:** [[KI-000009]] Society types · [[KI-000007]] RCS · [[KI-000001]] Cooperative society
 
 **Internal links:** /software · /federation-report · /blog/cooperative-society-tiers-primary-central-state-apex · /blog/nabard-and-federation-returns

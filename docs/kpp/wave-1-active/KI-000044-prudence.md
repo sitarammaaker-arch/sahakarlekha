@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Prudence means understating everything." → It means caution, not deliberate understatement.
 - ❌ "You record gains as soon as you expect them." → Gains are recognised when realised, not merely expected.
 
+**परिभाषा:** प्रूडेंस (prudence या conservatism) लेखांकन की वह परंपरा है जिसमें सतर्क रहा जाता है — आय या एसेट को बढ़ा-चढ़ाकर नहीं दिखाया जाता, और संभावित हानि व देनदारी का अंदाज़ा होते ही उसे दर्ज कर लिया जाता है, ताकि खाते ज़रूरत से ज़्यादा अच्छी तस्वीर न दिखाएँ।
+
+**क्यों ज़रूरी:** यह सदस्यों और ऑडिटरों को ज़रूरत से ज़्यादा उम्मीद भरे खातों से बचाता है — जैसे यह मान लेने के बजाय कि सारा बकाया वसूल हो जाएगा, संदिग्ध बकाये के लिए प्रावधान (provision) करना।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "प्रूडेंस का मतलब है हर चीज़ को कम करके दिखाना।" → इसका मतलब सावधानी है, जान-बूझकर कम दिखाना नहीं।
+- ❌ "फ़ायदे की उम्मीद होते ही उसे दर्ज कर लो।" → फ़ायदा तब दर्ज होता है जब वह सच में मिल जाए, सिर्फ़ उम्मीद पर नहीं।
+
+**सीखने के लक्ष्य:**
+- प्रूडेंस/conservatism की परिभाषा बता सकें।
+- इसे हानि और फ़ायदे को दर्ज करने के फ़र्क पर लागू कर सकें।
+
 **Related concepts:** [[KI-000043]] Going concern · [[KI-000045]] Consistency (planned) · [[KI-000038]] Expense
 
 **Internal links:** /guide/accounting-foundations · /guide/audit-preparation

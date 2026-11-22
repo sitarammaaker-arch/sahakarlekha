@@ -35,6 +35,18 @@ review_schedule: 2027-07-25
 - ❌ "Receipt and payment are the same voucher." → Receipt is money IN; payment is money OUT.
 - ❌ "You must know debit/credit to record a receipt." → Easy mode hides Dr/Cr — just pick "money in".
 
+**परिभाषा:** रसीद वाउचर समिति में आने वाले पैसे को दर्ज करता है — नकद या बैंक में — जैसे किसी सदस्य का भुगतान, कर्ज़ की वापसी, या किसी ग्राहक का बिल चुकाना।
+
+**क्यों ज़रूरी:** रसीदों से कैश बुक और सदस्यों/ग्राहकों का बकाया सही रहता है। कोई रसीद छूट जाए तो किताबों में वह पैसा अब भी बकाया दिखता है जो असल में चुकाया जा चुका है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "रसीद और भुगतान एक ही वाउचर है।" → रसीद यानी पैसा आया; भुगतान यानी पैसा गया।
+- ❌ "रसीद दर्ज करने के लिए नाम-जमा (Dr/Cr) जानना ज़रूरी है।" → आसान मोड (Easy mode) Dr/Cr छिपा देता है — बस "पैसा आया" चुनें।
+
+**सीखने के लक्ष्य:**
+- रसीद वाउचर की परिभाषा बता सकें।
+- रसीद (आया) और भुगतान (गया) का फ़र्क बता सकें।
+
 **Related concepts:** [[KI-000404]] Payment voucher · [[KI-000055]] Voucher · [[KI-000402]] Sale
 
 **Internal links:** /receive-payment · /help/receive-payment · /guide/receipts-and-payments

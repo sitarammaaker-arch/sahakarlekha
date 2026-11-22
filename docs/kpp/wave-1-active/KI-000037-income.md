@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "All money received is income." → Money received as a deposit or a loan is a liability, not income.
 - ❌ "Income equals cash in hand." → Income is earnings; cash is a separate asset.
 
+**परिभाषा:** आय वह धन है जो समिति अपने कामकाज से कमाती है — जैसे कर्ज़ पर ब्याज, कमीशन, माल की बिक्री, फ़ीस या सेवा शुल्क — और जो किसी अवधि में समिति के धन को बढ़ाता है।
+
+**क्यों ज़रूरी:** आय और खर्च से ही तय होता है कि समिति को बचत (surplus) हुई या घाटा (deficit)। कमाई को सही तरह आय में दर्ज करने से नतीजा और रिपोर्ट सही रहती हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "जो भी पैसा मिला, वह आय है।" → जमा (deposit) या कर्ज़ के रूप में मिला पैसा देनदारी (liability) है, आय नहीं।
+- ❌ "आय मतलब हाथ में नकद।" → आय कमाई है; नकद एक अलग एसेट है।
+
+**सीखने के लक्ष्य:**
+- समिति के उदाहरणों से आय की परिभाषा बता सकें।
+- आय (कमाई) को मिली हुई जमा/कर्ज़ से अलग पहचान सकें।
+
 **Related concepts:** [[KI-000038]] Expense · [[KI-000167]] Net profit/surplus (planned) · [[KI-000201]] Profit & Loss (planned)
 
 **Internal links:** /guide/income-and-expenditure · /profit-loss

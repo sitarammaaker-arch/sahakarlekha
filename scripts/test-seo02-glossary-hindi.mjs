@@ -36,7 +36,7 @@ for (const f of kis) {
   ok(parts.every((p) => devanagariShare(p) >= 0.7), `${f}: each Hindi field is mostly Devanagari (${parts.map((p) => devanagariShare(p).toFixed(2)).join(', ')})`);
   ok(src.indexOf('**परिभाषा:**') < src.indexOf('**Related concepts:**'), `${f}: the Hindi block sits before Related concepts (the English fields keep their boundaries)`);
 }
-ok(done.length >= 10, `KIs with Hindi text: ${done.length} of ${kis.length}`);
+ok(done.length === kis.length, `every KI carries its Hindi text — a new term needs the four Hindi fields too (${done.length} of ${kis.length})`);
 
 // ── built pages (when dist/ exists) ──
 if (existsSync(join(ROOT, 'dist/glossary'))) {

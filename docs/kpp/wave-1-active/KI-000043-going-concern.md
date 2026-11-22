@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Going concern means the society can never close." → It is an assumption that can change if circumstances change.
 - ❌ "It is only relevant at year-end." → It underlies the whole basis of preparing accounts.
 
+**परिभाषा:** गोइंग कंसर्न (going concern) लेखा की वह मान्यता है कि समिति आने वाले समय में चलती रहेगी — इसलिए उसके खाते इस आधार पर बनाए जाते हैं कि वह अभी बंद होने या अपनी संपत्तियाँ बेचने वाली नहीं है।
+
+**क्यों ज़रूरी:** इसी मान्यता के कारण खातों में सामान्य मूल्यांकन होता है, समिति टूटने वाला (break-up) मूल्यांकन नहीं। अगर गोइंग कंसर्न पर शक हो, तो उसे साफ़ बताना ज़रूरी है — यह ऑडिट का एक अहम बिंदु है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "गोइंग कंसर्न का मतलब है समिति कभी बंद नहीं हो सकती।" → यह एक मान्यता है, जो हालात बदलने पर बदल सकती है।
+- ❌ "यह सिर्फ़ साल के अंत में काम आता है।" → खाते बनाने का पूरा आधार ही यही है।
+
+**सीखने के लक्ष्य:**
+- गोइंग कंसर्न मान्यता की परिभाषा बता सकें।
+- मूल्यांकन और ऑडिट के लिए यह क्यों ज़रूरी है, समझा सकें।
+
 **Related concepts:** [[KI-000044]] Prudence · [[KI-000025]] Accounting · [[KI-000053]] Accounting period
 
 **Internal links:** /guide/accounting-foundations · /guide/audit-preparation

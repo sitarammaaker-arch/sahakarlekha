@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Any voucher type will do for the first entry." → Choose the type that matches the transaction.
 - ❌ "Narration can be skipped on the first entry." → A clear narration is good practice from the start.
 
+**परिभाषा:** पहला वाउचर बनाना यानी सॉफ़्टवेयर में समिति का पहला लेन-देन दर्ज करना — सही वाउचर प्रकार (रसीद/भुगतान/जर्नल/कॉन्ट्रा) चुनना, खाते, रकम, तारीख और विवरण (narration) डालना — ताकि पक्का हो जाए कि बहीखाता ठीक चल रहा है।
+
+**क्यों ज़रूरी:** पहला वाउचर वह पल है जब समिति की किताबें "चालू" होती हैं। इसे सही करने से रोज़ की हर एंट्री का सही तरीका बन जाता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "पहली एंट्री के लिए कोई भी वाउचर प्रकार चल जाएगा।" → वही प्रकार चुनें जो लेन-देन से मेल खाता हो।
+- ❌ "पहली एंट्री में विवरण छोड़ा जा सकता है।" → शुरू से ही साफ़ विवरण लिखना अच्छी आदत है।
+
+**सीखने के लक्ष्य:**
+- पहला वाउचर सही प्रकार और विवरण के साथ दर्ज कर सकें।
+- पक्का कर सकें कि सेटअप शुरू से आख़िर तक ठीक काम कर रहा है।
+
 **Related concepts:** [[KI-000055]] Voucher · [[KI-000071]] Voucher entry quick reference · [[KI-000061]] Narration · [[KI-000329]] Enter opening balances (task)
 
 **Internal links:** /guide/voucher-types · /vouchers

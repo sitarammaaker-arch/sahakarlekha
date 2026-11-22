@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Accounting is only for big organisations." → Even the smallest society needs it.
 - ❌ "Accounting = just maths." → It is mainly organised recording and reporting, not heavy calculation.
 
+**परिभाषा:** लेखांकन (accounting) समिति के लेन-देन को क्रम से दर्ज करने, छाँटने (वर्गीकरण), सारांश बनाने और रिपोर्ट करने की व्यवस्थित प्रक्रिया है — ताकि समिति की आर्थिक स्थिति और प्रदर्शन समझे और जाँचे जा सकें।
+
+**क्यों ज़रूरी:** SahakarLekha जो कुछ भी करता है, उसकी नींव यही है। अच्छे लेखांकन का मतलब है साफ़ ऑडिट, सही रिपोर्ट और भरोसेमंद फ़ैसले।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "लेखांकन सिर्फ़ बड़ी संस्थाओं के लिए है।" → सबसे छोटी समिति को भी इसकी ज़रूरत है।
+- ❌ "लेखांकन मतलब सिर्फ़ गणित।" → यह मुख्य रूप से व्यवस्थित ढंग से दर्ज करना और रिपोर्ट बनाना है, भारी गणना नहीं।
+
+**सीखने के लक्ष्य:**
+- एक वाक्य में लेखांकन की परिभाषा बता सकें।
+- इसके चार मुख्य कदम गिना सकें (दर्ज करना, छाँटना, सारांश बनाना, रिपोर्ट करना)।
+
 **Related concepts:** [[KI-000026]] Double-entry system · [[KI-000039]] Transaction · [[KI-000046]] Books of account · [[KI-000049]] Accounting cycle
 
 **Internal links:** /guide/accounting-foundations · /guide/introduction

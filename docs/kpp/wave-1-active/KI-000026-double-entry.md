@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Double-entry means writing the same thing twice." → It means recording two *different* sides (debit and credit) of one transaction.
 - ❌ "It is only needed in software." → It is the universal accounting principle, software just automates it.
 
+**परिभाषा:** डबल एंट्री हिसाब रखने का वह तरीका है जिसमें हर लेन-देन कम से कम दो खातों में लिखा जाता है — एक तरफ़ "नाम" (Debit) और दूसरी तरफ़ बराबर रकम का "जमा" (Credit) — ताकि बही हमेशा बराबर (balance) रहे।
+
+**क्यों ज़रूरी:** यह भरोसेमंद लेखा की रीढ़ है। SahakarLekha इसे अपने-आप लागू करता है, इसीलिए तलपट (Trial Balance) हमेशा मिलता है — यानी नाम और जमा बराबर रहते हैं (नाम = जमा)।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "डबल एंट्री का मतलब एक ही बात दो बार लिखना है।" → इसका मतलब है एक लेन-देन के दो अलग पहलू (नाम और जमा) लिखना।
+- ❌ "यह सिर्फ़ सॉफ़्टवेयर में ज़रूरी है।" → यह लेखा का हर जगह लागू होने वाला नियम है, सॉफ़्टवेयर बस इसे अपने-आप करता है।
+
+**सीखने के लक्ष्य:**
+- समझा सकें कि हर लेन-देन में नाम और जमा बराबर होते हैं।
+- डबल एंट्री को बराबर Trial Balance से जोड़ सकें।
+
 **Related concepts:** [[KI-000027]] Debit · [[KI-000028]] Credit · [[KI-000040]] Accounting equation · [[KI-000025]] Accounting
 
 **Internal links:** /guide/accounting-foundations · /guide/golden-rules

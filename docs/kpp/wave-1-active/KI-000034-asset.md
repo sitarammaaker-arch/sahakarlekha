@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Only cash is an asset." → Loans receivable, stock, and fixed items are assets too.
 - ❌ "Assets are always physical." → Amounts owed to the society (receivables) are assets without being physical.
 
+**परिभाषा:** एसेट (परिसंपत्ति) वह हर मूल्यवान चीज़ है जो समिति के पास है या जो समिति को मिलनी है — जैसे कैश, बैंक में जमा, सदस्यों को दिया गया कर्ज़, स्टॉक, इमारत या उपकरण — जिससे आगे फ़ायदा मिल सकता है।
+
+**क्यों ज़रूरी:** एसेट बैलेंस शीट का आधा हिस्सा हैं और खातों की एक मुख्य श्रेणी हैं। चीज़ों को सही ढंग से एसेट में रखने से रिपोर्टें सही बनती हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "सिर्फ़ कैश ही एसेट है।" → मिलने वाला कर्ज़, स्टॉक और स्थायी चीज़ें भी एसेट हैं।
+- ❌ "एसेट हमेशा कोई दिखने-छूने वाली चीज़ होती है।" → समिति को जो रकम मिलनी है (लेनदारी/receivables), वह भी एसेट है, भले ही दिखती न हो।
+
+**सीखने के लक्ष्य:**
+- एसेट की परिभाषा बता सकें और समिति के उदाहरण दे सकें।
+- एसेट और देनदारी (liability) का फ़र्क कर सकें।
+
 **Related concepts:** [[KI-000035]] Liability · [[KI-000036]] Capital · [[KI-000040]] Accounting equation · [[KI-000227]] Assets side (planned)
 
 **Internal links:** /guide/balance-sheet · /balance-sheet

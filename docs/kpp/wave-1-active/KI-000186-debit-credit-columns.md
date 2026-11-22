@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "A balance can go in either column." → It goes on the side that matches the account's nature.
 - ❌ "Equal totals mean zero errors." → Equal totals confirm Dr=Cr, but some errors can still hide; it is a first check, not the only one.
 
+**परिभाषा:** Trial Balance में नाम (Debit) और जमा (Credit) कॉलम हर खाते का क्लोज़िंग बैलेंस उसके सही पक्ष में दिखाते हैं — नाम-शेष एक कॉलम में, जमा-शेष दूसरे में — और दोनों कॉलमों का जोड़ बराबर होना चाहिए।
+
+**क्यों ज़रूरी:** दोनों कॉलमों का मिलना बही की पहली सेहत-जाँच है — अगर ये न मिलें, तो अंतिम खाते (final accounts) बनाने से पहले गलती ढूँढनी होगी।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "बैलेंस किसी भी कॉलम में लिख सकते हैं।" → बैलेंस उसी पक्ष में जाता है जो खाते की प्रकृति से मेल खाता है।
+- ❌ "जोड़ बराबर है तो कोई गलती नहीं।" → बराबर जोड़ से बस Dr = Cr पक्का होता है, पर कुछ गलतियाँ फिर भी छिपी रह सकती हैं; यह पहली जाँच है, अकेली नहीं।
+
+**सीखने के लक्ष्य:**
+- दो कॉलम वाले Trial Balance और बराबर जोड़ को समझा सकें।
+- बराबर जोड़ को पहली (अकेली नहीं) जाँच के रूप में पहचान सकें।
+
 **Related concepts:** [[KI-000185]] Trial balance (planned) · [[KI-000027]] Debit · [[KI-000028]] Credit · [[KI-000026]] Double-entry system
 
 **Internal links:** /guide/trial-balance · /trial-balance

@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Accounting period must be a full year." → It is usually a year, but shorter periods are used for reviews.
 - ❌ "Period and financial year are unrelated." → The financial year is the standard accounting period.
 
+**परिभाषा:** लेखांकन अवधि वह समय-खंड है जिसके लिए खाते बनाए जाते हैं और नतीजे मापे जाते हैं — आम तौर पर वित्तीय वर्ष, पर अंदरूनी समीक्षा के लिए महीना या तिमाही भी हो सकती है।
+
+**क्यों ज़रूरी:** अवधि तय होने से आय और खर्च सही समय-खंड से मिलाए जा सकते हैं, जिससे नतीजे और तुलना का मतलब बनता है। SahakarLekha में रिपोर्ट हमेशा किसी अवधि से जुड़ी होती है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "लेखांकन अवधि पूरा साल ही होनी चाहिए।" → आम तौर पर यह साल होती है, पर समीक्षा के लिए छोटी अवधि भी ली जाती है।
+- ❌ "अवधि और वित्तीय वर्ष का आपस में कोई लेना-देना नहीं।" → वित्तीय वर्ष ही मानक लेखांकन अवधि है।
+
+**सीखने के लक्ष्य:**
+- लेखांकन अवधि की परिभाषा बता सकें।
+- इसे वित्तीय वर्ष और रिपोर्टिंग से जोड़ सकें।
+
 **Related concepts:** [[KI-000050]] Financial year · [[KI-000049]] Accounting cycle · [[KI-000037]] Income
 
 **Internal links:** /guide/accounting-foundations · /reports

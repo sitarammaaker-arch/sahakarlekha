@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "A nominee automatically becomes a member." → Nomination concerns receiving dues; membership follows the byelaws/rules.
 - ❌ "Nomination can't be changed." → A member can usually update their nominee.
 
+**परिभाषा:** नॉमिनी वह व्यक्ति है जिसे सदस्य पहले से चुनकर दर्ज कराता है, ताकि सदस्य की मृत्यु होने पर उसका शेयर/जमा/लाभ समिति से उसी को मिले — इससे समिति को पता रहता है कि किससे व्यवहार करना है।
+
+**क्यों ज़रूरी:** नॉमिनी दर्ज होने से सदस्य की मृत्यु पर विवाद और देरी नहीं होती। इसके लिए समितियाँ नामांकन रजिस्टर (nomination register) रखती हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "नॉमिनी अपने-आप सदस्य बन जाता है।" → नामांकन बकाया रकम पाने से जुड़ा है; सदस्यता उपनियम (bye-laws)/नियमों के हिसाब से ही मिलती है।
+- ❌ "नामांकन बदला नहीं जा सकता।" → सदस्य आम तौर पर अपना नॉमिनी बदल सकता है।
+
+**सीखने के लक्ष्य:**
+- नॉमिनी की परिभाषा बता सकें।
+- समझा सकें कि नॉमिनी दर्ज करना क्यों ज़रूरी है।
+
 **Related concepts:** [[KI-000064]] Nomination (planned) · [[KI-000131]] Membership · [[KI-000004]] Member
 
 **Internal links:** /guide/member-management · /nomination-register

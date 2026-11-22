@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "You can name heads anyhow." → Clear, standard names (and correct group) keep reports readable and audit-friendly.
 - ❌ "More heads is always better." → Too many tiny heads clutter; group sensibly.
 
+**परिभाषा:** लेजर हेड (account head) वह नाम है जिसके तहत बही में कोई खास खाता खोला जाता है — जैसे "वेतन", "किराया", "बैंक — SBI", या किसी सदस्य का नाम — और उससे जुड़ी सारी एंट्री उसी के नीचे दर्ज होती हैं।
+
+**क्यों ज़रूरी:** सही लेजर हेड (सही ग्रुप के नीचे) बनाना पहले दिन का setup काम है। अच्छे हेड से एंट्री आसान होती है और रिपोर्ट साफ़ बनती हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "हेड का नाम कुछ भी रख सकते हैं।" → साफ़, मानक नाम (और सही ग्रुप) से रिपोर्ट पढ़ने में आसान और ऑडिट के लायक रहती हैं।
+- ❌ "जितने ज़्यादा हेड, उतना अच्छा।" → बहुत सारे छोटे-छोटे हेड से गड़बड़ बढ़ती है; समझदारी से ग्रुप बनाएँ।
+
+**सीखने के लक्ष्य:**
+- खाता/लेजर हेड की परिभाषा बता सकें।
+- सही ग्रुप के नीचे साफ़ नाम वाले हेड चुन सकें।
+
 **Related concepts:** [[KI-000033]] Account · [[KI-000082]] Account group · [[KI-000081]] Chart of accounts (planned) · [[KI-000097]] Account-name glossary
 
 **Internal links:** /guide/chart-of-accounts · /ledger-heads

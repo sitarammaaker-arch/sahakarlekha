@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "A credit society is the same as a bank." → It serves its members under cooperative law; banking-licensed cooperatives (cooperative banks) are a separate, RBI-regulated category.
 - ❌ "Anyone can deposit or borrow." → Typically members only, per byelaws.
 
+**परिभाषा:** साख सहकारी समिति वह समिति है जिसका मुख्य काम सदस्यों की बचत/जमा इकट्ठा करना और सदस्यों को कर्ज़ देना है — ताकि सदस्यों के बीच ही सस्ता कर्ज़ और बचत की सुरक्षित जगह मिले।
+
+**क्यों ज़रूरी:** साख समितियाँ SahakarLekha का एक बड़ा हिस्सा हैं; इनका हिसाब जमा, कर्ज़, ब्याज और वसूली के इर्द-गिर्द घूमता है — और सॉफ़्टवेयर ये सब सुविधाएँ सीधे देता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "साख समिति और बैंक एक ही चीज़ हैं।" → साख समिति सहकारी कानून के तहत अपने सदस्यों की सेवा करती है; बैंकिंग लाइसेंस वाली सहकारी संस्थाएँ (सहकारी बैंक) एक अलग श्रेणी हैं, जिन पर RBI का नियंत्रण है।
+- ❌ "कोई भी जमा कर सकता है या कर्ज़ ले सकता है।" → आम तौर पर उपनियम (bye-laws) के अनुसार सिर्फ़ सदस्य ही।
+
+**सीखने के लक्ष्य:**
+- साख सहकारी समिति की परिभाषा बता सकें।
+- इसे लाइसेंस वाले सहकारी बैंक से अलग पहचान सकें।
+
 **Related concepts:** [[KI-000009]] Society types · [[KI-000010]] PACS · [[KI-000131]] Membership · [[KI-000289]] Loan (glossary)
 
 **Internal links:** /software · /guide/society-type-entries

@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Account names don't matter." → Consistent names keep reports clear and comparable.
 - ❌ "Every society must invent its own names." → A standard glossary saves time and avoids errors.
 
+**परिभाषा:** खातों के नामों की शब्दावली लेजर खातों के नामों की एक मानक सूची है, हिंदी और अंग्रेज़ी दोनों में — ताकि समिति मनमाने नामों की जगह एक जैसे, पहचाने हुए नाम इस्तेमाल करे (जैसे "किराया / Rent", "ब्याज आय / Interest Income")।
+
+**क्यों ज़रूरी:** एक जैसे नामों से रिपोर्ट की तुलना आसान होती है, ऑडिट आसानी से होता है, और नए कर्मचारी खाते सही बना पाते हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "खातों के नाम से कोई फ़र्क नहीं पड़ता।" → एक जैसे नामों से रिपोर्ट साफ़ रहती हैं और उनकी तुलना हो पाती है।
+- ❌ "हर समिति को अपने नाम खुद गढ़ने पड़ते हैं।" → मानक शब्दावली से समय बचता है और गलतियाँ नहीं होतीं।
+
+**सीखने के लक्ष्य:**
+- खातों के नामों की मानक सूची का फ़ायदा समझा सकें।
+- खाते बनाते समय एक जैसे दो-भाषी नाम इस्तेमाल कर सकें।
+
 **Related concepts:** [[KI-000083]] Account head · [[KI-000098]] Expense dictionary · [[KI-000081]] Chart of accounts (planned)
 
 **Internal links:** /guide/account-name-glossary · /ledger-heads

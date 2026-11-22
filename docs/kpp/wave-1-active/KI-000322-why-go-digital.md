@@ -32,8 +32,20 @@ review_schedule: 2027-06-27
 **Why it matters:** Many societies still use paper. This articulates the value of switching — central to SahakarLekha's purpose and to a chairman's adoption decision.
 
 **Common misconceptions:**
-- ❌ "Digital is only for big or urban societies." → Even small/rural societies benefit, especially with Hindi-first, free tools.
+- ❌ "Digital is only for big or urban societies." → Even small/rural societies benefit, especially with simple, Hindi-first tools.
 - ❌ "Going digital means losing control." → It improves control through clear records, roles, and audit trails.
+
+**परिभाषा:** "डिजिटल अपनाना" यानी समिति का हिसाब कागज़ी रजिस्टर से अकाउंटिंग सॉफ़्टवेयर पर ले जाना — जिससे काम तेज़ होता है, सटीकता बढ़ती है, रिपोर्ट तुरंत मिलती हैं, डेटा ज़्यादा सुरक्षित रहता है और ऑडिट आसान होता है।
+
+**क्यों ज़रूरी:** बहुत-सी समितियाँ आज भी कागज़ पर काम करती हैं। यह बताता है कि बदलने का क्या फ़ायदा है — जो SahakarLekha के मकसद का केंद्र है और अध्यक्ष के अपनाने के फ़ैसले के लिए भी अहम है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "डिजिटल सिर्फ़ बड़ी या शहरी समितियों के लिए है।" → छोटी/ग्रामीण समितियों को भी फ़ायदा है, ख़ासकर आसान, हिंदी-पहले टूल के साथ।
+- ❌ "डिजिटल होने से नियंत्रण हाथ से निकल जाता है।" → साफ़ रिकॉर्ड, भूमिकाएँ (roles) और ऑडिट ट्रेल (audit trail) से नियंत्रण और बेहतर होता है।
+
+**सीखने के लक्ष्य:**
+- डिजिटल अपनाने के मुख्य फ़ायदे गिना सकें।
+- अपनाने को लेकर आम आपत्तियों का जवाब दे सकें।
 
 **Related concepts:** [[KI-000303]] Cloud accounting · [[KI-000306]] Data backup · [[KI-000305]] Society setup · [[KI-000001]] Cooperative society
 

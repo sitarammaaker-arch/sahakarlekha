@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Cash-in-hand includes the bank balance." → Bank money is separate; cash-in-hand is physical cash only.
 - ❌ "It can be negative." → Physical cash cannot be negative; a negative balance means an error.
 
+**परिभाषा:** कैश-इन-हैंड वह नकद रकम है जो किसी समय समिति के पास वास्तव में मौजूद है — यानी कैश बुक का क्लोज़िंग बैलेंस — जो गिने गए नोट-सिक्कों से मेल खाना चाहिए।
+
+**क्यों ज़रूरी:** कैश-इन-हैंड ऑडिट में अक्सर जाँचा जाता है। अगर किताब का बैलेंस और असली नकद अलग हों, तो यह किसी गलती या रिसाव (leakage) का संकेत है, जिसे तुरंत ठीक करना चाहिए।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "कैश-इन-हैंड में बैंक बैलेंस भी आता है।" → बैंक का पैसा अलग है; कैश-इन-हैंड सिर्फ़ हाथ का नकद है।
+- ❌ "यह माइनस में भी हो सकता है।" → असली नकद माइनस नहीं हो सकता; माइनस बैलेंस का मतलब कोई गलती है।
+
+**सीखने के लक्ष्य:**
+- कैश-इन-हैंड की परिभाषा बता सकें।
+- किताब के बैलेंस को गिने हुए नकद से मिला सकें।
+
 **Related concepts:** [[KI-000099]] Cash · [[KI-000101]] Cash book · [[KI-000100]] Cash account · [[KI-000110]] Denomination slip (planned)
 
 **Internal links:** /guide/receipts-and-payments · /cash-book

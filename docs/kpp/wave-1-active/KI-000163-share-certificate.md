@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "A share certificate can be traded on a market." → Cooperative shares are not market-traded; they are held/transferred per society rules.
 - ❌ "The certificate is just a formality." → It is the member's proof of their shareholding.
 
+**परिभाषा:** शेयर सर्टिफिकेट वह दस्तावेज़ है जो समिति सदस्य को उसके शेयरों के सबूत के रूप में देती है — इसमें सदस्य का नाम, शेयरों की संख्या और मूल्य लिखा होता है — और यह उसके मालिकाना हिस्से का प्रमाण है।
+
+**क्यों ज़रूरी:** यह सदस्य के मालिकाना हक़ का सबूत और सदस्यता का बुनियादी रिकॉर्ड है। सर्टिफिकेट और शेयर रजिस्टर को आपस में मिलाकर रखने से विवाद नहीं होते।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "शेयर सर्टिफिकेट बाज़ार में खरीदा-बेचा जा सकता है।" → सहकारी शेयर बाज़ार में नहीं बिकते; वे समिति के नियमों के हिसाब से रखे या ट्रांसफ़र किए जाते हैं।
+- ❌ "सर्टिफिकेट बस एक औपचारिकता है।" → यह सदस्य के शेयरों का सबूत है।
+
+**सीखने के लक्ष्य:**
+- शेयर सर्टिफिकेट की परिभाषा बता सकें।
+- इसे शेयर रजिस्टर और मालिकाना हक़ के सबूत से जोड़ सकें।
+
 **Related concepts:** [[KI-000153]] Share · [[KI-000162]] Share register (planned) · [[KI-000131]] Membership · [[KI-000158]] Face value
 
 **Internal links:** /guide/member-management · /share-register
