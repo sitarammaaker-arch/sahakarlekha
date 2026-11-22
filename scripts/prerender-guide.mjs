@@ -2593,10 +2593,10 @@ function transform(template, page0) {
   const url = SITE + (page.path || '/blog');
   let html = template;
 
-  // Subpages: drop the homepage-only template schemas (SoftwareApplication + the
-  // 5-question FAQPage) so each page carries ONLY its own JSON-LD + Organization.
-  // The homepage itself (path '/') KEEPS them — they belong there.
-  // The English home (/en) keeps them too: the template's SoftwareApplication/FAQPage text is English.
+  // Subpages: drop the homepage-only template schema (SoftwareApplication) so each page carries ONLY its own
+  // JSON-LD + Organization. The homepage itself (path '/') and the English home (/en) keep it.
+  // SEO-07: the template no longer carries a FAQPage (its questions were not visible on the homepage); the
+  // FAQPage filter stays as a guard in case one is ever added back to the template.
   if (page.path !== '/' && page.path !== '/en') {
     html = html.replace(/<script type="application\/ld\+json">([\s\S]*?)<\/script>\s*/g, (m0, body) =>
       /"@type":\s*"(SoftwareApplication|FAQPage)"/.test(body) ? '' : m0);
