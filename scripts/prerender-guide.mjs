@@ -165,6 +165,7 @@ const FOOTER_LINKS = [
   ['/pricing', 'मूल्य'], ['/about', 'हमारे बारे में'], ['/contact', 'संपर्क'],
   ['/cooperative-software/haryana', 'हरियाणा की समितियों के लिए'], ['/author/sitaram', 'लेखक'],
   ['/editorial-policy', 'संपादकीय नीति'], ['/privacy', 'गोपनीयता नीति'], ['/terms', 'नियम व शर्तें'],
+  ['/partner', 'पार्टनर बनें'], ['/ask', 'सवाल पूछें'],   // SEO-06: they had no inbound static link
 ];
 
 /**
@@ -259,6 +260,7 @@ const FOOTER_LINKS_EN = [
   ['/pricing', 'Pricing'], ['/about', 'About us'], ['/contact', 'Contact'],
   ['/cooperative-software/haryana', 'For societies in Haryana'], ['/author/sitaram', 'Author'],
   ['/editorial-policy', 'Editorial policy'], ['/privacy', 'Privacy policy'], ['/terms', 'Terms & conditions'],
+  ['/partner', 'Become a partner'], ['/ask', 'Ask a question'],   // SEO-06
 ];
 const BRAND_BAR_EN =
   `<header class="sl-bar"><div class="sl-bar-in">` +
@@ -405,6 +407,11 @@ function guidePages(DATA) {
               items.map((e) => `<li><a href="/guide/${e.slug}">${esc(e.title)}</a></li>`).join('') + `</ul>`;
           }
           return out;
+        })() +
+        // SEO-06: the part quizzes were orphans in static HTML (sitemap only) — the hub links every one.
+        (() => {
+          const qs = Object.values(DATA.quizzes || {}).filter((q) => q && q.partId);
+          return qs.length ? `<h2>भाग-वार क्विज़</h2><ul>${qs.map((q) => `<li><a href="/guide/quiz/${q.partId}">${esc(q.title)} — क्विज़ (${(q.questions || []).length} प्रश्न)</a></li>`).join('')}</ul>` : '';
         })() +
         registerCta(),
     }),
@@ -774,7 +781,7 @@ function blogPages(DATA) {
         current: c.name,
         html:
           `<h1>${esc(c.name)}</h1><p>${esc(c.intro)}</p><p><small>${catPosts.length} लेख</small></p>` +
-          `<ul>${catPosts.map(postLi).join('')}</ul>` +
+          `<ul>${catPosts.map((p) => postLi(p).replace(/<\/li>$/, p.description ? `<br>${esc(p.description)}</li>` : '</li>')).join('')}</ul>` +   // SEO-05
           `<p><a href="/blog">सभी श्रेणियाँ और लेख</a></p>` + registerCta(),
       }),
       _cat: { c, posts: catPosts }, // English twin (batch E2) — not rendered
@@ -1451,13 +1458,18 @@ function appShellPages(DATA) {
       'सहकार लेखा गाइड के पूर्णता प्रमाणपत्र को क्रमांक व नाम से सत्यापित करें।',
       'प्रमाणपत्र सत्यापन', '<p><a href="/guide/certificate">पूर्णता प्रमाणपत्र</a></p>', [['/guide', 'गाइड']]),
   ];
-  for (const q of Object.values(DATA.quizzes || {})) {
-    if (!q || !q.partId) continue;
+  // SEO-05/06: each quiz page lists its questions WITH their options (the answers stay in the app), and links the
+  // previous / next part's quiz, so no quiz is an orphan and none is a 50-word page.
+  const quizList = Object.values(DATA.quizzes || {}).filter((q) => q && q.partId);
+  quizList.forEach((q, i) => {
     const list = q.questions || [];
+    const prev = quizList[i - 1], next = quizList[i + 1];
+    const nav = [prev && `<a href="/guide/quiz/${prev.partId}">← ${esc(prev.title)}</a>`, `<a href="/guide">गाइड पर लौटें</a>`, next && `<a href="/guide/quiz/${next.partId}">${esc(next.title)} →</a>`].filter(Boolean).join(' · ');
+    const items = list.map((x) => `<li>${esc(x.q)}${(x.options || []).length ? `<ul>${x.options.map((o) => `<li>${esc(o)}</li>`).join('')}</ul>` : ''}</li>`).join('');
     pages.push(page(`/guide/quiz/${q.partId}`, `${q.title} — क्विज़ | सहकार लेखा गाइड`,
       `${q.title}: ${list.length} प्रश्नों की क्विज़ — अपना ज्ञान परखें।`,
-      q.title, `<ol>${list.map((x) => `<li>${esc(x.q)}</li>`).join('')}</ol><p><a href="/guide">गाइड पर लौटें</a></p>`, [['/guide', 'गाइड']]));
-  }
+      q.title, `<ol>${items}</ol><p>सही उत्तर और हर उत्तर की व्याख्या क्विज़ हल करने पर दिखती है।</p><p>${nav}</p>`, [['/guide', 'गाइड']]));
+  });
   return pages;
 }
 
@@ -2208,7 +2220,7 @@ function blogCategoryEn(base, hp, DATA) {
   const missing = posts.filter((p) => !blogEn(DATA, p.slug));
   if (missing.length) return { skip: `untranslated posts in the category: ${missing.map((p) => p.slug).join(', ')}` };
   const url = SITE + base.path;
-  const li = (p) => `<li><a href="/blog/${p.slug}">${esc(blogEn(DATA, p.slug).title)}</a> <small>(${p.date})</small></li>`;
+  const li = (p) => `<li><a href="/blog/${p.slug}">${esc(blogEn(DATA, p.slug).title)}</a> <small>(${p.date})</small>${blogEn(DATA, p.slug).excerpt ? `<br>${esc(blogEn(DATA, p.slug).excerpt)}` : ''}</li>`;   // SEO-05
   return { page: { ...base, title: e.metaTitle, description: e.description,
     jsonLd: [
       {
