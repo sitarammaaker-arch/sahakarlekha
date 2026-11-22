@@ -507,13 +507,13 @@ const RestoreCenter: React.FC = () => {
               <p className={`font-semibold ${report.ok ? 'text-green-800' : 'text-amber-900'}`}>
                 {summarizeVerification(report, hi)}
               </p>
-              {(report.manifest || report.encryptedHeader) && (
+              {(() => { const head = report.manifest ?? report.encryptedHeader; return head && (
                 <p className="text-xs text-gray-500 mt-1">
-                  {(report.manifest ?? report.encryptedHeader).societyName}
-                  {' · '}{hi ? 'वित्तीय वर्ष' : 'FY'} {(report.manifest ?? report.encryptedHeader).financialYear}
-                  {' · '}{new Date((report.manifest ?? report.encryptedHeader).createdAt).toLocaleString(hi ? 'hi-IN' : 'en-IN')}
+                  {head.societyName}
+                  {' · '}{hi ? 'वित्तीय वर्ष' : 'FY'} {head.financialYear}
+                  {' · '}{new Date(head.createdAt).toLocaleString(hi ? 'hi-IN' : 'en-IN')}
                 </p>
-              )}
+              ); })()}
             </div>
           </CardContent>
         </Card>

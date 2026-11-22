@@ -246,7 +246,7 @@ export async function exportEntity(
   if (!entity) throw new ExportDeniedError(`unknown entity "${request.entityKey}"`);
 
   const authz = authorizeExport(entity, env.principal, request.format, request.mode);
-  if (!authz.ok) throw new ExportDeniedError(authz.reason);
+  if (!authz.ok) throw new ExportDeniedError(authz.reason ?? 'export not allowed');
 
   const columns = selectColumns(entity, request.mode, request.columns);
   const kept = filterRows(entity, rows, request.mode, request.includeDeleted);

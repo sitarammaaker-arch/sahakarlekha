@@ -61,7 +61,9 @@ export function resolveCurrentVouchers(events: readonly LedgerEvent[]): CurrentV
   const byAgg = new Map<string, LedgerEvent[]>();
   for (const e of Array.isArray(events) ? events : []) {
     if (e.aggregateType !== 'voucher') continue;
-    (byAgg.get(e.aggregateId) ?? byAgg.set(e.aggregateId, []).get(e.aggregateId)).push(e);
+    let list = byAgg.get(e.aggregateId);
+    if (!list) { list = []; byAgg.set(e.aggregateId, list); }
+    list.push(e);
   }
   const out: CurrentVoucher[] = [];
   for (const [id, evs] of byAgg) {

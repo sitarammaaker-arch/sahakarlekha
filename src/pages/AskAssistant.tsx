@@ -189,7 +189,7 @@ const AskAssistant: React.FC = () => {
                     <thead>
                       <tr className="bg-muted/50 border-b">
                         {computed.table.columns.map((c, i) => (
-                          <th key={i} className={`py-2 px-3 font-semibold text-foreground ${computed.table.align?.[i] === 'right' ? 'text-right' : 'text-left'}`}>{c}</th>
+                          <th key={i} className={`py-2 px-3 font-semibold text-foreground ${computed.table?.align?.[i] === 'right' ? 'text-right' : 'text-left'}`}>{c}</th>
                         ))}
                       </tr>
                     </thead>

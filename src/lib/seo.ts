@@ -39,7 +39,8 @@ const PLAN_NAME: Record<'starter' | 'plus' | 'pro', string> = { starter: 'Starte
 /** /pricing structured data: the three public plans with their prices, read from the plan catalogue. */
 export function pricingJsonLd(): object {
   const plans = (['starter', 'plus', 'pro'] as const).map((id) => PLAN_CATALOG[id]);
-  const prices = plans.map((p) => p.price);
+  // A plan without a list price (null) must not enter Math.min/max — null reads as 0 there.
+  const prices = plans.map((p) => p.price).filter((p): p is number => typeof p === 'number');
   return {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',

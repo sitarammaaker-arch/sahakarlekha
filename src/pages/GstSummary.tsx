@@ -110,7 +110,7 @@ export default function GstSummary() {
         : (r.netAmount > 0 ? Math.round((r.taxAmount / r.netAmount) * 100) : 0);
       const cust = r.customerId ? customerMap.get(r.customerId) : undefined;
       if (partyGstin(cust)) {
-        const bucket = cdnr.get(partyGstin(cust)) ?? { ctin: partyGstin(cust), custName: cust.name || r.customerName, notes: [] };
+        const bucket = cdnr.get(partyGstin(cust)) ?? { ctin: partyGstin(cust), custName: cust?.name || r.customerName, notes: [] };
         bucket.notes.push({ nt_num: r.returnNo, nt_dt: r.date, val: r.grandTotal, rate, txval: r.netAmount, iamt: r.igstAmount, camt: r.cgstAmount, samt: r.sgstAmount });
         cdnr.set(partyGstin(cust), bucket);
       } else {

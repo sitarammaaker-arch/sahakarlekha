@@ -1978,7 +1978,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (officialNo && officialNo !== provisionalNo) {
           restampVoucherNo(v.id, officialNo);
         }
-        attemptBase({ ...baseCols, voucherNo: officialNo ?? provisionalNo }, 0);
+        attemptBase({ ...baseCols, voucherNo: officialNo ?? provisionalNo ?? v.voucherNo }, 0);
       });
     }
   };

@@ -769,7 +769,7 @@ const Payroll: React.FC = () => {
     if (isFinancial) setTimeout(() => window.location.reload(), 1800);
   };
 
-  const nameOf = (n: { hi?: string; en?: string } | null) => (hi ? n?.hi : n?.en) || n?.en || n?.hi || '—';
+  const nameOf = (n: { hi?: string; en?: string } | null | undefined) => (hi ? n?.hi : n?.en) || n?.en || n?.hi || '—';
 
   const printPayslip = (slip: Payslip, slipLines: Payline[]) => {
     const earn = slipLines.filter((l) => !isDeduction(l.kind));
