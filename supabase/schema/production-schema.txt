@@ -38,7 +38,7 @@ column accounts.p1ExpenseBucket text
 column accounts.p1IncomeCategory text
 column accounts.parentId text
 column accounts.report_class text
-column accounts.society_id text not null default 'SOC001'::text
+column accounts.society_id text not null
 column accounts.subtype text
 column accounts.turnoverBucket text
 column accounts.type text not null
@@ -67,7 +67,7 @@ column assets.p6Category text
 column assets.purchaseDate text
 column assets.residualValue numeric default 0
 column assets.saleProceeds numeric default 0
-column assets.society_id text not null default 'SOC001'::text
+column assets.society_id text not null
 column assets.status text default 'active'::text
 column assets.usefulLife numeric
 column assets.voucherIds jsonb default '[]'::jsonb
@@ -83,7 +83,7 @@ column audit_log.entity_type text not null
 column audit_log.id uuid not null default gen_random_uuid()
 column audit_log.jurisdiction text
 column audit_log.reason text
-column audit_log.society_id text not null default 'SOC001'::text
+column audit_log.society_id text not null
 column audit_log.source text default 'app'::text
 column audit_objections.actionTaken text
 column audit_objections.amountInvolved numeric default 0
@@ -99,7 +99,7 @@ column audit_objections.objectionNo text
 column audit_objections.paraNo text
 column audit_objections.rectifiedDate text
 column audit_objections.remarks text
-column audit_objections.society_id text not null default 'SOC001'::text
+column audit_objections.society_id text not null
 column audit_objections.status text
 column bank_reconciliations.asOfDate text
 column bank_reconciliations.bankAccountId text
@@ -112,7 +112,7 @@ column bank_reconciliations.isReconciled boolean default false
 column bank_reconciliations.jurisdiction text
 column bank_reconciliations.reconciledAt text
 column bank_reconciliations.reconciledBy text
-column bank_reconciliations.society_id text not null default 'SOC001'::text
+column bank_reconciliations.society_id text not null
 column bank_reconciliations.statementBalance numeric
 column bank_reconciliations.unclearedDepositIds jsonb default '[]'::jsonb
 column bank_reconciliations.unclearedDepositsTotal numeric
@@ -147,7 +147,7 @@ column budgets.financialYear text
 column budgets.heads jsonb default '[]'::jsonb
 column budgets.id text not null
 column budgets.jurisdiction text
-column budgets.society_id text not null default 'SOC001'::text
+column budgets.society_id text not null
 column catalog_versions.catalog_name text not null
 column catalog_versions.content_hash text not null
 column catalog_versions.effective_summary jsonb not null default '{}'::jsonb
@@ -175,7 +175,7 @@ column compliance_filings.id text not null
 column compliance_filings.itemId text
 column compliance_filings.jurisdiction text
 column compliance_filings.note text
-column compliance_filings.society_id text not null default 'SOC001'::text
+column compliance_filings.society_id text not null
 column consumer_patronage_runs.amountPaid numeric default 0
 column consumer_patronage_runs.approvedAt text
 column consumer_patronage_runs.approvedBy text
@@ -190,7 +190,7 @@ column consumer_patronage_runs.lines jsonb default '[]'::jsonb
 column consumer_patronage_runs.ratePct numeric
 column consumer_patronage_runs.resolutionDate text
 column consumer_patronage_runs.resolutionNo text
-column consumer_patronage_runs.society_id text not null default 'SOC001'::text
+column consumer_patronage_runs.society_id text not null
 column consumer_patronage_runs.status text
 column consumer_patronage_runs.to text
 column consumer_patronage_runs.total numeric
@@ -202,7 +202,7 @@ column consumer_price_lists.isDeleted boolean default false
 column consumer_price_lists.itemId text
 column consumer_price_lists.jurisdiction text
 column consumer_price_lists.price numeric
-column consumer_price_lists.society_id text not null default 'SOC001'::text
+column consumer_price_lists.society_id text not null
 column consumer_price_lists.tier text
 column consumer_price_lists.updatedAt timestamp with time zone default now()
 column consumer_purchase_orders.approvedAt text
@@ -220,7 +220,7 @@ column consumer_purchase_orders.purchaseId text
 column consumer_purchase_orders.purchaseNo text
 column consumer_purchase_orders.receivedAt text
 column consumer_purchase_orders.resolutionNo text
-column consumer_purchase_orders.society_id text not null default 'SOC001'::text
+column consumer_purchase_orders.society_id text not null
 column consumer_purchase_orders.status text
 column consumer_purchase_orders.supplierId text
 column consumer_purchase_orders.supplierName text
@@ -268,7 +268,7 @@ column customers.phone text
 column customers.pincode text
 column customers.placeOfSupply text
 column customers.registrationType text
-column customers.society_id text not null default 'SOC001'::text
+column customers.society_id text not null
 column customers.state text
 column customers.tcsApplicable boolean default false
 column customers.tdsApplicable boolean default false
@@ -289,7 +289,7 @@ column dairy_dispatches.remarks text
 column dairy_dispatches.shift text
 column dairy_dispatches.shortage numeric
 column dairy_dispatches.snf numeric
-column dairy_dispatches.society_id text not null default 'SOC001'::text
+column dairy_dispatches.society_id text not null
 column dairy_dispatches.unionName text
 column dairy_dispatches.vehicleNo text
 column dairy_dispatches.voucherId text
@@ -308,7 +308,7 @@ column dairy_distributions.lines jsonb
 column dairy_distributions.rate numeric
 column dairy_distributions.resolutionDate text
 column dairy_distributions.resolutionNo text
-column dairy_distributions.society_id text not null default 'SOC001'::text
+column dairy_distributions.society_id text not null
 column dairy_distributions.status text
 column dairy_distributions.to text
 column dairy_distributions.total numeric
@@ -326,7 +326,7 @@ column dairy_input_issues.memberId text
 column dairy_input_issues.memberName text
 column dairy_input_issues.qty numeric
 column dairy_input_issues.remarks text
-column dairy_input_issues.society_id text not null default 'SOC001'::text
+column dairy_input_issues.society_id text not null
 column dairy_input_issues.voucherId text
 column dairy_rate_charts.basis text
 column dairy_rate_charts.createdAt timestamp with time zone default now()
@@ -339,7 +339,7 @@ column dairy_rate_charts.matrix jsonb
 column dairy_rate_charts.name text
 column dairy_rate_charts.season text
 column dairy_rate_charts.snfBands jsonb
-column dairy_rate_charts.society_id text not null default 'SOC001'::text
+column dairy_rate_charts.society_id text not null
 column dairy_settlements.amountPaid numeric default 0
 column dairy_settlements.approvedAt timestamp with time zone
 column dairy_settlements.approvedBy text
@@ -354,7 +354,7 @@ column dairy_settlements.memberId text
 column dairy_settlements.memberName text
 column dairy_settlements.netPayable numeric
 column dairy_settlements.settlementNo text
-column dairy_settlements.society_id text not null default 'SOC001'::text
+column dairy_settlements.society_id text not null
 column dairy_settlements.status text
 column dairy_settlements.to text
 column dairy_settlements.voucherId text
@@ -376,7 +376,7 @@ column department_bills.isDeleted boolean default false
 column department_bills.jurisdiction text
 column department_bills.narration text
 column department_bills.paidAmount numeric default 0
-column department_bills.society_id text not null default 'SOC001'::text
+column department_bills.society_id text not null
 column department_bills.status text
 column department_bills.voucherId text
 column department_bills.workOrderId text
@@ -393,7 +393,7 @@ column departments.jurisdiction text
 column departments.name text
 column departments.openingBalance numeric
 column departments.phone text
-column departments.society_id text not null default 'SOC001'::text
+column departments.society_id text not null
 column departments.status text
 column departments.tdsApplicable boolean default false
 column deposit_accounts.accountNo text
@@ -408,7 +408,7 @@ column deposit_accounts.jurisdiction text
 column deposit_accounts.maturityDate text
 column deposit_accounts.memberId text
 column deposit_accounts.openDate text
-column deposit_accounts.society_id text not null default 'SOC001'::text
+column deposit_accounts.society_id text not null
 column deposit_accounts.status text default 'active'::text
 column deposit_transactions.amount numeric
 column deposit_transactions.balanceAfter numeric
@@ -418,7 +418,7 @@ column deposit_transactions.depositAccountId text
 column deposit_transactions.id text not null
 column deposit_transactions.jurisdiction text
 column deposit_transactions.mode text
-column deposit_transactions.society_id text not null default 'SOC001'::text
+column deposit_transactions.society_id text not null
 column deposit_transactions.txnType text
 column deposit_transactions.voucherId text
 column document_sequences.book text not null
@@ -437,7 +437,7 @@ column elections.jurisdiction text
 column elections.nominationDeadline text
 column elections.post text
 column elections.remarks text
-column elections.society_id text not null default 'SOC001'::text
+column elections.society_id text not null
 column elections.status text default 'upcoming'::text
 column elections.title text
 column elections.totalVoters integer default 0
@@ -483,7 +483,7 @@ column employees.pan text
 column employees.payScale text
 column employees.pfApplicable boolean
 column employees.phone text
-column employees.society_id text not null default 'SOC001'::text
+column employees.society_id text not null
 column employees.status text default 'active'::text
 column employees.uan text
 column error_log.actor_name text
@@ -506,7 +506,7 @@ column eway_bills.items jsonb default '[]'::jsonb
 column eway_bills.jurisdiction text
 column eway_bills.partyGst text
 column eway_bills.partyName text
-column eway_bills.society_id text not null default 'SOC001'::text
+column eway_bills.society_id text not null
 column eway_bills.totalGst numeric default 0
 column eway_bills.totalTaxable numeric default 0
 column eway_bills.transDocDate text
@@ -572,7 +572,7 @@ column housing_amc.id text not null
 column housing_amc.isDeleted boolean default false
 column housing_amc.jurisdiction text
 column housing_amc.remarks text
-column housing_amc.society_id text not null default 'SOC001'::text
+column housing_amc.society_id text not null
 column housing_amc.startDate text
 column housing_amc.vendor text
 column housing_buildings.address text
@@ -583,7 +583,7 @@ column housing_buildings.isDeleted boolean default false
 column housing_buildings.jurisdiction text
 column housing_buildings.name text
 column housing_buildings.remarks text
-column housing_buildings.society_id text not null default 'SOC001'::text
+column housing_buildings.society_id text not null
 column housing_buildings.totalUnits numeric
 column housing_charge_heads.accountId text
 column housing_charge_heads.basis text
@@ -600,7 +600,7 @@ column housing_charge_heads.nameEn text
 column housing_charge_heads.nameHi text
 column housing_charge_heads.order numeric default 0
 column housing_charge_heads.rate numeric default 0
-column housing_charge_heads.society_id text not null default 'SOC001'::text
+column housing_charge_heads.society_id text not null
 column housing_complaints.category text
 column housing_complaints.complaintNo text
 column housing_complaints.createdAt timestamp with time zone default now()
@@ -614,7 +614,7 @@ column housing_complaints.memberId text
 column housing_complaints.raisedDate text
 column housing_complaints.resolution text
 column housing_complaints.resolvedDate text
-column housing_complaints.society_id text not null default 'SOC001'::text
+column housing_complaints.society_id text not null
 column housing_complaints.status text default 'open'::text
 column housing_complaints.title text
 column housing_documents.authority text
@@ -627,7 +627,7 @@ column housing_documents.isDeleted boolean default false
 column housing_documents.jurisdiction text
 column housing_documents.reference text
 column housing_documents.remarks text
-column housing_documents.society_id text not null default 'SOC001'::text
+column housing_documents.society_id text not null
 column housing_documents.status text
 column housing_documents.title text
 column housing_flats.area numeric
@@ -653,7 +653,7 @@ column housing_flats.registrationDate text
 column housing_flats.shareCertNo text
 column housing_flats.shareCount numeric
 column housing_flats.shareFaceValue numeric
-column housing_flats.society_id text not null default 'SOC001'::text
+column housing_flats.society_id text not null
 column housing_flats.unitType text
 column housing_fund_investments.amount numeric
 column housing_fund_investments.createdAt timestamp with time zone default now()
@@ -668,7 +668,7 @@ column housing_fund_investments.isDeleted boolean default false
 column housing_fund_investments.jurisdiction text
 column housing_fund_investments.maturityDate text
 column housing_fund_investments.redemptionVoucherId text
-column housing_fund_investments.society_id text not null default 'SOC001'::text
+column housing_fund_investments.society_id text not null
 column housing_fund_investments.status text default 'active'::text
 column housing_fund_investments.voucherId text
 column housing_insurance.coverageType text
@@ -681,7 +681,7 @@ column housing_insurance.jurisdiction text
 column housing_insurance.policyNo text
 column housing_insurance.premium numeric
 column housing_insurance.remarks text
-column housing_insurance.society_id text not null default 'SOC001'::text
+column housing_insurance.society_id text not null
 column housing_insurance.startDate text
 column housing_insurance.sumInsured numeric
 column housing_parking.createdAt timestamp with time zone default now()
@@ -693,7 +693,7 @@ column housing_parking.jurisdiction text
 column housing_parking.memberId text
 column housing_parking.monthlyCharge numeric
 column housing_parking.slotNo text
-column housing_parking.society_id text not null default 'SOC001'::text
+column housing_parking.society_id text not null
 column housing_parking.status text default 'allotted'::text
 column housing_parking.vehicleNo text
 column housing_parking.vehicleType text
@@ -709,7 +709,7 @@ column housing_transfers.premium numeric
 column housing_transfers.remarks text
 column housing_transfers.resolutionDate text
 column housing_transfers.resolutionNo text
-column housing_transfers.society_id text not null default 'SOC001'::text
+column housing_transfers.society_id text not null
 column housing_transfers.toMemberId text
 column housing_transfers.transferFee numeric
 column housing_transfers.transferType text
@@ -721,7 +721,7 @@ column hsn_master.description text
 column hsn_master.gstRate numeric default 0
 column hsn_master.id text not null
 column hsn_master.jurisdiction text
-column hsn_master.society_id text not null default 'SOC001'::text
+column hsn_master.society_id text not null
 column hsn_master.type text default 'HSN'::text
 column invoice_counters.fy text not null
 column invoice_counters.last_no integer not null default 0
@@ -766,7 +766,7 @@ column kachi_aarat_entries.isDeleted boolean default false
 column kachi_aarat_entries.jurisdiction text
 column kachi_aarat_entries.narration text
 column kachi_aarat_entries.partyName text
-column kachi_aarat_entries.society_id text not null default 'SOC001'::text
+column kachi_aarat_entries.society_id text not null
 column kcc_loans.createdAt text
 column kcc_loans.createdBy text
 column kcc_loans.cropName text
@@ -785,7 +785,7 @@ column kcc_loans.narration text
 column kcc_loans.outstandingAmount numeric default 0
 column kcc_loans.repaidAmount numeric default 0
 column kcc_loans.sanctionedAmount numeric default 0
-column kcc_loans.society_id text not null default 'SOC001'::text
+column kcc_loans.society_id text not null
 column kcc_loans.status text default 'active'::text
 column kcc_loans.voucherId text
 column leads.created_at timestamp with time zone not null default now()
@@ -810,7 +810,7 @@ column ledger_events.producer_kind text not null default 'human'::text
 column ledger_events.reversal_of text
 column ledger_events.schema_version integer not null default 1
 column ledger_events.sequence bigint not null
-column ledger_events.society_id text not null default 'SOC001'::text
+column ledger_events.society_id text not null
 column loan_interest_accruals.amount numeric not null default 0
 column loan_interest_accruals.createdAt timestamp with time zone not null default now()
 column loan_interest_accruals.createdBy text
@@ -842,7 +842,7 @@ column loans.monthlyInstallment numeric
 column loans.purpose text
 column loans.repaidAmount numeric default 0
 column loans.security text
-column loans.society_id text not null default 'SOC001'::text
+column loans.society_id text not null
 column loans.status text
 column loans.sureties jsonb default '[]'::jsonb
 column loans.voucherId text
@@ -860,7 +860,7 @@ column maintenance_bills.memberId text
 column maintenance_bills.paidAmount numeric default 0
 column maintenance_bills.period text
 column maintenance_bills.receivableAccountId text
-column maintenance_bills.society_id text not null default 'SOC001'::text
+column maintenance_bills.society_id text not null
 column maintenance_bills.status text
 column maintenance_bills.voucherId text
 column marketing_dealer_licences.authority text
@@ -922,7 +922,7 @@ column marketing_transporters.name text
 column marketing_transporters.nameHi text
 column marketing_transporters.phone text
 column marketing_transporters.ratePerQtl numeric
-column marketing_transporters.society_id text not null default 'SOC001'::text
+column marketing_transporters.society_id text not null
 column marketing_transporters.updatedAt timestamp with time zone default now()
 column marketing_transporters.vehicleNo text
 column meeting_register.agenda text
@@ -934,7 +934,7 @@ column meeting_register.jurisdiction text
 column meeting_register.meetingNo text
 column meeting_register.minutes text
 column meeting_register.resolutions text
-column meeting_register.society_id text not null default 'SOC001'::text
+column meeting_register.society_id text not null
 column meeting_register.status text default 'scheduled'::text
 column meeting_register.time text
 column meeting_register.type text
@@ -1021,7 +1021,7 @@ column members.shareCertReason text
 column members.shareCertStatus text
 column members.shareCount numeric
 column members.shareFaceValue numeric
-column members.society_id text not null default 'SOC001'::text
+column members.society_id text not null
 column members.state text
 column members.status text default 'active'::text
 column members.statusChangedAt text
@@ -1052,7 +1052,7 @@ column milk_entries.rate numeric
 column milk_entries.rateChartId text
 column milk_entries.shift text
 column milk_entries.snf numeric
-column milk_entries.society_id text not null default 'SOC001'::text
+column milk_entries.society_id text not null
 column milk_entries.source text
 column milk_entries.water numeric
 column muster_entries.accrualVoucherId text
@@ -1068,7 +1068,7 @@ column muster_entries.paid boolean default false
 column muster_entries.paidAmount numeric default 0
 column muster_entries.paymentVoucherId text
 column muster_entries.period text
-column muster_entries.society_id text not null default 'SOC001'::text
+column muster_entries.society_id text not null
 column muster_entries.workBasis text
 column muster_entries.workOrderId text
 column notification_outbox.attempts integer not null default 0
@@ -1119,7 +1119,7 @@ column p7_entries.jurisdiction text
 column p7_entries.narration text
 column p7_entries.rentedCapacityMT numeric default 0
 column p7_entries.rentedGodownCount numeric default 0
-column p7_entries.society_id text not null default 'SOC001'::text
+column p7_entries.society_id text not null
 column p7_entries.sugarCattleFeedSales numeric default 0
 column p7_entries.transportChargesPaid numeric default 0
 column p7_entries.truckCount numeric default 0
@@ -1264,7 +1264,7 @@ column pf_esi_runs.id text not null
 column pf_esi_runs.isDeleted boolean default false
 column pf_esi_runs.jurisdiction text
 column pf_esi_runs.period text
-column pf_esi_runs.society_id text not null default 'SOC001'::text
+column pf_esi_runs.society_id text not null
 column pf_esi_runs.status text
 column pf_esi_runs.voucherId text
 column platform_admins.created_at timestamp with time zone default now()
@@ -1284,7 +1284,7 @@ column procurement_agencies.kind text
 column procurement_agencies.ledgerAccountId text
 column procurement_agencies.name text
 column procurement_agencies.nameHi text
-column procurement_agencies.society_id text not null default 'SOC001'::text
+column procurement_agencies.society_id text not null
 column procurement_agencies.updatedAt timestamp with time zone default now()
 column procurement_agency_bills.agencyId text not null
 column procurement_agency_bills.billNo text not null
@@ -1335,7 +1335,7 @@ column procurement_bardana_types.id text not null
 column procurement_bardana_types.jurisdiction text
 column procurement_bardana_types.name text
 column procurement_bardana_types.nameHi text
-column procurement_bardana_types.society_id text not null default 'SOC001'::text
+column procurement_bardana_types.society_id text not null
 column procurement_bardana_types.updatedAt timestamp with time zone default now()
 column procurement_centres.agencyId text
 column procurement_centres.code text
@@ -1344,7 +1344,7 @@ column procurement_centres.id text not null
 column procurement_centres.jurisdiction text
 column procurement_centres.name text
 column procurement_centres.nameHi text
-column procurement_centres.society_id text not null default 'SOC001'::text
+column procurement_centres.society_id text not null
 column procurement_centres.updatedAt timestamp with time zone default now()
 column procurement_crops.code text
 column procurement_crops.createdAt timestamp with time zone default now()
@@ -1352,7 +1352,7 @@ column procurement_crops.id text not null
 column procurement_crops.jurisdiction text
 column procurement_crops.name text
 column procurement_crops.nameHi text
-column procurement_crops.society_id text not null default 'SOC001'::text
+column procurement_crops.society_id text not null
 column procurement_crops.updatedAt timestamp with time zone default now()
 column procurement_deduction_rules.accountId text
 column procurement_deduction_rules.basis text
@@ -1364,7 +1364,7 @@ column procurement_deduction_rules.jurisdiction text
 column procurement_deduction_rules.name text
 column procurement_deduction_rules.nameHi text
 column procurement_deduction_rules.rate jsonb
-column procurement_deduction_rules.society_id text not null default 'SOC001'::text
+column procurement_deduction_rules.society_id text not null
 column procurement_deduction_rules.updatedAt timestamp with time zone default now()
 column procurement_dispatches.acceptedDate text
 column procurement_dispatches.acceptedQty numeric
@@ -1398,7 +1398,7 @@ column procurement_events.name text not null
 column procurement_events.occurredAt timestamp with time zone
 column procurement_events.payload jsonb
 column procurement_events.recordedAt timestamp with time zone default now()
-column procurement_events.society_id text not null default 'SOC001'::text
+column procurement_events.society_id text not null
 column procurement_farmers.bankAccountNo text
 column procurement_farmers.bankName text
 column procurement_farmers.createdAt timestamp with time zone default now()
@@ -1410,7 +1410,7 @@ column procurement_farmers.ifsc text
 column procurement_farmers.jurisdiction text
 column procurement_farmers.mobile text
 column procurement_farmers.portalId text
-column procurement_farmers.society_id text not null default 'SOC001'::text
+column procurement_farmers.society_id text not null
 column procurement_farmers.updatedAt timestamp with time zone default now()
 column procurement_farmers.village text
 column procurement_financial_intents.amount jsonb
@@ -1422,7 +1422,7 @@ column procurement_financial_intents.intentType text
 column procurement_financial_intents.jformId text
 column procurement_financial_intents.jurisdiction text
 column procurement_financial_intents.lotId text
-column procurement_financial_intents.society_id text not null default 'SOC001'::text
+column procurement_financial_intents.society_id text not null
 column procurement_financial_intents.updatedAt timestamp with time zone default now()
 column procurement_jform_counters.jurisdiction text
 column procurement_jform_counters.last_no integer not null default 0
@@ -1441,7 +1441,7 @@ column procurement_jforms.lotId text
 column procurement_jforms.net jsonb
 column procurement_jforms.netAmountMinor bigint
 column procurement_jforms.netCurrency text
-column procurement_jforms.society_id text not null default 'SOC001'::text
+column procurement_jforms.society_id text not null
 column procurement_jforms.updatedAt timestamp with time zone default now()
 column procurement_lots.arhtiyaId text
 column procurement_lots.bags integer
@@ -1462,7 +1462,7 @@ column procurement_lots.operationalStatus text
 column procurement_lots.quantity jsonb
 column procurement_lots.reconciliationStatus text
 column procurement_lots.seasonId text
-column procurement_lots.society_id text not null default 'SOC001'::text
+column procurement_lots.society_id text not null
 column procurement_lots.tareWeight numeric
 column procurement_lots.updatedAt timestamp with time zone default now()
 column procurement_lots.varietyId text
@@ -1471,7 +1471,7 @@ column procurement_moisture_records.id text not null
 column procurement_moisture_records.jurisdiction text
 column procurement_moisture_records.lotId text
 column procurement_moisture_records.moisture jsonb
-column procurement_moisture_records.society_id text not null default 'SOC001'::text
+column procurement_moisture_records.society_id text not null
 column procurement_moisture_records.updatedAt timestamp with time zone default now()
 column procurement_msp_rates.createdAt timestamp with time zone default now()
 column procurement_msp_rates.cropId text
@@ -1480,7 +1480,7 @@ column procurement_msp_rates.id text not null
 column procurement_msp_rates.jurisdiction text
 column procurement_msp_rates.rate jsonb
 column procurement_msp_rates.seasonId text
-column procurement_msp_rates.society_id text not null default 'SOC001'::text
+column procurement_msp_rates.society_id text not null
 column procurement_msp_rates.updatedAt timestamp with time zone default now()
 column procurement_posting_requests.amount jsonb
 column procurement_posting_requests.amountAmountMinor bigint
@@ -1492,7 +1492,7 @@ column procurement_posting_requests.jformId text
 column procurement_posting_requests.jurisdiction text
 column procurement_posting_requests.lotId text
 column procurement_posting_requests.requestType text
-column procurement_posting_requests.society_id text not null default 'SOC001'::text
+column procurement_posting_requests.society_id text not null
 column procurement_posting_requests.updatedAt timestamp with time zone default now()
 column procurement_posting_rule_results.createdAt timestamp with time zone default now()
 column procurement_posting_rule_results.financialIntentId text
@@ -1504,7 +1504,7 @@ column procurement_posting_rule_results.lotId text
 column procurement_posting_rule_results.postingRequestId text
 column procurement_posting_rule_results.profile text
 column procurement_posting_rule_results.requestType text
-column procurement_posting_rule_results.society_id text not null default 'SOC001'::text
+column procurement_posting_rule_results.society_id text not null
 column procurement_posting_rule_results.updatedAt timestamp with time zone default now()
 column procurement_quality_specs.createdAt timestamp with time zone default now()
 column procurement_quality_specs.cropId text
@@ -1513,7 +1513,7 @@ column procurement_quality_specs.jurisdiction text
 column procurement_quality_specs.maxLimit numeric
 column procurement_quality_specs.parameter text
 column procurement_quality_specs.seasonId text
-column procurement_quality_specs.society_id text not null default 'SOC001'::text
+column procurement_quality_specs.society_id text not null
 column procurement_quality_specs.updatedAt timestamp with time zone default now()
 column procurement_quality_tests.createdAt timestamp with time zone default now()
 column procurement_quality_tests.id text not null
@@ -1521,7 +1521,7 @@ column procurement_quality_tests.inspectedBy text
 column procurement_quality_tests.jurisdiction text
 column procurement_quality_tests.lotId text
 column procurement_quality_tests.result text
-column procurement_quality_tests.society_id text not null default 'SOC001'::text
+column procurement_quality_tests.society_id text not null
 column procurement_quality_tests.updatedAt timestamp with time zone default now()
 column procurement_seasons.createdAt timestamp with time zone default now()
 column procurement_seasons.cropYear text
@@ -1530,7 +1530,7 @@ column procurement_seasons.id text not null
 column procurement_seasons.jurisdiction text
 column procurement_seasons.name text
 column procurement_seasons.nameHi text
-column procurement_seasons.society_id text not null default 'SOC001'::text
+column procurement_seasons.society_id text not null
 column procurement_seasons.startDate text
 column procurement_seasons.updatedAt timestamp with time zone default now()
 column procurement_settlement_counters.jurisdiction text
@@ -1556,7 +1556,7 @@ column procurement_settlements.netPayableAmountMinor bigint
 column procurement_settlements.netPayableCurrency text
 column procurement_settlements.settlementNo text
 column procurement_settlements.settlementVoucherId text
-column procurement_settlements.society_id text not null default 'SOC001'::text
+column procurement_settlements.society_id text not null
 column procurement_settlements.status text
 column procurement_settlements.updatedAt timestamp with time zone default now()
 column procurement_varieties.createdAt timestamp with time zone default now()
@@ -1565,7 +1565,7 @@ column procurement_varieties.id text not null
 column procurement_varieties.jurisdiction text
 column procurement_varieties.name text
 column procurement_varieties.nameHi text
-column procurement_varieties.society_id text not null default 'SOC001'::text
+column procurement_varieties.society_id text not null
 column procurement_varieties.updatedAt timestamp with time zone default now()
 column purchase_returns.bankAccountId text
 column purchase_returns.cgstAmount numeric
@@ -1584,7 +1584,7 @@ column purchase_returns.purchaseNo text
 column purchase_returns.refundMode text
 column purchase_returns.returnNo text
 column purchase_returns.sgstAmount numeric
-column purchase_returns.society_id text not null default 'SOC001'::text
+column purchase_returns.society_id text not null
 column purchase_returns.supplierId text
 column purchase_returns.supplierName text
 column purchase_returns.taxAmount numeric
@@ -1616,7 +1616,7 @@ column purchases.rcmApplicable boolean default false
 column purchases.roundOff numeric default 0
 column purchases.sgstAmount numeric default 0
 column purchases.sgstPct numeric default 0
-column purchases.society_id text not null default 'SOC001'::text
+column purchases.society_id text not null
 column purchases.supplierBillDate text
 column purchases.supplierBillNo text
 column purchases.supplierId text
@@ -1642,7 +1642,7 @@ column recoverables.narration text
 column recoverables.openingBalance numeric default 0
 column recoverables.partyName text
 column recoverables.recoveries numeric default 0
-column recoverables.society_id text not null default 'SOC001'::text
+column recoverables.society_id text not null
 column referral_attribution_events.action text not null
 column referral_attribution_events.actor text not null
 column referral_attribution_events.created_at timestamp with time zone not null default now()
@@ -1691,7 +1691,7 @@ column salary_records.pfEmployee numeric
 column salary_records.pfEmployer numeric
 column salary_records.pt numeric
 column salary_records.slipNo text
-column salary_records.society_id text not null default 'SOC001'::text
+column salary_records.society_id text not null
 column salary_records.tds numeric
 column salary_records.voucherId text
 column sales.bankAccountId text
@@ -1724,7 +1724,7 @@ column sales.roundOff numeric default 0
 column sales.saleNo text
 column sales.sgstAmount numeric default 0
 column sales.sgstPct numeric default 0
-column sales.society_id text not null default 'SOC001'::text
+column sales.society_id text not null
 column sales.taxAmount numeric default 0
 column sales.totalAmount numeric
 column sales.voucherId text
@@ -1748,7 +1748,7 @@ column sales_returns.refundMode text
 column sales_returns.returnNo text
 column sales_returns.saleNo text
 column sales_returns.sgstAmount numeric
-column sales_returns.society_id text not null default 'SOC001'::text
+column sales_returns.society_id text not null
 column sales_returns.taxAmount numeric
 column sales_returns.voucherId text
 column signup_attempts.at timestamp with time zone not null default now()
@@ -1772,7 +1772,7 @@ column society_activities.enabled_at timestamp with time zone not null default n
 column society_activities.id text not null
 column society_activities.isDeleted boolean default false
 column society_activities.jurisdiction text
-column society_activities.society_id text not null default 'SOC001'::text
+column society_activities.society_id text not null
 column society_activities.status text not null default 'active'::text
 column society_capabilities.capability text not null
 column society_capabilities.created_at timestamp with time zone default now()
@@ -1781,7 +1781,7 @@ column society_capabilities.granted_by text
 column society_capabilities.id text not null
 column society_capabilities.jurisdiction text
 column society_capabilities.mode text not null default 'grant'::text
-column society_capabilities.society_id text not null default 'SOC001'::text
+column society_capabilities.society_id text not null
 column society_capabilities.source text not null default 'admin'::text
 column society_flags.posting_service boolean not null default true
 column society_flags.society_id text not null
@@ -1850,7 +1850,7 @@ column society_settings.shortNameHi text
 column society_settings.signatories jsonb default '{}'::jsonb
 column society_settings.societyType text default 'marketing_processing'::text
 column society_settings.societyVariant text
-column society_settings.society_id text not null default 'SOC001'::text
+column society_settings.society_id text not null
 column society_settings.state text
 column society_settings.statutoryAppropriation boolean default false
 column society_settings.storageLossNormPct numeric
@@ -1888,7 +1888,7 @@ column stock_items.purchaseRate numeric default 0
 column stock_items.sacCode text
 column stock_items.saleRate numeric default 0
 column stock_items.salesAccountId text
-column stock_items.society_id text not null default 'SOC001'::text
+column stock_items.society_id text not null
 column stock_items.stockGroup text default 'General'::text
 column stock_items.unit text
 column stock_movements.amount numeric
@@ -1904,7 +1904,7 @@ column stock_movements.narration text
 column stock_movements.qty numeric
 column stock_movements.rate numeric
 column stock_movements.referenceNo text
-column stock_movements.society_id text not null default 'SOC001'::text
+column stock_movements.society_id text not null
 column stock_movements.type text
 column subscriptions.activated_by text
 column subscriptions.created_at timestamp with time zone not null default now()
@@ -1956,7 +1956,7 @@ column suppliers.pincode text
 column suppliers.placeOfSupply text
 column suppliers.registrationType text
 column suppliers.salesRep text
-column suppliers.society_id text not null default 'SOC001'::text
+column suppliers.society_id text not null
 column suppliers.state text
 column suppliers.supplierCode text
 column suppliers.supplierType text
@@ -1969,7 +1969,7 @@ column suppliers.website text
 column tds_challan_links.challanId text
 column tds_challan_links.entryId text not null
 column tds_challan_links.jurisdiction text
-column tds_challan_links.society_id text not null default 'SOC001'::text
+column tds_challan_links.society_id text not null
 column tds_challans.amount numeric
 column tds_challans.bankName text
 column tds_challans.bsrCode text
@@ -1983,7 +1983,7 @@ column tds_challans.isDeleted boolean default false
 column tds_challans.jurisdiction text
 column tds_challans.otherAmount numeric not null default 0
 column tds_challans.quarter text
-column tds_challans.society_id text not null default 'SOC001'::text
+column tds_challans.society_id text not null
 column tds_challans.status text
 column tds_entries.challanId text
 column tds_entries.createdAt text
@@ -2000,7 +2000,7 @@ column tds_entries.natureOfPayment text
 column tds_entries.purchaseId text
 column tds_entries.quarter text
 column tds_entries.section text
-column tds_entries.society_id text not null default 'SOC001'::text
+column tds_entries.society_id text not null
 column tds_entries.status text
 column tds_entries.tdsAmount numeric
 column tds_entries.tdsRate numeric
@@ -2068,7 +2068,7 @@ column voucher_entries.dr numeric not null default 0
 column voucher_entries.id text not null
 column voucher_entries.jurisdiction text
 column voucher_entries.narration text
-column voucher_entries.society_id text not null default 'SOC001'::text
+column voucher_entries.society_id text not null
 column voucher_entries.voucherId text not null
 column voucher_entries.workOrderId text
 column voucher_lines.account_id text not null
@@ -2121,7 +2121,7 @@ column vouchers.refId text
 column vouchers.refType text
 column vouchers.reversalOf text
 column vouchers.reversedBy text
-column vouchers.society_id text not null default 'SOC001'::text
+column vouchers.society_id text not null
 column vouchers.type text
 column vouchers.voucherNo text
 column vouchers.workOrderId text
@@ -2134,7 +2134,7 @@ column work_orders.endDate text
 column work_orders.id text not null
 column work_orders.isDeleted boolean default false
 column work_orders.jurisdiction text
-column work_orders.society_id text not null default 'SOC001'::text
+column work_orders.society_id text not null
 column work_orders.startDate text
 column work_orders.status text
 column work_orders.workOrderNo text
@@ -2148,7 +2148,7 @@ column worker_advances.jurisdiction text
 column worker_advances.mode text
 column worker_advances.narration text
 column worker_advances.recovered numeric default 0
-column worker_advances.society_id text not null default 'SOC001'::text
+column worker_advances.society_id text not null
 column worker_advances.status text
 column worker_advances.voucherId text
 column worker_advances.workerId text
@@ -2173,7 +2173,7 @@ column workers.name text
 column workers.pan text
 column workers.permanentAddress text
 column workers.phone text
-column workers.society_id text not null default 'SOC001'::text
+column workers.society_id text not null
 column workers.status text
 column workers.uan text
 column workers.workerCode text
