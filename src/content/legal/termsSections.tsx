@@ -94,12 +94,12 @@ export const SECTIONS = [
     title: { hi: 'बौद्धिक संपदा', en: 'Intellectual Property' },
     hi: (
       <p className="text-muted-foreground leading-relaxed">
-        SahakarLekha सॉफ्टवेयर, लोगो, डिज़ाइन और कोड हमारी बौद्धिक संपदा हैं। "SahakarLekha" और "सहकारलेखा" हमारे ट्रेडमार्क हैं। पूर्व लिखित सहमति के बिना आप सॉफ्टवेयर की नकल, उसमें संशोधन या उसका वितरण नहीं कर सकते, और न ही उससे व्युत्पन्न कृतियाँ बना सकते हैं।
+        SahakarLekha सॉफ्टवेयर, लोगो, डिज़ाइन और कोड हमारी बौद्धिक संपदा हैं। "SahakarLekha", "सहकार लेखा" और "सहकारलेखा" हमारे ट्रेडमार्क हैं। पूर्व लिखित सहमति के बिना आप सॉफ्टवेयर की नकल, उसमें संशोधन या उसका वितरण नहीं कर सकते, और न ही उससे व्युत्पन्न कृतियाँ बना सकते हैं।
       </p>
     ),
     en: (
       <p className="text-muted-foreground leading-relaxed">
-        The SahakarLekha software, logo, design, and source code are our intellectual property. "SahakarLekha" and "सहकारलेखा" are our trademarks. You may not copy, modify, distribute, or create derivative works from the software without prior written consent.
+        The SahakarLekha software, logo, design, and source code are our intellectual property. "SahakarLekha", "सहकार लेखा" and "सहकारलेखा" are our trademarks. You may not copy, modify, distribute, or create derivative works from the software without prior written consent.
       </p>
     ),
   },
