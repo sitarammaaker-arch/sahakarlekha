@@ -116,7 +116,7 @@ export default function ElectionModule() {
     // Stored for older readers only — the page computes the status from the date on every render.
     const status: ElectionStatus = electionStatusOn(form.electionDate, todayStr());
     const election: Election & { society_id: string } = {
-      id: `elec_${Date.now()}`,
+      id: `elec_${crypto.randomUUID()}`,
       electionNo: nextNo(),
       title: form.title,
       post: form.post,

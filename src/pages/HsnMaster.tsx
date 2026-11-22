@@ -109,7 +109,7 @@ export default function HsnMaster() {
       setCodes(prev => prev.map(c => c.id === editId ? { ...c, ...form, id: editId } : c));
       toast({ title: hi ? 'HSN कोड अपडेट हुआ' : 'HSN code updated' });
     } else {
-      const newId = `hsn_${Date.now()}`;
+      const newId = `hsn_${crypto.randomUUID()}`;
       const record = { id: newId, society_id: societyId, code: form.code.trim(), description: form.description.trim(), type: form.type, gstRate: form.gstRate, cess: form.cess, createdAt: new Date().toISOString() };
       const { error } = await hsnInsert(record);
       if (error) {
@@ -160,7 +160,7 @@ export default function HsnMaster() {
     }
     const now = new Date().toISOString();
     const records = toAdd.map((s, i) => ({
-      id: `hsn_seed_${Date.now()}_${i}`,
+      id: `hsn_seed_${crypto.randomUUID()}`,
       society_id: societyId,
       code: s.code,
       description: s.description,
