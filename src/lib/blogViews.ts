@@ -5,7 +5,7 @@
  * Everything is best-effort — a failed call must never break the page, and the
  * blog renders fine (just without counts) if the migration hasn't been run yet.
  */
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabaseLazy';   // SEO-13: public pages load supabase-js only when they use it
 
 /** Count one view per browser session per post (best-effort, fire-and-forget). */
 export async function incrementBlogView(slug: string): Promise<void> {
@@ -16,6 +16,7 @@ export async function incrementBlogView(slug: string): Promise<void> {
     sessionStorage.setItem(key, '1');
   } catch { /* sessionStorage blocked (private mode) — still count below */ }
   try {
+    const supabase = await getSupabase();
     await supabase.rpc('increment_blog_view', { p_slug: slug });
   } catch { /* never surface to the user */ }
 }
@@ -24,6 +25,7 @@ export async function incrementBlogView(slug: string): Promise<void> {
 export async function fetchBlogViewCount(slug: string): Promise<number | null> {
   if (!slug) return null;
   try {
+    const supabase = await getSupabase();
     const { data, error } = await supabase
       .from('blog_post_views')
       .select('views')
@@ -39,6 +41,7 @@ export async function fetchBlogViewCount(slug: string): Promise<number | null> {
 /** All view counts as { slug: views } — {} on any failure (feature degrades silently). */
 export async function fetchBlogViewCounts(): Promise<Record<string, number>> {
   try {
+    const supabase = await getSupabase();
     const { data, error } = await supabase.from('blog_post_views').select('slug,views');
     if (error || !data) return {};
     const map: Record<string, number> = {};

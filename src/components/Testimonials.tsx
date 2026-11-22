@@ -4,7 +4,7 @@
  * Hides the reviews grid gracefully when there are none yet.
  */
 import React, { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabaseLazy';   // SEO-13: public pages load supabase-js only when they use it
 import { useDocumentMeta } from '@/lib/useDocumentMeta';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -39,6 +39,7 @@ const Testimonials: React.FC = () => {
     let alive = true;
     (async () => {
       try {
+        const supabase = await getSupabase();
         const { data, error } = await supabase.rpc('public_reviews');
         if (!error && alive) setReviews((data as Review[]) || []);
       } catch { /* fail-soft: just show the rating form */ }

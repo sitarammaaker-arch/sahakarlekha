@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Link } from '@/components/LocalLink';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabaseLazy';   // SEO-13: public pages load supabase-js only when they use it
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -33,6 +33,7 @@ const HelpfulWidget: React.FC = () => {
   const save = async (verdict: 'up' | 'down', note?: string) => {
     setSubmitting(true);
     try {
+      const supabase = await getSupabase();
       const msg = (verdict === 'up' ? '👍 उपयोगी' : '👎 उपयोगी नहीं') + (note ? ` — ${note.trim()}` : '');
       const { error } = await supabase.from('feedback').insert([{
         type: 'helpful',
