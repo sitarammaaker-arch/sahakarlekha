@@ -116,6 +116,7 @@ applied_migration 194
 applied_migration 195
 applied_migration 196
 applied_migration 197
+applied_migration 198
 column _rls_182_backup.cmd text not null
 column _rls_182_backup.created text[] not null
 column _rls_182_backup.permissive text not null
@@ -124,6 +125,10 @@ column _rls_182_backup.qual text
 column _rls_182_backup.roles text[] not null
 column _rls_182_backup.tablename text not null
 column _rls_182_backup.with_check text
+column _soc001_orphans_backup.id bigint not null default nextval('_soc001_orphans_backup_id_seq'::regclass)
+column _soc001_orphans_backup.row_data jsonb not null
+column _soc001_orphans_backup.saved_at timestamp with time zone not null default now()
+column _soc001_orphans_backup.tbl text not null
 column account_reclass_log.account_id text not null
 column account_reclass_log.id bigint not null default nextval('account_reclass_log_id_seq'::regclass)
 column account_reclass_log.logged_at timestamp with time zone not null default now()
@@ -2295,6 +2300,7 @@ column workers.uan text
 column workers.workerCode text
 column workers.workerType text
 constraint _rls_182_backup._rls_182_backup_pkey PRIMARY KEY (tablename, policyname)
+constraint _soc001_orphans_backup._soc001_orphans_backup_pkey PRIMARY KEY (id)
 constraint account_reclass_log.account_reclass_log_pkey PRIMARY KEY (id)
 constraint account_roles.account_roles_account_fkey FOREIGN KEY (account_id, society_id) REFERENCES accounts(id, society_id)
 constraint account_roles.account_roles_pkey PRIMARY KEY (society_id, role)
@@ -3006,6 +3012,7 @@ function weekly_digest_counts(p_society_id text, p_day date) returns jsonb secur
 function weekly_digest_targets(p_day date) returns TABLE(society_id text, state text, tan boolean, gstin boolean, has_employees boolean, filed_ids text[], counts jsonb) security definer set search_path=public volatility=s body_md5=596626bbf8e141a05bcd4fa743195f17
 function withdraw_voucher(p_id text, p_reason text, p_deleted_by text) returns jsonb security definer set search_path="" volatility=v body_md5=8dadb91316f039ec813c760fe443f54c
 grant _rls_182_backup.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+grant _soc001_orphans_backup.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant account_reclass_log.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant account_roles.anon REFERENCES,SELECT,TRIGGER
 grant account_roles.authenticated REFERENCES,SELECT,TRIGGER
@@ -4000,6 +4007,7 @@ policy workers.society_rw_w_delete PERMISSIVE DELETE to authenticated using (((s
 policy workers.society_rw_w_insert PERMISSIVE INSERT to authenticated using () check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
 policy workers.society_rw_w_update PERMISSIVE UPDATE to authenticated using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write())) check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
 table _rls_182_backup rls=t force=f
+table _soc001_orphans_backup rls=t force=f
 table account_reclass_log rls=t force=f
 table account_roles rls=t force=f
 table account_seed_log rls=t force=f
