@@ -537,7 +537,8 @@
     "test:perf01-voucher-list": "node scripts/test-perf01-voucher-list.mjs",
     "test:report-leftovers": "node scripts/test-report-leftovers.mjs",
     "test:arch06-voucher-paths": "node scripts/test-arch06-voucher-paths.mjs",
-    "test:seo-public-pages": "node scripts/test-seo-public-pages.mjs"
+    "test:seo-public-pages": "node scripts/test-seo-public-pages.mjs",
+    "test:db04-no-soc001-default": "node scripts/test-db04-no-soc001-default.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
