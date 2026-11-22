@@ -85,5 +85,37 @@ ok(stampedStatus({ origin: 'manual', type: 'payment', amount: 6000, approvalStat
 // 6. Default config (nothing set) → manual vouchers pass through untouched (no regression).
 ok(stampedStatus({ origin: 'manual', type: 'journal', amount: 999999, approvalStatus: undefined }, {}) === undefined, 'no config → manual voucher not held (unchanged behaviour)');
 
+// 7. Bill-wise settlement (receipt/payment against bills) — a PENDING or REJECTED voucher must not
+//    settle a bill; only counted (approved / un-gated) vouchers do. Restores outstanding on reject.
+const { getBillSettledMap, getPartyUnallocated, getOpenPurchaseBills } = await import(abs('../src/lib/billUtils.ts'));
+const alloc = [{ billId: 'P1', amount: 1000, method: 'against' }, { amount: 50, method: 'on-account' }];
+const bv = (approvalStatus, extra = {}) => ({ id: 'v' + (approvalStatus ?? 'none'), refType: 'bill-payment', refId: 'S1', billAllocations: alloc, approvalStatus, ...extra });
+ok((getBillSettledMap([bv('pending')]).P1 || 0) === 0, 'pending bill-payment does NOT settle the bill');
+ok((getBillSettledMap([bv('rejected')]).P1 || 0) === 0, 'rejected bill-payment does NOT settle the bill (outstanding restored)');
+ok(getBillSettledMap([bv('approved')]).P1 === 1000, 'approved bill-payment settles the bill');
+ok(getBillSettledMap([bv(undefined)]).P1 === 1000, 'un-gated (no approval status) bill-payment settles the bill');
+ok((getBillSettledMap([bv('approved', { isDeleted: true })]).P1 || 0) === 0, 'deleted bill-payment does not settle');
+ok(getPartyUnallocated([bv('pending'), bv('rejected')], 'bill-payment', 'S1') === 0, 'pending/rejected on-account/advance not counted');
+ok(getPartyUnallocated([bv('approved')], 'bill-payment', 'S1') === 50, 'approved on-account counted');
+const purchase = { id: 'P1', supplierId: 'S1', paymentMode: 'credit', grandTotal: 1000 };
+ok(getOpenPurchaseBills([purchase], [bv('pending')], 'S1').length === 1, 'bill stays OPEN while its payment is pending');
+ok(getOpenPurchaseBills([purchase], [bv('rejected')], 'S1').length === 1, 'bill re-opens after its payment is rejected');
+ok(getOpenPurchaseBills([purchase], [bv('approved')], 'S1').length === 0, 'bill closes once its payment is approved');
+
+// 8. Source pins — user-created voucher creators must carry origin:'manual' (else the matrix is bypassed).
+import { readFileSync } from 'node:fs';
+const src = (rel) => readFileSync(pathResolve(HERE, rel), 'utf8');
+const dc = src('../src/contexts/DataContext.tsx');
+for (const ref of ['bill-receipt', 'bill-payment']) {
+  const i = dc.indexOf(`refType: '${ref}'`);
+  ok(i > 0 && /origin: 'manual'/.test(dc.slice(i, i + 200)), `${ref} voucher carries origin:'manual'`);
+}
+for (const f of ['CashBook', 'BankBook']) {
+  const t = src(`../src/pages/${f}.tsx`);
+  const i = t.indexOf('addVoucher({');
+  ok(i > 0 && /origin: 'manual'/.test(t.slice(i, i + 600)), `${f} quick entry carries origin:'manual'`);
+}
+
+
 console.log(`\nApproval matrix (pure): ${pass} passed, ${fail} failed`);
 process.exitCode = fail > 0 ? 1 : 0;
