@@ -258,5 +258,24 @@ for (const file of ['diff.ts', 'naturalKeys.ts']) {
   ok(diffRow({ x: [1, 2] }, { x: [2, 1] }).length === 1, 'array order still matters');
 }
 
+// ── DB-10 drill: Fresh into a RE-REGISTERED society (settings row + seeded chart, books empty) ──
+{
+  const societyE = { key: 'society', table: 'society_settings', naturalKey: ['society_id'] };
+  const accountE = { key: 'account', table: 'accounts', naturalKey: ['id'] };
+  const memberE = { key: 'member', table: 'members', naturalKey: ['id'] };
+  const archive = { society: [{ society_id: 'S', name: 'Old name' }], account: [{ id: '3301', name: 'Cash' }, { id: '9001', name: 'Custom' }], member: [{ id: 'm1' }] };
+  const seeded = { society: [{ society_id: 'S', name: 'New reg' }], account: [{ id: '3301', name: 'Cash in hand' }, { id: '5555', name: 'Seed only' }] };
+  const d = diffRestore([societyE, accountE, memberE], archive, seeded, 'fresh');
+  ok(d.ok, 'Fresh accepts the registration seed (settings + chart) while the books are empty');
+  const acc = d.entities.find((e) => e.key === 'account');
+  ok(acc.insert === 1 && acc.update === 1 && acc.orphan === 1, 'and treats it as Replace: archive accounts win, a seed-only account goes');
+  ok(d.entities.find((e) => e.key === 'member').insert === 1, 'other entities are still plain inserts');
+  const withVoucher = diffRestore([societyE, accountE], archive, { ...seeded, voucher: [{ id: 'v1' }] }, 'fresh');
+  ok(!withVoucher.ok && withVoucher.problems.some((p) => p.includes('society_settings')), 'once a voucher exists, Fresh refuses the settings row again');
+  const withMember = diffRestore([societyE, accountE, memberE], archive, { ...seeded, member: [{ id: 'm9' }] }, 'fresh');
+  ok(!withMember.ok, 'and a member in the table still blocks Fresh');
+  ok(diffMod.REGISTRATION_SEED_KEYS.size === 2 && diffMod.REGISTRATION_SEED_KEYS.has('society') && diffMod.REGISTRATION_SEED_KEYS.has('account'), 'only society_settings and accounts count as the registration seed');
+}
+
 console.log(`\nRestore diff: ${pass} passed, ${fail} failed`);
 process.exitCode = fail > 0 ? 1 : 0;

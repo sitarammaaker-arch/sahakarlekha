@@ -70,10 +70,11 @@ App → **Restore Center** (admin):
 1. Choose the `.slbak` → enter the key → **Unlock** → "Verified — N collections, M rows, no tampering".
 2. Cross-society confirmation: type the archive's society name exactly (allowed only while the target society's
    books are empty — no voucher, no member).
-3. Dry run: choose **Replace — the archive wins** → *Show what would change*. It deletes the seeded chart accounts
-   the archive does not have; that is correct. (**Fresh** currently refuses here because registration already
-   created `society_settings` and the chart — see "Known gaps".)
-4. **1. Create safety backup** → type the target society's name → **Run REPLACE restore**.
+3. Dry run: choose **Fresh — into an empty society** → *Show what would change*. A re-registered society still holds
+   its registration seed (`society_settings` + the standard chart); while it has no voucher and no member, Fresh
+   treats those two tables like Replace — the archive's settings and chart win, and seeded accounts the archive does
+   not have are removed. **Replace** works as well (it needs the safety backup first).
+4. Type the target society's name → **Run FRESH restore** (Replace / Merge: **1. Create safety backup** first).
    Expect: "Restore complete — N collections, M rows, K ledger entries regenerated."
 
 ## 5. Prove it
@@ -89,12 +90,10 @@ items / movements, and an md5 of every account's trial-balance balance. **All ma
 | The founder's saved key was not the server's key | Every encrypted backup unopenable by the owner | Key replaced, fingerprints matched, fresh backup |
 | Restore replay compared entry **IDs**: a voucher with no `lines` replays as `<id>-<id>-dr/-cr`, the server writes `<id>-1/-2` | No restore of a society with such vouchers could complete (10 receipts, identical amounts) | `compareReplay` pairs unmatched entries by content within the same voucher (fix/restore-replay-id-agnostic) |
 | Staging was 48 migrations behind production | A restore there failed before it started | Staging brought to 201; diff now empty |
+| Fresh refused a re-registered society (registration seeds settings + chart) | The mode meant for this recovery could not be used | Fresh accepts the registration seed while the books are empty (fix/restore-fresh-registration-seed) |
 | `societies` / `society_users` / auth are not in a backup | A recovery must recreate the society + admin by hand | Documented (step 3) |
 
 ## Known gaps (open)
 
-- **Fresh mode into a newly registered society** refuses (`society_settings` 1 row, chart already seeded). Replace
-  works and is the documented path; Fresh should accept the registration seed when the society has no voucher and
-  no member.
 - Platform data (subscriptions, invoices, partners) has no recovery path from society archives.
 - Restore Center lists the server's own audit row as "written on the server (no app record)".
