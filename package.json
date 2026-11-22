@@ -543,7 +543,8 @@
     "test:soc001-orphans": "node scripts/test-soc001-orphans.mjs",
     "test:db02-unguessable-ids": "node scripts/test-db02-unguessable-ids.mjs",
     "test:db06-voucher-checks": "node scripts/test-db06-voucher-checks.mjs",
-    "test:db03-voucher-account-fks": "node scripts/test-db03-voucher-account-fks.mjs"
+    "test:db03-voucher-account-fks": "node scripts/test-db03-voucher-account-fks.mjs",
+    "test:db03-member-fks": "node scripts/test-db03-member-fks.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

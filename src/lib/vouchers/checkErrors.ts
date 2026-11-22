@@ -15,10 +15,13 @@ const REASONS: Record<string, string> = {
 /** DB-03 (migration 200): the voucher or an entry names an account the society does not have. */
 const MISSING_ACCOUNT = 'वाउचर में चुना गया खाता (account) इस समिति में मौजूद नहीं है — page refresh करें और खाता दोबारा चुनें (The chosen account does not exist in this society)';
 export const VOUCHER_ACCOUNT_FK_NAMES = ['vouchers_debit_account_fkey', 'vouchers_credit_account_fkey', 'voucher_entries_account_fkey'];
+/** DB-03 part 2 (migration 201): the voucher names a member the society does not have. */
+const MISSING_MEMBER = 'वाउचर में चुना गया सदस्य इस समिति में मौजूद नहीं है — page refresh करें और सदस्य दोबारा चुनें (The chosen member does not exist in this society)';
 
 export function voucherCheckErrorText(msg: string): string {
   const s = String(msg ?? '');
   if (/foreign key constraint/i.test(s) && VOUCHER_ACCOUNT_FK_NAMES.some((n) => s.includes(n))) return MISSING_ACCOUNT;
+  if (/foreign key constraint/i.test(s) && s.includes('vouchers_member_fkey')) return MISSING_MEMBER;
   if (!/check constraint/i.test(s)) return s;
   for (const [name, reason] of Object.entries(REASONS)) if (s.includes(name)) return reason;
   return s;
