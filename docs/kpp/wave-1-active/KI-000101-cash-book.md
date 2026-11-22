@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Cash book includes bank transactions." → Bank transactions belong to the bank book; SahakarLekha keeps them distinct.
 - ❌ "Cash book is just a list." → It also shows the running cash balance, which should match physical cash.
 
+**परिभाषा:** कैश बुक वह बही है जिसमें सारी नकद रसीदें और नकद भुगतान तारीख के क्रम में दर्ज होते हैं, और जिससे किसी भी समय हाथ में मौजूद नकद का शेष पता चलता है।
+
+**क्यों ज़रूरी:** कैश बुक सबसे ज़्यादा इस्तेमाल होने वाली बही है और नकद की जाँच (cash verification) का आधार भी। सही कैश बुक ही नकद के साफ़ हिसाब की नींव है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "बैंक के लेन-देन भी कैश बुक में आते हैं।" → बैंक के लेन-देन बैंक बुक में आते हैं; SahakarLekha दोनों को अलग रखता है।
+- ❌ "कैश बुक बस एक सूची है।" → उसमें चलता हुआ नकद शेष भी होता है, जो तिजोरी के असली नकद से मिलना चाहिए।
+
+**सीखने के लक्ष्य:**
+- कैश बुक की परिभाषा और उसमें क्या दर्ज होता है, बता सकें।
+- समझ सकें कि कैश बुक का शेष हाथ के नकद के बराबर होना चाहिए।
+
 **Related concepts:** [[KI-000099]] Cash · [[KI-000100]] Cash account · [[KI-000114]] Bank book · [[KI-000206]] Receipts & Payments (planned)
 
 **Internal links:** /guide/receipts-and-payments · /cash-book

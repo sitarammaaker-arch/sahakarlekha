@@ -122,6 +122,11 @@ const GlossaryTerm: React.FC = () => {
   // English mode leads with the English name; Hindi mode (default, prerendered) is unchanged.
   const primaryName = language === 'hi' ? (term.hindiName || term.title) : (term.englishName || term.title);
   const secondaryName = language === 'hi' ? term.englishName : term.hindiName;
+  // SEO-02: a term whose KI carries its Hindi text gets a Hindi page — Hindi definition, the Hindi plain explanation,
+  // why / misconceptions / objectives in Hindi, and the English definition in one small card. Until then (and on the
+  // English page) the fields stay as they were.
+  const hiText = language === 'hi' && !!term.definitionHi;
+  const pick = (hi: string, en: string) => (hiText && hi ? hi : en);
 
   return (
     <PublicLayout>
@@ -148,17 +153,23 @@ const GlossaryTerm: React.FC = () => {
           <p className="flex items-center gap-1.5 text-xs font-semibold text-primary uppercase tracking-wide mb-1.5">
             <BookOpen className="h-3.5 w-3.5" /> {L('परिभाषा · Definition', 'Definition')}
           </p>
-          <p className="text-[1.05rem] leading-relaxed text-foreground">{term.definition}</p>
+          <p className="text-[1.05rem] leading-relaxed text-foreground">{hiText ? term.definitionHi : term.definition}</p>
         </div>
 
         {/* Plain language */}
-        {term.plain && (
+        {(hiText ? term.hindi : term.plain) && (
           <Field icon={<Lightbulb className="h-4 w-4 text-amber-500" />} title={L('आसान शब्दों में', 'In plain words')}>
-            <p className="leading-relaxed text-foreground/90">{term.plain}</p>
+            <p className="leading-relaxed text-foreground/90">{hiText ? term.hindi : term.plain}</p>
           </Field>
         )}
 
-        {/* Hindi + English explanations */}
+        {/* Hindi + English explanations (a Hindi-text page keeps only the English definition, for bilingual readers) */}
+        {hiText ? (
+          <Card className="mt-7"><CardContent className="p-4">
+            <p className="text-xs font-semibold text-primary mb-1">In English</p>
+            <p lang="en" className="text-sm leading-relaxed text-foreground/90">{term.definition}</p>
+          </CardContent></Card>
+        ) : (
         <div className="grid md:grid-cols-2 gap-4 mt-7">
           {term.hindi && (
             <Card><CardContent className="p-4">
@@ -173,25 +184,26 @@ const GlossaryTerm: React.FC = () => {
             </CardContent></Card>
           )}
         </div>
+        )}
 
         {/* Why it matters */}
         {term.why && (
           <Field icon={<Compass className="h-4 w-4 text-sky-500" />} title={L('यह क्यों ज़रूरी है', 'Why it matters')}>
-            <p className="leading-relaxed text-foreground/90">{term.why}</p>
+            <p className="leading-relaxed text-foreground/90">{pick(term.whyHi, term.why)}</p>
           </Field>
         )}
 
         {/* Common misconceptions */}
         {term.misconceptions && (
           <Field icon={<AlertTriangle className="h-4 w-4 text-amber-500" />} title={L('आम गलतफ़हमियाँ', 'Common misconceptions')}>
-            <GuideMarkdown source={term.misconceptions} />
+            <GuideMarkdown source={pick(term.misconceptionsHi, term.misconceptions)} />
           </Field>
         )}
 
         {/* Learning objectives (from the KI — was parsed but never shown) */}
         {term.learningObjectives && (
           <Field icon={<GraduationCap className="h-4 w-4 text-emerald-600" />} title={L('इस शब्द से आप क्या सीखेंगे', 'What you will learn from this term')}>
-            <GuideMarkdown source={term.learningObjectives} />
+            <GuideMarkdown source={pick(term.learningObjectivesHi, term.learningObjectives)} />
           </Field>
         )}
 

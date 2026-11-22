@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "More shares = more votes." → In cooperatives, voting is one member, one vote, irrespective of shares.
 - ❌ "Cooperative shares trade on a stock market." → They do not; they are held and transferred per society rules.
 
+**परिभाषा:** शेयर समिति की पूँजी में सदस्य के योगदान की एक इकाई है। आम तौर पर सदस्य बनने के लिए कम से कम एक शेयर लेना ज़रूरी होता है, और यह समिति में सदस्य की हिस्सेदारी दिखाता है।
+
+**क्यों ज़रूरी:** शेयर से ही शेयर पूँजी, शेयर रजिस्टर और (जहाँ लागू हो) लाभांश बनते हैं — ये SahakarLekha के सदस्य और पूँजी वाले मूल रिकॉर्ड हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "ज़्यादा शेयर = ज़्यादा वोट।" → सहकारी समिति में शेयर कितने भी हों, एक सदस्य का एक ही वोट होता है।
+- ❌ "सहकारी शेयर शेयर बाज़ार में बिकते हैं।" → नहीं; वे समिति के नियमों के अनुसार ही रखे और ट्रांसफ़र किए जाते हैं।
+
+**सीखने के लक्ष्य:**
+- शेयर को सदस्य की पूँजी की इकाई के रूप में समझा सकें।
+- याद रखें कि शेयरों से "एक सदस्य, एक वोट" का नियम नहीं बदलता।
+
 **Related concepts:** [[KI-000154]] Share capital (planned) · [[KI-000157]] Paid-up capital · [[KI-000158]] Face value · [[KI-000131]] Membership
 
 **Internal links:** /guide/member-management · /share-register

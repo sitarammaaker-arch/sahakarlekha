@@ -35,6 +35,18 @@ review_schedule: 2027-07-25
 - ❌ "Closing stock is money in hand." → It is the value of goods, not cash.
 - ❌ "It must be typed manually each year." → It is computed from purchases and sales (movements).
 
+**परिभाषा:** अंतिम स्टॉक (closing stock) अवधि के अंत में समिति के पास बचे बिना बिके माल का मूल्य है, जो अगली अवधि का प्रारंभिक स्टॉक बन जाता है।
+
+**क्यों ज़रूरी:** अंतिम स्टॉक सीधे सकल लाभ (gross profit) को बदलता है। स्टॉक गलत हो — या स्टॉक के खाने और माल की आवाजाही से निकले मूल्य को मिला दिया जाए — तो कागज़ पर झूठा लाभ या घाटा बन जाता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "अंतिम स्टॉक हाथ का पैसा है।" → यह माल का मूल्य है, नकद नहीं।
+- ❌ "हर साल इसे हाथ से लिखना पड़ता है।" → यह खरीद और बिक्री (माल की आवाजाही) से अपने-आप निकलता है।
+
+**सीखने के लक्ष्य:**
+- अंतिम स्टॉक की परिभाषा और यह आगे कैसे जाता है, बता सकें।
+- समझ सकें कि इसका असर सकल लाभ पर पड़ता है।
+
 **Related concepts:** [[KI-000401]] Purchase · [[KI-000402]] Sale
 
 **Internal links:** /inventory · /guide/inventory-management · /cookbook/closing-stock
