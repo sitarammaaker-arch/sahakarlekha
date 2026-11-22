@@ -20,7 +20,7 @@ register('data:text/javascript,' + encodeURIComponent(`
     return next(spec, ctx);
   }
   export async function load(url, ctx, next) {
-    if (url === SUPABASE) return { format: 'module', shortCircuit: true, source: 'export const supabase = globalThis.__sb;' };
+    if (url === SUPABASE) return { format: 'module', shortCircuit: true, source: 'export const supabase = globalThis.__sb; export const supabaseLoose = supabase;' };
     return next(url, ctx);
   }
 `));

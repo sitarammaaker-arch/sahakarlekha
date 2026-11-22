@@ -9,6 +9,7 @@
  * declarations are required here AND enforced by CHECK constraints in the database.
  */
 import React, { useEffect, useMemo, useState } from 'react';
+import { asDbArgs } from '@/lib/dbRow';
 import { useSearchParams } from 'react-router-dom';
 import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
@@ -132,11 +133,11 @@ export const PartnerApply: React.FC = () => {
     }
     setSubmitting(true);
     try {
-      const { data, error: rpcErr } = await supabase.rpc('partner_apply', {
+      const { data, error: rpcErr } = await supabase.rpc('partner_apply', asDbArgs({
         p_name: name.trim(), p_phone: phone, p_email: email.trim(), p_category: category,
         p_district: district.trim() || null, p_state: state || null, p_note: note.trim() || null,
         p_declared_not_public_servant: declPublic, p_declared_not_proxy: declProxy,
-      });
+      }));
       const res = (data ?? {}) as { ok?: boolean; token?: string; error_code?: string };
       if (rpcErr || !res.ok) {
         const known = APPLY_ERRORS[res.error_code ?? ''];

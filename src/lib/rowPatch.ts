@@ -14,7 +14,7 @@
  * patchRow(): the write. Nothing changed → no request. `.select('id')` turns "0 rows updated" (row gone, or RLS
  * refused) into an error, so the caller's RULE-1 rollback + toast runs instead of a silent no-op success.
  */
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseLoose } from '@/lib/supabase';
 
 const NEVER_SENT = new Set(['id', 'society_id']);
 
@@ -39,7 +39,7 @@ export const ROW_NOT_UPDATED = 'क्लाउड पर यह रिकॉर
 export function patchRow(table: string, id: string, before: object | null | undefined, next: object): PromiseLike<PatchResult> {
   const patch = changedColumns(before, next);
   if (Object.keys(patch).length === 0) return Promise.resolve({ error: null });
-  return supabase.from(table).update(patch).eq('id', id).select('id').then(({ data, error }) => ({
+  return supabaseLoose.from(table).update(patch).eq('id', id).select('id').then(({ data, error }) => ({
     error: error ?? (!data?.length ? { message: ROW_NOT_UPDATED } : null),
   }));
 }

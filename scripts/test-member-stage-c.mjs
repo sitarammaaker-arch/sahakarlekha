@@ -114,7 +114,7 @@ for (const name of ['member_portal_snapshot', 'member_portal_own_photo_path']) {
 }
 ok(/add column if not exists "liabilityType"/.test(m125) && /check \("liabilityType" is null or "liabilityType" in \('limited', 'unlimited'\)\)/.test(m125) && /"statusDetails"\s+jsonb/.test(m125), '125 adds the columns + liability check');
 const dc = read('src/contexts/DataContext.tsx');
-ok(dc.includes("delete base.statusDetails;") && dc.includes(".update({ statusDetails: details ?? null })"), 'statusDetails never in the base upsert; own update');
+ok(dc.includes("delete base.statusDetails;") && dc.includes(".update(asDbRow({ statusDetails: details ?? null }))"), 'statusDetails never in the base upsert; own update');
 ok(read('src/lib/export/entities/member.ts').includes("internal('statusDetails'") && read('src/lib/export/entities/core.ts').includes("internal('liabilityType'") && read('supabase/functions/_shared/backup-core.mjs').includes('"statusDetails"'), 'backup / export carry the new fields');
 ok(read('supabase/functions/_shared/member-portal-core.mjs').includes("'disqualified'") && read('src/lib/members/voters.ts').includes("'disqualified'"), 'disqualified = exited for the portal and the voters roll');
 

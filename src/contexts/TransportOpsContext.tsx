@@ -12,6 +12,7 @@
  * guarded (RULE 6); deletes cascade to the document's vouchers (RULE 3).
  */
 import { tr } from '@/lib/uiLang';
+import type { LooseRow } from '@/lib/dbRow';
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { findVoucherOwner, type OwnerGroup } from '@/lib/voucherOwnership';
 import { useCapabilityEnabled } from '@/contexts/useCapabilityEnabled';
@@ -73,7 +74,7 @@ export function TransportOpsProvider({ children }: { children: ReactNode }) {
   useEffect(() => { toastRef.current = toast; }, [toast]);
 
   const societyId = user?.societyId || 'SOC001';
-  const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId, jurisdiction: resolveJurisdiction(society?.state) });
+  const withSoc = <T extends object>(d: T): LooseRow => ({ ...d, society_id: societyId, jurisdiction: resolveJurisdiction(society?.state) });
   const actor = () => user?.name || 'System';
 
   const guardFYLocked = (): boolean => {

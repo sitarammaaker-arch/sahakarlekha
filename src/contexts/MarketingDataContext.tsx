@@ -18,12 +18,13 @@
  * agencies / centres land in M1b, effective-dated MSP rates in M1c, deduction/quality/bardana in M1d.
  */
 import { tr } from '@/lib/uiLang';
+import type { LooseRow } from '@/lib/dbRow';
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { refuseIfWriteBlocked } from '@/lib/connectivity/writeBlock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseLoose } from '@/lib/supabase';
 import { patchRow } from '@/lib/rowPatch';
 import { fetchAllPaged } from '@/lib/supabasePaging';
 import { unlessEmpty } from '@/lib/emptyTables';
@@ -195,7 +196,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
   const societyId = user?.societyId || 'SOC001';
   // T-01: stamp BOTH tenancy keys (society_id + jurisdiction) — the value comes from the SSOT
   // resolver so a domain row carries the same jurisdiction the main context writes (anti-IRR-4).
-  const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId, jurisdiction: resolveJurisdiction(society?.state) });
+  const withSoc = <T extends object>(d: T): LooseRow => ({ ...d, society_id: societyId, jurisdiction: resolveJurisdiction(society?.state) });
 
   const societyRef = useRef(society);
   societyRef.current = society;
@@ -967,7 +968,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
     return l ? centres.find(c => c.id === l.centreId)?.agencyId : undefined;
   }, [procurementLots, centres]);
   const receivableOf = (agencyId: string) => agencies.find(a => a.id === agencyId)?.ledgerAccountId || mspReceivableId;
-  const persistRow = <T extends object>(table: string, row: T) => supabase.from(table).upsert(withSoc(row));
+  const persistRow = <T extends object>(table: string, row: T) => supabaseLoose.from(table).upsert(withSoc(row));
 
   const addDispatch = useCallback((data: { date: string; agencyId: string; lotIds: string[]; vehicleNo?: string; transporterId?: string; destination?: string; note?: string }): ProcurementDispatch => {
     const now = new Date().toISOString();

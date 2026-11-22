@@ -10,6 +10,7 @@
     "build:dev": "vite build --mode development && node scripts/prerender-guide.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "db:types": "supabase gen types typescript --linked --schema public > src/types/database.ts",
     "preview": "vite preview",
     "validate:glossary": "node scripts/validate-glossary.mjs",
     "eval:ask": "node scripts/eval-ask.mjs",
@@ -550,7 +551,8 @@
     "test:seo13-entry": "node scripts/test-seo13-entry.mjs",
     "test:auth-lazy-client": "node scripts/test-auth-lazy-client.mjs",
     "test:seo02-glossary-hindi": "node scripts/test-seo02-glossary-hindi.mjs",
-    "test:ts-strict": "node scripts/test-ts-strict.mjs"
+    "test:ts-strict": "node scripts/test-ts-strict.mjs",
+    "test:db-types": "node scripts/test-db-types.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

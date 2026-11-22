@@ -1,4 +1,5 @@
 import { tr } from '@/lib/uiLang';
+import { asDbArgs, asDbRow, dbRowAs, type LooseRow } from '@/lib/dbRow';
 import { systemOwnedVoucherKind, systemOwnedVoucherMessage } from '@/lib/systemOwnedVoucher';
 import { isMemberShareVoucher } from '@/lib/members/memberShareVoucher';
 import { loanRepaymentPrincipal, REF_LOAN_REPAYMENT, REF_LOAN_INTEREST_RELEASE } from '@/lib/loans/interestAccrual';
@@ -63,7 +64,7 @@ import * as storage from '@/lib/storage';
 import { ACCOUNT_IDS, CMS_SOCIETY_ACCOUNTS, getBankAccountIds, defaultBankAccountId, defaultDebtorsAccountId, defaultCreditorsAccountId } from '@/lib/storage';
 import { isUniqueViolation, isMissingBranchColumn, payloadWithoutMissingColumn, MAX_RENUMBER_RETRIES } from '@/lib/dbRetry';
 import { voucherLinesBalance, snapSubRupeeResidual } from '@/lib/validation';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseLoose } from '@/lib/supabase';
 import { patchRow } from '@/lib/rowPatch';
 import type { SocietyCapabilityRow, Capability, SocietyActivityRow } from '@/lib/navigation';
 import { navigationService, declaredActivities } from '@/lib/navigation';
@@ -497,7 +498,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // the SINGLE seam every write goes through (T-01, anti-IRR-4). stampTenant is the tested,
   // pure primitive; the row's tenancy is set by context, never by whatever it carried.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const withSoc = (d: Record<string, any>) => stampTenant(d, { societyId: societyIdRef.current, jurisdiction: jurisdictionRef.current });
+  const withSoc = (d: Record<string, any>): LooseRow => stampTenant(d, { societyId: societyIdRef.current, jurisdiction: jurisdictionRef.current });
   // Member PII split (Phase 2, docs/reports-audit/design/MEMBER-PII-ROLE-SCOPED-READ.md). true once the
   // member_identity table is found at load: from then on `members` upserts never carry aadhaar/pan
   // (they would re-expose PII to every role) and PII is saved to member_identity instead. false =
@@ -507,7 +508,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // found at load. Then party rows never carry PAN / bank / Aadhaar; they are read from / written to party_identity.
   const partySplitRef = useRef(false);
   // M2: the admission columns (migration 116) never ride the base upsert — persistMemberAdmission writes them after.
-  const memberRow = (m: Record<string, any>) => {
+  const memberRow = (m: Record<string, any>): LooseRow => {
     const base: Record<string, any> = splitAdmissionFields(identitySplitRef.current ? stripMemberPII(m) : m).base;
     for (const f of MEMBER_STATUS_EXTRA_FIELDS) delete base[f];   // M4: migration-117 columns ride their own update
     delete base.statusDetails;   // stage C (migration 125): its own update in changeMemberStatus, never the base upsert
@@ -562,7 +563,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // (built by buildEvent) onto the existing ledger_events columns — no new schema.
   // The LedgerEvent → ledger_events row mapping, in ONE place (RULE 2). Used by the best-effort shadow
   // append (persistLedgerEvent) and the journal-first AUTHORITATIVE append (persistEventAuthoritative).
-  const toLedgerEventRow = (ev: LedgerEvent) => ({
+  const toLedgerEventRow = (ev: LedgerEvent): LooseRow => ({
     event_id: ev.eventId,
     event_type: ev.eventType,
     schema_version: ev.schemaVersion,
@@ -1276,7 +1277,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       let from = 0;
       // Safety cap: 200 pages = 200,000 rows. Tweak if any single table ever exceeds this.
       for (let i = 0; i < 200; i++) {
-        let q = supabase.from(table).select('*').eq('society_id', sid).range(from, from + PAGE - 1);
+        let q = supabaseLoose.from(table).select('*').eq('society_id', sid).range(from, from + PAGE - 1);
         for (const col of orderBy) q = q.order(col, { ascending: true });
         const { data, error } = await q;
         if (error) return { data: out, error };
@@ -1547,15 +1548,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // Supabase is the single source of truth for society settings.
           // All devices always load from Supabase — save once, sync everywhere.
           // localStorage is only used as offline fallback (when Supabase is unreachable).
-          setSocietyState(socData[0]);
-          storage.setSociety(socData[0]);
+          // DB row → app type: settings columns allow NULL where SocietySettings treats them as present (DB types).
+          const socRow = dbRowAs<SocietySettings>(socData[0]);
+          setSocietyState(socRow);
+          storage.setSociety(socRow);
 
           // T-09 (ADR-0001): when this tenant is cut over to ledger reads, load the FULL event journal
           // so getTrialBalance's parity gate has the whole log (session events alone never satisfy
           // parity). GATED on the flag → for every other tenant this never runs (dormant, zero cost).
           // Best-effort: a failure just leaves the journal short, so the parity gate falls back to the
           // voucher-state compute — no harm. snake_case columns → the camelCase LedgerEvent shape.
-          if ((socData[0] as SocietySettings).ledgerReadsEnabled) {
+          if (socRow.ledgerReadsEnabled) {
             try {
               // NOTE: this loader's fetchAllPaged is the LOCAL one — (table, orderBy), society-scoped
               // already. It was being called as (table, sid, orderCol), so `sid` landed in orderCol:
@@ -1667,7 +1670,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: tr(`❌ ${label} क्लाउड में सेव नहीं हुई`, `❌ ${label} not saved to the cloud`), description: tr(`${msg}. स्क्रीन से हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, `${msg}. Removed from the screen — nothing will go wrong on refresh.`), variant: 'destructive', duration: 15000 });
     };
     const p = buildStockDocumentPayload(kind, doc, voucher, event, movements);
-    supabase.rpc('post_stock_document', p).then(({ data, error }) => {
+    supabase.rpc('post_stock_document', asDbArgs(p)).then(({ data, error }) => {
       if (error) { fail(postVoucherMessage(postVoucherErrorCode(error.message), error.message)); return; }
       const r = (data ?? {}) as { docNo?: string; voucherNo?: string; narration?: string; events?: Record<string, unknown>[] };
       const docNo = r.docNo ?? (doc as unknown as Record<string, string>)[docNoKey];
@@ -1753,10 +1756,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toastRef.current({ title: tr(`❌ ${label} का बदलाव क्लाउड में सेव नहीं हुआ`, `❌ Change to ${label} not saved to the cloud`), description: tr(`${msg}. बदलाव वापस ले लिया गया — ${label} पहले जैसी ही है।`, `${msg}. The change was undone — ${label} is the same as before.`), variant: 'destructive', duration: 15000 });
     };
     const p = buildStockDocumentPayload(kind, doc, voucher, event, movements);
-    supabase.rpc('update_stock_document', {
+    supabase.rpc('update_stock_document', asDbArgs({
       p_kind: kind, p_id: doc.id, p_doc: p.p_doc, p_voucher: p.p_voucher, p_lines: p.p_lines, p_event: p.p_event, p_movements: p.p_movements,
       p_reason: null, p_by: userRef.current?.name || 'System',
-    }).then(({ data, error }) => {
+    })).then(({ data, error }) => {
       if (error) { fail(postVoucherMessage(postVoucherErrorCode(error.message), error.message)); return; }
       const r = (data ?? {}) as { voucherNo?: string; events?: Record<string, unknown>[] };
       if (r.voucherNo) {
@@ -2170,7 +2173,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         opts?.onFailed?.();
       };
       const pp = buildPendingVoucherPayload(newVoucher);
-      supabase.rpc('save_pending_voucher', pp).then(({ data, error }) => {
+      supabase.rpc('save_pending_voucher', asDbArgs(pp)).then(({ data, error }) => {
         if (error) { failPending(postVoucherMessage(postVoucherErrorCode(error.message), error.message), error.message); return; }
         const officialNo = (data as { voucherNo?: string } | null)?.voucherNo;
         if (officialNo && officialNo !== newVoucher.voucherNo) {
@@ -2205,7 +2208,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const ev = eventFor(v);
         restamp(v, ev);
         const p = buildPostVoucherPayload(v, ev);
-        supabase.rpc('post_voucher', p).then(({ data, error }) => {
+        supabase.rpc('post_voucher', asDbArgs(p)).then(({ data, error }) => {
           if (!error) {
             // 'posted' or 'exists' (idempotent retry) — both mean the voucher is durable. 096: the server
             // issued the OFFICIAL number inside the posting transaction — restamp it locally.
@@ -2672,7 +2675,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // journal itself. The server's events replace the optimistic ones. Failure → revert + toast (RULE 1).
     if (postingServiceRef.current && current.approvalStatus !== 'pending') {
       const p = buildEditVoucherPayload(updatedVoucher, { withActivityTag: tagChanged });
-      supabase.rpc('edit_voucher', { ...p, p_producer: userRef.current?.name ?? null }).then(({ data, error }) => {
+      supabase.rpc('edit_voucher', asDbArgs({ ...p, p_producer: userRef.current?.name ?? null })).then(({ data, error }) => {
         if (error) {
           reportError('voucher-edit-post-service', error.message, { voucherId: id });
           revertEdit();
@@ -2698,7 +2701,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toastRef.current({ title: tr('❌ वाउचर का बदलाव क्लाउड में सेव नहीं हुआ', '❌ Voucher change not saved to the cloud'), description: tr(`${msg}. बदलाव वापस ले लिया गया — refresh करने पर पुराना data सुरक्षित है।`, `${msg}. The change was undone — your old data is safe on refresh.`), variant: 'destructive', duration: 15000 });
       };
       const p = buildEditVoucherPayload(updatedVoucher, { withActivityTag: tagChanged });
-      supabase.rpc('save_pending_voucher', { p_voucher: p.p_voucher, p_lines: p.p_lines }).then(({ error }) => {
+      supabase.rpc('save_pending_voucher', asDbArgs({ p_voucher: p.p_voucher, p_lines: p.p_lines })).then(({ error }) => {
         if (error) undo(postVoucherMessage(postVoucherErrorCode(error.message), error.message), error.message);
       }, (rejection: unknown) => { const msg = rejection instanceof Error ? rejection.message : String(rejection); undo(`Network error — ${msg}`, msg); });
       return true;
@@ -3185,7 +3188,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const uncleared = { ...current, isCleared: false, clearedDate: undefined };
     setVouchersState(prev => { const updated = prev.map(v => v.id === id ? uncleared : v); return updated; });
     const write = postingServiceRef.current
-      ? supabase.rpc('set_voucher_cleared', { p_id: id, p_cleared: false, p_cleared_date: null })
+      ? supabase.rpc('set_voucher_cleared', asDbArgs({ p_id: id, p_cleared: false, p_cleared_date: null }))
       : supabase.from('vouchers').update({ isCleared: false, clearedDate: null }).eq('id', id);
     write.then(({ error }) => {
       if (error) {
@@ -3229,7 +3232,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         reportError('voucher-approve-post-service', msg, { voucherId: id });
         toastRef.current({ title: tr('अप्रूवल सेव नहीं हुआ', 'Approval not saved'), description: tr(`${msg}. Refresh करने पर पुराना data वापस आ जाएगा।`, `${msg}. On Refresh, the old data will come back.`), variant: 'destructive', duration: 15000 });
       };
-      supabase.rpc('approve_voucher', { p_id: id, p_lines: buildEditVoucherPayload(updated).p_lines, p_approved_by: approvedBy }).then(({ data, error }) => {
+      supabase.rpc('approve_voucher', asDbArgs({ p_id: id, p_lines: buildEditVoucherPayload(updated).p_lines, p_approved_by: approvedBy })).then(({ data, error }) => {
         if (error) undoApprove(postVoucherMessage(postVoucherErrorCode(error.message), error.message));
         else {
           const evs = mapLedgerEventRows(((data as { events?: Record<string, unknown>[] } | null)?.events) ?? []);
@@ -3807,7 +3810,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (resolutionNo || resolutionDate) toastRef.current({ title: tr('स्थिति सेव हुई — पर प्रस्ताव संख्या नहीं', 'Status saved — but not the resolution number'), description: tr(`प्रस्ताव संख्या/तिथि सेव नहीं हुई (${e2.message})। Migration 117 चलाएँ।`, `Resolution number/date not saved (${e2.message}). Run Migration 117.`), duration: 10000 });
       });
       // Stage C (migration 125): the facts behind the cessation (r.14(2) proof, r.19 count, r.18 facts) — own update.
-      supabase.from('members').update({ statusDetails: details ?? null }).eq('id', id).then(({ error: e3 }) => {
+      supabase.from('members').update(asDbRow({ statusDetails: details ?? null })).eq('id', id).then(({ error: e3 }) => {
         if (!e3) return;
         reportError('write-partial', e3.message, { at: 'member status details' });
         if (details) toastRef.current({ title: tr('स्थिति सेव हुई — पर विवरण नहीं', 'Status saved — but not the details'), description: tr(`अयोग्यता का प्रमाण / आम सभा की गिनती / त्यागपत्र का विवरण सेव नहीं हुआ (${e3.message})। Migration 125 चलाएँ, फिर स्थिति दोबारा दर्ज करें।`, `Proof of disqualification / general meeting count / resignation details not saved (${e3.message}). Run Migration 125, then record the status again.`), duration: 10000 });
@@ -4881,7 +4884,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // journal (sync_account_opening_event, 103) — no client journal write, and no dependence on the in-memory
   // journal being fully loaded. target 0 = the account was deleted (net its journal opening to zero).
   const syncOpeningOnServer = (accountId: string, targetMinor?: number) => {
-    supabase.rpc('sync_account_opening_event', { p_account_id: accountId, p_target_minor: targetMinor ?? null }).then(({ data, error }) => {
+    supabase.rpc('sync_account_opening_event', asDbArgs({ p_account_id: accountId, p_target_minor: targetMinor ?? null })).then(({ data, error }) => {
       if (error) {
         reportError('account-opening-post-service', error.message, { accountId });
         toastRef.current({ title: tr('⚠ खाता सेव हुआ, पर opening बही (journal) में नहीं गई', '⚠ Account saved, but the opening was not posted to the ledger (journal)'), description: tr(`${postVoucherMessage(postVoucherErrorCode(error.message), error.message)} — opening दोबारा सेव करें; न हो तो admin को बताएँ।`, `${postVoucherMessage(postVoucherErrorCode(error.message), error.message)} — save the opening again; if it still fails, tell your admin.`), variant: 'destructive', duration: 15000 });
@@ -5195,7 +5198,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // journal reversed + reposted pairs, voucher_entries/voucher_lines, parties, opening netting, account
     // delete and the audit row. Nothing is half-applied, so there is no client compensation to run.
     if (postingServiceRef.current) {
-      const res = await supabase.rpc('merge_accounts', { p_keep: keepId, p_remove: removeId, p_by: userRef.current?.name ?? null })
+      const res = await supabase.rpc('merge_accounts', asDbArgs({ p_keep: keepId, p_remove: removeId, p_by: userRef.current?.name ?? null }))
         .then((r) => r, (e: unknown) => ({ data: null, error: { message: `Network error — ${e instanceof Error ? e.message : String(e)}` } }));
       if (res.error) {
         reportError('merge-accounts-post-service', res.error.message, { keepId, removeId });
@@ -5392,7 +5395,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // every column the DB DOES have still lands; the base row is safe. Only roll back on a
       // real failure (RLS reject / network). A migrated DB succeeds on the first call.
       const attempt = (payload: Record<string, unknown>, dropped: string[]): void => {
-        supabase.from('society_settings').upsert(payload).then(
+        supabase.from('society_settings').upsert(asDbRow(payload)).then(
           ({ error }) => {
             if (!error) {
               if (dropped.length) toastRef.current({ title: tr('सहेजा गया — पर कुछ कॉलम इस DB में नहीं हैं', 'Saved — but some columns are not in this DB'), description: tr(`बाक़ी सब सेव हुआ; ये कॉलम database में नहीं हैं — बाकी migration चलाएँ: ${dropped.join(', ')}.`, `Everything else was saved; these columns are not in the database — run the pending migrations: ${dropped.join(', ')}.`), duration: 12000 });
@@ -6574,7 +6577,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return true;
   };
   const saveLoanSureties = (loanId: string, sureties: NonNullable<Loan['sureties']>, restore: Loan['sureties']) => {
-    supabase.from('loans').update({ sureties }).eq('id', loanId).eq('society_id', societyIdRef.current).then(({ error }) => {
+    supabase.from('loans').update(asDbRow({ sureties })).eq('id', loanId).eq('society_id', societyIdRef.current).then(({ error }) => {
       if (!error) return;
       reportError('write-partial', error.message, { at: 'Loan sureties', loanId });
       loansRef.current = loansRef.current.map(l => l.id === loanId ? { ...l, sureties: restore } : l);

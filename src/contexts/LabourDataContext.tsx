@@ -11,6 +11,7 @@
  * upsert, with RULE-1 rollback on cloud failure and a RULE-6 FY-lock guard on every mutation.
  */
 import { tr } from '@/lib/uiLang';
+import type { LooseRow } from '@/lib/dbRow';
 import { voucherRefusedToast, inFlightToast } from '@/lib/voucherRefused';
 import { useLatest } from '@/hooks/useLatest';
 import { useInFlight } from '@/hooks/useInFlight';
@@ -118,7 +119,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   const societyId = user?.societyId || 'SOC001';
   // T-01: stamp BOTH tenancy keys (society_id + jurisdiction) — the value comes from the SSOT
   // resolver so a domain row carries the same jurisdiction the main context writes (anti-IRR-4).
-  const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId, jurisdiction: resolveJurisdiction(society?.state) });
+  const withSoc = <T extends object>(d: T): LooseRow => ({ ...d, society_id: societyId, jurisdiction: resolveJurisdiction(society?.state) });
 
   const guardFYLocked = (): boolean => {
     if (refuseIfWriteBlocked(toastRef.current)) return true; // F1: online-only entry (shared rule)

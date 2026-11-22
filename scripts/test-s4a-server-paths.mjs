@@ -62,7 +62,7 @@ ok('mergeAccounts: …before (and instead of) the client-side multi-write path',
 ok('mergeAccounts: applies the server journal events locally', /mapLedgerEventRows\(r\.events/.test(merge));
 
 // Row 7 (104): pending (maker-checker) create / edit.
-ok('addVoucher: a PENDING voucher with the posting service → rpc save_pending_voucher', /postingServiceRef\.current && newVoucher\.approvalStatus === 'pending'\) \{[\s\S]*?rpc\('save_pending_voucher', pp\)/.test(add));
+ok('addVoucher: a PENDING voucher with the posting service → rpc save_pending_voucher', /postingServiceRef\.current && newVoucher\.approvalStatus === 'pending'\) \{[\s\S]*?rpc\('save_pending_voucher', asDbArgs\(pp\)\)/.test(add));
 ok('addVoucher: …before the post_voucher branch, with rollback + toast on failure', before(add, "rpc('save_pending_voucher'", "rpc('post_voucher'") && /failPending[\s\S]*?rollbackOptimistic\(\)/.test(add));
 const upd = body('updateVoucher');
 ok('updateVoucher: a PENDING voucher with the posting service → rpc save_pending_voucher', /postingServiceRef\.current && current\.approvalStatus === 'pending'\) \{[\s\S]*?rpc\('save_pending_voucher'/.test(upd));

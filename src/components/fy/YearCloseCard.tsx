@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { asDbArgs } from '@/lib/dbRow';
 import { Lock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useData } from '@/contexts/DataContext';
@@ -56,7 +57,7 @@ export const YearCloseCard: React.FC = () => {
     }
     setBusy(true);
     const { stockMinor } = preview(y);
-    const { data, error } = await supabase.rpc('close_financial_year', { p_fy_label: y.fy_label, p_authority: authority.trim(), p_closing_stock_minor: stockMinor });
+    const { data, error } = await supabase.rpc('close_financial_year', asDbArgs({ p_fy_label: y.fy_label, p_authority: authority.trim(), p_closing_stock_minor: stockMinor }));
     setBusy(false);
     setConfirm(null);
     if (error) {

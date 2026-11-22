@@ -4,6 +4,7 @@
  * Shows all registered societies + subscription management.
  */
 import React, { useEffect, useState, useCallback } from 'react';
+import { asDbArgs, dbRowAs } from '@/lib/dbRow';
 import { Link } from '@/components/LocalLink';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -152,7 +153,7 @@ const SuperAdminDashboard: React.FC = () => {
       // shapes so the count join, search and plan-save all key off society_id
       // regardless of which function definition is deployed (see migration 009).
       type RawSociety = Society & { id?: string; registration_no?: string; society_type?: string };
-      const rows: Society[] = (societyData ?? []).map((raw: RawSociety) => {
+      const rows: Society[] = dbRowAs<RawSociety[]>(societyData ?? []).map((raw) => {
         const society_id = raw.society_id ?? raw.id ?? '';
         return {
           ...raw,
@@ -233,13 +234,13 @@ const SuperAdminDashboard: React.FC = () => {
       });
       if (actErr) throw actErr;
       // Society-level lock + internal notes stay on the societies row (orthogonal to tier).
-      const { error: socErr } = await supabase.rpc('update_society_subscription', {
+      const { error: socErr } = await supabase.rpc('update_society_subscription', asDbArgs({
         p_society_id:      editSociety.society_id,
         p_plan:            editSociety.plan ?? 'active',
         p_plan_expires_at: editSociety.plan_expires_at ?? null,
         p_is_locked:       editForm.is_locked,
         p_notes:           editForm.subscription_notes,
-      });
+      }));
       if (socErr) throw socErr;
       toast({ title: 'Subscription updated', description: editSociety.name });
       setEditSociety(null);
@@ -254,13 +255,13 @@ const SuperAdminDashboard: React.FC = () => {
   // ── Quick lock toggle ──────────────────────────────────────────────────────
   const toggleLock = async (s: Society) => {
     try {
-      await supabase.rpc('update_society_subscription', {
+      await supabase.rpc('update_society_subscription', asDbArgs({
         p_society_id:      s.society_id,
         p_plan:            s.plan,
         p_plan_expires_at: s.plan_expires_at ?? null,
         p_is_locked:       !s.is_locked,
         p_notes:           s.subscription_notes ?? '',
-      });
+      }));
       toast({ title: !s.is_locked ? 'Society locked' : 'Society unlocked', description: s.name });
       loadSocieties();
     } catch {

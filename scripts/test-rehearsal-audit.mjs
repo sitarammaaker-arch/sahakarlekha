@@ -43,7 +43,7 @@ register(
         return next(spec, ctx);
       }
       export async function load(url, ctx, next) {
-        if (url === SUPABASE) return { format: 'module', shortCircuit: true, source: 'export const supabase = {};' };
+        if (url === SUPABASE) return { format: 'module', shortCircuit: true, source: 'export const supabase = {}; export const supabaseLoose = supabase;' };
         return next(url, ctx);
       }
     `),

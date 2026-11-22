@@ -5,6 +5,7 @@
  * financial summary across all branches.
  */
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
+import { dbRowAs } from '@/lib/dbRow';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -377,7 +378,7 @@ const MultiSocietyConsolidation: React.FC = () => {
         countMap[r.society_id] = Number(r.user_count);
       });
       setLiveSocieties(
-        (sData ?? []).map((s: LiveSociety) => ({ ...s, user_count: countMap[s.society_id] ?? 0 }))
+        dbRowAs<LiveSociety[]>(sData ?? []).map((s) => ({ ...s, user_count: countMap[s.society_id] ?? 0 }))
       );
     }).finally(() => setLiveLoading(false));
   }, [isSuperAdmin]);
