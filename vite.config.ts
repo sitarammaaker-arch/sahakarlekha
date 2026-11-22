@@ -40,7 +40,10 @@ export default defineConfig(({ mode }) => ({
           if (id.includes("xlsx")) return "xlsx";
           if (id.includes("@supabase")) return "supabase";
           if (id.includes("lucide-react")) return "icons";
-          if (id.includes("@radix-ui")) return "radix";
+          // SEO-13: NO "radix" group. One chunk of every Radix primitive (45 KB gzip) was modulepreloaded by every public
+          // page because the root needs two of them (toast, tooltip). Left to Rollup, each page loads only the primitives
+          // it uses: public entry 226 → 201 KB gzip, landing/blog/guide/glossary/pricing −16…−24 KB, Vouchers unchanged.
+          // (Icons stay grouped: splitting them added ~100 chunks for +7 KB on app pages.)
           if (id.includes("react-router") || id.includes("@remix-run")) return "router";
         },
       },

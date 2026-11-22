@@ -62,6 +62,7 @@ const FOOTER_LINKS: { to: string; hi: string; en: string }[] = [
 const FOOTER_LINKS_AFTER_ASK: { to: string; hi: string; en: string }[] = [
   { to: '/faq', hi: 'सामान्य प्रश्न', en: 'FAQ' },
   { to: '/contact', hi: 'संपर्क', en: 'Contact' },
+  { to: '/partner', hi: 'पार्टनर बनें', en: 'Become a Partner' },   // SEO-06: the partner page had no inbound link
   { to: '/editorial-policy', hi: 'संपादकीय नीति', en: 'Editorial Policy' },
   { to: '/privacy', hi: 'गोपनीयता', en: 'Privacy Policy' },
   { to: '/terms', hi: 'नियम एवं शर्तें', en: 'Terms' },
