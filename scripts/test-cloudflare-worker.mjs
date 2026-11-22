@@ -54,6 +54,10 @@ ok(W.fillDestination('/:seg/:path*', { seg: 'x', path: '' }) === '/x' && W.fillD
   ok(r.status === 200 && (await r.text()) === '<html>shell</html>' && !r.headers.get('Location') && calls[0] === '/', 'app route: 200 with the shell HTML (asks for "/", no Location header leaks)');
   const n = await W.default.fetch(new Request('https://sahakarlekha.com/zzz-none'), { ASSETS });
   ok(n.status === 404 && n.headers.get('X-Content-Type-Options') === 'nosniff', 'unknown path: 404 from the assets 404 page, with security headers');
+  ok(n.headers.get('Cache-Control') === 'no-store', 'unknown path: the 404 is never cached');
+  const old = await W.default.fetch(new Request('https://sahakarlekha.com/assets/AppDataShell-oldhash.js'), { ASSETS });
+  ok(old.status === 404 && old.headers.get('Cache-Control') === 'no-store' && !/immutable/.test(old.headers.get('Cache-Control') || ''), 'a missing /assets file (old chunk after a deploy): 404 with no-store, NOT the one-year immutable cache of real assets');
+  ok(/immutable/.test(W.headersFor('/assets/x.js')['Cache-Control'] || '') && W.notFoundHeaders('/assets/x.js', 200)['Cache-Control'] === W.headersFor('/assets/x.js')['Cache-Control'], 'a 2xx keeps the path rule (real assets stay immutable)');
   const rd = await W.default.fetch(new Request('https://sahakarlekha.com/guide/adhyay-1?x=1'), { ASSETS });
   ok(rd.status === 308 && rd.headers.get('Location') === 'https://sahakarlekha.com/guide/accounting-foundations?x=1', 'redirect keeps the query string');
 }

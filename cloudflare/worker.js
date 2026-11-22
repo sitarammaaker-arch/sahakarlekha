@@ -29,6 +29,17 @@ export function headersFor(path) {
   return out;
 }
 
+/**
+ * Headers for an answer to a path that matched no file. A 404 / error must never be cached: the /assets/(.*) rule's
+ * "immutable, max-age=31536000" is for real hashed files only — on a 404 (an old chunk name a tab still asks for after
+ * a deploy) it told the browser to keep the 404 page as that file for a year.
+ */
+export function notFoundHeaders(path, status) {
+  const h = headersFor(path);
+  if (status >= 400) h['Cache-Control'] = 'no-store';
+  return h;
+}
+
 const withHeaders = (res, extra) => {
   const r = new Response(res.body, res);
   for (const [k, v] of Object.entries(extra)) r.headers.set(k, v);
@@ -68,6 +79,6 @@ export default {
     }
     // Unknown path: let the assets binding answer — not_found_handling "404-page" serves dist/404.html with 404.
     const res = await env.ASSETS.fetch(request);
-    return withHeaders(res, headersFor(url.pathname));
+    return withHeaders(res, notFoundHeaders(url.pathname, res.status));
   },
 };
