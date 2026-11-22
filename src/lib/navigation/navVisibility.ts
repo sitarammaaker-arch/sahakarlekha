@@ -14,7 +14,7 @@ import { roleModuleAccess, roleGrantsModule } from './roleAccess';
 export interface NavContext {
   societyType: SocietyType;
   capabilities: Set<Capability>;
-  hasRole: (roles?: Role[]) => boolean;
+  hasRole: (roles: Role[]) => boolean;   // only called with a module's requiredRoles (defined)
   /** Raw role string of the current user (ECR-06 S2). For the 4 legacy names (and when
    *  absent) the classic requiredRoles path runs unchanged; for a mapped 17-role name the
    *  ROLE_MODULE_ACCESS map becomes the role gate instead. */

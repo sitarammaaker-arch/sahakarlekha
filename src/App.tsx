@@ -27,7 +27,8 @@ function SadasyaRedirect() {
   return <Navigate to={`/member/${encodeURIComponent(societyId)}`} replace />;
 }
 
-function lazyWithRetry<T extends ComponentType<unknown>>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the same bound React.lazy uses; props differ per page
+function lazyWithRetry<T extends ComponentType<any>>(
   factory: () => Promise<{ default: T }>,
 ) {
   return lazy(async () => {

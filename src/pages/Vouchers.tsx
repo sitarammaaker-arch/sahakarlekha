@@ -520,7 +520,9 @@ const Vouchers: React.FC = () => {
     },
   };
 
-  const currentVoucher = voucherConfig[voucherType];
+  // Only receipt / payment / journal / contra have an entry config here; a template of any other type (sale,
+  // purchase, notes) would have crashed on `.icon` — it falls back to the journal form.
+  const currentVoucher = voucherConfig[voucherType as keyof typeof voucherConfig] ?? voucherConfig.journal;
   const VoucherIcon = currentVoucher.icon;
 
   // Expert mode multi-line submit (called from handleExpertSubmit)

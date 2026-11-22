@@ -975,7 +975,12 @@ function resolveCurrentVouchers(events) {
   const byAgg = /* @__PURE__ */ new Map();
   for (const e of Array.isArray(events) ? events : []) {
     if (e.aggregateType !== "voucher") continue;
-    (byAgg.get(e.aggregateId) ?? byAgg.set(e.aggregateId, []).get(e.aggregateId)).push(e);
+    let list = byAgg.get(e.aggregateId);
+    if (!list) {
+      list = [];
+      byAgg.set(e.aggregateId, list);
+    }
+    list.push(e);
   }
   const out = [];
   for (const [id, evs] of byAgg) {
