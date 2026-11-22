@@ -24,7 +24,14 @@ export const EXTRA_PRIVATE = [
   'member',          // member portal — per-society personal data, own auth client
   'sadasya',         // old member-portal URL (redirects to /member)
   'reset-password',  // password-reset token flow
+  'verify-email',    // e-mail verification token flow (SEO P3, 2026-11-22)
+  'verify-backup',   // .slbak checker — a public utility, but no content worth a search result (SEO P3)
 ];
+
+/** Private sub-paths under a PUBLIC first segment (the segment itself stays indexable). SEO P3, 2026-11-22. */
+export const PRIVATE_SUBPATHS = {
+  partner: ['login', 'portal', 'status'],   // /partner is the public programme page; these are the partner's own screens
+};
 
 const routes = [...app.matchAll(/<Route\s+path="([^"]+)"\s+element=\{([^\n]*)/g)].map((m) => ({ path: m[1], el: m[2] }));
 const seg = (p) => p.replace(/^\//, '').split('/')[0];
@@ -37,6 +44,7 @@ const alt = PRIVATE.join('|');
 const RULES = [
   { source: `/(${alt})`, headers: [{ key: 'X-Robots-Tag', value: 'noindex' }] },
   { source: `/(${alt})/:path*`, headers: [{ key: 'X-Robots-Tag', value: 'noindex' }] },
+  ...Object.entries(PRIVATE_SUBPATHS).map(([s, subs]) => ({ source: `/${s}/(${subs.join('|')})`, headers: [{ key: 'X-Robots-Tag', value: 'noindex' }] })),
 ];
 const isNoindexRule = (h) => h.headers?.some((x) => x.key === 'X-Robots-Tag');
 
@@ -52,6 +60,10 @@ let pass = 0, fail = 0;
 const ok = (name, cond, detail = '') => { if (cond) { pass++; console.log(`  ✓ ${name}`); } else { fail++; console.log(`  ✗ ${name}${detail ? ' — ' + detail : ''}`); } };
 const rules = vercel.headers.filter(isNoindexRule);
 const covered = new Set(rules.flatMap((h) => (h.source.match(/^\/\(([^)]+)\)/)?.[1] ?? '').split('|')).filter(Boolean));
+for (const [s, subs] of Object.entries(PRIVATE_SUBPATHS)) {
+  ok(`/${s}/(${subs.join('|')}) carries noindex while /${s} stays indexable`, rules.some((h) => h.source === `/${s}/(${subs.join('|')})`) && !covered.has(s));
+  ok(`every /${s}/<x> listed is a real route`, subs.every((x) => routes.some((r) => r.path === `/${s}/${x}`)));
+}
 const missing = PRIVATE.filter((s) => !covered.has(s));
 ok(`every private route segment carries X-Robots-Tag: noindex (${PRIVATE.length})`, missing.length === 0, `missing: ${missing.join(', ')} — run: node scripts/private-noindex.mjs --write`);
 ok('both exact and sub-path rules exist', rules.some((h) => !h.source.includes(':path*')) && rules.some((h) => h.source.endsWith('/:path*')));
