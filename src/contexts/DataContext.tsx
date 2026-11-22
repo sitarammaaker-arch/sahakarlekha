@@ -124,6 +124,7 @@ import { canHoldShares, touchesShareCapital, manualMemberShareVoucherMessage } f
 import { memberWriteErrorText } from '@/lib/members/writeErrors';
 import { MEMBER_STATUS_EXTRA_FIELDS } from '@/lib/members/cessation';
 import { isCountedVoucher } from '@/lib/countedVoucher';
+import { voucherCheckErrorText } from '@/lib/vouchers/checkErrors';
 
 /* T-09 — the `ledger_events` row → LedgerEvent mapper now lives in lib/ledger/rows.ts.
    It moved because the CAIOS D-lane must read the SAME journal from the Edge Function,
@@ -1858,7 +1859,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // they used to carry their own copies, which is how three paths drift apart.
   const toastVoucherNotSaved = (msg: string) => toastRef.current({
     title: tr('❌ वाउचर क्लाउड में सेव नहीं हुआ', '❌ Voucher not saved to the cloud'),
-    description: tr(`${msg}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, `${msg}. The entry was removed from the screen — nothing will go wrong on refresh.`),
+    description: tr(`${voucherCheckErrorText(msg)}. स्क्रीन से entry हटा दी गई — refresh करने पर कुछ ग़लत नहीं होगा।`, `${voucherCheckErrorText(msg)}. The entry was removed from the screen — nothing will go wrong on refresh.`),
     variant: 'destructive',
     duration: 15000,
   });

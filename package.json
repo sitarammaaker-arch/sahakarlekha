@@ -541,7 +541,8 @@
     "test:db04-no-soc001-default": "node scripts/test-db04-no-soc001-default.mjs",
     "test:seo07-homepage-faq": "node scripts/test-seo07-homepage-faq.mjs",
     "test:soc001-orphans": "node scripts/test-soc001-orphans.mjs",
-    "test:db02-unguessable-ids": "node scripts/test-db02-unguessable-ids.mjs"
+    "test:db02-unguessable-ids": "node scripts/test-db02-unguessable-ids.mjs",
+    "test:db06-voucher-checks": "node scripts/test-db06-voucher-checks.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
