@@ -290,7 +290,10 @@ const numberedMigrations = readdirSync(pathResolve(HERE, '../supabase/migrations
 // only through a numbered migration (190+). Those count as base schema for table coverage.
 const postSec01Migrations = readdirSync(pathResolve(HERE, '../supabase/migrations'))
   .filter((n) => /^\d{3}_.*\.sql$/.test(n) && !n.endsWith('_down.sql') && Number(n.slice(0, 3)) >= 190).sort()
-  .map((n) => readFileSync(pathResolve(HERE, '../supabase/migrations', n), 'utf8')).join('\n');
+  .map((n) => readFileSync(pathResolve(HERE, '../supabase/migrations', n), 'utf8'))
+  // _tables (e.g. _soc001_orphans_backup) are private one-off backups, not society data — not part of the registry
+  .map((sql) => sql.replace(/^create table if not exists\s+(?:public\.)?_\w+\s*\([\s\S]*?\n\);/gim, ''))
+  .join('\n');
 const schema = parseSchema(
   readFileSync(pathResolve(HERE, '../supabase-tables.sql'), 'utf8') +
   '\n' +

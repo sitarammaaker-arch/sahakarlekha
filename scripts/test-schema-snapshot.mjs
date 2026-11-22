@@ -64,7 +64,10 @@ const { REGISTRY } = await import(pathToFileURL(join(SRC, 'lib/export/registry.t
 // ── 4. migrations against production ──
 {
   const created = new Set();
-  for (const f of readdirSync(join(ROOT, 'supabase/migrations')).filter((n) => /^\d{3}_.*\.sql$/.test(n) && !n.endsWith('_down.sql'))) {
+  // A migration production has not run yet (merge comes first, the SQL after) is pending, not missing: only check the
+  // ones the snapshot records as applied. A snapshot without these lines records none → every migration is checked.
+  const applied = new Set(lines.filter((l) => l.startsWith('applied_migration ')).map((l) => l.split(' ')[1]));
+  for (const f of readdirSync(join(ROOT, 'supabase/migrations')).filter((n) => /^\d{3}_.*\.sql$/.test(n) && !n.endsWith('_down.sql') && (applied.size === 0 || applied.has(n.slice(0, 3))))) {
     for (const m of readFileSync(join(ROOT, 'supabase/migrations', f), 'utf8').matchAll(/^\s*create table if not exists\s+(?:public\.)?"?(\w+)"?/gim)) created.add(m[1]);
   }
   const never = [...created].filter((t) => !tables.has(t));
@@ -94,7 +97,8 @@ const NOT_EXPORTED = {
 };
 {
   const exported = new Set(REGISTRY.map((e) => e.table));
-  const unexplained = [...tables].filter((t) => !exported.has(t) && !(t in NOT_EXPORTED));
+  // `_`-prefixed tables are private one-off backups (RLS on, no policy) — never society data, never exported.
+  const unexplained = [...tables].filter((t) => !exported.has(t) && !(t in NOT_EXPORTED) && !t.startsWith('_'));
   ok(unexplained.length === 0, `every production table is exported or listed in NOT_EXPORTED with a reason (${unexplained.join(', ')})`);
   const stale = Object.keys(NOT_EXPORTED).filter((t) => !tables.has(t) || exported.has(t));
   ok(stale.length === 0, `NOT_EXPORTED lists only real, non-exported tables (${stale.join(', ')})`);

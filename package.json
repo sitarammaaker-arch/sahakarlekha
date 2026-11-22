@@ -539,7 +539,8 @@
     "test:arch06-voucher-paths": "node scripts/test-arch06-voucher-paths.mjs",
     "test:seo-public-pages": "node scripts/test-seo-public-pages.mjs",
     "test:db04-no-soc001-default": "node scripts/test-db04-no-soc001-default.mjs",
-    "test:seo07-homepage-faq": "node scripts/test-seo07-homepage-faq.mjs"
+    "test:seo07-homepage-faq": "node scripts/test-seo07-homepage-faq.mjs",
+    "test:soc001-orphans": "node scripts/test-soc001-orphans.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
