@@ -201,14 +201,32 @@ export function diffEntity(
  * plan refuses to insert (`voucher_entry`, `audit_log`) must not appear in a diff either,
  * or an operator would be shown a number of rows that is never going to be written.
  */
+/**
+ * DB-10 drill (2026-11-22): registering a society writes its `society_settings` row and seeds the standard chart. A
+ * society re-registered after a data loss is therefore never "empty", and Fresh refused it ("society_settings already
+ * holds 1 row", "accounts already holds 211 rows") — the one mode meant for exactly that recovery. While the books
+ * are still empty (no voucher, no member), those two tables hold only the registration seed: Fresh treats them as
+ * Replace (the archive's settings and chart win; seeded accounts the archive lacks go). Every other table must still
+ * be empty, and once a voucher or member exists Fresh refuses as before.
+ */
+export const REGISTRATION_SEED_KEYS: ReadonlySet<string> = new Set(['society', 'account']);
+
+export function registrationSeedAllowed(
+  mode: RestoreMode,
+  currentRows: Record<string, readonly Row[] | undefined>,
+): boolean {
+  return mode === 'fresh' && (currentRows['voucher']?.length ?? 0) === 0 && (currentRows['member']?.length ?? 0) === 0;
+}
+
 export function diffRestore(
   entities: readonly EntityDescriptor[],
   archiveRows: Record<string, readonly Row[] | undefined>,
   currentRows: Record<string, readonly Row[] | undefined>,
   mode: RestoreMode,
 ): RestoreDiff {
+  const seedOk = registrationSeedAllowed(mode, currentRows);
   const diffs = entities.map(e =>
-    diffEntity(e, archiveRows[e.key] ?? null, currentRows[e.key] ?? [], mode),
+    diffEntity(e, archiveRows[e.key] ?? null, currentRows[e.key] ?? [], seedOk && REGISTRATION_SEED_KEYS.has(e.key) ? 'replace' : mode),
   );
 
   const totals = diffs.reduce(

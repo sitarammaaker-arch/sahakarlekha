@@ -237,5 +237,16 @@ const deleteChains = src.match(/\.delete\(\)[^;]*/g) || [];
 ok(deleteChains.length > 0 && deleteChains.every(c => c.includes("eq('society_id'")),
   'EVERY delete in the source is scoped by society_id — none can reach another tenant');
 
+// ── DB-10 drill: Fresh over the registration seed writes like Replace; anything else non-empty refuses ──
+{
+  const accountE = getEntity('account');
+  const seedPlan = planEntityWrites(accountE, [{ id: '3301', name: 'Cash' }], [{ id: '3301', name: 'Cash in hand' }, { id: '5555', name: 'Seed' }], 'fresh');
+  ok(seedPlan.insert.length === 0 && seedPlan.upsert.length === 1 && seedPlan.deleteKeys.length === 1 && seedPlan.deleteKeys[0].id === '5555',
+    'Fresh over the seeded chart upserts the archive accounts and removes seed-only ones');
+  let refused = null;
+  try { planEntityWrites(member, archive, [{ id: 'x' }], 'fresh'); } catch (e) { refused = e; }
+  ok(refused instanceof RestoreWriteError, 'Fresh into any other non-empty table refuses instead of guessing');
+}
+
 console.log(`\nRestore writer: ${pass} passed, ${fail} failed`);
 process.exitCode = fail > 0 ? 1 : 0;

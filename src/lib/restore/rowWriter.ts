@@ -31,7 +31,7 @@
  * ─────────────────────────────────────────────────────────────────────────────────────
  */
 import type { EntityDescriptor } from '../export/registry.types';
-import type { RestoreMode } from './diff';
+import { REGISTRATION_SEED_KEYS, type RestoreMode } from './diff';
 import { keyOf, type Row } from './naturalKeys';
 import { isMissingTableError } from '../export/missingTable';
 import { stripMemberPII } from '../memberIdentity';
@@ -78,7 +78,13 @@ export function planEntityWrites(
   const keyOfRow = (r: Row) => keyOf(entity, r);
 
   if (mode === 'fresh') {
-    return { insert: [...archiveRows], upsert: [], deleteKeys: [] };
+    if (currentRows.length === 0) return { insert: [...archiveRows], upsert: [], deleteKeys: [] };
+    // DB-10: the registration seed (society_settings + the seeded chart) of a society whose books are still empty —
+    // the dry run (diff.ts registrationSeedAllowed) has already checked that. The archive wins, as in Replace.
+    // Any other non-empty table under Fresh is a bug upstream: refuse rather than guess.
+    if (!REGISTRATION_SEED_KEYS.has(entity.key)) {
+      throw new RestoreWriteError(entity.table, `Fresh restore into a non-empty table (${currentRows.length} row(s))`);
+    }
   }
 
   if (mode === 'merge') {
