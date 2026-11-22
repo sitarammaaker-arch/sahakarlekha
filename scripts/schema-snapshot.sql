@@ -60,5 +60,8 @@ select json_build_object('lines', (select json_agg(l order by l) from (
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.prokind in ('f', 'p')
      and not exists (select 1 from pg_depend dp where dp.objid = p.oid and dp.deptype = 'e')
+  union all
+  -- the migrations production has applied, so a check can tell a not-yet-run migration from a missing table
+  select format('applied_migration %s', m.version) from public.app_migrations m
 ) s)) as r;
 rollback;

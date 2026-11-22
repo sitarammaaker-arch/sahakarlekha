@@ -58,7 +58,7 @@ const sqlCreates = [...sqlText.matchAll(/^create table if not exists\s+(?:public
 // through a numbered migration (190+), so those count as declared SQL too.
 const MIG_DIR = join(ROOT, 'supabase', 'migrations');
 for (const n of readdirSync(MIG_DIR).filter((f) => /^\d{3}_.*\.sql$/.test(f) && !f.endsWith('_down.sql') && Number(f.slice(0, 3)) >= 190)) {
-  for (const m of readFileSync(join(MIG_DIR, n), 'utf8').matchAll(/^create table if not exists\s+(?:public\.)?(\w+)\s*\(/gim)) if (!sqlCreates.includes(m[1])) sqlCreates.push(m[1]);
+  for (const m of readFileSync(join(MIG_DIR, n), 'utf8').matchAll(/^create table if not exists\s+(?:public\.)?(\w+)\s*\(/gim)) if (!m[1].startsWith('_') && !sqlCreates.includes(m[1])) sqlCreates.push(m[1]);   // _tables: private one-off backups, not society data
 }
 
 
