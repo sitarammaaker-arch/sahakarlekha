@@ -119,6 +119,13 @@ applied_migration 197
 applied_migration 198
 applied_migration 199
 applied_migration 200
+applied_migration 201
+column _member_ref_backup.id bigint not null default nextval('_member_ref_backup_id_seq'::regclass)
+column _member_ref_backup.old_member_id text not null
+column _member_ref_backup.row_id text not null
+column _member_ref_backup.saved_at timestamp with time zone not null default now()
+column _member_ref_backup.society_id text not null
+column _member_ref_backup.tbl text not null
 column _rls_182_backup.cmd text not null
 column _rls_182_backup.created text[] not null
 column _rls_182_backup.permissive text not null
@@ -2301,6 +2308,7 @@ column workers.status text
 column workers.uan text
 column workers.workerCode text
 column workers.workerType text
+constraint _member_ref_backup._member_ref_backup_pkey PRIMARY KEY (id)
 constraint _rls_182_backup._rls_182_backup_pkey PRIMARY KEY (tablename, policyname)
 constraint _soc001_orphans_backup._soc001_orphans_backup_pkey PRIMARY KEY (id)
 constraint account_reclass_log.account_reclass_log_pkey PRIMARY KEY (id)
@@ -2403,6 +2411,7 @@ constraint kcc_loans.kcc_loans_pkey PRIMARY KEY (id)
 constraint leads.leads_pkey PRIMARY KEY (id)
 constraint ledger_events.ledger_events_pkey PRIMARY KEY (event_id)
 constraint loan_interest_accruals.loan_interest_accruals_pkey PRIMARY KEY (id)
+constraint loans.loans_member_fkey FOREIGN KEY ("memberId", society_id) REFERENCES members(id, society_id)
 constraint loans.loans_pkey PRIMARY KEY (id)
 constraint maintenance_bills.maintenance_bills_pkey PRIMARY KEY (id)
 constraint marketing_dealer_licences.marketing_dealer_licences_kind_check CHECK ((kind = ANY (ARRAY['authorisation'::text, 'sourceCertificate'::text])))
@@ -2420,6 +2429,7 @@ constraint member_portal_login_attempts.member_portal_login_attempts_pkey PRIMAR
 constraint member_portal_users.member_portal_users_auth_user_id_fkey FOREIGN KEY (auth_user_id) REFERENCES auth.users(id) ON DELETE CASCADE
 constraint member_portal_users.member_portal_users_pkey PRIMARY KEY (auth_user_id)
 constraint member_portal_users.member_portal_users_society_id_member_id_key UNIQUE (society_id, member_id)
+constraint members.members_id_society_key UNIQUE (id, society_id)
 constraint members.members_pkey PRIMARY KEY (id)
 constraint mfa_failures.mfa_failures_pkey PRIMARY KEY (id)
 constraint mfa_verified_sessions.mfa_verified_sessions_pkey PRIMARY KEY (session_id)
@@ -2622,6 +2632,7 @@ constraint vouchers.vouchers_approval_status_known CHECK ((("approvalStatus" IS 
 constraint vouchers.vouchers_credit_account_fkey FOREIGN KEY ("creditAccountId", society_id) REFERENCES accounts(id, society_id)
 constraint vouchers.vouchers_date_iso CHECK (((date IS NOT NULL) AND (date ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'::text)))
 constraint vouchers.vouchers_debit_account_fkey FOREIGN KEY ("debitAccountId", society_id) REFERENCES accounts(id, society_id)
+constraint vouchers.vouchers_member_fkey FOREIGN KEY ("memberId", society_id) REFERENCES members(id, society_id)
 constraint vouchers.vouchers_pkey PRIMARY KEY (id)
 constraint vouchers.vouchers_type_known CHECK (((type IS NOT NULL) AND (type = ANY (ARRAY['receipt'::text, 'payment'::text, 'journal'::text, 'contra'::text, 'purchase'::text, 'sale'::text, 'debit_note'::text, 'credit_note'::text]))))
 constraint work_orders.work_orders_pkey PRIMARY KEY (id)
@@ -2633,6 +2644,7 @@ execute _fy_balances(p_sid text, p_as_of date)
 execute _fy_close_post(p_sid text, p_no text, p_date date, p_narration text, p_ref text, p_legs jsonb, p_by text)
 execute _is_system_owned_voucher(p_id text, p_ref text) anon,authenticated
 execute _legs_match_voucher(p_legs jsonb, p_vlines jsonb, p_dr text, p_cr text, p_amount numeric)
+execute _member_id_blank_to_null()
 execute _mfa_assert_self(p_claimed text, p_me text)
 execute _mfa_caller_email()
 execute _mfa_enrolled(p_email text)
@@ -2830,6 +2842,7 @@ function _fy_balances(p_sid text, p_as_of date) returns TABLE(account_id text, n
 function _fy_close_post(p_sid text, p_no text, p_date date, p_narration text, p_ref text, p_legs jsonb, p_by text) returns text security definer set search_path=public volatility=v body_md5=328fa54a9cbd76e36f688dc78e8fe829
 function _is_system_owned_voucher(p_id text, p_ref text) returns text security invoker volatility=i body_md5=69247e6a87a8212812831d2c194b68f6
 function _legs_match_voucher(p_legs jsonb, p_vlines jsonb, p_dr text, p_cr text, p_amount numeric) returns boolean security invoker set search_path="" volatility=i body_md5=b3b280c00adff39406e2181492e24ccd
+function _member_id_blank_to_null() returns trigger security invoker set search_path="" volatility=v body_md5=831df79ff65cde5cddfdaf5f13be3735
 function _mfa_assert_self(p_claimed text, p_me text) returns void security invoker volatility=i body_md5=0ae72219bdc2a1b69743a64416570c5a
 function _mfa_caller_email() returns text security invoker set search_path=public, extensions volatility=s body_md5=5664d32f9ad53f4d7ab3f1f434d240e8
 function _mfa_enrolled(p_email text) returns boolean security definer set search_path=public volatility=s body_md5=8bab67641e2c5aa61a694484f7486136
@@ -2993,7 +3006,7 @@ function refresh_subscription_status() returns integer security definer set sear
 function register_society(p_society_id text, p_email text, p_password text, p_name text, p_society jsonb, p_settings jsonb, p_accounts jsonb) returns jsonb security definer set search_path="" volatility=v body_md5=3b3fed38fa295e16bf07cb3806068d69
 function reject_voucher(p_id text, p_reason text, p_rejected_by text) returns jsonb security definer set search_path="" volatility=v body_md5=4cc24dc96d32ecc6912f6a83495da34e
 function request_email_verification(p_locale text) returns jsonb security definer set search_path=public, extensions volatility=v body_md5=0e19dbea6567637e6e3cd99344d615a3
-function restore_commit(p_run uuid, p_chunks integer, p_mode text, p_manifest_hash text, p_revived jsonb) returns jsonb security definer set search_path=public volatility=v body_md5=bb577aba5fe547c1cbf073011d0e7afd
+function restore_commit(p_run uuid, p_chunks integer, p_mode text, p_manifest_hash text, p_revived jsonb) returns jsonb security definer set search_path=public volatility=v body_md5=fc0080a589e26e300de108bb67e4b239
 function restore_stage(p_run uuid, p_seq integer, p_ops jsonb) returns jsonb security definer set search_path=public volatility=v body_md5=697e74615a4ad078cfd2edfeb06eb463
 function save_pending_voucher(p_voucher jsonb, p_lines jsonb) returns jsonb security definer set search_path="" volatility=v body_md5=6ba1ab80ed07a7218edb5fd58d9dab80
 function set_my_email_locale(p_locale text) returns jsonb security definer set search_path=public, extensions volatility=v body_md5=e8fa129a7cc4f46079aed560ab0c1dda
@@ -3021,6 +3034,7 @@ function voucher_edit_capabilities() returns jsonb security invoker set search_p
 function weekly_digest_counts(p_society_id text, p_day date) returns jsonb security definer set search_path=public volatility=s body_md5=e2256e8d5320f163a316dda6e1f24af7
 function weekly_digest_targets(p_day date) returns TABLE(society_id text, state text, tan boolean, gstin boolean, has_employees boolean, filed_ids text[], counts jsonb) security definer set search_path=public volatility=s body_md5=596626bbf8e141a05bcd4fa743195f17
 function withdraw_voucher(p_id text, p_reason text, p_deleted_by text) returns jsonb security definer set search_path="" volatility=v body_md5=8dadb91316f039ec813c760fe443f54c
+grant _member_ref_backup.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant _rls_182_backup.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant _soc001_orphans_backup.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant account_reclass_log.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
@@ -3474,6 +3488,7 @@ index CREATE INDEX idx_kachi_aarat_entries_society ON public.kachi_aarat_entries
 index CREATE INDEX idx_kcc_loans_society ON public.kcc_loans USING btree (society_id)
 index CREATE INDEX idx_leads_created ON public.leads USING btree (created_at DESC)
 index CREATE INDEX idx_leads_email ON public.leads USING btree (email)
+index CREATE INDEX idx_loans_member ON public.loans USING btree ("memberId", society_id)
 index CREATE INDEX idx_maintenance_bills_society_period ON public.maintenance_bills USING btree (society_id, period)
 index CREATE INDEX idx_marketing_dealer_licences_society ON public.marketing_dealer_licences USING btree (society_id)
 index CREATE INDEX idx_marketing_hired_trips_society ON public.marketing_hired_trips USING btree (society_id)
@@ -3529,6 +3544,7 @@ index CREATE INDEX idx_ve_society ON public.voucher_entries USING btree (society
 index CREATE INDEX idx_ve_voucher ON public.voucher_entries USING btree ("voucherId")
 index CREATE INDEX idx_vouchers_credit_account ON public.vouchers USING btree ("creditAccountId", society_id)
 index CREATE INDEX idx_vouchers_debit_account ON public.vouchers USING btree ("debitAccountId", society_id)
+index CREATE INDEX idx_vouchers_member ON public.vouchers USING btree ("memberId", society_id)
 index CREATE INDEX ledger_events_scope ON public.ledger_events USING btree (society_id, aggregate_type, aggregate_id, sequence)
 index CREATE INDEX loan_interest_accruals_loan_idx ON public.loan_interest_accruals USING btree (society_id, "loanId")
 index CREATE INDEX members_jurisdiction_idx ON public.members USING btree (society_id, jurisdiction)
@@ -4019,6 +4035,7 @@ policy workers.society_rw PERMISSIVE SELECT to authenticated using ((society_id 
 policy workers.society_rw_w_delete PERMISSIVE DELETE to authenticated using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write())) check ()
 policy workers.society_rw_w_insert PERMISSIVE INSERT to authenticated using () check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
 policy workers.society_rw_w_update PERMISSIVE UPDATE to authenticated using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write())) check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
+table _member_ref_backup rls=t force=f
 table _rls_182_backup rls=t force=f
 table _soc001_orphans_backup rls=t force=f
 table account_reclass_log rls=t force=f
@@ -4279,6 +4296,8 @@ trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.work_orders FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.worker_advances FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.workers FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
+trigger CREATE TRIGGER member_id_blank_to_null BEFORE INSERT OR UPDATE ON public.loans FOR EACH ROW EXECUTE FUNCTION _member_id_blank_to_null()
+trigger CREATE TRIGGER member_id_blank_to_null BEFORE INSERT OR UPDATE ON public.vouchers FOR EACH ROW EXECUTE FUNCTION _member_id_blank_to_null()
 trigger CREATE TRIGGER members_fy_lock_guard BEFORE INSERT OR DELETE OR UPDATE ON public.members FOR EACH ROW EXECUTE FUNCTION members_fy_lock_guard()
 trigger CREATE TRIGGER members_pii_redirect BEFORE INSERT OR UPDATE ON public.members FOR EACH ROW EXECUTE FUNCTION members_pii_redirect()
 trigger CREATE TRIGGER refuse_rewrite BEFORE DELETE OR UPDATE ON public.audit_log FOR EACH ROW EXECUTE FUNCTION _refuse_log_rewrite()
