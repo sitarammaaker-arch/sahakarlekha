@@ -4,6 +4,7 @@
  * session cannot redirect a payout. Check the partner's PAN card and cancelled cheque / passbook before approving.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { asDbArgs } from '@/lib/dbRow';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,7 +56,7 @@ export default function AdminDetailRequests() {
   const decide = async (r: RequestRow, decision: 'approved' | 'rejected', reason?: string) => {
     setBusy(r.id);
     try {
-      const { data, error: err } = await supabase.rpc('admin_detail_request_decide', { p_id: r.id, p_decision: decision, p_note: reason ?? null });
+      const { data, error: err } = await supabase.rpc('admin_detail_request_decide', asDbArgs({ p_id: r.id, p_decision: decision, p_note: reason ?? null }));
       const res = (data ?? {}) as { ok?: boolean; error_code?: string };
       if (err || !res.ok) {
         const why = res.error_code === 'reason_required' ? L('अस्वीकार करने का कारण लिखें।', 'Write a reason for rejecting.')

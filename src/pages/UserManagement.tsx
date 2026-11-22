@@ -136,7 +136,7 @@ export default function UserManagement() {
         // P1-SEC-5: never fetch society_users.password (plain-text). Auth is via
         // Supabase Auth; the list does not need/display the stored password.
         .select('id, name, email, role, is_active, society_id, created_at, mfa_enabled, branch_id')
-        .eq('society_id', societyId)
+        .eq('society_id', societyId ?? '')   // no society → no rows (the cache is kept)
         .order('created_at', { ascending: true });
 
       if (!error && data && data.length > 0) {
@@ -146,11 +146,11 @@ export default function UserManagement() {
           email: u.email,
           password: '', // P1-SEC-5: password is no longer read from society_users
           role: u.role as UserRole,
-          isActive: u.is_active,
-          society_id: u.society_id,
-          createdAt: u.created_at,
+          isActive: !!u.is_active,                 // NULL read as inactive, as before (falsy)
+          society_id: u.society_id ?? '',
+          createdAt: u.created_at ?? '',
           mfaEnabled: !!u.mfa_enabled,
-          branchId: (u as { branch_id?: string }).branch_id || '',
+          branchId: u.branch_id || '',
         }));
         setUsers(mapped);
         cacheUsers(mapped);

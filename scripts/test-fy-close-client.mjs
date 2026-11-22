@@ -19,7 +19,7 @@ const dc = readFileSync(resolve(root, 'src/contexts/DataContext.tsx'), 'utf8');
 const tp = readFileSync(resolve(root, 'src/lib/reports/tradingAndProfitLoss.ts'), 'utf8');
 ok('the trading A/c recognises the year-close stock journal (either direction)', /refType === 'fy\.close\.stock' && inReportedYear\(v\)/.test(tp) && /closingViaLegacy \|\| closingViaDedicated \|\| closingViaYearClose/.test(tp) && /return computeTradingAccount\(/.test(dc));
 const card = readFileSync(resolve(root, 'src/components/fy/YearCloseCard.tsx'), 'utf8');
-ok('the card calls close_financial_year with the authority and the closing stock', /rpc\('close_financial_year', \{ p_fy_label: y\.fy_label, p_authority: authority\.trim\(\), p_closing_stock_minor: stockMinor \}\)/.test(card));
+ok('the card calls close_financial_year with the authority and the closing stock', /rpc\('close_financial_year', asDbArgs\(\{ p_fy_label: y\.fy_label, p_authority: authority\.trim\(\), p_closing_stock_minor: stockMinor \}\)\)/.test(card));
 ok('the card announces success only when the server returned no error', card.indexOf('if (error)') < card.indexOf('close हो गया'));
 ok('the card is for admins and only for closing years', /user\?\.role !== 'admin' \|\| years\.length === 0/.test(card) && /\.eq\('status', 'closing'\)/.test(card));
 ok('SocietySetup shows the card', /<YearCloseCard \/>/.test(readFileSync(resolve(root, 'src/pages/SocietySetup.tsx'), 'utf8')));

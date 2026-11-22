@@ -9,6 +9,7 @@
  * write, so nothing on screen changes unless the server said ok. Payouts, TDS and clawback are the Payouts tab (167).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { asDbArgs } from '@/lib/dbRow';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -121,10 +122,10 @@ export default function AdminCommissionsPanel() {
     }
     setSaving(true);
     try {
-      const { data, error: err } = await supabase.rpc('admin_commission_rule_add', {
+      const { data, error: err } = await supabase.rpc('admin_commission_rule_add', asDbArgs({
         p_effective_from: rFrom, p_first_year_pct: first, p_renewal_pct: renewal,
         p_renewal_years: Math.trunc(years), p_hold_days: Math.trunc(hold), p_note: rNote.trim() || null,
-      });
+      }));
       const res = (data ?? {}) as { ok?: boolean; error_code?: string; repriced?: number };
       if (err || !res.ok) {
         toast({

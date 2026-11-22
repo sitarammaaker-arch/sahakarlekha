@@ -9,6 +9,7 @@
  * Not a Supabase Auth login: the society app's session and RLS are untouched.
  */
 import React, { useCallback, useEffect, useState } from 'react';
+import { dbRowAs } from '@/lib/dbRow';
 import { useNavigate } from 'react-router-dom';
 import { Link } from '@/components/LocalLink';
 import PublicLayout from '@/components/PublicLayout';
@@ -187,7 +188,7 @@ export const PartnerPortalHome: React.FC = () => {
     try {
       const { data: d, error } = await supabase.rpc('partner_portal', { p_session: session });
       if (error) { setLoadError(true); return; }
-      const res = d as PortalData;
+      const res = dbRowAs<PortalData>(d);
       if (!res?.ok) { signOutLocal(); return; }   // expired / revoked
       setData(res);
     } catch {

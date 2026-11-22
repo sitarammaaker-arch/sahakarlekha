@@ -52,7 +52,7 @@ ok("records '083' last; down restores 078's cancel_voucher and drops the new fun
 
 console.log('App wiring');
 const h = dc.slice(dc.indexOf('const postStockDocumentEdit = ('), dc.indexOf('// S3-e-1 · the ONE way a parent-record cascade'));
-ok('postStockDocumentEdit calls update_stock_document with the lib payload', /buildStockDocumentPayload\(kind, doc, voucher, event, movements\)/.test(h) && /supabase\.rpc\('update_stock_document', \{/.test(h));
+ok('postStockDocumentEdit calls update_stock_document with the lib payload', /buildStockDocumentPayload\(kind, doc, voucher, event, movements\)/.test(h) && /supabase\.rpc\('update_stock_document', asDbArgs\(\{/.test(h));
 ok('failure (error or rejection) → undo + destructive toast + reportError', /args\.undo\(\);/.test(h) && /variant: 'destructive', duration: 15000/.test(h) && /reportError\(`\$\{kind\}-edit-post-service`/.test(h) && (h.match(/fail\(/g) || []).length >= 2);
 ok('success restamps the voucher number and swaps the journal events', /voucherNo: r\.voucherNo!/.test(h) && /filter\(e => e\.eventId !== event\.eventId\), \.\.\.evs\]/.test(h));
 for (const [fn, kind, no] of [['updateSale', 'sale', 'saleNo'], ['updatePurchase', 'purchase', 'purchaseNo']]) {

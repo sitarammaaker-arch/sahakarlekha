@@ -9,7 +9,7 @@
  * mutations.  All such calls must go through this file.
  */
 
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseLoose } from '@/lib/supabase';
 
 // ── Generic helpers ───────────────────────────────────────────────────────────
 
@@ -18,7 +18,7 @@ export async function dbSelect<T = unknown>(
   societyId: string,
   opts?: { orderBy?: string; ascending?: boolean },
 ): Promise<{ data: T[]; error: string | null }> {
-  let q = supabase.from(table).select('*').eq('society_id', societyId);
+  let q = supabaseLoose.from(table).select('*').eq('society_id', societyId);
   if (opts?.orderBy) q = (q as any).order(opts.orderBy, { ascending: opts.ascending ?? false });
   const { data, error } = await q;
   return { data: (data ?? []) as T[], error: error?.message ?? null };
@@ -28,7 +28,7 @@ export async function dbInsert<T extends object>(
   table: string,
   record: T,
 ): Promise<{ error: string | null }> {
-  const { error } = await supabase.from(table).insert(record);
+  const { error } = await supabaseLoose.from(table).insert(record);
   return { error: error?.message ?? null };
 }
 
@@ -37,7 +37,7 @@ export async function dbBulkInsert<T extends object>(
   records: T[],
 ): Promise<{ error: string | null }> {
   if (records.length === 0) return { error: null };
-  const { error } = await supabase.from(table).insert(records);
+  const { error } = await supabaseLoose.from(table).insert(records);
   return { error: error?.message ?? null };
 }
 
@@ -46,7 +46,7 @@ export async function dbUpdate<T extends object>(
   id: string,
   updates: T,
 ): Promise<{ error: string | null }> {
-  const { error } = await supabase.from(table).update(updates).eq('id', id);
+  const { error } = await supabaseLoose.from(table).update(updates).eq('id', id);
   return { error: error?.message ?? null };
 }
 
@@ -54,7 +54,7 @@ export async function dbDelete(
   table: string,
   id: string,
 ): Promise<{ error: string | null }> {
-  const { error } = await supabase.from(table).delete().eq('id', id);
+  const { error } = await supabaseLoose.from(table).delete().eq('id', id);
   return { error: error?.message ?? null };
 }
 

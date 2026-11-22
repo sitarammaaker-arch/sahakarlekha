@@ -49,7 +49,7 @@ console.log('App wiring');
 ok('addVoucher: optional persistWith hands over voucher + event + rollback instead of saving', /opts\?: \{ persistWith\?: VoucherPersistWith[;}]/.test(dc)
   && /if \(opts\?\.persistWith && shadowEvent\) \{ opts\.persistWith\(newVoucher, shadowEvent, rollbackOptimistic\); return newVoucher; \}/.test(dc));
 const ps = dc.slice(dc.indexOf('const postStockDocument = ('), dc.indexOf('// S3-e-1 · the ONE way a parent-record cascade'));
-ok("postStockDocument calls post_stock_document with the lib payload", /buildStockDocumentPayload\(kind, doc, voucher, event, movements\)/.test(ps) && /supabase\.rpc\('post_stock_document', p\)/.test(ps));
+ok("postStockDocument calls post_stock_document with the lib payload", /buildStockDocumentPayload\(kind, doc, voucher, event, movements\)/.test(ps) && /supabase\.rpc\('post_stock_document', asDbArgs\(p\)\)/.test(ps));
 ok('failure (error or rejection) → voucher rollback + local undo + destructive toast + reportError', /args\.rollbackVoucher\(\);\s*args\.undoLocal\(\);/.test(ps) && /variant: 'destructive', duration: 15000/.test(ps) && (ps.match(/fail\(/g) || []).length >= 2);
 ok('success restamps document number, movements, voucher number/narration and the event', /saleNo: docNo/.test(ps) && /purchaseNo: docNo/.test(ps) && /referenceNo: docNo/.test(ps) && /vPatch/.test(ps) && /mapLedgerEventRows/.test(ps));
 for (const [fn, kind] of [['addSale', 'sale'], ['addPurchase', 'purchase']]) {

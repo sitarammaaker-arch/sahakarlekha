@@ -61,7 +61,7 @@ ok(columns.has('event_id') && columns.has('payload') && columns.has('sequence'),
 // Parse that object literal — it is the single source of the persisted column set.
 const dc = readFileSync(pathResolve(ROOT, 'src', 'contexts', 'DataContext.tsx'), 'utf8');
 ok(dc.includes(".from('ledger_events').insert(toLedgerEventRow("), 'DataContext persists to ledger_events via the toLedgerEventRow mapping');
-const mapIdx = dc.indexOf('toLedgerEventRow = (ev: LedgerEvent) => ({');
+const mapIdx = dc.indexOf('toLedgerEventRow = (ev: LedgerEvent): LooseRow => ({');
 ok(mapIdx > -1, 'the toLedgerEventRow column mapping exists');
 const insBlock = dc.slice(mapIdx, dc.indexOf('});', mapIdx));
 const insertKeys = [...insBlock.matchAll(/^\s*(\w+):/gm)].map((m) => m[1]);

@@ -18,7 +18,7 @@
  *
  * The cap itself lives in source.ts (DEFAULT_MAX_ROWS). One number, one home.
  */
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseLoose } from '@/lib/supabase';
 import type { EntityDescriptor, ExportFormat } from './registry.types';
 import { assertReadable, DEFAULT_MAX_ROWS } from './source';
 
@@ -86,7 +86,7 @@ export function assessExport(args: {
 
 export interface CountOptions {
   /** Injected in tests. Production always uses the real client. */
-  client?: typeof supabase;
+  client?: typeof supabaseLoose;   // the table name is the registry's runtime string
 }
 
 /**
@@ -102,7 +102,7 @@ export async function countEntityRows(
   options: CountOptions = {},
 ): Promise<{ count: number; error: string | null }> {
   assertReadable(entity);
-  const client = options.client ?? supabase;
+  const client = options.client ?? supabaseLoose;
 
   const { count, error } = await client
     .from(entity.table)

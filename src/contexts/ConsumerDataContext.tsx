@@ -14,6 +14,7 @@
  * C2 exposes the 'member' tier in the UI; 'wholesale'/'promo' are schema-ready for later slices.
  */
 import { tr } from '@/lib/uiLang';
+import type { LooseRow } from '@/lib/dbRow';
 import { voucherRefusedToast, inFlightToast } from '@/lib/voucherRefused';
 import { useLatest } from '@/hooks/useLatest';
 import { useInFlight } from '@/hooks/useInFlight';
@@ -127,7 +128,7 @@ export function ConsumerProvider({ children }: { children: ReactNode }) {
   const societyId = user?.societyId || 'SOC001';
   // T-01: stamp BOTH tenancy keys (society_id + jurisdiction) — the value comes from the SSOT
   // resolver so a domain row carries the same jurisdiction the main context writes (anti-IRR-4).
-  const withSoc = <T extends object>(d: T) => ({ ...d, society_id: societyId, jurisdiction: resolveJurisdiction(society?.state) });
+  const withSoc = <T extends object>(d: T): LooseRow => ({ ...d, society_id: societyId, jurisdiction: resolveJurisdiction(society?.state) });
 
   const societyRef = useRef(society);
   societyRef.current = society;

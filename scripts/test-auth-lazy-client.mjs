@@ -64,6 +64,7 @@ export const supabase = {
     signUp: async () => ({ error: null }),
   },
 };
+export const supabaseLoose = supabase;
 export default supabase;
 `;
 const ENTRY = `

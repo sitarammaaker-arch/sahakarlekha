@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseLoose } from '@/lib/supabase';
 
 /**
  * Fetch ALL rows of a society-scoped table, paging past Supabase's default 1000-row response cap.
@@ -32,7 +32,7 @@ export async function fetchAllPaged<T>(
   let from = 0;
   // Safety cap: 200 pages = 200,000 rows. Tweak if any single table ever exceeds this.
   for (let i = 0; i < 200; i++) {
-    let q = supabase.from(table).select('*').eq('society_id', societyId).range(from, from + PAGE - 1);
+    let q = supabaseLoose.from(table).select('*').eq('society_id', societyId).range(from, from + PAGE - 1);
     for (const col of orderBy) q = q.order(col, { ascending: true });
     const { data, error } = await q;
     if (error) return { data: out, error };

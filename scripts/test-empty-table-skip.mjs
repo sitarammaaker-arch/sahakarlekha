@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 const root = PR(dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = PR(root, 'src');
 const STUB = 'data:text/javascript,' + encodeURIComponent(
-  'export const supabase = { rpc: (...a) => globalThis.__rpc(...a) };');
+  'export const supabase = { rpc: (...a) => globalThis.__rpc(...a) }; export const supabaseLoose = supabase;');
 register('data:text/javascript,' + encodeURIComponent(`
   import { existsSync } from 'node:fs'; import { pathToFileURL } from 'node:url'; import { resolve as PR } from 'node:path';
   const SRC = ${JSON.stringify(SRC)};

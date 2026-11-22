@@ -51,6 +51,7 @@ export const supabase = {
   storage: { from: () => ({ upload: async () => ({ data: null, error: null }), download: async () => ({ data: null, error: null }), list: async () => ({ data: [], error: null }), remove: async () => ({ data: null, error: null }), createSignedUrl: async () => ({ data: null, error: null }) }) },
   functions: { invoke: async () => ({ data: null, error: null }) },
 };
+export const supabaseLoose = supabase;
 export default supabase;
 `;
 const FAKE_AUTH = `

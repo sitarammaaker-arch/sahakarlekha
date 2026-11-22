@@ -75,6 +75,8 @@ pattern inline (or create a sibling helper if you're adding ≥ 3 paths).
 4. After the user has run it, refresh the production schema snapshot (DB-01, read-only):
    `node scripts/schema-snapshot.mjs` → commit `supabase/schema/production-schema.txt`.
    `test:schema-snapshot` fails while a migration's table is missing from it.
+   In the same PR regenerate the client's DB types: `npm run db:types` → commit `src/types/database.ts`
+   (`test:db-types` fails while the types and the snapshot disagree on a table or column).
 
 ### Forbidden patterns
 

@@ -120,7 +120,7 @@ const upd = dc.slice(dc.indexOf('const updateLoan = useCallback('), dc.indexOf('
 ok(/const \{ sureties: updatedSureties, monthlyInstallment: updatedInstalment, \.\.\.updatedBase \} = updated;/.test(upd) && /patchRow\('loans', id, before, updatedBase\)/.test(upd) && !/upsert\(/.test(upd), 'updateLoan: sureties are not in the base write (ARCH-04: changed base columns only)');
 ok(/if \(!error && suretiesChanged\) saveLoanSureties\(id, updatedSureties \?\? \[\], before\.sureties\);/.test(upd), 'updateLoan: step 2 only when the sureties were part of the change (a repayment does not rewrite them)');
 const sv = dc.slice(dc.indexOf('const saveLoanSureties ='), dc.indexOf('const saveLoanInstalment ='));
-ok(/\.update\(\{ sureties \}\)\.eq\('id', loanId\)\.eq\('society_id', societyIdRef\.current\)/.test(sv), 'step 2 updates this society\'s loan only');
+ok(/\.update\(asDbRow\(\{ sureties \}\)\)\.eq\('id', loanId\)\.eq\('society_id', societyIdRef\.current\)/.test(sv), 'step 2 updates this society\'s loan only');
 ok(/setLoansState\(prev => prev\.map\(l => l\.id === loanId \? \{ \.\.\.l, sureties: restore \} : l\)\)/.test(sv) && /variant: 'destructive', duration: 15000/.test(sv) && /migration 169/.test(sv), 'a failed step 2 restores the screen and says so loudly, naming the migration');
 ok(/if \(guardFYLocked\(\)\) return false;/.test(upd) &&/if \(guardFYLocked\(\)\) return \{ \.\.\.data, id: '' \}/.test(add), 'FY-lock guard still first on both');
 

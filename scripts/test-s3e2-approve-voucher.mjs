@@ -41,7 +41,7 @@ ok("records '079' last; down drops it", /values \('079', 'approve_voucher'\)\s*o
 console.log('approveVoucher wiring');
 const a = dc.slice(dc.indexOf('const approveVoucher = useCallback('), dc.indexOf('const rejectVoucher = useCallback('));
 const rpc = a.slice(a.indexOf('if (postingServiceRef.current)'), a.indexOf("supabase.from('vouchers').upsert(withSoc(updated))"));
-ok('posting service → approve_voucher with the getVoucherLines legs, before the table path', rpc.length > 100 && /supabase\.rpc\('approve_voucher', \{ p_id: id, p_lines: buildEditVoucherPayload\(updated\)\.p_lines, p_approved_by: approvedBy \}\)/.test(rpc));
+ok('posting service → approve_voucher with the getVoucherLines legs, before the table path', rpc.length > 100 && /supabase\.rpc\('approve_voucher', asDbArgs\(\{ p_id: id, p_lines: buildEditVoucherPayload\(updated\)\.p_lines, p_approved_by: approvedBy \}\)\)/.test(rpc));
 ok('RPC error AND rejection → roll back + destructive toast + reportError', (rpc.match(/undoApprove\(/g) || []).length === 2 && /reportError\('voucher-approve-post-service'/.test(rpc) && /variant: 'destructive', duration: 15000/.test(rpc));
 ok("server events swapped into the journal; RPC branch returns before the table path", /mapLedgerEventRows\(/.test(rpc) && /return true;\s*\}\s*$/.test(rpc));
 ok('flag off: after the upsert succeeds → entries + ensureVoucherPostedEvent', /syncEntries\(updated\);[\s\S]*?void ensureVoucherPostedEvent\(updated, approvedBy\);/.test(a));

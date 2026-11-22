@@ -26,6 +26,7 @@
  * as test-nav.mjs). The side-effecting inserts are not.
  */
 import { supabase } from '@/lib/supabase';
+import { asDbRow } from '@/lib/dbRow';
 
 /**
  * `export` and `restore` (T-02) are DATA-CUSTODY actions, not business mutations.
@@ -103,7 +104,7 @@ function reportAuditFailure(error: unknown, context?: Record<string, unknown>): 
 export function logAudit(input: AuditInput, ctx: AuditContext): void {
   try {
     const row = buildAuditEvent(input, ctx);
-    void supabase.from('audit_log').insert(row).then(
+    void supabase.from('audit_log').insert(asDbRow(row)).then(
       // G4: a lost audit row is a governance gap, not a console detail — make it operator-visible.
       // Loaded lazily, only on failure, so this module's import graph stays as light as before.
       ({ error }) => { if (error) { console.warn('[audit] write failed (run audit_log migration?):', error.message); reportAuditFailure(error.message, { entity: row.entity_type, action: row.action }); } },
@@ -168,7 +169,7 @@ export function buildExportAuditEvent(input: ExportAuditInput, ctx: AuditContext
  */
 export async function logAuditBlocking(input: AuditInput, ctx: AuditContext): Promise<void> {
   const row = buildAuditEvent(input, ctx);
-  const { error } = await supabase.from('audit_log').insert(row);
+  const { error } = await supabase.from('audit_log').insert(asDbRow(row));
   throwIfAuditFailed(error);
 }
 
@@ -178,7 +179,7 @@ export async function logAuditBlocking(input: AuditInput, ctx: AuditContext): Pr
  */
 export async function logExportAudit(input: ExportAuditInput, ctx: AuditContext): Promise<void> {
   const row = buildExportAuditEvent(input, ctx);
-  const { error } = await supabase.from('audit_log').insert(row);
+  const { error } = await supabase.from('audit_log').insert(asDbRow(row));
   throwIfAuditFailed(error);
 }
 
@@ -242,6 +243,6 @@ export function buildRehearsalAuditEvent(input: RehearsalAuditInput, ctx: AuditC
  */
 export async function logRehearsalAudit(input: RehearsalAuditInput, ctx: AuditContext): Promise<void> {
   const row = buildRehearsalAuditEvent(input, ctx);
-  const { error } = await supabase.from('audit_log').insert(row);
+  const { error } = await supabase.from('audit_log').insert(asDbRow(row));
   throwIfAuditFailed(error);
 }

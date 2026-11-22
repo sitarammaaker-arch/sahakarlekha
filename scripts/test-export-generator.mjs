@@ -67,6 +67,7 @@ register(
                   };
                 },
               };
+              export const supabaseLoose = supabase;
             \`,
           };
         }

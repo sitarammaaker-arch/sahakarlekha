@@ -13,6 +13,7 @@
  *   • Payout list + TDS register CSV for a financial year.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { asDbArgs, dbRowAs } from '@/lib/dbRow';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -162,7 +163,7 @@ export default function AdminPayoutsPanel() {
     try {
       const { data, error: err } = await supabase.rpc('admin_payout_preview', { p_partner_id: partnerId, p_payout_date: payDate });
       if (err) { toast({ title: L('Preview नहीं बना', 'Preview failed'), description: err.message, variant: 'destructive', duration: 10000 }); return; }
-      setPreview(data as Preview);
+      setPreview(dbRowAs<Preview>(data));
     } catch {
       toast({ title: L('Preview नहीं बना', 'Preview failed'), description: L('इंटरनेट जाँचें।', 'Check your internet connection.'), variant: 'destructive', duration: 10000 });
     }
@@ -172,10 +173,10 @@ export default function AdminPayoutsPanel() {
     if (!preview?.ok || !preview.commission_ids?.length) return;
     setSaving(true);
     try {
-      const { data, error: err } = await supabase.rpc('admin_payout_record', {
+      const { data, error: err } = await supabase.rpc('admin_payout_record', asDbArgs({
         p_partner_id: partnerId, p_payout_date: payDate, p_commission_ids: preview.commission_ids,
         p_expected_net_paise: preview.net_paise, p_method: method, p_utr: utr.trim(), p_note: note.trim() || null,
-      });
+      }));
       const res = (data ?? {}) as { ok?: boolean; error_code?: string; net_paise?: number };
       if (err || !res.ok) {
         toast({ title: L('भुगतान दर्ज नहीं हुआ', 'Payment not recorded'), description: err?.message ?? payoutErrorText(res.error_code, language), variant: 'destructive', duration: 12000 });
@@ -208,10 +209,10 @@ export default function AdminPayoutsPanel() {
     }
     setSaving(true);
     try {
-      const { data, error: err } = await supabase.rpc('admin_tds_rule_add', {
+      const { data, error: err } = await supabase.rpc('admin_tds_rule_add', asDbArgs({
         p_effective_from: tFrom, p_rate_pct: rate, p_no_pan_rate_pct: noPan, p_fy_threshold_paise: threshold,
         p_section_ref: tSection.trim(), p_source_ref: tSource.trim(), p_note: tNote.trim() || null,
-      });
+      }));
       const res = (data ?? {}) as { ok?: boolean; error_code?: string };
       if (err || !res.ok) {
         toast({ title: L('TDS नियम सेव नहीं हुआ', 'TDS rule not saved'), description: err?.message ?? payoutErrorText(res.error_code, language), variant: 'destructive', duration: 10000 });

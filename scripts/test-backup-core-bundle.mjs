@@ -59,7 +59,7 @@ register(
         }
         return next(spec, ctx);
       }
-      export async function load(u, c, n) { if (u === SB) return { format: 'module', shortCircuit: true, source: 'export const supabase = {};' }; return n(u, c); }
+      export async function load(u, c, n) { if (u === SB) return { format: 'module', shortCircuit: true, source: 'export const supabase = {}; export const supabaseLoose = supabase;' }; return n(u, c); }
     `),
 );
 

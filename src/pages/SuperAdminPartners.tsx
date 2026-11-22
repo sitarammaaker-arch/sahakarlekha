@@ -9,6 +9,7 @@
  * no row changes on screen unless the server said ok (the list is re-read after every write — RULE 1).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { asDbArgs } from '@/lib/dbRow';
 import { Link } from '@/components/LocalLink';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -226,7 +227,7 @@ export default function SuperAdminPartners() {
     if (!decide) return;
     setSaving(true);
     try {
-      const { data, error: err } = await supabase.rpc('admin_partner_decide', { p_id: decide.partner.id, p_status: decide.status, p_note: decideNote.trim() || null });
+      const { data, error: err } = await supabase.rpc('admin_partner_decide', asDbArgs({ p_id: decide.partner.id, p_status: decide.status, p_note: decideNote.trim() || null }));
       const res = (data ?? {}) as { ok?: boolean; error_code?: string; code?: string | null };
       if (err || !res.ok) {
         toast({ title: L('बदलाव सेव नहीं हुआ', 'Change not saved'), description: (language === 'hi' ? DECIDE_ERRORS : DECIDE_ERRORS_EN)[res.error_code ?? ''] ?? err?.message ?? L('दोबारा कोशिश करें।', 'Please try again.'), variant: 'destructive', duration: 10000 });
@@ -250,9 +251,9 @@ export default function SuperAdminPartners() {
     if (!setTarget) return;
     setSaving(true);
     try {
-      const { data, error: err } = await supabase.rpc('admin_referral_set', {
+      const { data, error: err } = await supabase.rpc('admin_referral_set', asDbArgs({
         p_society_id: setTarget.societyId.trim(), p_code: normalizeReferralCode(setCode) || null, p_reason: setReason.trim(),
-      });
+      }));
       const res = (data ?? {}) as { ok?: boolean; error_code?: string };
       if (err || !res.ok) {
         toast({ title: L('बदलाव सेव नहीं हुआ', 'Change not saved'), description: err?.message ?? referralErrorText(res.error_code, language), variant: 'destructive', duration: 10000 });

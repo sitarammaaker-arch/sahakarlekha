@@ -7,6 +7,7 @@
  * toast) — nothing to roll back.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { asDbRow } from '@/lib/dbRow';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import type { DistributionRun } from '@/lib/distribution/dividendRuns';
@@ -34,7 +35,7 @@ export function useDistributionRuns() {
 
   const saveRun = useCallback(async (run: DistributionRun): Promise<{ ok: boolean; error?: string; code?: string }> => {
     if (!societyId) return { ok: false, error: 'no society' };
-    const { error } = await supabase.from(TABLE).upsert({ ...run, society_id: societyId });
+    const { error } = await supabase.from(TABLE).upsert(asDbRow({ ...run, society_id: societyId }));
     // MEM-05: the code travels too — a duplicate (23505) must never be mistaken for "table missing".
     if (error) return { ok: false, error: error.message, code: (error as { code?: string }).code };
     setRuns((prev) => [...prev.filter((r) => r.id !== run.id), run]);

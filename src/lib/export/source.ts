@@ -31,7 +31,7 @@
  * `exclude` entities are refused here as well as in the generator. Defence in depth: a
  * future caller that forgets `authorizeExport` still cannot read user_mfa.
  */
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseLoose } from '@/lib/supabase';
 import type { EntityDescriptor } from './registry.types';
 import type { SourceRow } from './generator';
 import { isMissingTableError } from './missingTable';
@@ -61,7 +61,7 @@ export class EntityNotReadableError extends Error {
 export interface FetchOptions {
   maxRows?: number;
   /** Injected in tests. Production always uses the real client. */
-  client?: typeof supabase;
+  client?: typeof supabaseLoose;   // the table name is the registry's runtime string
 }
 
 /**
@@ -98,7 +98,7 @@ export async function fetchEntityRows(
 ): Promise<FetchResult> {
   assertReadable(entity);
 
-  const client = options.client ?? supabase;
+  const client = options.client ?? supabaseLoose;
   const maxRows = options.maxRows ?? DEFAULT_MAX_ROWS;
   const order = orderColumns(entity);
 
@@ -134,7 +134,7 @@ export async function fetchEntityRows(
 export { isMissingTableError };
 
 async function readPage(
-  client: typeof supabase,
+  client: typeof supabaseLoose,
   table: string,
   societyId: string,
   order: string[],
