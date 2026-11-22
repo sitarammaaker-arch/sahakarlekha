@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Consolidation merges everyone's books into one." → Each society's books stay separate; only the view is combined.
 - ❌ "It's only for big federations." → Any accountant handling several societies benefits.
 
+**परिभाषा:** बहु-समिति समेकन (multi-society consolidation) यानी कई समितियों को एक ही जगह से संभालना और देखना — संघ (federation), शीर्ष संस्था, या कई समितियों का काम देखने वाले लेखाकार/ऑडिटर के लिए उपयोगी — जिसमें हर समिति की बही अलग रहती है, पर उन्हें साथ-साथ देखा जा सकता है।
+
+**क्यों ज़रूरी:** संघों और साझा लेखाकारों को कई समितियों पर नज़र रखनी होती है, बिना उनकी बही मिलाए। SahakarLekha यह सुविधा देता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "समेकन में सबकी बही मिलाकर एक कर दी जाती है।" → हर समिति की बही अलग रहती है; सिर्फ़ देखने का नज़ारा एक जगह जुड़ता है।
+- ❌ "यह सिर्फ़ बड़े संघों के लिए है।" → कई समितियाँ संभालने वाले किसी भी लेखाकार को इसका फ़ायदा है।
+
+**सीखने के लक्ष्य:**
+- बहु-समिति समेकन की परिभाषा बता सकें।
+- समझ सकें कि हर समिति की बही अलग रहती है।
+
 **Related concepts:** [[KI-000018]] Apex / Federation · [[KI-000305]] Society setup · [[KI-000314]] Dashboard
 
 **Internal links:** /software · /multi-society-consolidation · /guide/balance-sheet · /blog/nabard-and-federation-returns

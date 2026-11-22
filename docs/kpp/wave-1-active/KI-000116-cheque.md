@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Writing a cheque instantly reduces the bank balance." → The book entry is made, but the bank balance changes only when the cheque clears — a reconciliation point.
 - ❌ "A cheque is the same as cash." → It is a payment instruction, subject to clearing and possible dishonour.
 
+**परिभाषा:** चेक बैंक को दिया गया लिखित निर्देश है कि चेक काटने वाले (drawer) के खाते से तय रकम किसी नामित व्यक्ति या पक्ष को दे दी जाए; समितियाँ बिना नकद के भुगतान लेने-देने के लिए अक्सर इसका इस्तेमाल करती हैं।
+
+**क्यों ज़रूरी:** चेक रोज़ का बैंक साधन है; यह कैसे काम करता है, यह जानने से बैंक एंट्री और मिलान (reconciliation) सही होते हैं (जैसे जारी हुए पर अभी क्लियर न हुए चेक)।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "चेक काटते ही बैंक बैलेंस घट जाता है।" → बही में एंट्री हो जाती है, पर बैंक बैलेंस तभी बदलता है जब चेक क्लियर होता है — यह मिलान का एक बिंदु है।
+- ❌ "चेक नकद जैसा ही है।" → यह भुगतान का निर्देश है, जो क्लियरिंग पर निर्भर है और बाउंस (dishonour) भी हो सकता है।
+
+**सीखने के लक्ष्य:**
+- चेक की परिभाषा और समिति के भुगतानों में उसकी भूमिका बता सकें।
+- चेक जारी करने और क्लियर होने के बीच के समय के अंतर को समझ सकें।
+
 **Related concepts:** [[KI-000114]] Bank book · [[KI-000117]] Demand draft (planned) · [[KI-000122]] Bank reconciliation (planned) · [[KI-000126]] Stale cheque (planned)
 
 **Internal links:** /guide/receipts-and-payments · /bank-book

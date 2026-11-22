@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Reports must be built by hand each time." → In software they are generated instantly for any period.
 - ❌ "Only accountants can run reports." → Chairmen/secretaries can generate and read them too.
 
+**परिभाषा:** रिपोर्ट निकालना यानी सॉफ़्टवेयर से कोई वित्तीय विवरण या रजिस्टर तैयार करना — रिपोर्ट (Trial Balance, बैलेंस शीट, कैश बुक आदि) और अवधि चुनना, फिर उसे देखना, प्रिंट करना या export करना।
+
+**क्यों ज़रूरी:** किताबें रखने का असली मकसद ही रिपोर्ट हैं — फ़ैसलों, ऑडिट और सदस्यों के लिए। रिपोर्ट निकालना आना ही डेटा को काम का बनाता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "हर बार रिपोर्ट हाथ से बनानी पड़ती है।" → सॉफ़्टवेयर में किसी भी अवधि की रिपोर्ट तुरंत बन जाती है।
+- ❌ "रिपोर्ट सिर्फ़ अकाउंटेंट ही निकाल सकते हैं।" → अध्यक्ष और सचिव भी रिपोर्ट निकाल और पढ़ सकते हैं।
+
+**सीखने के लक्ष्य:**
+- चुनी हुई अवधि की रिपोर्ट निकाल सकें।
+- काम में लेने के लिए उसे export/प्रिंट कर सकें।
+
 **Related concepts:** [[KI-000212]] How to read financial reports · [[KI-000314]] Dashboard · [[KI-000185]] Trial balance (planned)
 
 **Internal links:** /guide/financial-ratios-and-lifecycle · /reports

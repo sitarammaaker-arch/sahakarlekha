@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Backup is only needed when something breaks." → Backups must exist *before* a problem, not after.
 - ❌ "Cloud means I never need to think about backup." → Cloud automates it, but understanding restore (recovery) still matters.
 
+**परिभाषा:** डेटा backup यानी समिति के हिसाब के डेटा की एक सुरक्षित अतिरिक्त कॉपी रखना, ताकि मूल डेटा खो जाए, खराब हो जाए या गलती से बदल जाए तो उसे वापस पाया जा सके।
+
+**क्यों ज़रूरी:** समिति के रिकॉर्ड दोबारा नहीं बनाए जा सकते। backup डेटा खोने से बचाता है — यही एक बड़ी वजह है कि क्लाउड अकाउंटिंग एक अकेले लोकल कंप्यूटर से ज़्यादा सुरक्षित है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "backup तभी चाहिए जब कुछ खराब हो जाए।" → backup समस्या आने से *पहले* होना चाहिए, बाद में नहीं।
+- ❌ "क्लाउड है तो backup के बारे में कभी सोचना ही नहीं पड़ता।" → क्लाउड इसे अपने-आप करता है, पर डेटा वापस लाने (restore) की समझ फिर भी ज़रूरी है।
+
+**सीखने के लक्ष्य:**
+- डेटा backup की परिभाषा बता सकें और समझा सकें कि यह पहले से क्यों होना चाहिए।
+- backup को सुरक्षित वापसी (restore) से जोड़कर समझ सकें।
+
 **Related concepts:** [[KI-000307]] Data restore (planned) · [[KI-000303]] Cloud accounting · [[KI-000316]] Optimistic save & rollback (planned)
 
 **Internal links:** /guide/data-security-and-backup · /backup-restore

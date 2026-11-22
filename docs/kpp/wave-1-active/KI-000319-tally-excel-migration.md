@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Switching means losing old records." → Migration brings masters, opening balances, and history across.
 - ❌ "Migration must be perfect in one shot." → Core data first (masters + opening balances); details can follow.
 
+**परिभाषा:** Tally/Excel से माइग्रेशन यानी समिति के मौजूदा रिकॉर्ड (मास्टर, ओपनिंग बैलेंस और पुराना इतिहास) को पुराने साधन से नए सॉफ़्टवेयर में एक बार ले जाना — आम तौर पर पुराने सिस्टम से export करके और नए में bulk import करके।
+
+**क्यों ज़रूरी:** "हमारा पुराना डेटा खो जाएगा" — यही डर कई समितियों को नया सॉफ़्टवेयर अपनाने से रोकता है। माइग्रेशन का साफ़ रास्ता यह डर दूर कर देता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "सॉफ़्टवेयर बदलने का मतलब पुराने रिकॉर्ड खोना है।" → माइग्रेशन से मास्टर, ओपनिंग बैलेंस और इतिहास नए सॉफ़्टवेयर में आ जाते हैं।
+- ❌ "माइग्रेशन एक ही बार में बिल्कुल सही होना चाहिए।" → पहले मुख्य डेटा (मास्टर + ओपनिंग बैलेंस) लाएँ; बाकी विवरण बाद में आ सकते हैं।
+
+**सीखने के लक्ष्य:**
+- Tally/Excel से माइग्रेशन का रास्ता समझा सकें।
+- "पुराना डेटा खो जाएगा" वाली आपत्ति का जवाब दे सकें।
+
 **Related concepts:** [[KI-000308]] Universal importer · [[KI-000033]] Account · [[KI-000051]] Opening balance (planned) · [[KI-000305]] Society setup
 
 **Internal links:** /guide/society-setup-and-roles · /universal-importer

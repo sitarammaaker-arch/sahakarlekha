@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Approval slows everything down." → It is a quick check that prevents costly errors and objections.
 - ❌ "The same person can make and approve." → That defeats the control; maker and checker should differ.
 
+**परिभाषा:** वाउचर स्वीकृति प्रक्रिया (approval workflow) एक नियंत्रण है, जिसमें एक व्यक्ति (maker) का बनाया वाउचर दूसरे व्यक्ति (checker) की जाँच और मंज़ूरी के बाद ही अंतिम होता है — एंट्री और मंज़ूरी अलग रखकर गलती और दुरुपयोग रोके जाते हैं।
+
+**क्यों ज़रूरी:** इससे भरोसा और साफ़ नियंत्रण बनता है — ऑडिटर कामों के बँटवारे (separation of duties) को अहम मानते हैं, और गलतियाँ कम होती हैं। SahakarLekha इस प्रक्रिया को सपोर्ट करता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "मंज़ूरी से सारा काम धीमा हो जाता है।" → यह छोटी-सी जाँच है जो महँगी गलतियों और आपत्तियों से बचाती है।
+- ❌ "एक ही व्यक्ति वाउचर बना भी सकता है और मंज़ूर भी कर सकता है।" → इससे नियंत्रण का मतलब ही खत्म हो जाता है; maker और checker अलग-अलग होने चाहिए।
+
+**सीखने के लक्ष्य:**
+- maker-checker स्वीकृति प्रक्रिया की परिभाषा बता सकें।
+- एंट्री और मंज़ूरी को अलग रखना क्यों ज़रूरी है, समझा सकें।
+
 **Related concepts:** [[KI-000055]] Voucher · [[KI-000253]] Audit trail (planned) · [[KI-000311]] User permission
 
 **Internal links:** /guide/society-setup-and-roles · /voucher-approval

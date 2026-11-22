@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Journal and ledger are the same." → Journal is the first chronological record; ledger groups entries by account.
 - ❌ "Only journal vouchers go in the journal." → Conceptually, all transactions originate as journal entries.
 
+**परिभाषा:** जर्नल वह पहली बही (book of original entry) है जिसमें लेन-देन सबसे पहले तारीख के क्रम में लिखे जाते हैं — हर एंट्री में दिखता है कि किस खाते को नाम (Dr) और किसे जमा (Cr) किया गया — और इसके बाद उन्हें लेजर में पोस्ट किया जाता है।
+
+**क्यों ज़रूरी:** इससे हर एंट्री के दोनों पहलू लिखने की आदत बनती है — यही डबल एंट्री का व्यावहारिक रूप है। सॉफ़्टवेयर में समायोजन (adjustment) और ट्रांसफ़र के लिए जर्नल वाउचर इस्तेमाल होते हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "जर्नल और लेजर एक ही चीज़ हैं।" → जर्नल तारीख-वार पहला रिकॉर्ड है; लेजर एंट्रियों को खाते-वार इकट्ठा करता है।
+- ❌ "जर्नल में सिर्फ़ जर्नल वाउचर जाते हैं।" → सिद्धांत रूप में हर लेन-देन जर्नल एंट्री के रूप में ही शुरू होता है।
+
+**सीखने के लक्ष्य:**
+- जर्नल को पहली बही (book of original entry) के रूप में परिभाषित कर सकें।
+- जर्नल और लेजर का फ़र्क बता सकें।
+
 **Related concepts:** [[KI-000079]] Ledger · [[KI-000048]] Posting · [[KI-000055]] Voucher · [[KI-000086]] Day book
 
 **Internal links:** /guide/daybook-and-ledger · /vouchers

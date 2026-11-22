@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "NEFT and RTGS are the same." → They differ in settlement timing and typical use.
 - ❌ "Digital transfers don't need a voucher." → Every transfer is still a transaction that must be recorded.
 
+**परिभाषा:** NEFT और RTGS भारत में बैंक से बैंक पैसा भेजने के इलेक्ट्रॉनिक तरीके हैं — NEFT बैच में निपटता है और आम ट्रांसफर के लिए ठीक है, जबकि RTGS तुरंत (real-time) निपटता है और बड़ी रकम भेजने में काम आता है।
+
+**क्यों ज़रूरी:** समितियाँ अब ज़्यादा लेन-देन डिजिटल करती हैं; NEFT/RTGS को सही दर्ज करने से बैंक बुक सही रहती है और बैंक मिलान (reconciliation) आसान होता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "NEFT और RTGS एक ही हैं।" → दोनों में पैसा निपटने का समय और आम इस्तेमाल अलग है।
+- ❌ "डिजिटल ट्रांसफर का वाउचर नहीं बनता।" → हर ट्रांसफर भी एक लेन-देन है, जिसे दर्ज करना ज़रूरी है।
+
+**सीखने के लक्ष्य:**
+- NEFT और RTGS का फ़र्क बता सकें।
+- डिजिटल ट्रांसफर को बैंक लेन-देन के रूप में दर्ज कर सकें।
+
 **Related concepts:** [[KI-000119]] UPI (planned) · [[KI-000114]] Bank book · [[KI-000113]] Bank account
 
 **Internal links:** /guide/receipts-and-payments · /bank-book

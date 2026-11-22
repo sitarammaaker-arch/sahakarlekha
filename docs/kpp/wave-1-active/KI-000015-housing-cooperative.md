@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "A housing society is a builder." → It is a members' body that manages/develops housing, not a commercial builder.
 - ❌ "Maintenance money is the society's profit." → It is a fund for upkeep, accounted as members' contributions.
 
+**परिभाषा:** आवास सहकारी समिति सदस्य मिलकर मकान लेने, बनाने या उनका प्रबंधन करने के लिए बनाते हैं — यह सदस्यों का रखरखाव (maintenance) योगदान, साझा फंड और साझा संपत्ति की देखभाल संभालती है।
+
+**क्यों ज़रूरी:** आवास समितियाँ SahakarLekha में सदस्यों का बकाया, रखरखाव वसूली, फंड और रिपोर्ट का काम करती हैं — इनका काम कर्ज़ या व्यापार करने वाली समितियों से अलग होता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "आवास समिति एक बिल्डर है।" → यह सदस्यों की संस्था है जो मकानों का प्रबंधन या विकास करती है, कोई व्यापारी बिल्डर नहीं।
+- ❌ "रखरखाव का पैसा समिति का मुनाफ़ा है।" → यह देखभाल के लिए फंड है, जिसे सदस्यों के योगदान के रूप में दर्ज किया जाता है।
+
+**सीखने के लक्ष्य:**
+- आवास सहकारी समिति की परिभाषा बता सकें।
+- इसका लेखा रखरखाव और फंड पर टिका है, यह पहचान सकें।
+
 **Related concepts:** [[KI-000009]] Society types · [[KI-000004]] Member · [[KI-000001]] Cooperative society
 
 **Internal links:** /software · /guide/society-type-entries

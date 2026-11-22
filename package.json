@@ -548,7 +548,8 @@
     "test:seo-offers": "node scripts/test-seo-offers.mjs",
     "test:seo-0506": "node scripts/test-seo-0506.mjs",
     "test:seo13-entry": "node scripts/test-seo13-entry.mjs",
-    "test:auth-lazy-client": "node scripts/test-auth-lazy-client.mjs"
+    "test:auth-lazy-client": "node scripts/test-auth-lazy-client.mjs",
+    "test:seo02-glossary-hindi": "node scripts/test-seo02-glossary-hindi.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

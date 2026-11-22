@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Capital is the society's cash." → Cash is an asset; capital is the members' ownership claim, which may be held in many assets.
 - ❌ "Only share money is capital." → Reserves and accumulated surplus are part of own funds too.
 
+**परिभाषा:** कैपिटल (अपना धन / own funds) समिति में सदस्यों की हिस्सेदारी है — मुख्यतः शेयर कैपिटल, साथ में जमा हुए आरक्षित फंड (reserves) और सरप्लस। यह दिखाती है कि समिति अपने सदस्यों/मालिकों को कितना देय है।
+
+**क्यों ज़रूरी:** एसेट और लायबिलिटी के साथ कैपिटल तीसरी मुख्य श्रेणी है और लेखा समीकरण (accounting equation) को पूरा करती है। यह सदस्यों के स्वामित्व को दिखाती है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "कैपिटल यानी समिति का नकद।" → नकद एक एसेट है; कैपिटल सदस्यों का स्वामित्व-दावा है, जो कई तरह के एसेट में लगा हो सकता है।
+- ❌ "सिर्फ़ शेयर का पैसा ही कैपिटल है।" → आरक्षित फंड और जमा हुआ सरप्लस भी अपने धन का हिस्सा हैं।
+
+**सीखने के लक्ष्य:**
+- समिति के लिए कैपिटल/अपने धन की परिभाषा बता सकें।
+- कैपिटल (स्वामित्व-दावा) और नकद (एसेट) का फ़र्क बता सकें।
+
 **Related concepts:** [[KI-000034]] Asset · [[KI-000035]] Liability · [[KI-000040]] Accounting equation · [[KI-000153]] Share
 
 **Internal links:** /guide/balance-sheet · /share-register

@@ -33,7 +33,19 @@ review_schedule: 2027-06-27
 
 **Common misconceptions:**
 - ❌ "A dairy society only sells milk." → Many also supply cattle feed, veterinary services, and inputs to members.
-- ❌ "All members are paid the same rate." → Payment usually depends on quantity and quality (fat/SNF). *(Exact rate treatment is a separate, validation-needed topic.)*
+- ❌ "All members are paid the same rate." → Payment usually depends on quantity and quality (fat/SNF).
+
+**परिभाषा:** दुग्ध सहकारी समिति दूध उत्पादकों की समिति है जो सदस्यों का दूध इकट्ठा करती है, उसकी गुणवत्ता जाँचती है, सदस्यों को उसका भुगतान करती है और उसे आगे बेचती है (अक्सर जिला/राज्य दुग्ध संघ के ज़रिए) — इससे छोटे डेयरी किसानों को उचित दाम और पक्का बाज़ार मिलता है।
+
+**क्यों ज़रूरी:** दुग्ध समितियाँ SahakarLekha का एक बड़ा वर्ग हैं; इनका हिसाब रोज़ के दूध संग्रह, फैट/SNF के आधार पर भुगतान और बकाया के इर्द-गिर्द घूमता है — और सॉफ़्टवेयर इन्हीं तरीकों को संभालता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "दुग्ध समिति सिर्फ़ दूध बेचती है।" → कई समितियाँ सदस्यों को पशु आहार, पशु-चिकित्सा सेवा और दूसरा ज़रूरी सामान भी देती हैं।
+- ❌ "सभी सदस्यों को एक ही दर से भुगतान होता है।" → भुगतान आम तौर पर दूध की मात्रा और गुणवत्ता (फैट/SNF) पर निर्भर करता है।
+
+**सीखने के लक्ष्य:**
+- दुग्ध सहकारी समिति और उसका मुख्य काम बता सकें।
+- दूध संग्रह के अलावा वह कौन-सी सेवाएँ दे सकती है, पहचान सकें।
 
 **Related concepts:** [[KI-000009]] Society types · [[KI-000004]] Member · [[KI-000001]] Cooperative society · [[KI-000014]] Credit society
 

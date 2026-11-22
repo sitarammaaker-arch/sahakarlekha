@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Ledger account = the whole ledger." → It is one account *within* the ledger.
 - ❌ "Each account needs manual totalling." → Software keeps the running balance automatically.
 
+**परिभाषा:** लेजर अकाउंट लेजर के अंदर का एक अकेला खाता है — जैसे कैश, बैंक, वेतन या कोई एक सदस्य — जिसमें उसके सारे नाम (debit), जमा (credit) और चालू/अंतिम शेष दिखते हैं।
+
+**क्यों ज़रूरी:** किसी एक लेजर अकाउंट को पढ़कर ही आप शेष की जाँच करते हैं, किसी एंट्री को ढूँढते हैं, या ऑडिट में किसी आँकड़े को समझाते हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "लेजर अकाउंट मतलब पूरा लेजर।" → यह लेजर के *अंदर* का एक खाता है।
+- ❌ "हर खाते का जोड़ हाथ से लगाना पड़ता है।" → सॉफ़्टवेयर चालू शेष अपने-आप रखता है।
+
+**सीखने के लक्ष्य:**
+- लेजर अकाउंट की परिभाषा बता सकें।
+- किसी एक खाते से शेष को ढूँढ और जाँच सकें।
+
 **Related concepts:** [[KI-000079]] Ledger · [[KI-000033]] Account · [[KI-000081]] Chart of accounts (planned) · [[KI-000048]] Posting
 
 **Internal links:** /guide/daybook-and-ledger · /ledger

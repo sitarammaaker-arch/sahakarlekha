@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "The RCS owns or runs the society." → It regulates; members run it.
 - ❌ "Every state has identical RCS rules." → Cooperative law is largely state-specific; specifics vary by state. *(For exact provisions, verify with your state RCS — not covered in this educational item.)*
 
+**परिभाषा:** सहकारी समितियों का रजिस्ट्रार (RCS) वह सरकारी अधिकारी/कार्यालय है जो सहकारी समितियों का पंजीकरण, नियमन और निगरानी करता है — अपने क्षेत्र में पंजीकरण, ऑडिट की देख-रेख, ज़रूरी सरकारी रिटर्न (statutory filings) और नियमों के पालन का काम इसी के पास है।
+
+**क्यों ज़रूरी:** समिति किसको जवाब देती है (RCS को), यह जानने से अनुपालन और सरकारी रिटर्न का सारा काम समझ में आता है। SahakarLekha की रिपोर्टें इस तरह बनी हैं कि RCS में जमा करने का काम आसान हो।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "RCS समिति का मालिक है या उसे चलाता है।" → RCS सिर्फ़ नियमन करता है; समिति को सदस्य चलाते हैं।
+- ❌ "हर राज्य में RCS के नियम एक जैसे हैं।" → सहकारी कानून ज़्यादातर राज्य का अपना होता है, इसलिए बारीक नियम राज्य-दर-राज्य बदलते हैं। (सही प्रावधान अपने राज्य के RCS से पक्का करें — यह जानकारी इस लेख में नहीं दी गई है।)
+
+**सीखने के लक्ष्य:**
+- बता सकें कि RCS क्या है और क्या काम करता है।
+- समझ सकें कि बारीक नियम हर राज्य में अलग हैं (इनके लिए RCS/CA से पूछें)।
+
 **Related concepts:** [[KI-000001]] Cooperative society · [[KI-000023]] Ministry of Cooperation (planned) · [[KI-000287]] Audit (glossary)
 
 **Internal links:** /guide/society-setup-and-roles · /guide/statutory-returns

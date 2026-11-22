@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "If the screen shows it, it must be saved." → Only true if the save was actually confirmed; good software verifies and warns on failure.
 - ❌ "Cloud apps can lose entries silently." → A well-built one surfaces failures instead of hiding them.
 
+**परिभाषा:** सेव की विश्वसनीयता का मतलब है कि जब आप कोई एंट्री सेव करें तो वह सच में क्लाउड में जमा हो — और अगर सेव नाकाम हो तो सॉफ़्टवेयर आपको बताए और यह न दिखाए कि सेव हो गया, ताकि आपका काम आपकी जानकारी के बिना कभी न खोए।
+
+**क्यों ज़रूरी:** हिसाब-किताब का सबसे बड़ा डर है — "सेव हुआ दिख रहा था पर हुआ नहीं, और refresh करते ही एंट्री गायब।" भरोसेमंद और ईमानदार सेव असली मेहनत को बचाता है — यह SahakarLekha का एक मूल सिद्धांत है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "स्क्रीन पर दिख रहा है तो सेव ही होगा।" → यह तभी सच है जब सेव की सच में पुष्टि हुई हो; अच्छा सॉफ़्टवेयर जाँच करता है और नाकाम होने पर चेतावनी देता है।
+- ❌ "क्लाउड ऐप चुपचाप एंट्री खो सकते हैं।" → अच्छी तरह बना ऐप नाकामी को छिपाता नहीं, सामने दिखाता है।
+
+**सीखने के लक्ष्य:**
+- समझा सकें कि पुष्टि वाला, ईमानदार सेव क्यों ज़रूरी है।
+- पहचान सकें कि नाकामी को छिपाया नहीं, सामने दिखाया जाना चाहिए।
+
 **Related concepts:** [[KI-000306]] Data backup · [[KI-000303]] Cloud accounting · [[KI-000317]] Local-vs-cloud integrity (planned)
 
 **Internal links:** /guide/data-security-and-backup · /register

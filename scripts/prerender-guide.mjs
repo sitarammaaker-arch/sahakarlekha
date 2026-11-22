@@ -1132,6 +1132,22 @@ function cookbookPages(DATA) {
 
 /* ---------------- glossary routes (KI markdown → full-body term pages, GOS-03) ---------------- */
 
+/** SEO-02: the Hindi glossary page of a KI that carries its Hindi text — Hindi definition, the Hindi plain
+ *  explanation, the English definition (one paragraph, for bilingual readers), then why / misconceptions / objectives
+ *  in Hindi (each falls back to the English field). Mirrors src/pages/GlossaryTerm.tsx (hiText). */
+function glossaryHindiBody(s, def) {
+  const noRefs = (x) => x.replace(/\[\[[^\]]*\]\]/g, '');
+  const why = s['क्यों ज़रूरी'] || s['why it matters'];
+  const mis = s['आम गलतफ़हमियाँ'] || s['common misconceptions'];
+  const obj = s['सीखने के लक्ष्य'] || s['learning objectives'];
+  return `<p><strong>परिभाषा:</strong> ${esc(kiPlain(s['परिभाषा']))}</p>` +
+    (s['hindi explanation'] ? `<h2>आसान शब्दों में</h2><p>${esc(kiPlain(s['hindi explanation']))}</p>` : '') +
+    (def ? `<h2>In English</h2><p lang="en">${esc(def)}</p>` : '') +
+    (why ? `<h2>यह क्यों ज़रूरी है</h2><p>${esc(kiPlain(why))}</p>` : '') +
+    (mis ? `<h2>आम गलतफ़हमियाँ</h2>${md(noRefs(mis))}` : '') +
+    (obj ? `<h2>सीखने के लक्ष्य</h2>${md(noRefs(obj))}` : '');
+}
+
 function parseKiSections(body) {
   const out = {};
   const re = /\*\*([^*\n]+?):\*\*/g;
@@ -1236,13 +1252,15 @@ function glossaryPages(DATA) {
         current: t.hindi || t.en,
         html:
           `<h1>${esc(t.hindi || t.en)}</h1><p><em>${esc(t.en)}</em></p>` +
+          // SEO-02: a KI with its Hindi text (**परिभाषा:** …) gets a Hindi page, as GlossaryTerm renders it; else as before.
+          (s['परिभाषा'] ? glossaryHindiBody(s, def) : (
           (def ? `<p><strong>परिभाषा:</strong> ${esc(def)}</p>` : '') +
           (s['plain-language explanation'] ? `<h2>आसान शब्दों में</h2><p>${esc(kiPlain(s['plain-language explanation']))}</p>` : '') +
           (s['hindi explanation'] ? `<h2>हिन्दी में</h2><p lang="hi">${esc(kiPlain(s['hindi explanation']))}</p>` : '') +
           (s['english explanation'] ? `<h2>In English</h2><p lang="en">${esc(kiPlain(s['english explanation']))}</p>` : '') +
           (s['why it matters'] ? `<h2>यह क्यों ज़रूरी है</h2><p>${esc(kiPlain(s['why it matters']))}</p>` : '') +
           (s['common misconceptions'] ? `<h2>आम गलतफ़हमियाँ</h2>${md(s['common misconceptions'].replace(/\[\[[^\]]*\]\]/g, ''))}` : '') +
-          (s['learning objectives'] ? `<h2>सीखने के लक्ष्य</h2>${md(s['learning objectives'].replace(/\[\[[^\]]*\]\]/g, ''))}` : '') +
+          (s['learning objectives'] ? `<h2>सीखने के लक्ष्य</h2>${md(s['learning objectives'].replace(/\[\[[^\]]*\]\]/g, ''))}` : ''))) +
           (related.length ? `<h2>जुड़े विषय</h2><p>${related.join(' · ')}</p>` : '') +
           (() => {
             // GOS-11: definition → narrative edge in the static body too

@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "The equation only matters at year-end." → It holds true after every single transaction.
 - ❌ "Capital and liabilities are the same." → Capital is members' own funds; liabilities are owed to outsiders/depositors.
 
+**परिभाषा:** अकाउंटिंग इक्वेशन कहता है **एसेट = लायबिलिटी + कैपिटल** — यानी समिति के पास जो कुछ है, वह या तो दूसरों को देय पैसे से आया है या सदस्यों के अपने धन से।
+
+**क्यों ज़रूरी:** इसी की वजह से बैलेंस शीट मिलती है और डबल-एंट्री काम करती है। अगर यह न मिले, तो कहीं गलती है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "यह इक्वेशन सिर्फ़ साल के अंत में मायने रखता है।" → यह हर एक लेन-देन के बाद सही रहता है।
+- ❌ "कैपिटल और लायबिलिटी एक ही हैं।" → कैपिटल सदस्यों का अपना धन है; लायबिलिटी बाहर वालों/जमाकर्ताओं को देनी है।
+
+**सीखने के लक्ष्य:**
+- अकाउंटिंग इक्वेशन बता सकें।
+- समझा सकें कि यह हमेशा बराबर क्यों रहता है।
+
 **Related concepts:** [[KI-000034]] Asset · [[KI-000035]] Liability · [[KI-000036]] Capital · [[KI-000026]] Double-entry system · [[KI-000207]] Balance sheet (planned)
 
 **Internal links:** /guide/balance-sheet · /guide/accounting-foundations

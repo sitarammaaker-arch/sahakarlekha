@@ -46,6 +46,12 @@ export interface GlossaryEntry {
   why: string;
   misconceptions: string;        // markdown bullet list
   learningObjectives: string;    // markdown bullet list
+  // SEO-02 (2026-11-22): the Hindi page's own text. Each is '' until the KI carries it (**परिभाषा:**,
+  // **क्यों ज़रूरी:**, **आम गलतफ़हमियाँ:**, **सीखने के लक्ष्य:**); the Hindi page then falls back to the English field.
+  definitionHi: string;
+  whyHi: string;
+  misconceptionsHi: string;      // markdown bullet list
+  learningObjectivesHi: string;  // markdown bullet list
   searchIntent: string;
   related: RelatedRef[];
   internalLinks: string[];       // in-app routes (e.g. /guide/introduction)
@@ -208,6 +214,10 @@ function buildEntry(path: string, raw: string): GlossaryEntry | null {
     why: plainText(getSection(sections, 'why it matters')),
     misconceptions: getSection(sections, 'common misconceptions'), // rendered via markdown (keeps bullets/bold)
     learningObjectives: getSection(sections, 'learning objectives'),
+    definitionHi: plainText(getSection(sections, 'परिभाषा')),
+    whyHi: plainText(getSection(sections, 'क्यों ज़रूरी')),
+    misconceptionsHi: getSection(sections, 'आम गलतफ़हमियाँ'),
+    learningObjectivesHi: getSection(sections, 'सीखने के लक्ष्य'),
     searchIntent: plainText(getSection(sections, 'search intent')),
     related,
     internalLinks,

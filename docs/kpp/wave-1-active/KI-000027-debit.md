@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Debit always means money going out / a reduction." → Not necessarily; for an asset like cash, a debit is an *increase*.
 - ❌ "Debit is bad, credit is good." → They are neutral directions, not value judgments.
 
+**परिभाषा:** नाम (Debit/Dr) किसी खाते की एंट्री का बायाँ पक्ष है। मोटे तौर पर, डेबिट से एसेट या खर्च का बढ़ना, या लायबिलिटी, कैपिटल या आय का घटना दर्ज होता है।
+
+**क्यों ज़रूरी:** हर एंट्री में दो ही शब्द आते हैं — डेबिट और क्रेडिट। सही पक्ष चुनना वाउचर एंट्री का पहला हुनर है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "डेबिट का मतलब हमेशा पैसा जाना या घटना है।" → ज़रूरी नहीं; कैश जैसे एसेट में डेबिट का मतलब *बढ़ोतरी* है।
+- ❌ "डेबिट बुरा है, क्रेडिट अच्छा।" → ये सिर्फ़ दो दिशाएँ हैं, अच्छे-बुरे का फ़ैसला नहीं।
+
+**सीखने के लक्ष्य:**
+- डेबिट को एंट्री का बायाँ पक्ष पहचान सकें।
+- "डेबिट = पैसा बाहर" वाली गलतफ़हमी से बच सकें।
+
 **Related concepts:** [[KI-000028]] Credit · [[KI-000026]] Double-entry system · [[KI-000029]] Golden rules
 
 **Internal links:** /guide/golden-rules · /guide/accounting-foundations

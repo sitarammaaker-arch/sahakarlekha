@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Everyone should be admin for convenience." → That removes control; assign the least access each role needs.
 - ❌ "Roles and individual users are the same." → A role is the access level; users are assigned a role.
 
+**परिभाषा:** उपयोगकर्ता भूमिका (user role) सॉफ़्टवेयर में पहुँच-अधिकारों का एक नाम वाला समूह है (जैसे Admin, Accountant या Data-entry), जो हर उपयोगकर्ता को दिया जाता है — इससे तय होता है कि वह क्या देख और क्या कर सकता है, ताकि हर व्यक्ति की ज़िम्मेदारी और पहुँच उसके काम से मेल खाए।
+
+**क्यों ज़रूरी:** भूमिकाओं से डेटा सुरक्षित और नियंत्रण साफ़ रहता है — हर किसी को सब कुछ बदलने या मिटाने की छूट नहीं होनी चाहिए। ऑडिटर भूमिका के आधार पर दी गई पहुँच को अहमियत देते हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "आसानी के लिए सबको admin बना दो।" → इससे नियंत्रण खत्म हो जाता है; हर भूमिका को उतनी ही पहुँच दें जितनी ज़रूरी है।
+- ❌ "भूमिका और उपयोगकर्ता एक ही चीज़ हैं।" → भूमिका पहुँच का स्तर है; उपयोगकर्ता को कोई भूमिका दी जाती है।
+
+**सीखने के लक्ष्य:**
+- उपयोगकर्ता भूमिका की परिभाषा बता सकें।
+- भूमिकाएँ देते समय "कम से कम ज़रूरी पहुँच" (least privilege) का नियम लागू कर सकें।
+
 **Related concepts:** [[KI-000311]] User permission · [[KI-000065]] Voucher approval workflow · [[KI-000253]] Audit trail (planned)
 
 **Internal links:** /guide/society-setup-and-roles · /user-management

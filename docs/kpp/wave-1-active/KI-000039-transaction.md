@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Only large dealings are transactions." → Even a small receipt or payment is a transaction.
 - ❌ "A quote or order is a transaction." → It becomes a transaction only when money or value actually changes (per the society's basis).
 
+**परिभाषा:** लेन-देन कोई भी आर्थिक घटना है जिसमें पैसा या पैसे के बराबर मूल्य शामिल हो — जैसे कैश मिलना, खर्च चुकाना, कर्ज़ देना या माल खरीदना — और जिसे समिति अपनी बही में दर्ज करती है।
+
+**क्यों ज़रूरी:** लेन-देन ही लेखा का कच्चा माल है — हर वाउचर, हर लेजर एंट्री और हर रिपोर्ट किसी लेन-देन से ही शुरू होती है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "सिर्फ़ बड़े सौदे ही लेन-देन होते हैं।" → छोटी-सी रसीद या भुगतान भी लेन-देन है।
+- ❌ "कोटेशन या ऑर्डर भी लेन-देन है।" → यह लेन-देन तभी बनता है जब पैसा या मूल्य सच में हाथ बदले (समिति के हिसाब के आधार के अनुसार)।
+
+**सीखने के लक्ष्य:**
+- लेन-देन की परिभाषा बता सकें।
+- लेन-देन को उसकी वाउचर एंट्री से जोड़ सकें।
+
 **Related concepts:** [[KI-000055]] Voucher · [[KI-000025]] Accounting · [[KI-000049]] Accounting cycle
 
 **Internal links:** /guide/accounting-foundations · /vouchers

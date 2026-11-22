@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Accounting is just data entry." → Entry is one step; the cycle includes checking, adjusting, reporting, and closing.
 - ❌ "The cycle runs once." → It repeats every accounting period.
 
+**परिभाषा:** लेखांकन चक्र (accounting cycle) लेन-देन से अंतिम खातों तक के कदमों का दोहराया जाने वाला क्रम है — दर्ज करना (वाउचर) → पोस्ट करना (लेजर) → Trial Balance → समायोजन (adjustments) → वित्तीय विवरण → खाते बंद करना — जो हर लेखा अवधि में दोहराया जाता है।
+
+**क्यों ज़रूरी:** इससे पता चलता है कि *हर काम कहाँ फ़िट होता है* — वाउचर रोज़ क्यों डालते हैं, मिलान (reconcile) हर महीने और खाते बंद हर साल क्यों करते हैं। SahakarLekha इस चक्र का ज़्यादातर हिस्सा अपने-आप कर देता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "लेखा का मतलब बस डेटा एंट्री है।" → एंट्री एक कदम है; चक्र में जाँच, समायोजन, रिपोर्ट बनाना और खाते बंद करना भी शामिल है।
+- ❌ "यह चक्र एक ही बार चलता है।" → यह हर लेखा अवधि में दोहराया जाता है।
+
+**सीखने के लक्ष्य:**
+- लेखांकन चक्र के कदम क्रम से गिना सकें।
+- रोज़, महीने और साल के कामों को चक्र में सही जगह रख सकें।
+
 **Related concepts:** [[KI-000039]] Transaction · [[KI-000055]] Voucher · [[KI-000185]] Trial balance (planned) · [[KI-000197]] Final accounts (planned) · [[KI-000050]] Financial year
 
 **Internal links:** /guide/accounting-foundations · /guide/case-study-full-year

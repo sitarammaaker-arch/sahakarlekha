@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Backups alone keep me safe." → You also need a working restore to actually recover.
 - ❌ "Restoring is risky and complicated." → In good software it is a guided, safe step.
 
+**परिभाषा:** डेटा रिस्टोर (बहाली) वह प्रक्रिया है जिसमें backup से समिति का डेटा वापस लाया जाता है — गलती से डेटा खोने, खराब होने या गलत बदलाव के बाद रिकॉर्ड को पहले की सही स्थिति में लौटाने के लिए।
+
+**क्यों ज़रूरी:** backup तभी काम का है जब उससे रिस्टोर हो सके। रिस्टोर समझने से भरोसा मिलता है कि समिति का रिकॉर्ड सच में सुरक्षित है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "सिर्फ़ backup होने से मैं सुरक्षित हूँ।" → डेटा सच में वापस पाने के लिए रिस्टोर का ठीक से काम करना भी ज़रूरी है।
+- ❌ "रिस्टोर करना जोखिम भरा और मुश्किल है।" → अच्छे सॉफ़्टवेयर में यह कदम-दर-कदम बताया गया, सुरक्षित काम है।
+
+**सीखने के लक्ष्य:**
+- डेटा रिस्टोर की परिभाषा बता सकें।
+- backup और रिस्टोर को सुरक्षा की एक जोड़ी के रूप में समझ सकें।
+
 **Related concepts:** [[KI-000306]] Data backup · [[KI-000303]] Cloud accounting · [[KI-000316]] Optimistic save & rollback
 
 **Internal links:** /guide/data-security-and-backup · /backup-restore

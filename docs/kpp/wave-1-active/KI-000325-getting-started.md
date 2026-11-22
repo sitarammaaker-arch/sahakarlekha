@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "I must learn everything before starting." → The first few steps are enough to begin; the rest can be learned as you go.
 - ❌ "I should enter this year's transactions before setting up." → Setup and opening balances come first, then daily vouchers.
 
+**परिभाषा:** शुरुआत (getting started) SahakarLekha पर नई समिति के लिए सुझाया गया पहला रास्ता है — रजिस्टर करें, समिति सेटअप करें, लेजर खाते (ledger heads) और सदस्य जोड़ें, ओपनिंग बैलेंस डालें और पहला वाउचर दर्ज करें — ताकि जल्दी से काम करने लायक बहीखाता तैयार हो जाए।
+
+**क्यों ज़रूरी:** नए उपयोगकर्ता अक्सर नहीं जानते कि कहाँ से शुरू करें। साफ़ रास्ता होने से लोग बीच में नहीं छोड़ते और समिति जल्दी काम पर लग जाती है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "शुरू करने से पहले मुझे सब कुछ सीखना होगा।" → शुरुआत के लिए पहले कुछ कदम काफ़ी हैं; बाकी काम करते-करते सीखा जा सकता है।
+- ❌ "सेटअप से पहले इस साल के लेन-देन डाल देने चाहिए।" → पहले सेटअप और ओपनिंग बैलेंस, फिर रोज़ के वाउचर।
+
+**सीखने के लक्ष्य:**
+- शुरुआत के कदम क्रम से गिना सकें।
+- जानें कि सेटअप और ओपनिंग बैलेंस रोज़ की एंट्री से पहले आते हैं।
+
 **Related concepts:** [[KI-000305]] Society setup · [[KI-000329]] Opening balance entry (planned) · [[KI-000330]] First voucher (planned) · [[KI-000327]] Add member (planned)
 
 **Internal links:** /guide/quick-start · /register

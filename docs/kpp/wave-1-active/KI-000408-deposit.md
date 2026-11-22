@@ -35,6 +35,18 @@ review_schedule: 2027-07-25
 - ❌ "A deposit is the society's income." → It is a liability the society owes back.
 - ❌ "SB, FD, RD and Pigmy are recorded the same way." → They differ in interest, maturity and installments.
 
+**परिभाषा:** जमा (deposit) वह पैसा है जो सदस्य सुरक्षित रखने और ब्याज पाने के लिए समिति में रखता है — जैसे बचत (SB), सावधि (FD), आवर्ती (RD) या पिग्मी — और जिसे समिति को सदस्य को लौटाना होता है।
+
+**क्यों ज़रूरी:** जमा सदस्यों का पैसा है और PACS/क्रेडिट समिति का एक मुख्य काम है। हर सदस्य का सही शेष और सही ब्याज रखने से सदस्यों का भरोसा बना रहता है और बही भी सही रहती है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "जमा समिति की आय है।" → यह देनदारी है, जो समिति को वापस लौटानी है।
+- ❌ "SB, FD, RD और पिग्मी एक ही तरह दर्ज होते हैं।" → ब्याज, परिपक्वता (maturity) और किस्तों में इनका फ़र्क होता है।
+
+**सीखने के लक्ष्य:**
+- जमा की परिभाषा बता सकें और SB/FD/RD/पिग्मी के नाम बता सकें।
+- बता सकें कि जमा समिति के लिए देनदारी है।
+
 **Related concepts:** [[KI-000403]] Receipt voucher · [[KI-000004]] Member
 
 **Internal links:** /deposits · /guide/receipts-and-payments

@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Cloud means my data is less safe." → Reputable cloud systems keep encrypted, backed-up copies — usually safer than a single local PC.
 - ❌ "I need to install heavy software." → A browser is enough; there is nothing big to install.
 
+**परिभाषा:** क्लाउड लेखांकन यानी समिति की किताबें किसी सुरक्षित ऑनलाइन सॉफ़्टवेयर में रखना जिसे ब्राउज़र से खोला जाता है; डेटा दूर के सर्वरों पर रहता है और कहीं से भी मिल जाता है — किसी एक कंप्यूटर या कागज़ी रजिस्टरों पर निर्भर नहीं रहना पड़ता।
+
+**क्यों ज़रूरी:** इससे समझ आता है कि SahakarLekha कैसे काम करता है और यह कंप्यूटर की फ़ाइलों या कागज़ से ज़्यादा सुरक्षित और लचीला क्यों है — डिजिटल होने वाली समितियों के लिए यह एक मुख्य फ़ायदा है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "क्लाउड में मेरा डेटा कम सुरक्षित है।" → भरोसेमंद क्लाउड सिस्टम डेटा की encrypted और backup वाली कॉपियाँ रखते हैं — जो आम तौर पर एक अकेले कंप्यूटर से ज़्यादा सुरक्षित है।
+- ❌ "मुझे भारी सॉफ़्टवेयर इंस्टॉल करना पड़ेगा।" → ब्राउज़र काफ़ी है; कुछ बड़ा इंस्टॉल नहीं करना पड़ता।
+
+**सीखने के लक्ष्य:**
+- क्लाउड लेखांकन की परिभाषा बता सकें।
+- कंप्यूटर की फ़ाइलों/कागज़ के मुकाबले इसकी सुरक्षा और कहीं से भी इस्तेमाल के फ़ायदे समझा सकें।
+
 **Related concepts:** [[KI-000304]] SaaS (planned) · [[KI-000306]] Data backup · [[KI-000322]] Why go digital · [[KI-000305]] Society setup
 
 **Internal links:** /software · /register · /guide/data-security-and-backup · /blog/data-security-and-backup

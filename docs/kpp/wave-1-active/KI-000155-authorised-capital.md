@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Authorised capital is the money the society has." → It is the limit; paid-up capital is what was actually received.
 - ❌ "It can be exceeded freely." → Raising beyond it needs the proper amendment.
 
+**परिभाषा:** ऑथराइज़्ड कैपिटल (authorised capital) वह अधिकतम शेयर कैपिटल है जो समिति को (अपनी उपविधि (bye-laws)/पंजीकरण के अनुसार) सदस्यों से जुटाने की अनुमति है — यानी वह ऊपरी सीमा जहाँ तक वह शेयर जारी कर सकती है, न कि असल में जुटाई गई रकम।
+
+**क्यों ज़रूरी:** नए सदस्य जोड़ते समय या और कैपिटल जुटाते समय यह ऊपरी सीमा जानना ज़रूरी है। इसी के दायरे में जारी (issued) और पेड-अप (paid-up) कैपिटल को देखा जाता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "ऑथराइज़्ड कैपिटल वह पैसा है जो समिति के पास है।" → यह एक सीमा है; पेड-अप कैपिटल वह है जो असल में मिला।
+- ❌ "इस सीमा से आगे जब चाहें जा सकते हैं।" → इससे ज़्यादा जुटाने के लिए उचित संशोधन (amendment) ज़रूरी है।
+
+**सीखने के लक्ष्य:**
+- ऑथराइज़्ड कैपिटल को ऊपरी सीमा के रूप में समझा सकें।
+- इसे जारी (issued) और पेड-अप कैपिटल से अलग पहचान सकें।
+
 **Related concepts:** [[KI-000153]] Share · [[KI-000156]] Issued capital · [[KI-000157]] Paid-up capital · [[KI-000036]] Capital
 
 **Internal links:** /guide/member-management · /share-register

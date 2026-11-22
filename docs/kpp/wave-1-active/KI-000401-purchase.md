@@ -35,6 +35,18 @@ review_schedule: 2027-07-25
 - ❌ "A separate voucher must be made by hand." → The purchase screen posts the voucher automatically.
 - ❌ "Cash and credit purchases are recorded the same way." → Credit purchase creates a supplier due; cash purchase reduces cash immediately.
 
+**परिभाषा:** खरीद का मतलब है समिति का कोई माल या सेवा खरीदना — दोबारा बेचने के लिए, सदस्यों के लिए, या अपने काम के लिए — और उसे इस तरह दर्ज करना कि स्टॉक और सप्लायर का खाता साथ-साथ अपडेट हों।
+
+**क्यों ज़रूरी:** खरीद से ही स्टॉक का मूल्य, Trading Account और सप्लायरों का बकाया तय होता है। कोई खरीद छूट जाए या गलत दर्ज हो, तो अंतिम स्टॉक और मुनाफ़ा दोनों गलत निकलते हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "खरीद का वाउचर अलग से हाथ से बनाना पड़ता है।" → खरीद की स्क्रीन वाउचर अपने-आप बना देती है।
+- ❌ "नकद और उधार खरीद एक ही तरह दर्ज होती है।" → उधार खरीद में सप्लायर का बकाया बनता है; नकद खरीद में उसी समय नकद घटता है।
+
+**सीखने के लक्ष्य:**
+- सहकारी लेखा में खरीद की परिभाषा बता सकें।
+- नकद खरीद और उधार खरीद का फ़र्क समझ सकें।
+
 **Related concepts:** [[KI-000402]] Sale · [[KI-000055]] Voucher · [[KI-000409]] Closing stock
 
 **Internal links:** /purchases · /help/record-purchase · /guide/purchase-entries

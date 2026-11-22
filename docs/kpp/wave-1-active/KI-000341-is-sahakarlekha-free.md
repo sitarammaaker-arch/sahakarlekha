@@ -39,6 +39,18 @@ review_schedule: 2027-06-27
 - ❌ "The software is free." → The accounting app is a paid annual plan (see `/pricing`); the guide, help centre, cookbook, glossary and calculators are free for everyone.
 - ❌ "Pricing is the same forever." → Treat pricing as live; always source it from `/pricing`.
 
+**परिभाषा:** यह Knowledge Item समितियों के लिए SahakarLekha की कीमत/उपलब्धता वाले सवाल को एक जगह रखता है, ताकि कीमत से जुड़ा हर FAQ या AI जवाब एक ही, एक जैसे और ताज़ा स्रोत से बने।
+
+**क्यों ज़रूरी:** सॉफ़्टवेयर अपनाने से पहले कीमत सबसे आम सवालों में से एक है। इसे एक ही KI में रखने से वेबसाइट, ब्लॉग और AI सहायक पर अलग-अलग जवाब नहीं आते।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "सॉफ़्टवेयर मुफ़्त है।" → अकाउंटिंग ऐप एक सालाना पेड प्लान है (देखें `/pricing`); गाइड, हेल्प सेंटर, कुकबुक, शब्दकोश (glossary) और कैलकुलेटर सबके लिए मुफ़्त हैं।
+- ❌ "कीमत हमेशा एक जैसी रहेगी।" → कीमत को बदलने वाली मानें; हमेशा `/pricing` से ही लें।
+
+**सीखने के लक्ष्य:**
+- कीमत के सवाल का एक ही, एक जैसा जवाब दे सकें।
+- मौजूदा कीमत हमेशा लाइव /pricing पेज से ही लें।
+
 **Related concepts:** [[KI-000303]] Cloud accounting · [[KI-000321]] Choosing accounting software (planned) · [[KI-000322]] Why go digital
 
 **Internal links:** /pricing · /register · /software · /guide/introduction · /tools/gst-calculator

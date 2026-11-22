@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Bank balance in books always equals the passbook." → They can differ temporarily; reconciliation explains the difference.
 - ❌ "All banks share one account in the books." → Each bank account is tracked separately.
 
+**परिभाषा:** बैंक खाता वह खाता है जो समिति किसी बैंक में रखती है; लेखांकन में यह एक एसेट खाता है जिसमें उस बैंक में जमा और निकाला गया सारा पैसा दर्ज होता है।
+
+**क्यों ज़रूरी:** समिति का ज़्यादातर पैसा बैंक से ही आता-जाता है; सही बैंक खाता (और उसका मिलान यानी reconciliation) भरोसेमंद किताबों की नींव है। एक समिति के कई बैंक खाते हो सकते हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "किताबों का बैंक बैलेंस हमेशा पासबुक के बराबर होता है।" → कुछ समय के लिए दोनों में फ़र्क हो सकता है; मिलान (reconciliation) से वह फ़र्क समझ आता है।
+- ❌ "किताबों में सभी बैंकों का एक ही खाता होता है।" → हर बैंक खाते का हिसाब अलग रखा जाता है।
+
+**सीखने के लक्ष्य:**
+- बैंक खाते को एक एसेट खाते के रूप में परिभाषित कर सकें।
+- समझ सकें कि कई बैंकों का हिसाब अलग-अलग रखा जाता है।
+
 **Related concepts:** [[KI-000114]] Bank book · [[KI-000121]] Bank statement · [[KI-000122]] Bank reconciliation (planned) · [[KI-000100]] Cash account
 
 **Internal links:** /guide/receipts-and-payments · /bank-book

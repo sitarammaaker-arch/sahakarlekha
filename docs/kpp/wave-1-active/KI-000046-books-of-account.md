@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "One register is enough." → Different books serve different purposes (cash, bank, ledger, etc.).
 - ❌ "Books of account and final accounts are the same." → Books are the day-to-day records; final accounts are the year-end summaries built from them.
 
+**परिभाषा:** लेखा-बही (books of account) वे रिकॉर्ड हैं जिनमें समिति अपने लेन-देन रखती है — मुख्य रूप से कैश बुक, बैंक बुक, डे बुक, जर्नल और लेजर — और इन्हीं के आधार पर रिपोर्ट और ऑडिट होते हैं।
+
+**क्यों ज़रूरी:** साफ़ और पूरी लेखा-बही ही सही रिपोर्ट और आसान ऑडिट की पहली शर्त है — SahakarLekha इस्तेमाल करने का असली मकसद यही है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "एक ही रजिस्टर काफ़ी है।" → अलग-अलग बही का काम अलग है (कैश, बैंक, लेजर आदि)।
+- ❌ "लेखा-बही और अंतिम खाते एक ही हैं।" → बही रोज़ के रिकॉर्ड हैं; अंतिम खाते (final accounts) साल के अंत में इन्हीं से बने सारांश हैं।
+
+**सीखने के लक्ष्य:**
+- मुख्य लेखा-बहियों के नाम बता सकें।
+- लेखा-बही और अंतिम खातों का फ़र्क समझ सकें।
+
 **Related concepts:** [[KI-000047]] Journal · [[KI-000079]] Ledger · [[KI-000086]] Day book · [[KI-000101]] Cash book
 
 **Internal links:** /guide/daybook-and-ledger · /day-book

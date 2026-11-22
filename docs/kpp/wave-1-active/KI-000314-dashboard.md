@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "The dashboard replaces detailed reports." → It summarises; detailed reports are still there when needed.
 - ❌ "Only accountants use it." → It is most useful for chairmen/managers wanting a quick overview.
 
+**परिभाषा:** डैशबोर्ड सॉफ़्टवेयर की मुख्य (होम) स्क्रीन है जो समिति के ज़रूरी आँकड़े एक नज़र में दिखाती है — कैश और बैंक बैलेंस, सदस्य, आय/व्यय, बकाया — ताकि पदाधिकारी हर रिपोर्ट खोले बिना समिति की स्थिति जल्दी देख सकें।
+
+**क्यों ज़रूरी:** यह बिखरे आँकड़ों को एक झटपट स्थिति-चित्र में बदल देता है — प्रधान (chairman) और मैनेजर के लिए उपयोगी, जिन्हें हर लेजर नहीं, बस मुख्य तस्वीर चाहिए।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "डैशबोर्ड से विस्तृत रिपोर्टों की ज़रूरत खत्म हो जाती है।" → यह सिर्फ़ सार दिखाता है; विस्तृत रिपोर्टें ज़रूरत पड़ने पर मौजूद रहती हैं।
+- ❌ "इसे सिर्फ़ लेखाकार इस्तेमाल करते हैं।" → यह सबसे ज़्यादा उन प्रधान/मैनेजरों के काम आता है जो जल्दी पूरी झलक चाहते हैं।
+
+**सीखने के लक्ष्य:**
+- डैशबोर्ड क्या दिखाता है, बता सकें।
+- समिति की सेहत जल्दी देखने के लिए इसका इस्तेमाल कर सकें।
+
 **Related concepts:** [[KI-000212]] How to read financial reports · [[KI-000025]] Accounting · [[KI-000049]] Accounting cycle
 
 **Internal links:** /reports · /dashboard · /blog/how-to-read-financial-reports · /guide/financial-ratios-and-lifecycle

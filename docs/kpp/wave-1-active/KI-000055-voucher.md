@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "A voucher is only the paper bill." → The bill is the *support*; the voucher is the accounting entry.
 - ❌ "All vouchers are the same." → There are types (receipt, payment, journal, contra, compound) for different situations.
 
+**परिभाषा:** वाउचर वह कागज़ या रिकॉर्ड है जिसमें खातों का एक लेन-देन दर्ज होता है — उसकी तारीख, किस खाते में डेबिट और किसमें क्रेडिट, रक़म, और विवरण (narration)। आम तौर पर उसके पीछे कोई बिल या रसीद सबूत के तौर पर लगी होती है।
+
+**क्यों ज़रूरी:** SahakarLekha में हर आँकड़ा वाउचर से ही आता है। हर लेजर, हर रिपोर्ट और ऑडिट का पूरा रिकॉर्ड वाउचरों से बनता है — वाउचर सही, तो सब सही।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "वाउचर का मतलब सिर्फ़ कागज़ी बिल है।" → बिल तो सबूत है; वाउचर लेखा की एंट्री है।
+- ❌ "सारे वाउचर एक जैसे होते हैं।" → अलग-अलग काम के लिए अलग प्रकार हैं — रसीद, भुगतान, जर्नल, कॉन्ट्रा।
+
+**सीखने के लक्ष्य:**
+- वाउचर और उसके मुख्य हिस्से बता सकें।
+- वाउचर (एंट्री) और उसके साथ लगे बिल का फ़र्क समझ सकें।
+
 **Related concepts:** [[KI-000039]] Transaction · [[KI-000056]] Receipt voucher (planned) · [[KI-000057]] Payment voucher (planned) · [[KI-000079]] Ledger
 
 **Internal links:** /guide/voucher-types · /vouchers

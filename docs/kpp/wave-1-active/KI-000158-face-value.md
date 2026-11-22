@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Face value changes with the society's performance." → It is fixed; it does not fluctuate like a market price.
 - ❌ "Face value is the member's total capital." → Total capital = face value × number of shares held.
 
+**परिभाषा:** फेस वैल्यू (face value) हर शेयर पर छपा तय नाममात्र मूल्य है (जैसे ₹10 या ₹100); किसी सदस्य की शेयर कैपिटल इसी से निकलती है — फेस वैल्यू × उसके पास के शेयरों की संख्या।
+
+**क्यों ज़रूरी:** फेस वैल्यू से तय होता है कि शेयर कैपिटल कैसे मापी और दर्ज की जाए। इसे सही रखने से शेयर रजिस्टर और पूँजी के आँकड़े सही रहते हैं।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "समिति के कामकाज के साथ फेस वैल्यू बदलती रहती है।" → यह तय रहती है; बाज़ार भाव की तरह ऊपर-नीचे नहीं होती।
+- ❌ "फेस वैल्यू ही सदस्य की कुल पूँजी है।" → कुल पूँजी = फेस वैल्यू × सदस्य के शेयरों की संख्या।
+
+**सीखने के लक्ष्य:**
+- शेयर की फेस वैल्यू की परिभाषा बता सकें।
+- फेस वैल्यू × शेयरों से शेयर कैपिटल निकाल सकें।
+
 **Related concepts:** [[KI-000153]] Share · [[KI-000157]] Paid-up capital · [[KI-000154]] Share capital (planned)
 
 **Internal links:** /guide/member-management · /share-register

@@ -35,6 +35,18 @@ review_schedule: 2027-06-27
 - ❌ "Any expense head will do." → The right head keeps the P&L/I&E and budget meaningful.
 - ❌ "An expense dictionary is only for accountants." → New staff use it to avoid common mis-postings.
 
+**परिभाषा:** व्यय शब्दकोश (expense dictionary) आम खर्च-शीर्षों की एक संदर्भ-सूची है, जिसमें हर शीर्ष के साथ छोटी टिप्पणी होती है कि उसमें क्या आता है — ताकि हर खर्च सही शीर्ष में दर्ज हो (जैसे यह "मरम्मत" है, "स्टेशनरी" है, या "व्यावसायिक शुल्क"?)।
+
+**क्यों ज़रूरी:** खर्च गलत शीर्ष में दर्ज हो जाए तो रिपोर्ट और बजट बिगड़ जाते हैं। शब्दकोश से खर्च का वर्गीकरण एक-सा और सही रहता है।
+
+**आम गलतफ़हमियाँ:**
+- ❌ "कोई भी खर्च-शीर्ष चल जाएगा।" → सही शीर्ष से ही P&L/I&E और बजट का मतलब बना रहता है।
+- ❌ "व्यय शब्दकोश सिर्फ़ अकाउंटेंट के लिए है।" → नए कर्मचारी भी इसकी मदद से आम गलत एंट्रियों से बचते हैं।
+
+**सीखने के लक्ष्य:**
+- व्यय शब्दकोश से खर्च को सही शीर्ष में रख सकें।
+- खर्च की आम गलत एंट्रियों से बच सकें।
+
 **Related concepts:** [[KI-000038]] Expense · [[KI-000097]] Account-name glossary · [[KI-000201]] Profit & Loss (planned)
 
 **Internal links:** /guide/expense-dictionary · /ledger-heads
