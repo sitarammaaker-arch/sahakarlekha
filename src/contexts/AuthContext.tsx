@@ -606,7 +606,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         if (legacyUser) {
           // User is on legacy auth — create in Supabase Auth with a temp password
-          const tempPassword = `Temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          const tempPassword = `Temp_${crypto.randomUUID()}`;
           const { error: signUpError } = await supabase.auth.signUp({
             email,
             password: tempPassword,

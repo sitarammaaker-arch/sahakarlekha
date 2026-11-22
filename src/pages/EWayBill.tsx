@@ -191,7 +191,7 @@ export default function EWayBill() {
     setGeneratedJson(jsonStr);
 
     const entry: EWayEntry & { society_id: string } = {
-      id: `ewb_${Date.now()}`,
+      id: `ewb_${crypto.randomUUID()}`,
       type: sourceType,
       docNo: isSale ? s.saleNo : s.purchaseNo,
       date: s.date,

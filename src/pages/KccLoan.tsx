@@ -169,7 +169,7 @@ export default function KccLoan() {
     }
 
     const newLoan: KccLoan & { society_id: string } = {
-      id: `kcc_${Date.now()}`,
+      id: `kcc_${crypto.randomUUID()}`,
       loanNo: nextLoanNo(),
       memberId: form.memberId,
       memberName: form.memberName,

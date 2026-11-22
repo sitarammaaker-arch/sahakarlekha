@@ -127,7 +127,7 @@ export default function BudgetModule() {
       ));
     } else {
       const newBudget: Budget & { society_id: string } = {
-        id: `bgt_${Date.now()}`,
+        id: `bgt_${crypto.randomUUID()}`,
         financialYear: selectedFY,
         heads,
         approvedBy: user?.name,
