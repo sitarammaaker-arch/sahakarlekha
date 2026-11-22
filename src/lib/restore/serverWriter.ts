@@ -148,6 +148,8 @@ export interface RestoreRpc {
 export interface ServerCommitResult {
   status: 'committed';
   rowsWritten: number; rowsDeleted: number; vouchersCancelled: number; accountsKept: number; entries: number;
+  /** 201: members a voucher or loan still names — marked deleted instead of removed (absent before migration 201). */
+  membersKept?: number;
   voucherLinesReposted: number; journal: { posted: number; reposted: number; cancelled: number };
 }
 
