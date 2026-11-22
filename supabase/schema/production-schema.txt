@@ -118,6 +118,7 @@ applied_migration 196
 applied_migration 197
 applied_migration 198
 applied_migration 199
+applied_migration 200
 column _rls_182_backup.cmd text not null
 column _rls_182_backup.created text[] not null
 column _rls_182_backup.permissive text not null
@@ -2604,6 +2605,7 @@ constraint transport_vehicles.transport_vehicles_pkey PRIMARY KEY (id)
 constraint transport_vehicles.transport_vehicles_status_check CHECK ((status = ANY (ARRAY['active'::text, 'inactive'::text])))
 constraint user_mfa.user_mfa_pkey PRIMARY KEY (email)
 constraint user_mfa_recovery.user_mfa_recovery_pkey PRIMARY KEY (id)
+constraint voucher_entries.voucher_entries_account_fkey FOREIGN KEY ("accountId", society_id) REFERENCES accounts(id, society_id)
 constraint voucher_entries.voucher_entries_amounts CHECK (((dr >= (0)::numeric) AND (cr >= (0)::numeric) AND (NOT ((dr > (0)::numeric) AND (cr > (0)::numeric)))))
 constraint voucher_entries.voucher_entries_pkey PRIMARY KEY (id)
 constraint voucher_entries.voucher_entries_voucherId_fkey FOREIGN KEY ("voucherId") REFERENCES vouchers(id) ON DELETE CASCADE
@@ -2617,7 +2619,9 @@ constraint voucher_lines.voucher_lines_voucher_id_fkey FOREIGN KEY (voucher_id) 
 constraint voucher_lines.voucher_lines_voucher_line UNIQUE (voucher_id, line_no)
 constraint vouchers.vouchers_amount_nonneg CHECK ((amount >= (0)::numeric))
 constraint vouchers.vouchers_approval_status_known CHECK ((("approvalStatus" IS NULL) OR ("approvalStatus" = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text]))))
+constraint vouchers.vouchers_credit_account_fkey FOREIGN KEY ("creditAccountId", society_id) REFERENCES accounts(id, society_id)
 constraint vouchers.vouchers_date_iso CHECK (((date IS NOT NULL) AND (date ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'::text)))
+constraint vouchers.vouchers_debit_account_fkey FOREIGN KEY ("debitAccountId", society_id) REFERENCES accounts(id, society_id)
 constraint vouchers.vouchers_pkey PRIMARY KEY (id)
 constraint vouchers.vouchers_type_known CHECK (((type IS NOT NULL) AND (type = ANY (ARRAY['receipt'::text, 'payment'::text, 'journal'::text, 'contra'::text, 'purchase'::text, 'sale'::text, 'debit_note'::text, 'credit_note'::text]))))
 constraint work_orders.work_orders_pkey PRIMARY KEY (id)
@@ -3520,8 +3524,11 @@ index CREATE INDEX idx_transport_vehicle_expenses_society ON public.transport_ve
 index CREATE INDEX idx_transport_vehicles_society ON public.transport_vehicles USING btree (society_id)
 index CREATE INDEX idx_user_mfa_recovery_email ON public.user_mfa_recovery USING btree (email)
 index CREATE INDEX idx_ve_account ON public.voucher_entries USING btree ("accountId")
+index CREATE INDEX idx_ve_account_society ON public.voucher_entries USING btree ("accountId", society_id)
 index CREATE INDEX idx_ve_society ON public.voucher_entries USING btree (society_id)
 index CREATE INDEX idx_ve_voucher ON public.voucher_entries USING btree ("voucherId")
+index CREATE INDEX idx_vouchers_credit_account ON public.vouchers USING btree ("creditAccountId", society_id)
+index CREATE INDEX idx_vouchers_debit_account ON public.vouchers USING btree ("debitAccountId", society_id)
 index CREATE INDEX ledger_events_scope ON public.ledger_events USING btree (society_id, aggregate_type, aggregate_id, sequence)
 index CREATE INDEX loan_interest_accruals_loan_idx ON public.loan_interest_accruals USING btree (society_id, "loanId")
 index CREATE INDEX members_jurisdiction_idx ON public.members USING btree (society_id, jurisdiction)
