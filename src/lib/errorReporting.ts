@@ -9,7 +9,7 @@
  * an error reporter that can itself error (or re-enter its own handlers) is worse than useless.
  * A later slice can plug Sentry into this same seam and/or add an in-app viewer.
  */
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabaseLazy';   // SEO-13: main.tsx starts error tracking — keep supabase-js off the entry
 import { getAuthSession } from '@/lib/authSession'; // not '@/lib/storage': that file is the chart templates
 
 export interface ErrorRecord {
@@ -62,9 +62,10 @@ export function reportError(source: string, error: unknown, context?: Record<str
     // traced to its books (the Rania duplicate-number refusal had to be found by timestamp).
     let societyId: string | null = null;
     try { societyId = getAuthSession()?.societyId || null; } catch { /* no storage → leave null */ }
-    supabase.from('error_log').insert(societyId ? { ...rec, society_id: societyId } : rec).then(
+    const row = societyId ? { ...rec, society_id: societyId } : rec;
+    getSupabase().then((supabase) => supabase.from('error_log').insert(row)).then(
       () => { /* logged */ },
-      () => { /* swallow — a failed error-log must never surface or re-enter a handler */ },
+      () => { /* swallow — a failed error-log (or a client that did not load) must never surface or re-enter a handler */ },
     );
   } catch {
     /* the reporter itself must never throw */

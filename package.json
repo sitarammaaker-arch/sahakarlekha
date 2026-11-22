@@ -547,7 +547,8 @@
     "test:db03-member-fks": "node scripts/test-db03-member-fks.mjs",
     "test:seo-offers": "node scripts/test-seo-offers.mjs",
     "test:seo-0506": "node scripts/test-seo-0506.mjs",
-    "test:seo13-entry": "node scripts/test-seo13-entry.mjs"
+    "test:seo13-entry": "node scripts/test-seo13-entry.mjs",
+    "test:auth-lazy-client": "node scripts/test-auth-lazy-client.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

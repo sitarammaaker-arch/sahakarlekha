@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from 'react';
 import { getAuthSession, setAuthSession } from '@/lib/authSession'; // not '@/lib/storage': that file is the chart templates
-import { supabase } from '@/lib/supabase';
+import { getSupabase, whenSupabaseLoaded, hasStoredAuthSession } from '@/lib/supabaseLazy';   // SEO-13: supabase-js is not on the public entry path
 import { can as rbacCan, type Permission } from '@/lib/rbac';
 import { generateSecret, otpauthUri } from '@/lib/totp';
 import { isMfaPending } from '@/lib/auth/mfaPending';
@@ -157,6 +157,7 @@ function restoreSession(): User | null {
  *  accepted for call-site compatibility but ignored — the JWT is authoritative. */
 async function checkSuperAdmin(_email?: string): Promise<boolean> {
   try {
+    const supabase = await getSupabase();
     const { data, error } = await supabase.rpc('is_platform_admin');
     return !error && data === true;
   } catch {
@@ -169,6 +170,7 @@ async function checkSuperAdmin(_email?: string): Promise<boolean> {
  *  platform_admin_identity() instead. Falls back to is_platform_admin until 085 is applied. */
 async function checkPlatformAdminIdentity(): Promise<boolean> {
   try {
+    const supabase = await getSupabase();
     const { data, error } = await supabase.rpc('platform_admin_identity');
     if (!error) return data === true;
   } catch {
@@ -182,6 +184,7 @@ async function checkPlatformAdminIdentity(): Promise<boolean> {
  *  refresh error, or a token still marked pending, means the login is not finished. */
 async function refreshVerifiedSession(): Promise<boolean> {
   try {
+    const supabase = await getSupabase();
     const { data, error } = await supabase.auth.refreshSession();
     if (error || !data.session) return false;
     return !isMfaPending(data.session.access_token);
@@ -202,6 +205,7 @@ async function refreshVerifiedSession(): Promise<boolean> {
 async function readPlatformMfaStatus(): Promise<boolean | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
+      const supabase = await getSupabase();
       const { data, error } = await supabase.rpc('platform_admin_mfa_status');
       if (!error && typeof data === 'boolean') return data;
     } catch {
@@ -259,7 +263,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const left = idleRemainingMs(last || null, Date.now(), SESSION_TIMEOUT_MS);
       if (left > 0) { armIdleTimer(left); return; }   // another tab was active more recently
       noteLogoutReason('idle');
-      supabase.auth.signOut({ scope: 'local' }).catch(() => { /* cleared locally regardless */ }).finally(doLogout);
+      getSupabase().then((supabase) => supabase.auth.signOut({ scope: 'local' })).catch(() => { /* cleared locally regardless */ }).finally(doLogout);
     }, delayMs);
   }, [doLogout]);
 
@@ -274,85 +278,96 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Restore Supabase Auth session on mount
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const email = session?.user?.email;
-      // SEC-03: a stored session that still owes a 2FA code (e.g. the page was reloaded mid-challenge)
-      // sees no data server-side — sign it out rather than show a signed-in shell over empty screens.
-      if (session && isMfaPending(session.access_token)) {
-        await supabase.auth.signOut().catch(() => { /* cleared locally regardless */ });
-        doLogout();
-        return;
-      }
-      if (!email) {
-        // P0-3 (localStorage-role): a restored app session with NO Supabase Auth JWT is unverified —
-        // its role/societyId came from client-editable localStorage and can't be trusted. Sign it out
-        // so a fresh login re-derives them from society_users. Skipped on localhost, where the DEV-only
-        // demo users log in without a JWT by design. A valid production user always has a JWT at this
-        // point, so they are unaffected; only a stale/forged app-session is cleared.
-        if (!isLocalhost() && getAuthSession()) doLogout();
-        return;
-      }
-      try {
-        const { data, error: rowError } = await supabase
-          .from('society_users')
-          .select('id, name, email, role, society_id, is_active, mfa_enabled, branch_id')
-          .eq('email', email.trim().toLowerCase())   // stored emails are lower-case (mig 097)
-          .eq('is_active', true)
-          .maybeSingle();
-
-        if (data) {
-          const u = buildUser(data);
-          setUser(u);
-          setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
-          checkSuperAdmin(u.email).then(setIsSuperAdmin);
+    // SEO-13: the client loads on first use (lib/supabaseLazy). A load that fails (offline) keeps the stored
+    // session, exactly as an unreachable Supabase did before. A visitor with no stored session (Supabase's or this
+    // app's) has nothing to restore: the client is not loaded for them here, and the auth-state subscription attaches
+    // as soon as anything else loads it (signing in, a widget, an app page). The restore is skipped for them — there
+    // was nothing to restore at mount, and running it later would race the sign-in that loaded the client.
+    let cancelled = false;
+    let subscription: { unsubscribe: () => void } | null = null;
+    const restore = hasStoredAuthSession() || !!getAuthSession();
+    (restore ? getSupabase() : whenSupabaseLoaded()).then((supabase) => {
+      if (cancelled) return;
+      if (restore) supabase.auth.getSession().then(async ({ data: { session } }) => {
+        const email = session?.user?.email;
+        // SEC-03: a stored session that still owes a 2FA code (e.g. the page was reloaded mid-challenge)
+        // sees no data server-side — sign it out rather than show a signed-in shell over empty screens.
+        if (session && isMfaPending(session.access_token)) {
+          await supabase.auth.signOut().catch(() => { /* cleared locally regardless */ });
+          doLogout();
           return;
         }
-
-        // Not a society user — may be a platform super-admin. P0-3: derive this from the
-        // VERIFIED JWT session (is_platform_admin RPC), never from the restored localStorage
-        // flag. A stale/forged localStorage `societyId:'PLATFORM'` is corrected here.
-        // Both reads are checked for an ERROR separately from "no": a failed request proves nothing, so
-        // it keeps the session as the catch below does; only two clean "no" answers end it.
-        const { data: saData, error: saError } = await supabase.rpc('is_platform_admin');
-        const isSA = !saError && saData === true;
-        if (isSA) {
-          const u: User = {
-            id: session!.user.id,
-            name: session!.user.user_metadata?.name || email.split('@')[0],
-            email,
-            role: 'admin',
-            societyId: 'PLATFORM',
-          };
-          setUser(u);
-          setIsSuperAdmin(true);
-          setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
-        } else {
-          setIsSuperAdmin(false);
-          // Audit 2026-11-16 (S-7 / J-8): a valid login with NO active society user and no platform-admin
-          // row (the user was deactivated, or the society_users email no longer matches). The app used to
-          // keep showing the shell from the old localStorage session. End it and say why on /login.
-          if (!rowError && !saError && getAuthSession()) {
-            noteLogoutReason('inactive');
-            await supabase.auth.signOut({ scope: 'local' }).catch(() => { /* cleared locally regardless */ });
-            doLogout();
-          }
+        if (!email) {
+          // P0-3 (localStorage-role): a restored app session with NO Supabase Auth JWT is unverified —
+          // its role/societyId came from client-editable localStorage and can't be trusted. Sign it out
+          // so a fresh login re-derives them from society_users. Skipped on localhost, where the DEV-only
+          // demo users log in without a JWT by design. A valid production user always has a JWT at this
+          // point, so they are unaffected; only a stale/forged app-session is cleared.
+          if (!isLocalhost() && getAuthSession()) doLogout();
+          return;
         }
-      } catch {
-        // Supabase unreachable — keep localStorage session
-      }
-    });
+        try {
+          const { data, error: rowError } = await supabase
+            .from('society_users')
+            .select('id, name, email, role, society_id, is_active, mfa_enabled, branch_id')
+            .eq('email', email.trim().toLowerCase())   // stored emails are lower-case (mig 097)
+            .eq('is_active', true)
+            .maybeSingle();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') {
-        doLogout();
-      } else if (event === 'TOKEN_REFRESHED' && !pendingMfaRef.current && getAuthSession()
-        && isMfaPending(session?.access_token)) {
-        // SEC-03: a finished login whose refreshed token says 2FA is owed (its verified session was
-        // cleared server-side) — sign out. Deferred: supabase-js must not be re-entered from here.
-        setTimeout(() => { supabase.auth.signOut().catch(() => doLogout()); }, 0);
-      }
-    });
-    return () => subscription.unsubscribe();
+          if (data) {
+            const u = buildUser(data);
+            setUser(u);
+            setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
+            checkSuperAdmin(u.email).then(setIsSuperAdmin);
+            return;
+          }
+
+          // Not a society user — may be a platform super-admin. P0-3: derive this from the
+          // VERIFIED JWT session (is_platform_admin RPC), never from the restored localStorage
+          // flag. A stale/forged localStorage `societyId:'PLATFORM'` is corrected here.
+          // Both reads are checked for an ERROR separately from "no": a failed request proves nothing, so
+          // it keeps the session as the catch below does; only two clean "no" answers end it.
+          const { data: saData, error: saError } = await supabase.rpc('is_platform_admin');
+          const isSA = !saError && saData === true;
+          if (isSA) {
+            const u: User = {
+              id: session!.user.id,
+              name: session!.user.user_metadata?.name || email.split('@')[0],
+              email,
+              role: 'admin',
+              societyId: 'PLATFORM',
+            };
+            setUser(u);
+            setIsSuperAdmin(true);
+            setAuthSession({ email: u.email, name: u.name, role: u.role, societyId: u.societyId, branchId: u.branchId });
+          } else {
+            setIsSuperAdmin(false);
+            // Audit 2026-11-16 (S-7 / J-8): a valid login with NO active society user and no platform-admin
+            // row (the user was deactivated, or the society_users email no longer matches). The app used to
+            // keep showing the shell from the old localStorage session. End it and say why on /login.
+            if (!rowError && !saError && getAuthSession()) {
+              noteLogoutReason('inactive');
+              await supabase.auth.signOut({ scope: 'local' }).catch(() => { /* cleared locally regardless */ });
+              doLogout();
+            }
+          }
+        } catch {
+          // Supabase unreachable — keep localStorage session
+        }
+      });
+
+      subscription = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_OUT') {
+          doLogout();
+        } else if (event === 'TOKEN_REFRESHED' && !pendingMfaRef.current && getAuthSession()
+          && isMfaPending(session?.access_token)) {
+          // SEC-03: a finished login whose refreshed token says 2FA is owed (its verified session was
+          // cleared server-side) — sign out. Deferred: supabase-js must not be re-entered from here.
+          setTimeout(() => { supabase.auth.signOut().catch(() => doLogout()); }, 0);
+        }
+      }).data.subscription;
+    }).catch(() => { /* client did not load — keep the localStorage session */ });
+    return () => { cancelled = true; subscription?.unsubscribe(); };
   }, [doLogout]);
 
   useEffect(() => {
@@ -398,6 +413,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const pending = pendingMfaRef.current;
     if (!pending) return false;
     try {
+      const supabase = await getSupabase();
       // Server-side verify — the secret never reaches the client (ECR-12 s3).
       const { data, error } = pending.user.societyId === 'PLATFORM'
         ? await supabase.rpc('platform_admin_mfa_verify', { p_code: code })
@@ -417,6 +433,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const adminResetMfa = useCallback(async (targetEmail: string): Promise<boolean> => {
     if (!user) return false;
     try {
+      const supabase = await getSupabase();
       const { data, error } = await supabase.rpc('app_mfa_admin_reset', { p_admin_email: user.email, p_target_email: targetEmail });
       return !error && data === true;
     } catch {
@@ -427,6 +444,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const generateRecoveryCodes = useCallback(async (code: string): Promise<string[] | null> => {
     if (!user) return null;
     try {
+      const supabase = await getSupabase();
       const { data, error } = isSuperAdmin
         ? await supabase.rpc('platform_admin_mfa_gen_recovery', { p_code: code })
         : await supabase.rpc('app_mfa_gen_recovery', { p_email: user.email, p_code: code });
@@ -441,6 +459,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const pending = pendingMfaRef.current;
     if (!pending) return false;
     try {
+      const supabase = await getSupabase();
       const { data, error } = pending.user.societyId === 'PLATFORM'
         ? await supabase.rpc('platform_admin_verify_recovery', { p_code: code })
         : await supabase.rpc('app_verify_recovery', { p_email: pending.user.email, p_code: code });
@@ -462,6 +481,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // 1. Try Supabase Auth (signInWithPassword — JWT based)
     try {
+      const supabase = await getSupabase();
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) failure = classifyAuthError(authError, online);
       if (!authError && authData.user) {
@@ -564,6 +584,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = useCallback(async () => {
     try {
+      const supabase = await getSupabase();
       await supabase.auth.signOut();
     } catch {
       // ignore — still clear local session
@@ -578,6 +599,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const sendPasswordReset = async (email: string): Promise<{ success: boolean; isEmailSent: boolean }> => {
     try {
+      const supabase = await getSupabase();
       // First try Supabase Auth reset (works if user is in Supabase Auth)
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
@@ -659,6 +681,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const confirmMfa = useCallback(async (secret: string, code: string): Promise<MfaResult> => {
     if (!user) return { ok: false, reason: 'save-failed' };
     try {
+      const supabase = await getSupabase();
       // Server verifies the code and stores the secret in the locked user_mfa
       // table (SECURITY DEFINER) — the client never writes the secret (ECR-12 s3).
       // Platform admins (not in society_users) use the parallel is_platform_admin()-gated RPC.
@@ -677,6 +700,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const disableMfa = useCallback(async (code: string): Promise<MfaResult> => {
     if (!user) return { ok: false, reason: 'save-failed' };
     try {
+      const supabase = await getSupabase();
       const { data, error } = isSuperAdmin
         ? await supabase.rpc('platform_admin_mfa_disable', { p_code: code })
         : await supabase.rpc('app_mfa_disable', { p_email: user.email, p_code: code });

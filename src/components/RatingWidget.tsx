@@ -6,7 +6,7 @@
  */
 import React, { useState } from 'react';
 import { Link } from '@/components/LocalLink';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabaseLazy';   // SEO-13: public pages load supabase-js only when they use it
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -39,6 +39,7 @@ const RatingWidget: React.FC<{ className?: string }> = ({ className = '' }) => {
     }
     setSubmitting(true);
     try {
+      const supabase = await getSupabase();
       const { error } = await supabase.from('feedback').insert([{
         type: 'review',
         rating,

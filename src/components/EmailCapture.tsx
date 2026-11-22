@@ -9,7 +9,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Link } from '@/components/LocalLink';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabaseLazy';   // SEO-13: public pages load supabase-js only when they use it
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -80,8 +80,8 @@ const EmailCapture: React.FC<{ magnet?: MagnetKey; className?: string }> = ({
 
     // 2) Background (fire-and-forget): save the lead + send the welcome email.
     const page = typeof window !== 'undefined' ? window.location.href : null;
-    supabase.from('leads')
-      .insert([{ email: mail, source: magnet, marketing_consent: true, page_url: page }])
+    getSupabase()
+      .then((supabase) => supabase.from('leads').insert([{ email: mail, source: magnet, marketing_consent: true, page_url: page }]))
       .then(({ error }) => { if (!error) trackEvent('email_signup', { magnet }); }, () => {});
     fetch('/api/subscribe', {
       method: 'POST',
