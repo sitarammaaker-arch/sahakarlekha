@@ -18,7 +18,12 @@ ok(blocks.every((b) => !/"@type":\s*"FAQPage"/.test(b)), 'the template carries n
 ok(!/really free/i.test(tpl), 'the "Is SahakarLekha really free?" question is gone');
 ok(blocks.length >= 1 && blocks.every((b) => { try { JSON.parse(b); return true; } catch { return false; } }), 'the remaining JSON-LD blocks still parse');
 ok(tpl.includes('"alternateName": "सहकार लेखा"') && !tpl.includes('सहकारलेखा'), 'brand in Devanagari is two words (सहकार लेखा)');
-ok(read('src/pages/FAQ.tsx').includes("'@type': 'FAQPage'"), 'the /faq page keeps its own FAQPage (its questions are visible there)');
+{
+  // founder 2026-11-22: the Terms trademark line names BOTH Devanagari forms (the two-word brand + the older one-word form)
+  const t = read('src/content/legal/termsSections.tsx');
+  ok(t.includes('"SahakarLekha", "सहकार लेखा" और "सहकारलेखा" हमारे ट्रेडमार्क हैं।') && t.includes('"SahakarLekha", "सहकार लेखा" and "सहकारलेखा" are our trademarks.'), 'Terms (hi + en): trademarks list SahakarLekha, सहकार लेखा and सहकारलेखा');
+}
+ok(read('src/pages/FAQ.tsx').includes("'@type': 'FAQPage'"),'the /faq page keeps its own FAQPage (its questions are visible there)');
 
 if (existsSync(join(ROOT, 'dist', 'faq', 'index.html'))) {
   const count = (f) => (readFileSync(join(ROOT, 'dist', f), 'utf8').match(/"@type":\s*"FAQPage"/g) || []).length;
