@@ -153,6 +153,41 @@ export function compareReplay(
     }
   }
 
+  // DB-10 drill (2026-11-22): the entry ID is a label, not money. A voucher with no `lines` (the old debit/credit
+  // shape) replays as `${id}-${id}-dr` / `-cr`, while the server (post_voucher / restore_commit, migration 178) writes
+  // the same legs as `${id}-1` / `-2` — so every such voucher "failed" and a real restore of the practice society was
+  // refused (10 receipts, identical accounts and amounts). An entry left unmatched by ID is paired with an unmatched
+  // entry OF THE SAME VOUCHER whose content (account, Dr, Cr, dimensions) is identical; only what still differs is
+  // reported. The server rebuilds voucher_entries itself on commit, so the ID scheme on either side does not survive.
+  const contentKey = (row: Row): string =>
+    REPLAY_FIELDS.filter((f) => f !== 'id' && f !== 'voucherId').map((f) => encodeField(f, row[f])).join('|');
+  const pairByContent = () => {
+    const pool = new Map<string, string[]>();   // voucher|content → archive-only ids
+    for (const id of missing) {
+      const row = archivedById.get(id)!;
+      const k = voucherOf(row, id) + '#' + contentKey(row);
+      (pool.get(k) ?? pool.set(k, []).get(k)!).push(id);
+    }
+    const pairedReplay = new Set<string>();
+    const pairedArchive = new Set<string>();
+    for (const id of unexpected) {
+      const row = replayedById.get(id)!;
+      const ids = pool.get(voucherOf(row, id) + '#' + contentKey(row));
+      if (ids && ids.length) { pairedReplay.add(id); pairedArchive.add(ids.shift()!); }
+    }
+    return { pairedReplay, pairedArchive };
+  };
+  const { pairedReplay, pairedArchive } = pairByContent();
+  if (pairedReplay.size) {
+    const keepU = unexpected.filter((id) => !pairedReplay.has(id));
+    const keepM = missing.filter((id) => !pairedArchive.has(id));
+    unexpected.length = 0; unexpected.push(...keepU);
+    missing.length = 0; missing.push(...keepM);
+    vouchers.clear();
+    for (const id of unexpected) vouchers.add(voucherOf(replayedById.get(id)!, id));
+    for (const id of missing) vouchers.add(voucherOf(archivedById.get(id)!, id));
+  }
+
   for (const [id, replayedRow] of replayedById) {
     const archivedRow = archivedById.get(id);
     if (!archivedRow) continue;

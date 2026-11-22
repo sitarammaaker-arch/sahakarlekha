@@ -215,5 +215,23 @@ for (const forbidden of ['supabase', 'fetch(', 'localStorage', 'document.', 'Dat
   ok(!replaySrc.includes(forbidden), `replay.ts is pure (found "${forbidden}")`);
 }
 
+// ── DB-10 drill (2026-11-22): the entry ID is a label, not money ─────────────
+// A voucher with no `lines` replays as `${id}-${id}-dr/-cr`; the server writes `${id}-1/-2`. The real restore of the
+// practice society was refused on 10 such receipts with identical accounts and amounts.
+{
+  const lineless = { id: 'R1', amount: 250, debitAccountId: '3301', creditAccountId: '4101', isDeleted: false };
+  const replayedL = replayEntries([lineless], 'S1');
+  const serverRows = [
+    { id: 'R1-1', voucherId: 'R1', accountId: '3301', dr: '250.00', cr: '0', society_id: 'S1' },
+    { id: 'R1-2', voucherId: 'R1', accountId: '4101', dr: '0', cr: '250.00', society_id: 'S1' },
+  ];
+  ok(compareReplay(replayedL, serverRows).ok, 'a line-less voucher whose server-written entries carry other IDs (-1/-2) still reproduces');
+  const wrongAcct = compareReplay(replayedL, [serverRows[0], { ...serverRows[1], accountId: '4102' }]);
+  ok(!wrongAcct.ok && wrongAcct.vouchers.join() === 'R1', 'but a different account is still refused and the voucher named');
+  const otherVoucher = compareReplay(replayedL, [serverRows[0], { ...serverRows[1], id: 'R2-2', voucherId: 'R2' }]);
+  ok(!otherVoucher.ok, 'an identical leg that belongs to ANOTHER voucher is not borrowed to make a match');
+  ok(replaySrc.includes('pairByContent'), 'unmatched entries pair by content only within the same voucher');
+}
+
 console.log(`\nRestore replay: ${pass} passed, ${fail} failed`);
 process.exitCode = fail > 0 ? 1 : 0;
