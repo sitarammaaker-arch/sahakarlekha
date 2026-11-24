@@ -199,7 +199,7 @@ const purchase: EntityDescriptor = {
   minRole: 'viewer',
   scope: 'society',
   nature: 'transaction',
-  dependsOn: ['society', 'supplier', 'voucher'],
+  dependsOn: ['society', 'supplier', 'member', 'voucher'],
   naturalKey: ['purchaseNo'],
   softDeleteField: 'isDeleted',
   formats: ['csv', 'xlsx', 'json'],
@@ -211,6 +211,7 @@ const purchase: EntityDescriptor = {
     c('supplierName', 'Supplier', 'आपूर्तिकर्ता'),
     c('supplierPhone', 'Supplier Phone', 'आपूर्तिकर्ता फ़ोन', { piiClass: 'contact' }),
     internal('supplierId', 'Supplier Ref', 'आपूर्तिकर्ता संदर्भ'),
+    internal('memberId', 'Member', 'सदस्य'),   // 202 · bought from a member (member / non-member turnover)
     internal('items', 'Line Items', 'पंक्ति आइटम', { type: 'json' }),
     ...taxColumns({ tds: true }),
     internal('rcmApplicable', 'RCM Applicable', 'आरसीएम लागू', { type: 'boolean' }),
