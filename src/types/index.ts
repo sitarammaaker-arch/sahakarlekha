@@ -1378,6 +1378,22 @@ export interface StockMovement {
 // (Dr the person's "shortage recoverable" ledger / Cr "Sales by Shortage"); a 'shortageReversal' undoes one.
 export type StockAdjustmentReason = 'normalLoss' | 'damage' | 'shortageRecoverable' | 'shortageReversal' | 'excess' | 'other';
 
+// Migration 207: one bill / document file kept with a voucher (private bucket 'voucher-docs'). Removing it is a soft
+// delete — the row and the file stay for the audit trail.
+export interface VoucherAttachment {
+  id: string;
+  voucherId: string;
+  path: string;
+  fileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  uploadedBy?: string;
+  uploadedAt: string;
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
+}
+
 // Migration 204: one physical count of one godown (HAFED Accounts Manual 10.20, Annexure XV/1). The book figures are
 // frozen as they stood when the count was saved; each difference became an ordinary stock adjustment (and, for a
 // recoverable shortage, a voucher) whose reference is kept on the line.

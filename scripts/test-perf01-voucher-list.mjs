@@ -41,12 +41,13 @@ const L = await import(pathToFileURL(join(ROOT, 'src/lib/voucherListView.ts')).h
 {
   const s = read('src/pages/Vouchers.tsx');
   ok(s.includes('const branchVouchers = useMemo(() => vouchers.filter(v => matchesActiveBranch(v.branchId)), [vouchers, matchesActiveBranch]);'), 'branch filter is memoised (not redone on each keystroke in the entry form)');
-  ok(/const sortedVouchers = useMemo\(\(\) => branchVouchers[\s\S]{0,400}\[branchVouchers, showCancelled, deferredListQuery, accountById\]\);/.test(s), 'filter + search + sort is one memoised pass');
+  // +onlyNoBill / billsByVoucher (migration 207 "No bill" filter) — still one memoised pass.
+  ok(/const sortedVouchers = useMemo\(\(\) => branchVouchers[\s\S]{0,600}\[branchVouchers, showCancelled, deferredListQuery, accountById, onlyNoBill, billsByVoucher\]\);/.test(s), 'filter + search + sort is one memoised pass');
   ok(s.includes('const deferredListQuery = useDeferredValue(listQuery);'), 'the search box stays responsive (deferred query)');
   ok(s.includes('{listSlice.rows.map(v => {') && !s.includes('{sortedVouchers.map(v => {'), 'only one page of rows is rendered');
   ok(s.includes('const debitAcc = accountById.get(drLines[0]?.accountId);') && !/accounts\.find\(a => a\.id === drLines\[0\]/.test(s), 'row accounts come from a Map (no scan of the whole chart per row)');
   ok(s.includes('listSlice.rows.filter(bulkCancellable) : [];'), 'bulk "select all" selects only the rows on screen, never hidden ones');
-  ok(s.includes('useEffect(() => { setListPage(1); }, [deferredListQuery, showCancelled]);'), 'a new search or the cancelled toggle goes back to page 1');
+  ok(s.includes('useEffect(() => { setListPage(1); }, [deferredListQuery, showCancelled, onlyNoBill]);'), 'a new search, the cancelled toggle or the "No bill" filter goes back to page 1');
   ok(s.includes("'← पिछला'") && s.includes("'अगला →'"), 'Hindi-first pager');
 }
 

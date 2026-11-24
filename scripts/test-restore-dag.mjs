@@ -92,7 +92,7 @@ const ent = (key, dependsOn = [], backupPolicy = 'full', scope = 'society') =>
 
 const plan = planRestore(REGISTRY);
 
-ok(plan.insert.length === 101, `101 collections are inserted (got ${plan.insert.length})`); // +1: stock_verifications (204), +1: member_distribution_runs (066), +1: loan_interest_accruals (069), +1: member_identity (106), +3: transport vehicles / trips / expenses (128), +2: arhtiyas / bardana movements (137), +2: dispatches / agency bills (139), +2: dealer licences / scheme claims (140), +1: hired trips (141), +1: party_identity (195)
+ok(plan.insert.length === 102, `102 collections are inserted (got ${plan.insert.length})`); // +1: voucher_attachments (207), +1: stock_verifications (204), +1: member_distribution_runs (066), +1: loan_interest_accruals (069), +1: member_identity (106), +3: transport vehicles / trips / expenses (128), +2: arhtiyas / bardana movements (137), +2: dispatches / agency bills (139), +2: dealer licences / scheme claims (140), +1: hired trips (141), +1: party_identity (195)
 ok(plan.skipped.length === 10, `10 are skipped with a reason (got ${plan.skipped.length})`);
 ok(plan.insert.length + plan.skipped.length === REGISTRY.length,
   'every declared entity is either inserted or explained — no entity vanishes from a restore');
@@ -144,8 +144,8 @@ let closureErr = null;
 try { assertDependencyClosure(REGISTRY); } catch (e) { closureErr = e; }
 ok(closureErr === null, `every dependency of a restorable entity is itself restorable (${closureErr?.message ?? ''})`);
 
-ok(describePlan(plan, false).includes('101 collections'), 'the summary names the real count');
-ok(describePlan(plan, true).includes('101'), 'and says so in Hindi too');
+ok(describePlan(plan, false).includes('102 collections'), 'the summary names the real count');
+ok(describePlan(plan, true).includes('102'), 'and says so in Hindi too');
 
 // ── 2. SYNTHETIC GRAPHS ──────────────────────────────────────────────────────
 

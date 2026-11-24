@@ -7813,6 +7813,51 @@ export type Database = {
         }
         Relationships: []
       }
+      voucher_attachments: {
+        Row: {
+          deletedAt: string | null
+          deletedBy: string | null
+          fileName: string | null
+          id: string
+          isDeleted: boolean
+          mimeType: string | null
+          path: string
+          sizeBytes: number | null
+          society_id: string
+          uploadedAt: string
+          uploadedBy: string | null
+          voucherId: string
+        }
+        Insert: {
+          deletedAt?: string | null
+          deletedBy?: string | null
+          fileName?: string | null
+          id: string
+          isDeleted?: boolean
+          mimeType?: string | null
+          path: string
+          sizeBytes?: number | null
+          society_id: string
+          uploadedAt?: string
+          uploadedBy?: string | null
+          voucherId: string
+        }
+        Update: {
+          deletedAt?: string | null
+          deletedBy?: string | null
+          fileName?: string | null
+          id?: string
+          isDeleted?: boolean
+          mimeType?: string | null
+          path?: string
+          sizeBytes?: number | null
+          society_id?: string
+          uploadedAt?: string
+          uploadedBy?: string | null
+          voucherId?: string
+        }
+        Relationships: []
+      }
       voucher_entries: {
         Row: {
           accountId: string

@@ -37,8 +37,12 @@ import { useToast } from '@/hooks/use-toast';
 import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
 import { canShareReceipt, receiptHead, receiptMessage } from '@/lib/whatsappShare';
 import { allocBillNo, allocMethod } from '@/lib/billUtils';
-import type { Voucher, VoucherType, VoucherLine } from '@/types';
-import { Plus, Minus } from 'lucide-react';
+import type { Voucher, VoucherType, VoucherLine, VoucherAttachment } from '@/types';
+import { fetchAllPaged } from '@/lib/supabasePaging';
+import { ATTACHMENT_ACCEPT, BILL_EXPECTED_TYPES, attachmentFileError, attachmentsByVoucher, formatBytes, vouchersWithoutBill } from '@/lib/voucherAttachments';
+import { uploadVoucherAttachment } from '@/lib/voucherAttachmentsClient';
+import { VoucherAttachmentsDialog } from '@/components/VoucherAttachmentsDialog';
+import { Plus, Minus, Paperclip } from 'lucide-react';
 import { VOUCHER_TEMPLATES, ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
 import { availableTemplates } from '@/lib/voucherTemplateAvailability';
 import type { LedgerAccount } from '@/types';
@@ -65,7 +69,7 @@ const Vouchers: React.FC = () => {
   // pages — byte-identical to the old hardcoded gate for all 4 legacy roles.
   const canEdit = can('update');    // create + edit + reverse (correction)
   const canDelete = can('delete');  // cancel — admin/societyAdmin/secretary only (restore is disabled)
-  const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, setVoucherCheque, getTrialBalance, matchesActiveBranch, canEditVoucherActivity } = useData();
+  const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, setVoucherCheque, guardPageWrite, getTrialBalance, matchesActiveBranch, canEditVoucherActivity } = useData();
   const [submitForApproval, setSubmitForApproval] = useState(false);
   // UX-01: the maker-checker tick exists only where the society turned approval on. Elsewhere a ticked
   // box kept vouchers out of every report with an ordinary "saved" toast and nobody able to approve.
@@ -139,6 +143,35 @@ const Vouchers: React.FC = () => {
   // The cheque fields show only when the voucher touches a bank ledger (never for cash).
   const touchesBank = (...ids: (string | undefined)[]) => ids.some(id => !!id && bankIds.includes(id));
   const chequeFieldsFor = (show: boolean) => (show && (chequeNo.trim() || chequeDate) ? { chequeNo: chequeNo.trim() || undefined, chequeDate: chequeDate || undefined } : {});
+  // Bills chosen while making the voucher (uploaded right after it saves).
+  const billPicker = () => (
+    <div className="space-y-1.5">
+      <Label className="text-base font-semibold">{language === 'hi' ? 'बिल की कॉपी (वैकल्पिक)' : 'Bill copy (optional)'}</Label>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-accent">
+          <Paperclip className="h-4 w-4" />{language === 'hi' ? 'फ़ोटो / PDF चुनें' : 'Choose photo / PDF'}
+          <input type="file" accept={ATTACHMENT_ACCEPT} multiple className="hidden"
+            onChange={e => {
+              const files = Array.from(e.target.files ?? []);
+              e.target.value = '';
+              const good: File[] = [];
+              for (const f of files) { const bad = attachmentFileError(f); if (bad) toast({ title: f.name, description: bad, variant: 'destructive' }); else good.push(f); }
+              if (good.length) setPendingBills(p => [...p, ...good]);
+            }} />
+        </label>
+        {pendingBills.map((f, i) => (
+          <span key={`${f.name}-${i}`} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs">
+            {f.name.length > 24 ? `${f.name.slice(0, 22)}…` : f.name} · {formatBytes(f.size)}
+            <button type="button" className="text-muted-foreground hover:text-destructive" aria-label={language === 'hi' ? 'हटाएँ' : 'Remove'}
+              onClick={() => setPendingBills(p => p.filter((_, j) => j !== i))}>×</button>
+          </span>
+        ))}
+      </div>
+      {pendingBills.length > 0 && (
+        <p className="text-xs text-muted-foreground">{language === 'hi' ? 'वाउचर सेव होते ही बिल जुड़ जाएगा; फ़ोटो अपने-आप छोटी हो जाती है।' : 'The bill is added as soon as the voucher saves; photos are shrunk automatically.'}</p>
+      )}
+    </div>
+  );
   const chequeInputs = (no: string, setNo: (s: string) => void, date: string, setDate: (s: string) => void, compact = false) => (
     <div className="grid grid-cols-2 gap-3">
       <div className="space-y-1.5">
@@ -200,6 +233,21 @@ const Vouchers: React.FC = () => {
   const [reverseId, setReverseId] = useState<string | null>(null);
   const [reverseReason, setReverseReason] = useState('');
   const [showCancelled, setShowCancelled] = useState(false);
+  // Migration 207: bill copies kept with vouchers — loaded on this page only (no extra login read).
+  const [attachments, setAttachments] = useState<VoucherAttachment[]>([]);
+  const [attachFor, setAttachFor] = useState<string | null>(null);     // voucher id whose bills dialog is open
+  const [pendingBills, setPendingBills] = useState<File[]>([]);        // chosen on the entry form, uploaded once it saves
+  const [onlyNoBill, setOnlyNoBill] = useState(false);
+  const pendingBillsRef = useRef<File[]>([]);
+  pendingBillsRef.current = pendingBills;
+  useEffect(() => {
+    if (!user?.societyId) { setAttachments([]); return; }
+    fetchAllPaged<VoucherAttachment>('voucher_attachments', user.societyId, ['uploadedAt', 'id']).then(
+      ({ data, error }) => { if (!error && data) setAttachments(data as VoucherAttachment[]); },
+      () => { /* table not there yet (migration 207) — the page works without bills */ },
+    );
+  }, [user?.societyId]);
+  const billsByVoucher = useMemo(() => attachmentsByVoucher(attachments), [attachments]);
   // PERF-01: the list is searched and shown one page at a time (it used to render every voucher).
   const [listQuery, setListQuery] = useState('');
   const [listPage, setListPage] = useState(1);
@@ -216,6 +264,21 @@ const Vouchers: React.FC = () => {
         window.clearTimeout(safety);
         setSaving(false);
         setSavedVoucherNo(sv.voucherNo);
+        // Bills chosen on the form go up now that the voucher exists (it is safe either way — a failed bill never
+        // touches the voucher; it can be added again from the 📎 button).
+        const bills = pendingBillsRef.current;
+        if (bills.length && user?.societyId) {
+          setPendingBills([]);
+          void (async () => {
+            let added = 0;
+            for (const file of bills) {
+              const r = await uploadVoucherAttachment({ societyId: user.societyId!, voucherId: sv.id, file, by: user?.name });
+              if (r.ok) { setAttachments(a => [...a, r.row]); added++; }
+              else toast({ title: `${file.name}: ${language === 'hi' ? 'बिल नहीं जुड़ा' : 'bill not added'}`, description: `${sv.voucherNo} — ${r.error} ${language === 'hi' ? '(वाउचर सुरक्षित है; सूची में 📎 से दोबारा जोड़ें)' : '(the voucher is safe; add it again from 📎 in the list)'}`, variant: 'destructive', duration: 12000 });
+            }
+            if (added) toast({ title: language === 'hi' ? `${added} बिल जुड़ा` : `${added} bill(s) added`, description: sv.voucherNo });
+          })();
+        }
         // UX-01: a pending voucher is NOT in the books yet — the toast must not read like a normal save.
         if (sv.approvalStatus === 'pending') {
           toast({
@@ -679,6 +742,7 @@ const Vouchers: React.FC = () => {
     setNarration('');
     setChequeNo('');
     setChequeDate('');
+    setPendingBills([]);
     setLinkedMemberId('');
     setVoucherNoInput('');
     setSavedVoucherNo(null);
@@ -692,14 +756,16 @@ const Vouchers: React.FC = () => {
   const accountById = useMemo(() => new Map(accounts.map(a => [a.id, a])), [accounts]);
   const sortedVouchers = useMemo(() => branchVouchers
     .filter(v => showCancelled ? v.isDeleted : !v.isDeleted)
+    .filter(v => !onlyNoBill || (BILL_EXPECTED_TYPES.includes(v.type) && !billsByVoucher.get(v.id)?.length))
     .filter(v => !deferredListQuery.trim() || matchesVoucherQuery(v, deferredListQuery, getVoucherLines(v).map(l => accountById.get(l.accountId)?.name ?? '')))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [branchVouchers, showCancelled, deferredListQuery, accountById]);
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [branchVouchers, showCancelled, deferredListQuery, accountById, onlyNoBill, billsByVoucher]);
+  const noBillCount = useMemo(() => vouchersWithoutBill({ vouchers: branchVouchers, attachments }).length, [branchVouchers, attachments]);
   const { activeCount, cancelledCount } = useMemo(() => {
     let cancelled = 0;
     for (const v of branchVouchers) if (v.isDeleted) cancelled++;
     return { activeCount: branchVouchers.length - cancelled, cancelledCount: cancelled };
   }, [branchVouchers]);
-  useEffect(() => { setListPage(1); }, [deferredListQuery, showCancelled]);
+  useEffect(() => { setListPage(1); }, [deferredListQuery, showCancelled, onlyNoBill]);
   const listSlice = pageOf(sortedVouchers, listPage);
 
   // A sale/purchase voucher still actively referenced by its parent CANNOT be cancelled
@@ -1027,6 +1093,7 @@ const Vouchers: React.FC = () => {
                         />
                       </div>
                       {touchesBank(debitAccount, creditAccount) && chequeInputs(chequeNo, setChequeNo, chequeDate, setChequeDate)}
+                      {billPicker()}
                       {members.length > 0 && (
                         <div className="space-y-2">
                           <Label className="text-base font-semibold">
@@ -1321,6 +1388,7 @@ const Vouchers: React.FC = () => {
                     </div>
                     {(voucherType === 'contra' || touchesBank(debitAccount, creditAccount) || (entryMode === 'expert' && touchesBank(...lines.map(l => l.accountId))))
                       && chequeInputs(chequeNo, setChequeNo, chequeDate, setChequeDate)}
+                    {billPicker()}
 
                     {members.length > 0 && (
                       <div className="space-y-2">
@@ -1436,6 +1504,13 @@ const Vouchers: React.FC = () => {
                   {language === 'hi' ? `${sortedVouchers.length} वाउचर मिले` : `${sortedVouchers.length} found`}
                 </span>
               )}
+              {!showCancelled && (noBillCount > 0 || onlyNoBill) && (
+                <Button variant={onlyNoBill ? 'default' : 'outline'} size="sm" className="h-9 gap-1" onClick={() => setOnlyNoBill(o => !o)}
+                  title={language === 'hi' ? 'भुगतान / खरीद वाउचर जिनके साथ बिल की कॉपी नहीं है' : 'Payment / purchase vouchers with no bill copy'}>
+                  <Paperclip className="h-4 w-4" />
+                  {language === 'hi' ? `बिना बिल (${noBillCount})` : `No bill (${noBillCount})`}
+                </Button>
+              )}
             </div>
             {sortedVouchers.length === 0 ? (
               vouchers.filter(v => !v.isDeleted).length === 0 ? (
@@ -1531,6 +1606,17 @@ const Vouchers: React.FC = () => {
                                 onClick={() => handlePrintVoucher(v.id)}>
                                 <Printer className="h-4 w-4" />
                               </Button>
+                              {(() => {
+                                const n = billsByVoucher.get(v.id)?.length ?? 0;
+                                return (
+                                  <Button variant="ghost" size="sm" className={cn('h-9 px-2 gap-0.5', n ? 'text-blue-700' : 'text-muted-foreground')}
+                                    title={language === 'hi' ? (n ? `बिल की कॉपी (${n})` : 'बिल की कॉपी जोड़ें') : (n ? `Bill copies (${n})` : 'Add bill copy')}
+                                    aria-label={language === 'hi' ? 'बिल की कॉपी' : 'Bill copies'}
+                                    onClick={() => setAttachFor(v.id)}>
+                                    <Paperclip className="h-4 w-4" />{n > 0 && <span className="text-xs">{n}</span>}
+                                  </Button>
+                                );
+                              })()}
                               {canShareReceipt(v) && (() => {
                                 const share = receiptShare(v);
                                 return <WhatsAppShareButton kind="receipt" iconOnly hi={language === 'hi'} phone={share.phone} message={share.message}
@@ -1695,6 +1781,11 @@ const Vouchers: React.FC = () => {
               <Textarea value={editNarration} onChange={e => setEditNarration(e.target.value)} rows={2} placeholder={language === 'hi' ? 'विवरण...' : 'Narration...'} />
               {(editType === 'contra' || (editIsCompound ? touchesBank(...editLines.map(l => l.accountId)) : touchesBank(editDebit, editCredit)))
                 && <div className="pt-2">{chequeInputs(editChequeNo, setEditChequeNo, editChequeDate, setEditChequeDate, true)}</div>}
+              {editId && (
+                <Button type="button" variant="outline" size="sm" className="mt-2 gap-1" onClick={() => setAttachFor(editId)}>
+                  <Paperclip className="h-4 w-4" />{language === 'hi' ? `बिल की कॉपी (${billsByVoucher.get(editId)?.length ?? 0})` : `Bill copies (${billsByVoucher.get(editId)?.length ?? 0})`}
+                </Button>
+              )}
               {editActivityLocked && editActivity && (
                 <p className="text-sm text-muted-foreground">
                   {language === 'hi' ? 'गतिविधि: ' : 'Activity: '}<span className="font-medium text-foreground">{activityLabel(editActivity)}</span>
@@ -1899,6 +1990,19 @@ const Vouchers: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Migration 207: bill copies of one voucher */}
+      <VoucherAttachmentsDialog
+        voucher={attachFor ? (vouchers.find(x => x.id === attachFor) ?? null) : null}
+        attachments={attachFor ? (billsByVoucher.get(attachFor) ?? []) : []}
+        societyId={user?.societyId || ''}
+        userName={user?.name}
+        hi={language === 'hi'}
+        guardWrite={date => guardPageWrite('update', date)}
+        onAdded={row => setAttachments(a => [...a, row])}
+        onRemoved={id => setAttachments(a => a.map(x => (x.id === id ? { ...x, isDeleted: true } : x)))}
+        onClose={() => setAttachFor(null)}
+      />
     </div>
   );
 };
