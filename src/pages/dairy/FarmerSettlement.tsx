@@ -14,6 +14,7 @@ import EntityExportButton from '@/components/export/EntityExportButton';
 import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
 import { milkSettlementMessage } from '@/lib/whatsappReminders';
 import { fmtDate } from '@/lib/dateUtils';
+import { confirmAction } from '@/lib/confirmAction';
 
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN')}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -64,7 +65,7 @@ function SettlementCard({ s }: { s: DairySettlement }) {
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {!isDraft && <WhatsAppShareButton kind="milk-settlement" iconOnly hi={hi} phone={member?.phone} message={shareMessage} />}
-          <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(hi ? 'सेटलमेंट हटाएँ?' : 'Delete settlement?')) deleteDairySettlement(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+          <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction(hi ? 'सेटलमेंट हटाएँ?' : 'Delete settlement?')) deleteDairySettlement(s.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
         </div>
       </div>
 

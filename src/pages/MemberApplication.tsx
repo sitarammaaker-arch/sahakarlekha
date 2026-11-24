@@ -21,6 +21,7 @@ import { MemberPhotoPicker } from '@/components/members/MemberPhotoPicker';
 import { photoDataUrl } from '@/lib/members/photo';
 import { FileText, ArrowLeft } from 'lucide-react';
 import type { MemberType, CasteCategory } from '@/types';
+import { confirmAction } from '@/lib/confirmAction';
 
 const CASTE_OPTIONS: { value: CasteCategory; label: string; labelHi: string }[] = [
   { value: 'General', label: 'General', labelHi: 'सामान्य' },
@@ -157,9 +158,9 @@ const MemberApplication: React.FC = () => {
 
   const f = (key: keyof typeof form, value: string) => setForm(prev => ({ ...prev, [key]: value }));
   // Stage D: a half-filled application is not thrown away by one stray click.
-  const leave = () => {
+  const leave = async () => {
     const dirty = (Object.keys(EMPTY_FORM) as (keyof typeof EMPTY_FORM)[]).some(k => k !== 'applicationDate' && form[k] !== EMPTY_FORM[k]) || !!photo;
-    if (dirty && !window.confirm(hi ? 'भरा हुआ आवेदन छोड़कर जाएँ? जानकारी सेव नहीं होगी।' : 'Leave this application? What you typed will be lost.')) return;
+    if (dirty && !await confirmAction(hi ? 'भरा हुआ आवेदन छोड़कर जाएँ? जानकारी सेव नहीं होगी।' : 'Leave this application? What you typed will be lost.')) return;
     navigate('/members');
   };
   // U8 (M2): share capital = shares × face value when both are given (as in the member form), so they can't disagree.

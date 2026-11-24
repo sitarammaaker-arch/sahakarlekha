@@ -17,6 +17,7 @@ import { isFundAccount, buildFundStatement } from '@/lib/housing/funds';
 import { round2 } from '@/lib/housing/billing';
 import { PiggyBank, TrendingUp, MinusCircle, PlusCircle, Download, Trash2, Landmark } from 'lucide-react';
 import { isCountedVoucher } from '@/lib/countedVoucher';
+import { confirmAction } from '@/lib/confirmAction';
 
 type OpType = 'interest' | 'utilisation' | 'contribution';
 
@@ -249,7 +250,7 @@ export default function FundStatement() {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {i.status === 'active' && <Button size="sm" variant="outline" onClick={() => openRedeem(i)}>{hi ? 'भुनाएँ' : 'Redeem'}</Button>}
-                    <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(hi ? 'निवेश हटाएँ?' : 'Delete investment?')) deleteFundInvestment(i.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction(hi ? 'निवेश हटाएँ?' : 'Delete investment?')) deleteFundInvestment(i.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   </div>
                 </div>
               ))}

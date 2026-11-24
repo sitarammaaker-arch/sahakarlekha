@@ -19,6 +19,7 @@ import { Fuel, Trash2 } from 'lucide-react';
 import EntityExportButton from '@/components/export/EntityExportButton';
 import { resolveTransportAccounts, TRANSPORT_EXPENSE_ROLES } from '@/lib/transport/accounts';
 import type { VehicleExpense } from '@/types';
+import { confirmAction } from '@/lib/confirmAction';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -61,8 +62,8 @@ export default function VehicleExpenses() {
       { onSaved: () => { setAmount(''); setNarration(''); } },
     );
   };
-  const remove = (e: VehicleExpense) => {
-    if (!window.confirm(hi ? `खर्च ${e.expenseNo} हटाएँ? (इसका वाउचर भी रद्द होगा)` : `Delete expense ${e.expenseNo}? (its voucher will be cancelled too)`)) return;
+  const remove = async (e: VehicleExpense) => {
+    if (!await confirmAction(hi ? `खर्च ${e.expenseNo} हटाएँ? (इसका वाउचर भी रद्द होगा)` : `Delete expense ${e.expenseNo}? (its voucher will be cancelled too)`)) return;
     deleteVehicleExpense(e.id);
   };
 

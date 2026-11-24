@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
 import { ArrowLeftRight, Trash2 } from 'lucide-react';
+import { confirmAction } from '@/lib/confirmAction';
 
 export default function TransferRegister() {
   const { transfers, recordFlatTransfer, deleteFlatTransfer, housingFlats } = useHousingData();
@@ -158,7 +159,7 @@ export default function TransferRegister() {
                 <div className="font-medium">{flatLabel(t.flatId)} · {t.date}</div>
                 <div className="text-muted-foreground">{memberLabel(t.fromMemberId)} → {memberLabel(t.toMemberId)}{(t.transferFee || t.premium) ? ` · ${hi ? 'शुल्क' : 'fee'} ${money((t.transferFee || 0) + (t.premium || 0))}` : ''}{t.resolutionNo ? ` · ${hi ? 'प्रस्ताव' : 'Res.'} ${t.resolutionNo}` : ''}</div>
               </div>
-              <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { if (window.confirm(hi ? 'हस्तांतरण हटाएँ? (शुल्क voucher रद्द होगा; स्वामित्व स्वतः वापस नहीं होगा)' : 'Delete transfer? (fee voucher is cancelled; ownership is not auto-reverted)')) deleteFlatTransfer(t.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              <Button size="sm" variant="ghost" className="shrink-0" onClick={async () => { if (await confirmAction(hi ? 'हस्तांतरण हटाएँ? (शुल्क voucher रद्द होगा; स्वामित्व स्वतः वापस नहीं होगा)' : 'Delete transfer? (fee voucher is cancelled; ownership is not auto-reverted)')) deleteFlatTransfer(t.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
             </div>
           ))}
         </CardContent>

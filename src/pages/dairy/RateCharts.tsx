@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Table2, Trash2, Calculator } from 'lucide-react';
 import type { DairyRateBand } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 // "3.0,3.5,4.0,4.5" → bands [3-3.5),[3.5-4),[4-4.5)
 function parseBands(csv: string): DairyRateBand[] {
@@ -153,7 +154,7 @@ export default function RateCharts() {
                 </div>
                 <div className="text-muted-foreground">{hi ? 'प्रभावी' : 'Effective'} {c.effectiveFrom}</div>
               </div>
-              <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { if (window.confirm(hi ? `चार्ट "${c.name}" हटाएँ?` : `Delete chart "${c.name}"?`)) deleteRateChart(c.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              <Button size="sm" variant="ghost" className="shrink-0" onClick={async () => { if (await confirmAction(hi ? `चार्ट "${c.name}" हटाएँ?` : `Delete chart "${c.name}"?`)) deleteRateChart(c.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
             </div>
           ))}
         </CardContent>

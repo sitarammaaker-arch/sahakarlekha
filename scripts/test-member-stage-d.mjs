@@ -32,12 +32,13 @@ ok(mem.includes("'फिर से स्वीकृत करें (अपी
 ok(!mem.includes("new Date().toISOString().split('T')[0]") && read('src/pages/MemberApplication.tsx').indexOf("new Date().toISOString().split('T')[0]") < 0, 'member pages use the local date (todayStr), not UTC');
 ok(mem.includes('`/share-register?q=${encodeURIComponent(form.memberId || \'\')}`'), 'edit form links to the Share Register for this member');
 ok(mem.includes('grid grid-cols-1 sm:grid-cols-2 gap-3') && !/<div className="grid grid-cols-2 gap-3">/.test(mem.slice(mem.indexOf('const MemberForm'), mem.indexOf('const Members: React.FC') > 0 ? mem.indexOf('const Members: React.FC') : undefined)), 'member form stacks on a phone');
-ok(mem.includes("window.confirm(hi ? 'सदस्य की फ़ोटो हटाएँ?"), 'removing a photo asks first');
+// In-page confirm since 2026-11-24 (window.confirm never shows in the desktop app's pane — test:no-native-confirm).
+ok(mem.includes("await confirmAction(hi ? 'सदस्य की फ़ोटो हटाएँ?"), 'removing a photo asks first');
 
 // ── application form ──
 const app = read('src/pages/MemberApplication.tsx');
 ok(app.includes("'नामांकित का नाम' : 'Nominee Name'}<span className=\"text-destructive\"> *</span>"), 'application: nominee marked required');
-ok(app.includes('const leave = () => {') && app.includes('window.confirm(') && app.includes('onClick={leave}'), 'application: leaving a filled form asks first');
+ok(app.includes('const leave = async () => {') && app.includes('await confirmAction(') && app.includes('onClick={leave}'), 'application: leaving a filled form asks first');
 
 // ── Share Register, Nomination, Voters, Election, Member-360 ──
 const sr = read('src/pages/ShareRegister.tsx');

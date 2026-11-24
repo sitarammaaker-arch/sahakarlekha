@@ -28,6 +28,7 @@ import type { Recoverable, RecoverableCategory, RecoverableLegalStage } from '@/
 import { RECOVERABLE_CATEGORY_LABELS, RECOVERABLE_STAGE_LABELS } from '@/lib/annualReview/p2Calculator';
 import EntityExportButton from '@/components/export/EntityExportButton';
 import { fyStartOf, societyFyStart } from '@/lib/fyPeriod';
+import { confirmAction } from '@/lib/confirmAction';
 
 const EMPTY_FORM = {
   partyName: '',
@@ -159,8 +160,8 @@ const RecoverablesRegister: React.FC = () => {
     resetForm();
   };
 
-  const handleDelete = (r: Recoverable) => {
-    if (!confirm(hi ? `"${r.partyName}" का रिकॉर्ड हटाएं?` : `Delete recoverable for "${r.partyName}"?`)) return;
+  const handleDelete = async (r: Recoverable) => {
+    if (!await confirmAction(hi ? `"${r.partyName}" का रिकॉर्ड हटाएं?` : `Delete recoverable for "${r.partyName}"?`)) return;
     deleteRecoverable(r.id);
     toast({ title: hi ? 'हटाया गया' : 'Deleted' });
   };

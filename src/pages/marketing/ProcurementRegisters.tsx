@@ -17,6 +17,7 @@ import { seasonReconciliation } from '@/lib/marketing/agencyBilling';
 import { Trash2 } from 'lucide-react';
 import { deriveLotStage, isRejectedQuality, LOT_STAGE_LABEL } from '@/lib/procurement/agentFlow';
 import { isEngineVoucher } from '@/lib/accounting/voucherImmutability';
+import { confirmAction } from '@/lib/confirmAction';
 
 const LEGACY_CROPS: Record<string, { name: string; nameHi: string }> = {
   wheat: { name: 'Wheat', nameHi: 'गेहूँ' }, paddy: { name: 'Paddy', nameHi: 'धान' },
@@ -383,7 +384,7 @@ export default function ProcurementRegisters() {
               {[...bardanaMovements].sort((a, b) => (a.date < b.date ? 1 : -1)).map(m => (
                 <div key={m.id} className="flex items-center justify-between rounded border px-2 py-1.5 text-sm gap-2">
                   <span>{m.date} · {m.direction === 'in' ? (hi ? 'आई' : 'In') : (hi ? 'गई' : 'Out')} · {PARTY_LABEL[m.partyType]} {m.partyName || ''} · <b>{m.bags}</b> {hi ? 'बोरी' : 'bags'}{m.bardanaTypeId ? ` · ${typeName(m.bardanaTypeId)}` : ''}{m.note ? ` · ${m.note}` : ''}</span>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive shrink-0" onClick={() => { if (window.confirm(hi ? 'यह एंट्री हटाएँ?' : 'Delete this entry?')) deleteBardanaMovement(m.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive shrink-0" onClick={async () => { if (await confirmAction(hi ? 'यह एंट्री हटाएँ?' : 'Delete this entry?')) deleteBardanaMovement(m.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
                 </div>
               ))}
             </CardContent>

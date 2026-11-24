@@ -14,6 +14,7 @@ import { isRejectedQuality } from '@/lib/procurement/agentFlow';
 import { billBase, incidentalAmount, dispatchTotals, type AgencyBillLine, type IncidentalUnit } from '@/lib/marketing/agencyBilling';
 import { agencyBillHTML, openPrint } from '@/lib/procurement/print';
 import { Plus, Trash2, Truck } from 'lucide-react';
+import { confirmAction } from '@/lib/confirmAction';
 
 /**
  * Marketing D3 — the agency side of MSP procurement, under the Agency Receipt page:
@@ -136,7 +137,7 @@ export default function AgencyOps({ hi }: { hi: boolean }) {
                       <div className="text-xs text-muted-foreground">{d.lotIds.length} {hi ? 'लॉट' : 'lots'} · {d.dispatchedQty} {hi ? 'क्विं' : 'qtl'}{d.bags ? ` · ${d.bags} ${hi ? 'बोरी' : 'bags'}` : ''} · {money(d.dispatchedValue)}{d.vehicleNo ? ` · ${d.vehicleNo}` : ''}{d.destination ? ` · ${d.destination}` : ''}</div>
                       {d.status === 'accepted' && <div className="text-xs">{hi ? 'स्वीकृत' : 'Accepted'} {d.acceptedQty} · {d.acceptedDate}{(d.shortageQty || 0) > 0 ? <span className="text-red-600"> · {hi ? 'कमी' : 'shortage'} {d.shortageQty} {hi ? 'क्विं' : 'qtl'} · {money(d.shortageValue || 0)}</span> : ''}</div>}
                     </div>
-                    {!billedIds.has(d.id) && <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => { if (window.confirm(hi ? `डिस्पैच ${d.dispatchNo} हटाएँ?${d.shortageVoucherId ? ' कमी का वाउचर भी रद्द होगा।' : ''}` : `Delete dispatch ${d.dispatchNo}?`)) void deleteDispatch(d.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>}
+                    {!billedIds.has(d.id) && <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={async () => { if (await confirmAction(hi ? `डिस्पैच ${d.dispatchNo} हटाएँ?${d.shortageVoucherId ? ' कमी का वाउचर भी रद्द होगा।' : ''}` : `Delete dispatch ${d.dispatchNo}?`)) void deleteDispatch(d.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>}
                   </div>
                   {d.status === 'dispatched' && (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
@@ -199,7 +200,7 @@ export default function AgencyOps({ hi }: { hi: boolean }) {
                   <div className="flex items-center gap-1 shrink-0">
                     {b.status === 'draft' && <Button size="sm" onClick={() => approveAgencyBill(b.id)}>{hi ? 'स्वीकृत करें' : 'Approve'}</Button>}
                     <Button size="sm" variant="ghost" onClick={() => printBill(b.id)}>{hi ? 'प्रिंट' : 'Print'}</Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => { if (window.confirm(hi ? `बिल ${b.billNo} हटाएँ?${b.voucherId ? ' उसका खर्च-वाउचर भी रद्द होगा।' : ''}` : `Delete bill ${b.billNo}?`)) void deleteAgencyBill(b.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={async () => { if (await confirmAction(hi ? `बिल ${b.billNo} हटाएँ?${b.voucherId ? ' उसका खर्च-वाउचर भी रद्द होगा।' : ''}` : `Delete bill ${b.billNo}?`)) void deleteAgencyBill(b.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>
               ))}

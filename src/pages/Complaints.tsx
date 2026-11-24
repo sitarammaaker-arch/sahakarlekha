@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { MessageSquareWarning, Trash2 } from 'lucide-react';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 const CATEGORIES = [
   { id: 'plumbing', en: 'Plumbing', hi: 'नलसाजी' },
@@ -148,7 +149,7 @@ export default function Complaints() {
                   <div className="text-muted-foreground">{c.complaintNo} · {c.raisedDate}{c.flatNo ? ` · ${c.flatNo}` : ''}</div>
                   {c.description && <div className="text-muted-foreground mt-0.5">{c.description}</div>}
                 </div>
-                <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { if (window.confirm(hi ? 'शिकायत हटाएँ?' : 'Delete complaint?')) deleteComplaint(c.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                <Button size="sm" variant="ghost" className="shrink-0" onClick={async () => { if (await confirmAction(hi ? 'शिकायत हटाएँ?' : 'Delete complaint?')) deleteComplaint(c.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant={c.status === 'resolved' || c.status === 'closed' ? 'default' : c.status === 'in_progress' ? 'secondary' : 'destructive'}>{hi ? statusMeta(c.status).hi : statusMeta(c.status).en}</Badge>

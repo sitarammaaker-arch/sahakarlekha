@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { FileCheck, Trash2 } from 'lucide-react';
+import { confirmAction } from '@/lib/confirmAction';
 
 const DOC_TYPES = [
   { id: 'noc', en: 'NOC', hi: 'एनओसी' },
@@ -108,7 +109,7 @@ export default function LegalDocuments() {
                   {d.reference ? `${d.reference} · ` : ''}{d.authority || '—'}{d.date ? ` · ${d.date}` : ''}{d.expiryDate ? ` → ${d.expiryDate}` : ''}
                 </div>
               </div>
-              <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { if (window.confirm(hi ? 'दस्तावेज़ हटाएँ?' : 'Delete document?')) deleteDocument(d.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              <Button size="sm" variant="ghost" className="shrink-0" onClick={async () => { if (await confirmAction(hi ? 'दस्तावेज़ हटाएँ?' : 'Delete document?')) deleteDocument(d.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
             </div>
           ))}
         </CardContent>

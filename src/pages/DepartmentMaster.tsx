@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Landmark, Pencil, Trash2 } from 'lucide-react';
 import type { Department, DepartmentType } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 const TYPES: { id: DepartmentType; en: string; hi: string }[] = [
   { id: 'govt_department', en: 'Govt Department', hi: 'सरकारी विभाग' },
@@ -72,7 +73,7 @@ export default function DepartmentMaster() {
     setEditOpen(false);
   };
 
-  const remove = (d: Department) => {
+  const remove = async (d: Department) => {
     // RULE-3: block deletion while live bills / work orders reference this department
     // (their receivable + income vouchers would otherwise point at a vanished party).
     const hasBills = departmentBills.some(b => !b.isDeleted && b.departmentId === d.id);
@@ -87,7 +88,7 @@ export default function DepartmentMaster() {
       });
       return;
     }
-    if (!window.confirm(hi ? `विभाग ${d.name} हटाएँ?` : `Delete department ${d.name}?`)) return;
+    if (!await confirmAction(hi ? `विभाग ${d.name} हटाएँ?` : `Delete department ${d.name}?`)) return;
     deleteDepartment(d.id);
     toast({ title: hi ? 'विभाग हटाया गया' : 'Department deleted' });
   };

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PackagePlus, Trash2 } from 'lucide-react';
 import type { DairyInputType } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN')}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -123,7 +124,7 @@ export default function DairyInputs() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="font-medium">{inr(i.amount)}</span>
-                <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(hi ? 'आदान हटाएँ?' : 'Delete input issue?')) deleteDairyInputIssue(i.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction(hi ? 'आदान हटाएँ?' : 'Delete input issue?')) deleteDairyInputIssue(i.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             </div>
           ))}

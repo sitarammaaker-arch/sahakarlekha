@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Building, Trash2 } from 'lucide-react';
+import { confirmAction } from '@/lib/confirmAction';
 
 export default function Buildings() {
   const { buildings, addBuilding, deleteBuilding, housingFlats, maintenanceBills } = useHousingData();
@@ -98,7 +99,7 @@ export default function Buildings() {
                     {b.floors ? `${b.floors} ${hi ? 'मंज़िल' : 'floors'} · ` : ''}{b.totalUnits ? `${b.totalUnits} ${hi ? 'यूनिट' : 'units'} · ` : ''}{hi ? 'मासिक' : 'monthly'} {money(s.monthly)}{b.address ? ` · ${b.address}` : ''}
                   </div>
                 </div>
-                <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { if (window.confirm(hi ? `भवन "${b.name}" हटाएँ? (फ्लैट नहीं हटेंगे)` : `Delete building "${b.name}"? (flats are not deleted)`)) deleteBuilding(b.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                <Button size="sm" variant="ghost" className="shrink-0" onClick={async () => { if (await confirmAction(hi ? `भवन "${b.name}" हटाएँ? (फ्लैट नहीं हटेंगे)` : `Delete building "${b.name}"? (flats are not deleted)`)) deleteBuilding(b.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             );
           })}

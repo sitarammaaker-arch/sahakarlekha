@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { PurchaseReturnRefund, PurchaseReturn as PurchaseReturnType } from '@/types';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
+import { confirmAction } from '@/lib/confirmAction';
 
 const TODAY = () => new Date().toISOString().split('T')[0];
 const fmt = (amount: number) =>
@@ -263,7 +264,7 @@ const PurchaseReturn: React.FC = () => {
                           <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-800" title={hi ? 'संशोधित करें' : 'Edit'} onClick={() => startEdit(r)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700" title={hi ? 'रद्द करें' : 'Reverse'} onClick={() => { if (window.confirm(hi ? `वापसी ${r.returnNo} रद्द करें?` : `Reverse return ${r.returnNo}?`)) { deletePurchaseReturn(r.id); toast({ title: hi ? 'वापसी रद्द' : 'Return reversed' }); } }}>
+                          <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700" title={hi ? 'रद्द करें' : 'Reverse'} onClick={async () => { if (await confirmAction(hi ? `वापसी ${r.returnNo} रद्द करें?` : `Reverse return ${r.returnNo}?`)) { deletePurchaseReturn(r.id); toast({ title: hi ? 'वापसी रद्द' : 'Return reversed' }); } }}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>

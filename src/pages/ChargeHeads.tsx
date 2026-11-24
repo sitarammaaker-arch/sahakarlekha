@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { ListChecks, Trash2, Sparkles } from 'lucide-react';
 import { accountCode } from '@/lib/accountCode';
+import { confirmAction } from '@/lib/confirmAction';
 
 const BASES = [
   { id: 'fixed', en: 'Fixed ₹ / flat', hi: 'निश्चित ₹ / फ्लैट' },
@@ -179,7 +180,7 @@ export default function ChargeHeads() {
                 <Input type="number" min={0} className="w-24 h-8" defaultValue={h.rate}
                   onBlur={e => { const r = Number(e.target.value); if (r >= 0 && r !== h.rate) updateChargeHead(h.id, { rate: r }); }} />
                 <Switch checked={h.isActive !== false} onCheckedChange={c => updateChargeHead(h.id, { isActive: c })} />
-                <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(hi ? `"${h.nameEn}" हटाएँ?` : `Delete "${h.nameEn}"?`)) deleteChargeHead(h.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction(hi ? `"${h.nameEn}" हटाएँ?` : `Delete "${h.nameEn}"?`)) deleteChargeHead(h.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             </div>
           ))}

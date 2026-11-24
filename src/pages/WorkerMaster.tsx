@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { HardHat, Pencil, Trash2 } from 'lucide-react';
 import type { Worker, WorkerType, WorkerCategory } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 const TYPES: { id: WorkerType; en: string; hi: string }[] = [
   { id: 'member', en: 'Member', hi: 'सदस्य' },
@@ -112,7 +113,7 @@ export default function WorkerMaster() {
     setEditOpen(false);
   };
 
-  const remove = (w: Worker) => {
+  const remove = async (w: Worker) => {
     // RULE-3: block deletion while live dependents exist (their wage-accrual / advance
     // vouchers would otherwise dangle on the books with no owning worker).
     const hasMuster = musterEntries.some(m => !m.isDeleted && m.memberId === w.id);
@@ -127,7 +128,7 @@ export default function WorkerMaster() {
       });
       return;
     }
-    if (!window.confirm(hi ? `श्रमिक ${w.name} हटाएँ?` : `Delete worker ${w.name}?`)) return;
+    if (!await confirmAction(hi ? `श्रमिक ${w.name} हटाएँ?` : `Delete worker ${w.name}?`)) return;
     deleteWorker(w.id);
     toast({ title: hi ? 'श्रमिक हटाया गया' : 'Worker deleted' });
   };

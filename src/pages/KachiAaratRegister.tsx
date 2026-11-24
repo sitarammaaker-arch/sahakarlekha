@@ -28,6 +28,7 @@ import EntityExportButton from '@/components/export/EntityExportButton';
 import { fyStartOf, societyFyStart } from '@/lib/fyPeriod';
 import { jurisdictionCapabilities } from '@/lib/navigation/capabilityResolver';
 import { damiLedgerId, reconcileDami } from '@/lib/marketing/kachiAarat';
+import { confirmAction } from '@/lib/confirmAction';
 
 const EMPTY_FORM = {
   date: new Date().toISOString().split('T')[0],
@@ -138,8 +139,8 @@ const KachiAaratRegister: React.FC = () => {
     setIsAddOpen(false); setEditId(null); resetForm();
   };
 
-  const handleDelete = (e: KachiAaratEntry) => {
-    if (!confirm(hi ? 'एंट्री हटाएं?' : 'Delete this entry?')) return;
+  const handleDelete = async (e: KachiAaratEntry) => {
+    if (!await confirmAction(hi ? 'एंट्री हटाएं?' : 'Delete this entry?')) return;
     deleteKachiAaratEntry(e.id);
     toast({ title: hi ? 'हटाया गया' : 'Deleted' });
   };

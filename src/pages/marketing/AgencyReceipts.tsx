@@ -14,6 +14,7 @@ import { receiptCap, COMMISSION_RECEIPT_REF_TYPE } from '@/lib/procurement/agent
 import { todayStr } from '@/lib/dateUtils';
 import { Landmark, Trash2 } from 'lucide-react';
 import AgencyOps from './AgencyOps';
+import { confirmAction } from '@/lib/confirmAction';
 
 /**
  * Agency Receipt (Marketing M3c) — money received from the procurement agency (FCI / NAFED / the
@@ -187,7 +188,7 @@ export default function AgencyReceipts() {
                 </div>
                 <div className="text-xs text-muted-foreground">{v.date} · {receiptDr(v)} {v.narration ? `· ${v.narration}` : ''}</div>
               </div>
-              <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => { if (window.confirm(hi ? `रसीद ${v.voucherNo} रद्द करें? इसका वाउचर भी रद्द होगा।` : `Cancel receipt ${v.voucherNo}? Its voucher is cancelled too.`)) deleteAgencyReceipt(v.id); }} aria-label={hi ? 'रसीद हटाएँ' : 'delete'}><Trash2 className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={async () => { if (await confirmAction(hi ? `रसीद ${v.voucherNo} रद्द करें? इसका वाउचर भी रद्द होगा।` : `Cancel receipt ${v.voucherNo}? Its voucher is cancelled too.`)) deleteAgencyReceipt(v.id); }} aria-label={hi ? 'रसीद हटाएँ' : 'delete'}><Trash2 className="h-4 w-4" /></Button>
             </div>
           ))}
         </CardContent>
