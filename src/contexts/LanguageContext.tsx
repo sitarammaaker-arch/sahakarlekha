@@ -149,6 +149,7 @@ export const translations: Translations = {
   memberTurnover: { hi: 'सदस्य / गैर-सदस्य कारोबार', en: 'Member / Non-member Turnover' },
   godownShortage: { hi: 'गोदाम घटत / बढ़त रजिस्टर', en: 'Godown Shortage Register' },
   stockVerification: { hi: 'भौतिक स्टॉक सत्यापन', en: 'Physical Stock Verification' },
+  chequeRegister: { hi: 'चेक रजिस्टर', en: 'Cheque Register' },
   wageRegister: { hi: 'मज़दूरी रजिस्टर', en: 'Wage Register' },
   workerLedger: { hi: 'श्रमिक लेजर', en: 'Worker Ledger' },
   advanceRegister: { hi: 'अग्रिम रजिस्टर', en: 'Advance Register' },

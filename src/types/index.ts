@@ -84,6 +84,9 @@ export interface Voucher {
   approvalRemarks?: string;
   approvedBy?: string;
   approvedAt?: string;
+  // Migration 205: cheque / DD on a bank voucher (HAFED Proformas IV/1, IV/2). Saved in their own patch.
+  chequeNo?: string;
+  chequeDate?: string;
   // Multi-line voucher support (Phase 1 — Path B)
   lines?: VoucherLine[];
   refType?: string;   // e.g. 'sale', 'purchase', 'bill-receipt'

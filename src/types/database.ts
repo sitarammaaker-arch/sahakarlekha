@@ -7955,6 +7955,8 @@ export type Database = {
           approvedBy: string | null
           billAllocations: Json | null
           branchId: string | null
+          chequeDate: string | null
+          chequeNo: string | null
           clearedDate: string | null
           costCentreId: string | null
           createdAt: string | null
@@ -7995,6 +7997,8 @@ export type Database = {
           approvedBy?: string | null
           billAllocations?: Json | null
           branchId?: string | null
+          chequeDate?: string | null
+          chequeNo?: string | null
           clearedDate?: string | null
           costCentreId?: string | null
           createdAt?: string | null
@@ -8035,6 +8039,8 @@ export type Database = {
           approvedBy?: string | null
           billAllocations?: Json | null
           branchId?: string | null
+          chequeDate?: string | null
+          chequeNo?: string | null
           clearedDate?: string | null
           costCentreId?: string | null
           createdAt?: string | null

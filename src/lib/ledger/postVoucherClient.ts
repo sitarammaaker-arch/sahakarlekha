@@ -19,8 +19,9 @@ export interface PostVoucherPayload {
   p_event: Record<string, unknown>;
 }
 
-/** Local-only / audit fields that never go to the server row. */
-const LOCAL_ONLY = ['editHistory'] as const;
+/** Local-only / audit fields that never go to the server row. chequeNo / chequeDate (migration 205) are written by
+ *  their own patch once the voucher is durable, so a server without the columns never sees them. */
+const LOCAL_ONLY = ['editHistory', 'chequeNo', 'chequeDate'] as const;
 
 export function buildPostVoucherPayload(v: Voucher, event: LedgerEvent): PostVoucherPayload {
   const p_voucher: Record<string, unknown> = { ...v };

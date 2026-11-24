@@ -27,7 +27,7 @@ const DIRECT_ICON: Record<string, ElementType> = { dashboard: LayoutDashboard, m
 export const HUBS: HubDef[] = [
   { id: 'books', hi: 'बहियाँ', en: 'Books', icon: BookOpen, sections: [
     { hi: 'रोज़ की बहियाँ', en: 'Daily books', moduleIds: ['cashBook', 'bankBook', 'dayBook', 'ledger'] },
-    { hi: 'मिलान व जाँच', en: 'Reconcile & check', moduleIds: ['bankReconciliation', 'voucherApproval', 'deletedVouchers'] },
+    { hi: 'मिलान व जाँच', en: 'Reconcile & check', moduleIds: ['bankReconciliation', 'chequeRegister', 'voucherApproval', 'deletedVouchers'] },
   ] },
   { id: 'sales', hi: 'बिक्री', en: 'Sales', icon: ShoppingCart, sections: [
     { hi: 'बिक्री', en: 'Sales', moduleIds: ['sales', 'salesReturn', 'saleRegister'] },

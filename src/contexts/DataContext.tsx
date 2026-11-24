@@ -233,6 +233,8 @@ interface DataContextType {
   /** S2: which skippable tables (src/lib/emptyTables.ts) hold no rows for this society — one shared call. */
   knownEmptyTables: (sid: string) => Promise<ReadonlySet<string>>;
   reverseVoucher: (id: string, reason: string) => Voucher | null;
+  /** Migration 205: cheque / DD no. and date on an existing voucher. false = a guard refused it. */
+  setVoucherCheque: (id: string, chequeNo: string | undefined, chequeDate: string | undefined) => boolean;
   /** T-20: post the year-end statutory appropriation of net surplus as ONE balanced voucher through
    *  the canonical engine (effective-dated UCAS rates). Flag-gated (society.statutoryAppropriation).
    *  Returns the posted voucher, or null when blocked/refused (a toast explains why). */
@@ -1891,8 +1893,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // restricted user's fresh voucher is invisible to its own verify-read below and would
     // be falsely rolled back. attemptBase retries without it on a stale schema cache.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // chequeNo / chequeDate (migration 205) are kept out of BOTH steps — patchVoucherCheque writes them on their own,
+    // so an un-migrated database never loses the voucher's lines or approval status over a cheque number.
     const { lines, refType, refId, billAllocations, isCleared, clearedDate, editHistory, groupId,
-            approvalStatus, approvalRemarks, approvedBy, approvedAt, workOrderId, costCentreId, ...baseCols } = v;
+            approvalStatus, approvalRemarks, approvedBy, approvedAt, workOrderId, costCentreId, chequeNo, chequeDate, ...baseCols } = v;
 
     const handleBaseFailure = (msg: string) => {
       console.error(`Voucher ${opts.isUpdate ? 'update' : 'save'} failed (base):`, msg);
@@ -2010,6 +2014,45 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return guardPeriodLock(date);
   };
 
+  // Migration 205: write a voucher's cheque / DD number and date in their OWN update (never with the base row or the
+  // lines / approval extras). Resolves the error message, or null when saved. Local state is the caller's to keep in step.
+  const patchVoucherCheque = (id: string, chequeNo: string | undefined, chequeDate: string | undefined): Promise<string | null> =>
+    new Promise(resolve => {
+      supabase.from('vouchers').update({ chequeNo: chequeNo?.trim() || null, chequeDate: chequeDate || null }).eq('id', id).select('id').then(
+        ({ data, error }) => {
+          const msg = error?.message ?? (data && data.length ? null : 'cheque update matched 0 rows');
+          if (msg) reportError('write-partial', msg, { at: 'voucher cheque patch', voucherId: id });
+          resolve(msg);
+        },
+        (e: unknown) => resolve(e instanceof Error ? e.message : String(e)),
+      );
+    });
+  const chequeNotSavedToast = (msg: string) => toastRef.current({
+    title: tr('वाउचर सेव हुआ — पर cheque नं. नहीं', 'Voucher saved — but not the cheque no.'),
+    description: tr(`Cheque नं. / तारीख़ क्लाउड में सेव नहीं हुई (${msg})। Migration 205 चलाएँ, फिर वाउचर edit करके दोबारा भरें।`, `The cheque no. / date did not reach the cloud (${msg}). Run Migration 205, then edit the voucher and fill them again.`),
+    duration: 10000,
+  });
+
+  // Cheque / DD details on an existing voucher (Vouchers page edit). Same guards as an edit; rolled back on failure.
+  const setVoucherCheque = useCallback((id: string, chequeNo: string | undefined, chequeDate: string | undefined): boolean => {
+    const cur = vouchersRef.current.find(v => v.id === id);
+    if (!cur || cur.isDeleted) return false;
+    if (guardPageWrite('update', cur.date)) return false;
+    const next = { chequeNo: chequeNo?.trim() || undefined, chequeDate: chequeDate || undefined };
+    if ((cur.chequeNo || undefined) === next.chequeNo && (cur.chequeDate || undefined) === next.chequeDate) return true;
+    const put = (fields: { chequeNo?: string; chequeDate?: string }) => {
+      vouchersRef.current = vouchersRef.current.map(v => v.id === id ? { ...v, ...fields } : v);
+      setVouchersState(prev => prev.map(v => v.id === id ? { ...v, ...fields } : v));
+    };
+    put(next);
+    void patchVoucherCheque(id, next.chequeNo, next.chequeDate).then(msg => {
+      if (!msg) return;
+      put({ chequeNo: cur.chequeNo, chequeDate: cur.chequeDate });   // RULE 1: roll back
+      toastRef.current({ title: tr('Cheque नं. सेव नहीं हुआ', 'Cheque no. not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${msg}। Migration 205 चली है?`, `Not saved to the cloud — ${msg}. Has Migration 205 been run?`), variant: 'destructive', duration: 10000 });
+    });
+    return true;
+  }, [guardPageWrite]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const addVoucher = useCallback((data: Omit<Voucher, 'id' | 'voucherNo' | 'createdAt'> & { voucherNo?: string }, opts?: { persistWith?: VoucherPersistWith; onPersisted?: (v: Voucher) => void; onSaved?: (v: Voucher) => void; onFailed?: () => void }): Voucher => {
     // ECR-06: role gate at the voucher choke point — every composite flow (sale/purchase/salary/
     // loan/reversal) and page funnels through here, so one guard covers every voucher birth.
@@ -2039,6 +2082,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ECR-07: block back-dating a new voucher into a locked period.
     if (guardPeriodLock(data.date)) {
       return { id: '', voucherNo: '', type: data.type, date: data.date, debitAccountId: '', creditAccountId: '', amount: 0, narration: '', createdBy: '', createdAt: '' } as unknown as Voucher;
+    }
+    // Migration 205: a voucher born with a cheque no. gets it written in its own patch once the voucher is durable,
+    // whichever save path ran (post_voucher, save_pending_voucher or the client two-step).
+    if (data.chequeNo || data.chequeDate) {
+      const callerSaved = opts?.onSaved;
+      opts = { ...opts, onSaved: (saved: Voucher) => {
+        void patchVoucherCheque(saved.id, data.chequeNo, data.chequeDate).then(msg => {
+          if (!msg) return;
+          vouchersRef.current = vouchersRef.current.map(v => v.id === saved.id ? { ...v, chequeNo: undefined, chequeDate: undefined } : v);
+          setVouchersState(prev => prev.map(v => v.id === saved.id ? { ...v, chequeNo: undefined, chequeDate: undefined } : v));
+          chequeNotSavedToast(msg);
+        });
+        callerSaved?.(saved);
+      } };
     }
     // Final batch: a MANUAL voucher on Share Capital 1102 tagged to a member never moves member.shareCapital — the
     // register and the ledger drifted (2 members in prod). Member share moves go through the Share Register.
@@ -9029,7 +9086,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlements: procurementSettlementsView, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment, cancelProcurementLot,
-    addVoucher, updateVoucher, cancelVoucher, guardPageWrite, registerVoucherOwner, registerVoucherCancelFollower, reverseVoucher, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
+    addVoucher, updateVoucher, cancelVoucher, guardPageWrite, registerVoucherOwner, registerVoucherCancelFollower, reverseVoucher, setVoucherCheque, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
@@ -9068,7 +9125,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     procurementPostingRuleResults, generatePostingRuleResult, generateEngineVoucher,
     procurementSettlementsView, createFarmerSettlement, addSettlementDeductionLine, removeSettlementDeductionLine, approveFarmerSettlement,
     recordFarmerPayment, cancelProcurementLot,
-    addVoucher, updateVoucher, cancelVoucher, guardPageWrite, registerVoucherOwner, registerVoucherCancelFollower, reverseVoucher, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
+    addVoucher, updateVoucher, cancelVoucher, guardPageWrite, registerVoucherOwner, registerVoucherCancelFollower, reverseVoucher, setVoucherCheque, gstLegs, addStatutoryAppropriation, restoreVoucher, usesPostingService, canEditVoucherActivity, clearVoucher, unclearVoucher, approveVoucher, rejectVoucher, knownEmptyTables,
     addMember, updateMember, changeMemberStatus, deleteMember, uploadMemberPhoto, removeMemberPhoto, memberPhotoUrl, refundShareCapital, approveShareRefund, payShareRefund, purchaseShareCapital, transferShareCapital, shareOperation, getMemberShareReconciliation, approveMember, rejectMember,
     workOrders, addWorkOrder, updateWorkOrder, deleteWorkOrder,
     musterEntries, addMusterEntry, updateMusterEntry, deleteMusterEntry, payWages,
