@@ -4,6 +4,7 @@ import { QuickCreateMaster, allowedQuickKinds } from '@/components/QuickCreateMa
 import { roleCanCreateMaster } from '@/lib/masterCreate';
 import type { StockItem } from '@/types';
 import { BankAccountSelect } from '@/components/BankAccountSelect';
+import { MemberPicker } from '@/components/MemberPicker';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -87,6 +88,8 @@ const SaleManagement: React.FC = () => {
   // ── New Sale form state ───────────────────────────────────────────────────
   const [saleDate, setSaleDate] = useState(TODAY);
   const [customerId, setCustomerId] = useState('');
+  // Sale to a member (सदस्य को बिक्री): the member / non-member turnover report reads it (Income-tax Act 2025 s.149).
+  const [memberId, setMemberId] = useState('');
   const [partyCreateOpen, setPartyCreateOpen] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -195,6 +198,7 @@ const SaleManagement: React.FC = () => {
     creditDaysTouched.current = false;
     setSaleDate(TODAY);
     setCustomerId('');
+    setMemberId('');
     setCustomerName('');
     setCustomerPhone('');
     setItems([EMPTY_ITEM()]);
@@ -212,6 +216,7 @@ const SaleManagement: React.FC = () => {
     setEditingId(sale.id);
     setSaleDate(sale.date);
     setCustomerId(sale.customerId || '');
+    setMemberId(sale.memberId || '');
     setCustomerName(sale.customerName);
     setCustomerPhone(sale.customerPhone || '');
     setItems(sale.items.length ? sale.items.map(it => ({ ...it })) : [EMPTY_ITEM()]);
@@ -305,6 +310,8 @@ const SaleManagement: React.FC = () => {
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim() || undefined,
       customerId: customerId || undefined,
+      // Sent on every save, edits included: an edit replaces the whole row, so leaving it out would wipe the tag.
+      memberId: memberId || undefined,
       items: validItems,
       totalAmount,
       discount,
@@ -622,6 +629,16 @@ const SaleManagement: React.FC = () => {
                   placeholder={language === 'hi' ? 'स्वतः भरेगा' : 'Auto-filled'}
                   className="bg-muted/50"
                 />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label>{language === 'hi' ? 'सदस्य को बिक्री? (वैकल्पिक)' : 'Sold to a member? (optional)'}</Label>
+                <MemberPicker value={memberId} onChange={setMemberId} triggerClassName="h-10"
+                  noneLabel={language === 'hi' ? 'नहीं — गैर-सदस्य' : 'No — non-member'} />
+                <p className="text-xs text-muted-foreground">
+                  {language === 'hi'
+                    ? 'सदस्य चुनने पर यह बिक्री "सदस्य / गैर-सदस्य कारोबार" report में सदस्यों के खाते में गिनी जाएगी।'
+                    : 'With a member chosen, this sale counts under members in the "Member / non-member turnover" report.'}
+                </p>
               </div>
             </CardContent>
           </Card>

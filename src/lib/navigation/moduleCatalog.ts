@@ -151,6 +151,8 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'reports',            titleKey: 'reports',            icon: BarChart3,       route: '/reports',              domain: 'reports', requiredCapabilities: U, order: 5 },
   { id: 'saleRegister',       titleKey: 'saleRegister',       icon: ShoppingCart,    route: '/sale-register',        domain: 'reports', requiredCapabilities: ['inventory_sales'], order: 6 },
   { id: 'purchaseRegister',   titleKey: 'purchaseRegister',   icon: PackagePlus,     route: '/purchase-register',    domain: 'reports', requiredCapabilities: U, order: 7 },
+  // Purchases from / sales to members vs non-members (Income-tax Act 2025 s.149; HAFED Accounts Manual heads 31.10/31.11).
+  { id: 'memberTurnover',     titleKey: 'memberTurnover',     icon: Users,           route: '/member-turnover',      domain: 'reports', requiredCapabilities: ['inventory_sales'], order: 7.2 },
   { id: 'procurementMatch',   titleKey: 'procurementMatch',   icon: GitCompareArrows, route: '/procurement-match',   domain: 'reports', requiredCapabilities: ['inventory_sales'], requiredRoles: ['admin', 'accountant', 'auditor'], order: 7.5 },
   { id: 'billsOutstanding',   titleKey: 'billsOutstanding',   icon: Clock,           route: '/bills-outstanding',    domain: 'reports', requiredCapabilities: U, order: 8 },
   { id: 'ledgerHygiene',      titleKey: 'ledgerHygiene',      icon: Stethoscope,     route: '/ledger-hygiene',       domain: 'reports', requiredCapabilities: U, requiredRoles: ['admin', 'accountant', 'auditor'], order: 8.5 },

@@ -617,7 +617,7 @@ var purchase = {
   minRole: "viewer",
   scope: "society",
   nature: "transaction",
-  dependsOn: ["society", "supplier", "voucher"],
+  dependsOn: ["society", "supplier", "member", "voucher"],
   naturalKey: ["purchaseNo"],
   softDeleteField: "isDeleted",
   formats: ["csv", "xlsx", "json"],
@@ -629,6 +629,8 @@ var purchase = {
     c4("supplierName", "Supplier", "\u0906\u092A\u0942\u0930\u094D\u0924\u093F\u0915\u0930\u094D\u0924\u093E"),
     c4("supplierPhone", "Supplier Phone", "\u0906\u092A\u0942\u0930\u094D\u0924\u093F\u0915\u0930\u094D\u0924\u093E \u092B\u093C\u094B\u0928", { piiClass: "contact" }),
     internal4("supplierId", "Supplier Ref", "\u0906\u092A\u0942\u0930\u094D\u0924\u093F\u0915\u0930\u094D\u0924\u093E \u0938\u0902\u0926\u0930\u094D\u092D"),
+    internal4("memberId", "Member", "\u0938\u0926\u0938\u094D\u092F"),
+    // 202 · bought from a member (member / non-member turnover)
     internal4("items", "Line Items", "\u092A\u0902\u0915\u094D\u0924\u093F \u0906\u0907\u091F\u092E", { type: "json" }),
     ...taxColumns({ tds: true }),
     internal4("rcmApplicable", "RCM Applicable", "\u0906\u0930\u0938\u0940\u090F\u092E \u0932\u093E\u0917\u0942", { type: "boolean" }),

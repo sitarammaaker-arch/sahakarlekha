@@ -4,6 +4,7 @@ import { QuickCreateMaster, allowedQuickKinds } from '@/components/QuickCreateMa
 import { roleCanCreateMaster } from '@/lib/masterCreate';
 import type { StockItem } from '@/types';
 import { BankAccountSelect } from '@/components/BankAccountSelect';
+import { MemberPicker } from '@/components/MemberPicker';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
@@ -79,6 +80,9 @@ const PurchaseManagement: React.FC = () => {
   // ── New Purchase form state ───────────────────────────────────────────────
   const [purchaseDate, setPurchaseDate] = useState(TODAY);
   const [supplierId, setSupplierId] = useState('');
+  // Purchase from a member (सदस्य से खरीद, migration 202): the member / non-member turnover report reads it
+  // (members' produce — Income-tax Act 2025 s.149; HAFED Accounts Manual heads 31.10 / 31.11).
+  const [memberId, setMemberId] = useState('');
   const [partyCreateOpen, setPartyCreateOpen] = useState(false);
   const [supplierName, setSupplierName] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
@@ -200,6 +204,7 @@ const PurchaseManagement: React.FC = () => {
     creditDaysTouched.current = false;
     setPurchaseDate(TODAY);
     setSupplierId('');
+    setMemberId('');
     setSupplierName('');
     setSupplierPhone('');
     setSupplierBillNo('');
@@ -219,6 +224,7 @@ const PurchaseManagement: React.FC = () => {
     setEditingId(purchase.id);
     setPurchaseDate(purchase.date);
     setSupplierId(purchase.supplierId || '');
+    setMemberId(purchase.memberId || '');
     setSupplierName(purchase.supplierName);
     setSupplierPhone(purchase.supplierPhone || '');
     setSupplierBillNo(purchase.supplierBillNo || '');
@@ -300,6 +306,8 @@ const PurchaseManagement: React.FC = () => {
       supplierName: supplierName.trim(),
       supplierPhone: supplierPhone.trim() || undefined,
       supplierId: supplierId || undefined,
+      // Sent on every save, edits included: an edit replaces the whole row, so leaving it out would wipe the tag.
+      memberId: memberId || undefined,
       supplierBillNo: billNo || undefined,
       supplierBillDate: supplierBillDate || undefined,
       items: validItems,
@@ -628,6 +636,14 @@ const PurchaseManagement: React.FC = () => {
                   value={supplierBillDate}
                   onChange={e => setSupplierBillDate(e.target.value)}
                 />
+              </div>
+              <div className="space-y-1">
+                <Label>{language === 'hi' ? 'सदस्य से खरीद? (वैकल्पिक)' : 'Bought from a member? (optional)'}</Label>
+                <MemberPicker value={memberId} onChange={setMemberId} triggerClassName="h-10"
+                  noneLabel={language === 'hi' ? 'नहीं — गैर-सदस्य' : 'No — non-member'} />
+                <p className="text-xs text-muted-foreground">
+                  {language === 'hi' ? '"सदस्य / गैर-सदस्य कारोबार" report में गिनी जाएगी।' : 'Counted in the "Member / non-member turnover" report.'}
+                </p>
               </div>
             </CardContent>
           </Card>

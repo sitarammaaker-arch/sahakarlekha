@@ -1652,6 +1652,7 @@ export interface Purchase {
   dueDate?: string | null;     // date + creditDays; no due date = no late charge
   lateFeeRule?: LateFeeRule | null; // the rule frozen on this bill when it was made (lib/lateFee)
   supplierId?: string;     // linked registered supplier
+  memberId?: string;       // 202 · bought from this member (members' produce) — read by the member / non-member turnover report
   voucherId?: string;
   taxVoucherIds?: string[]; // auto-created GST/TDS journal voucher IDs
   narration: string;

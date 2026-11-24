@@ -6084,6 +6084,7 @@ export type Database = {
           items: Json | null
           jurisdiction: string | null
           lateFeeRule: Json | null
+          memberId: string | null
           narration: string | null
           netAmount: number | null
           paymentMode: string | null
@@ -6127,6 +6128,7 @@ export type Database = {
           items?: Json | null
           jurisdiction?: string | null
           lateFeeRule?: Json | null
+          memberId?: string | null
           narration?: string | null
           netAmount?: number | null
           paymentMode?: string | null
@@ -6170,6 +6172,7 @@ export type Database = {
           items?: Json | null
           jurisdiction?: string | null
           lateFeeRule?: Json | null
+          memberId?: string | null
           narration?: string | null
           netAmount?: number | null
           paymentMode?: string | null

@@ -120,6 +120,7 @@ applied_migration 198
 applied_migration 199
 applied_migration 200
 applied_migration 201
+applied_migration 202
 column _member_ref_backup.id bigint not null default nextval('_member_ref_backup_id_seq'::regclass)
 column _member_ref_backup.old_member_id text not null
 column _member_ref_backup.row_id text not null
@@ -1738,6 +1739,7 @@ column purchases.isDeleted boolean default false
 column purchases.items jsonb default '[]'::jsonb
 column purchases.jurisdiction text
 column purchases.lateFeeRule jsonb
+column purchases.memberId text
 column purchases.narration text
 column purchases.netAmount numeric
 column purchases.paymentMode text
