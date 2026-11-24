@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/errorReporting';
 import type { VoucherAttachment } from '@/types';
 import {
-  VOUCHER_DOCS_BUCKET, ATTACHMENT_MAX_BYTES, attachmentFileError, attachmentPath, fitAttachment, isImageType,
+  VOUCHER_DOCS_BUCKET, ATTACHMENT_MAX_BYTES, attachmentFileError, attachmentPath, fitAttachment, isImageType, storageLimitError,
+  type BillStorageUsage,
 } from '@/lib/voucherAttachments';
 import { tr } from '@/lib/uiLang';
 
@@ -27,7 +28,17 @@ async function shrinkImage(file: Blob): Promise<Blob> {
 
 export type UploadResult = { ok: true; row: VoucherAttachment } | { ok: false; error: string };
 
-export async function uploadVoucherAttachment(input: { societyId: string; voucherId: string; file: File; by?: string }): Promise<UploadResult> {
+/** The signed-in society's bill storage (migration 208): bytes used and its plan's limit. null when unknown. */
+export async function fetchBillStorageUsage(): Promise<BillStorageUsage | null> {
+  try {
+    const { data, error } = await supabase.rpc('voucher_docs_usage');
+    if (error || !data || typeof data !== 'object') return null;
+    const d = data as { used?: number; limit?: number };
+    return { used: Number(d.used) || 0, limit: Number(d.limit) || 0 };
+  } catch { return null; }
+}
+
+export async function uploadVoucherAttachment(input: { societyId: string; voucherId: string; file: File; by?: string; usage?: BillStorageUsage | null }): Promise<UploadResult> {
   const { societyId, voucherId, file } = input;
   if (!societyId) return { ok: false, error: tr('समिति नहीं मिली — दोबारा login करें।', 'Society not found — please log in again.') };
   const bad = attachmentFileError(file);
@@ -41,13 +52,16 @@ export async function uploadVoucherAttachment(input: { societyId: string; vouche
     catch { return { ok: false, error: tr('फ़ोटो खुल नहीं पाई — दूसरी फ़ोटो या PDF चुनें।', 'The photo could not be read — choose another photo or a PDF.') }; }
   }
   if (body.size > ATTACHMENT_MAX_BYTES) return { ok: false, error: tr('छोटी करने के बाद भी फ़ाइल 5 MB से बड़ी है।', 'The file is still over 5 MB after shrinking.') };
+  // Migration 208: the society's plan limit. The server refuses too; asking first spares an upload that would be undone.
+  const overLimit = storageLimitError(input.usage, body.size);
+  if (overLimit) return { ok: false, error: overLimit };
 
   const id = crypto.randomUUID();
   const path = attachmentPath(societyId, voucherId, id, ext);
   const up = await supabase.storage.from(VOUCHER_DOCS_BUCKET).upload(path, body, { upsert: false, contentType: mimeType, cacheControl: '3600' });
   if (up.error) {
     reportError('voucher-attachment', up.error.message, { at: 'upload', voucherId });
-    return { ok: false, error: tr(`बिल upload नहीं हुआ — ${up.error.message}`, `The bill did not upload — ${up.error.message}`) };
+    return { ok: false, error: refusedMessage(up.error.message, tr(`बिल upload नहीं हुआ — ${up.error.message}`, `The bill did not upload — ${up.error.message}`)) };
   }
   const row: VoucherAttachment = {
     id, voucherId, path, fileName: file.name?.slice(0, 200) || undefined, mimeType, sizeBytes: body.size,
@@ -58,9 +72,18 @@ export async function uploadVoucherAttachment(input: { societyId: string; vouche
     // RULE 1: the row is what the app lists — without it the file would be an orphan. Take the file back out.
     await supabase.storage.from(VOUCHER_DOCS_BUCKET).remove([path]);
     reportError('voucher-attachment', ins.error.message, { at: 'row insert', voucherId });
-    return { ok: false, error: tr(`बिल सेव नहीं हुआ — ${ins.error.message}`, `The bill was not saved — ${ins.error.message}`) };
+    return { ok: false, error: refusedMessage(ins.error.message, tr(`बिल सेव नहीं हुआ — ${ins.error.message}`, `The bill was not saved — ${ins.error.message}`)) };
   }
   return { ok: true, row };
+}
+
+/** A policy refusal reads as "row-level security" — say what it most likely means (limit reached, or no write role). */
+function refusedMessage(raw: string, fallback: string): string {
+  if (!/row-level security|violates|unauthorized|403/i.test(raw)) return fallback;
+  return tr(
+    'बिल सेव नहीं हुआ — समिति की बिल storage सीमा पूरी हो गई है, या आपके login को जोड़ने की अनुमति नहीं है।',
+    'The bill was not saved — the society\'s bill storage limit is reached, or your login may not add bills.',
+  );
 }
 
 /** A link that works for 10 minutes (the bucket is private). */

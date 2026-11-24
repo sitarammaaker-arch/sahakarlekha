@@ -3,14 +3,14 @@
  * for the audit trail). The parent passes guardPageWrite so the same refusals as any edit apply (role, FY lock,
  * period lock, offline); a cancelled voucher's bills can be opened but not changed.
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Paperclip, ExternalLink, Trash2, Upload, FileText, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Voucher, VoucherAttachment } from '@/types';
-import { ATTACHMENT_ACCEPT, formatBytes } from '@/lib/voucherAttachments';
-import { uploadVoucherAttachment, openVoucherAttachment, removeVoucherAttachment } from '@/lib/voucherAttachmentsClient';
+import { ATTACHMENT_ACCEPT, formatBytes, storagePercent, type BillStorageUsage } from '@/lib/voucherAttachments';
+import { uploadVoucherAttachment, openVoucherAttachment, removeVoucherAttachment, fetchBillStorageUsage } from '@/lib/voucherAttachmentsClient';
 import { fmtDate } from '@/lib/dateUtils';
 
 export function VoucherAttachmentsDialog(props: {
@@ -30,18 +30,23 @@ export function VoucherAttachmentsDialog(props: {
   const [confirmId, setConfirmId] = useState<string | null>(null);   // the row asking "remove?" (in-page — no window.confirm)
   const fileRef = useRef<HTMLInputElement>(null);
   const readOnly = !!voucher?.isDeleted;
+  // Migration 208: the society's bill storage — shown, and checked before each upload (the server checks too).
+  const [usage, setUsage] = useState<BillStorageUsage | null>(null);
+  useEffect(() => { if (voucher?.id) void fetchBillStorageUsage().then(setUsage); }, [voucher?.id]);
 
   const add = async (files: FileList | null) => {
     if (!voucher || !files?.length) return;
     if (guardWrite(voucher.date)) return;
     setBusy(true);
     let added = 0;
+    let u = usage;
     for (const file of Array.from(files)) {
-      const r = await uploadVoucherAttachment({ societyId, voucherId: voucher.id, file, by: userName });
-      if (r.ok) { onAdded(r.row); added++; }
+      const r = await uploadVoucherAttachment({ societyId, voucherId: voucher.id, file, by: userName, usage: u });
+      if (r.ok) { onAdded(r.row); added++; if (u) u = { ...u, used: u.used + (r.row.sizeBytes || 0) }; }
       else toast({ title: `${file.name}: ${hi ? 'नहीं जुड़ा' : 'not added'}`, description: r.error, variant: 'destructive', duration: 10000 });
     }
     setBusy(false);
+    setUsage(u);
     if (fileRef.current) fileRef.current.value = '';
     if (added) toast({ title: hi ? `${added} बिल जुड़ा` : `${added} bill(s) added`, description: voucher.voucherNo });
   };
@@ -108,6 +113,18 @@ export function VoucherAttachmentsDialog(props: {
               </li>
             ))}
           </ul>
+        )}
+
+        {usage && usage.limit > 0 && (
+          <div className="space-y-1" aria-label={hi ? 'बिल storage उपयोग' : 'Bill storage use'}>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{hi ? 'समिति की बिल storage' : "Society's bill storage"}</span>
+              <span>{formatBytes(usage.used)} / {formatBytes(usage.limit)}</span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-muted">
+              <div className={`h-1.5 rounded-full ${storagePercent(usage) >= 90 ? 'bg-destructive' : 'bg-primary'}`} style={{ width: `${Math.max(storagePercent(usage), usage.used > 0 ? 1 : 0)}%` }} />
+            </div>
+          </div>
         )}
 
         {!readOnly && (

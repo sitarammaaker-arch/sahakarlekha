@@ -25,6 +25,7 @@ import { buildArchive, archiveFileName, planArchive, REGISTRY, BACKUP_FORMAT_VER
 import { planRetention } from '../_shared/retention-plan.mjs';
 import { resolvePlacements } from '../_shared/placement-config.mjs';
 import { pickDueSocieties, attemptsFromAuditRows } from '../_shared/backup-due.mjs';
+import { billOffsiteKey, billOffsitePrefix, planBillCopies, parseListPage } from '../_shared/bill-offsite.mjs';
 
 const PAGE = 1000;
 // DB-10 (audit 2026-11-17): the platform backup key. When set, every scheduled archive is sealed with it
@@ -86,6 +87,70 @@ async function replicateOffVendor(path: string, bytes: Uint8Array): Promise<{ ok
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
+// ── Bill copies off-site (migration 207's private bucket 'voucher-docs') ─────────────────────
+// The archive carries the LIST of bills (voucher_attachments), not the files. Each run also copies this society's bill
+// files that are not yet in the off-site store, sealed with the backup key — at most BILL_FILES_PER_RUN new ones, so a
+// society with many bills catches up over a few runs instead of blowing the function's time budget. Best effort: a
+// failure here is recorded, never a failed backup (the bills are still safe in Supabase).
+const BILL_BUCKET = 'voucher-docs';
+const BILL_FILES_PER_RUN = Number(Deno.env.get('BACKUP_BILL_FILES_PER_RUN')) || 40;
+
+type BillCopyResult = { total: number; alreadyThere: number; copied: number; failed: number; deferred: number; error?: string };
+
+async function listOffsiteKeys(client: AwsClient, prefix: string): Promise<Set<string>> {
+  const keys = new Set<string>();
+  let token: string | null = null;
+  for (let page = 0; page < 200; page++) {
+    const q = new URLSearchParams({ 'list-type': '2', prefix, ...(token ? { 'continuation-token': token } : {}) });
+    const res = await client.fetch(`${S3_ENDPOINT.replace(/\/+$/, '')}/${S3_BUCKET}?${q.toString()}`, { method: 'GET' });
+    if (!res.ok) throw new Error(`list ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
+    const { keys: got, next } = parseListPage(await res.text());
+    for (const k of got) keys.add(k);
+    if (!next) break;
+    token = next;
+  }
+  return keys;
+}
+
+async function replicateBillFiles(supabase: any, societyId: string, encrypted: boolean, meta: { societyName: string; registrationNo: string }): Promise<BillCopyResult> {
+  const out: BillCopyResult = { total: 0, alreadyThere: 0, copied: 0, failed: 0, deferred: 0 };
+  try {
+    const { data: rows, error } = await supabase.from('voucher_attachments').select('path').eq('society_id', societyId).limit(100000);
+    if (error) {
+      if (isMissingTableError(error.message, 'voucher_attachments')) return out;   // migration 207 not run here
+      throw new Error(error.message);
+    }
+    const client = new AwsClient({ accessKeyId: S3_KEY_ID, secretAccessKey: S3_SECRET, service: 's3', region: S3_REGION });
+    const present = await listOffsiteKeys(client, billOffsitePrefix(societyId));
+    const plan = planBillCopies((rows ?? []).map((r: { path: string }) => r.path), present, encrypted, BILL_FILES_PER_RUN);
+    Object.assign(out, { total: plan.total, alreadyThere: plan.alreadyThere, deferred: plan.deferred });
+    for (const path of plan.toCopy) {
+      try {
+        const { data: blob, error: dlErr } = await supabase.storage.from(BILL_BUCKET).download(path);
+        if (dlErr || !blob) throw new Error(`download: ${dlErr?.message ?? 'empty'}`);
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        const body = encrypted
+          ? await encryptArchive(bytes, ENC_PASSPHRASE, {
+              formatVersion: 'bill-1', societyName: meta.societyName, registrationNo: meta.registrationNo,
+              financialYear: '', createdAt: new Date().toISOString(), trigger: `bill-copy:${path}`,
+            })
+          : bytes;
+        const res = await client.fetch(`${S3_ENDPOINT.replace(/\/+$/, '')}/${S3_BUCKET}/${billOffsiteKey(path, encrypted)}`, {
+          method: 'PUT', body, headers: { 'content-type': encrypted ? 'application/octet-stream' : (blob.type || 'application/octet-stream') },
+        });
+        if (!res.ok) throw new Error(`put ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
+        out.copied++;
+      } catch (e) {
+        out.failed++;
+        out.error ??= e instanceof Error ? e.message : String(e);
+      }
+    }
+  } catch (e) {
+    out.error = e instanceof Error ? e.message : String(e);
+  }
+  return out;
+}
+
 // Retention (opt-in destructive): the bucket otherwise grows ~1 file/society/week forever.
 // Policy is computed by the CI-tested pure planner (_shared/retention-plan.mjs): keep the
 // newest BACKUP_KEEP_RECENT files (default 12) + the newest file of each calendar month for
@@ -237,6 +302,11 @@ async function backupSociety(supabase: any, societyId: string) {
     if (rep.ok) { secondaryLanded = { provider: S3_PROVIDER, region: S3_REGION, jurisdiction: S3_JURISDICTION }; offVendor = 'landed'; }
     else { offVendor = `failed: ${rep.error}`; }
   }
+  // The bill files themselves (the archive above carries only their list). Best effort, recorded below.
+  let billFiles: BillCopyResult | null = null;
+  if (S3_ENABLED) {
+    billFiles = await replicateBillFiles(supabase, societyId, encrypted, { societyName: meta.societyName, registrationNo: meta.registrationNo });
+  }
 
   // Grade the placement with the SAME policy the client's Backup Health uses (evaluate321) — one
   // policy, never a server-side second opinion. A copy whose location the operator has not declared,
@@ -276,6 +346,7 @@ async function backupSociety(supabase: any, societyId: string) {
         manifestHash: manifest.manifestHash,
         // T-36: where the copies actually landed, and how that placement grades (DP-P4).
         offVendor,
+        billFiles,   // bill copies sent off-site this run: { total, alreadyThere, copied, failed, deferred, error? } (null ⇒ no off-site store)
         placement,                                                        // null ⇒ unevaluated
         placementUnevaluated: placement ? null : unevaluatedReasons,      // …and exactly why
       },
@@ -286,7 +357,7 @@ async function backupSociety(supabase: any, societyId: string) {
     if (error) recorded = false;
   } catch { recorded = false; }
 
-  return { societyId, ok: true, filename, path, bytes: stored.length, encrypted, entities: manifest.totals.entityCount, rows: manifest.totals.rowCount, recorded };
+  return { societyId, ok: true, filename, path, bytes: stored.length, encrypted, entities: manifest.totals.entityCount, rows: manifest.totals.rowCount, recorded, billFiles };
 }
 
 /**

@@ -9401,6 +9401,9 @@ export type Database = {
         }[]
       }
       voucher_edit_capabilities: { Args: never; Returns: Json }
+      voucher_docs_limit_bytes: { Args: { p_society: string }; Returns: number }
+      voucher_docs_usage: { Args: never; Returns: Json }
+      voucher_docs_used_bytes: { Args: { p_society: string }; Returns: number }
       weekly_digest_counts: {
         Args: { p_day: string; p_society_id: string }
         Returns: Json
