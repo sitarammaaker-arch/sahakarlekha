@@ -454,6 +454,8 @@ var stockMovement = {
     money3("amount", "Amount", "\u0930\u093E\u0936\u093F"),
     c3("referenceNo", "Reference No.", "\u0938\u0902\u0926\u0930\u094D\u092D \u0938\u0902\u0916\u094D\u092F\u093E"),
     c3("narration", "Narration", "\u0935\u093F\u0935\u0930\u0923"),
+    c3("reason", "Adjustment Reason", "\u0938\u092E\u093E\u092F\u094B\u091C\u0928 \u0915\u093E \u0915\u093E\u0930\u0923", { type: "enum" }),
+    c3("responsiblePerson", "Responsible Person", "\u091C\u093C\u093F\u092E\u094D\u092E\u0947\u0926\u093E\u0930 \u0935\u094D\u092F\u0915\u094D\u0924\u093F"),
     internal3("godownId", "Godown", "\u0917\u094B\u0926\u093E\u092E"),
     internal3("batchNo", "Batch No.", "\u092C\u0948\u091A \u0938\u0902\u0916\u094D\u092F\u093E"),
     internal3("expiryDate", "Expiry Date", "\u0938\u092E\u093E\u092A\u094D\u0924\u093F \u0924\u093F\u0925\u093F", { type: "date" }),
