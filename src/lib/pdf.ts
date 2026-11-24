@@ -2467,7 +2467,8 @@ export function generateStockVerificationPDF(
   const sig = getSignatoryNames(society);
   addDocumentSignatureBlock(doc, font, ['Verified by', 'Secretary / Manager'], y + 6, undefined, [v.designation ? `${v.verifiedBy} (${v.designation})` : v.verifiedBy, sig.secretary]);
   addPageNumbers(doc, font, society?.name);
-  doc.save(pdfFileName(`StockVerification_${v.verificationNo.replace(/\//g, '-')}`, society, v.date, v.date));
+  // The count's number goes in the scope part of the name (the type part keeps letters only): …_PV-3_2026-11-24_…
+  doc.save(pdfFileName('StockVerification', society, undefined, undefined, `${v.verificationNo.replace(/\//g, '-')}_${v.date}`));
 }
 
 

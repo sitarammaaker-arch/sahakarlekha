@@ -71,11 +71,15 @@ export const nextVerificationNo = (existing: readonly Pick<StockVerification, 'v
   return `PV/${max + 1}`;
 };
 
-export function certificateText(input: { verifiedBy: string; designation?: string; date: string; place: string; differences: number }, hi: boolean): string {
+/** `place` is the godown's name; leave it out for a count of the society's whole stock. */
+export function certificateText(input: { verifiedBy: string; designation?: string; date: string; place?: string; differences: number }, hi: boolean): string {
   const who = input.designation ? `${input.verifiedBy} (${input.designation})` : input.verifiedBy;
+  const named = input.place && /गोदाम|godown|warehouse/i.test(input.place);   // "मुख्य गोदाम" — don't say "गोदाम" twice
+  const whatHi = input.place ? `${input.place}${named ? '' : ' गोदाम'} के स्टॉक` : 'समिति के पूरे स्टॉक';
+  const whatEn = input.place ? `the stock of ${named ? input.place : `the ${input.place} godown`}` : "the society's whole stock";
   return hi
-    ? `प्रमाणित किया जाता है कि मैंने ${input.date} को ${input.place} के स्टॉक का भौतिक सत्यापन स्वयं किया। गिनी गई मात्राएँ ऊपर दर्ज हैं; ${input.differences ? `${input.differences} वस्तुओं में अंतर मिला, जिनका कारण साथ लिखा है` : 'किताब और भौतिक स्टॉक में कोई अंतर नहीं मिला'}। — ${who}`
-    : `Certified that I physically verified the stock of ${input.place} on ${input.date}. The quantities counted are recorded above; ${input.differences ? `${input.differences} item(s) differed, each with its reason stated` : 'the book and the physical stock agree'}. — ${who}`;
+    ? `प्रमाणित किया जाता है कि मैंने ${input.date} को ${whatHi} का भौतिक सत्यापन स्वयं किया। गिनी गई मात्राएँ ऊपर दर्ज हैं; ${input.differences ? `${input.differences} वस्तुओं में अंतर मिला, जिनका कारण साथ लिखा है` : 'किताब और भौतिक स्टॉक में कोई अंतर नहीं मिला'}। — ${who}`
+    : `Certified that I physically verified ${whatEn} on ${input.date}. The quantities counted are recorded above; ${input.differences ? `${input.differences} item(s) differed, each with its reason stated` : 'the book and the physical stock agree'}. — ${who}`;
 }
 
 /** Status after posting: complete only when every difference was saved. */

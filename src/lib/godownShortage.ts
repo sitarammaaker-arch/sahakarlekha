@@ -114,7 +114,7 @@ export interface ShortageRow {
   value: number;        // rupees at the rate stored on the movement
   reason?: StockAdjustmentReason;
   person?: string;
-  voucherNo?: string;   // the shortage voucher (recoverable shortages only)
+  voucherNo?: string;   // the shortage voucher (recoverable shortages), or the PV/… count that made the adjustment
   reversed: boolean;    // a later "shortage cancelled" movement undid it
   narration: string;
 }
@@ -169,7 +169,8 @@ export function buildShortageRegister(input: {
         value: r2(Math.abs(Number(m.amount) || 0)),
         reason: m.reason,
         person: m.responsiblePerson || undefined,
-        voucherNo: m.reason === 'shortageRecoverable' || m.reason === 'shortageReversal' ? (m.referenceNo || undefined) : undefined,
+        // The voucher of a recoverable shortage, or the physical verification (PV/…) that made the adjustment.
+        voucherNo: m.reason === 'shortageRecoverable' || m.reason === 'shortageReversal' || /^PV\//.test(m.referenceNo || '') ? (m.referenceNo || undefined) : undefined,
         reversed: m.reason === 'shortageRecoverable' && !!m.referenceNo && reversedRefs.has(m.referenceNo),
         narration: m.narration || '',
       };

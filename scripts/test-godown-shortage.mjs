@@ -84,7 +84,7 @@ const mv = (o) => ({ id: o.id, date: o.date, itemId: 'I1', type: 'adjustment', q
 const movements = [
   mv({ id: 'a', date: '2026-05-01', qty: -3, ref: 'JV-1', extra: { reason: 'shortageRecoverable', responsiblePerson: 'Ram Singh', godownId: 'GD1' } }),
   mv({ id: 'b', date: '2026-05-02', qty: -2, extra: { reason: 'normalLoss' } }),
-  mv({ id: 'c', date: '2026-05-03', qty: 4, extra: { reason: 'excess' } }),
+  mv({ id: 'c', date: '2026-05-03', qty: 4, ref: 'PV/2', extra: { reason: 'excess' } }),   // from physical verification PV/2
   mv({ id: 'd', date: '2026-05-04', qty: -1 }),                                   // old manual adjustment, no reason
   mv({ id: 'e', date: '2026-05-05', qty: -5, ref: 'TRF/1' }),                      // transfer leg — not in the register
   mv({ id: 'f', date: '2026-05-05', qty: 2, ref: 'SR/1', amount: 20 }),            // return — not in the register
@@ -107,6 +107,8 @@ const ra = reg.rows.find(r => r.id === 'a');
 ok(ra.godownName === 'Main' && ra.person === 'Ram Singh' && ra.voucherNo === 'JV-1' && ra.value === 30 && !ra.reversed, 'recoverable row carries godown, person, voucher, value');
 ok(reg.rows.find(r => r.id === 'g').reversed === true, 'a reversed shortage is marked');
 ok(reg.rows.find(r => r.id === 'd').reason === undefined, 'an old adjustment shows with no reason');
+ok(reg.rows.find(r => r.id === 'c').voucherNo === 'PV/2', 'an adjustment from a physical verification shows its PV no.');
+ok(reg.rows.find(r => r.id === 'b').voucherNo === undefined, 'a plain adjustment shows no reference');
 ok(reg.totals.decreaseValue === 60, `decrease = 30 + 20 + 10 (reversed one left out), got ${reg.totals.decreaseValue}`);
 ok(reg.totals.increaseValue === 40, `increase = excess 40 (reversal left out), got ${reg.totals.increaseValue}`);
 ok(reg.totals.recoverableValue === 30, 'recoverable = 30');

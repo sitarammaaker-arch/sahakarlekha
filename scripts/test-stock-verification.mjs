@@ -81,6 +81,11 @@ ok(L.statusAfterPosting([{ ...l1, posted: true }, { ...l3, posted: false }]) ===
 const cert = L.certificateText({ verifiedBy: 'Ramesh', designation: 'Manager', date: '10/05/2026', place: 'Main godown', differences: 2 }, true);
 ok(cert.includes('Ramesh (Manager)') && cert.includes('Main godown') && cert.includes('2 वस्तुओं'), 'Hindi certificate');
 ok(L.certificateText({ verifiedBy: 'R', date: 'd', place: 'p', differences: 0 }, false).includes('agree'), 'no-difference certificate');
+ok(cert.includes('Main godown के स्टॉक') && !cert.includes('godown गोदाम'), 'a name that already says godown is not doubled');
+ok(L.certificateText({ verifiedBy: 'R', date: 'd', place: 'Sirsa', differences: 0 }, true).includes('Sirsa गोदाम के स्टॉक'), 'a bare name gets "गोदाम"');
+const whole = L.certificateText({ verifiedBy: 'R', date: 'd', differences: 0 }, true);
+ok(whole.includes('समिति के पूरे स्टॉक का') && !whole.includes('स्टॉक के स्टॉक'), 'whole-stock certificate reads "समिति के पूरे स्टॉक का"');
+ok(L.certificateText({ verifiedBy: 'R', date: 'd', differences: 0 }, false).includes("the society's whole stock"), 'English whole-stock wording');
 
 // ── overdue ──
 const od = L.overdueCounts({
