@@ -305,4 +305,36 @@ const loanInterestAccrual: EntityDescriptor = {
   ],
 };
 
-export const CORE_ENTITIES: EntityDescriptor[] = [society, account, voucher, voucherEntry, societyActivities, memberDistributionRun, loanInterestAccrual];
+// ─── voucher_attachments (migration 207) ─────────────────────────────────────────────
+// The list of bill copies kept with vouchers. The files themselves live in the private bucket 'voucher-docs'; a backup
+// carries this list (which voucher, which file, who added it), not the file bytes.
+const voucherAttachment: EntityDescriptor = {
+  key: 'voucher_attachment',
+  table: 'voucher_attachments',
+  domain: 'core',
+  label: 'Voucher Bill Copies',
+  labelHi: 'वाउचर बिल की कॉपी',
+  minRole: 'viewer',
+  scope: 'society',
+  nature: 'transaction',
+  dependsOn: ['society', 'voucher'],
+  naturalKey: ['id'],
+  softDeleteField: 'isDeleted',
+  formats: ['csv', 'xlsx', 'json'],
+  backupPolicy: 'full',
+  columns: [
+    c('id', 'ID', 'आईडी', { defaultVisible: false }),
+    c('voucherId', 'Voucher', 'वाउचर'),
+    c('fileName', 'File Name', 'फ़ाइल का नाम'),
+    c('mimeType', 'File Type', 'फ़ाइल प्रकार'),
+    c('sizeBytes', 'Size (bytes)', 'आकार (bytes)', { type: 'number' }),
+    c('uploadedBy', 'Added By', 'जोड़ने वाला'),
+    c('uploadedAt', 'Added At', 'जोड़ने का समय', { type: 'date' }),
+    internal('path', 'Storage Path', 'storage पथ'),
+    internal('isDeleted', 'Removed', 'हटाया गया'),
+    internal('deletedAt', 'Removed At', 'हटाने का समय', { type: 'date' }),
+    internal('deletedBy', 'Removed By', 'हटाने वाला'),
+  ],
+};
+
+export const CORE_ENTITIES: EntityDescriptor[] = [society, account, voucher, voucherAttachment, voucherEntry, societyActivities, memberDistributionRun, loanInterestAccrual];

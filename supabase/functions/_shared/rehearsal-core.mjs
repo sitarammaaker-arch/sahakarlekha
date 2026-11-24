@@ -250,7 +250,35 @@ var loanInterestAccrual = {
     c("isDeleted", "Deleted", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E", { type: "boolean", defaultVisible: false })
   ]
 };
-var CORE_ENTITIES = [society, account, voucher, voucherEntry, societyActivities, memberDistributionRun, loanInterestAccrual];
+var voucherAttachment = {
+  key: "voucher_attachment",
+  table: "voucher_attachments",
+  domain: "core",
+  label: "Voucher Bill Copies",
+  labelHi: "\u0935\u093E\u0909\u091A\u0930 \u092C\u093F\u0932 \u0915\u0940 \u0915\u0949\u092A\u0940",
+  minRole: "viewer",
+  scope: "society",
+  nature: "transaction",
+  dependsOn: ["society", "voucher"],
+  naturalKey: ["id"],
+  softDeleteField: "isDeleted",
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  columns: [
+    c("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c("voucherId", "Voucher", "\u0935\u093E\u0909\u091A\u0930"),
+    c("fileName", "File Name", "\u092B\u093C\u093E\u0907\u0932 \u0915\u093E \u0928\u093E\u092E"),
+    c("mimeType", "File Type", "\u092B\u093C\u093E\u0907\u0932 \u092A\u094D\u0930\u0915\u093E\u0930"),
+    c("sizeBytes", "Size (bytes)", "\u0906\u0915\u093E\u0930 (bytes)", { type: "number" }),
+    c("uploadedBy", "Added By", "\u091C\u094B\u0921\u093C\u0928\u0947 \u0935\u093E\u0932\u093E"),
+    c("uploadedAt", "Added At", "\u091C\u094B\u0921\u093C\u0928\u0947 \u0915\u093E \u0938\u092E\u092F", { type: "date" }),
+    internal("path", "Storage Path", "storage \u092A\u0925"),
+    internal("isDeleted", "Removed", "\u0939\u091F\u093E\u092F\u093E \u0917\u092F\u093E"),
+    internal("deletedAt", "Removed At", "\u0939\u091F\u093E\u0928\u0947 \u0915\u093E \u0938\u092E\u092F", { type: "date" }),
+    internal("deletedBy", "Removed By", "\u0939\u091F\u093E\u0928\u0947 \u0935\u093E\u0932\u093E")
+  ]
+};
+var CORE_ENTITIES = [society, account, voucher, voucherAttachment, voucherEntry, societyActivities, memberDistributionRun, loanInterestAccrual];
 
 // src/lib/export/entities/member.ts
 var c2 = (key, header, headerHi, over = {}) => ({ key, header, headerHi, type: "string", piiClass: "none", defaultVisible: true, ...over });

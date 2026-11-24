@@ -374,7 +374,7 @@ ok(/create table if not exists customers[\s\S]*?"gstNo" text/i.test(rawSql), 'th
 const keys = REGISTRY.map(e => e.key).sort();
 const EXPECTED = [
   // T-06 core + member
-  'account', 'member', 'member_identity', 'society', 'voucher', 'voucher_entry',
+  'account', 'member', 'member_identity', 'society', 'voucher', 'voucher_attachment', 'voucher_entry',   // +voucher_attachment (207)
   // DB-09 (migration 195): PAN / bank of customers, suppliers, farmers, employees, workers
   'party_identity',
   // T-07 inventory
