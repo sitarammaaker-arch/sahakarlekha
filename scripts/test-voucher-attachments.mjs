@@ -84,6 +84,29 @@ ok(missing.map(x => x.id).join() === 'v2,v3,v7,v8', `missing: v2, v3, v7, v8 (go
 ok(L.vouchersWithoutBill({ vouchers, attachments, from: '2026-05-01', to: '2026-05-31' }).map(x => x.id).join() === 'v2,v3,v8', 'date range');
 ok(L.vouchersWithoutBill({ vouchers, attachments, types: ['receipt'] }).length === 0, 'a receipt with a file is not missing');
 
+// ── storage limit (migration 208) ──
+{
+  const GB = 1024 * MB;
+  ok(L.billStorageLimitBytes('starter') === 2 * GB && L.billStorageLimitBytes('pro') === 50 * GB, 'plan limits');
+  ok(L.billStorageLimitBytes(undefined) === 5 * GB && L.billStorageLimitBytes('unknown') === 5 * GB, 'an unknown plan gets the 5 GB default');
+  ok(L.storageLimitError({ used: 1 * GB, limit: 2 * GB }, 300 * 1024) === null, 'a file that fits');
+  ok(L.storageLimitError({ used: 2 * GB - 100, limit: 2 * GB }, 300 * 1024) !== null, 'a file that would pass the limit is refused');
+  ok(L.storageLimitError(null, 999 * MB) === null, 'unknown usage → the server decides');
+  ok(L.storagePercent({ used: 1 * GB, limit: 4 * GB }) === 25 && L.storagePercent({ used: 9 * GB, limit: 4 * GB }) === 100, 'percent, capped at 100');
+  ok(L.formatBytes(5 * GB) === '5 GB' && L.formatBytes(1.5 * GB) === '1.5 GB', 'GB formatting');
+  // The SQL function (migration 208) and the TS table must say the same thing.
+  const { readFileSync } = await import('node:fs');
+  const sql = readFileSync(new URL('../supabase/migrations/208_voucher_docs_limit.sql', import.meta.url), 'utf8');
+  const fn = sql.slice(sql.indexOf('function public.voucher_docs_limit_bytes'), sql.indexOf('function public.voucher_docs_used_bytes'));
+  const sqlMap = Object.fromEntries([...fn.matchAll(/when '(\w+)'\s+then (\d+)/g)].map(m => [m[1], Number(m[2])]));
+  const sqlDefault = Number((fn.match(/else (\d+)/) || [])[1]);
+  const ts = { ...L.BILL_STORAGE_LIMIT_GB }; delete ts.legacy;   // legacy rides the SQL "else"
+  ok(JSON.stringify(sqlMap) === JSON.stringify(ts), `SQL plan limits match the TS table (sql ${JSON.stringify(sqlMap)} vs ts ${JSON.stringify(ts)})`);
+  ok(sqlDefault === L.DEFAULT_BILL_STORAGE_LIMIT_GB && L.BILL_STORAGE_LIMIT_GB.legacy === sqlDefault, 'legacy / default limit matches');
+  ok(/voucher_attachments_tenant_insert[\s\S]*voucher_docs_used_bytes\(society_id\) \+ coalesce\("sizeBytes", 0\) <= public\.voucher_docs_limit_bytes\(society_id\)/.test(sql), 'the row policy refuses a file past the limit');
+  ok(/"voucher_docs_insert"[\s\S]*voucher_docs_used_bytes\(\(storage\.foldername\(name\)\)\[1\]\) < public\.voucher_docs_limit_bytes/.test(sql), 'the bucket policy refuses uploads once at the limit');
+}
+
 // ── the dialog never relies on a native confirm (it did nothing in the desktop app's browser pane, live 2026-11-24) ──
 {
   const { readFileSync } = await import('node:fs');

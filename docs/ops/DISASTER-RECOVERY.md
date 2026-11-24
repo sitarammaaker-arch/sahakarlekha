@@ -93,6 +93,23 @@ items / movements, and an md5 of every account's trial-balance balance. **All ma
 | Fresh refused a re-registered society (registration seeds settings + chart) | The mode meant for this recovery could not be used | Fresh accepts the registration seed while the books are empty (fix/restore-fresh-registration-seed) |
 | `societies` / `society_users` / auth are not in a backup | A recovery must recreate the society + admin by hand | Documented (step 3) |
 
+## 6. Bill copies (voucher attachments)
+
+The archive holds the **list** of bill copies (`voucher_attachments`: which voucher, file name, storage path), not the
+files. The files live in the private Supabase bucket `voucher-docs` (`<societyId>/<voucherId>/<id>.<ext>`), and each
+backup run also copies new ones to B2 under `voucher-docs/<storage path>.slbak`, sealed with the same backup key
+(at most 40 new files per run; the audit row's `billFiles` says `{ total, alreadyThere, copied, failed, deferred }`).
+
+To bring the bills back after the books are restored (step 4):
+
+1. B2 → the backup bucket → `voucher-docs/<old societyId>/` → download the files you need (or the whole folder).
+2. Open each one with the key — it stays out of the shell history because it is read from the environment:
+   `$env:BACKUP_ENCRYPTION_PASSPHRASE = '<key>'` then
+   `node scripts/decrypt-backup-file.mjs <file>.slbak <file>` (the output is the original JPG / PDF).
+3. Upload each opened file to Supabase Storage → `voucher-docs` at the **same path**, with the society id changed to
+   the new society's id if it changed. The restored `voucher_attachments` rows point at those paths (they carry the old
+   society id in `path` — if the id changed, update `path` with a `replace()` after uploading).
+
 ## Known gaps (open)
 
 - Platform data (subscriptions, invoices, partners) has no recovery path from society archives.

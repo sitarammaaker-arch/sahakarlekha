@@ -49,8 +49,35 @@ export function formatBytes(n: number | undefined): string {
   const b = Number(n) || 0;
   if (b < 1024) return `${b} B`;
   if (b < 1024 * 1024) return `${Math.round(b / 1024)} KB`;
-  return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  return `${(b / 1024 / 1024 / 1024).toFixed(1).replace(/\.0$/, '')} GB`;
 }
+
+// ── storage limit per society (migration 208) ──
+// The same numbers as voucher_docs_limit_bytes() in migration 208 — test:voucher-attachments keeps the two in step.
+// Removed bills count too: their files are kept for the audit trail.
+// Public plans: Starter / Plus / Pro. trial = Starter (the 30-day trial is Starter-equivalent); enterprise is the hidden
+// contact-sales plan; legacy = the grandfathered free societies.
+export const BILL_STORAGE_LIMIT_GB: Record<string, number> = { trial: 2, starter: 2, plus: 10, pro: 50, enterprise: 200, legacy: 5 };
+export const DEFAULT_BILL_STORAGE_LIMIT_GB = 5;
+export const billStorageLimitBytes = (plan: string | undefined): number =>
+  (BILL_STORAGE_LIMIT_GB[plan ?? ''] ?? DEFAULT_BILL_STORAGE_LIMIT_GB) * 1024 * 1024 * 1024;
+
+export interface BillStorageUsage { used: number; limit: number }
+
+/** Why a file of `size` bytes would not fit, or null. */
+export function storageLimitError(usage: BillStorageUsage | null | undefined, size: number): string | null {
+  if (!usage || !(usage.limit > 0)) return null;
+  if (usage.used + size <= usage.limit) return null;
+  return tr(
+    `बिल की storage सीमा पूरी हो गई (${formatBytes(usage.used)} / ${formatBytes(usage.limit)})। बड़ा plan लें, या support@sahakarlekha.com पर लिखें।`,
+    `The bill storage limit is reached (${formatBytes(usage.used)} / ${formatBytes(usage.limit)}). Upgrade the plan, or write to support@sahakarlekha.com.`,
+  );
+}
+
+/** Share of the limit in use, 0–100 (for the bar). */
+export const storagePercent = (u: BillStorageUsage | null | undefined): number =>
+  u && u.limit > 0 ? Math.min(100, Math.round((u.used / u.limit) * 1000) / 10) : 0;
 
 /** Live attachments per voucher id. */
 export function attachmentsByVoucher(rows: readonly VoucherAttachment[]): Map<string, VoucherAttachment[]> {

@@ -40,7 +40,7 @@ import { allocBillNo, allocMethod } from '@/lib/billUtils';
 import type { Voucher, VoucherType, VoucherLine, VoucherAttachment } from '@/types';
 import { fetchAllPaged } from '@/lib/supabasePaging';
 import { ATTACHMENT_ACCEPT, BILL_EXPECTED_TYPES, attachmentFileError, attachmentsByVoucher, formatBytes, vouchersWithoutBill } from '@/lib/voucherAttachments';
-import { uploadVoucherAttachment } from '@/lib/voucherAttachmentsClient';
+import { uploadVoucherAttachment, fetchBillStorageUsage } from '@/lib/voucherAttachmentsClient';
 import { VoucherAttachmentsDialog } from '@/components/VoucherAttachmentsDialog';
 import { Plus, Minus, Paperclip } from 'lucide-react';
 import { VOUCHER_TEMPLATES, ACCOUNT_IDS, getBankAccountIds } from '@/lib/storage';
@@ -271,9 +271,10 @@ const Vouchers: React.FC = () => {
           setPendingBills([]);
           void (async () => {
             let added = 0;
+            let usage = await fetchBillStorageUsage();   // migration 208 — checked before each file (the server checks too)
             for (const file of bills) {
-              const r = await uploadVoucherAttachment({ societyId: user.societyId!, voucherId: sv.id, file, by: user?.name });
-              if (r.ok) { setAttachments(a => [...a, r.row]); added++; }
+              const r = await uploadVoucherAttachment({ societyId: user.societyId!, voucherId: sv.id, file, by: user?.name, usage });
+              if (r.ok) { setAttachments(a => [...a, r.row]); added++; if (usage) usage = { ...usage, used: usage.used + (r.row.sizeBytes || 0) }; }
               else toast({ title: `${file.name}: ${language === 'hi' ? 'बिल नहीं जुड़ा' : 'bill not added'}`, description: `${sv.voucherNo} — ${r.error} ${language === 'hi' ? '(वाउचर सुरक्षित है; सूची में 📎 से दोबारा जोड़ें)' : '(the voucher is safe; add it again from 📎 in the list)'}`, variant: 'destructive', duration: 12000 });
             }
             if (added) toast({ title: language === 'hi' ? `${added} बिल जुड़ा` : `${added} bill(s) added`, description: sv.voucherNo });

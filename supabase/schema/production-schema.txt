@@ -126,6 +126,7 @@ applied_migration 204
 applied_migration 205
 applied_migration 206
 applied_migration 207
+applied_migration 208
 column _member_ref_backup.id bigint not null default nextval('_member_ref_backup_id_seq'::regclass)
 column _member_ref_backup.old_member_id text not null
 column _member_ref_backup.row_id text not null
@@ -2872,6 +2873,9 @@ execute unsubscribe_by_token(p_token text) anon,authenticated
 execute update_society_subscription(p_society_id text, p_plan text, p_plan_expires_at timestamp with time zone, p_is_locked boolean, p_notes text) authenticated
 execute update_stock_document(p_kind text, p_id text, p_doc jsonb, p_voucher jsonb, p_lines jsonb, p_event jsonb, p_movements jsonb, p_reason text, p_by text) authenticated
 execute verify_certificate(p_cert_no text, p_name text) anon,authenticated
+execute voucher_docs_limit_bytes(p_society text) authenticated
+execute voucher_docs_usage() authenticated
+execute voucher_docs_used_bytes(p_society text) authenticated
 execute voucher_edit_capabilities() authenticated
 execute weekly_digest_counts(p_society_id text, p_day date)
 execute weekly_digest_targets(p_day date)
@@ -3071,6 +3075,9 @@ function unsubscribe_by_token(p_token text) returns jsonb security definer set s
 function update_society_subscription(p_society_id text, p_plan text, p_plan_expires_at timestamp with time zone, p_is_locked boolean, p_notes text) returns void security definer set search_path=public, extensions volatility=v body_md5=dcfae794703cca726c6b98ad85bceed6
 function update_stock_document(p_kind text, p_id text, p_doc jsonb, p_voucher jsonb, p_lines jsonb, p_event jsonb, p_movements jsonb, p_reason text, p_by text) returns jsonb security definer set search_path="" volatility=v body_md5=62cb2a9d2066c12b1d218fddf50b9573
 function verify_certificate(p_cert_no text, p_name text) returns TABLE(holder_name text, issued_at timestamp with time zone) security definer set search_path=public, extensions volatility=v body_md5=f56f6d7a0f6c880d380494a801d5e114
+function voucher_docs_limit_bytes(p_society text) returns bigint security definer set search_path="" volatility=s body_md5=ac8d31eeb0bcebf299470b57185c97a9
+function voucher_docs_usage() returns jsonb security definer set search_path="" volatility=s body_md5=f54a5bbcfe3c790b0e829761a299842e
+function voucher_docs_used_bytes(p_society text) returns bigint security definer set search_path="" volatility=s body_md5=f10e813a819dcdf1f0c1b8420f6e4053
 function voucher_edit_capabilities() returns jsonb security invoker set search_path="" volatility=s body_md5=9df708107fdefdf32d616a5f4e2247d2
 function weekly_digest_counts(p_society_id text, p_day date) returns jsonb security definer set search_path=public volatility=s body_md5=e2256e8d5320f163a316dda6e1f24af7
 function weekly_digest_targets(p_day date) returns TABLE(society_id text, state text, tan boolean, gstin boolean, has_employees boolean, filed_ids text[], counts jsonb) security definer set search_path=public volatility=s body_md5=596626bbf8e141a05bcd4fa743195f17
@@ -4065,7 +4072,7 @@ policy transport_vehicles.transport_vehicles_insert PERMISSIVE INSERT to authent
 policy transport_vehicles.transport_vehicles_select PERMISSIVE SELECT to authenticated using ((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids))) check ()
 policy transport_vehicles.transport_vehicles_update PERMISSIVE UPDATE to authenticated using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write())) check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
 policy voucher_attachments.voucher_attachments_tenant_delete PERMISSIVE DELETE to public using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_delete())) check ()
-policy voucher_attachments.voucher_attachments_tenant_insert PERMISSIVE INSERT to public using () check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
+policy voucher_attachments.voucher_attachments_tenant_insert PERMISSIVE INSERT to public using () check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write() AND ((voucher_docs_used_bytes(society_id) + COALESCE("sizeBytes", (0)::bigint)) <= voucher_docs_limit_bytes(society_id))))
 policy voucher_attachments.voucher_attachments_tenant_select PERMISSIVE SELECT to public using ((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids))) check ()
 policy voucher_attachments.voucher_attachments_tenant_update PERMISSIVE UPDATE to public using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write())) check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
 policy voucher_entries.society_rw PERMISSIVE SELECT to authenticated using ((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids))) check ()
