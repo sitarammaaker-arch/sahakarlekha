@@ -280,6 +280,13 @@ export const PDF_HI_EXTRA: Record<string, string> = {
   'booked': 'घटत चढ़ी',
   'recovered / written off': 'वसूल / बट्टे खाते',
   'dues from persons (shortage recoverable)': 'व्यक्तियों पर बकाया (स्टॉक घटत वसूली योग्य)',
+  // ── physical stock verification (Annexure XV/1) ──
+  'physical stock verification': 'भौतिक स्टॉक सत्यापन',
+  'book qty': 'किताब में मात्रा',
+  'counted': 'गिनी मात्रा',
+  'difference': 'अंतर',
+  'reason / person': 'कारण / व्यक्ति',
+  'verified by': 'सत्यापनकर्ता',
 
   // ── misc ──
   'nil': 'शून्य',

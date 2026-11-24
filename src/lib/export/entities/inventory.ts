@@ -1,7 +1,7 @@
 /**
  * Export Registry — inventory & org-structure entities (T-07).
  *
- * Declares: branches, godowns, stock_items, stock_movements.
+ * Declares: branches, godowns, stock_items, stock_movements, stock_verifications.
  *
  * RULE 2 WARNING (stock_items.currentStock). That column is a CACHE. The canonical
  * stock figure is `openingStock + sum(stock_movements)` — see CLAUDE.md RULE 2 and the
@@ -147,4 +147,37 @@ const stockMovement: EntityDescriptor = {
   ],
 };
 
-export const INVENTORY_ENTITIES: EntityDescriptor[] = [branch, godown, stockItem, stockMovement];
+// ─── stock_verifications (migration 204) ────────────────────────────────────────────
+// One physical count with its certificate (HAFED Accounts Manual 10.20, Annexure XV/1). The differences it found are
+// stock_movements / vouchers of their own; this row only records the count, so it restores after the godowns.
+const stockVerification: EntityDescriptor = {
+  key: 'stock_verification',
+  table: 'stock_verifications',
+  domain: 'inventory',
+  label: 'Physical Stock Verifications',
+  labelHi: 'भौतिक स्टॉक सत्यापन',
+  capability: 'inventory_sales',
+  minRole: 'viewer',
+  scope: 'society',
+  nature: 'transaction',
+  dependsOn: ['society', 'godown'],
+  naturalKey: ['id'],
+  formats: ['csv', 'xlsx', 'json'],
+  backupPolicy: 'full',
+  columns: [
+    c('id', 'ID', 'आईडी', { defaultVisible: false }),
+    c('verificationNo', 'Verification No.', 'सत्यापन सं.'),
+    c('date', 'Date', 'दिनांक', { type: 'date' }),
+    c('godownId', 'Godown', 'गोदाम'),
+    c('verifiedBy', 'Verified By', 'सत्यापनकर्ता'),
+    c('designation', 'Designation', 'पद'),
+    c('status', 'Status', 'स्थिति', { type: 'enum' }),
+    internal('lines', 'Counted Lines', 'गिनी गई पंक्तियाँ', { type: 'json' }),
+    c('certificate', 'Certificate', 'प्रमाणपत्र'),
+    c('remarks', 'Remarks', 'टिप्पणी'),
+    internal('createdBy', 'Created By', 'बनाने वाला'),
+    internal('createdAt', 'Created At', 'निर्माण समय', { type: 'date' }),
+  ],
+};
+
+export const INVENTORY_ENTITIES: EntityDescriptor[] = [branch, godown, stockItem, stockMovement, stockVerification];

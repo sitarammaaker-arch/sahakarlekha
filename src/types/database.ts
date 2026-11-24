@@ -7210,6 +7210,54 @@ export type Database = {
         }
         Relationships: []
       }
+      stock_verifications: {
+        Row: {
+          certificate: string | null
+          createdAt: string
+          createdBy: string | null
+          date: string
+          designation: string | null
+          godownId: string | null
+          id: string
+          lines: Json
+          remarks: string | null
+          society_id: string
+          status: string
+          verificationNo: string
+          verifiedBy: string
+        }
+        Insert: {
+          certificate?: string | null
+          createdAt?: string
+          createdBy?: string | null
+          date: string
+          designation?: string | null
+          godownId?: string | null
+          id: string
+          lines?: Json
+          remarks?: string | null
+          society_id: string
+          status?: string
+          verificationNo: string
+          verifiedBy: string
+        }
+        Update: {
+          certificate?: string | null
+          createdAt?: string
+          createdBy?: string | null
+          date?: string
+          designation?: string | null
+          godownId?: string | null
+          id?: string
+          lines?: Json
+          remarks?: string | null
+          society_id?: string
+          status?: string
+          verificationNo?: string
+          verifiedBy?: string
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           activated_by: string | null

@@ -378,7 +378,7 @@ const EXPECTED = [
   // DB-09 (migration 195): PAN / bank of customers, suppliers, farmers, employees, workers
   'party_identity',
   // T-07 inventory
-  'branch', 'godown', 'stock_item', 'stock_movement',
+  'branch', 'godown', 'stock_item', 'stock_movement', 'stock_verification',   // +stock_verification (204)
   // T-07 trade
   'customer', 'hsn', 'purchase', 'purchase_return', 'sale', 'sales_return', 'supplier',
   // T-08 lending + deposits

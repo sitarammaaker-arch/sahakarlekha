@@ -462,7 +462,36 @@ var stockMovement = {
     internal3("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
   ]
 };
-var INVENTORY_ENTITIES = [branch, godown, stockItem, stockMovement];
+var stockVerification = {
+  key: "stock_verification",
+  table: "stock_verifications",
+  domain: "inventory",
+  label: "Physical Stock Verifications",
+  labelHi: "\u092D\u094C\u0924\u093F\u0915 \u0938\u094D\u091F\u0949\u0915 \u0938\u0924\u094D\u092F\u093E\u092A\u0928",
+  capability: "inventory_sales",
+  minRole: "viewer",
+  scope: "society",
+  nature: "transaction",
+  dependsOn: ["society", "godown"],
+  naturalKey: ["id"],
+  formats: ["csv", "xlsx", "json"],
+  backupPolicy: "full",
+  columns: [
+    c3("id", "ID", "\u0906\u0908\u0921\u0940", { defaultVisible: false }),
+    c3("verificationNo", "Verification No.", "\u0938\u0924\u094D\u092F\u093E\u092A\u0928 \u0938\u0902."),
+    c3("date", "Date", "\u0926\u093F\u0928\u093E\u0902\u0915", { type: "date" }),
+    c3("godownId", "Godown", "\u0917\u094B\u0926\u093E\u092E"),
+    c3("verifiedBy", "Verified By", "\u0938\u0924\u094D\u092F\u093E\u092A\u0928\u0915\u0930\u094D\u0924\u093E"),
+    c3("designation", "Designation", "\u092A\u0926"),
+    c3("status", "Status", "\u0938\u094D\u0925\u093F\u0924\u093F", { type: "enum" }),
+    internal3("lines", "Counted Lines", "\u0917\u093F\u0928\u0940 \u0917\u0908 \u092A\u0902\u0915\u094D\u0924\u093F\u092F\u093E\u0901", { type: "json" }),
+    c3("certificate", "Certificate", "\u092A\u094D\u0930\u092E\u093E\u0923\u092A\u0924\u094D\u0930"),
+    c3("remarks", "Remarks", "\u091F\u093F\u092A\u094D\u092A\u0923\u0940"),
+    internal3("createdBy", "Created By", "\u092C\u0928\u093E\u0928\u0947 \u0935\u093E\u0932\u093E"),
+    internal3("createdAt", "Created At", "\u0928\u093F\u0930\u094D\u092E\u093E\u0923 \u0938\u092E\u092F", { type: "date" })
+  ]
+};
+var INVENTORY_ENTITIES = [branch, godown, stockItem, stockMovement, stockVerification];
 
 // src/lib/export/entities/trade.ts
 var c4 = (key, header, headerHi, over = {}) => ({ key, header, headerHi, type: "string", piiClass: "none", defaultVisible: true, ...over });

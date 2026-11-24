@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable';
 import type { RowInput } from 'jspdf-autotable';
 import QRCode from 'qrcode';
 import { rpParticulars } from '@/lib/ledger/rpLabel';
-import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord, Voucher, HousingFlat, MaintenanceBill, LateFeeRule } from '@/types';
+import type { SocietySettings, AccountBalance, CashBookEntry, BankBookEntry, LedgerAccount, Member, MemberLedgerEntry, ReceiptsPaymentsData, Loan, Asset, AuditObjection, Employee, SalaryRecord, Voucher, HousingFlat, MaintenanceBill, LateFeeRule, StockVerification } from '@/types';
 import { ACCOUNT_IDS } from '@/lib/storage';
 import { getVoucherLines } from '@/lib/voucherUtils';
 import { fmtDate } from '@/lib/dateUtils';
@@ -29,6 +29,7 @@ import { buildBalanceSheetLayout, visibleRows, pyResult, type BsSide } from '@/l
 import type { GroupSchedule } from '@/lib/reports/groupSchedule';
 import { memberStatusLabel } from '@/lib/memberLifecycle';
 import { reasonLabel, type ShortageRegister } from '@/lib/godownShortage';
+import { countTotals } from '@/lib/stockVerification';
 import { appealLastDate, applicationReceivedOn, isHaryana } from '@/lib/members/admission';
 import type { BlankPdfSpec } from '@/content/downloads';
 import { invoiceView, stateLabel, type SubscriptionInvoice } from '@/lib/billing/invoiceView';
@@ -2426,6 +2427,47 @@ export function generateGodownShortagePDF(
   addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], y + 6, undefined, [sig.accountant, sig.secretary, sig.president]);
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('GodownShortage', society, fromDate, toDate));
+}
+
+
+// ── Physical Stock Verification certificate PDF ──────────────────────────────
+// One count (HAFED Accounts Manual 10.20, Annexure XV/1): book vs counted quantity per item, the differences with
+// their reason, and the verifier's certificate. A certificate is signed to be valid, so it uses the document
+// signature block (never hidden by the society's report-signature setting). English only — pass hi=false lines.
+
+export function generateStockVerificationPDF(
+  v: StockVerification, society: SocietySettings, placeName: string, certificate: string,
+): void {
+  const doc = new jsPDF({ orientation: 'portrait' });
+  const { startY, font } = addHeader(doc, 'Physical Stock Verification', society, `${v.verificationNo} · ${fmtDate(v.date)} · ${placeName}`, { reportCode: 'PSV' });
+  const t = countTotals(v.lines);
+  doc.setFont(font, 'normal'); doc.setFontSize(8.5);
+  doc.text(`Items counted ${t.counted} · differing ${t.differing} · short ${t.shortValue ? fmt(t.shortValue) : '—'} · excess ${t.excessValue ? fmt(t.excessValue) : '—'}`, 14, startY + 2);
+  const q = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 3 });
+  autoTable(doc, {
+    startY: startY + 6,
+    head: [['Item', 'Unit', 'Book qty', 'Counted', 'Difference', 'Value', 'Reason / person']],
+    body: v.lines.map(l => [l.itemName, l.unit, q(l.bookQty), q(l.physicalQty), l.diff ? `${l.diff > 0 ? '+' : ''}${q(l.diff)}` : '—', l.diff ? fmt(l.value) : '—',
+      l.diff ? `${reasonLabel(l.reason, false)}${l.person ? ` — ${l.person}` : ''}${l.posted === false ? ' (not posted)' : ''}` : '']),
+    styles: { fontSize: 8, cellPadding: 2, font },
+    headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 253] },
+    columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(2, 3, 4, 5),
+  });
+  let y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+  doc.setFont(font, 'normal'); doc.setFontSize(9);
+  const width = doc.internal.pageSize.getWidth() - 28;
+  for (const para of [certificate, ...(v.remarks ? [`Remarks: ${v.remarks}`] : [])]) {
+    const lines = doc.splitTextToSize(para, width);
+    if (y + lines.length * 4.5 > doc.internal.pageSize.getHeight() - 40) { doc.addPage(); y = 20; }
+    doc.text(lines, 14, y);
+    y += lines.length * 4.5 + 3;
+  }
+  const sig = getSignatoryNames(society);
+  addDocumentSignatureBlock(doc, font, ['Verified by', 'Secretary / Manager'], y + 6, undefined, [v.designation ? `${v.verifiedBy} (${v.designation})` : v.verifiedBy, sig.secretary]);
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName(`StockVerification_${v.verificationNo.replace(/\//g, '-')}`, society, v.date, v.date));
 }
 
 
