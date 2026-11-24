@@ -267,6 +267,20 @@ export const PDF_HI_EXTRA: Record<string, string> = {
     'प्रमाणित किया जाता है कि उपरोक्त समिति द्वारा रखा गया प्रति फ़्लैट अंश-प्रमाणपत्रों एवं नामांकनों का सही अभिलेख है।',
   'member share ledger': 'सदस्य अंश खाता-बही',
 
+  // ── godown shortage / excess register (HAFED Accounts Manual 9.19 / 10.20) ──
+  'godown shortage / excess register': 'गोदाम घटत / बढ़त रजिस्टर',
+  'item': 'वस्तु',
+  'godown': 'गोदाम',
+  'qty': 'मात्रा',
+  'value': 'मूल्य',
+  'reason': 'कारण',
+  'responsible person': 'ज़िम्मेदार व्यक्ति',
+  'voucher': 'वाउचर',
+  'person': 'व्यक्ति',
+  'booked': 'घटत चढ़ी',
+  'recovered / written off': 'वसूल / बट्टे खाते',
+  'dues from persons (shortage recoverable)': 'व्यक्तियों पर बकाया (स्टॉक घटत वसूली योग्य)',
+
   // ── misc ──
   'nil': 'शून्य',
   'this report has no transactions for the selected period.': 'चुनी गई अवधि में इस रिपोर्ट में कोई लेन-देन नहीं है।',

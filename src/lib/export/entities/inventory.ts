@@ -138,6 +138,8 @@ const stockMovement: EntityDescriptor = {
     money('amount', 'Amount', 'राशि'),
     c('referenceNo', 'Reference No.', 'संदर्भ संख्या'),
     c('narration', 'Narration', 'विवरण'),
+    c('reason', 'Adjustment Reason', 'समायोजन का कारण', { type: 'enum' }),
+    c('responsiblePerson', 'Responsible Person', 'ज़िम्मेदार व्यक्ति'),
     internal('godownId', 'Godown', 'गोदाम'),
     internal('batchNo', 'Batch No.', 'बैच संख्या'),
     internal('expiryDate', 'Expiry Date', 'समाप्ति तिथि', { type: 'date' }),

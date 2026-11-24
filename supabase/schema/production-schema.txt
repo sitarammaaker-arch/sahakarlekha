@@ -121,6 +121,7 @@ applied_migration 199
 applied_migration 200
 applied_migration 201
 applied_migration 202
+applied_migration 203
 column _member_ref_backup.id bigint not null default nextval('_member_ref_backup_id_seq'::regclass)
 column _member_ref_backup.old_member_id text not null
 column _member_ref_backup.row_id text not null
@@ -2035,7 +2036,9 @@ column stock_movements.jurisdiction text
 column stock_movements.narration text
 column stock_movements.qty numeric
 column stock_movements.rate numeric
+column stock_movements.reason text
 column stock_movements.referenceNo text
+column stock_movements.responsiblePerson text
 column stock_movements.society_id text not null
 column stock_movements.type text
 column subscriptions.activated_by text

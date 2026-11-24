@@ -7164,7 +7164,9 @@ export type Database = {
           narration: string | null
           qty: number | null
           rate: number | null
+          reason: string | null
           referenceNo: string | null
+          responsiblePerson: string | null
           society_id: string
           type: string | null
         }
@@ -7181,7 +7183,9 @@ export type Database = {
           narration?: string | null
           qty?: number | null
           rate?: number | null
+          reason?: string | null
           referenceNo?: string | null
+          responsiblePerson?: string | null
           society_id: string
           type?: string | null
         }
@@ -7198,7 +7202,9 @@ export type Database = {
           narration?: string | null
           qty?: number | null
           rate?: number | null
+          reason?: string | null
           referenceNo?: string | null
+          responsiblePerson?: string | null
           society_id?: string
           type?: string | null
         }

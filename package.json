@@ -407,6 +407,7 @@
     "test:cross-tenant-isolation": "node scripts/test-cross-tenant-isolation.mjs",
     "test:depreciation-rate-master": "node scripts/test-depreciation-rate-master.mjs",
     "test:member-turnover": "node scripts/test-member-turnover.mjs",
+    "test:godown-shortage": "node scripts/test-godown-shortage.mjs",
     "test:farmer-payment-mode": "node scripts/test-farmer-payment-mode.mjs",
     "test:global-search": "node scripts/test-global-search.mjs",
     "test:inter-branch": "node scripts/test-inter-branch.mjs",

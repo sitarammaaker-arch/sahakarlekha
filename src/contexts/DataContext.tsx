@@ -1,4 +1,8 @@
-import { tr } from '@/lib/uiLang';
+import { tr, uiLanguage } from '@/lib/uiLang';
+import {
+  findShortageGroup, findPersonLedger, findSalesByShortage, findWriteOffAccount, currentAssetsParent, tradingIncomeParent, directExpenseParent,
+  shortageAmount, validateAdjustment, SHORTAGE_GROUP, SALES_BY_SHORTAGE, WRITE_OFF_HEAD, REF_SHORTAGE, REF_SHORTAGE_WRITEOFF,
+} from '@/lib/godownShortage';
 import { asDbArgs, asDbRow, dbRowAs, type LooseRow } from '@/lib/dbRow';
 import { systemOwnedVoucherKind, systemOwnedVoucherMessage } from '@/lib/systemOwnedVoucher';
 import { isMemberShareVoucher } from '@/lib/members/memberShareVoucher';
@@ -342,6 +346,10 @@ interface DataContextType {
   deleteStockItem: (id: string) => void;
   addStockMovement: (data: Omit<StockMovement, 'id' | 'createdAt'>) => void;
   transferStock: (input: { itemId: string; fromGodownId: string; toGodownId: string; qty: number; date?: string }) => boolean;
+  // Godown shortage (HAFED 9.19 / 10.20): false = a guard refused it at once; otherwise onDone reports the cloud result.
+  recordStockShortage: (input: { itemId: string; qty: number; rate: number; date: string; person: string; narration?: string; godownId?: string; onDone?: (ok: boolean) => void }) => boolean;
+  reverseStockShortage: (movementId: string, reason: string, onDone?: (ok: boolean) => void) => boolean;
+  writeOffShortage: (input: { personAccountId: string; amount: number; date: string; resolutionNo: string; onDone?: (ok: boolean) => void }) => boolean;
 
   // Sales
   sales: Sale[];
@@ -7350,29 +7358,48 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, [addVoucher, user?.name, stockItems]);
 
-  const addStockMovement = useCallback((data: Omit<StockMovement, 'id' | 'createdAt'>) => {
-    if (guardFYLocked()) return;
-    const movement: StockMovement = { ...data, godownId: data.godownId ?? (activeGodownIdRef.current || undefined), id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+  // Saves one movement: optimistic add → base upsert (rolled back on failure, RULE 1) → step-2 patches.
+  // godownId and the migration-203 pair (reason, responsiblePerson) are SEPARATE patches, so a database
+  // that has not run 203 still keeps the godown (one missing column fails its whole update).
+  const saveStockMovement = (movement: StockMovement, opts?: { onSaved?: () => void; onFailed?: (message: string) => void }) => {
     stockMovementsRef.current = [...stockMovementsRef.current, movement];
     setStockMovementsState(prev => [...prev, movement]);
-    // ECR-17 P3: base upsert without godownId (never fails pre-migration) + rollback; then step-2 patch.
-    const { godownId: _mvGod, ...mvBase } = movement;
+    const { godownId: _mvGod, reason: _mvReason, responsiblePerson: _mvPerson, ...mvBase } = movement;
     supabase.from('stock_movements').upsert(withSoc(mvBase)).then(({ error }) => {
       if (error) {
         console.error('DB sync error:', error.message); reportError('db-sync', error.message);
         stockMovementsRef.current = stockMovementsRef.current.filter(m => m.id !== movement.id);
         setStockMovementsState(prev => prev.filter(m => m.id !== movement.id));   // RULE 1: roll back
+        recomputeItemStock(movement.itemId);
         toastRef.current({ title: tr('स्टॉक मूवमेंट सेव नहीं हुआ', 'Stock movement not saved'), description: tr(`क्लाउड में सेव नहीं हुआ — ${error.message}.`, `Not saved to the cloud — ${error.message}.`), variant: 'destructive', duration: 12000 });
+        opts?.onFailed?.(error.message);
         return;
       }
       if (_mvGod) supabase.from('stock_movements').update({ godownId: _mvGod }).eq('id', movement.id).then(({ error: gErr }) => { if (gErr) { console.warn('Movement godown patch:', gErr.message); reportError('write-partial', gErr.message, { at: 'Movement godown patch:' }); } });
+      if (_mvReason || _mvPerson) {
+        supabase.from('stock_movements').update({ reason: _mvReason ?? null, responsiblePerson: _mvPerson ?? null }).eq('id', movement.id).then(({ error: rErr }) => {
+          if (!rErr) return;
+          console.warn('Movement reason patch:', rErr.message); reportError('write-partial', rErr.message, { at: 'Movement reason patch:' });
+          toastRef.current({ title: tr('स्टॉक सेव हुआ — पर कारण नहीं', 'Stock saved — but not the reason'), description: tr(`समायोजन का कारण क्लाउड में सेव नहीं हुआ (${rErr.message})। Migration 203 चलाएँ।`, `The adjustment reason was not saved to the cloud (${rErr.message}). Run Migration 203.`), duration: 10000 });
+        });
+      }
+      opts?.onSaved?.();
     });
+    recomputeItemStock(movement.itemId);
+  };
 
-    // Recompute currentStock from openingStock + ALL movements (authoritative — prevents drift
-    // from past partial-sync failures or manual adjustments). Same formula as Inventory page.
+  const addStockMovement = useCallback((data: Omit<StockMovement, 'id' | 'createdAt'>) => {
+    if (guardFYLocked()) return;
+    const movement: StockMovement = { ...data, godownId: data.godownId ?? (activeGodownIdRef.current || undefined), id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    saveStockMovement(movement);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Recompute currentStock from openingStock + ALL movements (authoritative — prevents drift
+  // from past partial-sync failures or manual adjustments). Same formula as Inventory page.
+  const recomputeItemStock = (itemId: string) => {
     const allMovs = stockMovementsRef.current;
     setStockItemsState(prev => prev.map(i => {
-      if (i.id !== data.itemId) return i;
+      if (i.id !== itemId) return i;
       let qty = i.openingStock || 0;
       for (const m of allMovs) {
         if (m.itemId !== i.id) continue;
@@ -7383,7 +7410,153 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       supabase.from('stock_items').update({ currentStock: qty }).eq('id', i.id).then(({ error }) => { if (error) { reportCascade('Stock currentStock sync error', error); toastRef.current({ title: tr('स्टॉक मात्रा क्लाउड में सेव नहीं हुई', 'Stock quantity not saved to the cloud'), description: tr(`Refresh के बाद स्टॉक जाँचें। (Stock update failed.) ${error.message}`, `Check the stock after Refresh. (Stock update failed.) ${error.message}`), variant: 'destructive', duration: 10000 }); } });
       return { ...i, currentStock: qty };
     }));
-  }, []);
+  };
+
+  // ── Godown shortage (HAFED Accounts Manual 9.19 / 10.20) ─────────────────────────────────────────────
+  // An account this flow needs, found by name or created once and awaited (the voucher must not name an
+  // account the cloud does not have yet).
+  const createAccountAwaited = (data: Omit<LedgerAccount, 'id'>) =>
+    new Promise<LedgerAccount | null>(res => { addAccount(data, { onSaved: a => res(a), onFailed: () => res(null) }); });
+
+  const ensureShortageHeads = async (person: string): Promise<{ personId: string; salesId: string } | null> => {
+    let group = findShortageGroup(accountsRef.current);
+    if (!group) {
+      group = (await createAccountAwaited({ ...SHORTAGE_GROUP, type: 'asset', subtype: 'current_asset', openingBalance: 0, openingBalanceType: 'debit', isGroup: true, parentId: currentAssetsParent(accountsRef.current) })) ?? undefined;
+      if (!group) return null;
+    }
+    const name = person.trim().replace(/\s+/g, ' ');
+    let ledger = findPersonLedger(accountsRef.current, group.id, name);
+    if (!ledger) {
+      ledger = (await createAccountAwaited({ name, nameHi: name, type: 'asset', subtype: 'current_asset', openingBalance: 0, openingBalanceType: 'debit', isGroup: false, parentId: group.id })) ?? undefined;
+      if (!ledger) return null;
+    }
+    let sales = findSalesByShortage(accountsRef.current);
+    if (!sales) {
+      sales = (await createAccountAwaited({ ...SALES_BY_SHORTAGE, type: 'income', subtype: 'trading_income', openingBalance: 0, openingBalanceType: 'credit', isGroup: false, parentId: tradingIncomeParent(accountsRef.current) })) ?? undefined;
+      if (!sales) return null;
+    }
+    return { personId: ledger.id, salesId: sales.id };
+  };
+
+  // A recoverable shortage: the voucher (Dr person / Cr Sales by Shortage) is saved FIRST; the stock falls only
+  // once it is in the cloud, and if the stock then fails the voucher is withdrawn — never one without the other.
+  const recordStockShortage = useCallback((input: { itemId: string; qty: number; rate: number; date: string; person: string; narration?: string; godownId?: string; onDone?: (ok: boolean) => void }): boolean => {
+    if (guardFYLocked()) return false;
+    if (guardPermission('create', tr('घटत दर्ज करने', 'record a shortage'))) return false;
+    const item = stockItemsRef.current.find(i => i.id === input.itemId);
+    const qty = -Math.abs(input.qty);
+    const amount = shortageAmount(qty, input.rate);
+    const err = validateAdjustment({ qty, reason: 'shortageRecoverable', person: input.person, rate: input.rate }, uiLanguage() === 'hi');
+    if (!item || err) { toastRef.current({ title: tr('घटत दर्ज नहीं हुई', 'Shortage not recorded'), description: err ?? tr('वस्तु नहीं मिली', 'Item not found'), variant: 'destructive', duration: 8000 }); return false; }
+    const by = user?.name ?? 'System';
+    const movementId = crypto.randomUUID();
+    const fail = (why: string) => { toastRef.current({ title: tr('घटत दर्ज नहीं हुई', 'Shortage not recorded'), description: why, variant: 'destructive', duration: 12000 }); input.onDone?.(false); };
+    void (async () => {
+      const heads = await ensureShortageHeads(input.person);
+      if (!heads) { fail(tr('घटत के खाते नहीं बन सके — स्टॉक नहीं बदला।', 'The shortage ledgers could not be created — stock was not changed.')); return; }
+      const narration = `${tr('गोदाम घटत', 'Godown shortage')}: ${item.name} ${Math.abs(qty)} ${item.unit || ''} @ ₹${input.rate.toFixed(2)} — ${tr('वसूली', 'recoverable from')} ${input.person.trim()}${input.narration ? ` (${input.narration})` : ''}`;
+      const v = addVoucher({ type: 'journal', date: input.date, debitAccountId: heads.personId, creditAccountId: heads.salesId, amount, narration, createdBy: by, refType: REF_SHORTAGE, refId: movementId }, {
+        onSaved: saved => {
+          const movement: StockMovement = {
+            id: movementId, createdAt: new Date().toISOString(), date: input.date, itemId: item.id, type: 'adjustment', qty, rate: input.rate, amount,
+            referenceNo: saved.voucherNo, narration: input.narration || tr('गोदाम घटत — वसूली योग्य', 'Godown shortage — recoverable'),
+            godownId: input.godownId ?? (activeGodownIdRef.current || undefined), reason: 'shortageRecoverable', responsiblePerson: input.person.trim(),
+          };
+          saveStockMovement(movement, {
+            onSaved: () => {
+              emitAudit({ entityType: 'stockMovement', entityId: movementId, action: 'create', after: { itemId: item.id, qty, amount, person: movement.responsiblePerson, voucherNo: saved.voucherNo }, reason: 'Godown shortage recoverable' });
+              toastRef.current({ title: tr('घटत दर्ज', 'Shortage recorded'), description: tr(`${saved.voucherNo}: ₹${amount.toFixed(2)} ${movement.responsiblePerson} के नाम वसूली योग्य।`, `${saved.voucherNo}: ₹${amount.toFixed(2)} recoverable from ${movement.responsiblePerson}.`) });
+              input.onDone?.(true);
+            },
+            onFailed: msg => {
+              cancelVoucher(saved.id, `Stock movement failed: ${msg}`, by, { rollback: true });
+              input.onDone?.(false);
+            },
+          });
+        },
+        onFailed: () => fail(tr('घटत का वाउचर सेव नहीं हुआ — स्टॉक नहीं बदला।', 'The shortage voucher was not saved — stock was not changed.')),
+      });
+      if (!v.id) input.onDone?.(false);   // a guard refused the voucher (it has already said why)
+    })();
+    return true;
+  }, [addVoucher, cancelVoucher, addAccount, user?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Undo a recoverable shortage booked by mistake: stock goes back FIRST (a "shortage cancelled" movement under
+  // the same voucher no.), then the voucher is cancelled; if the cancel is refused the stock entry is removed again.
+  const reverseStockShortage = useCallback((movementId: string, reason: string, onDone?: (ok: boolean) => void): boolean => {
+    if (guardFYLocked()) return false;
+    if (guardPermission('delete', tr('घटत रद्द करने', 'cancel a shortage'))) return false;
+    const orig = stockMovementsRef.current.find(m => m.id === movementId && m.reason === 'shortageRecoverable');
+    const voucher = orig && vouchersRef.current.find(v => v.refType === REF_SHORTAGE && (v.refId === orig.id || v.voucherNo === orig.referenceNo) && !v.isDeleted);
+    if (!orig || stockMovementsRef.current.some(m => m.reason === 'shortageReversal' && m.referenceNo === orig.referenceNo)) {
+      toastRef.current({ title: tr('रद्द नहीं हुआ', 'Not cancelled'), description: tr('यह घटत नहीं मिली, या पहले ही रद्द हो चुकी है।', 'This shortage was not found, or is already cancelled.'), variant: 'destructive', duration: 8000 });
+      return false;
+    }
+    const by = user?.name ?? 'System';
+    const back: StockMovement = {
+      id: crypto.randomUUID(), createdAt: new Date().toISOString(), date: new Date().toISOString().split('T')[0], itemId: orig.itemId, type: 'adjustment',
+      qty: Math.abs(orig.qty), rate: orig.rate, amount: Math.abs(orig.amount), referenceNo: orig.referenceNo, narration: `${tr('घटत रद्द', 'Shortage cancelled')}: ${reason}`,
+      godownId: orig.godownId, reason: 'shortageReversal', responsiblePerson: orig.responsiblePerson,
+    };
+    const undoBack = () => {
+      stockMovementsRef.current = stockMovementsRef.current.filter(m => m.id !== back.id);
+      setStockMovementsState(prev => prev.filter(m => m.id !== back.id));
+      recomputeItemStock(back.itemId);
+      supabase.from('stock_movements').delete().eq('id', back.id).then(({ error }) => { if (error) reportCascade('Shortage reversal undo', error); });
+    };
+    saveStockMovement(back, {
+      onSaved: () => {
+        const finish = () => {
+          emitAudit({ entityType: 'stockMovement', entityId: orig.id, action: 'delete', before: { qty: orig.qty, amount: orig.amount, person: orig.responsiblePerson, voucherNo: orig.referenceNo }, reason: `Shortage cancelled: ${reason}` });
+          toastRef.current({ title: tr('घटत रद्द', 'Shortage cancelled'), description: tr(`${orig.referenceNo}: स्टॉक वापस जुड़ा, वाउचर रद्द।`, `${orig.referenceNo}: stock restored, voucher cancelled.`) });
+          onDone?.(true);
+        };
+        if (!voucher) { finish(); return; }   // the voucher is already gone — putting the stock back is all that is left
+        const started = cancelVoucher(voucher.id, `Shortage cancelled: ${reason}`, by, {
+          viaParent: true,
+          onCancelled: finish,
+          onFailed: msg => { undoBack(); toastRef.current({ title: tr('घटत रद्द नहीं हुई', 'Shortage not cancelled'), description: msg, variant: 'destructive', duration: 12000 }); onDone?.(false); },
+        });
+        if (!started) { undoBack(); onDone?.(false); }
+      },
+      onFailed: () => onDone?.(false),
+    });
+    return true;
+  }, [cancelVoucher, user?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Board-approved write-off of a person's shortage dues: Dr Wastage / Shortage expense / Cr the person's ledger.
+  const writeOffShortage = useCallback((input: { personAccountId: string; amount: number; date: string; resolutionNo: string; onDone?: (ok: boolean) => void }): boolean => {
+    if (guardFYLocked()) return false;
+    if (guardPermission('create', tr('घटत बट्टे खाते डालने', 'write off a shortage'))) return false;
+    const person = accountsRef.current.find(a => a.id === input.personAccountId);
+    const amount = Math.round((Number(input.amount) || 0) * 100) / 100;
+    if (!person || !(amount > 0) || !input.resolutionNo.trim()) {
+      toastRef.current({ title: tr('बट्टे खाते नहीं डाला', 'Not written off'), description: tr('व्यक्ति, रकम और Board प्रस्ताव संख्या ज़रूरी हैं।', 'The person, amount and Board resolution no. are required.'), variant: 'destructive', duration: 8000 });
+      return false;
+    }
+    const by = user?.name ?? 'System';
+    void (async () => {
+      let exp = findWriteOffAccount(accountsRef.current);
+      if (!exp) exp = await createAccountAwaited({ ...WRITE_OFF_HEAD, type: 'expense', subtype: 'direct_expense', openingBalance: 0, openingBalanceType: 'debit', isGroup: false, parentId: directExpenseParent(accountsRef.current) });
+      if (!exp) { input.onDone?.(false); return; }
+      const v = addVoucher({
+        type: 'journal', date: input.date, debitAccountId: exp.id, creditAccountId: person.id, amount, createdBy: by, refType: REF_SHORTAGE_WRITEOFF, refId: person.id,
+        narration: `${tr('गोदाम घटत बट्टे खाते', 'Godown shortage written off')}: ${person.name} — ${tr('Board प्रस्ताव', 'Board resolution')} ${input.resolutionNo.trim()}`,
+      }, {
+        onSaved: saved => { toastRef.current({ title: tr('बट्टे खाते डाला गया', 'Written off'), description: `${saved.voucherNo}: ₹${amount.toFixed(2)} — ${person.name}` }); input.onDone?.(true); },
+        onFailed: () => input.onDone?.(false),
+      });
+      if (!v.id) input.onDone?.(false);
+    })();
+    return true;
+  }, [addVoucher, addAccount, user?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // RULE 3: a shortage voucher belongs to its stock entry — cancelled only from the shortage register, which puts
+  // the stock back in the same step.
+  useEffect(() => registerVoucherOwner('stock-shortage', id => {
+    const v = vouchersRef.current.find(x => x.id === id);
+    return v && v.refType === REF_SHORTAGE && !v.isDeleted ? tr('गोदाम घटत रजिस्टर (Godown Shortage Register)', 'Godown Shortage Register') : null;
+  }), [registerVoucherOwner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ECR-20: inter-godown transfer — moves stock between godowns as a pair of adjustment
   // movements (OUT -qty at source, IN +qty at dest) that net to zero society-wide, so the
@@ -8867,7 +9040,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     recoverables, addRecoverable, updateRecoverable, deleteRecoverable,
     kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry,
     p7Entries, upsertP7Entry, deleteP7Entry,
-    addStockItem, updateStockItem, deleteStockItem, addStockMovement, transferStock,
+    addStockItem, updateStockItem, deleteStockItem, addStockMovement, transferStock, recordStockShortage, reverseStockShortage, writeOffShortage,
     addSale, updateSale, deleteSale, addBillReceipt, addBillPayment,
     addPurchase, updatePurchase, deletePurchase,
     addEmployee, updateEmployee, deleteEmployee,
@@ -8906,7 +9079,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     recoverables, addRecoverable, updateRecoverable, deleteRecoverable,
     kachiAaratEntries, addKachiAaratEntry, updateKachiAaratEntry, deleteKachiAaratEntry,
     p7Entries, upsertP7Entry, deleteP7Entry,
-    addStockItem, updateStockItem, deleteStockItem, addStockMovement, transferStock,
+    addStockItem, updateStockItem, deleteStockItem, addStockMovement, transferStock, recordStockShortage, reverseStockShortage, writeOffShortage,
     addSale, updateSale, deleteSale, addBillReceipt, addBillPayment,
     addPurchase, updatePurchase, deletePurchase,
     addEmployee, updateEmployee, deleteEmployee,

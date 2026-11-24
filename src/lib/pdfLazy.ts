@@ -99,6 +99,7 @@ export const generateBudgetPDF = lazy('generateBudgetPDF');
 export const generateSaleRegisterPDF = lazy('generateSaleRegisterPDF');
 export const generatePurchaseRegisterPDF = lazy('generatePurchaseRegisterPDF');
 export const generateMemberTurnoverPDF = lazy('generateMemberTurnoverPDF');
+export const generateGodownShortagePDF = lazy('generateGodownShortagePDF');
 export const generateClosingStockPDF = lazy('generateClosingStockPDF');
 export const generateDepreciationSchedulePDF = lazy('generateDepreciationSchedulePDF');
 export const generateAuditSchedulesPDF = lazy('generateAuditSchedulesPDF');
