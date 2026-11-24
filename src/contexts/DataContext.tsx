@@ -2016,15 +2016,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Migration 205: write a voucher's cheque / DD number and date in their OWN update (never with the base row or the
   // lines / approval extras). Resolves the error message, or null when saved. Local state is the caller's to keep in step.
+  // A posting-service society may not write vouchers directly (migration 105 trigger → post_voucher:direct_write_refused),
+  // so it goes through set_voucher_cheque (206), exactly as set_voucher_cleared does for the reconciliation flag.
   const patchVoucherCheque = (id: string, chequeNo: string | undefined, chequeDate: string | undefined): Promise<string | null> =>
     new Promise(resolve => {
+      const done = (msg: string | null) => {
+        if (msg) reportError('write-partial', msg, { at: 'voucher cheque patch', voucherId: id });
+        resolve(msg);
+      };
+      const fail = (e: unknown) => done(e instanceof Error ? e.message : String(e));
+      if (postingServiceRef.current) {
+        // '' clears it (the server nullifs a blank no.); an omitted date clears the date.
+        supabase.rpc('set_voucher_cheque', { p_id: id, p_cheque_no: chequeNo?.trim() ?? '', p_cheque_date: chequeDate || undefined }).then(
+          ({ error }) => done(error ? postVoucherMessage(postVoucherErrorCode(error.message), error.message) : null), fail,
+        );
+        return;
+      }
       supabase.from('vouchers').update({ chequeNo: chequeNo?.trim() || null, chequeDate: chequeDate || null }).eq('id', id).select('id').then(
-        ({ data, error }) => {
-          const msg = error?.message ?? (data && data.length ? null : 'cheque update matched 0 rows');
-          if (msg) reportError('write-partial', msg, { at: 'voucher cheque patch', voucherId: id });
-          resolve(msg);
-        },
-        (e: unknown) => resolve(e instanceof Error ? e.message : String(e)),
+        ({ data, error }) => done(error?.message ?? (data && data.length ? null : 'cheque update matched 0 rows')), fail,
       );
     });
   const chequeNotSavedToast = (msg: string) => toastRef.current({

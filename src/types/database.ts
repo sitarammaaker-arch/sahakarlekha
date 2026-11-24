@@ -9292,6 +9292,10 @@ export type Database = {
       }
       set_my_email_locale: { Args: { p_locale: string }; Returns: Json }
       set_my_weekly_digest: { Args: { p_on: boolean }; Returns: Json }
+      set_voucher_cheque: {
+        Args: { p_cheque_date?: string; p_cheque_no: string; p_id: string }
+        Returns: Json
+      }
       set_voucher_cleared: {
         Args: { p_cleared: boolean; p_cleared_date?: string; p_id: string }
         Returns: Json

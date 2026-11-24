@@ -124,6 +124,7 @@ applied_migration 202
 applied_migration 203
 applied_migration 204
 applied_migration 205
+applied_migration 206
 column _member_ref_backup.id bigint not null default nextval('_member_ref_backup_id_seq'::regclass)
 column _member_ref_backup.old_member_id text not null
 column _member_ref_backup.row_id text not null
@@ -2837,6 +2838,7 @@ execute restore_stage(p_run uuid, p_seq integer, p_ops jsonb) authenticated
 execute save_pending_voucher(p_voucher jsonb, p_lines jsonb) authenticated
 execute set_my_email_locale(p_locale text) authenticated
 execute set_my_weekly_digest(p_on boolean) authenticated
+execute set_voucher_cheque(p_id text, p_cheque_no text, p_cheque_date text) authenticated
 execute set_voucher_cleared(p_id text, p_cleared boolean, p_cleared_date text) authenticated
 execute society_email_log(p_limit integer) authenticated
 execute society_empty_tables(p_society_id text, p_tables text[]) authenticated
@@ -3035,6 +3037,7 @@ function restore_stage(p_run uuid, p_seq integer, p_ops jsonb) returns jsonb sec
 function save_pending_voucher(p_voucher jsonb, p_lines jsonb) returns jsonb security definer set search_path="" volatility=v body_md5=6ba1ab80ed07a7218edb5fd58d9dab80
 function set_my_email_locale(p_locale text) returns jsonb security definer set search_path=public, extensions volatility=v body_md5=e8fa129a7cc4f46079aed560ab0c1dda
 function set_my_weekly_digest(p_on boolean) returns jsonb security definer set search_path=public, extensions volatility=v body_md5=3f1d7e036ab8eb35519620bc788ecb03
+function set_voucher_cheque(p_id text, p_cheque_no text, p_cheque_date text) returns jsonb security definer set search_path="" volatility=v body_md5=1be353d54b21edb9741ecb930688c6ba
 function set_voucher_cleared(p_id text, p_cleared boolean, p_cleared_date text) returns jsonb security definer set search_path="" volatility=v body_md5=b36ea3e9a22fc54db8f465f0bc711d81
 function society_email_log(p_limit integer) returns TABLE(created_at timestamp with time zone, template_key text, recipient text, status text, attempts integer, sent_at timestamp with time zone, delivery_status text, last_error text) security definer set search_path=public volatility=s body_md5=fbc70f3fb3037ca8747423f36165e7d0
 function society_empty_tables(p_society_id text, p_tables text[]) returns text[] security invoker set search_path=public volatility=s body_md5=0bf9d928254be5624e7eace4faf55868
