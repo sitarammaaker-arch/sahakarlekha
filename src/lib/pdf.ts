@@ -2288,6 +2288,78 @@ export function generatePurchaseRegisterPDF(
 }
 
 
+// ── Member / Non-member Turnover PDF ─────────────────────────────────────────
+// Same figures as the /member-turnover page (lib/memberTurnover). Two tables: purchases (bought from) and sales
+// (sold to); the nominal / associate column only when it is used. English only, like the other register PDFs.
+
+type TurnoverPdfSide = {
+  rows: { accountId: string; accountName: string; member: number; nominal: number; nonMember: number; total: number }[];
+  totals: { member: number; nominal: number; nonMember: number; total: number };
+  bills: { member: number; nominal: number; nonMember: number };
+};
+
+export function generateMemberTurnoverPDF(
+  data: { purchases: TurnoverPdfSide; sales: TurnoverPdfSide; unmatchedMemberBills: number },
+  society: SocietySettings, fromDate?: string, toDate?: string,
+): void {
+  const doc = new jsPDF({ orientation: 'portrait' });
+  const subtitle = fromDate && toDate ? `${fmtDate(fromDate)} to ${fmtDate(toDate)}` : `FY: ${society.financialYear}`;
+  const { startY, font } = addHeader(doc, 'Member / Non-member Turnover', society, subtitle, { reportCode: 'MNT' });
+  const showNominal = data.sales.totals.nominal !== 0 || data.purchases.totals.nominal !== 0;
+  const dash = (n: number) => (n ? fmt(n) : '—');
+  const share = (t: TurnoverPdfSide['totals']) => (t.total > 0 ? `${Math.round((t.member / t.total) * 1000) / 10}%` : '0%');
+
+  const table = (title: string, s: TurnoverPdfSide, y: number): number => {
+    doc.setFont(font, 'bold'); doc.setFontSize(10);
+    doc.text(title, 14, y);
+    doc.setFont(font, 'normal'); doc.setFontSize(8);
+    const billLine = `Members' share: ${share(s.totals)} · bills — members ${s.bills.member}, non-members ${s.bills.nonMember}` +
+      (s.bills.nominal ? `, nominal/associate ${s.bills.nominal}` : '');
+    doc.text(billLine, doc.internal.pageSize.getWidth() - 14, y, { align: 'right' });
+    const head = ['Account', 'Members', ...(showNominal ? ['Nominal / associate'] : []), 'Non-members', 'Total'];
+    const amountCols = head.map((_, i) => i).filter(i => i > 0);
+    autoTable(doc, {
+      startY: y + 3,
+      head: [head],
+      body: s.rows.length
+        ? s.rows.map(r => [`${r.accountId} · ${r.accountName}`, dash(r.member), ...(showNominal ? [dash(r.nominal)] : []), dash(r.nonMember), fmt(r.total)])
+        : [['Nothing recorded in this period', '', ...(showNominal ? [''] : []), '', '']],
+      foot: [['Total', dash(s.totals.member), ...(showNominal ? [dash(s.totals.nominal)] : []), dash(s.totals.nonMember), fmt(s.totals.total)]],
+      styles: { fontSize: 8, cellPadding: 2, font },
+      headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+      footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 250, 253] },
+      columnStyles: Object.fromEntries(amountCols.map(i => [i, { halign: 'right' as const }])),
+      didParseCell: rightAlignAmountColumns(...amountCols),
+    });
+    return (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+  };
+
+  let y = table('Purchases — bought from', data.purchases, startY + 4);
+  y = table('Sales — sold to', data.sales, y);
+
+  doc.setFont(font, 'normal'); doc.setFontSize(7.5);
+  const notes = [
+    'Taxable value (after discount, before GST), account-wise. Returns are subtracted in the class of their original bill; deleted bills are left out.',
+    'Nominal and associate members are a separate column — whether they count for the income-tax deduction (Income-tax Act 2025 s.149) is for the auditor to decide. This report does not compute the deduction.',
+    ...(data.unmatchedMemberBills ? [`${data.unmatchedMemberBills} bill(s) name a member no longer in the member list; they are counted as members.`] : []),
+    'MSP / government procurement lots are not in this report.',
+  ];
+  const width = doc.internal.pageSize.getWidth() - 28;
+  for (const n of notes) {
+    const lines = doc.splitTextToSize(n, width);
+    if (y + lines.length * 4 > doc.internal.pageSize.getHeight() - 30) { doc.addPage(); y = 20; }
+    doc.text(lines, 14, y);
+    y += lines.length * 4 + 1;
+  }
+
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], y + 6, undefined, [sig.accountant, sig.secretary, sig.president]);
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName('MemberTurnover', society, fromDate, toDate));
+}
+
+
 // ── Closing Stock Report PDF — Category-wise grouped ────────────────────────
 
 export interface ClosingStockItemRow {
