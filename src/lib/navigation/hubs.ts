@@ -38,7 +38,7 @@ export const HUBS: HubDef[] = [
     { hi: 'सप्लायर', en: 'Suppliers', moduleIds: ['suppliers'] },
   ] },
   { id: 'stock', hi: 'स्टॉक', en: 'Stock', icon: Boxes, sections: [
-    { hi: 'माल', en: 'Items', moduleIds: ['inventory', 'hsnMaster', 'godowns'] },
+    { hi: 'माल', en: 'Items', moduleIds: ['inventory', 'hsnMaster', 'godowns', 'godownShortage'] },
     { hi: 'लाइसेंस व योजना', en: 'Licences & schemes', moduleIds: ['dealerCompliance'] },
     { hi: 'स्टॉक रिपोर्ट', en: 'Stock reports', moduleIds: ['closingStockReport', 'stockValuation'] },
   ] },

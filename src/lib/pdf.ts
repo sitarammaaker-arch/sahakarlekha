@@ -28,6 +28,7 @@ import { groupWithSubtotals, type GroupableLine } from '@/lib/reports/groupSubto
 import { buildBalanceSheetLayout, visibleRows, pyResult, type BsSide } from '@/lib/reports/balanceSheetLayout';
 import type { GroupSchedule } from '@/lib/reports/groupSchedule';
 import { memberStatusLabel } from '@/lib/memberLifecycle';
+import { reasonLabel, type ShortageRegister } from '@/lib/godownShortage';
 import { appealLastDate, applicationReceivedOn, isHaryana } from '@/lib/members/admission';
 import type { BlankPdfSpec } from '@/content/downloads';
 import { invoiceView, stateLabel, type SubscriptionInvoice } from '@/lib/billing/invoiceView';
@@ -2357,6 +2358,74 @@ export function generateMemberTurnoverPDF(
   addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], y + 6, undefined, [sig.accountant, sig.secretary, sig.president]);
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('MemberTurnover', society, fromDate, toDate));
+}
+
+
+// ── Godown Shortage / Excess Register PDF ────────────────────────────────────
+// Same figures as the /godown-shortage page (lib/godownShortage): the adjustments with their reason, then the dues
+// of each person a shortage was booked to. English only, like the other register PDFs — build `data` with hi=false.
+
+export function generateGodownShortagePDF(
+  data: ShortageRegister, society: SocietySettings, fromDate?: string, toDate?: string,
+): void {
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const subtitle = fromDate && toDate ? `${fmtDate(fromDate)} to ${fmtDate(toDate)}` : `FY: ${society.financialYear}`;
+  const { startY, font } = addHeader(doc, 'Godown Shortage / Excess Register', society, subtitle, { reportCode: 'GSR' });
+  const dash = (n: number) => (n ? fmt(n) : '—');
+  const t = data.totals;
+  doc.setFont(font, 'normal'); doc.setFontSize(8.5);
+  doc.text(`Decrease ${dash(t.decreaseValue)} · Excess ${dash(t.increaseValue)} · Recoverable shortage ${dash(t.recoverableValue)} · Outstanding from persons ${dash(t.outstanding)}`, 14, startY + 2);
+
+  autoTable(doc, {
+    startY: startY + 6,
+    head: [['Date', 'Item', 'Godown', 'Qty', 'Value', 'Reason', 'Responsible person', 'Voucher']],
+    body: data.rows.length
+      ? data.rows.map(r => [fmtDate(r.date), r.itemName, r.godownName || '—', `${r.qty > 0 ? '+' : ''}${r.qty} ${r.unit}`.trim(), fmt(r.value),
+          reasonLabel(r.reason, false) + (r.reversed ? ' (cancelled)' : ''), r.person || '—', r.voucherNo || '—'])
+      : [['No manual adjustment in this period', '', '', '', '', '', '', '']],
+    styles: { fontSize: 8, cellPadding: 2, font },
+    headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 253] },
+    columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' } },
+    didParseCell: rightAlignAmountColumns(3, 4),
+  });
+  let y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+
+  if (data.persons.length) {
+    if (y > doc.internal.pageSize.getHeight() - 50) { doc.addPage(); y = 20; }
+    doc.setFont(font, 'bold'); doc.setFontSize(10);
+    doc.text('Dues from persons (Shortage Recoverable)', 14, y);
+    autoTable(doc, {
+      startY: y + 3,
+      head: [['Person', 'Booked', 'Recovered / written off', 'Outstanding']],
+      body: data.persons.map(p => [p.name, dash(p.booked), dash(p.cleared), fmt(p.outstanding)]),
+      foot: [['Total', '', '', fmt(t.outstanding)]],
+      styles: { fontSize: 8, cellPadding: 2, font },
+      headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+      footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+      didParseCell: rightAlignAmountColumns(1, 2, 3),
+    });
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+  }
+
+  doc.setFont(font, 'normal'); doc.setFontSize(7.5);
+  const notes = [
+    'A recoverable shortage posts: the person\'s ledger Dr / Sales by Shortage Cr, at weighted-average cost. Closing stock falls by the same value, so gross profit does not change (HAFED Accounts Manual, para 10.20).',
+    'Normal loss, damage and excess post no voucher — they stay inside closing stock. Dues are as at the end date.',
+  ];
+  const width = doc.internal.pageSize.getWidth() - 28;
+  for (const n of notes) {
+    const lines = doc.splitTextToSize(n, width);
+    if (y + lines.length * 4 > doc.internal.pageSize.getHeight() - 30) { doc.addPage(); y = 20; }
+    doc.text(lines, 14, y);
+    y += lines.length * 4 + 1;
+  }
+
+  const sig = getSignatoryNames(society);
+  addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], y + 6, undefined, [sig.accountant, sig.secretary, sig.president]);
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName('GodownShortage', society, fromDate, toDate));
 }
 
 

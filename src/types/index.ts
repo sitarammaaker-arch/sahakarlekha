@@ -1366,8 +1366,14 @@ export interface StockMovement {
   batchNo?: string;     // Consumer C8 — batch/lot the movement relates to (esp. expiry/damage write-offs)
   expiryDate?: string;  // Consumer C8 — expiry date of the written-off/received batch
   godownId?: string;    // ECR-17 Phase 3: the godown this movement happened in (unset = default/unassigned)
+  reason?: StockAdjustmentReason;   // migration 203 — why a manual adjustment moved stock (HAFED 9.19/10.20)
+  responsiblePerson?: string;       // migration 203 — whom a recoverable shortage is booked to
   createdAt: string;
 }
+
+// Migration 203: why a manual stock adjustment happened. Only 'shortageRecoverable' posts a voucher
+// (Dr the person's "shortage recoverable" ledger / Cr "Sales by Shortage"); a 'shortageReversal' undoes one.
+export type StockAdjustmentReason = 'normalLoss' | 'damage' | 'shortageRecoverable' | 'shortageReversal' | 'excess' | 'other';
 
 // ── Godown (ECR-17 Phase 3 — godown-wise stock) ──────────────────────────────
 export interface Godown {

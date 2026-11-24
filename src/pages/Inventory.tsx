@@ -34,7 +34,8 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDate } from '@/lib/dateUtils';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import type { StockItem, StockMovement, LedgerAccount } from '@/types';
+import type { StockItem, StockMovement, LedgerAccount, StockAdjustmentReason } from '@/types';
+import { DECREASE_REASONS, INCREASE_REASONS, reasonLabel, validateAdjustment, shortageAmount } from '@/lib/godownShortage';
 import { useOpenOnNew } from '@/hooks/useOpenOnNew';
 
 // ─── Unit definitions ──────────────────────────────────────────────────────────
@@ -75,6 +76,8 @@ const EMPTY_ADJUSTMENT_FORM = {
   itemId: '',
   qty: '',
   narration: '',
+  reason: '' as StockAdjustmentReason | '',
+  person: '',
   date: new Date().toISOString().split('T')[0],
 };
 
@@ -506,10 +509,13 @@ const Inventory: React.FC = () => {
     updateStockItem,
     deleteStockItem,
     addStockMovement,
+    recordStockShortage,
+    employees,
     getEntityLinks,
     addAccount,
     society,
   } = useData();
+  const [adjSaving, setAdjSaving] = useState(false);
   // Stock Register: item-wise inward / outward / balance from the SAME reconciled movements the
   // quantity column uses (RULE 2) — so the register's closing equals the Inventory figure.
   const registerTableOf = (it: StockItem) => stockRegisterTable(stockRegister(it, reconciledStockMovements), { itemCode: it.itemCode, name: it.name, unit: it.unit });
@@ -881,7 +887,21 @@ const Inventory: React.FC = () => {
     // Value the adjustment at current weighted-average cost (RULE 2), not the stale
     // purchaseRate field — so an adjustment doesn't dilute the item's stock value to 0.
     const adjRate = computeStockCostRate(item, reconciledStockMovements);
+    const reason = adjForm.reason || undefined;
+    const invalid = validateAdjustment({ qty, reason, person: adjForm.person, rate: adjRate }, hi);
+    if (invalid) { toast({ title: invalid, variant: 'destructive' }); return; }
+    if (reason === 'shortageRecoverable') {
+      // HAFED 10.20: the voucher (Dr person / Cr Sales by Shortage) is saved first; the stock falls once it is in.
+      setAdjSaving(true);
+      const started = recordStockShortage({
+        itemId: item.id, qty, rate: adjRate, date: adjForm.date, person: adjForm.person, narration: adjForm.narration || undefined,
+        onDone: ok => { setAdjSaving(false); if (ok) { setAdjForm(EMPTY_ADJUSTMENT_FORM); setIsAdjustOpen(false); } },
+      });
+      if (!started) setAdjSaving(false);
+      return;
+    }
     addStockMovement({
+      reason,
       date: adjForm.date,
       itemId: adjForm.itemId,
       type: 'adjustment',
@@ -892,7 +912,7 @@ const Inventory: React.FC = () => {
       rate: adjRate,
       amount: Math.abs(qty) * adjRate,
       referenceNo: '',
-      narration: adjForm.narration || (qty >= 0 ? (hi ? 'स्टॉक में वृद्धि' : 'Stock increase') : (hi ? 'स्टॉक में कमी' : 'Stock decrease')),
+      narration: adjForm.narration || reasonLabel(reason, hi),
     });
     // currentStock is recomputed authoritatively inside addStockMovement (from
     // openingStock + all movements, RULE 2) — no separate incremental update here,
@@ -1521,6 +1541,51 @@ const Inventory: React.FC = () => {
                 />
               </div>
             </div>
+            {(() => {
+              // HAFED 9.19 / 10.20: why the stock changed. Only "shortage — recoverable" posts a voucher.
+              const q = Number(adjForm.qty);
+              const options = q < 0 ? DECREASE_REASONS : q > 0 ? INCREASE_REASONS : [];
+              const adjItem = stockItems.find(i => i.id === adjForm.itemId);
+              const rate = adjItem ? computeStockCostRate(adjItem, reconciledStockMovements) : 0;
+              return (
+                <>
+                  <div className="space-y-2">
+                    <Label>{hi ? 'कारण' : 'Reason'} <span className="text-destructive">*</span></Label>
+                    <Select
+                      value={adjForm.reason && options.includes(adjForm.reason) ? adjForm.reason : ''}
+                      onValueChange={val => setAdjForm(f => ({ ...f, reason: val as StockAdjustmentReason }))}
+                      disabled={!options.length}
+                    >
+                      <SelectTrigger data-testid="adj-reason">
+                        <SelectValue placeholder={options.length ? (hi ? 'कारण चुनें' : 'Choose a reason') : (hi ? 'पहले मात्रा (+/-) भरें' : 'Enter the quantity (+/-) first')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.map(r => <SelectItem key={r} value={r}>{reasonLabel(r, hi)}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {adjForm.reason === 'shortageRecoverable' && q < 0 && (
+                    <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 dark:bg-amber-950/30">
+                      <Label>{hi ? 'जिससे वसूली होगी (कर्मचारी / व्यक्ति)' : 'Recoverable from (employee / person)'} <span className="text-destructive">*</span></Label>
+                      <Input
+                        list="adj-person-list"
+                        value={adjForm.person}
+                        onChange={e => setAdjForm(f => ({ ...f, person: e.target.value }))}
+                        placeholder={hi ? 'नाम चुनें या लिखें' : 'Pick or type a name'}
+                      />
+                      <datalist id="adj-person-list">
+                        {employees.filter(e => e.status === 'active').map(e => <option key={e.id} value={e.name}>{e.designation}</option>)}
+                      </datalist>
+                      <p className="text-xs text-muted-foreground">
+                        {hi
+                          ? `वाउचर बनेगा: नाम "${adjForm.person || '…'}" (स्टॉक घटत वसूली योग्य) Dr / घटत से बिक्री Cr — ₹${shortageAmount(q, rate).toFixed(2)} (औसत लागत ₹${rate.toFixed(2)})। सकल लाभ नहीं बदलेगा; बकाया Balance Sheet में दिखेगा।`
+                          : `Voucher: "${adjForm.person || '…'}" (Shortage Recoverable) Dr / Sales by Shortage Cr — ₹${shortageAmount(q, rate).toFixed(2)} (average cost ₹${rate.toFixed(2)}). Gross profit does not change; the dues show on the Balance Sheet.`}
+                      </p>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
             <div className="space-y-2">
               <Label>{hi ? 'विवरण' : 'Narration'}</Label>
               <Input
@@ -1540,7 +1605,7 @@ const Inventory: React.FC = () => {
               >
                 {hi ? 'रद्द करें' : 'Cancel'}
               </Button>
-              <Button type="submit">{hi ? 'सहेजें' : 'Save'}</Button>
+              <Button type="submit" disabled={adjSaving}>{adjSaving ? (hi ? 'सेव हो रहा है…' : 'Saving…') : (hi ? 'सहेजें' : 'Save')}</Button>
             </div>
           </form>
         </DialogContent>
