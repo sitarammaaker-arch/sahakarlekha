@@ -122,6 +122,7 @@ applied_migration 200
 applied_migration 201
 applied_migration 202
 applied_migration 203
+applied_migration 204
 column _member_ref_backup.id bigint not null default nextval('_member_ref_backup_id_seq'::regclass)
 column _member_ref_backup.old_member_id text not null
 column _member_ref_backup.row_id text not null
@@ -2041,6 +2042,19 @@ column stock_movements.referenceNo text
 column stock_movements.responsiblePerson text
 column stock_movements.society_id text not null
 column stock_movements.type text
+column stock_verifications.certificate text
+column stock_verifications.createdAt timestamp with time zone not null default now()
+column stock_verifications.createdBy text
+column stock_verifications.date date not null
+column stock_verifications.designation text
+column stock_verifications.godownId text
+column stock_verifications.id text not null
+column stock_verifications.lines jsonb not null default '[]'::jsonb
+column stock_verifications.remarks text
+column stock_verifications.society_id text not null
+column stock_verifications.status text not null default 'pending'::text
+column stock_verifications.verificationNo text not null
+column stock_verifications.verifiedBy text not null
 column subscriptions.activated_by text
 column subscriptions.created_at timestamp with time zone not null default now()
 column subscriptions.notes text
@@ -2604,6 +2618,8 @@ constraint society_users.society_users_role_check CHECK ((role = ANY (ARRAY['adm
 constraint society_users.society_users_society_id_fkey FOREIGN KEY (society_id) REFERENCES societies(id) ON DELETE CASCADE
 constraint stock_items.stock_items_pkey PRIMARY KEY (id)
 constraint stock_movements.stock_movements_pkey PRIMARY KEY (id)
+constraint stock_verifications.stock_verifications_pkey PRIMARY KEY (id)
+constraint stock_verifications.stock_verifications_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'complete'::text, 'partial'::text])))
 constraint subscriptions.subscriptions_pkey PRIMARY KEY (society_id)
 constraint subscriptions.subscriptions_plan_check CHECK ((plan = ANY (ARRAY['starter'::text, 'plus'::text, 'pro'::text, 'enterprise'::text, 'legacy'::text, 'trial'::text])))
 constraint subscriptions.subscriptions_source_check CHECK ((source = ANY (ARRAY['manual'::text, 'razorpay'::text, 'grandfather'::text, 'trial'::text, 'system'::text])))
@@ -3409,6 +3425,9 @@ grant stock_items.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,
 grant stock_movements.anon DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant stock_movements.authenticated DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant stock_movements.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+grant stock_verifications.anon DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+grant stock_verifications.authenticated DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+grant stock_verifications.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant subscriptions.anon DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant subscriptions.authenticated DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant subscriptions.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
@@ -3557,6 +3576,7 @@ index CREATE INDEX signup_attempts_at ON public.signup_attempts USING btree (at)
 index CREATE INDEX signup_attempts_email ON public.signup_attempts USING btree (email_hash, at)
 index CREATE INDEX signup_attempts_ip ON public.signup_attempts USING btree (ip_hash, at)
 index CREATE INDEX stock_movements_society_created_idx ON public.stock_movements USING btree (society_id, "createdAt", id)
+index CREATE INDEX stock_verifications_society_created_idx ON public.stock_verifications USING btree (society_id, "createdAt", id)
 index CREATE INDEX voucher_entries_jurisdiction_idx ON public.voucher_entries USING btree (society_id, jurisdiction)
 index CREATE INDEX voucher_lines_tb ON public.voucher_lines USING btree (society_id, fy_id, account_id)
 index CREATE INDEX voucher_lines_voucher ON public.voucher_lines USING btree (voucher_id)
@@ -3986,6 +4006,10 @@ policy stock_movements.stock_movements_tenant_delete PERMISSIVE DELETE to public
 policy stock_movements.stock_movements_tenant_insert PERMISSIVE INSERT to public using () check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
 policy stock_movements.stock_movements_tenant_select PERMISSIVE SELECT to public using ((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids))) check ()
 policy stock_movements.stock_movements_tenant_update PERMISSIVE UPDATE to public using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write())) check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
+policy stock_verifications.stock_verifications_tenant_delete PERMISSIVE DELETE to public using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_delete())) check ()
+policy stock_verifications.stock_verifications_tenant_insert PERMISSIVE INSERT to public using () check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
+policy stock_verifications.stock_verifications_tenant_select PERMISSIVE SELECT to public using ((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids))) check ()
+policy stock_verifications.stock_verifications_tenant_update PERMISSIVE UPDATE to public using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write())) check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
 policy subscriptions.subscriptions_select_own PERMISSIVE SELECT to public using ((society_id = get_current_society_id())) check ()
 policy suppliers.society_rw PERMISSIVE SELECT to authenticated using ((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids))) check ()
 policy suppliers.society_rw_w_delete PERMISSIVE DELETE to authenticated using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write())) check ()
@@ -4182,6 +4206,7 @@ table society_settings rls=t force=f
 table society_users rls=t force=f
 table stock_items rls=t force=f
 table stock_movements rls=t force=f
+table stock_verifications rls=t force=f
 table subscriptions rls=t force=f
 table suppliers rls=t force=f
 table tds_challan_links rls=t force=f
@@ -4288,6 +4313,7 @@ trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.society_users FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.stock_items FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.stock_movements FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
+trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.stock_verifications FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.suppliers FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.tds_challan_links FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.tds_challans FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
