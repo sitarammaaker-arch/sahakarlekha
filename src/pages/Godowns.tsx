@@ -21,6 +21,7 @@ import { buildStackCard } from '@/lib/stackCard';
 import { capacityUtilisation } from '@/lib/godownCapacity';
 import { computeStorageLoss } from '@/lib/storageLoss';
 import { buildWarehouseDoc } from '@/lib/warehouseDoc';
+import { confirmAction } from '@/lib/confirmAction';
 
 const Godowns: React.FC = () => {
   const { godowns, addGodown, updateGodown, deleteGodown, branches, reconciledStockMovements, stockItems, transferStock, society } = useData();
@@ -54,7 +55,7 @@ const Godowns: React.FC = () => {
     if (editing) updateGodown(editing.id, data); else addGodown({ ...data, isActive: true });
     setOpen(false); toast({ title: hi ? 'गोदाम सहेजा गया' : 'Godown saved' });
   };
-  const remove = (g: Godown) => { if (window.confirm(hi ? `${g.name} हटाएँ?` : `Delete ${g.name}?`)) { deleteGodown(g.id); toast({ title: hi ? 'गोदाम हटाया गया' : 'Godown deleted' }); } };
+  const remove = async (g: Godown) => { if (await confirmAction(hi ? `${g.name} हटाएँ?` : `Delete ${g.name}?`)) { deleteGodown(g.id); toast({ title: hi ? 'गोदाम हटाया गया' : 'Godown deleted' }); } };
 
   const nameOfGodown = (id: string) => id === UNASSIGNED_GODOWN ? (hi ? 'बिना गोदाम' : 'Unassigned') : (godowns.find(g => g.id === id)?.name || id);
   const nameOfItem = (id: string) => stockItems.find(s => s.id === id)?.name || id;

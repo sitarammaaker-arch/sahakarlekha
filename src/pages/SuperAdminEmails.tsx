@@ -20,6 +20,7 @@ import { ArrowLeft, Mail, RefreshCw, AlertTriangle, Ban, HeartPulse } from 'luci
 import { EmailLogTable, emailStateHi, type EmailLogRow } from '@/components/email/EmailLogTable';
 import { fmtDateTime } from '@/lib/dateUtils';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { confirmAction } from '@/lib/confirmAction';
 
 interface SuppressionRow { email: string; reason: string; detail: string | null; created_at: string }
 
@@ -96,7 +97,7 @@ export default function SuperAdminEmails() {
   useEffect(() => { load(); }, [load]);
 
   const unsuppress = async (email: string) => {
-    if (!window.confirm(L(`${email} को ब्लॉक सूची से हटाएँ? अगला ईमेल फिर इस पते पर जाएगा — पहले पक्का करें कि पता ठीक कर दिया गया है।`, `Remove ${email} from the block list? The next email will go to this address again — first make sure the address has been corrected.`))) return;
+    if (!await confirmAction(L(`${email} को ब्लॉक सूची से हटाएँ? अगला ईमेल फिर इस पते पर जाएगा — पहले पक्का करें कि पता ठीक कर दिया गया है।`, `Remove ${email} from the block list? The next email will go to this address again — first make sure the address has been corrected.`))) return;
     const { error: e } = await supabase.rpc('admin_unsuppress_email', { p_email: email });
     if (e) {
       toast({ title: L('हटाया नहीं जा सका', 'Could not remove'), description: e.message, variant: 'destructive', duration: 10000 });

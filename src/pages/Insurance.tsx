@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { ShieldCheck, Trash2 } from 'lucide-react';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 const COVERAGE = [
   { id: 'building', en: 'Building', hi: 'भवन' },
@@ -112,7 +113,7 @@ export default function Insurance() {
                     {i.insurer || '—'}{i.sumInsured ? ` · ${hi ? 'बीमा' : 'SI'} ${money(i.sumInsured)}` : ''}{i.expiryDate ? ` · ${hi ? 'समाप्ति' : 'exp'} ${i.expiryDate}` : ''}
                   </div>
                 </div>
-                <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { if (window.confirm(hi ? 'पॉलिसी हटाएँ?' : 'Delete policy?')) deleteInsurance(i.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                <Button size="sm" variant="ghost" className="shrink-0" onClick={async () => { if (await confirmAction(hi ? 'पॉलिसी हटाएँ?' : 'Delete policy?')) deleteInsurance(i.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             );
           })}

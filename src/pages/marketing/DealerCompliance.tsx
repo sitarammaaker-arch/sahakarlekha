@@ -14,6 +14,7 @@ import { todayStr } from '@/lib/dateUtils';
 import { licenceStatus, suggestedValidUpto, schemeClaimBalance, LICENCE_STATUS_TEXT, type DealerLicence } from '@/lib/marketing/dealerCompliance';
 import { ShieldCheck, Trash2 } from 'lucide-react';
 import { LicenceExpiryBanner } from '@/components/marketing/LicenceExpiryBanner';
+import { confirmAction } from '@/lib/confirmAction';
 
 const PRODUCT_GROUPS = [
   { id: 'fertiliser', hi: 'उर्वरक', en: 'Fertiliser' },
@@ -118,7 +119,7 @@ export default function DealerCompliance() {
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <Button size="sm" variant="ghost" onClick={() => editLicence(l)}>{hi ? 'संपादित' : 'Edit'}</Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => { if (window.confirm(hi ? 'यह लाइसेंस हटाएँ?' : 'Delete this licence?')) deleteDealerLicence(l.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={async () => { if (await confirmAction(hi ? 'यह लाइसेंस हटाएँ?' : 'Delete this licence?')) deleteDealerLicence(l.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
             ))}
@@ -157,7 +158,7 @@ export default function DealerCompliance() {
                       <div className="font-medium">{c.claimNo} · {c.schemeName} {bal.outstanding <= 0.005 ? <Badge variant="secondary">{hi ? 'प्राप्त' : 'Received'}</Badge> : null}</div>
                       <div className="text-xs text-muted-foreground">{c.date}{c.authority ? ` · ${c.authority}` : ''}{c.period ? ` · ${c.period}` : ''} · {hi ? 'दावा' : 'claim'} {money(c.amount)} · {hi ? 'प्राप्त' : 'received'} {money(bal.received)} · <b>{hi ? 'बकाया' : 'outstanding'} {money(bal.outstanding)}</b></div>
                     </div>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => { if (window.confirm(hi ? `दावा ${c.claimNo} हटाएँ? उसका वाउचर भी रद्द होगा।` : `Delete claim ${c.claimNo}?`)) void deleteSchemeClaim(c.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={async () => { if (await confirmAction(hi ? `दावा ${c.claimNo} हटाएँ? उसका वाउचर भी रद्द होगा।` : `Delete claim ${c.claimNo}?`)) void deleteSchemeClaim(c.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                   {bal.outstanding > 0.005 && (
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">

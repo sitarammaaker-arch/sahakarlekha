@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Car, Trash2 } from 'lucide-react';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 const VEHICLES = [
   { id: 'car', en: 'Car', hi: 'कार' },
@@ -124,7 +125,7 @@ export default function Parking() {
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <Button size="sm" variant="ghost" onClick={() => updateParking(p.id, { status: p.status === 'allotted' ? 'vacant' : 'allotted' })}>{p.status === 'allotted' ? (hi ? 'खाली करें' : 'Vacate') : (hi ? 'आवंटित' : 'Allot')}</Button>
-                <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(hi ? 'स्लॉट हटाएँ?' : 'Delete slot?')) deleteParking(p.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction(hi ? 'स्लॉट हटाएँ?' : 'Delete slot?')) deleteParking(p.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             </div>
           ))}

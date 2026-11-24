@@ -36,6 +36,7 @@ import type { SocietyType, VoucherType } from '@/types';
 import { accountCode } from '@/lib/accountCode';
 import { fyStartFromLabel, societyFyStart } from '@/lib/fyPeriod';
 import { fmtDate } from '@/lib/dateUtils';
+import { confirmAction } from '@/lib/confirmAction';
 
 const SocietySetup: React.FC = () => {
   const { t, language } = useLanguage();
@@ -447,8 +448,8 @@ const SocietySetup: React.FC = () => {
     toast({ title: language === 'hi' ? 'खाता जोड़ा गया' : 'Account added' });
   };
 
-  const handleDeleteAccount = (id: string, name: string) => {
-    if (!window.confirm(language === 'hi' ? `"${name}" खाता हटाएं?` : `Delete account "${name}"?`)) return;
+  const handleDeleteAccount = async (id: string, name: string) => {
+    if (!await confirmAction(language === 'hi' ? `"${name}" खाता हटाएं?` : `Delete account "${name}"?`)) return;
     // deleteAccount bails with its own toast on a guard — only announce a delete that started.
     if (deleteAccount(id)) toast({ title: language === 'hi' ? 'खाता हटाया गया' : 'Account deleted' });
   };

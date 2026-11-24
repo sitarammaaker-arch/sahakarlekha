@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Wrench, Trash2 } from 'lucide-react';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 const EQUIPMENT = [
   { id: 'lift', en: 'Lift / Elevator', hi: 'लिफ्ट' },
@@ -112,7 +113,7 @@ export default function Amc() {
                     {a.vendor || '—'}{a.amount ? ` · ${money(a.amount)}/${hi ? 'वर्ष' : 'yr'}` : ''}{a.expiryDate ? ` · ${hi ? 'समाप्ति' : 'exp'} ${a.expiryDate}` : ''}
                   </div>
                 </div>
-                <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { if (window.confirm(hi ? 'अनुबंध हटाएँ?' : 'Delete contract?')) deleteAmc(a.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                <Button size="sm" variant="ghost" className="shrink-0" onClick={async () => { if (await confirmAction(hi ? 'अनुबंध हटाएँ?' : 'Delete contract?')) deleteAmc(a.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             );
           })}

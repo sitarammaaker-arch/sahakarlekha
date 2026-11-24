@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ClipboardList, Pencil, Trash2 } from 'lucide-react';
 import type { WorkOrder } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 const STATUSES = [
   { id: 'open', en: 'Open', hi: 'चालू' },
@@ -98,7 +99,7 @@ export default function WorkOrders() {
     setEditOpen(false);
   };
 
-  const remove = (w: WorkOrder) => {
+  const remove = async (w: WorkOrder) => {
     // RULE-3: block deletion while muster entries / department bills reference this WO
     // (their wage-accrual + income vouchers would otherwise stay live but unattributed).
     const hasMuster = musterEntries.some(m => !m.isDeleted && m.workOrderId === w.id);
@@ -113,7 +114,7 @@ export default function WorkOrders() {
       });
       return;
     }
-    if (!window.confirm(hi ? `कार्य आदेश ${w.workOrderNo} हटाएँ?` : `Delete work order ${w.workOrderNo}?`)) return;
+    if (!await confirmAction(hi ? `कार्य आदेश ${w.workOrderNo} हटाएँ?` : `Delete work order ${w.workOrderNo}?`)) return;
     deleteWorkOrder(w.id);
     toast({ title: hi ? 'कार्य आदेश हटाया गया' : 'Work order deleted' });
   };

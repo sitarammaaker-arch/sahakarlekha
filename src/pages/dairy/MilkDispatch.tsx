@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Truck, Trash2, HandCoins } from 'lucide-react';
 import type { DairyDispatch, MilkShift } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN')}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -40,7 +41,7 @@ function DispatchRow({ d }: { d: DairyDispatch }) {
           </div>
           <div className="text-muted-foreground text-xs">{d.date}{d.shift ? ` · ${d.shift === 'morning' ? (hi ? 'सुबह' : 'AM') : (hi ? 'शाम' : 'PM')}` : ''}{d.vehicleNo ? ` · ${d.vehicleNo}` : ''}</div>
         </div>
-        <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { if (window.confirm(hi ? 'डिस्पैच हटाएँ?' : 'Delete dispatch?')) deleteDairyDispatch(d.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+        <Button size="sm" variant="ghost" className="shrink-0" onClick={async () => { if (await confirmAction(hi ? 'डिस्पैच हटाएँ?' : 'Delete dispatch?')) deleteDairyDispatch(d.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
       </div>
       <div className="grid grid-cols-3 gap-2 text-xs">
         <div><div className="text-muted-foreground">{hi ? 'बिक्री' : 'Sale'}</div><div className="font-medium">{inr(d.amount)}</div></div>

@@ -17,6 +17,7 @@ import type { HousingFlat, MaintenanceBill } from '@/types';
 import { Receipt, Trash2, HandCoins, FileText } from 'lucide-react';
 import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
 import { maintenanceBillMessage } from '@/lib/whatsappReminders';
+import { confirmAction } from '@/lib/confirmAction';
 
 const thisMonth = () => new Date().toISOString().slice(0, 7); // YYYY-MM
 const today = () => new Date().toISOString().split('T')[0];
@@ -78,8 +79,8 @@ export default function MaintenanceBilling() {
     generateMaintenanceBills({ period });
   };
 
-  const remove = (id: string, billNo: string) => {
-    if (!window.confirm(hi ? `बिल ${billNo} हटाएँ? इसका receivable voucher भी रद्द होगा।` : `Delete bill ${billNo}? Its receivable voucher will be cancelled too.`)) return;
+  const remove = async (id: string, billNo: string) => {
+    if (!await confirmAction(hi ? `बिल ${billNo} हटाएँ? इसका receivable voucher भी रद्द होगा।` : `Delete bill ${billNo}? Its receivable voucher will be cancelled too.`)) return;
     // H: false = refused (lock / permission / voucher not cancellable) — the context already said why.
     if (deleteMaintenanceBill(id)) toast({ title: hi ? 'बिल हटाया गया' : 'Bill deleted' });
   };

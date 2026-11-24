@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { Truck, Plus, Pencil, Trash2 } from 'lucide-react';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 /**
  * Transport — hired transporters (T1 master) and, from E2, hired-truck trips: recording a trip POSTS
@@ -113,7 +114,7 @@ export default function Transport() {
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(t.id)} aria-label="edit"><Pencil className="h-4 w-4" /></Button>
-                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => { if (window.confirm(hi ? 'यह ट्रांसपोर्टर हटाएँ?' : 'Delete this transporter?')) deleteTransporter(t.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={async () => { if (await confirmAction(hi ? 'यह ट्रांसपोर्टर हटाएँ?' : 'Delete this transporter?')) deleteTransporter(t.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
               </div>
             </div>
           ))}
@@ -161,7 +162,7 @@ export default function Transport() {
                       <div className="font-medium">{t.tripNo} · {t.date} · {trName(t.transporterId)} {bal.outstanding <= 0.005 ? <Badge variant="secondary">{hi ? 'चुकता' : 'Paid'}</Badge> : null}</div>
                       <div className="text-xs text-muted-foreground">{t.vehicleNo || ''}{t.fromPlace || t.toPlace ? ` · ${t.fromPlace || ''} → ${t.toPlace || ''}` : ''}{t.qty ? ` · ${t.qty} ${hi ? 'क्विं' : 'qtl'}` : ''} · {hi ? 'भाड़ा' : 'freight'} {money(t.freight)} · {hi ? 'चुकाया' : 'paid'} {money(bal.paid)} · <b>{hi ? 'बकाया' : 'due'} {money(bal.outstanding)}</b></div>
                     </div>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => { if (window.confirm(hi ? `trip ${t.tripNo} हटाएँ? भाड़े का वाउचर भी रद्द होगा।` : `Delete trip ${t.tripNo}?`)) void deleteHiredTrip(t.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={async () => { if (await confirmAction(hi ? `trip ${t.tripNo} हटाएँ? भाड़े का वाउचर भी रद्द होगा।` : `Delete trip ${t.tripNo}?`)) void deleteHiredTrip(t.id); }} aria-label="delete"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                   {bal.outstanding > 0.005 && (
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">

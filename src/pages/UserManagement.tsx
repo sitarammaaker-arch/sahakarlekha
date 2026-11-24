@@ -28,6 +28,7 @@ import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
 import { fmtDateTime } from '@/lib/dateUtils';
 import { PLAN_CATALOG, priceLabel } from '@/lib/plans';
 import { UserRole } from '@/types';
+import { confirmAction, noticeAction } from '@/lib/confirmAction';
 
 const USERS_KEY = 'sahayata_app_users';
 
@@ -245,7 +246,8 @@ export default function UserManagement() {
         // Changing YOUR OWN email: this session's token still carries the old email, which every
         // tenant check reads — sign in again with the new email.
         if (emailChanged && (currentUser?.email || '').toLowerCase() === (editing.email || '').toLowerCase()) {
-          window.alert(hi
+          // In-page notice (window.alert never shows in the desktop app's pane): logout waits for "OK".
+          await noticeAction(hi
             ? `आपका ईमेल बदलकर ${newEmail} हो गया है। कृपया नए ईमेल से दोबारा लॉगिन करें।`
             : `Your email is now ${newEmail}. Please log in again with the new email.`);
           logout();
@@ -361,7 +363,7 @@ export default function UserManagement() {
 
   // ECR-12 — admin resets a locked-out user's 2FA (lost device).
   const handleResetMfa = async (u: AppUser) => {
-    if (!window.confirm(hi
+    if (!await confirmAction(hi
       ? `${u.name} का 2FA reset करें? वे बिना 2FA login करके दोबारा सेट कर पाएंगे.`
       : `Reset 2FA for ${u.name}? They will be able to log in without 2FA and set it up again.`)) return;
     const ok = await adminResetMfa(u.email);

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { getBankAccountIds } from '@/lib/storage';
 import { ShieldCheck, IndianRupee, Trash2, Download } from 'lucide-react';
+import { confirmAction } from '@/lib/confirmAction';
 
 export default function PfEsi() {
   const { workers, pfEsiRuns, computePfEsi, postPfEsi, depositPfEsi, deletePfEsiRun } = useLabourData();
@@ -58,12 +59,12 @@ export default function PfEsi() {
     const v = depositPfEsi({ runId: depRunId, mode: depMode, bankAccountId: depMode === 'bank' ? (depBankId || undefined) : undefined, date: depDate });
     if (v.id) setDepOpen(false);
   };
-  const remove = (id: string, p: string, deposited: boolean) => {
+  const remove = async (id: string, p: string, deposited: boolean) => {
     // A deposited run was likely already filed with EPFO/ESIC — warn explicitly before reversing.
     const msg = deposited
       ? (hi ? `${p} की EPF/ESI जमा हो चुकी है — संभवतः EPFO/ESIC में दाख़िल। हटाने पर देयता व जमा दोनों voucher उलट जाएँगे। फिर भी हटाएँ?` : `${p} EPF/ESI is already deposited — likely filed with EPFO/ESIC. Deleting reverses BOTH the liability and deposit vouchers. Delete anyway?`)
       : (hi ? `${p} की EPF/ESI रन हटाएँ? (इसके voucher रद्द होंगे)` : `Delete EPF/ESI run for ${p}? (its vouchers cancel)`);
-    if (!window.confirm(msg)) return;
+    if (!await confirmAction(msg)) return;
     deletePfEsiRun(id);
     toast({ title: hi ? 'रन हटाया गया' : 'Run deleted' });
   };

@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Building2, Pencil, Trash2, Search } from 'lucide-react';
 import type { HousingFlat } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 const UNIT_TYPES = [
   { id: '1bhk', en: '1 BHK', hi: '1 BHK' },
@@ -144,8 +145,8 @@ export default function FlatsRegister() {
     if (accepted) setEditOpen(false);
   };
 
-  const removeFlat = (f: HousingFlat) => {
-    if (!window.confirm(hi ? `फ्लैट ${f.flatNo} हटाएँ?` : `Delete flat ${f.flatNo}?`)) return;
+  const removeFlat = async (f: HousingFlat) => {
+    if (!await confirmAction(hi ? `फ्लैट ${f.flatNo} हटाएँ?` : `Delete flat ${f.flatNo}?`)) return;
     deleteHousingFlat(f.id);
     toast({ title: hi ? 'फ्लैट हटाया गया' : 'Flat deleted' });
   };

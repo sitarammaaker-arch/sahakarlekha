@@ -17,6 +17,7 @@ import { Truck, Trash2, Pencil } from 'lucide-react';
 import EntityExportButton from '@/components/export/EntityExportButton';
 import { expiryState } from '@/lib/transport/trips';
 import type { TransportVehicle, VehicleType } from '@/types';
+import { confirmAction } from '@/lib/confirmAction';
 
 const TYPES: { id: VehicleType; hi: string; en: string }[] = [
   { id: 'truck', hi: 'ट्रक', en: 'Truck' },
@@ -160,7 +161,7 @@ export default function Vehicles() {
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <Button size="sm" variant="ghost" onClick={() => edit(v)}><Pencil className="h-4 w-4" /></Button>
-                <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(hi ? `वाहन ${v.regNo} हटाएँ?` : `Delete vehicle ${v.regNo}?`)) deleteVehicle(v.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction(hi ? `वाहन ${v.regNo} हटाएँ?` : `Delete vehicle ${v.regNo}?`)) deleteVehicle(v.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             </div>
           ))}

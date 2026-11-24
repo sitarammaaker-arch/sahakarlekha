@@ -14,6 +14,7 @@ import { getBankAccountIds } from '@/lib/storage';
 import { Receipt, IndianRupee, Trash2 } from 'lucide-react';
 import type { DepartmentBill, DeptBillType } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 const BILL_TYPES: { id: DeptBillType; en: string; hi: string }[] = [
   { id: 'running', en: 'Running Bill', hi: 'रनिंग बिल' },
@@ -118,8 +119,8 @@ export default function DepartmentBills() {
     if (v.id) setPayOpen(false);
   };
 
-  const remove = (b: DepartmentBill) => {
-    if (!window.confirm(hi ? `बिल ${b.billNo} हटाएँ? (इसके वसूली voucher भी रद्द होंगे)` : `Delete bill ${b.billNo}? (its collection vouchers will be cancelled too)`)) return;
+  const remove = async (b: DepartmentBill) => {
+    if (!await confirmAction(hi ? `बिल ${b.billNo} हटाएँ? (इसके वसूली voucher भी रद्द होंगे)` : `Delete bill ${b.billNo}? (its collection vouchers will be cancelled too)`)) return;
     deleteDepartmentBill(b.id);
     toast({ title: hi ? 'बिल हटाया गया' : 'Bill deleted' });
   };

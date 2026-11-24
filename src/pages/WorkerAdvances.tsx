@@ -15,6 +15,7 @@ import { getBankAccountIds } from '@/lib/storage';
 import { HandCoins, IndianRupee, Trash2 } from 'lucide-react';
 import type { WorkerAdvance } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 export default function WorkerAdvances() {
   const { workers, workerAdvances, addWorkerAdvance, recordAdvanceRecovery, deleteWorkerAdvance } = useLabourData();
@@ -68,8 +69,8 @@ export default function WorkerAdvances() {
     const v = recordAdvanceRecovery({ advanceId: recId, amount: amt, mode: recMode, bankAccountId: recMode === 'bank' ? (recBankId || undefined) : undefined, date: recDate });
     if (v.id) setRecOpen(false);
   };
-  const remove = (a: WorkerAdvance) => {
-    if (!window.confirm(hi ? `अग्रिम ${a.advanceNo} हटाएँ? (वसूली voucher भी रद्द होंगे)` : `Delete advance ${a.advanceNo}? (its recovery vouchers cancel too)`)) return;
+  const remove = async (a: WorkerAdvance) => {
+    if (!await confirmAction(hi ? `अग्रिम ${a.advanceNo} हटाएँ? (वसूली voucher भी रद्द होंगे)` : `Delete advance ${a.advanceNo}? (its recovery vouchers cancel too)`)) return;
     deleteWorkerAdvance(a.id);
     toast({ title: hi ? 'अग्रिम हटाया गया' : 'Advance deleted' });
   };

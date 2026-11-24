@@ -15,6 +15,7 @@ import { getBankAccountIds } from '@/lib/storage';
 import { UserCheck, Pencil, Trash2, IndianRupee } from 'lucide-react';
 import type { MusterEntry } from '@/types';
 import EntityExportButton from '@/components/export/EntityExportButton';
+import { confirmAction } from '@/lib/confirmAction';
 
 const thisMonth = new Date().toISOString().slice(0, 7); // current YYYY-MM
 
@@ -126,8 +127,8 @@ export default function MusterRoll() {
     setEditOpen(false);
   };
 
-  const remove = (m: MusterEntry) => {
-    if (!window.confirm(hi ? `${memberName(m.memberId)} की हाज़िरी हटाएँ?` : `Delete attendance for ${memberName(m.memberId)}?`)) return;
+  const remove = async (m: MusterEntry) => {
+    if (!await confirmAction(hi ? `${memberName(m.memberId)} की हाज़िरी हटाएँ?` : `Delete attendance for ${memberName(m.memberId)}?`)) return;
     deleteMusterEntry(m.id);
     toast({ title: hi ? 'हाज़िरी हटाई गई' : 'Attendance deleted' });
   };

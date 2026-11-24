@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Building2, Plus, Edit2, Trash2, Home, ArrowLeftRight } from 'lucide-react';
 import type { Branch } from '@/types';
 import { INTER_BRANCH_CONTROL_ID } from '@/lib/interBranch';
+import { confirmAction } from '@/lib/confirmAction';
 
 const today = () => new Date().toISOString().split('T')[0];
 
@@ -60,9 +61,9 @@ const Branches: React.FC = () => {
     toast({ title: hi ? 'शाखा सहेजी गई' : 'Branch saved' });
   };
 
-  const remove = (b: Branch) => {
+  const remove = async (b: Branch) => {
     if (b.isHeadOffice) { toast({ title: hi ? 'हेड ऑफ़िस नहीं हटा सकते' : 'Cannot delete the Head Office', variant: 'destructive' }); return; }
-    if (!window.confirm(hi ? `${b.name} हटाएँ? इसकी entries "All" में दिखती रहेंगी।` : `Delete ${b.name}? Its entries stay visible under "All".`)) return;
+    if (!await confirmAction(hi ? `${b.name} हटाएँ? इसकी entries "All" में दिखती रहेंगी।` : `Delete ${b.name}? Its entries stay visible under "All".`)) return;
     deleteBranch(b.id);
     toast({ title: hi ? 'शाखा हटाई गई' : 'Branch deleted' });
   };

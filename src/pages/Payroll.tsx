@@ -24,6 +24,7 @@ import { Wallet, Users, IndianRupee, Loader2, Play, UserPlus, Printer, Download,
 import { buildEcr, type EcrMember } from '@/lib/pay/filing/ecr';
 import { ledgerPostingBlocked, LEDGER_POSTING_OFF_HI, LEDGER_POSTING_OFF_EN } from '@/lib/payroll/ledgerPostingGate';
 import { getBankAccountIds, defaultBankAccountId, ACCOUNT_IDS } from '@/lib/storage';
+import { confirmAction } from '@/lib/confirmAction';
 
 interface PayRun {
   run_id: string; run_no: string; period: string; period_month: string;
@@ -590,7 +591,7 @@ const Payroll: React.FC = () => {
 
   const deactivateEmp = async () => {
     const last = exitDate.trim();
-    if (!window.confirm(hi
+    if (!await confirmAction(hi
       ? `${nameOf(attEmp?.full_name)} को हटाएँ? ${last ? `${last} तक का वेतन बनेगा।` : 'आज तक का वेतन बनेगा।'}`
       : `Remove ${nameOf(attEmp?.full_name)}? Pay will be computed up to ${last || 'today'}.`)) return;
     setEmpBusy(true);
@@ -1292,7 +1293,7 @@ const Payroll: React.FC = () => {
                         )}
                         <Button size="sm" variant="outline" onClick={() => { setStructEdit(c.code); setStructVal(c.fixed_minor != null ? String(Number(c.fixed_minor) / 100) : ''); }}>{hi ? 'बदलें' : 'Edit'}</Button>
                         <Button size="sm" variant="ghost" className="text-destructive px-2" disabled={structBusy === c.code}
-                          onClick={() => { if (window.confirm(hi ? `${nameOf(c.display_name)} को इस कर्मचारी के ढाँचे से हटाएँ?` : `Remove ${nameOf(c.display_name)} from this employee's structure?`)) changeComponent('structure-remove', c.code); }}>
+                          onClick={async () => { if (await confirmAction(hi ? `${nameOf(c.display_name)} को इस कर्मचारी के ढाँचे से हटाएँ?` : `Remove ${nameOf(c.display_name)} from this employee's structure?`)) changeComponent('structure-remove', c.code); }}>
                           {structBusy === c.code ? <Loader2 className="h-3 w-3 animate-spin" /> : '✕'}
                         </Button>
                       </div>
@@ -1395,7 +1396,7 @@ const Payroll: React.FC = () => {
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium">{rupees(l.principal_minor)} {l.purpose && <span className="text-muted-foreground font-normal">· {l.purpose}</span>}</span>
                       <Button size="sm" variant="ghost" className="text-destructive h-7" disabled={loanBusy}
-                        onClick={() => { if (window.confirm(hi ? 'यह अग्रिम बंद करें? वसूली रुक जाएगी।' : 'Close this advance? Recovery stops.')) closeLoan(l.id); }}>
+                        onClick={async () => { if (await confirmAction(hi ? 'यह अग्रिम बंद करें? वसूली रुक जाएगी।' : 'Close this advance? Recovery stops.')) closeLoan(l.id); }}>
                         {hi ? 'बंद करें' : 'Close'}
                       </Button>
                     </div>
@@ -1544,24 +1545,24 @@ const Payroll: React.FC = () => {
                       {(r.state === 'posted' || r.state === 'paid') && (
                         <Button size="sm" variant="ghost" className="mr-2 text-destructive" disabled={transitioning === r.run_id || ledgerPostingBlocked('rollback')}
                           title={ledgerPostingBlocked('rollback') ? (hi ? LEDGER_POSTING_OFF_HI : LEDGER_POSTING_OFF_EN) : undefined}
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
                             const msg = hi
                               ? `रन ${r.run_no} को उलटें? इसकी बही entries reverse हो जाएँगी (books शून्य पर आएँगी); original रहेंगे। यह सुधार के लिए है।`
                               : `Reverse run ${r.run_no}? Its ledger entries will be reversed (books net to zero); originals are kept. For corrections.`;
-                            if (window.confirm(msg)) doTransition(r.run_id, 'rollback');
+                            if (await confirmAction(msg)) doTransition(r.run_id, 'rollback');
                           }}>
                           {transitioning === r.run_id ? <Loader2 className="h-3 w-3 animate-spin" /> : (hi ? 'उलटें' : 'Reverse')}
                         </Button>
                       )}
                       {(r.state === 'draft' || r.state === 'verified' || r.state === 'approved') && (
                         <Button size="sm" variant="ghost" className="mr-2 text-destructive" disabled={transitioning === r.run_id}
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
                             const msg = hi
                               ? `रन ${r.run_no} रद्द करें? यह post होने से पहले का सुधार है — बही पर कोई असर नहीं। रद्द run दोबारा नहीं चलता; उसी अवधि का नया run बनाया जा सकता है।`
                               : `Cancel run ${r.run_no}? Pre-post — no ledger impact. A cancelled run can't resume; you can start a fresh run for the same period.`;
-                            if (window.confirm(msg)) doTransition(r.run_id, 'cancel');
+                            if (await confirmAction(msg)) doTransition(r.run_id, 'cancel');
                           }}>
                           {transitioning === r.run_id ? <Loader2 className="h-3 w-3 animate-spin" /> : (hi ? 'रद्द करें' : 'Cancel')}
                         </Button>

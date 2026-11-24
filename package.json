@@ -411,6 +411,7 @@
     "test:stock-verification": "node scripts/test-stock-verification.mjs",
     "test:cheque-register": "node scripts/test-cheque-register.mjs",
     "test:voucher-attachments": "node scripts/test-voucher-attachments.mjs",
+    "test:no-native-confirm": "node scripts/test-no-native-confirm.mjs",
     "test:farmer-payment-mode": "node scripts/test-farmer-payment-mode.mjs",
     "test:global-search": "node scripts/test-global-search.mjs",
     "test:inter-branch": "node scripts/test-inter-branch.mjs",

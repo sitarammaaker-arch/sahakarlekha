@@ -60,6 +60,7 @@ import { ageOn } from '@/lib/members/voters';
 import { joiningPreviewLine } from '@/lib/members/joiningReceipts';
 import { defaultBankAccountId } from '@/lib/storage';
 import { downloadExcel } from '@/lib/exportUtils';
+import { confirmAction } from '@/lib/confirmAction';
 
 // ECR-16: member lifecycle status → label + badge colour per state.
 const STATUS_META: Record<MemberStatus, { hi: string; en: string; cls: string }> = {
@@ -1518,7 +1519,7 @@ const Members: React.FC = () => {
                     <Button size="sm" variant="outline" disabled={photoBusy} onClick={() => photoInput.current?.click()}>
                       {photoBusy ? (hi ? 'सेव हो रही है…' : 'Saving…') : viewPhotoPath ? (hi ? 'फ़ोटो बदलें' : 'Change photo') : (hi ? 'फ़ोटो जोड़ें' : 'Add photo')}
                     </Button>
-                    {viewPhotoPath && <Button size="sm" variant="ghost" disabled={photoBusy} onClick={() => { if (window.confirm(hi ? 'सदस्य की फ़ोटो हटाएँ? (धारा 40 के अनुसार फ़ोटो रखना ज़रूरी है)' : 'Remove the member photo? (s.40 requires one)')) removeMemberPhoto(viewMember.id); }}>{hi ? 'फ़ोटो हटाएँ' : 'Remove photo'}</Button>}
+                    {viewPhotoPath && <Button size="sm" variant="ghost" disabled={photoBusy} onClick={async () => { if (await confirmAction(hi ? 'सदस्य की फ़ोटो हटाएँ? (धारा 40 के अनुसार फ़ोटो रखना ज़रूरी है)' : 'Remove the member photo? (s.40 requires one)')) removeMemberPhoto(viewMember.id); }}>{hi ? 'फ़ोटो हटाएँ' : 'Remove photo'}</Button>}
                   </div>
                 )}
                 {!viewPhotoPath && <p className="text-[11px] text-muted-foreground">{hi ? 'धारा 40: प्राथमिक समिति के हर सदस्य की फ़ोटो रखनी होती है।' : 's.40: a photograph of every member of a primary society.'}</p>}

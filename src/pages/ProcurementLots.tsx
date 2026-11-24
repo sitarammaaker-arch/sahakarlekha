@@ -17,6 +17,7 @@ import { deriveLotStage, LOT_STAGE_LABEL, isRejectedQuality, suggestDeductionAcc
 import { jformSlipHTML, paymentSlipHTML, openPrint, type SlipParty } from '@/lib/procurement/print';
 import { Wheat, Plus, AlertTriangle } from 'lucide-react';
 import type { Voucher } from '@/types';
+import { confirmAction, promptAction } from '@/lib/confirmAction';
 
 // Legacy crop ids (used before the M1a Crop master). Kept only so lots created earlier still
 // render a readable crop name; new lots pick from the Crop master (useMarketingData().crops).
@@ -359,9 +360,15 @@ export default function ProcurementLots() {
     const disp = dispatches.find(d => !d.isDeleted && d.lotIds.includes(lotId));
     if (disp) { toast({ title: hi ? 'लॉट डिस्पैच में है' : 'Lot is in a dispatch', description: hi ? `यह लॉट डिस्पैच ${disp.dispatchNo} में एजेंसी को भेजा जा चुका है — पहले "एजेंसी रसीद" पेज पर वह डिस्पैच हटाएँ।` : `Delete dispatch ${disp.dispatchNo} on the Agency Receipt page first.`, variant: 'destructive', duration: 12000 }); return; }
     const posted = !!lotEngineVoucher(lotId);
-    const reason = window.prompt(hi
-      ? `यह लॉट रद्द करें?${posted ? ' इसकी बहीखाता पोस्टिंग का उल्टा (reversal) वाउचर बनेगा, और निपटान व कमीशन रद्द होंगे।' : ''}\nकारण लिखें:`
-      : `Cancel this lot?${posted ? ' Its posting is reversed and its settlement / commission cancelled.' : ''}\nReason:`);
+    // In-page prompt (window.prompt never shows in the desktop app's pane). OK with an empty reason still cancels, as before.
+    const reason = await promptAction({
+      title: hi ? 'यह लॉट रद्द करें?' : 'Cancel this lot?',
+      description: posted ? (hi ? 'इसकी बहीखाता पोस्टिंग का उल्टा (reversal) वाउचर बनेगा, और निपटान व कमीशन रद्द होंगे।' : 'Its posting is reversed and its settlement / commission cancelled.') : undefined,
+      label: hi ? 'कारण लिखें' : 'Reason',
+      confirmLabel: hi ? 'लॉट रद्द करें' : 'Cancel lot',
+      cancelLabel: hi ? 'वापस' : 'Back',
+      destructive: true,
+    });
     if (reason == null) return;
     setCancellingLotId(lotId);
     try { await cancelProcurementLot({ lotId, reason }); } finally { setCancellingLotId(null); }
@@ -608,7 +615,7 @@ export default function ProcurementLots() {
                   <div className="text-xs text-emerald-600 mt-0.5">
                     {hi ? 'कमीशन' : 'Commission'}: {money(commissionForLot(l.id)!.amount)} · {commissionForLot(l.id)!.voucherNo}
                     {' · '}
-                    <button type="button" className="underline text-destructive" onClick={() => { const c = commissionForLot(l.id)!; if (window.confirm(hi ? `कमीशन ${c.voucherNo} (${money(c.amount)}) रद्द करें?` : `Cancel commission ${c.voucherNo} (${money(c.amount)})?`)) deleteCommissionAccrual(c.id); }}>{hi ? 'रद्द करें' : 'Cancel'}</button>
+                    <button type="button" className="underline text-destructive" onClick={async () => { const c = commissionForLot(l.id)!; if (await confirmAction(hi ? `कमीशन ${c.voucherNo} (${money(c.amount)}) रद्द करें?` : `Cancel commission ${c.voucherNo} (${money(c.amount)})?`)) deleteCommissionAccrual(c.id); }}>{hi ? 'रद्द करें' : 'Cancel'}</button>
                   </div>
                 )}
                 {lotRejected(l.id) && (

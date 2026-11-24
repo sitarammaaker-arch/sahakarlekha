@@ -13,6 +13,7 @@ import { downloadCSV } from '@/lib/exportUtils';
 import { Gift, Trash2, CheckCircle2, HandCoins, Download } from 'lucide-react';
 import type { DairyDistribution, DairyBonusBasis } from '@/types';
 import { societyFyStart } from '@/lib/fyPeriod';
+import { confirmAction } from '@/lib/confirmAction';
 
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN')}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -55,7 +56,7 @@ function DistributionCard({ d, surplus }: { d: DairyDistribution; surplus: numbe
             {d.kind === 'bonus' ? `${d.from} → ${d.to} · ${d.basis === 'per_value' ? (hi ? 'मूल्य' : 'value') : (hi ? 'प्रति लीटर' : 'per L')} @ ${d.rate}` : `${d.fyLabel || ''} · ${d.rate}% ${hi ? 'शेयर पूंजी पर' : 'of share capital'}`}
           </div>
         </div>
-        <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { if (window.confirm(hi ? 'वितरण हटाएँ?' : 'Delete distribution?')) deleteDairyDistribution(d.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+        <Button size="sm" variant="ghost" className="shrink-0" onClick={async () => { if (await confirmAction(hi ? 'वितरण हटाएँ?' : 'Delete distribution?')) deleteDairyDistribution(d.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-xs">

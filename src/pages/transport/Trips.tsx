@@ -26,6 +26,7 @@ import type { TransportTrip } from '@/types';
 import { gtaTax, gtaModeProblem, GTA_GST_SOURCES, RCM_RECIPIENT_CATEGORIES_HI, RCM_RECIPIENT_CATEGORIES_EN, type GtaGstMode } from '@/lib/transport/gtaGst';
 import { societyStateCode, resolveStateCode, partyGstin } from '@/lib/gstStates';
 import { INDIAN_STATES } from '@/lib/constants';
+import { confirmAction } from '@/lib/confirmAction';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -104,8 +105,8 @@ export default function Trips() {
   };
   const payNet = +Math.max(0, (Number(payAmount) || 0) - (Number(payTds) || 0)).toFixed(2);
 
-  const remove = (t: TransportTrip) => {
-    if (!window.confirm(hi ? `ट्रिप ${t.tripNo} हटाएँ? (इसका वाउचर और वसूली रसीदें भी रद्द होंगी)` : `Delete trip ${t.tripNo}? (its voucher and receipts will be cancelled too)`)) return;
+  const remove = async (t: TransportTrip) => {
+    if (!await confirmAction(hi ? `ट्रिप ${t.tripNo} हटाएँ? (इसका वाउचर और वसूली रसीदें भी रद्द होंगी)` : `Delete trip ${t.tripNo}? (its voucher and receipts will be cancelled too)`)) return;
     deleteTrip(t.id);
   };
 

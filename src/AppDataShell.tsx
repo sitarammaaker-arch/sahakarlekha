@@ -19,6 +19,7 @@ import { MarketingProvider } from '@/contexts/MarketingDataContext';
 import { TransportOpsProvider } from '@/contexts/TransportOpsContext';
 import { ConsumerProvider } from '@/contexts/ConsumerDataContext';
 import ExportContextBinder from '@/components/ExportContextBinder';
+import { ConfirmHost } from '@/components/ConfirmHost';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { CapabilityGuard } from '@/components/CapabilityGuard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -38,6 +39,9 @@ const AppDataProviders: React.FC<{ children: React.ReactNode }> = ({ children })
             <TransportOpsProvider>
               <ConsumerProvider>
                 <ExportContextBinder />
+                {/* In-page confirm / prompt / notice (lib/confirmAction) — only signed-in pages ask, so it lives in this
+                    lazy chunk, not in the public entry. */}
+                <ConfirmHost />
                 {children}
               </ConsumerProvider>
             </TransportOpsProvider>
