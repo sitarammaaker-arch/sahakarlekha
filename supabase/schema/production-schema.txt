@@ -125,6 +125,7 @@ applied_migration 203
 applied_migration 204
 applied_migration 205
 applied_migration 206
+applied_migration 207
 column _member_ref_backup.id bigint not null default nextval('_member_ref_backup_id_seq'::regclass)
 column _member_ref_backup.old_member_id text not null
 column _member_ref_backup.row_id text not null
@@ -2212,6 +2213,18 @@ column user_mfa_recovery.code_hash text not null
 column user_mfa_recovery.email text not null
 column user_mfa_recovery.id bigint not null
 column user_mfa_recovery.used_at timestamp with time zone
+column voucher_attachments.deletedAt timestamp with time zone
+column voucher_attachments.deletedBy text
+column voucher_attachments.fileName text
+column voucher_attachments.id text not null
+column voucher_attachments.isDeleted boolean not null default false
+column voucher_attachments.mimeType text
+column voucher_attachments.path text not null
+column voucher_attachments.sizeBytes bigint
+column voucher_attachments.society_id text not null
+column voucher_attachments.uploadedAt timestamp with time zone not null default now()
+column voucher_attachments.uploadedBy text
+column voucher_attachments.voucherId text not null
 column voucher_entries.accountId text not null
 column voucher_entries.costCentreId text
 column voucher_entries.cr numeric not null default 0
@@ -2640,6 +2653,7 @@ constraint transport_vehicles.transport_vehicles_pkey PRIMARY KEY (id)
 constraint transport_vehicles.transport_vehicles_status_check CHECK ((status = ANY (ARRAY['active'::text, 'inactive'::text])))
 constraint user_mfa.user_mfa_pkey PRIMARY KEY (email)
 constraint user_mfa_recovery.user_mfa_recovery_pkey PRIMARY KEY (id)
+constraint voucher_attachments.voucher_attachments_pkey PRIMARY KEY (id)
 constraint voucher_entries.voucher_entries_account_fkey FOREIGN KEY ("accountId", society_id) REFERENCES accounts(id, society_id)
 constraint voucher_entries.voucher_entries_amounts CHECK (((dr >= (0)::numeric) AND (cr >= (0)::numeric) AND (NOT ((dr > (0)::numeric) AND (cr > (0)::numeric)))))
 constraint voucher_entries.voucher_entries_pkey PRIMARY KEY (id)
@@ -3460,6 +3474,9 @@ grant transport_vehicles.authenticated DELETE,INSERT,REFERENCES,SELECT,TRIGGER,T
 grant transport_vehicles.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant user_mfa.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant user_mfa_recovery.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+grant voucher_attachments.anon DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+grant voucher_attachments.authenticated DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+grant voucher_attachments.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant voucher_entries.anon DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant voucher_entries.authenticated DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
 grant voucher_entries.service_role DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
@@ -3583,6 +3600,8 @@ index CREATE INDEX signup_attempts_email ON public.signup_attempts USING btree (
 index CREATE INDEX signup_attempts_ip ON public.signup_attempts USING btree (ip_hash, at)
 index CREATE INDEX stock_movements_society_created_idx ON public.stock_movements USING btree (society_id, "createdAt", id)
 index CREATE INDEX stock_verifications_society_created_idx ON public.stock_verifications USING btree (society_id, "createdAt", id)
+index CREATE INDEX voucher_attachments_society_uploaded_idx ON public.voucher_attachments USING btree (society_id, "uploadedAt", id)
+index CREATE INDEX voucher_attachments_voucher_idx ON public.voucher_attachments USING btree (society_id, "voucherId")
 index CREATE INDEX voucher_entries_jurisdiction_idx ON public.voucher_entries USING btree (society_id, jurisdiction)
 index CREATE INDEX voucher_lines_tb ON public.voucher_lines USING btree (society_id, fy_id, account_id)
 index CREATE INDEX voucher_lines_voucher ON public.voucher_lines USING btree (voucher_id)
@@ -4045,6 +4064,10 @@ policy transport_vehicles.transport_vehicles_delete PERMISSIVE DELETE to authent
 policy transport_vehicles.transport_vehicles_insert PERMISSIVE INSERT to authenticated using () check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
 policy transport_vehicles.transport_vehicles_select PERMISSIVE SELECT to authenticated using ((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids))) check ()
 policy transport_vehicles.transport_vehicles_update PERMISSIVE UPDATE to authenticated using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write())) check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
+policy voucher_attachments.voucher_attachments_tenant_delete PERMISSIVE DELETE to public using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_delete())) check ()
+policy voucher_attachments.voucher_attachments_tenant_insert PERMISSIVE INSERT to public using () check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
+policy voucher_attachments.voucher_attachments_tenant_select PERMISSIVE SELECT to public using ((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids))) check ()
+policy voucher_attachments.voucher_attachments_tenant_update PERMISSIVE UPDATE to public using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write())) check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
 policy voucher_entries.society_rw PERMISSIVE SELECT to authenticated using ((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids))) check ()
 policy voucher_entries.society_rw_w_delete PERMISSIVE DELETE to authenticated using (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write())) check ()
 policy voucher_entries.society_rw_w_insert PERMISSIVE INSERT to authenticated using () check (((society_id IN ( SELECT current_user_society_ids() AS current_user_society_ids)) AND jwt_can_write()))
@@ -4223,6 +4246,7 @@ table transport_vehicle_expenses rls=t force=f
 table transport_vehicles rls=t force=f
 table user_mfa rls=t force=f
 table user_mfa_recovery rls=t force=f
+table voucher_attachments rls=t force=f
 table voucher_entries rls=t force=f
 table voucher_lines rls=t force=f
 table vouchers rls=t force=f
@@ -4327,6 +4351,7 @@ trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.transport_trips FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.transport_vehicle_expenses FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.transport_vehicles FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
+trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.voucher_attachments FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.voucher_entries FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.voucher_lines FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
 trigger CREATE TRIGGER change_log_row AFTER INSERT OR DELETE OR UPDATE ON public.vouchers FOR EACH ROW WHEN ((CURRENT_USER = 'authenticated'::name)) EXECUTE FUNCTION _change_log_row()
