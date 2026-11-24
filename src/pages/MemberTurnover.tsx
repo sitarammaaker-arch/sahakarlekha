@@ -15,11 +15,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Users, Download } from 'lucide-react';
+import { Users, Download, FileSpreadsheet, FileText } from 'lucide-react';
 import { PrintButton, PrintHeader } from '@/components/ReportPrint';
 import { buildMemberTurnover, memberSharePct, type TurnoverSide } from '@/lib/memberTurnover';
 import { societyFyStart } from '@/lib/fyPeriod';
-import { downloadCSV } from '@/lib/exportUtils';
+import { downloadCSV, downloadExcelSingle } from '@/lib/exportUtils';
+import { generateMemberTurnoverPDF } from '@/lib/pdfLazy';
 
 export default function MemberTurnover() {
   const { society, sales, purchases, members, stockItems, accounts, matchesActiveBranch } = useData();
@@ -59,16 +60,19 @@ export default function MemberTurnover() {
     share: hi ? 'सदस्यों का हिस्सा' : 'Members’ share',
   };
 
-  const exportCsv = () => {
-    const headers = [hi ? 'भाग' : 'Side', head.account, head.member, head.nominal, head.nonMember, head.total];
-    const r = (n: number) => n.toFixed(2);
+  // One table for CSV and Excel: side, account, the three classes and the total (numbers, so Excel can sum them).
+  const exportHeaders = [hi ? 'भाग' : 'Side', head.account, head.member, head.nominal, head.nonMember, head.total];
+  const exportRows = () => {
     const part = (label: string, s: TurnoverSide) => [
-      ...s.rows.map(x => [label, `${x.accountId} ${accName(x)}`, r(x.member), r(x.nominal), r(x.nonMember), r(x.total)]),
-      [label, hi ? 'कुल' : 'Total', r(s.totals.member), r(s.totals.nominal), r(s.totals.nonMember), r(s.totals.total)],
+      ...s.rows.map(x => [label, `${x.accountId} ${accName(x)}`, x.member, x.nominal, x.nonMember, x.total]),
+      [label, hi ? 'कुल' : 'Total', s.totals.member, s.totals.nominal, s.totals.nonMember, s.totals.total],
     ];
-    downloadCSV(headers, [...part(hi ? 'खरीद' : 'Purchases', result.purchases), ...part(hi ? 'बिक्री' : 'Sales', result.sales)],
-      `member-turnover-${from || 'start'}-to-${to || 'end'}.csv`);
+    return [...part(hi ? 'खरीद' : 'Purchases', result.purchases), ...part(hi ? 'बिक्री' : 'Sales', result.sales)];
   };
+  const fileBase = `member-turnover-${from || 'start'}-to-${to || 'end'}`;
+  const exportCsv = () => downloadCSV(exportHeaders, exportRows().map(r => r.map(c => (typeof c === 'number' ? c.toFixed(2) : c))), `${fileBase}.csv`);
+  const exportExcel = () => downloadExcelSingle(exportHeaders, exportRows(), fileBase, 'Member Turnover');
+  const exportPdf = () => generateMemberTurnoverPDF(result, society, from || undefined, to || undefined);
 
   const sideTable = (title: string, s: TurnoverSide, billWord: string) => (
     <Card>
@@ -137,7 +141,9 @@ export default function MemberTurnover() {
               : 'Purchases from and sales to members, apart from non-members — account-wise, taxable value (after discount, before GST).'}
           </p>
         </div>
-        <div className="flex gap-2 print:hidden">
+        <div className="flex flex-wrap gap-2 print:hidden">
+          <Button variant="outline" size="sm" onClick={exportPdf} className="gap-1"><FileText className="h-4 w-4" />PDF</Button>
+          <Button variant="outline" size="sm" onClick={exportExcel} className="gap-1"><FileSpreadsheet className="h-4 w-4" />Excel</Button>
           {hasAny && <Button variant="outline" size="sm" onClick={exportCsv} className="gap-1"><Download className="h-4 w-4" />CSV</Button>}
           <PrintButton />
         </div>
