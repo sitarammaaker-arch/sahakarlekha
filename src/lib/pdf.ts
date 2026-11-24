@@ -30,6 +30,7 @@ import type { GroupSchedule } from '@/lib/reports/groupSchedule';
 import { memberStatusLabel } from '@/lib/memberLifecycle';
 import { reasonLabel, type ShortageRegister } from '@/lib/godownShortage';
 import { countTotals } from '@/lib/stockVerification';
+import type { ChequeRow } from '@/lib/chequeRegister';
 import { appealLastDate, applicationReceivedOn, isHaryana } from '@/lib/members/admission';
 import type { BlankPdfSpec } from '@/content/downloads';
 import { invoiceView, stateLabel, type SubscriptionInvoice } from '@/lib/billing/invoiceView';
@@ -2427,6 +2428,51 @@ export function generateGodownShortagePDF(
   addSignatureBlock(doc, font, ['Accountant', 'Secretary / Manager', 'President'], y + 6, undefined, [sig.accountant, sig.secretary, sig.president]);
   addPageNumbers(doc, font, society?.name);
   doc.save(pdfFileName('GodownShortage', society, fromDate, toDate));
+}
+
+
+// ── Cheque Issue / Collection Register PDF ───────────────────────────────────
+// HAFED Proformas IV/1 and IV/2. The two "Initials" columns stay blank, to be signed on the printed copy.
+// English only — build `rows` with hi=false.
+
+export function generateChequeRegisterPDF(
+  kind: 'issued' | 'received', rows: ChequeRow[], society: SocietySettings, fromDate?: string, toDate?: string,
+): void {
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const title = kind === 'issued' ? 'Cheque Issue Register' : 'Cheque Collection Register';
+  const subtitle = fromDate && toDate ? `${fmtDate(fromDate)} to ${fmtDate(toDate)}` : `FY: ${society.financialYear}`;
+  const { startY, font } = addHeader(doc, title, society, subtitle, { reportCode: kind === 'issued' ? 'CQI' : 'CQR' });
+  const head = kind === 'issued'
+    ? ['Sr.', 'Date', 'Cheque No.', 'Drawn in favour of', 'Bank', 'Amount', 'Presented on', 'Cashier', 'Officer']
+    : ['Sr.', 'Date', 'Cheque / DD No. & date', 'Received from', 'Deposited in', 'Amount', 'Cashier', 'Officer', 'Realised on'];
+  const body = rows.length
+    ? rows.map(r => {
+        const cleared = r.cleared ? (r.clearedDate ? fmtDate(r.clearedDate) : 'Cleared') : `Pending (${r.daysPending ?? 0} d)`;
+        const no = r.chequeDate && kind === 'received' ? `${r.chequeNo} / ${fmtDate(r.chequeDate)}` : r.chequeNo;
+        return kind === 'issued'
+          ? [String(r.serial), fmtDate(r.date), no, r.party, r.bankName, fmt(r.amount), cleared, '', '']
+          : [String(r.serial), fmtDate(r.date), no, r.party, r.bankName, fmt(r.amount), '', '', cleared];
+      })
+    : [[kind === 'issued' ? 'No cheque issued in this period' : 'No cheque received in this period', '', '', '', '', '', '', '', '']];
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  autoTable(doc, {
+    startY: startY + 4,
+    head: [head],
+    body,
+    foot: [['', '', '', 'Total', '', fmt(total), '', '', '']],
+    styles: { fontSize: 8, cellPadding: 2, font, minCellHeight: 7 },
+    headStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    footStyles: { fillColor: [41, 82, 163], textColor: 255, fontStyle: 'bold' },
+    columnStyles: { 5: { halign: 'right' }, 7: { cellWidth: 22 }, 8: { cellWidth: kind === 'issued' ? 22 : 26 } },
+    didParseCell: rightAlignAmountColumns(5),
+  });
+  const y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  doc.setFont(font, 'normal'); doc.setFontSize(7.5);
+  doc.text(kind === 'issued'
+    ? 'HAFED Accounts Manual, para 4.6 / Proforma IV/1. "Presented on" is the date the cheque cleared in the bank reconciliation.'
+    : 'HAFED Accounts Manual, para 4.7 / Proforma IV/2. "Realised on" is the date the cheque cleared in the bank reconciliation.', 14, y);
+  addPageNumbers(doc, font, society?.name);
+  doc.save(pdfFileName(kind === 'issued' ? 'ChequeIssueRegister' : 'ChequeCollectionRegister', society, fromDate, toDate));
 }
 
 

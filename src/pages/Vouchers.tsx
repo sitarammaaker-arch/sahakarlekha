@@ -65,7 +65,7 @@ const Vouchers: React.FC = () => {
   // pages — byte-identical to the old hardcoded gate for all 4 legacy roles.
   const canEdit = can('update');    // create + edit + reverse (correction)
   const canDelete = can('delete');  // cancel — admin/societyAdmin/secretary only (restore is disabled)
-  const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, getTrialBalance, matchesActiveBranch, canEditVoucherActivity } = useData();
+  const { accounts, members, vouchers, sales, purchases, customers, suppliers, society, addVoucher, updateVoucher, cancelVoucher, reverseVoucher, setVoucherCheque, getTrialBalance, matchesActiveBranch, canEditVoucherActivity } = useData();
   const [submitForApproval, setSubmitForApproval] = useState(false);
   // UX-01: the maker-checker tick exists only where the society turned approval on. Elsewhere a ticked
   // box kept vouchers out of every report with an ordinary "saved" toast and nobody able to approve.
@@ -136,6 +136,21 @@ const Vouchers: React.FC = () => {
   const [voucherType, setVoucherType] = useState<VoucherType>('receipt');
   const [contraDir, setContraDir] = useState<'cash_to_bank' | 'bank_to_cash'>('cash_to_bank');
   const bankIds = useMemo(() => getBankAccountIds(accounts), [accounts]);
+  // The cheque fields show only when the voucher touches a bank ledger (never for cash).
+  const touchesBank = (...ids: (string | undefined)[]) => ids.some(id => !!id && bankIds.includes(id));
+  const chequeFieldsFor = (show: boolean) => (show && (chequeNo.trim() || chequeDate) ? { chequeNo: chequeNo.trim() || undefined, chequeDate: chequeDate || undefined } : {});
+  const chequeInputs = (no: string, setNo: (s: string) => void, date: string, setDate: (s: string) => void, compact = false) => (
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1.5">
+        <Label className={compact ? '' : 'text-base font-semibold'}>{language === 'hi' ? 'Cheque / DD नं. (वैकल्पिक)' : 'Cheque / DD no. (optional)'}</Label>
+        <Input value={no} onChange={e => setNo(e.target.value)} placeholder={language === 'hi' ? 'जैसे 004512' : 'e.g. 004512'} className={compact ? '' : 'h-11'} />
+      </div>
+      <div className="space-y-1.5">
+        <Label className={compact ? '' : 'text-base font-semibold'}>{language === 'hi' ? 'Cheque की तारीख़' : 'Cheque date'}</Label>
+        <Input type="date" value={date} onChange={e => setDate(e.target.value)} className={compact ? '' : 'h-11'} />
+      </div>
+    </div>
+  );
   // Only the quick-entry templates whose accounts exist in THIS society's chart (the chart depends on the society type — e.g. no commission
   // income in PACS, no telephone in housing); showing the rest filled an empty / invalid account and said nothing.
   const usableTemplates = useMemo(() => availableTemplates(VOUCHER_TEMPLATES, accounts, bankIds, ACCOUNT_IDS.BANK), [accounts, bankIds]);
@@ -174,6 +189,9 @@ const Vouchers: React.FC = () => {
   const [creditAccount, setCreditAccount] = useState('');
   const [amount, setAmount] = useState('');
   const [narration, setNarration] = useState('');
+  // Migration 205: cheque / DD on a bank voucher (HAFED Proformas IV/1, IV/2) — feeds the Cheque Register.
+  const [chequeNo, setChequeNo] = useState('');
+  const [chequeDate, setChequeDate] = useState('');
   const [linkedMemberId, setLinkedMemberId] = useState('');
   const [voucherNoInput, setVoucherNoInput] = useState('');
   const [cancelId, setCancelId] = useState<string | null>(null);
@@ -288,6 +306,8 @@ const Vouchers: React.FC = () => {
   const [editCredit, setEditCredit] = useState('');
   const [editAmount, setEditAmount] = useState('');
   const [editNarration, setEditNarration] = useState('');
+  const [editChequeNo, setEditChequeNo] = useState('');
+  const [editChequeDate, setEditChequeDate] = useState('');
   const [editMemberId, setEditMemberId] = useState('');
   // Editable only when canEditVoucherActivity(): the server's edit_voucher keeps an edited tag from migration
   // 127 on — before that it would show here and silently revert on refresh (RULE 1), so it stays read-only.
@@ -426,6 +446,8 @@ const Vouchers: React.FC = () => {
     setEditCredit(v.creditAccountId);
     setEditAmount(String(v.amount));
     setEditNarration(v.narration || '');
+    setEditChequeNo(v.chequeNo || '');
+    setEditChequeDate(v.chequeDate || '');
     setEditMemberId(v.memberId || '');
     setEditActivity(activityOfTag(v.costCentreId) ?? '');
     setEditActivityOrig(activityOfTag(v.costCentreId) ?? '');
@@ -464,6 +486,7 @@ const Vouchers: React.FC = () => {
       });
       // A guard already surfaced the real reason on failure — don't mask it with a false success.
       if (!ok) return;
+      if (touchesBank(...editLines.map(l => l.accountId))) setVoucherCheque(editId, editChequeNo, editChequeDate);
       toast({ title: language === 'hi' ? 'वाउचर अपडेट किया गया' : 'Voucher updated successfully' });
       setEditId(null);
       return;
@@ -489,6 +512,7 @@ const Vouchers: React.FC = () => {
     // A guard (FY-lock / period-lock / approved→use-reversal / unbalanced / no-permission)
     // already showed the real reason — don't paper over it with a false "success".
     if (!ok) return;
+    if (editType === 'contra' || touchesBank(editDebit, editCredit)) setVoucherCheque(editId, editChequeNo, editChequeDate);
     toast({ title: language === 'hi' ? 'वाउचर अपडेट किया गया' : 'Voucher updated successfully' });
     setEditId(null);
   };
@@ -566,6 +590,7 @@ const Vouchers: React.FC = () => {
       approvalStatus: approvalOn && submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
       ...activityField,
+      ...chequeFieldsFor(touchesBank(...lines.map(l => l.accountId))),
     }, saveOpts('expert', { hi: 'वाउचर सहेजा गया', en: 'Voucher saved' }));
     // addVoucher refuses (permission / FY lock / plan) with an empty id and has already shown why — never claim "saved".
     if (!v?.id) { setSaving(false); return; }
@@ -598,6 +623,7 @@ const Vouchers: React.FC = () => {
         approvalStatus: approvalOn && submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
         ...activityField,
+        ...chequeFieldsFor(true),   // a contra always has a bank side (deposit / self-cheque withdrawal)
       }, saveOpts('contra', { hi: 'कोंट्रा वाउचर सहेजा गया', en: 'Contra Voucher saved' }));
       // addVoucher refuses (permission / FY lock / plan) with an empty id and has already shown why — never claim "saved".
       if (!v?.id) { setSaving(false); return; }
@@ -631,6 +657,7 @@ const Vouchers: React.FC = () => {
       approvalStatus: approvalOn && submitForApproval ? 'pending' : undefined,
       origin: 'manual',   // ECR-11: subject to the approval matrix (threshold / all-manual)
       ...activityField,
+      ...chequeFieldsFor(touchesBank(debitAccount, creditAccount)),
     }, saveOpts('simple', { hi: 'वाउचर सहेजा गया', en: 'Voucher saved' }));
     // addVoucher refuses (permission / FY lock / plan) with an empty id and has already shown why — never claim "saved".
     if (!v?.id) { setSaving(false); return; }
@@ -650,6 +677,8 @@ const Vouchers: React.FC = () => {
     }
     setAmount('');
     setNarration('');
+    setChequeNo('');
+    setChequeDate('');
     setLinkedMemberId('');
     setVoucherNoInput('');
     setSavedVoucherNo(null);
@@ -997,6 +1026,7 @@ const Vouchers: React.FC = () => {
                           className="h-11"
                         />
                       </div>
+                      {touchesBank(debitAccount, creditAccount) && chequeInputs(chequeNo, setChequeNo, chequeDate, setChequeDate)}
                       {members.length > 0 && (
                         <div className="space-y-2">
                           <Label className="text-base font-semibold">
@@ -1289,6 +1319,8 @@ const Vouchers: React.FC = () => {
                         className="min-h-20 text-base"
                       />
                     </div>
+                    {(voucherType === 'contra' || touchesBank(debitAccount, creditAccount) || (entryMode === 'expert' && touchesBank(...lines.map(l => l.accountId))))
+                      && chequeInputs(chequeNo, setChequeNo, chequeDate, setChequeDate)}
 
                     {members.length > 0 && (
                       <div className="space-y-2">
@@ -1661,6 +1693,8 @@ const Vouchers: React.FC = () => {
             <div className="space-y-1.5">
               <Label>{t('narration')}</Label>
               <Textarea value={editNarration} onChange={e => setEditNarration(e.target.value)} rows={2} placeholder={language === 'hi' ? 'विवरण...' : 'Narration...'} />
+              {(editType === 'contra' || (editIsCompound ? touchesBank(...editLines.map(l => l.accountId)) : touchesBank(editDebit, editCredit)))
+                && <div className="pt-2">{chequeInputs(editChequeNo, setEditChequeNo, editChequeDate, setEditChequeDate, true)}</div>}
               {editActivityLocked && editActivity && (
                 <p className="text-sm text-muted-foreground">
                   {language === 'hi' ? 'गतिविधि: ' : 'Activity: '}<span className="font-medium text-foreground">{activityLabel(editActivity)}</span>

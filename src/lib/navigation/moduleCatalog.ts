@@ -46,6 +46,7 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   { id: 'cashBook',           titleKey: 'cashBook',           icon: Wallet,          route: '/cash-book',          domain: 'core', requiredCapabilities: U, order: 1 },
   { id: 'bankBook',           titleKey: 'bankBook',           icon: Building2,       route: '/bank-book',          domain: 'core', requiredCapabilities: U, order: 2 },
   { id: 'bankReconciliation', titleKey: 'bankReconciliation', icon: CheckCircle2,    route: '/bank-reconciliation', domain: 'core', requiredCapabilities: U, order: 3 },
+  { id: 'chequeRegister',     titleKey: 'chequeRegister',     icon: Landmark,        route: '/cheque-register',     domain: 'core', requiredCapabilities: U, order: 3.1 },
   { id: 'vouchers',           titleKey: 'vouchers',           icon: FileText,        route: '/vouchers',           domain: 'core', requiredCapabilities: U, order: 4 },
   { id: 'voucherApproval',    titleKey: 'voucherApproval',    icon: CheckCircle2,    route: '/voucher-approval',   domain: 'core', requiredCapabilities: U, requiredRoles: ['admin'], order: 6 },
   { id: 'dayBook',            titleKey: 'dayBook',            icon: CalendarDays,    route: '/day-book',           domain: 'core', requiredCapabilities: U, order: 7 },

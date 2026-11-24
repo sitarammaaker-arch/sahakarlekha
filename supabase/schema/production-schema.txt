@@ -123,6 +123,7 @@ applied_migration 201
 applied_migration 202
 applied_migration 203
 applied_migration 204
+applied_migration 205
 column _member_ref_backup.id bigint not null default nextval('_member_ref_backup_id_seq'::regclass)
 column _member_ref_backup.old_member_id text not null
 column _member_ref_backup.row_id text not null
@@ -2243,6 +2244,8 @@ column vouchers.approvedAt text
 column vouchers.approvedBy text
 column vouchers.billAllocations jsonb
 column vouchers.branchId text
+column vouchers.chequeDate date
+column vouchers.chequeNo text
 column vouchers.clearedDate text
 column vouchers.costCentreId text
 column vouchers.createdAt timestamp without time zone default now()
