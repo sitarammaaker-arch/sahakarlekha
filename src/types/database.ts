@@ -9400,10 +9400,10 @@ export type Database = {
           issued_at: string
         }[]
       }
-      voucher_edit_capabilities: { Args: never; Returns: Json }
       voucher_docs_limit_bytes: { Args: { p_society: string }; Returns: number }
       voucher_docs_usage: { Args: never; Returns: Json }
       voucher_docs_used_bytes: { Args: { p_society: string }; Returns: number }
+      voucher_edit_capabilities: { Args: never; Returns: Json }
       weekly_digest_counts: {
         Args: { p_day: string; p_society_id: string }
         Returns: Json
