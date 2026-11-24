@@ -84,5 +84,13 @@ ok(missing.map(x => x.id).join() === 'v2,v3,v7,v8', `missing: v2, v3, v7, v8 (go
 ok(L.vouchersWithoutBill({ vouchers, attachments, from: '2026-05-01', to: '2026-05-31' }).map(x => x.id).join() === 'v2,v3,v8', 'date range');
 ok(L.vouchersWithoutBill({ vouchers, attachments, types: ['receipt'] }).length === 0, 'a receipt with a file is not missing');
 
+// ── the dialog never relies on a native confirm (it did nothing in the desktop app's browser pane, live 2026-11-24) ──
+{
+  const { readFileSync } = await import('node:fs');
+  const dlg = readFileSync(new URL('../src/components/VoucherAttachmentsDialog.tsx', import.meta.url), 'utf8');
+  ok(!/window\.confirm\(|[^.\w]confirm\(/.test(dlg.replace(/\/\/.*$/gm, '')), 'remove asks in the row (no window.confirm)');
+  ok(dlg.includes('setConfirmId(a.id)') && dlg.includes('onClick={() => remove(a)}'), 'trash → "Remove?" → yes removes');
+}
+
 console.log(`\nVoucher attachments: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

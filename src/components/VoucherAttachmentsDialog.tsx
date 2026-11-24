@@ -27,6 +27,7 @@ export function VoucherAttachmentsDialog(props: {
   const { voucher, attachments, societyId, userName, hi, guardWrite, onAdded, onRemoved, onClose } = props;
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);   // the row asking "remove?" (in-page — no window.confirm)
   const fileRef = useRef<HTMLInputElement>(null);
   const readOnly = !!voucher?.isDeleted;
 
@@ -54,18 +55,21 @@ export function VoucherAttachmentsDialog(props: {
     toast({ title: hi ? 'बिल नहीं खुला' : 'Could not open the bill', variant: 'destructive' });
   };
 
+  // Removal asks in the row itself. window.confirm was used first and did nothing in the desktop app's browser pane (and
+  // in some phone browsers), where the native dialog never shows and answers "no" (live check, 2026-11-24).
   const remove = async (a: VoucherAttachment) => {
+    setConfirmId(null);
     if (!voucher || guardWrite(voucher.date)) return;
-    if (!window.confirm(hi ? `"${a.fileName || 'बिल'}" हटाएँ? (ऑडिट रिकॉर्ड में फ़ाइल बनी रहेगी)` : `Remove "${a.fileName || 'bill'}"? (the file stays in the audit record)`)) return;
     setBusy(true);
     const err = await removeVoucherAttachment(a.id, userName);
     setBusy(false);
     if (err) { toast({ title: hi ? 'नहीं हटा' : 'Not removed', description: err, variant: 'destructive', duration: 10000 }); return; }
     onRemoved(a.id);
+    toast({ title: hi ? 'बिल हटाया गया' : 'Bill removed', description: hi ? 'ऑडिट रिकॉर्ड में फ़ाइल बनी रहेगी।' : 'The file stays in the audit record.' });
   };
 
   return (
-    <Dialog open={!!voucher} onOpenChange={o => { if (!o) onClose(); }}>
+    <Dialog open={!!voucher} onOpenChange={o => { if (!o) { setConfirmId(null); onClose(); } }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Paperclip className="h-5 w-5" />{hi ? 'बिल की कॉपी' : 'Bill copies'} — {voucher?.voucherNo}</DialogTitle>
@@ -87,9 +91,19 @@ export function VoucherAttachmentsDialog(props: {
                   <p className="truncate font-medium">{a.fileName || (hi ? 'बिल' : 'Bill')}</p>
                   <p className="text-xs text-muted-foreground">{formatBytes(a.sizeBytes)} · {fmtDate(a.uploadedAt.slice(0, 10))}{a.uploadedBy ? ` · ${a.uploadedBy}` : ''}</p>
                 </div>
-                <Button size="sm" variant="outline" className="gap-1" onClick={() => open(a)} disabled={busy}><ExternalLink className="h-3.5 w-3.5" />{hi ? 'देखें' : 'Open'}</Button>
-                {!readOnly && (
-                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => remove(a)} disabled={busy} aria-label={hi ? 'हटाएँ' : 'Remove'}><Trash2 className="h-4 w-4" /></Button>
+                {confirmId === a.id ? (
+                  <span className="flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground">{hi ? 'पक्का हटाएँ?' : 'Remove?'}</span>
+                    <Button size="sm" variant="destructive" onClick={() => remove(a)} disabled={busy}>{hi ? 'हाँ, हटाएँ' : 'Yes, remove'}</Button>
+                    <Button size="sm" variant="outline" onClick={() => setConfirmId(null)} disabled={busy}>{hi ? 'नहीं' : 'No'}</Button>
+                  </span>
+                ) : (
+                  <>
+                    <Button size="sm" variant="outline" className="gap-1" onClick={() => open(a)} disabled={busy}><ExternalLink className="h-3.5 w-3.5" />{hi ? 'देखें' : 'Open'}</Button>
+                    {!readOnly && (
+                      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setConfirmId(a.id)} disabled={busy} aria-label={hi ? 'हटाएँ' : 'Remove'}><Trash2 className="h-4 w-4" /></Button>
+                    )}
+                  </>
                 )}
               </li>
             ))}
