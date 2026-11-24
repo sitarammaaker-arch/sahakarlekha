@@ -1375,6 +1375,38 @@ export interface StockMovement {
 // (Dr the person's "shortage recoverable" ledger / Cr "Sales by Shortage"); a 'shortageReversal' undoes one.
 export type StockAdjustmentReason = 'normalLoss' | 'damage' | 'shortageRecoverable' | 'shortageReversal' | 'excess' | 'other';
 
+// Migration 204: one physical count of one godown (HAFED Accounts Manual 10.20, Annexure XV/1). The book figures are
+// frozen as they stood when the count was saved; each difference became an ordinary stock adjustment (and, for a
+// recoverable shortage, a voucher) whose reference is kept on the line.
+export interface StockVerificationLine {
+  itemId: string;
+  itemName: string;
+  unit: string;
+  bookQty: number;
+  physicalQty: number;
+  diff: number;               // physical − book
+  rate: number;               // weighted-average cost when counted
+  value: number;              // |diff| × rate, rupees
+  reason?: StockAdjustmentReason;
+  person?: string;
+  posted?: boolean;           // the adjustment for this difference is saved
+  referenceNo?: string;       // its voucher no. (recoverable shortage) or the verification no.
+}
+export interface StockVerification {
+  id: string;
+  verificationNo: string;
+  date: string;
+  godownId?: string;
+  verifiedBy: string;
+  designation?: string;
+  status: 'pending' | 'complete' | 'partial';
+  lines: StockVerificationLine[];
+  certificate?: string;
+  remarks?: string;
+  createdBy?: string;
+  createdAt: string;
+}
+
 // ── Godown (ECR-17 Phase 3 — godown-wise stock) ──────────────────────────────
 export interface Godown {
   id: string;

@@ -344,10 +344,10 @@ interface DataContextType {
   addStockItem: (data: Omit<StockItem, 'id' | 'itemCode'>, opts?: { onSaved?: (i: StockItem) => void; onFailed?: () => void }) => StockItem;
   updateStockItem: (id: string, data: Partial<StockItem>) => void;
   deleteStockItem: (id: string) => void;
-  addStockMovement: (data: Omit<StockMovement, 'id' | 'createdAt'>) => void;
+  addStockMovement: (data: Omit<StockMovement, 'id' | 'createdAt'>, opts?: { onSaved?: () => void; onFailed?: (message: string) => void }) => void;
   transferStock: (input: { itemId: string; fromGodownId: string; toGodownId: string; qty: number; date?: string }) => boolean;
   // Godown shortage (HAFED 9.19 / 10.20): false = a guard refused it at once; otherwise onDone reports the cloud result.
-  recordStockShortage: (input: { itemId: string; qty: number; rate: number; date: string; person: string; narration?: string; godownId?: string; onDone?: (ok: boolean) => void }) => boolean;
+  recordStockShortage: (input: { itemId: string; qty: number; rate: number; date: string; person: string; narration?: string; godownId?: string; onDone?: (ok: boolean, voucherNo?: string) => void }) => boolean;
   reverseStockShortage: (movementId: string, reason: string, onDone?: (ok: boolean) => void) => boolean;
   writeOffShortage: (input: { personAccountId: string; amount: number; date: string; resolutionNo: string; onDone?: (ok: boolean) => void }) => boolean;
 
@@ -7388,10 +7388,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     recomputeItemStock(movement.itemId);
   };
 
-  const addStockMovement = useCallback((data: Omit<StockMovement, 'id' | 'createdAt'>) => {
-    if (guardFYLocked()) return;
+  const addStockMovement = useCallback((data: Omit<StockMovement, 'id' | 'createdAt'>, opts?: { onSaved?: () => void; onFailed?: (message: string) => void }) => {
+    if (guardFYLocked()) { opts?.onFailed?.('FY locked'); return; }
     const movement: StockMovement = { ...data, godownId: data.godownId ?? (activeGodownIdRef.current || undefined), id: crypto.randomUUID(), createdAt: new Date().toISOString() };
-    saveStockMovement(movement);
+    saveStockMovement(movement, opts);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recompute currentStock from openingStock + ALL movements (authoritative — prevents drift
@@ -7440,7 +7440,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // A recoverable shortage: the voucher (Dr person / Cr Sales by Shortage) is saved FIRST; the stock falls only
   // once it is in the cloud, and if the stock then fails the voucher is withdrawn — never one without the other.
-  const recordStockShortage = useCallback((input: { itemId: string; qty: number; rate: number; date: string; person: string; narration?: string; godownId?: string; onDone?: (ok: boolean) => void }): boolean => {
+  const recordStockShortage = useCallback((input: { itemId: string; qty: number; rate: number; date: string; person: string; narration?: string; godownId?: string; onDone?: (ok: boolean, voucherNo?: string) => void }): boolean => {
     if (guardFYLocked()) return false;
     if (guardPermission('create', tr('घटत दर्ज करने', 'record a shortage'))) return false;
     const item = stockItemsRef.current.find(i => i.id === input.itemId);
@@ -7466,7 +7466,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             onSaved: () => {
               emitAudit({ entityType: 'stockMovement', entityId: movementId, action: 'create', after: { itemId: item.id, qty, amount, person: movement.responsiblePerson, voucherNo: saved.voucherNo }, reason: 'Godown shortage recoverable' });
               toastRef.current({ title: tr('घटत दर्ज', 'Shortage recorded'), description: tr(`${saved.voucherNo}: ₹${amount.toFixed(2)} ${movement.responsiblePerson} के नाम वसूली योग्य।`, `${saved.voucherNo}: ₹${amount.toFixed(2)} recoverable from ${movement.responsiblePerson}.`) });
-              input.onDone?.(true);
+              input.onDone?.(true, saved.voucherNo);
             },
             onFailed: msg => {
               cancelVoucher(saved.id, `Stock movement failed: ${msg}`, by, { rollback: true });

@@ -22,6 +22,7 @@ const PORTRAIT = [
   'SaleInvoice', 'SubscriptionInvoice', 'PurchaseRecord', 'MemberApplication',                  // per-document / forms
   'GstSummary', 'AuditSchedules',                                        // see note: GST Summary stays portrait for now
   'MemberTurnover',                                                      // account | members | (nominal) | non-members | total — fits A4 portrait
+  'StockVerification',                                                   // one count + certificate — a per-document format
 ];
 // generateBlankFormatPDF takes its orientation from a spec on purpose.
 const DATA_DRIVEN = ['BlankFormat'];
