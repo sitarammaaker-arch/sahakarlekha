@@ -70,6 +70,23 @@ const sql104 = readFileSync(resolve(ROOT, 'supabase/migrations/104_save_pending_
 ok('104 defines save_pending_voucher as SECURITY DEFINER, anon revoked', /function public\.save_pending_voucher\([^)]*\)[\s\S]*?security definer/.test(sql104) && /revoke execute on function public\.save_pending_voucher\([^)]*\) from public, anon/.test(sql104));
 ok('104 writes no lines / entries / journal for a pending voucher', !/insert into public\.(voucher_lines|voucher_entries|ledger_events)/.test(sql104));
 
+// 206: the cheque no. / date on a voucher. A direct update is refused for a posting-service society (105's trigger) —
+// found live 2026-11-24 — so it goes through set_voucher_cheque, like set_voucher_cleared.
+{
+  const dcSrc = readFileSync(resolve(ROOT, 'src/contexts/DataContext.tsx'), 'utf8');
+  const pv = dcSrc.slice(dcSrc.indexOf('const patchVoucherCheque ='), dcSrc.indexOf('const chequeNotSavedToast'));
+  ok('patchVoucherCheque: posting service → rpc set_voucher_cheque, else the targeted update',
+    /if \(postingServiceRef\.current\) \{[\s\S]*?rpc\('set_voucher_cheque'/.test(pv) && pv.includes("from('vouchers').update({ chequeNo"));
+  const sql206 = readFileSync(resolve(ROOT, 'supabase/migrations/206_set_voucher_cheque.sql'), 'utf8');
+  ok('206 defines set_voucher_cheque as SECURITY DEFINER, anon revoked, authenticated granted',
+    /function public\.set_voucher_cheque\([^)]*\)[\s\S]*?security definer/.test(sql206)
+    && /revoke execute on function public\.set_voucher_cheque\([^)]*\) from public, anon/.test(sql206)
+    && /grant execute on function public\.set_voucher_cheque\([^)]*\) to authenticated/.test(sql206));
+  ok('206 writes only the two cheque columns', /update public\.vouchers set "chequeNo" = v_no, "chequeDate" = p_cheque_date::date where id = p_id/.test(sql206)
+    && !/insert into public\.(voucher_lines|voucher_entries|ledger_events)/.test(sql206));
+  ok('206 refuses a cancelled voucher and an audit-locked year', sql206.includes("'post_voucher:voucher_cancelled'") && sql206.includes("'post_voucher:fy_locked'"));
+}
+
 for (const fn of ['reject_voucher', 'set_voucher_cleared', 'link_voucher_reversal', 'sync_account_opening_event', 'merge_accounts']) {
   ok(`103 defines ${fn} as SECURITY DEFINER`, new RegExp(`function public\\.${fn}\\([^)]*\\)[\\s\\S]*?security definer`).test(sql));
   ok(`103 revokes ${fn} from anon and grants authenticated`, new RegExp(`revoke execute on function public\\.${fn}\\([^)]*\\) from public, anon`).test(sql) && new RegExp(`grant execute on function public\\.${fn}\\([^)]*\\) to authenticated`).test(sql));
