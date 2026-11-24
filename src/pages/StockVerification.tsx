@@ -56,6 +56,8 @@ export default function StockVerification() {
   }, [societyId]);
 
   const activeGodowns = godowns.filter(g => g.isActive !== false);
+  // The godown's name for the certificate; undefined for a count of the whole stock.
+  const godownName = (id?: string) => (id ? (godowns.find(g => g.id === id)?.name || id) : undefined);
   const placeName = (id?: string) => (id ? (godowns.find(g => g.id === id)?.name || id) : (hi ? 'पूरा स्टॉक' : 'Whole stock'));
   const overdue = useMemo(() => {
     const live = godowns.filter(g => g.isActive !== false);
@@ -90,7 +92,7 @@ export default function StockVerification() {
     if (guardPageWrite('create', date)) return;
     setSaving(true);
     const no = nextVerificationNo(list);
-    const cert = certificateText({ verifiedBy: verifiedBy.trim(), designation: designation.trim() || undefined, date: fmtDate(date), place: placeName(godownId || undefined), differences: totals.differing }, hi);
+    const cert = certificateText({ verifiedBy: verifiedBy.trim(), designation: designation.trim() || undefined, date: fmtDate(date), place: godownName(godownId), differences: totals.differing }, hi);
     const row: Verification = {
       id: crypto.randomUUID(), verificationNo: no, date, godownId: godownId || undefined, verifiedBy: verifiedBy.trim(), designation: designation.trim() || undefined,
       status: 'pending', lines, certificate: cert, remarks: remarks.trim() || undefined, createdBy: user?.name, createdAt: new Date().toISOString(),
@@ -150,7 +152,7 @@ export default function StockVerification() {
     // English PDF: item names in English, certificate re-worded in English.
     const names = new Map(stockItems.map(i => [i.id, i.name]));
     const enLines = v.lines.map(l => ({ ...l, itemName: names.get(l.itemId) || l.itemName }));
-    const cert = certificateText({ verifiedBy: v.verifiedBy, designation: v.designation, date: fmtDate(v.date), place: v.godownId ? (godowns.find(g => g.id === v.godownId)?.name || v.godownId) : 'Whole stock', differences: v.lines.filter(l => l.diff).length }, false);
+    const cert = certificateText({ verifiedBy: v.verifiedBy, designation: v.designation, date: fmtDate(v.date), place: godownName(v.godownId), differences: v.lines.filter(l => l.diff).length }, false);
     generateStockVerificationPDF({ ...v, lines: enLines }, society, v.godownId ? (godowns.find(g => g.id === v.godownId)?.name || v.godownId) : 'Whole stock', cert);
   };
   const [openId, setOpenId] = useState<string | null>(null);
@@ -299,7 +301,7 @@ export default function StockVerification() {
                 <Input id="pv-rem" value={remarks} onChange={e => setRemarks(e.target.value)} placeholder={hi ? 'जैसे बोरियाँ गीली मिलीं' : 'e.g. some bags found damp'} />
               </div>
               <p className="text-sm rounded-md bg-muted p-3">
-                {certificateText({ verifiedBy: verifiedBy.trim() || '…', designation: designation.trim() || undefined, date: fmtDate(date), place: placeName(godownId || undefined), differences: totals.differing }, hi)}
+                {certificateText({ verifiedBy: verifiedBy.trim() || '…', designation: designation.trim() || undefined, date: fmtDate(date), place: godownName(godownId), differences: totals.differing }, hi)}
               </p>
               <p className="text-xs text-muted-foreground">
                 {hi

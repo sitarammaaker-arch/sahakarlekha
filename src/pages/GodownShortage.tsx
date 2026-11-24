@@ -69,7 +69,7 @@ export default function GodownShortage() {
   const woTooMuch = woPerson ? Number(woAmount) > woPerson.outstanding + 0.005 : false;
 
   // ── exports ──
-  const head = [hi ? 'तारीख़' : 'Date', hi ? 'वस्तु' : 'Item', hi ? 'गोदाम' : 'Godown', hi ? 'मात्रा' : 'Qty', hi ? 'रकम (₹)' : 'Value (₹)', hi ? 'कारण' : 'Reason', hi ? 'ज़िम्मेदार व्यक्ति' : 'Responsible person', hi ? 'वाउचर' : 'Voucher', hi ? 'विवरण' : 'Narration'];
+  const head = [hi ? 'तारीख़' : 'Date', hi ? 'वस्तु' : 'Item', hi ? 'गोदाम' : 'Godown', hi ? 'मात्रा' : 'Qty', hi ? 'रकम (₹)' : 'Value (₹)', hi ? 'कारण' : 'Reason', hi ? 'ज़िम्मेदार व्यक्ति' : 'Responsible person', hi ? 'वाउचर / संदर्भ' : 'Voucher / ref.', hi ? 'विवरण' : 'Narration'];
   const rowCells = (r: ShortageRow) => [fmtDate(r.date), r.itemName, r.godownName || '—', `${r.qty} ${r.unit}`.trim(), r.qty < 0 ? -r.value : r.value, reasonLabel(r.reason, hi) + (r.reversed ? (hi ? ' (रद्द)' : ' (cancelled)') : ''), r.person || '', r.voucherNo || '', r.narration];
   const fileBase = `godown-shortage-${from || 'start'}-to-${to || 'end'}`;
   const exportCsv = () => downloadCSV(head, reg.rows.map(r => rowCells(r).map(c => (typeof c === 'number' ? c.toFixed(2) : c))), `${fileBase}.csv`);
