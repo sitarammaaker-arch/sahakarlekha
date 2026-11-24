@@ -111,6 +111,8 @@ var voucher = {
     c("debitAccountId", "Debit Account", "\u0928\u093E\u092E\u0947 \u0916\u093E\u0924\u093E"),
     c("creditAccountId", "Credit Account", "\u091C\u092E\u093E \u0916\u093E\u0924\u093E"),
     c("memberId", "Member", "\u0938\u0926\u0938\u094D\u092F"),
+    c("chequeNo", "Cheque / DD No.", "\u091A\u0947\u0915 / \u0921\u094D\u0930\u093E\u092B\u094D\u091F \u0928\u0902."),
+    c("chequeDate", "Cheque Date", "\u091A\u0947\u0915 \u0915\u0940 \u0924\u093E\u0930\u0940\u0916\u093C", { type: "date" }),
     internal("lines", "Voucher Lines", "\u0935\u093E\u0909\u091A\u0930 \u092A\u0902\u0915\u094D\u0924\u093F\u092F\u093E\u0901", { type: "json" }),
     internal("billAllocations", "Bill Allocations", "\u092C\u093F\u0932 \u0906\u0935\u0902\u091F\u0928", { type: "json" }),
     internal("refType", "Reference Type", "\u0938\u0902\u0926\u0930\u094D\u092D \u092A\u094D\u0930\u0915\u093E\u0930", { type: "enum" }),

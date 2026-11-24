@@ -147,6 +147,8 @@ const voucher: EntityDescriptor = {
     c('debitAccountId', 'Debit Account', 'नामे खाता'),
     c('creditAccountId', 'Credit Account', 'जमा खाता'),
     c('memberId', 'Member', 'सदस्य'),
+    c('chequeNo', 'Cheque / DD No.', 'चेक / ड्राफ्ट नं.'),
+    c('chequeDate', 'Cheque Date', 'चेक की तारीख़', { type: 'date' }),
     internal('lines', 'Voucher Lines', 'वाउचर पंक्तियाँ', { type: 'json' }),
     internal('billAllocations', 'Bill Allocations', 'बिल आवंटन', { type: 'json' }),
     internal('refType', 'Reference Type', 'संदर्भ प्रकार', { type: 'enum' }),
